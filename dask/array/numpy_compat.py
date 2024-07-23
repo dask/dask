@@ -23,8 +23,7 @@ if NUMPY_GE_200:
     from numpy.lib.array_utils import normalize_axis_index, normalize_axis_tuple
 else:
     from numpy import AxisError, ComplexWarning  # noqa: F401
-    from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
-    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
+    from numpy.core.numeric import normalize_axis_index, normalize_axis_tuple
 
 
 # Taken from scikit-learn:

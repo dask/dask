@@ -15,10 +15,10 @@ from typing import (
 
 if TYPE_CHECKING:
     # IPython import is relatively slow. Avoid if not necessary
-    from IPython.display import DisplayObject
-
     # TODO import from typing (requires Python >=3.10)
-    from typing_extensions import TypeAlias
+    from typing import TypeAlias
+
+    from IPython.display import DisplayObject
 
 CollType = TypeVar("CollType", bound="DaskCollection")
 CollType_co = TypeVar("CollType_co", bound="DaskCollection", covariant=True)
