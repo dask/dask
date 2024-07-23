@@ -45,7 +45,7 @@ dependencies:
   - sparse=0.12.0
   - sqlalchemy=1.4.16
   - tblib=1.6.0
-  - tiledb-py=0.8.1
+  - tiledb-py=0.12
   - zarr=2.12.0
   - pip
   - pip:
