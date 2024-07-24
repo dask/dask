@@ -264,6 +264,7 @@ Here are some common patterns to avoid and nicer alternatives:
        on the cluster.
 
        .. code-block:: python
+
            ddf = dd.read_parquet(...)
            ddf2 = dd.read_csv(filenames)
            ddf = dd.concat([ddf, ddf2])
@@ -277,6 +278,7 @@ Here are some common patterns to avoid and nicer alternatives:
        pointers to the data.
 
        .. code-block:: python
+
            f = h5py.File(...)
 
            x = np.asarray(f["x"])  # Get data as a NumPy array locally
