@@ -194,8 +194,13 @@ def describe_aggregate(values):
 
 
 def describe_numeric_aggregate(
-    stats, name=None, is_timedelta_col=False, is_datetime_col=False
+    stats,
+    name=None,
+    is_timedelta_col=False,
+    is_datetime_col=False,
+    unit="ns",
 ):
+    unit = unit or "ns"
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
@@ -205,17 +210,17 @@ def describe_numeric_aggregate(
         typ = type(q)
 
     if is_timedelta_col:
-        mean = pd.to_timedelta(mean)
-        std = pd.to_timedelta(std)
-        min = pd.to_timedelta(min)
-        max = pd.to_timedelta(max)
-        q = q.apply(lambda x: pd.to_timedelta(x))
+        mean = pd.to_timedelta(mean, unit=unit).as_unit(unit)
+        std = pd.to_timedelta(std, unit=unit).as_unit(unit)
+        min = pd.to_timedelta(min, unit=unit).as_unit(unit)
+        max = pd.to_timedelta(max, unit=unit).as_unit(unit)
+        q = q.apply(lambda x: pd.to_timedelta(x, unit=unit).as_unit(unit))
 
     if is_datetime_col:
         # mean is not implemented for datetime
-        min = pd.to_datetime(min)
-        max = pd.to_datetime(max)
-        q = q.apply(lambda x: pd.to_datetime(x))
+        min = pd.to_datetime(min, unit=unit).as_unit(unit)
+        max = pd.to_datetime(max, unit=unit).as_unit(unit)
+        q = q.apply(lambda x: pd.to_datetime(x, unit=unit).as_unit(unit))
 
     if is_datetime_col:
         part1 = typ([count, min], index=["count", "min"])

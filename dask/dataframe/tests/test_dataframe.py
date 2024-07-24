@@ -6314,7 +6314,7 @@ def test_preserve_ts_unit_in_meta_creation():
         {
             "a": [1],
             "timestamp": pd.Series(
-                [pd.Timestamp.utcnow()], dtype="datetime64[us, UTC]"
+                [pd.Timestamp.now("UTC")], dtype="datetime64[us, UTC]"
             ),
         }
     )

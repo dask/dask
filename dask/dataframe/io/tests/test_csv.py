@@ -978,7 +978,10 @@ def test_late_dtypes():
     )
 
     with filetext(text) as fn:
-        sol = pd.read_csv(fn)
+        if PANDAS_GE_300:
+            sol = pd.read_csv(fn, parse_dates=["dates"])
+        else:
+            sol = pd.read_csv(fn)
         msg = (
             "Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
             "\n"
@@ -1036,6 +1039,17 @@ def test_late_dtypes():
         with pytest.raises(ValueError) as e:
             dd.read_csv(fn, sample=50, dtype={"names": "O"}).compute(scheduler="sync")
         assert str(e.value) == msg
+
+        if PANDAS_GE_300:
+            # Specifying dtypes works
+            res = dd.read_csv(
+                fn,
+                sample=50,
+                dtype={"more_numbers": float, "names": object, "numbers": float},
+                parse_dates=["dates"],
+            )
+            assert_eq(res, sol)
+            return
 
         with pytest.raises(ValueError) as e:
             dd.read_csv(

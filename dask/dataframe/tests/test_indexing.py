@@ -9,7 +9,13 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, IndexingError, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+    PANDAS_GE_300,
+    IndexingError,
+    tm,
+)
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta, pyarrow_strings_enabled
 
@@ -351,8 +357,10 @@ def test_getitem_integer_slice():
     ddf = dd.from_pandas(df, 2)
     # except for float dtype indexes
     ctx = contextlib.nullcontext()
-    if PANDAS_GE_210:
+    if PANDAS_GE_210 and not PANDAS_GE_300:
         ctx = pytest.warns(FutureWarning, match="float-dtype index")
+    elif PANDAS_GE_300:
+        ctx = pytest.raises(NotImplementedError)
     with ctx:
         assert_eq(ddf[2:8], df[2:8])
     with ctx:

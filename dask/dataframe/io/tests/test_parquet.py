@@ -20,7 +20,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.array.numpy_compat import NUMPY_GE_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GE_202
+from dask.dataframe._compat import PANDAS_GE_202, PANDAS_GE_300
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -1384,7 +1384,8 @@ def test_pyarrow_schema_inference(tmpdir, index, schema):
                     "2017-01-02",
                     "2017-01-06",
                     "2017-01-09",
-                ]
+                ],
+                unit=None if not PANDAS_GE_300 else "ms",
             ),
             "amount": [100, 200, 300, 400, 500, 600, 700],
         },
