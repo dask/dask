@@ -4055,7 +4055,11 @@ def test_roundtrip_decimal_dtype(tmpdir):
         ddf1 = ddf1.astype({"col1": pd.ArrowDtype(pa.decimal128(5, 2))})
     else:
         assert ddf1["col1"].dtype == ddf2["col1"].dtype
-    assert_eq(ddf1, ddf2, check_divisions=False)
+
+    # seems to be a Pyarrow bug
+    assert_eq(ddf1, ddf2, check_divisions=False, check_dtype=not PANDAS_GE_300)
+    if PANDAS_GE_300:
+        assert ddf2["ts"].dtype != ddf1["ts"].dtype
 
 
 @PYARROW_MARK
@@ -4080,7 +4084,10 @@ def test_roundtrip_date_dtype(tmpdir):
         ddf1 = ddf1.astype({"col1": pd.ArrowDtype(pa.date32())})
     else:
         assert ddf1["col1"].dtype == ddf2["col1"].dtype
-    assert_eq(ddf1, ddf2, check_divisions=False)
+    # seems to be a Pyarrow bug
+    assert_eq(ddf1, ddf2, check_divisions=False, check_dtype=not PANDAS_GE_300)
+    if PANDAS_GE_300:
+        assert ddf2["ts"].dtype != ddf1["ts"].dtype
 
 
 def test_roundtrip_rename_columns(tmpdir, engine):
