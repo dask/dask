@@ -43,6 +43,12 @@ def istask(x):
     >>> istask(1)
     False
     """
+    from dask._task_spec import DataNode, GraphNode
+
+    if isinstance(x, GraphNode):
+        if isinstance(x, DataNode):
+            return False
+        return True
     return type(x) is tuple and x and callable(x[0])
 
 
@@ -178,7 +184,9 @@ def keys_in_tasks(keys: Collection[Key], tasks: Iterable[Any], as_list: bool = F
     >>> keys_in_tasks(dsk, ['x', 'y', 'j'])  # doctest: +SKIP
     {'x', 'y'}
     """
-    ret = []
+    from dask._task_spec import GraphNode
+
+    ret: list[Key] = []
     while tasks:
         work = []
         for w in tasks:
@@ -189,6 +197,8 @@ def keys_in_tasks(keys: Collection[Key], tasks: Iterable[Any], as_list: bool = F
                 work.extend(w)
             elif typ is dict:
                 work.extend(w.values())
+            elif isinstance(w, GraphNode):
+                ret.extend(w.dependencies)
             else:
                 try:
                     if w in keys:
