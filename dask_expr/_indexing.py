@@ -87,7 +87,9 @@ class LocIndexer(Indexer):
             return self._loc(iindexer(self.obj), cindexer)
 
         if self.obj.known_divisions:
-            iindexer = self._maybe_partial_time_string(iindexer)
+            idx = self.obj.index._meta
+            unit = idx.unit if hasattr(idx, "unit") else None
+            iindexer = self._maybe_partial_time_string(iindexer, unit=unit)
 
             if isinstance(iindexer, slice):
                 return self._loc_slice(iindexer, cindexer)
@@ -133,13 +135,13 @@ class LocIndexer(Indexer):
         )
         return self._loc_series(iindexer_series, cindexer, check_alignment=False)
 
-    def _maybe_partial_time_string(self, iindexer):
+    def _maybe_partial_time_string(self, iindexer, unit):
         """
         Convert index-indexer for partial time string slicing
         if obj.index is DatetimeIndex / PeriodIndex
         """
         idx = meta_nonempty(self.obj._meta.index)
-        iindexer = _maybe_partial_time_string(idx, iindexer)
+        iindexer = _maybe_partial_time_string(idx, iindexer, unit)
         return iindexer
 
     def _loc_slice(self, iindexer, cindexer):

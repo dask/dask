@@ -1084,6 +1084,8 @@ class Median(GroupByShift):
 
 
 def groupby_get_group(df, *by_key, get_key=None, columns=None):
+    if PANDAS_GE_300 and is_scalar(get_key):
+        get_key = (get_key,)
     return _groupby_get_group(df, list(by_key), get_key, columns)
 
 
