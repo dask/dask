@@ -49,7 +49,7 @@ dependencies:
   - zarr=2.12.0
   - pip
   - pip:
-      # optional dependencies pulled in by pip install  dask[distributed]
+      # optional dependencies pulled in by pip install dask[distributed]
       - git+https://github.com/dask/distributed
       - git+https://github.com/dask/dask-expr
   # test dependencies
