@@ -247,45 +247,45 @@ Here are some common patterns to avoid and nicer alternatives:
    .. tab-item:: DataFrames
        :sync: dataframe
 
-        We are using Dask to read a parquet dataset before appending a set of pandas
-        DataFrames to it. We are loading the csv files into memory before sending the
-        data to Dask.
+       We are using Dask to read a parquet dataset before appending a set of pandas
+       DataFrames to it. We are loading the csv files into memory before sending the
+       data to Dask.
 
-        .. code-block:: python
+       .. code-block:: python
 
+          ddf = dd.read_parquet(...)
+
+          pandas_dfs = []
+          for fn in filenames:
+              pandas_dfs(pandas.read_csv(fn))     # Read locally with pandas
+          ddf = dd.concat([ddf] + pandas_dfs)     # Give to Dask
+
+       Instead, we can use Dask to read the csv files directly, keeping all data
+       on the cluster.
+
+       .. code-block:: python
            ddf = dd.read_parquet(...)
-
-           pandas_dfs = []
-           for fn in filenames:
-               pandas_dfs(pandas.read_csv(fn))     # Read locally with pandas
-           ddf = dd.concat([ddf] + pandas_dfs)     # Give to Dask
-
-        Instead, we can use Dask to read the csv files directly, keeping all data
-        on the cluster.
-
-        .. code-block:: python
-            ddf = dd.read_parquet(...)
-            ddf2 = dd.read_csv(filenames)
-            ddf = dd.concat([ddf, ddf2])
+           ddf2 = dd.read_csv(filenames)
+           ddf = dd.concat([ddf, ddf2])
 
 
    .. tab-item:: Arrays
        :sync: array
 
-        We are using NumPy to create an in-memory array before handing it over to
-        Dask, forcing Dask to embed the array into the task graph instead of handling
-        pointers to the data.
+       We are using NumPy to create an in-memory array before handing it over to
+       Dask, forcing Dask to embed the array into the task graph instead of handling
+       pointers to the data.
 
-        .. code-block:: python
-            f = h5py.File(...)
+       .. code-block:: python
+           f = h5py.File(...)
 
-            x = np.asarray(f["x"])  # Get data as a NumPy array locally
-            x = da.from_array(x)   # Hand NumPy array to Dask
+           x = np.asarray(f["x"])  # Get data as a NumPy array locally
+           x = da.from_array(x)   # Hand NumPy array to Dask
 
-        Instead, we can use Dask to read the file directly, keeping all data
-        on the cluster.
+       Instead, we can use Dask to read the file directly, keeping all data
+       on the cluster.
 
-        .. code-block:: python
+       .. code-block:: python
 
             f = h5py.File(...)
             x = da.from_array(f["x"])  # Let Dask do the reading
@@ -293,36 +293,36 @@ Here are some common patterns to avoid and nicer alternatives:
    .. tab-item:: Delayed
        :sync: delayed
 
-        We are using pandas to read a large CSV file before building a Graph
-        with delayed to parallelize a computation on the data.
+       We are using pandas to read a large CSV file before building a Graph
+       with delayed to parallelize a computation on the data.
 
-        .. code-block:: python
+       .. code-block:: python
 
-            @dask.delayed
-            def process(a, b):
-                ...
-
-            df = pandas.read_csv("some-large-file.csv")  # Create large object locally
-            results = []
-            for item in L:
-                result = process(item, df)  # include df in every delayed call
-                results.append(result)
-
-        Instead, we can use delayed to read the data as well. This avoid embedding the
-        large file into the graph, Dask can just pass a reference to the delayed
-        object around.
-
-        .. code-block:: python
-
-            @dask.delayed
-            def process(a, b):
+           @dask.delayed
+           def process(a, b):
                ...
 
-            df = dask.delayed(pandas.read_csv)("some-large-file.csv")  # Let Dask build object
-            results = []
-            for item in L:
-               result = process(item, df)  # include pointer to df in every delayed call
+           df = pandas.read_csv("some-large-file.csv")  # Create large object locally
+           results = []
+           for item in L:
+               result = process(item, df)  # include df in every delayed call
                results.append(result)
+
+       Instead, we can use delayed to read the data as well. This avoid embedding the
+       large file into the graph, Dask can just pass a reference to the delayed
+       object around.
+
+       .. code-block:: python
+
+           @dask.delayed
+           def process(a, b):
+              ...
+
+           df = dask.delayed(pandas.read_csv)("some-large-file.csv")  # Let Dask build object
+           results = []
+           for item in L:
+              result = process(item, df)  # include pointer to df in every delayed call
+              results.append(result)
 
 Embedding large objects like pandas DataFrames or Arrays into the computation is a
 frequent pain point for Dask users. It adds a significant delay until the scheduler
