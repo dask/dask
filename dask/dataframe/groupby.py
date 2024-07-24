@@ -3123,12 +3123,16 @@ def _unique_aggregate(series_gb, name=None):
 
 
 def _value_counts(x, **kwargs):
-    if not x.groups or all(
-        pd.isna(key) for key in flatten(x.groups.keys(), container=tuple)
-    ):
-        return pd.Series(dtype=int)
-    else:
-        return x.value_counts(**kwargs)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", "`groups` by one element list returns", FutureWarning
+        )
+        if not x.groups or all(
+            pd.isna(key) for key in flatten(x.groups.keys(), container=tuple)
+        ):
+            return pd.Series(dtype=int)
+        else:
+            return x.value_counts(**kwargs)
 
 
 def _value_counts_aggregate(series_gb):
