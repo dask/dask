@@ -121,6 +121,7 @@ from dask_expr._shuffle import (
 )
 from dask_expr._str_accessor import StringAccessor
 from dask_expr._util import (
+    PANDAS_GE_300,
     _BackendData,
     _convert_to_list,
     _get_shuffle_preferring_order,
@@ -400,7 +401,7 @@ class FrameBase(DaskMethodsMixin):
             if (
                 self.ndim == 2
                 and is_integer_slice
-                and not is_float_dtype(self.index.dtype)
+                and (not is_float_dtype(self.index.dtype) or PANDAS_GE_300)
             ):
                 return self.iloc[other]
             else:
@@ -1577,6 +1578,10 @@ Expr={expr}"""
             if needs_time_conversion:
                 numeric_dd = _convert_to_numeric(self, skipna)
 
+        units = None
+        if needs_time_conversion and time_cols is not None:
+            units = [getattr(self._meta[c].array, "unit", None) for c in time_cols]
+
         if axis == 1:
             return numeric_dd.map_partitions(
                 M.std if not needs_time_conversion else _sqrt_and_convert_to_timedelta,
@@ -1598,6 +1603,8 @@ Expr={expr}"""
                 "time_cols": time_cols,
                 "axis": axis,
                 "dtype": getattr(meta, "dtype", None),
+                "unit": getattr(meta, "unit", None),
+                "units": units,
             }
             sqrt_func = _sqrt_and_convert_to_timedelta
         else:
