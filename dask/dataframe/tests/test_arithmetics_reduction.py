@@ -1771,17 +1771,13 @@ def test_datetime_std_with_larger_dataset(axis, skipna, numeric_only):
     kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
     kwargs["skipna"] = skipna
 
-    expected = pdf[["dt1"]].std(axis=axis, **kwargs)
-    result = ddf[["dt1"]].std(axis=axis, **kwargs)
-    # assert_near_timedeltas(result.compute(), expected)
-
     # Same thing but as Series. No axis, since axis=1 raises error
     assert_near_timedeltas(ddf["dt1"].std(**kwargs).compute(), pdf["dt1"].std(**kwargs))
 
     # Computation on full dataset
     expected = pdf.std(axis=axis, **kwargs)
-    result = ddf.std(axis=axis, **kwargs)
-    assert_near_timedeltas(result.compute(), expected)
+    result = ddf.std(axis=axis, **kwargs).compute()
+    assert_near_timedeltas(result, expected)
 
 
 @pytest.mark.parametrize("skipna", [False, True])
