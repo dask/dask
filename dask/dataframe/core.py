@@ -8589,7 +8589,13 @@ def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs)
                 category=RuntimeWarning,
                 message="invalid value encountered in cast",
             )
-            return pd.to_timedelta(M.std(partition, *args, axis=axis, **kwargs))
+            unit = kwargs.pop("unit", None)
+            result = pd.to_timedelta(
+                M.std(partition, *args, axis=axis, **kwargs), unit=unit
+            )
+            if unit is not None and dtype is not None:
+                result = result.astype(dtype)
+            return result
 
     is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
 
@@ -8610,8 +8616,8 @@ def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs)
     if units is None:
         units = [None] * len(time_cols)
     for time_col, matching_val, unit in zip(time_cols, matching_vals, units):
-        result = pd.to_timedelta(matching_val, unit=kwargs.get("unit", None))
-        if kwargs.get("unit", None) is not None:
+        result = pd.to_timedelta(matching_val, unit=unit)
+        if unit is not None:
             result = result.as_unit(unit)
         sqrt[time_col] = result
 
