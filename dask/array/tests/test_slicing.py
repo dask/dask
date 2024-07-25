@@ -407,14 +407,14 @@ def test_slicing_with_numpy_arrays():
     )
 
     assert bd1 == bd2
-    # np.testing.assert_equal(a, b)
+    np.testing.assert_equal(dict(a), dict(b))
 
     i = [False, True, True, False, False, False, False, False, False, True]
     index = (i, slice(None, None, None))
     index = normalize_index(index, (10, 10))
     c, bd3 = slice_array("y", "x", ((3, 3, 3, 1), (3, 3, 3, 1)), index, itemsize=8)
     assert bd1 == bd3
-    # np.testing.assert_equal(a, c)
+    np.testing.assert_equal(dict(a), dict(c))
 
 
 def test_slicing_and_chunks():
