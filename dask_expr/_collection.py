@@ -1571,6 +1571,8 @@ Expr={expr}"""
                     )
                 else:
                     needs_time_conversion = True
+                    if axis == 1:
+                        numeric_dd = numeric_dd.astype(f"datetime64[{meta.array.unit}]")
                     for col in time_cols:
                         numeric_dd[col] = _convert_to_numeric(numeric_dd[col], skipna)
         else:
@@ -1583,6 +1585,11 @@ Expr={expr}"""
             units = [getattr(self._meta[c].array, "unit", None) for c in time_cols]
 
         if axis == 1:
+            _kwargs = (
+                {}
+                if not needs_time_conversion
+                else {"unit": meta.array.unit, "dtype": meta.dtype}
+            )
             return numeric_dd.map_partitions(
                 M.std if not needs_time_conversion else _sqrt_and_convert_to_timedelta,
                 meta=meta,
@@ -1591,6 +1598,7 @@ Expr={expr}"""
                 ddof=ddof,
                 enforce_metadata=False,
                 numeric_only=numeric_only,
+                **_kwargs,
             )
 
         result = numeric_dd.var(
