@@ -201,6 +201,7 @@ def describe_numeric_aggregate(
     unit="ns",
 ):
     unit = unit or "ns"
+
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
