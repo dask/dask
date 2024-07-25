@@ -52,21 +52,25 @@ class DescribeNumeric(Reduction):
             frame.max(split_every=self.split_every),
         ]
         return DescribeNumericAggregate(
-            self.frame._meta.name, is_td_col, is_dt_col, *stats
+            self.frame._meta.name,
+            is_td_col,
+            is_dt_col,
+            getattr(self.frame._meta.array, "unit", None),
+            *stats,
         )
 
 
 class DescribeNumericAggregate(Blockwise):
-    _parameters = ["name", "is_timedelta_col", "is_datetime_col"]
+    _parameters = ["name", "is_timedelta_col", "is_datetime_col", "unit"]
     _defaults = {"is_timedelta_col": False, "is_datetime_col": False}
 
     def _broadcast_dep(self, dep):
         return dep.npartitions == 1
 
     @staticmethod
-    def operation(name, is_timedelta_col, is_datetime_col, *stats):
+    def operation(name, is_timedelta_col, is_datetime_col, unit, *stats):
         return describe_numeric_aggregate(
-            stats, name, is_timedelta_col, is_datetime_col
+            stats, name, is_timedelta_col, is_datetime_col, unit
         )
 
 
