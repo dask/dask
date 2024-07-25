@@ -386,14 +386,16 @@ def _maybe_partial_time_string(index, indexer, unit="ns"):
         else:
             stop = indexer.stop
         if PANDAS_GE_300 and hasattr(start, "as_unit"):
-            start, stop = start.as_unit(unit), stop.as_unit(unit)
+            start = None if start is None else start.as_unit(unit)
+            stop = None if stop is None else stop.as_unit(unit)
         return slice(start, stop)
 
     elif isinstance(indexer, str):
         start = index._maybe_cast_slice_bound(indexer, "left")
         stop = index._maybe_cast_slice_bound(indexer, "right")
         if PANDAS_GE_300 and hasattr(start, "as_unit"):
-            start, stop = start.as_unit(unit), stop.as_unit(unit)
+            start = None if start is None else start.as_unit(unit)
+            stop = None if stop is None else stop.as_unit(unit)
         return slice(min(start, stop), max(start, stop))
 
     return indexer
