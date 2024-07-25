@@ -87,7 +87,34 @@ class ArraySliceDep(ArrayBlockwiseDep):
         return tuple(slice(*s, None) for s in loc)
 
 
-class ArrayOverlapLayer(Layer):
+class ArrayLayer(Layer):
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self._construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
+    def get_output_keys(self):
+        return self.keys()  # FIXME! this implementation materializes the graph
+
+
+class ArrayOverlapLayer(ArrayLayer):
     """Simple HighLevelGraph array overlap layer.
 
     Lazily computed High-level graph layer for a array overlap operations.
@@ -120,31 +147,6 @@ class ArrayOverlapLayer(Layer):
 
     def __repr__(self):
         return f"ArrayOverlapLayer<name='{self.name}'"
-
-    @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self._construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __len__(self):
-        return len(self._dict)
-
-    def is_materialized(self):
-        return hasattr(self, "_cached_dict")
-
-    def get_output_keys(self):
-        return self.keys()  # FIXME! this implementation materializes the graph
 
     def _dask_keys(self):
         if self._cached_keys is not None:
@@ -206,6 +208,68 @@ class ArrayOverlapLayer(Layer):
                 )
 
         dsk = toolz.merge(interior_slices, overlap_blocks)
+        return dsk
+
+
+class ArrayTakeLayer(ArrayLayer):
+    def __init__(
+        self,
+        outname,
+        inname,
+        maxsize,
+        split,
+        index_lists,
+        where_index,
+        chunks,
+        axis,
+        token,
+    ):
+        super().__init__()
+        self.outname = outname
+        self.inname = inname
+        self.maxsize = maxsize
+        self.split = split
+        self.index_lists = index_lists
+        self.where_index = where_index
+        self.chunks = chunks
+        self.token = token
+        self.axis = axis
+        self._cached_keys = None
+
+    def __repr__(self):
+        return f"ArrayTakeLayer<name='{self.outname}'"
+
+    def get_output_keys(self):
+        return self.keys()
+
+    def _dask_keys(self):
+        if self._cached_keys is not None:
+            return self._cached_keys
+
+        dims = [range(len(bd)) for bd in self.chunks]
+        indims = list(dims)
+        indims[self.axis] = list(range(len(self.where_index)))
+        result = list(product([self.outname], *indims))
+
+        self._cached_keys = result
+        return result
+
+    def _construct_graph(self, deserializing=False):
+        """Construct graph for a simple overlap operation."""
+        from dask.array.chunk import getitem
+
+        colon = slice(None, None, None)
+
+        dims = [range(len(bd)) for bd in self.chunks]
+
+        outdims = list(dims)
+        outdims[self.axis] = self.where_index
+        slices = [[colon] * len(bd) for bd in self.chunks]
+        slices[self.axis] = self.index_lists
+        slices = list(product(*slices))
+        inkeys = list(product([self.inname], *outdims))
+        values = [(getitem, inkey, slc) for inkey, slc in zip(inkeys, slices)]
+        dsk = dict(zip(self._dask_keys(), values))
         return dsk
 
 

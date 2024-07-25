@@ -15,6 +15,7 @@ from dask import config, core, utils
 from dask.array.chunk import getitem
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ArrayTakeLayer
 from dask.utils import _deprecated, cached_cumsum, is_arraylike
 
 colon = slice(None, None, None)
@@ -567,7 +568,7 @@ def slicing_plan(chunks, index):
         # prevent accidental automatic casting during `index - cum_chunks` below
         cum_chunks = cum_chunks.astype(index.dtype)
 
-    # this dispactches to the array library
+    # this dispatches to the array library
     chunk_locations = np.searchsorted(cum_chunks, index, side="right")
 
     # but we need chunk_locations as python ints for getitem calls downstream
@@ -657,19 +658,20 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     # Warn only when the default is not specified.
     warned = split is not None
 
-    for _, index_list in plan:
-        if not warned and len(index_list) > warnsize:
-            msg = (
-                "Slicing is producing a large chunk. To accept the large\n"
-                "chunk and silence this warning, set the option\n"
-                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': False}):\n"
-                "    ...     array[indexer]\n\n"
-                "To avoid creating the large chunks, set the option\n"
-                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': True}):\n"
-                "    ...     array[indexer]"
-            )
-            warnings.warn(msg, PerformanceWarning, stacklevel=6)
-            warned = True
+    if not warned:
+        for _, index_list in plan:
+            if not warned and len(index_list) > warnsize:
+                msg = (
+                    "Slicing is producing a large chunk. To accept the large\n"
+                    "chunk and silence this warning, set the option\n"
+                    "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': False}):\n"
+                    "    ...     array[indexer]\n\n"
+                    "To avoid creating the large chunks, set the option\n"
+                    "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': True}):\n"
+                    "    ...     array[indexer]"
+                )
+                warnings.warn(msg, PerformanceWarning, stacklevel=6)
+                break
 
     where_index = []
     index_lists = []
@@ -687,25 +689,20 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             index_lists.append(index_list)
             where_index.append(where_idx)
 
-    dims = [range(len(bd)) for bd in chunks]
-
-    indims = list(dims)
-    indims[axis] = list(range(len(where_index)))
-    keys = list(product([outname], *indims))
-
-    outdims = list(dims)
-    outdims[axis] = where_index
-    slices = [[colon] * len(bd) for bd in chunks]
-    slices[axis] = index_lists
-    slices = list(product(*slices))
-    inkeys = list(product([inname], *outdims))
-    values = [(getitem, inkey, slc) for inkey, slc in zip(inkeys, slices)]
-
     chunks2 = list(chunks)
     chunks2[axis] = tuple(map(len, index_lists))
-    dsk = dict(zip(keys, values))
 
-    return tuple(chunks2), dsk
+    return tuple(chunks2), ArrayTakeLayer(
+        outname,
+        inname,
+        maxsize,
+        split,
+        index_lists,
+        where_index,
+        chunks,
+        axis,
+        tokenize(axis),
+    )
 
 
 def posify_index(shape, ind):
