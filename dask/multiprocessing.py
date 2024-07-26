@@ -179,7 +179,7 @@ def get(
         Function to initialize a worker process before running any tasks in it.
     chunksize: int, optional
         Size of chunks to use when dispatching work.
-        Defaults to 5 as some batching is helpful.
+        Defaults to 6 as some batching is helpful.
         If -1, will be computed to evenly divide ready work across workers.
     """
     chunksize = chunksize or config.get("chunksize", 6)
