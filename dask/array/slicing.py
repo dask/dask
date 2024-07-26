@@ -630,16 +630,10 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     """
     from dask.array.core import PerformanceWarning
 
-    plan = slicing_plan(chunks[axis], index)
-    if len(plan) >= len(chunks[axis]) * 10:
-        factor = math.ceil(len(plan) / len(chunks[axis]))
+    split = config.get("array.slicing.split-large-chunks", None)
 
-        warnings.warn(
-            "Slicing with an out-of-order index is generating %d "
-            "times more chunks" % factor,
-            PerformanceWarning,
-            stacklevel=6,
-        )
+    # Warn only when the default is not specified.
+    warned = split is not None
 
     # Check for chunks from the plan that would violate the user's
     # configured chunk size.
@@ -653,10 +647,18 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
         maxsize = math.ceil(nbytes / (other_numel * itemsize))
         warnsize = maxsize * 5
 
-    split = config.get("array.slicing.split-large-chunks", None)
+    plan, where_index, index_lists = _create_take_index_lists(
+        chunks, index, axis, maxsize, split
+    )
+    if len(plan) >= len(chunks[axis]) * 10:
+        factor = math.ceil(len(plan) / len(chunks[axis]))
 
-    # Warn only when the default is not specified.
-    warned = split is not None
+        warnings.warn(
+            "Slicing with an out-of-order index is generating %d "
+            "times more chunks" % factor,
+            PerformanceWarning,
+            stacklevel=6,
+        )
 
     if not warned:
         for _, index_list in plan:
@@ -673,6 +675,25 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
                 warnings.warn(msg, PerformanceWarning, stacklevel=6)
                 break
 
+    chunks2 = list(chunks)
+    chunks2[axis] = tuple(map(len, index_lists))
+
+    return tuple(chunks2), ArrayTakeLayer(
+        outname,
+        inname,
+        maxsize,
+        split,
+        len(where_index),
+        chunks,
+        axis,
+        index,
+        tokenize(axis),
+    )
+
+
+def _create_take_index_lists(chunks, index, axis, maxsize, split):
+    plan = slicing_plan(chunks[axis], index)
+
     where_index = []
     index_lists = []
     for where_idx, index_list in plan:
@@ -688,21 +709,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
                 index_list = np.array(index_list)
             index_lists.append(index_list)
             where_index.append(where_idx)
-
-    chunks2 = list(chunks)
-    chunks2[axis] = tuple(map(len, index_lists))
-
-    return tuple(chunks2), ArrayTakeLayer(
-        outname,
-        inname,
-        maxsize,
-        split,
-        index_lists,
-        where_index,
-        chunks,
-        axis,
-        tokenize(axis),
-    )
+    return plan, where_index, index_lists
 
 
 def posify_index(shape, ind):

@@ -4,7 +4,7 @@ import functools
 import math
 import operator
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Mapping
 from itertools import product
 from typing import Any
 
@@ -15,6 +15,7 @@ from dask.base import tokenize
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from dask.core import flatten
 from dask.highlevelgraph import Layer
+from dask.typing import Key
 from dask.utils import apply, cached_cumsum, concrete, insert
 
 #
@@ -218,10 +219,10 @@ class ArrayTakeLayer(ArrayLayer):
         inname,
         maxsize,
         split,
-        index_lists,
-        where_index,
+        length_where_index,
         chunks,
         axis,
+        index,
         token,
     ):
         super().__init__()
@@ -229,18 +230,21 @@ class ArrayTakeLayer(ArrayLayer):
         self.inname = inname
         self.maxsize = maxsize
         self.split = split
-        self.index_lists = index_lists
-        self.where_index = where_index
+        self.length_where_index = length_where_index
         self.chunks = chunks
         self.token = token
         self.axis = axis
+        self.index = index
         self._cached_keys = None
 
     def __repr__(self):
         return f"ArrayTakeLayer<name='{self.outname}'"
 
     def get_output_keys(self):
-        return self.keys()
+        return set(self._dask_keys())
+
+    def keys(self):
+        return set(self._dask_keys())
 
     def _dask_keys(self):
         if self._cached_keys is not None:
@@ -248,7 +252,7 @@ class ArrayTakeLayer(ArrayLayer):
 
         dims = [range(len(bd)) for bd in self.chunks]
         indims = list(dims)
-        indims[self.axis] = list(range(len(self.where_index)))
+        indims[self.axis] = list(range(self.length_where_index))
         result = list(product([self.outname], *indims))
 
         self._cached_keys = result
@@ -256,21 +260,38 @@ class ArrayTakeLayer(ArrayLayer):
 
     def _construct_graph(self, deserializing=False):
         """Construct graph for a simple overlap operation."""
+
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+
         from dask.array.chunk import getitem
+        from dask.array.slicing import _create_take_index_lists
+
+        _, where_index, index_lists = _create_take_index_lists(
+            self.chunks, self.index, self.axis, self.maxsize, self.split
+        )
 
         colon = slice(None, None, None)
 
         dims = [range(len(bd)) for bd in self.chunks]
 
         outdims = list(dims)
-        outdims[self.axis] = self.where_index
+        outdims[self.axis] = where_index
         slices = [[colon] * len(bd) for bd in self.chunks]
-        slices[self.axis] = self.index_lists
+        slices[self.axis] = index_lists
         slices = list(product(*slices))
         inkeys = list(product([self.inname], *outdims))
         values = [(getitem, inkey, slc) for inkey, slc in zip(inkeys, slices)]
         dsk = dict(zip(self._dask_keys(), values))
+        self._cached_dict = dsk
         return dsk
+
+    def cull(
+        self, keys: set[Key], all_hlg_keys: Collection[Key]
+    ) -> tuple[Layer, Mapping[Key, set[Key]]]:
+        dims = [range(len(bd)) for bd in self.chunks]
+        inkeys = set(product([self.inname], *dims))
+        return self, {k: inkeys for k in self.keys()}
 
 
 def _expand_keys_around_center(k, dims, name=None, axes=None):
