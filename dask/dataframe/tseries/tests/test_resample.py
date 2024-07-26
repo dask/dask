@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 from itertools import product
 
 import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GE_220
+from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
 
@@ -212,7 +213,26 @@ def test_common_aggs(agg):
 
     f = lambda df: getattr(df, agg)()
 
-    res = f(ps.resample("1d"))
-    expected = f(ds.resample("1d"))
+    res = f(ps.resample("1D"))
+    expected = f(ds.resample("1D"))
 
     assert_eq(res, expected, check_dtype=False)
+
+
+def test_rule_deprecated():
+    index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
+    s = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(s, npartitions=2)
+
+    if PANDAS_GE_300:
+        ctx = pytest.warns(FutureWarning, match="'d' is deprecated")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        res = s.resample("1d").count()
+    with ctx:
+        expected = ds.resample("1d").count()
+
+    with ctx:
+        assert_eq(res, expected, check_dtype=False)

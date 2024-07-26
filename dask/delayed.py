@@ -95,6 +95,10 @@ def unpack_collections(expr):
         return expr._key, (expr,)
 
     if is_dask_collection(expr):
+        if hasattr(expr, "optimize"):
+            # Optimize dask-expr collections
+            expr = expr.optimize()
+
         finalized = finalize(expr)
         return finalized._key, (finalized,)
 

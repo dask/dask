@@ -371,7 +371,12 @@ def _nonempty_index(idx):
         # `self.monotonic_increasing` or `self.monotonic_decreasing`
         try:
             return pd.date_range(
-                start=start, periods=2, freq=idx.freq, tz=idx.tz, name=idx.name
+                start=start,
+                periods=2,
+                freq=idx.freq,
+                tz=idx.tz,
+                name=idx.name,
+                unit=idx.unit,
             )
         except ValueError:  # older pandas versions
             data = [start, "1970-01-02"] if idx.freq is None else None
@@ -436,7 +441,7 @@ def _nonempty_series(s, idx=None):
         data = [s.iloc[0]] * 2
     elif isinstance(dtype, pd.DatetimeTZDtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
-        data = [entry, entry]
+        data = pd.array([entry, entry], dtype=dtype)
     elif isinstance(dtype, pd.CategoricalDtype):
         if len(s.cat.categories):
             data = [s.cat.categories[0]] * 2

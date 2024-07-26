@@ -38,6 +38,7 @@ def _resample_series(
         freq=rule,
         **closed_kwargs,
         name=out.index.name,
+        unit=out.index.unit,
     ).tz_localize(start.tz, nonexistent="shift_forward")
 
     if not out.index.isin(new_index).all():
