@@ -2762,6 +2762,15 @@ class Array(DaskMethodsMixin):
 
         return rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
+    def shuffle(
+        self,
+        indexer: list[list[int]],
+        axis,
+    ):
+        from dask.array._shuffle import shuffle
+
+        return shuffle(self, indexer, axis)
+
     @property
     def real(self):
         from dask.array.ufunc import real

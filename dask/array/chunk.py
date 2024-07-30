@@ -417,7 +417,7 @@ def getitem(obj, index):
 
     """
     try:
-        result = obj[index]
+        result = obj[*index]
     except IndexError as e:
         raise ValueError(
             "Array chunk size or shape is unknown. "
