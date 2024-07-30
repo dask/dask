@@ -19,24 +19,26 @@ def shuffle(
     average_chunk_size = int(sum(x.chunks[axis]) / len(x.chunks[axis]) * 1.25)
 
     # Figure out how many groups we can put into one chunk
-    current_bucket, buckets = [], []
+    current_chunk, new_chunks = [], []
     for index in indexer:
         if (
-            len(current_bucket) + len(index) > average_chunk_size
-            and len(current_bucket) > 0
+            len(current_chunk) + len(index) > average_chunk_size
+            and len(current_chunk) > 0
         ):
-            buckets.append(current_bucket)
-            current_bucket = index.copy()
+            new_chunks.append(current_chunk)
+            current_chunk = index.copy()
         else:
-            current_bucket.extend(index)
-            if len(current_bucket) > average_chunk_size / 1.25:
-                buckets.append(current_bucket)
-                current_bucket = []
-    if len(current_bucket) > 0:
-        buckets.append(current_bucket)
+            current_chunk.extend(index)
+            if len(current_chunk) > average_chunk_size / 1.25:
+                new_chunks.append(current_chunk)
+                current_chunk = []
+    if len(current_chunk) > 0:
+        new_chunks.append(current_chunk)
 
-    chunk_borders = np.cumsum(x.chunks[axis])
-    new_index = list(
+    chunk_boundaries = np.cumsum(x.chunks[axis])
+
+    # Get existing chunk tuple locations
+    chunk_tuples = list(
         product(*(range(len(c)) for i, c in enumerate(x.chunks) if i != axis))
     )
 
@@ -52,24 +54,24 @@ def shuffle(
     for index in np.ndindex(old_blocks.shape):
         old_blocks[index] = (x.name,) + index
 
-    for final_chunk, bucket in enumerate(buckets):
-        arr = np.array(bucket)
+    for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
+        arr = np.array(new_chunk_taker)
         sorter = np.argsort(arr)
         sorted_array = arr[sorter]
-        chunk_nrs, borders = np.unique(
-            np.searchsorted(chunk_borders, sorted_array, side="right"),
+        source_chunk_nr, taker_boundary = np.unique(
+            np.searchsorted(chunk_boundaries, sorted_array, side="right"),
             return_index=True,
         )
-        borders = borders.tolist()
-        borders.append(len(bucket))
+        taker_boundary = taker_boundary.tolist()
+        taker_boundary.append(len(new_chunk_taker))
 
-        for nidx in new_index:
+        for chunk_tuple in chunk_tuples:
             keys = []
 
             for i, (c, b_start, b_end) in enumerate(
-                zip(chunk_nrs, borders[:-1], borders[1:])
+                zip(source_chunk_nr, taker_boundary[:-1], taker_boundary[1:])
             ):
-                key = convert_key(nidx, c, axis)
+                key = convert_key(chunk_tuple, c, axis)
                 name = (split_name, next(split_name_suffixes))
                 intermediates[name] = (
                     getitem,
@@ -77,13 +79,13 @@ def shuffle(
                     convert_key(
                         slices,
                         sorted_array[b_start:b_end]
-                        - (chunk_borders[c - 1] if c > 0 else 0),
+                        - (chunk_boundaries[c - 1] if c > 0 else 0),
                         axis,
                     ),
                 )
                 keys.append(name)
 
-            final_suffix = convert_key(nidx, final_chunk, axis)
+            final_suffix = convert_key(chunk_tuple, new_chunk_idx, axis)
             if len(keys) > 1:
                 merges[(merge_name,) + final_suffix] = (
                     concatenate_arrays,
@@ -102,7 +104,7 @@ def shuffle(
     chunks = []
     for i, c in enumerate(x.chunks):
         if i == axis:
-            chunks.append(tuple(map(len, buckets)))
+            chunks.append(tuple(map(len, new_chunks)))
         else:
             chunks.append(c)
 
