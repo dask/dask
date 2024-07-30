@@ -229,7 +229,7 @@ For more information on threads, processes, and how to configure them in Dask, s
 Load Data with Dask
 -------------------
 
-A common anto-pattern we se is people creating large Python objects like a DataFrame
+A common anti-pattern we se is people creating large Python objects like a DataFrame
 or an Array on the client (i.e. their local machine) outside of Dask and then embedding
 them into the computation. This means that Dask has to send these objects over the network
 multiple times instead of just passing pointers to the data.
