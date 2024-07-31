@@ -96,15 +96,13 @@ def shuffle(x, indexer: list[list[int]], axis):
                 merge_keys.append(name)
 
             merge_suffix = convert_key(chunk_tuple, new_chunk_idx, axis)
-            if len(merge_keys) > 1:
+            if len(merge_keys) >= 1:
                 merges[(merge_name,) + merge_suffix] = (
                     concatenate_arrays,
                     merge_keys,
                     sorter,
                     axis,
                 )
-            elif len(merge_keys) == 1:
-                merges[(merge_name,) + merge_suffix] = merge_keys[0]  # type: ignore[assignment]
             else:
                 raise NotImplementedError
 
