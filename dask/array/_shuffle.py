@@ -25,7 +25,7 @@ def shuffle(x, indexer: list[list[int]], axis):
             f"Axis {axis} is out of bounds for array with {len(x.chunks)} axes"
         )
 
-    if max(map(max, indexer)) >= sum(x.chunks[axis]):
+    if max(map(max, indexer)) >= sum(x.chunks[axis]):  # type: ignore[arg-type]
         raise IndexError(
             f"Indexer contains out of bounds index. Dimension only has {sum(x.chunks[axis])} elements."
         )
