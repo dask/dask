@@ -6,12 +6,30 @@ import numpy as np
 import toolz
 
 from dask.array.chunk import getitem
-from dask.array.core import Array
+from dask.array.core import Array, unknown_chunk_message
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 
 
 def shuffle(x, indexer: list[list[int]], axis):
+    if not isinstance(indexer, list) or not all(isinstance(i, list) for i in indexer):
+        raise ValueError("indexer must be a list of lists of positional indices")
+
+    if np.isnan(x.shape).any():
+        raise ValueError(
+            f"Shuffling only allowed with known chunk sizes. {unknown_chunk_message}"
+        )
+
+    if not axis <= len(x.chunks):
+        raise ValueError(
+            f"Axis {axis} is out of bounds for array with {len(x.chunks)} axes"
+        )
+
+    if max(map(max, indexer)) >= sum(x.chunks[axis]):
+        raise IndexError(
+            f"Indexer contains out of bounds index. Dimension only has {sum(x.chunks[axis])} elements."
+        )
+
     average_chunk_size = int(sum(x.chunks[axis]) / len(x.chunks[axis]) * 1.25)
 
     # Figure out how many groups we can put into one chunk
