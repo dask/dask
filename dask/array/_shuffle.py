@@ -56,8 +56,8 @@ def shuffle(x, indexer: list[list[int]], axis):
     The array was reordered along axis 1 according to the positional indexer that was given.
 
     >>> y.compute()
-    [[ 7  6  3  5  2  4  1  8]
-    [15 14 11 13 10 12  9 16]]
+    array([[ 7,  6,  3,  5,  2,  4,  1,  8],
+           [15, 14, 11, 13, 10, 12,  9, 16]])
     """
     if np.isnan(x.shape).any():
         raise ValueError(
