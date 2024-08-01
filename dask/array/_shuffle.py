@@ -18,13 +18,13 @@ def shuffle(x, indexer: list[list[int]], axis):
     token = tokenize(x, indexer, axis)
     out_name = f"shuffle-{token}"
 
-    chunks, layer = _shuffle(x.chunks, indexer, axis, x.name, out_name, token)
+    chunks, layer = _shuffle(x.chunks, indexer, axis, x.name, out_name)
     graph = HighLevelGraph.from_collections(out_name, layer, dependencies=[x])
 
     return Array(graph, out_name, chunks, meta=x)
 
 
-def _shuffle(chunks, indexer, axis, in_name, out_name, token):
+def _shuffle(chunks, indexer, axis, in_name, out_name):
     if not isinstance(indexer, list) or not all(isinstance(i, list) for i in indexer):
         raise ValueError("indexer must be a list of lists of positional indices")
 
@@ -66,7 +66,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     intermediates = dict()
     merges = dict()
-    split_name = f"shuffle-split-{token}"
+    split_name = f"shuffle-split-{out_name.split('-')[-1]}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()
 
