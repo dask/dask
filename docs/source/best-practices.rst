@@ -181,22 +181,6 @@ Fortunately, there are many options to support custom workloads:
     map_overlap
     reduction
 
-
-Stop Using Dask When No Longer Needed
--------------------------------------
-
-In many workloads it is common to use Dask to read in a large amount of data,
-reduce it down, and then iterate on a much smaller amount of data.  For this
-latter stage on smaller data it may make sense to stop using Dask, and start
-using normal Python again.
-
-.. code-block:: python
-
-   df = dd.read_parquet("lots-of-data-*.parquet")
-   df = df.groupby('name').mean()  # reduce data significantly
-   df = df.compute()               # continue on with pandas/NumPy
-
-
 Store Data Efficiently
 ----------------------
 
@@ -245,103 +229,140 @@ For more information on threads, processes, and how to configure them in Dask, s
 Load Data with Dask
 -------------------
 
-If you need to work with large Python objects, then please let Dask create
-them.  A common anti-pattern we see is people creating large Python objects
-outside of Dask, then giving those objects to Dask and asking it to manage them.
-This works, but means that Dask needs to move around these very large objects
-with its metadata, rather than as normal Dask-controlled results.
+A common anti-pattern we se is people creating large Python objects like a DataFrame
+or an Array on the client (i.e. their local machine) outside of Dask and then embedding
+them into the computation. This means that Dask has to send these objects over the network
+multiple times instead of just passing pointers to the data.
+
+This incurs a lot of overhead and slows down a computation quite significantly, especially
+so if the network connection between the client and the scheduler is slow. It can
+also overload the scheduler so that it errors with out of memory errors. Instead, you
+should use Dask methods to load the data and use Dask to control the results.
 
 Here are some common patterns to avoid and nicer alternatives:
 
-DataFrames
-~~~~~~~~~~
 
-.. code-block:: python
+.. tab-set::
 
-   # Don't
+   .. tab-item:: DataFrames
+       :sync: dataframe
 
-   ddf = ... a dask dataframe ...
-   for fn in filenames:
-       df = pandas.read_csv(fn)  # Read locally with pandas
-       ddf = ddf.append(df)            # Give to Dask
+       We are using Dask to read a parquet dataset before appending a set of pandas
+       DataFrames to it. We are loading the csv files into memory before sending the
+       data to Dask.
 
-.. code-block:: python
+       .. code-block:: python
 
-    # Do
+          ddf = dd.read_parquet(...)
 
-    ddf = dd.read_csv(filenames)
+          pandas_dfs = []
+          for fn in filenames:
+              pandas_dfs(pandas.read_csv(fn))     # Read locally with pandas
+          ddf = dd.concat([ddf] + pandas_dfs)     # Give to Dask
 
-Arrays
-~~~~~~
+       Instead, we can use Dask to read the csv files directly, keeping all data
+       on the cluster.
 
-.. code-block:: python
+       .. code-block:: python
 
-   # Don't
+           ddf = dd.read_parquet(...)
+           ddf2 = dd.read_csv(filenames)
+           ddf = dd.concat([ddf, ddf2])
 
-   f = h5py.File(...)
-   x = np.asarray(f["x"])  # Get data as a NumPy array locally
 
-   x = da.from_array(x)  # Hand NumPy array to Dask
+   .. tab-item:: Arrays
+       :sync: array
 
-.. code-block:: python
+       We are using NumPy to create an in-memory array before handing it over to
+       Dask, forcing Dask to embed the array into the task graph instead of handling
+       pointers to the data.
 
-   # Do
+       .. code-block:: python
 
-   f = h5py.File(...)
-   x = da.from_array(f["x"])  # Let Dask do the reading
+           f = h5py.File(...)
 
-Delayed
-~~~~~~~
+           x = np.asarray(f["x"])  # Get data as a NumPy array locally
+           x = da.from_array(x)   # Hand NumPy array to Dask
 
-.. code-block:: python
+       Instead, we can use Dask to read the file directly, keeping all data
+       on the cluster.
 
-    # Don't
+       .. code-block:: python
 
-    @dask.delayed
-    def process(a, b):
-        ...
+            f = h5py.File(...)
+            x = da.from_array(f["x"])  # Let Dask do the reading
 
-    df = pandas.read_csv("some-large-file.csv")  # Create large object locally
-    results = []
-    for item in L:
-        result = process(item, df)  # include df in every delayed call
-        results.append(result)
+   .. tab-item:: Delayed
+       :sync: delayed
 
-.. code-block:: python
+       We are using pandas to read a large CSV file before building a Graph
+       with delayed to parallelize a computation on the data.
 
-   # Do
+       .. code-block:: python
 
-   @dask.delayed
-   def process(a, b):
-       ...
+           @dask.delayed
+           def process(a, b):
+               ...
 
-   df = dask.delayed(pandas.read_csv)("some-large-file.csv")  # Let Dask build object
-   results = []
-   for item in L:
-       result = process(item, df)  # include pointer to df in every delayed call
-       results.append(result)
+           df = pandas.read_csv("some-large-file.csv")  # Create large object locally
+           results = []
+           for item in L:
+               result = process(item, df)  # include df in every delayed call
+               results.append(result)
 
+       Instead, we can use delayed to read the data as well. This avoid embedding the
+       large file into the graph, Dask can just pass a reference to the delayed
+       object around.
+
+       .. code-block:: python
+
+           @dask.delayed
+           def process(a, b):
+              ...
+
+           df = dask.delayed(pandas.read_csv)("some-large-file.csv")  # Let Dask build object
+           results = []
+           for item in L:
+              result = process(item, df)  # include pointer to df in every delayed call
+              results.append(result)
+
+Embedding large objects like pandas DataFrames or Arrays into the computation is a
+frequent pain point for Dask users. It adds a significant delay until the scheduler
+has received and is able to start the computation and stresses the scheduler during
+the computation.
+
+Using Dask to load these objects instead avoids these issues and improves the performance
+of a computation significantly.
 
 Avoid calling compute repeatedly
 --------------------------------
 
-Compute related results with shared computations in a single :func:`dask.compute` call
+Calling ``compute`` will block the execution on the client until the Dask computation
+completes. A pattern we regularly see is users calling ``compute`` in a loop or sequentially
+on slightly different queries.
+
+This prohibits Dask from parallelizing different computations on the cluster and from
+sharing intermediate results between different queries.
 
 .. code-block:: python
 
-   # Don't repeatedly call compute
+    foo = ...
+    results = []
+    for i in range(...):
+         results.append(foo.select(...).compute())
 
-   df = dd.read_csv("...")
-   xmin = df.x.min().compute()
-   xmax = df.x.max().compute()
+This holds execution every time that the iteration arrives at the compute call computing
+one query at a time.
 
 .. code-block:: python
 
-   # Do compute multiple results at the same time
-
-   df = dd.read_csv("...")
-
-   xmin, xmax = dask.compute(df.x.min(), df.x.max())
+    foo = ...
+    results = []
+    for i in range(...):
+         results.append(foo.select(...))  # no compute here
+    results = dask.compute(*results)
 
 This allows Dask to compute the shared parts of the computation (like the
-``dd.read_csv`` call above) only once, rather than once per ``compute`` call.
+``foo`` object above) only once, rather than once per ``compute`` call and allows
+Dask to parallelize across the different selects as well instead of running
+them sequentially.
