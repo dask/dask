@@ -3,7 +3,6 @@ from __future__ import annotations
 from itertools import count, product
 
 import numpy as np
-import toolz
 
 from dask.array.chunk import getitem
 from dask.array.core import Array, unknown_chunk_message
@@ -79,6 +78,7 @@ def shuffle(x, indexer: list[list[int]], axis):
         taker_boundary = taker_boundary.tolist()
         taker_boundary.append(len(new_chunk_taker))
 
+        taker_cache = {}
         for chunk_tuple in chunk_tuples:
             merge_keys = []
 
@@ -89,24 +89,36 @@ def shuffle(x, indexer: list[list[int]], axis):
                 chunk_key = convert_key(chunk_tuple, c, axis)
                 name = (split_name, next(split_name_suffixes))
                 this_slice = slices.copy()
-                this_slice[axis] = sorted_array[b_start:b_end] - (
-                    chunk_boundaries[c - 1] if c > 0 else 0
-                )
+
+                # Cache the takers to allow de-duplication when serializing
+                # Ugly!
+                if c in taker_cache:
+                    this_slice[axis] = taker_cache[c]
+                else:
+                    this_slice[axis] = sorted_array[b_start:b_end] - (
+                        chunk_boundaries[c - 1] if c > 0 else 0
+                    )
+                    if len(source_chunk_nr) == 1:
+                        this_slice[axis] = this_slice[axis][np.argsort(sorter)]
+                    taker_cache[c] = this_slice[axis]
+
                 intermediates[name] = getitem, old_blocks[chunk_key], tuple(this_slice)
                 merge_keys.append(name)
 
             merge_suffix = convert_key(chunk_tuple, new_chunk_idx, axis)
-            if len(merge_keys) >= 1:
+            if len(merge_keys) > 1:
                 merges[(merge_name,) + merge_suffix] = (
                     concatenate_arrays,
                     merge_keys,
                     sorter,
                     axis,
                 )
+            elif len(merge_keys) == 1:
+                merges[(merge_name,) + merge_suffix] = intermediates.pop(merge_keys[0])
             else:
                 raise NotImplementedError
 
-    layer = toolz.merge(merges, intermediates)
+    layer = {**merges, **intermediates}
     graph = HighLevelGraph.from_collections(merge_name, layer, dependencies=[x])
 
     chunks = []
