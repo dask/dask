@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from itertools import count, product
+from typing import Literal
 
 import numpy as np
 
@@ -11,7 +12,12 @@ from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 
 
-def shuffle(x, indexer: list[list[int]], axis):
+def shuffle(
+    x,
+    indexer: list[list[int]],
+    axis,
+    shuffle_method: Literal["p2p", "tasks"] | None = None,
+):
     """
     Reorders one dimensions of a Dask Array based on an indexer.
 
@@ -32,6 +38,9 @@ def shuffle(x, indexer: list[list[int]], axis):
         each group will end up in exactly one chunk.
     axis: int
         The axis to shuffle along.
+    shuffle_method: {"p2p", "tasks"}, optional
+        The shuffle method to use. tasks for single node operations, otherwise inferred
+        by the configuration "array.shuffle.method" if not given.
 
     Examples
     --------
@@ -68,13 +77,15 @@ def shuffle(x, indexer: list[list[int]], axis):
     token = tokenize(x, indexer, axis)
     out_name = f"shuffle-{token}"
 
-    chunks, layer = _shuffle(x.chunks, indexer, axis, x.name, out_name, token)
+    chunks, layer = _shuffle(
+        x.chunks, indexer, axis, x.name, out_name, token, shuffle_method
+    )
     graph = HighLevelGraph.from_collections(out_name, layer, dependencies=[x])
 
     return Array(graph, out_name, chunks, meta=x)
 
 
-def _shuffle(chunks, indexer, axis, in_name, out_name, token):
+def _shuffle(chunks, indexer, axis, in_name, out_name, token, shuffle_method=None):
     if not isinstance(indexer, list) or not all(isinstance(i, list) for i in indexer):
         raise ValueError("indexer must be a list of lists of positional indices")
 
@@ -87,6 +98,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         raise IndexError(
             f"Indexer contains out of bounds index. Dimension only has {sum(chunks[axis])} elements."
         )
+    shuffle_method = shuffle_method or config.get("array.shuffle.method")
 
     chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
     average_chunk_size = int(
@@ -109,6 +121,18 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
                 current_chunk = []
     if len(current_chunk) > 0:
         new_chunks.append(current_chunk)
+
+    output_chunks = []
+    for i, c in enumerate(chunks):
+        if i == axis:
+            output_chunks.append(tuple(map(len, new_chunks)))
+        else:
+            output_chunks.append(c)
+
+    if shuffle_method == "p2p":
+        from distributed.shuffle._shuffle_array import _p2p_shuffle
+
+        return output_chunks, _p2p_shuffle(chunks, new_chunks, axis, in_name, out_name)
 
     chunk_boundaries = np.cumsum(chunks[axis])
 
@@ -177,13 +201,6 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
                 merges[(out_name,) + merge_suffix] = intermediates.pop(merge_keys[0])
             else:
                 raise NotImplementedError
-
-    output_chunks = []
-    for i, c in enumerate(chunks):
-        if i == axis:
-            output_chunks.append(tuple(map(len, new_chunks)))
-        else:
-            output_chunks.append(c)
 
     layer = {**merges, **intermediates}
     return tuple(output_chunks), layer

@@ -25,6 +25,7 @@ array:
     method: "tasks"  # Rechunking method to use
     threshold: 4
   shuffle:
+    method: "tasks"  # Shuffle method to use"
     chunksize-tolerance: 1.25  # Tolerance for the shuffle algorithm when creating output chunks.
   svg:
     size: 120  # pixels
