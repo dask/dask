@@ -3,8 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+import dask
 import dask.array as da
-from dask.array import assert_eq
+from dask.array import assert_eq, shuffle
 from dask.core import flatten
 
 
@@ -35,6 +36,17 @@ def test_shuffle(arr, darr, indexer, chunks):
     assert result.chunks[1] == chunks
 
 
+def test_shuffle_config_tolerance(arr, darr):
+    indexer = [[1, 5, 6], [0, 3], [4, 2, 7]]
+    chunks = (3, 2, 3)
+    with dask.config.set({"array.shuffle.chunksize-tolerance": 1}):
+        result = darr.shuffle(indexer, axis=1)
+    expected = arr[:, list(flatten(indexer))]
+    assert_eq(result, expected)
+    assert result.chunks[0] == darr.chunks[0]
+    assert result.chunks[1] == chunks
+
+
 def test_shuffle_larger_array():
     arr = da.random.random((15, 15, 15), chunks=(5, 5, 5))
     indexer = np.arange(0, 15)
@@ -42,7 +54,7 @@ def test_shuffle_larger_array():
     indexer = [indexer[0:6], indexer[6:8], indexer[8:9], indexer[9:]]
     indexer = list(map(list, indexer))
     take_indexer = list(flatten(indexer))
-    assert_eq(arr.shuffle(indexer, axis=1), arr[..., take_indexer, :])
+    assert_eq(shuffle(arr, indexer, axis=1), arr[..., take_indexer, :])
 
 
 def test_incompatible_indexer(darr):
