@@ -4,6 +4,7 @@ from itertools import count, product
 
 import numpy as np
 
+from dask import config
 from dask.array.chunk import getitem
 from dask.array.core import Array, unknown_chunk_message
 from dask.base import tokenize
@@ -11,10 +12,59 @@ from dask.highlevelgraph import HighLevelGraph
 
 
 def shuffle(x, indexer: list[list[int]], axis):
+    """
+    Reorders one dimensions of a Dask Array based on an indexer.
+
+    The indexer defines a list of positional groups that will end up in the same chunk
+    together. A single group is in at most one chunk on this dimension, but a chunk
+    might contain multiple groups to avoid fragmentation of the array.
+
+    The algorithm tries to balance the chunksizes as much as possible to ideally keep the
+    number of chunks consistent or at least manageable.
+
+    Parameters
+    ----------
+    x: dask array
+        Array to be shuffled.
+    indexer:  list[list[int]]
+        The indexer that determins which elements along the dimension will end up in the
+        same chunk. Multiple groups can be in the same chunk to avoid fragmentation, but
+        each group will end up in exactly one chunk.
+    axis: int
+        The axis to shuffle along.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> import numpy as np
+    >>> arr = np.array([[1, 2, 3, 4, 5, 6, 7, 8], [9, 10, 11, 12, 13, 14, 15, 16]])
+    >>> x = da.from_array(arr, chunks=(2, 4))
+
+    Separate the elements in different groups.
+
+    >>> y = x.shuffle([[6, 5, 2], [4, 1], [3, 0, 7]], axis=1)
+
+    The shuffle algorihthm will combine the first 2 groups into a single chunk to keep
+    the number of chunks small.
+
+    The tolerance of increasing the chunk size is controlled by the configuration
+    "array.shuffle.chunksize-tolerance". The default value is 1.25.
+
+    >>> y.chunks
+    ((2,), (5, 3))
+
+    The array was reordered along axis 1 according to the positional indexer that was given.
+
+    >>> y.compute()
+    array([[ 7,  6,  3,  5,  2,  4,  1,  8],
+           [15, 14, 11, 13, 10, 12,  9, 16]])
+    """
     if np.isnan(x.shape).any():
         raise ValueError(
             f"Shuffling only allowed with known chunk sizes. {unknown_chunk_message}"
         )
+    assert isinstance(axis, int), "axis must be an integer"
+
     token = tokenize(x, indexer, axis)
     out_name = f"shuffle-{token}"
 
@@ -38,7 +88,10 @@ def _shuffle(chunks, indexer, axis, in_name, out_name):
             f"Indexer contains out of bounds index. Dimension only has {sum(chunks[axis])} elements."
         )
 
-    average_chunk_size = int(sum(chunks[axis]) / len(chunks[axis]) * 1.25)
+    chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
+    average_chunk_size = int(
+        sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance
+    )
 
     # Figure out how many groups we can put into one chunk
     current_chunk, new_chunks = [], []

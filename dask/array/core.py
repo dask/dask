@@ -2767,6 +2767,14 @@ class Array(DaskMethodsMixin):
         indexer: list[list[int]],
         axis,
     ):
+        """Convert blocks in dask array x for new chunks.
+
+        Refer to :func:`dask.array.shuffle` for full documentation.
+
+        See Also
+        --------
+        dask.array.shuffle : equivalent function
+        """
         from dask.array._shuffle import shuffle
 
         return shuffle(self, indexer, axis)
