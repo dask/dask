@@ -1,5 +1,5 @@
-10 Minutes to Dask
-==================
+Dask Cookbook
+=============
 
 .. meta::
     :description: This is a short overview of Dask geared towards new users. Additional Dask information can be found in the rest of the Dask documentation.
