@@ -17,6 +17,7 @@ def shuffle(
     indexer: list[list[int]],
     axis,
     shuffle_method: Literal["p2p", "tasks"] | None = None,
+    disk: bool = True,
 ):
     """
     Reorders one dimensions of a Dask Array based on an indexer.
@@ -41,6 +42,8 @@ def shuffle(
     shuffle_method: {"p2p", "tasks"}, optional
         The shuffle method to use. tasks for single node operations, otherwise inferred
         by the configuration "array.shuffle.method" if not given.
+    disk: bool, default True
+        Whether to use disk for the p2p shuffle operation. Default is True.
 
     Examples
     --------
@@ -78,14 +81,16 @@ def shuffle(
     out_name = f"shuffle-{token}"
 
     chunks, layer = _shuffle(
-        x.chunks, indexer, axis, x.name, out_name, token, shuffle_method
+        x.chunks, indexer, axis, x.name, out_name, token, shuffle_method, disk
     )
     graph = HighLevelGraph.from_collections(out_name, layer, dependencies=[x])
 
     return Array(graph, out_name, chunks, meta=x)
 
 
-def _shuffle(chunks, indexer, axis, in_name, out_name, token, shuffle_method=None):
+def _shuffle(
+    chunks, indexer, axis, in_name, out_name, token, shuffle_method=None, disk=True
+):
     if not isinstance(indexer, list) or not all(isinstance(i, list) for i in indexer):
         raise ValueError("indexer must be a list of lists of positional indices")
 
@@ -132,7 +137,9 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token, shuffle_method=Non
     if shuffle_method == "p2p":
         from distributed.shuffle._shuffle_array import _p2p_shuffle
 
-        return output_chunks, _p2p_shuffle(chunks, new_chunks, axis, in_name, out_name)
+        return output_chunks, _p2p_shuffle(
+            chunks, new_chunks, axis, in_name, out_name, disk
+        )
 
     chunk_boundaries = np.cumsum(chunks[axis])
 

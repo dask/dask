@@ -2767,6 +2767,7 @@ class Array(DaskMethodsMixin):
         indexer: list[list[int]],
         axis,
         shuffle_method: Literal["p2p", "tasks"] | None = None,
+        disk: bool = True,
     ):
         """Convert blocks in dask array x for new chunks.
 
@@ -2778,7 +2779,7 @@ class Array(DaskMethodsMixin):
         """
         from dask.array._shuffle import shuffle
 
-        return shuffle(self, indexer, axis, shuffle_method)
+        return shuffle(self, indexer, axis, shuffle_method, disk)
 
     @property
     def real(self):
