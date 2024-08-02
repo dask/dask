@@ -46,7 +46,6 @@ graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
 """
-import copy
 from collections import defaultdict, deque, namedtuple
 from collections.abc import Iterable, Mapping, MutableMapping
 from typing import Any, Callable, Literal, NamedTuple, overload
@@ -110,14 +109,7 @@ def order(
     expected_len = len(dsk)
 
     if dependencies is None:
-        dependencies_are_copy = True
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
-    else:
-        # Below we're removing items from the sets in this dict
-        # We need a deepcopy for that but we only want to do this if necessary
-        # since this only happens for special cases.
-        dependencies_are_copy = False
-        dependencies = dict(dependencies)
 
     dependents = reverse_dict(dependencies)
 
@@ -137,7 +129,6 @@ def order(
     # way that is simpler to handle
     all_tasks = False
     n_removed_leaves = 0
-    requires_data_task = defaultdict(set)
     while not all_tasks:
         all_tasks = True
         for leaf in list(leaf_nodes):
@@ -164,23 +155,6 @@ def order(
                     dependents[dep].remove(leaf)
                     if not dependents[dep]:
                         leaf_nodes.add(dep)
-
-        for root in list(root_nodes):
-            if root in leaf_nodes:
-                continue
-            if not istask(dsk[root]) and len(dependents[root]) > 1:
-                if not dependencies_are_copy:
-                    dependencies_are_copy = True
-                    dependencies = copy.deepcopy(dependencies)
-                root_nodes.remove(root)
-                for dep in dependents[root]:
-                    requires_data_task[dep].add(root)
-                    dependencies[dep].remove(root)
-                    if not dependencies[dep]:
-                        root_nodes.add(dep)
-                del dsk[root]
-                del dependencies[root]
-                del dependents[root]
 
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     if len(total_dependencies) != len(dsk):
@@ -238,9 +212,6 @@ def order(
             leaf_nodes.discard(item)
             if item in result:
                 continue
-
-            while requires_data_task[item]:
-                add_to_result(requires_data_task[item].pop())
 
             if return_stats:
                 result[item] = Order(i, crit_path_counter - _crit_path_counter_offset)
