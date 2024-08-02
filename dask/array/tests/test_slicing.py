@@ -23,6 +23,7 @@ from dask.array.slicing import (
     slice_array,
     slicing_plan,
     take,
+    take_along_axis,
 )
 from dask.array.utils import assert_eq, same_keys
 
@@ -1054,3 +1055,43 @@ def test_slice_array_null_dimension():
     array = da.from_array(np.zeros((3, 0)))
     expected = np.zeros((3, 0))[[0]]
     assert_eq(array[[0]], expected)
+
+
+def test_take_along_axis__simple_indexing():
+    # GIVEN
+    data = da.from_array(
+        [[[0, 1, 2, 3], [4, 5, 6, 7]], [[8, 9, 10, 11], [12, 13, 14, 15]]],
+        chunks=(1, 1, 1),
+    )
+    indexes = da.from_array([[[1, 2], [0, 1]], [[1, 0], [2, 1]]], chunks=(1, 1, 1))
+    expected = da.from_array([[[1, 2], [4, 5]], [[9, 8], [14, 13]]], chunks=(1, 1, 1))
+    # WHEN
+    res = take_along_axis(data, indexes, axis=-1)
+    # THEN
+    assert_eq(res, expected)
+
+
+def test_take_along_axis__indexing_twice_same_1darray():
+    # GIVEN
+    arr = da.from_array([[10, 20, 30, 40]], chunks=2)
+    idx = da.from_array([[0, 2], [2, 3]], chunks=-1)
+    expected = da.from_array([[10, 30], [30, 40]], chunks=2)
+    # WHEN
+    res = take_along_axis(arr, idx, axis=-1)
+    # THEN
+    assert_eq(res, expected)
+
+
+def test_take_along_axis__error_indexing_has_nans():
+    # GIVEN
+    arr = da.from_array([[10, 20, 30, 40]], chunks=2)
+    idx = da.from_array([[0, 2], [2, 3]], chunks=-1)
+    arr = arr[arr > 0]  # make it have a nan shape
+    expected_error = (
+        "take_along_axis for an array with unknown chunks with "
+        "a dask.array of ints is not supported"
+    )
+    # THEN
+    with pytest.raises(NotImplementedError, match=expected_error):
+        # WHEN
+        take_along_axis(arr, idx, axis=-1)
