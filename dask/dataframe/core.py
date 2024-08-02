@@ -8589,21 +8589,37 @@ def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs)
                 category=RuntimeWarning,
                 message="invalid value encountered in cast",
             )
-            return pd.to_timedelta(M.std(partition, *args, axis=axis, **kwargs))
+            unit = kwargs.pop("unit", None)
+            result = pd.to_timedelta(
+                M.std(partition, *args, axis=axis, **kwargs), unit=unit
+            )
+            if unit is not None and dtype is not None:
+                result = result.astype(dtype)
+            return result
 
     is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
 
     sqrt = np.sqrt(partition)
 
     if not is_df_like:
-        return pd.to_timedelta(sqrt)
+        result = pd.to_timedelta(sqrt, unit=kwargs.get("unit", None))
+        if kwargs.get("unit", None) is not None:
+            result = result.as_unit(kwargs["unit"])
+        return result
 
     time_col_mask = sqrt.index.isin(time_cols)
     matching_vals = sqrt[time_col_mask]
     if len(time_cols) > 0:
         sqrt = sqrt.astype(object)
-    for time_col, matching_val in zip(time_cols, matching_vals):
-        sqrt[time_col] = pd.to_timedelta(matching_val)
+
+    units = kwargs.get("units", None)
+    if units is None:
+        units = [None] * len(time_cols)
+    for time_col, matching_val, unit in zip(time_cols, matching_vals, units):
+        result = pd.to_timedelta(matching_val, unit=unit)
+        if unit is not None:
+            result = result.as_unit(unit)
+        sqrt[time_col] = result
 
     if dtype is not None:
         sqrt = sqrt.astype(dtype)
