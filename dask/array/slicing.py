@@ -550,12 +550,12 @@ def take(outname, inname, chunks, index, axis=0):
     >>> from pprint import pprint
     >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
     >>> chunks
-    ((4, ),)
+    ((4,),)
     When list is sorted we still try to preserve properly sized chunks.
 
     >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
     >>> chunks
-    ((4, ),)
+    ((4,),)
 
     When any indexed blocks would otherwise grow larger than
     dask.config.array.chunk-size, we will split them to avoid
