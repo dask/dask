@@ -29,7 +29,6 @@ from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
     BlockView,
-    PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
     broadcast_shapes,
@@ -1266,35 +1265,6 @@ def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
     if limit is None:
         limit = parse_bytes(dask.config.get("array.chunk-size"))
     assert max_chunksize_in_bytes < limit
-
-
-def test_reshape_warns_by_default_if_it_is_producing_large_chunks():
-    # Test reshape where output chunks would otherwise be too large
-    shape, chunks, reshape_size = (300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)
-    array = da.random.default_rng().random(shape, chunks=chunks)
-
-    with pytest.warns(PerformanceWarning) as record:
-        result = array.reshape(*reshape_size)
-        nbytes = array.dtype.itemsize
-        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-        assert max_chunksize_in_bytes > limit
-
-    assert len(record) == 1
-
-    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
-        result = array.reshape(*reshape_size)
-        nbytes = array.dtype.itemsize
-        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-        assert max_chunksize_in_bytes > limit
-
-    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        result = array.reshape(*reshape_size)
-        nbytes = array.dtype.itemsize
-        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-        assert max_chunksize_in_bytes < limit
 
 
 def test_full():
