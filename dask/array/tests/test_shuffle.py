@@ -36,12 +36,12 @@ def test_shuffle(arr, darr, indexer, chunks):
     assert result.chunks[1] == chunks
 
 
-def test_shuffle_config_tolerance(arr, darr):
+@pytest.mark.parametrize("tol, chunks", ((1, (3, 2, 3)), (1.4, (5, 3))))
+def test_shuffle_config_tolerance(arr, darr, tol, chunks):
     indexer = [[1, 5, 6], [0, 3], [4, 2, 7]]
-    chunks = (3, 2, 3)
-    with dask.config.set({"array.shuffle.chunksize-tolerance": 1}):
+    with dask.config.set({"array.shuffle.chunksize-tolerance": tol}):
         result = darr.shuffle(indexer, axis=1)
-    expected = arr[:, list(flatten(indexer))]
+    expected = arr[:, [1, 5, 6, 0, 3, 4, 2, 7]]
     assert_eq(result, expected)
     assert result.chunks[0] == darr.chunks[0]
     assert result.chunks[1] == chunks

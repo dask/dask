@@ -142,7 +142,7 @@ properties:
           chunksize-tolerance:
             type: number
             description: |
-              Tolerance for the shuffle algorithm when creating output chunks.
+              Upper tolerance for the shuffle algorithm when creating output chunks.
               Default is 1.25. This means that the shuffle algorithm can exceed
               the average input chunk size along this dimension by 25%.
 

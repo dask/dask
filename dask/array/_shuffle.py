@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from itertools import count, product
 
 import numpy as np
@@ -27,7 +28,7 @@ def shuffle(x, indexer: list[list[int]], axis):
     x: dask array
         Array to be shuffled.
     indexer:  list[list[int]]
-        The indexer that determins which elements along the dimension will end up in the
+        The indexer that determines which elements along the dimension will end up in the
         same chunk. Multiple groups can be in the same chunk to avoid fragmentation, but
         each group will end up in exactly one chunk.
     axis: int
@@ -68,13 +69,13 @@ def shuffle(x, indexer: list[list[int]], axis):
     token = tokenize(x, indexer, axis)
     out_name = f"shuffle-{token}"
 
-    chunks, layer = _shuffle(x.chunks, indexer, axis, x.name, out_name)
+    chunks, layer = _shuffle(x.chunks, indexer, axis, x.name, out_name, token)
     graph = HighLevelGraph.from_collections(out_name, layer, dependencies=[x])
 
     return Array(graph, out_name, chunks, meta=x)
 
 
-def _shuffle(chunks, indexer, axis, in_name, out_name):
+def _shuffle(chunks, indexer, axis, in_name, out_name, token):
     if not isinstance(indexer, list) or not all(isinstance(i, list) for i in indexer):
         raise ValueError("indexer must be a list of lists of positional indices")
 
@@ -87,24 +88,20 @@ def _shuffle(chunks, indexer, axis, in_name, out_name):
         raise IndexError(
             f"Indexer contains out of bounds index. Dimension only has {sum(chunks[axis])} elements."
         )
+    indexer = copy.deepcopy(indexer)
 
     chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
-    average_chunk_size = int(
-        sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance
-    )
+    chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
 
     # Figure out how many groups we can put into one chunk
     current_chunk, new_chunks = [], []
     for idx in indexer:
-        if (
-            len(current_chunk) + len(idx) > average_chunk_size
-            and len(current_chunk) > 0
-        ):
+        if len(current_chunk) + len(idx) > chunk_size_limit and len(current_chunk) > 0:
             new_chunks.append(current_chunk)
             current_chunk = idx.copy()
         else:
             current_chunk.extend(idx)
-            if len(current_chunk) > average_chunk_size / 1.25:
+            if len(current_chunk) > chunk_size_limit / chunksize_tolerance:
                 new_chunks.append(current_chunk)
                 current_chunk = []
     if len(current_chunk) > 0:
@@ -119,7 +116,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name):
 
     intermediates = dict()
     merges = dict()
-    split_name = f"shuffle-split-{out_name.split('-')[-1]}"
+    split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()
 
