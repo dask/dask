@@ -589,7 +589,12 @@ def take(outname, inname, chunks, index, axis=0):
         for i in range(0, len(index), average_chunk_size):
             indexer.append(index[i : i + average_chunk_size].tolist())
 
-        chunks, graph = _shuffle(chunks, indexer, axis, inname, outname)
+        token = (
+            outname.split("-")[-1]
+            if "-" in outname
+            else tokenize(outname, chunks, index, axis)
+        )
+        chunks, graph = _shuffle(chunks, indexer, axis, inname, outname, token)
         return chunks, graph
     else:
         from dask.array.core import unknown_chunk_message
