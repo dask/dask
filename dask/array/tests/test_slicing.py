@@ -317,7 +317,7 @@ def test_slicing_with_newaxis():
 def test_take():
     chunks, dsk = take("y-y", "x", [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
     expected = {
-        ("y", 0): (
+        ("y-y", 0): (
             concatenate_arrays,
             [
                 ("shuffle-split-y", 0),
@@ -342,7 +342,7 @@ def test_take():
 
     chunks, dsk = take("y-y", "x", [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
     expected = {
-        ("y", 0, 0): (
+        ("y-y", 0, 0): (
             concatenate_arrays,
             [
                 ("shuffle-split-y", 0),
@@ -351,7 +351,7 @@ def test_take():
             np.array([1, 3, 0, 2]),
             0,
         ),
-        ("y", 0, 1): (
+        ("y-y", 0, 1): (
             concatenate_arrays,
             [
                 ("shuffle-split-y", 2),
@@ -388,7 +388,7 @@ def test_take():
 def test_take_sorted():
     chunks, dsk = take("y-y", "x", [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
     expected = {
-        ("y", 0): (
+        ("y-y", 0): (
             concatenate_arrays,
             [
                 ("shuffle-split-y", 0),
