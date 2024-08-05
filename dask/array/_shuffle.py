@@ -89,7 +89,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         )
 
     chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
-    average_chunk_size = int(
+    chunk_size_limit = int(
         sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance
     )
 
