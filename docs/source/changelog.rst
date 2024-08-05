@@ -26,7 +26,7 @@ fixed with a more efficient algorithm.
 The new algorithm will keep the chunk-sizes along the axis that is indexed
 the same to avoid fragmentation of chunks or a large increase in chunk-size.
 
-See :pr:`11262` by `Patrick Hoefler`_ for more details and performance
+See :pr:`11262` and :pr:`11267` by `Patrick Hoefler`_ for more details and performance
 benchmarks.
 
 .. _v2024.7.1:
