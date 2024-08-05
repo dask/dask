@@ -27,7 +27,7 @@ def shuffle(x, indexer: list[list[int]], axis):
     x: dask array
         Array to be shuffled.
     indexer:  list[list[int]]
-        The indexer that determins which elements along the dimension will end up in the
+        The indexer that determines which elements along the dimension will end up in the
         same chunk. Multiple groups can be in the same chunk to avoid fragmentation, but
         each group will end up in exactly one chunk.
     axis: int
