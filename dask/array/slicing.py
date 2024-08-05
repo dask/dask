@@ -550,33 +550,16 @@ def take(outname, inname, chunks, index, axis=0):
     >>> from pprint import pprint
     >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
     >>> chunks
-    ((2, 1, 1),)
-    >>> pprint(dsk)   # doctest: +ELLIPSIS
-    {('y', 0): (<function getitem at ...>, ('x', 0), (array([5, 1]),)),
-     ('y', 1): (<function getitem at ...>, ('x', 2), (array([7]),)),
-     ('y', 2): (<function getitem at ...>, ('x', 0), (array([3]),))}
-
-    When list is sorted we retain original block structure
+    ((4, ),)
+    When list is sorted we still try to preserve properly sized chunks.
 
     >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
     >>> chunks
-    ((3, 1),)
-    >>> pprint(dsk)     # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    {('y', 0): (<function getitem at ...>,
-                ('x', 0),
-                (array([1, 3, 5]),)),
-     ('y', 1): (<function getitem at ...>, ('x', 2), (array([7]),))}
+    ((4, ),)
 
     When any indexed blocks would otherwise grow larger than
-    dask.config.array.chunk-size, we might split them,
-    depending on the value of ``dask.config.slicing.split-large-chunks``.
-
-    >>> import dask
-    >>> with dask.config.set({"array.slicing.split-large-chunks": True}):
-    ...      chunks, dsk = take('y', 'x', [(1, 1, 1), (2000, 2000), (2000, 2000)],
-    ...                        [0] + [1] * 6 + [2], axis=0)
-    >>> chunks
-    ((1, 3, 3, 1), (2000, 2000), (2000, 2000))
+    dask.config.array.chunk-size, we will split them to avoid
+    growing chunksizes.
     """
 
     if not np.isnan(chunks[axis]).any():

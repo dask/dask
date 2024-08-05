@@ -315,23 +315,23 @@ def test_slicing_with_newaxis():
 
 
 def test_take():
-    chunks, dsk = take("y", "x", [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    chunks, dsk = take("y-y", "x", [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
     expected = {
         ("y", 0): (
             concatenate_arrays,
             [
-                ("shuffle-split-e1004887ecd730e66da5397c4da5c2aa", 0),
-                ("shuffle-split-e1004887ecd730e66da5397c4da5c2aa", 1),
+                ("shuffle-split-y", 0),
+                ("shuffle-split-y", 1),
             ],
             np.array([1, 3, 0, 2]),
             0,
         ),
-        ("shuffle-split-e1004887ecd730e66da5397c4da5c2aa", 0): (
+        ("shuffle-split-y", 0): (
             getitem,
             ("x", 0),
             (np.array([1, 3, 5]),),
         ),
-        ("shuffle-split-e1004887ecd730e66da5397c4da5c2aa", 1): (
+        ("shuffle-split-y", 1): (
             getitem,
             ("x", 2),
             (np.array([7]),),
@@ -340,13 +340,13 @@ def test_take():
     np.testing.assert_equal(sorted(dsk.items()), sorted(expected.items()))
     assert chunks == ((4,),)
 
-    chunks, dsk = take("y", "x", [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
+    chunks, dsk = take("y-y", "x", [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
     expected = {
         ("y", 0, 0): (
             concatenate_arrays,
             [
-                ("shuffle-split-cf4bb0d03e85cfad92f7b7e4fa4305db", 0),
-                ("shuffle-split-cf4bb0d03e85cfad92f7b7e4fa4305db", 1),
+                ("shuffle-split-y", 0),
+                ("shuffle-split-y", 1),
             ],
             np.array([1, 3, 0, 2]),
             0,
@@ -354,28 +354,28 @@ def test_take():
         ("y", 0, 1): (
             concatenate_arrays,
             [
-                ("shuffle-split-cf4bb0d03e85cfad92f7b7e4fa4305db", 2),
-                ("shuffle-split-cf4bb0d03e85cfad92f7b7e4fa4305db", 3),
+                ("shuffle-split-y", 2),
+                ("shuffle-split-y", 3),
             ],
             np.array([1, 3, 0, 2]),
             0,
         ),
-        ("shuffle-split-cf4bb0d03e85cfad92f7b7e4fa4305db", 0): (
+        ("shuffle-split-y", 0): (
             getitem,
             ("x", 0, 0),
             (np.array([1, 3, 5]), slice(None)),
         ),
-        ("shuffle-split-cf4bb0d03e85cfad92f7b7e4fa4305db", 1): (
+        ("shuffle-split-y", 1): (
             getitem,
             ("x", 2, 0),
             (np.array([7]), slice(None)),
         ),
-        ("shuffle-split-cf4bb0d03e85cfad92f7b7e4fa4305db", 2): (
+        ("shuffle-split-y", 2): (
             getitem,
             ("x", 0, 1),
             (np.array([1, 3, 5]), slice(None)),
         ),
-        ("shuffle-split-cf4bb0d03e85cfad92f7b7e4fa4305db", 3): (
+        ("shuffle-split-y", 3): (
             getitem,
             ("x", 2, 1),
             (np.array([7]), slice(None)),
@@ -386,23 +386,23 @@ def test_take():
 
 
 def test_take_sorted():
-    chunks, dsk = take("y", "x", [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    chunks, dsk = take("y-y", "x", [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
     expected = {
         ("y", 0): (
             concatenate_arrays,
             [
-                ("shuffle-split-f7e29f740aa3d06bb0ed8a0686f13ecd", 0),
-                ("shuffle-split-f7e29f740aa3d06bb0ed8a0686f13ecd", 1),
+                ("shuffle-split-y", 0),
+                ("shuffle-split-y", 1),
             ],
             np.array([0, 1, 2, 3]),
             0,
         ),
-        ("shuffle-split-f7e29f740aa3d06bb0ed8a0686f13ecd", 0): (
+        ("shuffle-split-y", 0): (
             getitem,
             ("x", 0),
             (np.array([1, 3, 5]),),
         ),
-        ("shuffle-split-f7e29f740aa3d06bb0ed8a0686f13ecd", 1): (
+        ("shuffle-split-y", 1): (
             getitem,
             ("x", 2),
             (np.array([7]),),
