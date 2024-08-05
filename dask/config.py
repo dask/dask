@@ -272,7 +272,7 @@ def collect_env(env: Mapping[str, str] | None = None) -> dict:
 
     for name, value in env.items():
         if name.startswith("DASK_"):
-            varname = name[5:].lower().replace("__", ".")
+            varname = name[5:].lower().replace("__", ".").replace("--", "__")
             d[varname] = interpret_value(value)
 
     result: dict = {}
@@ -429,7 +429,11 @@ class set:
             if arg is not None:
                 for key, value in arg.items():
                     key = check_deprecations(key)
-                    self._assign(key.split("."), value, config)
+                    self._assign(
+                        [s.replace("__", ".") for s in key.split(".")],
+                        value,
+                        config,
+                    )
             if kwargs:
                 for key, value in kwargs.items():
                     key = key.replace("__", ".")
