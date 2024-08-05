@@ -89,22 +89,17 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         )
 
     chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
-    chunk_size_limit = int(
-        sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance
-    )
+    chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
 
     # Figure out how many groups we can put into one chunk
     current_chunk, new_chunks = [], []
     for idx in indexer:
-        if (
-            len(current_chunk) + len(idx) > average_chunk_size
-            and len(current_chunk) > 0
-        ):
+        if len(current_chunk) + len(idx) > chunk_size_limit and len(current_chunk) > 0:
             new_chunks.append(current_chunk)
             current_chunk = idx.copy()
         else:
             current_chunk.extend(idx)
-            if len(current_chunk) > average_chunk_size / 1.25:
+            if len(current_chunk) > chunk_size_limit / chunksize_tolerance:
                 new_chunks.append(current_chunk)
                 current_chunk = []
     if len(current_chunk) > 0:

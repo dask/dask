@@ -2767,7 +2767,7 @@ class Array(DaskMethodsMixin):
         indexer: list[list[int]],
         axis,
     ):
-        """Convert blocks in dask array x for new chunks.
+        """Reorders one dimensions of a Dask Array based on an indexer.
 
         Refer to :func:`dask.array.shuffle` for full documentation.
 
