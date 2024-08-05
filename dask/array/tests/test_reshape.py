@@ -301,3 +301,9 @@ def test_reshape_to_higher_dimension(reshaper, chunks):
     assert result.chunks == ((5, 5),) + chunks
     assert np.prod(result.shape) == np.prod(darr.shape)
     assert_eq(result, arr.reshape(10, *reshaper))
+
+
+def test_reshape_lower_dimension():
+    arr = da.ones((20, 20, 5), chunks=(10, 10, 5))
+    result = arr.reshape(400, 5)
+    assert result.chunks == ((100,) * 4, (5,))
