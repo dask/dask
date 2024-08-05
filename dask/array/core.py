@@ -2762,6 +2762,23 @@ class Array(DaskMethodsMixin):
 
         return rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
+    def shuffle(
+        self,
+        indexer: list[list[int]],
+        axis,
+    ):
+        """Reorders one dimensions of a Dask Array based on an indexer.
+
+        Refer to :func:`dask.array.shuffle` for full documentation.
+
+        See Also
+        --------
+        dask.array.shuffle : equivalent function
+        """
+        from dask.array._shuffle import shuffle
+
+        return shuffle(self, indexer, axis)
+
     @property
     def real(self):
         from dask.array.ufunc import real

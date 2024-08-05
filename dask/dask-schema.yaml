@@ -135,6 +135,17 @@ properties:
               The graph growth factor above which task-based shuffling introduces
               an intermediate step.
 
+      shuffle:
+        type: object
+        properties:
+
+          chunksize-tolerance:
+            type: number
+            description: |
+              Upper tolerance for the shuffle algorithm when creating output chunks.
+              Default is 1.25. This means that the shuffle algorithm can exceed
+              the average input chunk size along this dimension by 25%.
+
       svg:
         type: object
         properties:
