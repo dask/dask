@@ -1,6 +1,34 @@
 Changelog
 =========
 
+.. _v2024.8.0:
+
+2024.8.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+Improve efficiency and performance of slicing with positional indexers
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Performance improvement for slicing a Dask Array with a positional indexer.
+Random access patterns are now more stable and produce easier to use results.
+
+.. code-block:: python
+
+    x[slice(None), [1, 1, 3, 6, 3, 4, 5]]
+
+Using a positional indexer was previously prone to drastically increasing the
+number of output chunks and generating a very large task graph. This has been
+fixed with a more efficient algorithm.
+
+The new algorithm will keep the chunk-sizes along the axis that is indexed
+the same to avoid fragmentation of chunks or a large increase in chunk-size.
+
+See :pr:`11262` by `Patrick Hoefler`_ for more details and performance
+benchmarks.
+
 .. _v2024.7.1:
 
 2024.7.1
