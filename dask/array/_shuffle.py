@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from itertools import count, product
 
 import numpy as np
@@ -87,6 +88,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         raise IndexError(
             f"Indexer contains out of bounds index. Dimension only has {sum(chunks[axis])} elements."
         )
+    indexer = copy.deepcopy(indexer)
 
     chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
     chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
