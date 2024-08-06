@@ -363,6 +363,9 @@ def rechunk(
 
     method = method or config.get("array.rechunk.method")
 
+    if method == "auto":
+        method = _choose_rechunk_method(x.chunks, chunks, threshold=threshold)
+
     if method == "tasks":
         steps = plan_rechunk(
             x.chunks, chunks, x.dtype.itemsize, threshold, block_size_limit
@@ -381,6 +384,29 @@ def rechunk(
         raise NotImplementedError(f"Unknown rechunking method '{method}'")
 
 
+def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
+    try:
+        from distributed import default_client
+
+        default_client()
+    except (ImportError, ValueError):
+        return "tasks"
+
+    graph_size = estimate_graph_size(old_chunks, new_chunks)
+
+    graph_size_treshold = _graph_size_threshold(old_chunks, new_chunks)
+    return "tasks" if graph_size < graph_size_treshold else "p2p"
+
+
+import math
+
+
+def _graph_size_threshold(old_chunks, new_chunks):
+    n_old_blocks = _number_of_blocks(old_chunks)
+    n_new_blocks = _number_of_blocks(new_chunks)
+    return n_old_blocks * n_new_blocks / math.sqrt(n_old_blocks + n_new_blocks)
+
+
 def _number_of_blocks(chunks):
     return reduce(mul, map(len, chunks))
 
@@ -396,7 +422,11 @@ def estimate_graph_size(old_chunks, new_chunks):
     crossed_size = reduce(
         mul,
         (
-            (len(oc) + len(nc) - 1 if oc != nc else len(oc))
+            (
+                len(oc) + len(nc) - 1
+                if np.array_equal(oc, nc, equal_nan=True)
+                else len(oc)
+            )
             for oc, nc in zip(old_chunks, new_chunks)
         ),
     )
