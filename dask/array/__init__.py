@@ -32,6 +32,7 @@ def _array_expr_enabled() -> bool:
 
 try:
     from dask.array import backends, fft, lib, linalg, ma, overlap, random
+    from dask.array._shuffle import shuffle
     from dask.array.blockwise import atop, blockwise
     from dask.array.chunk_types import register_chunk_type
     from dask.array.core import (

@@ -26,12 +26,12 @@ def f(*args):
     pass
 
 
-def visualize(dsk, **kwargs):
+def visualize(dsk, suffix="", **kwargs):
     """Utility to visualize the raw low level graphs in this tests suite. This
     automatically generates a set of visualizations with different metrics and
     writes them out to a file prefixed by the test name and suffixed by the
     measure used."""
-    funcname = inspect.stack()[1][3]
+    funcname = inspect.stack()[1][3] + suffix
     if hasattr(dsk, "__dask_graph__"):
         dsk = collections_to_dsk([dsk], optimize_graph=True)
 
@@ -2020,6 +2020,81 @@ def test_order_flox_reduction_2(abcde):
         # Then, there are exactly four dependencies to load for every final
         # task.
         assert o[final_nodes[ix]] - o[final_nodes[ix - 1]] == 5
+
+
+def test_xarray_map_reduce_with_slicing():
+    # See https://github.com/dask/distributed/pull/8818
+    dsk = {
+        ("transpose", 0, 0, 0): (f, ("groupby-agg", 0, 0, 0)),
+        ("transpose", 0, 0, 1): (f, ("groupby-agg", 0, 0, 1)),
+        ("transpose", 0, 1, 0): (f, ("groupby-agg", 0, 1, 0)),
+        ("transpose", 0, 1, 1): (f, ("groupby-agg", 0, 1, 1)),
+        ("groupby-chunk", 0, 0, 0): (f, ("array", 0), ("getitem", 0, 0, 0)),
+        ("groupby-chunk", 0, 0, 1): (f, ("array", 1), ("getitem", 1, 0, 0)),
+        ("groupby-chunk", 0, 1, 0): (f, ("array", 0), ("getitem", 0, 0, 1)),
+        ("groupby-chunk", 0, 1, 1): (f, ("array", 1), ("getitem", 1, 0, 1)),
+        ("groupby-chunk", 1, 0, 0): (f, ("array", 0), ("getitem", 0, 1, 0)),
+        ("groupby-chunk", 1, 0, 1): (f, ("array", 1), ("getitem", 1, 1, 0)),
+        ("groupby-chunk", 1, 1, 0): (f, ("array", 0), ("getitem", 0, 1, 1)),
+        ("groupby-chunk", 1, 1, 1): (f, ("getitem", 1, 1, 1), ("array", 1)),
+        ("getitem", 0, 0, 0): (f, ("open_data", 0, 0, 0)),
+        ("getitem", 0, 0, 1): (f, ("open_data", 0, 0, 1)),
+        ("getitem", 0, 1, 0): (f, ("open_data", 0, 1, 0)),
+        ("getitem", 0, 1, 1): (f, ("open_data", 0, 1, 1)),
+        ("getitem", 1, 0, 0): (f, ("open_data", 1, 0, 0)),
+        ("getitem", 1, 0, 1): (f, ("open_data", 1, 0, 1)),
+        ("getitem", 1, 1, 0): (f, ("open_data", 1, 1, 0)),
+        ("getitem", 1, 1, 1): (f, ("open_data", 1, 1, 1)),
+        "data": "a",
+        ("array", 0): "b",
+        ("array", 1): "c",
+        ("open_data", 0, 1, 1): (f, "data"),
+        ("groupby-agg", 0, 1, 0): (
+            f,
+            ("groupby-chunk", 1, 0, 1),
+            ("groupby-chunk", 1, 0, 0),
+        ),
+        ("groupby-agg", 0, 1, 1): (
+            f,
+            ("groupby-chunk", 1, 1, 0),
+            ("groupby-chunk", 1, 1, 1),
+        ),
+        ("open_data", 1, 0, 0): (f, "data"),
+        ("open_data", 0, 1, 0): (f, "data"),
+        ("open_data", 1, 0, 1): (f, "data"),
+        ("open_data", 1, 1, 0): (f, "data"),
+        ("groupby-agg", 0, 0, 1): (
+            f,
+            ("groupby-chunk", 0, 1, 0),
+            ("groupby-chunk", 0, 1, 1),
+        ),
+        ("open_data", 0, 0, 1): (f, "data"),
+        ("open_data", 1, 1, 1): (f, "data"),
+        ("groupby-agg", 0, 0, 0): (
+            f,
+            ("groupby-chunk", 0, 0, 0),
+            ("groupby-chunk", 0, 0, 1),
+        ),
+        ("open_data", 0, 0, 0): (f, "data"),
+    }
+    o = order(dsk)
+
+    assert_topological_sort(dsk, o)
+    final_nodes = sorted(
+        [("transpose", 0, ix, jx) for ix in range(2) for jx in range(2)],
+        key=o.__getitem__,
+    )
+    all_diffs = []
+    for ix in range(1, len(final_nodes)):
+        # This assumes that all the data tasks are scheduled first.
+        # Then, there are exactly four dependencies to load for every final
+        # task.
+        all_diffs.append(o[final_nodes[ix]] - o[final_nodes[ix - 1]])
+
+    assert set(all_diffs) == {8}
+
+    _, pressure = diagnostics(dsk, o=o)
+    assert max(pressure) <= 5
 
 
 def test_xarray_8414():
