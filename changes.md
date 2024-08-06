@@ -1,5 +1,10 @@
 ## Dask-expr
 
+# v1.1.10
+
+- Fixup remaining upstream failures (:pr:`1111`) `Patrick Hoefler`_
+- Fix some things for pandas 3 (:pr:`1110`) `Patrick Hoefler`_
+
 # v1.1.9
 
 - Patch release for Dask 2024.7.0
