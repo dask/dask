@@ -13,7 +13,7 @@ Improve efficiency and performance of slicing with positional indexers
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Performance improvement for slicing a Dask Array with a positional indexer.
-Random access patterns are now more stable and produce easier to use results.
+Random access patterns are now more stable and produce easier-to-use results.
 
 .. code-block:: python
 
