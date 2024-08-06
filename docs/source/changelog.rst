@@ -29,6 +29,43 @@ the same to avoid fragmentation of chunks or a large increase in chunk-size.
 See :pr:`11262` and :pr:`11267` by `Patrick Hoefler`_ for more details and performance
 benchmarks.
 
+
+Improve scheduling efficiency for Xarray GroupBy-Reduce patterns
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The scheduler previously created an inefficient execution graph for Xarray GroupBy-Reduction
+patterns like:
+
+.. code-block:: python
+
+    import xarray as xr
+
+    arr = xr.open_zarr(...)
+    arr.groupby("time.month").mean()
+
+An issue in the algorithm that creates the execution order of the task graph
+lead to an inefficient execution strategy that accumulates a lot of unneceessary memory on
+the cluster.
+
+.. image:: images/changelog/dask-order-growing-memory.png
+  :width: 75%
+  :align: center
+  :alt: Memory keeps accumulating on the cluster when running an embarassingly parallel
+    operation.
+
+The operation itself is embarassingly parallel. Using the proper execution strategy
+the scheduler can now execute the operation with constant memory, avoiding spilling
+and allowing us to scale to larger datasets.
+
+.. image:: images/changelog/dask-order-constant-memory.png
+  :width: 75%
+  :align: center
+  :alt: Same operation is running with constant memory usage for the whole computation
+    and can scale for bigger datasets.
+
+See :pr-distributed:`8818` by `Patrick Hoefler`_ for more details and examples.
+
+
 .. _v2024.7.1:
 
 2024.7.1
