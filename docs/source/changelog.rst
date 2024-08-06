@@ -13,7 +13,7 @@ Improve efficiency and performance of slicing with positional indexers
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Performance improvement for slicing a Dask Array with a positional indexer.
-Random access patterns are now more stable and produce easier to use results.
+Random access patterns are now more stable and produce easier-to-use results.
 
 .. code-block:: python
 
@@ -28,6 +28,7 @@ the same to avoid fragmentation of chunks or a large increase in chunk-size.
 
 See :pr:`11262` and :pr:`11267` by `Patrick Hoefler`_ for more details and performance
 benchmarks.
+
 
 Improve scheduling efficiency for Xarray GroupBy-Reduce patterns
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -63,6 +64,7 @@ and allowing us to scale to larger datasets.
     and can scale for bigger datasets.
 
 See :pr-distributed:`8818` by `Patrick Hoefler`_ for more details and examples.
+
 
 .. _v2024.7.1:
 
