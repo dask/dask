@@ -207,6 +207,7 @@ Top level functions
    searchsorted
    select
    shape
+   shuffle
    sign
    signbit
    sin
@@ -300,6 +301,7 @@ Array
    Array.reshape
    Array.round
    Array.shape
+   Array.shuffle
    Array.size
    Array.squeeze
    Array.std
