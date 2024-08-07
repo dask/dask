@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from itertools import count, product
 from typing import Literal
 
@@ -34,7 +35,7 @@ def shuffle(
     x: dask array
         Array to be shuffled.
     indexer:  list[list[int]]
-        The indexer that determins which elements along the dimension will end up in the
+        The indexer that determines which elements along the dimension will end up in the
         same chunk. Multiple groups can be in the same chunk to avoid fragmentation, but
         each group will end up in exactly one chunk.
     axis: int
@@ -103,25 +104,21 @@ def _shuffle(
         raise IndexError(
             f"Indexer contains out of bounds index. Dimension only has {sum(chunks[axis])} elements."
         )
+    indexer = copy.deepcopy(indexer)
     shuffle_method = shuffle_method or config.get("array.shuffle.method")
 
     chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
-    average_chunk_size = int(
-        sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance
-    )
+    chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
 
     # Figure out how many groups we can put into one chunk
     current_chunk, new_chunks = [], []
     for idx in indexer:
-        if (
-            len(current_chunk) + len(idx) > average_chunk_size
-            and len(current_chunk) > 0
-        ):
+        if len(current_chunk) + len(idx) > chunk_size_limit and len(current_chunk) > 0:
             new_chunks.append(current_chunk)
             current_chunk = idx.copy()
         else:
             current_chunk.extend(idx)
-            if len(current_chunk) > average_chunk_size / 1.25:
+            if len(current_chunk) > chunk_size_limit / chunksize_tolerance:
                 new_chunks.append(current_chunk)
                 current_chunk = []
     if len(current_chunk) > 0:
@@ -208,6 +205,13 @@ def _shuffle(
                 merges[(out_name,) + merge_suffix] = intermediates.pop(merge_keys[0])
             else:
                 raise NotImplementedError
+
+    output_chunks = []
+    for i, c in enumerate(chunks):
+        if i == axis:
+            output_chunks.append(tuple(map(len, new_chunks)))
+        else:
+            output_chunks.append(c)
 
     layer = {**merges, **intermediates}
     return tuple(output_chunks), layer

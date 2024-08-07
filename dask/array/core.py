@@ -2769,7 +2769,7 @@ class Array(DaskMethodsMixin):
         shuffle_method: Literal["p2p", "tasks"] | None = None,
         disk: bool = True,
     ):
-        """Convert blocks in dask array x for new chunks.
+        """Reorders one dimensions of a Dask Array based on an indexer.
 
         Refer to :func:`dask.array.shuffle` for full documentation.
 
