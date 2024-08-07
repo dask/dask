@@ -307,3 +307,16 @@ def test_reshape_lower_dimension():
     arr = da.ones((20, 20, 5), chunks=(10, 10, 5))
     result = arr.reshape(400, 5)
     assert result.chunks == ((100,) * 4, (5,))
+
+
+def test_reshape_split_out_chunks():
+    # too large to assert the actual result
+    arr = da.ones(shape=(2, 1000, 100, 4800), chunks=(2, 1000, 100, 83))
+    result = arr.reshape(2, 1000, 100, 4, 1200)
+    assert result.chunks == (
+        (2,),
+        (1000,),
+        (100,),
+        (1, 1, 1, 1),
+        (80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80),
+    )
