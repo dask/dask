@@ -345,7 +345,11 @@ def inline_functions(
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
 
+    from dask.task_spec import BaseTask
+
     def inlinable(v):
+        if isinstance(v, BaseTask):
+            return False
         try:
             return functions_of(v).issubset(fast_functions)
         except TypeError:
