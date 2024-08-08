@@ -19,14 +19,14 @@ repos:
     hooks:
       - id: pyupgrade
         args:
-          - --py39-plus
+          - --py310-plus
   - repo: https://github.com/psf/black
     rev: 23.12.1
     hooks:
       - id: black
         language_version: python3
         args:
-          - --target-version=py39
+          - --target-version=py310
   - repo: https://github.com/pycqa/flake8
     rev: 7.0.0
     hooks:

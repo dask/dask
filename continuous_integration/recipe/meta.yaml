@@ -20,13 +20,13 @@ build:
 
 requirements:
   host:
-    - python >=3.9
+    - python >=3.10
     - pip
     - versioneer =0.29
     - tomli # [py<311]
 
   run:
-    - python >=3.9
+    - python >=3.10
     - click >=8.1
     - cloudpickle >=1.5.0
     - fsspec >=2021.09.0

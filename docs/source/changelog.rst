@@ -1,6 +1,20 @@
 Changelog
 =========
 
+.. _v2024.8.1:
+
+2024.8.1
+--------
+
+Highlights
+^^^^^^^^^^
+
+Drop support for Python 3.9
+"""""""""""""""""""""""""""
+
+This release drops support for Python 3.9 in accordance with NEP 29. Python 3.10
+is now the required minimum version to run Dask.
+
 .. _v2024.8.0:
 
 2024.8.0
