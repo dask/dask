@@ -112,7 +112,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `crick`_         | ``>=0.0.3``     | Use ``tdigest`` internal method for dataframe statistics computation                                    |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `cytoolz`_       | ``>=0.11.0``    | Faster cythonized implementation of internal iterators, functions, and dictionaries                     |
+| `cytoolz`_       | ``>=0.11.2``    | Faster cythonized implementation of internal iterators, functions, and dictionaries                     |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `dask-expr`_     |                 | Required for ``dask.dataframe``; Pins to a specific Dask version                                        |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -124,43 +124,43 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `graphviz`_      | ``>=0.8.4``     | Graph visualization using the graphviz engine                                                           |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `h5py`_          | ``>=2.10.0``    | Storing array data in hdf5 files                                                                        |
+| `h5py`_          | ``>=3.4.0``    | Storing array data in hdf5 files                                                                        |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `ipycytoscape`_  | ``>=1.0.1``     | Graph visualization using the cytoscape engine                                                          |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `IPython`_       | ``>=7.16.1``    | Write graph visualizations made with graphviz engine to file                                            |
+| `IPython`_       | ``>=7.30.1``    | Write graph visualizations made with graphviz engine to file                                            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `jinja2`_        | ``>=2.10.3``    | HTML representations of Dask objects in Jupyter notebooks (required for ``dask.diagnostics``)           |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `lz4`_           | ``>=4.3.2``     | Transparent use of lz4 compression algorithm                                                            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `matplotlib`_    | ``>=3.4.1``     | Color map support for graph visualization                                                               |
+| `matplotlib`_    | ``>=3.5.0``     | Color map support for graph visualization                                                               |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `mimesis`_       | ``>=5.3.0``     | Random bag data generation with :func:`dask.datasets.make_people`                                       |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `mmh3`_          | ``>=2.5.1``     | Use MurmurHash hash functions for array hashing (~8x faster than SHA1)                                  |
+| `mmh3`_          | ``>=3.0.0``     | Use MurmurHash hash functions for array hashing (~8x faster than SHA1)                                  |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `numpy`_         | ``>=1.21``      | Required for ``dask.array``                                                                             |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `pandas`_        | ``>=2.0``       | Required for ``dask.dataframe``                                                                         |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `psutil`_        | ``>=5.7.2``     | Factor CPU affinity into CPU count, intelligently infer blocksize when reading CSV files                |
+| `psutil`_        | ``>=5.8.0``     | Factor CPU affinity into CPU count, intelligently infer blocksize when reading CSV files                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `pyarrow`_       | ``>=7.0``       | Support for Apache Arrow datatypes & engine when storing/reading Apache ORC or Parquet files            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `python-snappy`_ | ``>=0.5.4``     | Snappy compression to bs used when storing/reading Avro or Parquet files                                |
+| `python-snappy`_ | ``>=0.6.0``     | Snappy compression to bs used when storing/reading Avro or Parquet files                                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `s3fs`_          | ``>=2021.9.0``  | Storing and reading data located in Amazon S3                                                           |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `scipy`_         | ``>=1.5.2``     | Required for ``dask.array.stats``, ``dask.array.fft``, and :func:`dask.array.linalg.lu`                 |
+| `scipy`_         | ``>=1.7.2``     | Required for ``dask.array.stats``, ``dask.array.fft``, and :func:`dask.array.linalg.lu`                 |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `sparse`_        | ``>=0.12.0``    | Use sparse arrays as backend for dask arrays                                                            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `sqlalchemy`_    | ``>=1.4.16``    | Writing and reading from SQL databases                                                                  |
+| `sqlalchemy`_    | ``>=1.4.26``    | Writing and reading from SQL databases                                                                  |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `tblib`_         | ``>=1.6.0``     | Serialization of worker traceback objects                                                               |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `tiledb`_        | ``>=0.8.1``     | Storing and reading data from TileDB files                                                              |
+| `tiledb`_        | ``>=0.12.0``    | Storing and reading data from TileDB files                                                              |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `xxhash`_        | ``>=2.0.0``     | Use xxHash hash functions for array hashing (~2x faster than MurmurHash, slightly slower than CityHash) |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+

@@ -4,10 +4,10 @@ channels:
 dependencies:
   # required dependencies
   - packaging=20.0
-  - python=3.9
-  - pyyaml=5.3.1
+  - python=3.10
+  - pyyaml=5.4.1
   - click=8.1
-  - cloudpickle=1.5.0
+  - cloudpickle=2.0.0
   - partd=1.4.0
   - fsspec=2021.09.0
   - importlib-metadata=4.13.0
@@ -24,28 +24,28 @@ dependencies:
   # optional dependencies used by dask
   - cachey=0.1.1
   - crick=0.0.3
-  - cytoolz=0.11.0
+  - cytoolz=0.11.2
   - dask-ml=1.4.0
-  - fastavro=1.1.0
+  - fastavro=1.4.7
   - fastparquet=0.8.2
-  - h5py=2.10.0
+  - h5py=3.4.0
   - ipycytoscape=1.0.1
-  - IPython=7.16.1
-  - matplotlib=3.4.1
+  - IPython=7.30.1
+  - matplotlib=3.5.0
   - mimesis=5.3.0
-  - mmh3=2.5.1
-  - psutil=5.7.2
+  - mmh3=3.0.0
+  - psutil=5.8.0
   - python-cityhash=0.4.6
   - python-graphviz=0.8.4
-  - python-snappy=0.5.4
-  - python-xxhash=2.0.0
+  - python-snappy=0.6.0
+  - python-xxhash=2.0.2
   - s3fs=2021.9.0
-  - scikit-image=0.17.2
-  - scipy=1.5.2
+  - scikit-image=0.19.0
+  - scipy=1.7.2
   - sparse=0.12.0
-  - sqlalchemy=1.4.16
+  - sqlalchemy=1.4.26
   - tblib=1.6.0
-  - tiledb-py=0.8.1
+  - tiledb-py=0.12
   - zarr=2.12.0
   - pip
   - pip:
