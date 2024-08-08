@@ -4573,14 +4573,20 @@ def asarray(
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
+
+    .. warning::
+        `dtype` is ignored if `a` has the attribute ``to_dask_array`` or
+        is a list or tuple of `Array`'s.
+        `order` is ignored if `a` is an `Array`, has the attribute ``to_dask_array``,
+        or is a list or tuple of `Array`'s.
     """
     if like is None:
         if isinstance(a, Array):
-            return a
+            return a if dtype is None else a.astype(dtype)
         elif hasattr(a, "to_dask_array"):
             return a.to_dask_array()
         elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-            return asarray(a.data)
+            return asarray(a.data, dtype=dtype, order=order)
         elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
             return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
         elif not isinstance(getattr(a, "shape", None), Iterable):
@@ -4641,14 +4647,20 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asanyarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
+
+    .. warning::
+        `dtype` is ignored if `a` has the attribute ``to_dask_array`` or
+        is a list or tuple of `Array`'s.
+        `order` is ignored if `a` is an `Array`, has the attribute ``to_dask_array``,
+        or is a list or tuple of `Array`'s.
     """
     if like is None:
         if isinstance(a, Array):
-            return a
+            return a if dtype is None else a.astype(dtype)
         elif hasattr(a, "to_dask_array"):
             return a.to_dask_array()
         elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-            return asanyarray(a.data)
+            return asanyarray(a.data, dtype=dtype, order=order)
         elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
             return stack(a)
         elif not isinstance(getattr(a, "shape", None), Iterable):
