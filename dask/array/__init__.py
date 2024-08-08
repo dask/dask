@@ -25,7 +25,7 @@ def _array_expr_enabled() -> bool:
                 "The query-planning config can only be changed before "
                 "`dask.dataframe` is first imported!"
             )
-        return ARRAY_EXPR_ENABLED
+        return ARRAY_EXPR_ENABLED  # type: ignore[return-value]
 
     return use_array_expr if use_array_expr is not None else False
 
