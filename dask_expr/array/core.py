@@ -1,7 +1,8 @@
 import functools
 import operator
+from collections.abc import Iterable
 from itertools import product
-from typing import Iterable, Union
+from typing import Union
 
 import numpy as np
 from dask import istask

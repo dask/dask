@@ -1,7 +1,7 @@
 import functools
+from collections.abc import Callable
 from operator import getitem
 from pprint import pformat
-from typing import Callable
 
 import numpy as np
 import pandas as pd

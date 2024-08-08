@@ -4,10 +4,10 @@ import datetime
 import functools
 import inspect
 import warnings
-from collections.abc import Callable, Hashable, Mapping
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from functools import wraps
 from numbers import Integral, Number
-from typing import Any, ClassVar, Iterable, Literal
+from typing import Any, ClassVar, Literal
 
 import dask.array as da
 import dask.dataframe.methods as methods
