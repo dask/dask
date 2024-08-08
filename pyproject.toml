@@ -17,7 +17,6 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -26,12 +25,12 @@ classifiers = [
 ]
 readme = "README.rst"
 urls = {Homepage = "https://github.com/dask/dask/"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     # NOTE: These are tested in `continuous_integration/test_imports.sh` If
     # you modify these, make sure to change the corresponding line there.
     "click >= 8.1",
-    "cloudpickle >= 1.5.0",
+    "cloudpickle >= 2.0.0",
     "fsspec >= 2021.09.0",
     "packaging >= 20.0",
     "partd >= 1.4.0",
@@ -55,7 +54,7 @@ dataframe = [
     "pandas >= 2.0",
     "dask-expr >= 1.1, <1.2",  # dask-expr pins the dask version
 ]
-distributed = ["distributed == 2024.7.1"]
+distributed = ["distributed == 2024.8.0"]
 diagnostics = [
     "bokeh >= 2.4.2",
     "jinja2 >= 2.10.3",
@@ -159,7 +158,7 @@ timeout = 300
 
 [tool.mypy]
 # Silence errors about Python 3.9-style delayed type annotations on Python 3.8
-python_version = "3.9"
+python_version = "3.10"
 # See https://github.com/python/mypy/issues/12286 for automatic multi-platform support
 platform = "linux"
 # platform = win32
