@@ -19,13 +19,13 @@ build:
 
 requirements:
   host:
-    - python >=3.9
+    - python >=3.10
     - pip
     - dask-core {{ dask_version }}
     - versioneer =0.28
     - tomli
   run:
-    - python >=3.9
+    - python >=3.10
     - {{ pin_compatible('dask-core', max_pin='x.x.x.x') }}
     - pyarrow
     - pandas >=2

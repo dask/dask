@@ -17,7 +17,7 @@ from dask_expr._util import _BackendData, _tokenize_deterministic
 
 if TYPE_CHECKING:
     # TODO import from typing (requires Python >=3.10)
-    from typing_extensions import TypeAlias
+    from typing import TypeAlias
 
 OptimizerStage: TypeAlias = Literal[
     "logical",
