@@ -252,13 +252,13 @@ def percentiles_to_weights(qs, vals, length):
     between the first and second percentiles, and then scaled by length:
 
     >>> 0.5 * length * (percentiles[1] - percentiles[0])
-    125.0
+    np.float64(125.0)
 
     The second weight uses the difference of percentiles on both sides, so
     it will be twice the first weight if the percentiles are equally spaced:
 
     >>> 0.5 * length * (percentiles[2] - percentiles[0])
-    250.0
+    np.float64(250.0)
     """
     if length == 0:
         return ()

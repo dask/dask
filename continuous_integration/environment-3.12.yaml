@@ -23,13 +23,15 @@ dependencies:
   - moto<5
   # Optional dependencies
   - mimesis
-  - numpy
+  - numpy >=2
   - pandas
-  - numba
+  # Temporarily removing to allow `numpy >=2` to be installed
+  # - numba
   - flask
   - fastparquet
   - h5py
-  - pytables
+  # Temporarily removing to allow `numpy >=2` to be installed
+  # - pytables
   - zarr
   # `tiledb-py=0.17.5` lead to strange seg faults in CI, However 0.18 is needed for 3.11
   # https://github.com/dask/dask/pull/9569
@@ -61,11 +63,13 @@ dependencies:
   - lz4
   - psutil
   - requests
-  - scikit-image
+  # Temporarily removing to allow `numpy >=2` to be installed
+  # - scikit-image
   - scikit-learn
   - scipy
   - python-snappy
-  - sparse
+  # Temporarily removing to allow `numpy >=2` to be installed
+  # - sparse
   - cachey
   - python-graphviz
   - python-cityhash
