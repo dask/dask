@@ -266,13 +266,13 @@ def _validate_rechunk(old_chunks, new_chunks):
 
 
 def rechunk(
-    x,
-    chunks="auto",
-    threshold=None,
-    block_size_limit=None,
-    balance=False,
-    method=None,
-):
+    x: Array,
+    chunks: int | tuple[int, ...] | dict[int, int | str] | str | None = "auto",
+    threshold: int | None = None,
+    block_size_limit: int | None = None,
+    balance: bool = False,
+    method: str | None = None,
+) -> Array:
     """
     Convert blocks in dask array x for new chunks.
 
@@ -350,14 +350,14 @@ def rechunk(
 
     # Now chunks are tuple of tuples
     ndim = x.ndim
-    if not len(chunks) == ndim:
+    if not len(chunks) == ndim:  # type: ignore[arg-type]
         raise ValueError("Provided chunks are not consistent with shape")
 
     if not balance and (chunks == x.chunks):
         return x
 
     if balance:
-        chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
+        chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)  # type: ignore
 
     _validate_rechunk(x.chunks, chunks)
 
