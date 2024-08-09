@@ -117,19 +117,19 @@ def test_distributed_shorten_traceback():
         dp2 = d.persist()
 
         TEST_NAME = "test_distributed_shorten_traceback"
-        expect = [TEST_NAME, "compute", "f3", "f2", "f1"]
+        expect = [TEST_NAME, "compute", "__call__", "f3", "f2", "f1"]
         with assert_tb_levels(expect):
             dask.compute(d())
 
-        expect = [TEST_NAME, "compute", "compute", "f3", "f2", "f1"]
+        expect = [TEST_NAME, "compute", "compute", "__call__", "f3", "f2", "f1"]
         with assert_tb_levels(expect):
             d.compute()
 
-        expect = [TEST_NAME, "compute", "f3", "f2", "f1"]
+        expect = [TEST_NAME, "compute", "__call__", "f3", "f2", "f1"]
         with assert_tb_levels(expect):
             dask.compute(dp1)
 
-        expect = [TEST_NAME, "compute", "compute", "f3", "f2", "f1"]
+        expect = [TEST_NAME, "compute", "compute", "__call__", "f3", "f2", "f1"]
         with assert_tb_levels(expect):
             dp2.compute()
 
