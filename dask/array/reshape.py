@@ -127,7 +127,7 @@ def _calc_lower_dimension_chunks(chunks, start, stop):
 
 def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
     # The previous step squashed the whole dimension into a single
-    # chunk for ileft + 1 (and potentially combined to many elements
+    # chunk for ileft + 1 (and potentially combined too many elements
     # into a single chunk for ileft as well). We split up the single
     # chunk into multiple chunks to match the max_in_chunk to keep
     # chunksizes consistent:
