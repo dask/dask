@@ -139,6 +139,12 @@ properties:
         type: object
         properties:
 
+          method:
+            type: string
+            description: |
+              The shuffle method to use. Must be either "tasks" or "p2p";
+              default is "tasks". Using "p2p" requires a distributed cluster.
+
           chunksize-tolerance:
             type: number
             description: |

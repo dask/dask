@@ -17,7 +17,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, TypeVar, Union, cast
+from typing import Any, Literal, TypeVar, Union, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -2766,6 +2766,8 @@ class Array(DaskMethodsMixin):
         self,
         indexer: list[list[int]],
         axis,
+        shuffle_method: Literal["p2p", "tasks"] | None = None,
+        disk: bool = True,
     ):
         """Reorders one dimensions of a Dask Array based on an indexer.
 
@@ -2777,7 +2779,7 @@ class Array(DaskMethodsMixin):
         """
         from dask.array._shuffle import shuffle
 
-        return shuffle(self, indexer, axis)
+        return shuffle(self, indexer, axis, shuffle_method, disk)
 
     @property
     def real(self):
