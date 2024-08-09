@@ -398,7 +398,8 @@ def order(
 
         return True
 
-    longest_path = use_longest_path()
+    longest_path = False
+    print(longest_path)
 
     def get_target() -> Key:
         raise NotImplementedError()
@@ -443,7 +444,8 @@ def order(
                     candidates2 = reachable_hull & candidates
                 if reachable_hull or runnable_hull:
                     if not candidates2:
-                        for c in reachable_hull:
+                        hull = runnable_hull if runnable_hull else reachable_hull
+                        for c in hull:
                             candidates2.update(leafs_connected[c])
                     candidates = candidates2
 
