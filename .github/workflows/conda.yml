@@ -4,7 +4,7 @@ on:
     branches:
       - main
     tags:
-      - "*"
+      - "*.*.*"
   pull_request:
     paths:
       - setup.py
@@ -38,6 +38,15 @@ jobs:
           use-mamba: true
           python-version: 3.9
           channel-priority: strict
+      - name: Remove outdated conda nightlies
+        if: github.event_name == 'push' && github.repository == 'dask/dask' && startsWith(github.ref, 'refs/tags/')
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.DASK_CONDA_TOKEN }}
+        run: |
+          # install anaconda for removal
+          mamba install -c conda-forge anaconda-client
+
+          anaconda remove dask/dask-core --force
       - name: Install dependencies
         run: |
           mamba install -c conda-forge boa conda-verify
