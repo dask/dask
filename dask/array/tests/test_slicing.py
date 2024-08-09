@@ -1073,3 +1073,20 @@ def test_slice_array_null_dimension():
     array = da.from_array(np.zeros((3, 0)))
     expected = np.zeros((3, 0))[[0]]
     assert_eq(array[[0]], expected)
+
+
+def test_take_sorted_indexer():
+    arr = da.ones((250, 100), chunks=((50, 100, 33, 67), 100))
+    indexer = list(range(0, 250))
+    result = arr[indexer, :]
+    assert_eq(arr, result)
+    assert {
+        **dict(arr.dask),
+        **{
+            k: k2
+            for k, k2 in zip(
+                [k for k in dict(result.dask) if "getitem" in k[0]],
+                dict(arr.dask).keys(),
+            )
+        },
+    } == dict(result.dask)
