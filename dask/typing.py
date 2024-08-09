@@ -24,6 +24,12 @@ CollType = TypeVar("CollType", bound="DaskCollection")
 CollType_co = TypeVar("CollType_co", bound="DaskCollection", covariant=True)
 PostComputeCallable = Callable
 
+T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
+
+Memory_Order: TypeAlias = Literal["C", "F"]
+Chunks: TypeAlias = Union[Sequence[int], Literal["auto"]]
+Shape: TypeAlias = Union[int, tuple[T_IntOrNaN, ...]]
+
 
 Key: TypeAlias = Union[str, bytes, int, float, tuple["Key", ...]]
 # FIXME: This type is a little misleading. Low level graphs are often
