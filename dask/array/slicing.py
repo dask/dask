@@ -572,7 +572,7 @@ def take(outname, inname, chunks, index, axis=0):
             # too deep to do this efficiently for now
             chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
             graph = {(outname,) + c: (inname,) + c for c in chunk_tuples}
-            return chunks, graph
+            return tuple(chunks), graph
 
         average_chunk_size = int(sum(chunks[axis]) / len(chunks[axis]))
 
@@ -586,7 +586,7 @@ def take(outname, inname, chunks, index, axis=0):
             if "-" in outname
             else tokenize(outname, chunks, index, axis)
         )
-        chunks, graph = _shuffle(chunks, indexer, axis, inname, outname, token)
+        return _shuffle(chunks, indexer, axis, inname, outname, token)
 
     else:
         from dask.array.core import unknown_chunk_message

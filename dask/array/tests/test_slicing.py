@@ -413,10 +413,10 @@ def test_take_sorted():
 
     chunks, dsk = take("y", "x", [(20, 20, 20, 20)], np.arange(0, 80), axis=0)
     expected = {
-        ("y", 0): (getitem, ("x", 0), (np.arange(0, 20),)),
-        ("y", 1): (getitem, ("x", 1), (np.arange(0, 20),)),
-        ("y", 2): (getitem, ("x", 2), (np.arange(0, 20),)),
-        ("y", 3): (getitem, ("x", 3), (np.arange(0, 20),)),
+        ("y", 0): ("x", 0),
+        ("y", 1): ("x", 1),
+        ("y", 2): ("x", 2),
+        ("y", 3): ("x", 3),
     }
     np.testing.assert_equal(dsk, expected)
     assert chunks == ((20, 20, 20, 20),)
