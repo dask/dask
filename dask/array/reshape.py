@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import math
+import warnings
 from functools import reduce
 from itertools import product
 from operator import mul
 
 import numpy as np
 
+from dask import config
 from dask.array.core import Array
 from dask.array.utils import meta_from_array
 from dask.base import tokenize
@@ -245,6 +247,15 @@ def reshape(x, shape, merge_chunks=True, limit=None):
 
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
     x2 = x.rechunk(inchunks)
+
+    if config.get("array.slicing.split-large-chunks", None):
+        warnings.warn(
+            "The 'array.slicing.split-large-chunks' option is deprecated "
+            "and will be removed in a future release. Dask automatically "
+            "handles the chunksizes now.",
+            FutureWarning,
+            stacklevel=2,
+        )
 
     # Construct graph
     in_keys = list(product([x2.name], *[range(len(c)) for c in inchunks]))
