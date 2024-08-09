@@ -84,15 +84,14 @@ import itertools
 import pickle
 import weakref
 from collections import defaultdict
-from collections.abc import Container, Iterable, Mapping, MutableMapping
+from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
 from functools import partial
-from typing import TYPE_CHECKING, Any, Callable, overload
+from typing import TYPE_CHECKING, Any, overload
 
 import cloudpickle
 
 from dask.base import normalize_token
 from dask.core import reverse_dict
-from dask.optimization import SubgraphCallable
 from dask.typing import Key as KeyType
 from dask.utils import is_namedtuple_instance
 
@@ -203,6 +202,8 @@ def convert_old_style_task(
     only_refs: bool,
     cache: MutableMapping,
 ) -> BaseTask:
+    from dask.optimization import SubgraphCallable
+
     if isinstance(arg, BaseTask):
         return arg
     rv: BaseTask
@@ -339,6 +340,7 @@ def resolve_aliases(dsk: dict, keys: set, dependents: dict) -> dict:
             and len(dependents[t.key]) == 1
         ):
             t = dsk[k] = dsk.pop(t.key)
+            seen.discard(k)
             if isinstance(t, Alias):
                 work.append(k)
 

@@ -376,52 +376,6 @@ def test_redirect_to_subgraph_callable():
     assert t() == expected
 
 
-def test_hybrid_legacy_new():
-    # e.g. after low level fusion
-
-    dsk = {
-        "foo": (func, Task("bar", func2, [Alias("a"), "b"]), "c"),
-    }
-    new_dsk = convert_old_style_dsk(dsk)
-    assert new_dsk["foo"]({"a": "a"}) == "a=b-c"
-
-
-def test_fusion_legacy_hybrid():
-    dsk = {
-        "foo": (func, "a", "b"),
-        "bar": (func2, "foo", "c"),
-    }
-    from dask.optimization import fuse
-
-    # The first part of this test just tests a couple of basic assumptions about
-    # how fusing works
-    fused, fused_deps = fuse(dsk, ["bar"])
-    assert len(fused) == 2
-    assert "bar" in fused
-    keys = set(fused)
-    keys.remove("bar")
-    fused_task_key = keys.pop()
-    assert fused["bar"] == fused_task_key
-    assert not fused_deps[fused_task_key]
-
-    new_dsk = convert_old_style_dsk(fused)
-    assert isinstance(new_dsk["bar"], Alias)
-    assert new_dsk["bar"].key == fused_task_key
-    assert not new_dsk[fused_task_key].dependencies
-    assert new_dsk[fused_task_key]() == "a-b=c"
-
-    # Below this is the real test. Fusion should block when encountering a
-    # new style task
-
-    dsk = {
-        "foo": Task("foo", func, ("a", "b")),
-        "bar": (func2, "foo", "c"),
-    }
-    fused, fused_deps = fuse(dsk, ["bar"])
-    assert len(fused) == 2
-    assert "bar" in fused
-
-
 def test_inline():
     t = Task("key-1", func, ["a", KeyRef("b")])
 
@@ -522,7 +476,11 @@ def test_pickle_literals():
 
 
 def test_resolve_aliases():
-    dsk = {"bar": "foo", "foo": (func, "a", "b"), "baz": "bar"}
+    dsk = {
+        "bar": "foo",
+        "foo": (func, "a", "b"),
+        "baz": "bar",
+    }
     new_dsk = convert_old_style_dsk(dsk)
     assert len(new_dsk) == 3
 

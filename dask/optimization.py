@@ -17,6 +17,7 @@ from dask.core import (
     subs,
     toposort,
 )
+from dask.task_spec import BaseTask
 from dask.typing import Graph, Key
 
 
@@ -345,21 +346,23 @@ def inline_functions(
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
 
-    from dask.task_spec import BaseTask
+    def inlinable(key, task):
+        if (
+            not isinstance(task, BaseTask)
+            and istask(task)
+            and key not in output
+            and dependents[key]
+        ):
+            try:
+                if functions_of(task).issubset(fast_functions) and not any(
+                    isinstance(dsk[d], BaseTask) for d in dependents[key]
+                ):
+                    return True
+            except TypeError:
+                pass
+        return False
 
-    def inlinable(v):
-        if isinstance(v, BaseTask):
-            return False
-        try:
-            return functions_of(v).issubset(fast_functions)
-        except TypeError:
-            return False
-
-    keys = [
-        k
-        for k, v in dsk.items()
-        if istask(v) and dependents[k] and k not in output and inlinable(v)
-    ]
+    keys = [k for k, v in dsk.items() if inlinable(k, v)]
 
     if keys:
         dsk = inline(
@@ -592,13 +595,16 @@ def fuse(
                 rdeps[v].append(k)
         deps[k] = set(vals)
 
-    reducible = {k for k, vals in rdeps.items() if len(vals) == 1}
-    if keys:
-        reducible -= keys
-
-    for k, v in dsk.items():
-        if type(v) is not tuple and not isinstance(v, (numbers.Number, str)):
-            reducible.discard(k)
+    reducible = set()
+    for k, vals in rdeps.items():
+        if (
+            len(vals) == 1
+            and k not in (keys or ())
+            and not isinstance(dsk[k], BaseTask)
+            and (type(dsk[k]) is tuple or isinstance(dsk[k], (numbers.Number, str)))
+            and not any(isinstance(dsk[v], BaseTask) for v in vals)
+        ):
+            reducible.add(k)
 
     if not reducible and (
         not fuse_subgraphs or all(len(set(v)) != 1 for v in rdeps.values())
@@ -688,6 +694,11 @@ def fuse(
                         and
                         # Sanity check; don't go too deep if new levels introduce new edge dependencies
                         (no_new_edges or height < max_depth_new_edges)
+                        and (
+                            not isinstance(dsk[parent], BaseTask)
+                            # TODO: substitute can be implemented with BaseTask.inline
+                            # or isinstance(dsk[child_key], BaseTask)
+                        )
                     ):
                         # Perform substitutions as we go
                         val = subs(dsk[parent], child_key, child_task)
@@ -805,6 +816,16 @@ def fuse(
                         and
                         # Sanity check; don't go too deep if new levels introduce new edge dependencies
                         (no_new_edges or height < max_depth_new_edges)
+                        and (
+                            not isinstance(dsk[parent], BaseTask)
+                            and not any(
+                                isinstance(dsk[child_key], BaseTask)
+                                for child_key in children
+                            )
+                            # TODO: substitute can be implemented with BaseTask.inline
+                            # or all(
+                            #     isintance(dsk[child], BaseTask) for child in children
+                        )
                     ):
                         # Perform substitutions as we go
                         val = dsk[parent]
