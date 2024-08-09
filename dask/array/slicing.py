@@ -566,7 +566,8 @@ def take(outname, inname, chunks, index, axis=0):
     if not np.isnan(chunks[axis]).any():
         from dask.array._shuffle import _shuffle
 
-        if np.abs(index - np.arange(np.sum(chunks[axis]))).sum() == 0:
+        arange = np.arange(np.sum(chunks[axis]))
+        if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
             chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
             graph = {(outname,) + c: (inname,) + c for c in chunk_tuples}
             return chunks, graph
