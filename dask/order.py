@@ -434,12 +434,18 @@ def order(
                 candidates = leaf_nodes
                 skey: Callable = sort_key
 
+                candidates2 = set()
                 if runnable_hull:
                     skey = lambda k: (num_needed[k], sort_key(k))
-                    candidates = runnable_hull & candidates
-                elif reachable_hull:
+                    candidates2 = runnable_hull & candidates
+                if not candidates2 and reachable_hull:
                     skey = lambda k: (num_needed[k], sort_key(k))
-                    candidates = reachable_hull & candidates
+                    candidates2 = reachable_hull & candidates
+                if reachable_hull or runnable_hull:
+                    if not candidates2:
+                        for c in reachable_hull:
+                            candidates2.update(leafs_connected[c])
+                    candidates = candidates2
 
                 if not candidates:
                     if seed := pick_seed():
@@ -490,7 +496,7 @@ def order(
     #   can define any route through the graph that should be considered as top
     #   priority.
     #
-    #   1. Determine the target node by calling `get_target`` and append the
+    #   1. Determine the target node by calling ``get_target`` and append the
     #      target to the critical path stack
     #   2. Take the _most valuable_ (max given a `sort_key`) of its dependents
     #      and append it to the critical path stack. This key is the new target.
