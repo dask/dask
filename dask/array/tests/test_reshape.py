@@ -257,8 +257,11 @@ def test_smooth_chunks_first_dimension():
             3,
         ),
     ]
-    result_in = _smooth_chunks(ileft, ii, 6, result_inchunks)
+    result_in = _smooth_chunks(ileft, ii, 12, result_inchunks)
     expected_in = [(1, 1, 1, 2, 1, 1, 1, 2), (6,), (3, 3)]
+    assert result_in == expected_in
+    result_in = _smooth_chunks(ileft, ii, 6, result_inchunks)
+    expected_in = [(1, 1, 1, 1, 1, 1, 1, 1, 1, 1), (6,), (3, 3)]
     assert result_in == expected_in
 
 

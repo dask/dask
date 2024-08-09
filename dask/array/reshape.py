@@ -190,9 +190,12 @@ def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
                     result_in.append(elem_in)
                     continue
 
-                elem_in_lower = elem_in // 2
-                elem_in_upper = math.ceil(elem_in / 2)
-                result_in.extend([elem_in_lower, elem_in_upper])
+                factor = math.ceil(elem_in * other_max_chunk / max_in_chunk)
+                ceil_elem = math.ceil(elem_in / factor)
+                new_in_chunk = [ceil_elem] * math.ceil(factor)
+                for i in range(ceil_elem * factor - elem_in):
+                    new_in_chunk[i] -= 1
+                result_in.extend(new_in_chunk)
 
             result_inchunks[ileft] = tuple(result_in)
     return result_inchunks
