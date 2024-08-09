@@ -135,6 +135,17 @@ def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
     # It's important to ensure that all dimensions before the dimension
     # we adjust have to have all-1 chunks to respect C contiguous arrays
     # during the reshaping
+    # Example:
+    # Assume arr = da.from_array(np.arange(0, 6).reshape(2, 3), chunks=(2, 3))
+    # Reshaping to arr.reshape(-1, ) will return
+    # [ 0  1  2  3  4  5  6  7  8  9 10 11]
+    # The first dimension of the reshaped dimension are the chunks with length 2
+    # Assume we split the second dimension into (2, 1), i.e. setting the chunks to
+    # ((2, 2), (2, 1)) and the output chunks to ((4, 2, 4, 2), )
+    # [ 0  1  3  4  2  5  6  7  9 10  8 11]
+    # This is equivalent to
+    # arr = np.arange(0, 12).reshape(4, 3)
+    # np.concatenate(list(map(lambda x: x.reshape(-1), [arr[:2, :2], arr[:2, 2:], arr[2:, :2], arr[2:, 2:]])))
 
     ileft_orig = ileft
     max_result_in_chunk = _cal_max_chunk_size(result_inchunks, ileft, ii)
@@ -152,8 +163,9 @@ def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
 
         if len(result_in_chunk) == 1:
             # This is a trivial case, when we arrive here is the chunk we are
-            # splitting of length 1 and all previous chunks that are reshaped
-            # into the same dimension are all-one. So we can split this dimension.
+            # splitting the same length as the whole dimension and all previous
+            # chunks that are reshaped into the same dimension are all-one.
+            # So we can split this dimension.
             elem = result_in_chunk[0]
             factor = min(factor, elem)
             ceil_elem = math.ceil(elem / factor)
