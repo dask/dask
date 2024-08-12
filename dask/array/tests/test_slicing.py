@@ -1055,7 +1055,7 @@ def test_unknown_chunks_length_one():
     # np.flatnonzero dispatches
     result = np.flatnonzero(arr)
     assert_eq(result[[0, -1]], np.flatnonzero(a)[[0, -1]])
-    
+
     result = da.flatnonzero(arr)
     assert_eq(result[[0, -1]], np.flatnonzero(a)[[0, -1]])
 
