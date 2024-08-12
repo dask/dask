@@ -731,7 +731,9 @@ class AssignPartitioningIndex(Blockwise):
                 if idx.ndim == 1:
                     idx = idx.to_frame()
             elif index_shuffle:
-                idx = obj.index.to_frame()
+                # set default index name, otherwise we will end up with 0
+                name = {"name": "_index"} if idx == ["_index"] else {}
+                idx = obj.index.to_frame(**name)
             else:
                 idx = _select_columns_or_index(obj, idx)
             return idx
