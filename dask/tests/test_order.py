@@ -2272,6 +2272,18 @@ def test_xarray_rechunk_map_reduce_cohorts():
     _, pressure = diagnostics(dsk, o=o)
     assert max(pressure) <= 7
 
+    final_nodes = sorted(
+        [("transpose", ix, jx, 0) for ix in range(2) for jx in range(2)],
+        key=o.__getitem__,
+    )
+    all_diffs = []
+    for ix in range(1, len(final_nodes)):
+        all_diffs.append(o[final_nodes[ix]] - o[final_nodes[ix - 1]])
+
+    # We process a big chunk first and then a small side-branch
+    # before we repeat this for the next independent branch
+    assert all_diffs == [10, 39, 10]
+
 
 def test_xarray_8414():
     # https://github.com/pydata/xarray/issues/8414#issuecomment-1793860552
