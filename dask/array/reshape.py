@@ -139,7 +139,7 @@ def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
     # Assume arr = da.from_array(np.arange(0, 12).reshape(4, 3), chunks=(2, 3))
     # Reshaping to arr.reshape(-1, ) will return
     # [ 0  1  2  3  4  5  6  7  8  9 10 11]
-    # The first dimension of the reshaped dimension are the chunks with length 2
+    # The first dimension of the reshaped axis are the chunks with length 2
     # Assume we split the second dimension into (2, 1), i.e. setting the chunks to
     # ((2, 2), (2, 1)) and the output chunks to ((4, 2, 4, 2), )
     # In this case, the individual chunks do not hold a contiguous sequence.
