@@ -1049,6 +1049,29 @@ def test_shuffle_slice(size, chunks):
     assert_eq(a, b)
 
 
+def test_unknown_chunks_length_one():
+    a = np.arange(256, dtype=int)
+    arr = da.from_array(a, chunks=(256,))
+    # np.flatnonzero dispatches
+    result = np.flatnonzero(arr)
+    assert_eq(result[[0, -1]], np.flatnonzero(a)[[0, -1]])
+
+    result = da.flatnonzero(arr)
+    assert_eq(result[[0, -1]], np.flatnonzero(a)[[0, -1]])
+
+    a = a.reshape(16, 16)
+    arr = da.from_array(a, chunks=(8, 16))
+    arr._chunks = ((8, 8), (np.nan,))
+    result = arr[:, [0, -1]]
+    expected = a[:, [0, -1]]
+    assert_eq(result, expected)
+
+    arr = da.from_array(a, chunks=(8, 8))
+    arr._chunks = ((8, 8), (np.nan, np.nan))
+    with pytest.raises(ValueError, match="Array chunk size or shape"):
+        arr[:, [0, -1]]
+
+
 @pytest.mark.parametrize("lock", [True, False])
 @pytest.mark.parametrize("asarray", [True, False])
 @pytest.mark.parametrize("fancy", [True, False])
@@ -1067,6 +1090,12 @@ def test_slice_array_3d_with_bool_numpy_array():
     actual = array[mask].compute()
     expected = np.arange(13, 24)
     assert_eq(actual, expected)
+
+
+def test_slice_masked_arrays():
+    arr = np.ma.array(range(8), mask=[0, 0, 1, 0, 0, 1, 0, 1])
+    darr = da.from_array(arr, chunks=(4, 4))
+    assert_eq(darr[[2, 6]], arr[[2, 6]])
 
 
 def test_slice_array_null_dimension():
