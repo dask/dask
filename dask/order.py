@@ -446,11 +446,15 @@ def order(
 
         # FIXME: This can be very expensive
         if longest_path and not runnable_hull and not reachable_hull:
-            return max(candidates, key=skey)
+            return leaf_nodes_sorted.pop()
         else:
             return min(candidates, key=skey)
 
     longest_path = not abs(len(root_nodes) - len(leaf_nodes)) / len(root_nodes) < 0.8
+
+    leaf_nodes_sorted = []
+    if longest_path:
+        leaf_nodes_sorted = sorted(leaf_nodes, key=sort_key, reverse=False)
 
     # *************************************************************************
     # CORE ALGORITHM STARTS HERE
