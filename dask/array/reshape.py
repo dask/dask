@@ -144,7 +144,8 @@ def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
     # ((2, 2), (2, 1)) and the output chunks to ((4, 2, 4, 2), )
     # In this case, the individual chunks do not hold a contiguous sequence.
     # For example, the first chunk is [[0, 1], [3, 4]].
-    # Then, the result will be different because we first reshape the individual, non-contiguous chunks before concatenating them:
+    # Then, the result will be different because we first reshape the individual,
+    # non-contiguous chunks before concatenating them:
     # [ 0  1  3  4  2  5  6  7  9 10  8 11]
     # This is equivalent to
     # arr = np.arange(0, 12).reshape(4, 3)
