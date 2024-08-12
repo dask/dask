@@ -450,8 +450,24 @@ def order(
         else:
             return min(candidates, key=skey)
 
-    longest_path = not abs(len(root_nodes) - len(leaf_nodes)) / len(root_nodes) < 0.8
+    def use_longest_path() -> bool:
+        size = 0
+        # Heavy reducer / splitter topologies often benefit from a very
+        # traditional critical path that expresses the longest chain of
+        # tasks.
+        if abs(len(root_nodes) - len(leaf_nodes)) / len(root_nodes) < 0.8:
+            # If the graph stays about the same, we are checking for symmetry
+            # and choose a "quickest path first" approach if the graph appears
+            # to be asymmetrical
+            for r in root_nodes:
+                if not size:
+                    size = len(leafs_connected[r])
+                elif size != len(leafs_connected[r]):
+                    return False
 
+        return True
+
+    longest_path = use_longest_path()
     leaf_nodes_sorted = []
     if longest_path:
         leaf_nodes_sorted = sorted(leaf_nodes, key=sort_key, reverse=False)
