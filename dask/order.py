@@ -396,11 +396,8 @@ def order(
         occurences_grouped = defaultdict(set)
         for root, occ in occurrences.items():
             occurences_grouped[occ].add(root)
-        occurences_grouped_sorted_tmp = {}
         for k, v in occurences_grouped.items():
-            occurences_grouped_sorted_tmp[k] = sorted(v, key=sort_key, reverse=True)
-        occurences_grouped_sorted.update(occurences_grouped_sorted_tmp)
-        return None
+            occurences_grouped_sorted[k] = sorted(v, key=sort_key, reverse=True)
 
     def pick_seed() -> Key | None:
         if not occurences_grouped_sorted:
