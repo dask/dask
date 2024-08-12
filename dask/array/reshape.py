@@ -136,7 +136,7 @@ def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
     # we adjust have all-1 chunks to respect C contiguous arrays
     # during the reshaping
     # Example:
-    # Assume arr = da.from_array(np.arange(0, 6).reshape(2, 3), chunks=(2, 3))
+    # Assume arr = da.from_array(np.arange(0, 12).reshape(4, 3), chunks=(2, 3))
     # Reshaping to arr.reshape(-1, ) will return
     # [ 0  1  2  3  4  5  6  7  8  9 10 11]
     # The first dimension of the reshaped dimension are the chunks with length 2
