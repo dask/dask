@@ -135,7 +135,7 @@ def test_resample_divisions_propagation():
     pdf = pd.DataFrame({"data": 1}, index=idx)
     df = from_pandas(pdf, npartitions=10)
     result = df.resample("0.03s").mean()
-    result = result.repartition(freq="1T")
+    result = result.repartition(freq="1d")
     expected = pdf.resample("0.03s").mean()
     assert_eq(result, expected)
 
