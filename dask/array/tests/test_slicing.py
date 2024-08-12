@@ -1069,6 +1069,12 @@ def test_slice_array_3d_with_bool_numpy_array():
     assert_eq(actual, expected)
 
 
+def test_slice_masked_arrays():
+    arr = np.ma.array(range(8), mask=[0, 0, 1, 0, 0, 1, 0, 1])
+    darr = da.from_array(arr, chunks=(4, 4))
+    assert_eq(darr[[2, 6]], arr[[2, 6]])
+
+
 def test_slice_array_null_dimension():
     array = da.from_array(np.zeros((3, 0)))
     expected = np.zeros((3, 0))[[0]]
