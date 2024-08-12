@@ -1052,7 +1052,11 @@ def test_shuffle_slice(size, chunks):
 def test_unknown_chunks_length_one():
     a = np.arange(256, dtype=int)
     arr = da.from_array(a, chunks=(256,))
+    # np.flatnonzero dispatches
     result = np.flatnonzero(arr)
+    assert_eq(result[[0, -1]], np.flatnonzero(a)[[0, -1]])
+    
+    result = da.flatnonzero(arr)
     assert_eq(result[[0, -1]], np.flatnonzero(a)[[0, -1]])
 
     a = a.reshape(16, 16)
