@@ -381,6 +381,9 @@ def order(
     # writing, the most expensive part of ordering is the prep work (mostly
     # connected roots + sort_key) which can be reused for multiple orderings.
 
+    # Only build this mapping if it's needed. This can be expensive for
+    # all-to-all communications, but we normally don't need it in this
+    # case
     occurences_grouped_sorted: dict[int, list[Key]] = {}
 
     def _built_occurrences_group_sorted() -> None:
@@ -414,23 +417,29 @@ def order(
             return picked_root
         return None
 
-    def get_target(first: bool = False) -> Key:
+    def get_target(longest_path: bool = False) -> Key:
+        # Some topologies benefit if the node with the most dependencies
+        # is used as first choice, others benefit from the opposite.
         candidates = leaf_nodes
         skey: Callable = sort_key
 
-        candidates2 = set()
+        preferred_candidates = set()
         if runnable_hull:
             skey = lambda k: (num_needed[k], sort_key(k))
-            candidates2 = runnable_hull & candidates
-        if not candidates2 and reachable_hull:
+            preferred_candidates = runnable_hull & candidates
+        if not preferred_candidates and reachable_hull:
             skey = lambda k: (num_needed[k], sort_key(k))
-            candidates2 = reachable_hull & candidates
+            preferred_candidates = reachable_hull & candidates
+
         if reachable_hull or runnable_hull:
-            if not candidates2:
+            # We can't reach a leaf node directly, but we still have nodes
+            # with results in memory, these notes can inform our path towards
+            # a new preferred leaf node.
+            if not preferred_candidates:
                 hull = runnable_hull if runnable_hull else reachable_hull
                 for c in hull:
-                    candidates2.update(leafs_connected[c])
-            candidates = candidates2
+                    preferred_candidates.update(leafs_connected[c])
+            candidates = preferred_candidates
 
         if not candidates:
             if seed := pick_seed():
@@ -439,16 +448,12 @@ def order(
                 candidates = runnable_hull or reachable_hull
 
         # FIXME: This can be very expensive
-        if first and not runnable_hull and not reachable_hull:
+        if longest_path and not runnable_hull and not reachable_hull:
             return max(candidates, key=skey)
         else:
             return min(candidates, key=skey)
 
     longest_path = not abs(len(root_nodes) - len(leaf_nodes)) / len(root_nodes) < 0.8
-    if not longest_path:
-        first = False
-    else:
-        first = True
 
     # *************************************************************************
     # CORE ALGORITHM STARTS HERE
@@ -548,7 +553,7 @@ def order(
         assert not scrit_path
 
         # A. Build the critical path
-        target = get_target(first=first)
+        target = get_target(longest_path=longest_path)
         next_deps = dependencies[target]
         path_append(target)
 
