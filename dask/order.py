@@ -398,72 +398,70 @@ def order(
 
         return True
 
-    longest_path = False
-    print(longest_path)
+    longest_path = use_longest_path()
 
-    def get_target() -> Key:
-        raise NotImplementedError()
+    def _build_get_target() -> Callable[[], Key]:
+        occurrences: defaultdict[Key, int] = defaultdict(int)
+        for t in leaf_nodes:
+            for r in roots_connected[t]:
+                occurrences[r] += 1
+        occurences_grouped = defaultdict(set)
+        for root, occ in occurrences.items():
+            occurences_grouped[occ].add(root)
+        occurences_grouped_sorted = {}
+        for k, v in occurences_grouped.items():
+            occurences_grouped_sorted[k] = sorted(v, key=sort_key, reverse=True)
+        del occurences_grouped, occurrences
 
-    if not longest_path:
+        def pick_seed() -> Key | None:
+            while occurences_grouped_sorted:
+                key = max(occurences_grouped_sorted)
+                picked_root = occurences_grouped_sorted[key][-1]
+                if picked_root in result:
+                    occurences_grouped_sorted[key].pop()
+                    if not occurences_grouped_sorted[key]:
+                        del occurences_grouped_sorted[key]
+                    continue
+                return picked_root
+            return None
 
-        def _build_get_target() -> Callable[[], Key]:
-            occurrences: defaultdict[Key, int] = defaultdict(int)
-            for t in leaf_nodes:
-                for r in roots_connected[t]:
-                    occurrences[r] += 1
-            occurences_grouped = defaultdict(set)
-            for root, occ in occurrences.items():
-                occurences_grouped[occ].add(root)
-            occurences_grouped_sorted = {}
-            for k, v in occurences_grouped.items():
-                occurences_grouped_sorted[k] = sorted(v, key=sort_key, reverse=True)
-            del occurences_grouped, occurrences
+        def get_target(first: bool = False) -> Key:
+            candidates = leaf_nodes
+            skey: Callable = sort_key
 
-            def pick_seed() -> Key | None:
-                while occurences_grouped_sorted:
-                    key = max(occurences_grouped_sorted)
-                    picked_root = occurences_grouped_sorted[key][-1]
-                    if picked_root in result:
-                        occurences_grouped_sorted[key].pop()
-                        if not occurences_grouped_sorted[key]:
-                            del occurences_grouped_sorted[key]
-                        continue
-                    return picked_root
-                return None
+            candidates2 = set()
+            if runnable_hull:
+                skey = lambda k: (num_needed[k], sort_key(k))
+                candidates2 = runnable_hull & candidates
+            if not candidates2 and reachable_hull:
+                skey = lambda k: (num_needed[k], sort_key(k))
+                candidates2 = reachable_hull & candidates
+            if reachable_hull or runnable_hull:
+                if not candidates2:
+                    hull = runnable_hull if runnable_hull else reachable_hull
+                    for c in hull:
+                        candidates2.update(leafs_connected[c])
+                candidates = candidates2
 
-            def get_target() -> Key:
-                candidates = leaf_nodes
-                skey: Callable = sort_key
+            if not candidates:
+                if seed := pick_seed():
+                    candidates = leafs_connected[seed]
+                else:
+                    candidates = runnable_hull or reachable_hull
 
-                candidates2 = set()
-                if runnable_hull:
-                    skey = lambda k: (num_needed[k], sort_key(k))
-                    candidates2 = runnable_hull & candidates
-                if not candidates2 and reachable_hull:
-                    skey = lambda k: (num_needed[k], sort_key(k))
-                    candidates2 = reachable_hull & candidates
-                if reachable_hull or runnable_hull:
-                    if not candidates2:
-                        hull = runnable_hull if runnable_hull else reachable_hull
-                        for c in hull:
-                            candidates2.update(leafs_connected[c])
-                    candidates = candidates2
-
-                if not candidates:
-                    if seed := pick_seed():
-                        candidates = leafs_connected[seed]
-                    else:
-                        candidates = runnable_hull or reachable_hull
-                # FIXME: This can be very expensive
+            # FIXME: This can be very expensive
+            if first and not runnable_hull and not reachable_hull:
+                return max(candidates, key=skey)
+            else:
                 return min(candidates, key=skey)
 
-            return get_target
+        return get_target
 
-        get_target = _build_get_target()
+    get_target = _build_get_target()
+    if not longest_path:
+        first = False
     else:
-        leaf_nodes_sorted = sorted(leaf_nodes, key=sort_key, reverse=False)
-        get_target = leaf_nodes_sorted.pop
-        del leaf_nodes_sorted
+        first = True
 
     # *************************************************************************
     # CORE ALGORITHM STARTS HERE
@@ -563,7 +561,7 @@ def order(
         assert not scrit_path
 
         # A. Build the critical path
-        target = get_target()
+        target = get_target(first=first)  # type: ignore[call-arg]
         next_deps = dependencies[target]
         path_append(target)
 
