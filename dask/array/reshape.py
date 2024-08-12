@@ -133,7 +133,7 @@ def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
     # chunksizes consistent:
     # ((1, 1), (200)) -> ((1, 1), (20, ) * 10) for max_in_chunk = 20
     # It's important to ensure that all dimensions before the dimension
-    # we adjust have to have all-1 chunks to respect C contiguous arrays
+    # we adjust have all-1 chunks to respect C contiguous arrays
     # during the reshaping
     # Example:
     # Assume arr = da.from_array(np.arange(0, 6).reshape(2, 3), chunks=(2, 3))
