@@ -19,6 +19,7 @@ Generally Dask is smaller and lighter weight than Spark.  This means that it
 has fewer features and, instead, is used in conjunction with other libraries,
 particularly those in the numeric Python ecosystem.  It couples with libraries
 like Pandas or Scikit-Learn to achieve high-level functionality.
+Additionally, Dask is often faster and more robustly performant on `standard benchmarks <https://docs.coiled.io/blog/tpch.html?utm_source=dask-docs&utm_medium=spark-vs-dask#dask-vs-spark>`_ than Spark.
 
 Language
 ~~~~~~~~
