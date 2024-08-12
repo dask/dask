@@ -2095,7 +2095,8 @@ def test_xarray_map_reduce_with_slicing():
     assert max(pressure) <= 5
 
 
-def test_xarray_rechunk_map_reduce_cohorts():
+@pytest.mark.parametrize("use_longest_path", [True, False])
+def test_xarray_rechunk_map_reduce_cohorts(use_longest_path):
     dsk = {
         ("transpose", 0, 0, 0): (f, ("concat-groupby", 0, 0, 0)),
         ("transpose", 0, 1, 0): (f, ("concat-groupby", 0, 1, 0)),
@@ -2266,11 +2267,18 @@ def test_xarray_rechunk_map_reduce_cohorts():
         ("open_dataset", 14, 0, 0): (f),
         ("open_dataset", 15, 0, 0): (f),
     }
+    if use_longest_path:
+        # ensure that we run through longes path True and False
+        keys = [("open-dataset", i, 0, 0) for i in range(20, 35)]
+        dsk.update({("dummy", 0): (f, keys)})
+        dsk.update({k: (f,) for k in keys})
+
     o = order(dsk)
 
     assert_topological_sort(dsk, o)
     _, pressure = diagnostics(dsk, o=o)
-    assert max(pressure) <= 7
+    # cut the dummy tasks in the end
+    assert max(pressure[:99]) <= 7
 
     final_nodes = sorted(
         [("transpose", ix, jx, 0) for ix in range(2) for jx in range(2)],
