@@ -256,15 +256,15 @@ def test_prefer_deep(abcde):
     |   |
     d   a
 
-    Prefer shorter chains first so we should start with d
+    Prefer longer chains first so we should start with d
     """
     a, b, c, d, e = abcde
     dsk = {a: 1, b: (f, a), c: (f, b), d: 1, e: (f, d)}
 
     o = order(dsk)
     assert_topological_sort(dsk, o)
-    assert o[a] > o[d]
-    assert o[b] > o[d]
+    assert o[a] < o[d]
+    assert o[b] < o[d]
 
 
 def test_stacklimit(abcde):
