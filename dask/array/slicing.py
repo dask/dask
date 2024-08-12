@@ -580,6 +580,15 @@ def take(outname, inname, chunks, index, axis=0):
         )
         chunks, graph = _shuffle(chunks, indexer, axis, inname, outname, token)
         return chunks, graph
+    elif len(chunks[axis]) == 1:
+        slices = [slice(None)] * len(chunks)
+        slices[axis] = list(index)
+        slices = tuple(slices)
+        chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
+        dsk = {
+            (outname,) + ct: (getitem, (inname,) + ct, slices) for ct in chunk_tuples
+        }
+        return chunks, dsk
     else:
         from dask.array.core import unknown_chunk_message
 
