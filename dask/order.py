@@ -393,6 +393,8 @@ def order(
     # writing, the most expensive part of ordering is the prep work (mostly
     # connected roots + sort_key) which can be reused for multiple orderings.
 
+    all_leafs_accessible = set()  # type: ignore[var-annotated]
+
     def get_target(longest_path: bool = False) -> Key:
         # Some topologies benefit if the node with the most dependencies
         # is used as first choice, others benefit from the opposite.
@@ -407,21 +409,25 @@ def order(
                 # We can't reach a leaf node directly, but we still have nodes
                 # with results in memory, these notes can inform our path towards
                 # a new preferred leaf node.
+                if not all_leafs_accessible or not longest_path:
+                    for r in processed_roots:
+                        leafs_connected_to_loaded_roots.update(leafs_connected[r])
+                    # Clear the processed roots to avoid updating the set multiple
+                    # times with the same root node
+                    processed_roots.clear()
 
-                for r in processed_roots:
-                    leafs_connected_to_loaded_roots.update(leafs_connected[r])
-                # Clear the processed roots to avoid updating the set multiple
-                # times with the same root node
-                processed_roots.clear()
+                    leafs_connected_to_loaded_roots.intersection_update(candidates)
 
-                leafs_connected_to_loaded_roots.intersection_update(candidates)
+                    if len(leafs_connected_to_loaded_roots) == len(leaf_nodes):
+                        all_leafs_accessible.add(True)
+
                 preferred_candidates = leafs_connected_to_loaded_roots
             candidates = preferred_candidates
         else:
             # We reach a new and independent branch, so throw away previous branch
             leafs_connected_to_loaded_roots.clear()
 
-        if longest_path and not reachable_hull:
+        if longest_path and (not reachable_hull or all_leafs_accessible):
             return leaf_nodes_sorted.pop()
         else:
             # FIXME: This can be very expensive
