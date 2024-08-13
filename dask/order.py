@@ -420,7 +420,7 @@ def order(
             # We reach a new and independent branch, so throw away previous branch
             leafs_connected_to_loaded_roots.clear()
 
-        if longest_path and not runnable_hull and not reachable_hull:
+        if longest_path and not reachable_hull:
             return leaf_nodes_sorted.pop()
         else:
             # FIXME: This can be very expensive
