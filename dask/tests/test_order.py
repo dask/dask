@@ -42,6 +42,8 @@ def order(dsk, *args, **kwargs):
 
     GRAPHS_FOR_DISTRIBUTED.append((inspect.stack()[1][3], dsk))
 
+    assert _order(dsk, *args, **kwargs) == _order(dsk, *args, **kwargs)
+
     return _order(dsk, *args, **kwargs)
 
 
