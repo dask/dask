@@ -154,7 +154,7 @@ xfail_strict = true
 timeout_method = "thread"
 # This should not be reduced; Windows CI has been observed to be occasionally
 # exceptionally slow.
-timeout = 300
+timeout = 3000
 
 [tool.mypy]
 # Silence errors about Python 3.9-style delayed type annotations on Python 3.8

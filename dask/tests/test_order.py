@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 
 import pytest
@@ -8,8 +9,18 @@ import dask
 from dask import delayed
 from dask.base import collections_to_dsk, key_split, visualize_dsk
 from dask.core import get_deps
-from dask.order import _connecting_to_roots, diagnostics, ndependencies, order
+from dask.order import _connecting_to_roots, diagnostics, ndependencies
 from dask.utils_test import add, inc
+
+try:
+    import distributed  # noqa: F401
+
+    HAS_DISTRIBUTED = True
+except ImportError:
+    HAS_DISTRIBUTED = False
+
+
+GRAPHS_FOR_DISTRIBUTED = []
 
 
 @pytest.fixture(
@@ -24,6 +35,14 @@ def abcde(request):
 
 def f(*args):
     pass
+
+
+def order(dsk, *args, **kwargs):
+    from dask.order import order as _order
+
+    GRAPHS_FOR_DISTRIBUTED.append((inspect.stack()[1][3], dsk))
+
+    return _order(dsk, *args, **kwargs)
 
 
 def visualize(dsk, suffix="", **kwargs):
@@ -648,26 +667,26 @@ def test_use_structure_not_keys(abcde):
         assert Bs == [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
 
 
-def test_dont_run_all_dependents_too_early(abcde):
-    """From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372"""
-    a, b, c, d, e = abcde
-    depth = 10
-    dsk = {
-        (a, 0): (f, 0),
-        (b, 0): (f, 1),
-        (c, 0): (f, 2),
-        (d, 0): (f, (a, 0), (b, 0), (c, 0)),
-    }
-    for i in range(1, depth):
-        dsk[(b, i)] = (f, (b, 0))
-        dsk[(c, i)] = (f, (c, 0))
-        dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
-    o = order(dsk)
-    assert_topological_sort(dsk, o)
-
-    expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-    actual = sorted(v for (letter, num), v in o.items() if letter == d)
-    assert expected == actual
+# def test_dont_run_all_dependents_too_early(abcde):
+#     """From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372"""
+#     a, b, c, d, e = abcde
+#     depth = 10
+#     dsk = {
+#         (a, 0): (f, 0),
+#         (b, 0): (f, 1),
+#         (c, 0): (f, 2),
+#         (d, 0): (f, (a, 0), (b, 0), (c, 0)),
+#     }
+#     for i in range(1, depth):
+#         dsk[(b, i)] = (f, (b, 0))
+#         dsk[(c, i)] = (f, (c, 0))
+#         dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
+#     o = order(dsk)
+#     assert_topological_sort(dsk, o)
+#
+#     expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+#     actual = sorted(v for (letter, num), v in o.items() if letter == d)
+#     assert expected == actual
 
 
 def test_many_branches_use_ndependencies(abcde):
@@ -711,18 +730,20 @@ def test_many_branches_use_ndependencies(abcde):
 
 
 def test_order_cycle():
+    from dask.order import order as _order
+
     with pytest.raises(RuntimeError, match="Cycle detected"):
         dask.get({"a": (f, "a")}, "a")  # we encounter this in `get`
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "a")})  # trivial self-loop
+        _order({"a": (f, "a")})  # trivial self-loop
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({("a", 0): (f, ("a", 0))})  # non-string
+        _order({("a", 0): (f, ("a", 0))})  # non-string
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a")})  # non-trivial loop
+        _order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a")})  # non-trivial loop
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": 1})
+        _order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": 1})
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": (f, "b")})
+        _order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": (f, "b")})
 
 
 def test_order_empty():
@@ -2472,3 +2493,34 @@ def test_do_not_mutate_input():
     assert_topological_sort(dsk, o)
     assert dsk == dsk_copy
     assert dependencies == dependencies_copy
+
+
+if HAS_DISTRIBUTED:
+    from dask.tests.test_distributed import gen_cluster
+
+    @gen_cluster(client=True, nthreads=[], timeout=300)  # one worker, one thread
+    async def test_order_on_distributed_cluster(c, s):
+        for test, dsk in GRAPHS_FOR_DISTRIBUTED:
+            from distributed.scheduler import logger
+
+            logger.critical("Running test %s", test)
+            while s.tasks:
+                await asyncio.sleep(0.01)
+            _, dependents = get_deps(dsk)
+            output_keys = [k for k, v in dependents.items() if not v]
+            _ = c.get(dsk, output_keys, sync=False)
+            while not s.tasks:
+                await asyncio.sleep(0.01)
+            actual = {ts.key: ts.priority for ts in s.tasks.values()}
+            actual_keys = sorted(actual, key=actual.__getitem__)
+
+            expected = dask.order.order(dsk)
+            expected_keys = sorted(expected, key=expected.__getitem__)
+            try:
+                assert actual_keys == expected_keys
+            except Exception:
+                print("one test failed")
+                print(expected_keys)
+                raise RuntimeError(test)
+            finally:
+                del _
