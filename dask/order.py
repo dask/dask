@@ -315,6 +315,8 @@ def order(
                 while branches:
                     path = branches.popleft()
                     while True:
+                        # Loop invariant. Too expensive to compute at runtime
+                        # assert not set(known_runnable_paths).intersection(runnable_hull)
                         current = path[-1]
                         runnable_hull.add(current)
                         deps_downstream = dependents[current]
@@ -343,6 +345,7 @@ def order(
                             continue
                         elif current in known_runnable_paths:
                             known_runnable_paths[current].append(path)
+                            runnable_hull.discard(current)
                             if (
                                 len(known_runnable_paths[current])
                                 >= num_needed[current]
