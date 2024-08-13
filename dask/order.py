@@ -410,6 +410,8 @@ def order(
 
                 for r in processed_roots:
                     leafs_connected_to_loaded_roots.update(leafs_connected[r])
+                # Clear the processed roots to avoid updating the set multiple
+                # times with the same root node
                 processed_roots.clear()
 
                 leafs_connected_to_loaded_roots.intersection_update(candidates)
