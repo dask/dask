@@ -2665,3 +2665,12 @@ def test_empty_from_pandas_projection():
     df["foo"] = from_pandas(foo, npartitions=1)
     pdf["foo"] = foo
     assert_eq(df["foo"], pdf["foo"])
+
+
+def test_to_backend_simplify():
+    with dask.config.set({"dataframe.backend": "pandas"}):
+        df = from_dict({"x": [1, 2, 3], "y": [4, 5, 6]}, npartitions=2)
+        df2 = df.to_backend("pandas")[["y"]]
+        assert str(df2.expr) != str(df[["y"]].expr)
+        df3 = df2.simplify()
+        assert str(df3.expr) == str(df[["y"]].expr)
