@@ -4,8 +4,10 @@ import numpy as np
 import pandas as pd
 from dask.backends import CreationDispatch
 from dask.dataframe.backends import DataFrameBackendEntrypoint
+from dask.dataframe.dispatch import to_pandas_dispatch
 
 from dask_expr._dispatch import get_collection_type
+from dask_expr._expr import ToBackend
 
 try:
     import sparse
@@ -32,6 +34,17 @@ dataframe_creation_dispatch = CreationDispatch(
 )
 
 
+class ToPandasBackend(ToBackend):
+    @staticmethod
+    def operation(df, options):
+        return to_pandas_dispatch(df, **options)
+
+    def _simplify_down(self):
+        if isinstance(self.frame._meta, (pd.DataFrame, pd.Series, pd.Index)):
+            # We already have pandas data
+            return self.frame
+
+
 class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     """Pandas-Backend Entrypoint Class for Dask-Expressions
 
@@ -40,17 +53,10 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     """
 
     @classmethod
-    def to_backend_dispatch(cls):
-        from dask.dataframe.dispatch import to_pandas_dispatch
-
-        return to_pandas_dispatch
-
-    @classmethod
     def to_backend(cls, data, **kwargs):
-        if isinstance(data._meta, (pd.DataFrame, pd.Series, pd.Index)):
-            # Already a pandas-backed collection
-            return data
-        return data.map_partitions(cls.to_backend_dispatch(), **kwargs)
+        from dask_expr._collection import new_collection
+
+        return new_collection(ToPandasBackend(data, kwargs))
 
 
 dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())

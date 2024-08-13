@@ -1303,6 +1303,13 @@ class _DeepCopy(Elemwise):
         return df.copy(deep=True)
 
 
+class ToBackend(Elemwise):
+    _parameters = ["frame", "options"]
+    _projection_passthrough = True
+    _filter_passthrough = True
+    _preserves_partitioning_information = True
+
+
 class RenameSeries(Elemwise):
     _parameters = ["frame", "index", "sorted_index"]
     _defaults = {"sorted_index": False}
