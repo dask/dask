@@ -5703,7 +5703,7 @@ def merge(
     if left_on and right_on:
         warn_dtype_mismatch(left, right, left_on, right_on)
 
-    return new_collection(
+    result = new_collection(
         Merge(
             left,
             right,
@@ -5719,6 +5719,10 @@ def merge(
             broadcast=broadcast,
         )
     )
+    if left._meta.index.name != right._meta.index.name:
+        return result.rename_axis(index=result._meta.index.name)
+    else:
+        return result
 
 
 @wraps(pd.merge_asof)

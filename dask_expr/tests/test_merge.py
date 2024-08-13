@@ -840,6 +840,22 @@ def test_merge_avoid_overeager_filter_pushdown():
     assert isinstance(result.expr.frame.frame, Merge)
 
 
+def test_join_consistent_index_names():
+    pdf1 = pd.DataFrame(index=["a", "b", "c"], data=dict(a=[1, 2, 3]))
+    pdf1.index.name = "test"
+    df1 = from_pandas(pdf1, 2)
+
+    pdf2 = pd.DataFrame(index=["a", "b", "d"], data=dict(b=[1, 2, 3]))
+    df2 = from_pandas(pdf2, 2)
+    result = df1.join(df2, how="outer")
+    expected = pdf1.join(pdf2, how="outer")
+    assert_eq(result, expected, check_index=False)
+    assert result.index.name is None
+    assert result._meta.index.name is None
+    assert result.partitions[0].compute().index.name is None
+    assert expected.index.name is None
+
+
 @pytest.mark.parametrize("how", ["left", "inner", "right", "outer"])
 def test_isin_filter_pushdown(how):
     pdf1 = pd.DataFrame(
