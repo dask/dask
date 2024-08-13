@@ -402,7 +402,7 @@ def order(
             skey = lambda k: (num_needed[k], sort_key(k))
             preferred_candidates = reachable_hull & candidates
 
-        if reachable_hull or runnable_hull:
+        if reachable_hull:
             # We can't reach a leaf node directly, but we still have nodes
             # with results in memory, these notes can inform our path towards
             # a new preferred leaf node.
