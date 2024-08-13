@@ -339,7 +339,6 @@ def order(
                                         branch.append(d)
                                         branches.append(branch)
                                 break
-                            runnable_hull.update(deps_downstream)
                             path.extend(deps_downstream)
                             continue
                         elif current in known_runnable_paths:
