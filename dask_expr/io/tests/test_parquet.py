@@ -9,7 +9,7 @@ from dask.dataframe.utils import assert_eq
 from dask.utils import key_split
 from pyarrow import fs
 
-from dask_expr import from_graph, from_pandas, read_parquet
+from dask_expr import from_array, from_graph, from_pandas, read_parquet
 from dask_expr._expr import Filter, Lengths, Literal
 from dask_expr._reductions import Len
 from dask_expr.io import FusedParquetIO, ReadParquet
@@ -576,3 +576,19 @@ def test_timestamp_divisions(tmpdir):
         pd.Timestamp("2017-11-26 17:00:00.067000"),
         pd.Timestamp("2017-11-26 17:00:00.102000"),
     )
+
+
+def test_read_parquet_index_projection(tmpdir):
+    df = from_array(
+        np.zeros((201 * 10, 8), dtype=np.int64),
+        columns=["val1", "val2", "val3", "val4", "val5", "val6", "val7", "tsprv"],
+    )
+    df = df.repartition(npartitions=201)
+    df.to_parquet(tmpdir + "/index", write_index=False)
+
+    df = read_parquet(tmpdir + "/index", calculate_divisions=True)
+    result = df.assign(dts=df.index - df.tsprv)
+    expected = df.compute()
+    expected = expected.assign(dts=expected.index - expected.tsprv)
+
+    assert_eq(result.dts.min(), expected.dts.min())
