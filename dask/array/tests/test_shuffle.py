@@ -81,3 +81,16 @@ def test_oob_axis(darr):
 def test_oob_indexer(darr):
     with pytest.raises(IndexError, match="Indexer contains out of bounds index"):
         darr.shuffle([[16]], axis=1)
+
+
+def test_shuffle_no_op_with_correct_indexer():
+    arr = da.ones((250, 100), chunks=((50, 100, 33, 67), 100))
+    indexer = [
+        list(range(0, 50)),
+        list(range(50, 150)),
+        list(range(150, 183)),
+        list(range(183, 250)),
+    ]
+    result = arr.shuffle(indexer, axis=0)
+    assert result.dask == arr.dask
+    assert_eq(arr, result)
