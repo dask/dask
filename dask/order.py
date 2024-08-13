@@ -326,6 +326,8 @@ def order(
                             if num_needed[current] <= 1:
                                 for k in path:
                                     add_to_result(k)
+                            else:
+                                runnable_hull.discard(current)
                         elif len(path) == 1 or len(deps_upstream) == 1:
                             if len(deps_downstream) > 1:
                                 for d in sorted(deps_downstream, key=sort_key):
@@ -338,7 +340,7 @@ def order(
                                         branches.append(branch)
                                 break
                             runnable_hull.update(deps_downstream)
-                            path.extend(sorted(deps_downstream, key=sort_key))
+                            path.extend(deps_downstream)
                             continue
                         elif current in known_runnable_paths:
                             known_runnable_paths[current].append(path)
@@ -371,6 +373,7 @@ def order(
                                     add_to_result(k)
                             else:
                                 known_runnable_paths[current] = [path]
+                                runnable_hull.discard(current)
                         break
 
     # Pick strategy
@@ -434,10 +437,11 @@ def order(
                 candidates = leaf_nodes
                 skey: Callable = sort_key
 
-                if runnable_hull:
-                    skey = lambda k: (num_needed[k], sort_key(k))
-                    candidates = runnable_hull & candidates
-                elif reachable_hull:
+                # We're not considering runnable_hull because if there was a
+                # runnable leaf node, process_runnables should've taken care of
+                # it already, i.e. the intersection of runnable_hull and
+                # candidates is always empty
+                if reachable_hull:
                     skey = lambda k: (num_needed[k], sort_key(k))
                     candidates = reachable_hull & candidates
 
@@ -445,6 +449,7 @@ def order(
                     if seed := pick_seed():
                         candidates = leafs_connected[seed]
                     else:
+                        # FIXME: This seems to be dead code (at least untested)
                         candidates = runnable_hull or reachable_hull
                 # FIXME: This can be very expensive
                 return min(candidates, key=skey)
@@ -573,10 +578,6 @@ def order(
             if item in result:
                 continue
             if num_needed[item]:
-                if item in known_runnable_paths:
-                    for path in known_runnable_paths_pop(item):
-                        path_extend(reversed(path))
-                    continue
                 path_append(item)
                 deps = dependencies[item].difference(result)
                 unknown: list[Key] = []
