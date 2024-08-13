@@ -16,6 +16,7 @@ NUMPY_GE_123 = _np_version.release >= (1, 23)
 NUMPY_GE_124 = _np_version.release >= (1, 24)
 NUMPY_GE_125 = _np_version.release >= (1, 25)
 NUMPY_GE_200 = _np_version.release >= (2, 0)
+NUMPY_GE_210 = _np_version.release >= (2, 1)
 
 
 if NUMPY_GE_200:
