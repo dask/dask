@@ -413,10 +413,10 @@ def test_take_sorted():
 
     chunks, dsk = take("y", "x", [(20, 20, 20, 20)], np.arange(0, 80), axis=0)
     expected = {
-        ("y", 0): (getitem, ("x", 0), (np.arange(0, 20),)),
-        ("y", 1): (getitem, ("x", 1), (np.arange(0, 20),)),
-        ("y", 2): (getitem, ("x", 2), (np.arange(0, 20),)),
-        ("y", 3): (getitem, ("x", 3), (np.arange(0, 20),)),
+        ("y", 0): ("x", 0),
+        ("y", 1): ("x", 1),
+        ("y", 2): ("x", 2),
+        ("y", 3): ("x", 3),
     }
     np.testing.assert_equal(dsk, expected)
     assert chunks == ((20, 20, 20, 20),)
@@ -1102,3 +1102,20 @@ def test_slice_array_null_dimension():
     array = da.from_array(np.zeros((3, 0)))
     expected = np.zeros((3, 0))[[0]]
     assert_eq(array[[0]], expected)
+
+
+def test_take_sorted_indexer():
+    arr = da.ones((250, 100), chunks=((50, 100, 33, 67), 100))
+    indexer = list(range(0, 250))
+    result = arr[indexer, :]
+    assert_eq(arr, result)
+    assert {
+        **dict(arr.dask),
+        **{
+            k: k2
+            for k, k2 in zip(
+                [k for k in dict(result.dask) if "getitem" in k[0]],
+                dict(arr.dask).keys(),
+            )
+        },
+    } == dict(result.dask)
