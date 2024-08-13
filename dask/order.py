@@ -322,6 +322,8 @@ def order(
                 while branches:
                     path = branches.popleft()
                     while True:
+                        # Loop invariant. Too expensive to compute at runtime
+                        # assert not set(known_runnable_paths).intersection(runnable_hull)
                         current = path[-1]
                         runnable_hull.add(current)
                         deps_downstream = dependents[current]
@@ -333,6 +335,8 @@ def order(
                             if num_needed[current] <= 1:
                                 for k in path:
                                     add_to_result(k)
+                            else:
+                                runnable_hull.discard(current)
                         elif len(path) == 1 or len(deps_upstream) == 1:
                             if len(deps_downstream) > 1:
                                 for d in sorted(deps_downstream, key=sort_key):
@@ -344,11 +348,11 @@ def order(
                                         branch.append(d)
                                         branches.append(branch)
                                 break
-                            runnable_hull.update(deps_downstream)
-                            path.extend(sorted(deps_downstream, key=sort_key))
+                            path.extend(deps_downstream)
                             continue
                         elif current in known_runnable_paths:
                             known_runnable_paths[current].append(path)
+                            runnable_hull.discard(current)
                             if (
                                 len(known_runnable_paths[current])
                                 >= num_needed[current]
@@ -378,6 +382,7 @@ def order(
                                     add_to_result(k)
                             else:
                                 known_runnable_paths[current] = [path]
+                                runnable_hull.discard(current)
                         break
 
     # Pick strategy
@@ -395,10 +400,7 @@ def order(
         skey: Callable = sort_key
 
         preferred_candidates = set()
-        if runnable_hull:
-            skey = lambda k: (num_needed[k], sort_key(k))
-            preferred_candidates = runnable_hull & candidates
-        if not preferred_candidates and reachable_hull:
+        if reachable_hull:
             skey = lambda k: (num_needed[k], sort_key(k))
             preferred_candidates = reachable_hull & candidates
 
@@ -562,10 +564,6 @@ def order(
             if item in result:
                 continue
             if num_needed[item]:
-                if item in known_runnable_paths:
-                    for path in known_runnable_paths_pop(item):
-                        path_extend(reversed(path))
-                    continue
                 path_append(item)
                 deps = dependencies[item].difference(result)
                 unknown: list[Key] = []

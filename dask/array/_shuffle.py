@@ -8,6 +8,7 @@ import numpy as np
 from dask import config
 from dask.array.chunk import getitem
 from dask.array.core import Array, unknown_chunk_message
+from dask.array.dispatch import concatenate_lookup
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 
@@ -70,6 +71,9 @@ def shuffle(x, indexer: list[list[int]], axis):
     out_name = f"shuffle-{token}"
 
     chunks, layer = _shuffle(x.chunks, indexer, axis, x.name, out_name, token)
+    if len(layer) == 0:
+        return Array(x.dask, x.name, x.chunks, meta=x)
+
     graph = HighLevelGraph.from_collections(out_name, layer, dependencies=[x])
 
     return Array(graph, out_name, chunks, meta=x)
@@ -88,6 +92,17 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         raise IndexError(
             f"Indexer contains out of bounds index. Dimension only has {sum(chunks[axis])} elements."
         )
+
+    if len(indexer) == len(chunks[axis]):
+        # check if the array is already shuffled the way we want
+        ctr = 0
+        for idx, c in zip(indexer, chunks[axis]):
+            if idx != list(range(ctr, ctr + c)):
+                break
+            ctr += c
+        else:
+            return chunks, {}
+
     indexer = copy.deepcopy(indexer)
 
     chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
@@ -187,7 +202,8 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
 
 def concatenate_arrays(arrs, sorter, axis):
-    return np.take(np.concatenate(arrs, axis=axis), np.argsort(sorter), axis=axis)
+    concatenate = concatenate_lookup.dispatch(type(arrs[0]))
+    return np.take(concatenate(arrs, axis=axis), np.argsort(sorter), axis=axis)
 
 
 def convert_key(key, chunk, axis):
