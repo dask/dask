@@ -208,6 +208,9 @@ def order(
 
     _sort_keys_cache: dict[Key, tuple[int, int, int, int, str]] = {}
 
+    leafs_connected_to_loaded_roots = set()
+    processed_roots = set()
+
     def sort_key(x: Key) -> tuple[int, int, int, int, str]:
         try:
             return _sort_keys_cache[x]
@@ -246,6 +249,10 @@ def order(
                 result[item] = Order(i, crit_path_counter - _crit_path_counter_offset)
             else:
                 result[item] = i
+
+            if item in root_nodes:
+                processed_roots.add(item)
+
             i += 1
             # Note: This is a `set` and therefore this introduces a certain
             # randomness. However, this randomness should not have any impact on
@@ -381,39 +388,6 @@ def order(
     # writing, the most expensive part of ordering is the prep work (mostly
     # connected roots + sort_key) which can be reused for multiple orderings.
 
-    # Only build this mapping if it's needed. This can be expensive for
-    # all-to-all communications, but we normally don't need it in this
-    # case
-    occurences_grouped_sorted: dict[int, list[Key]] = {}
-
-    def _built_occurrences_group_sorted() -> None:
-        if occurences_grouped_sorted:
-            return
-        occurrences: defaultdict[Key, int] = defaultdict(int)
-        for t in leaf_nodes:
-            for r in roots_connected[t]:
-                occurrences[r] += 1
-        occurences_grouped = defaultdict(set)
-        for root, occ in occurrences.items():
-            occurences_grouped[occ].add(root)
-        for k, v in occurences_grouped.items():
-            occurences_grouped_sorted[k] = sorted(v, key=sort_key, reverse=True)
-
-    def pick_seed() -> Key | None:
-        if not occurences_grouped_sorted:
-            _built_occurrences_group_sorted()
-
-        while occurences_grouped_sorted:
-            key = max(occurences_grouped_sorted)
-            picked_root = occurences_grouped_sorted[key][-1]
-            if picked_root in result:
-                occurences_grouped_sorted[key].pop()
-                if not occurences_grouped_sorted[key]:
-                    del occurences_grouped_sorted[key]
-                continue
-            return picked_root
-        return None
-
     def get_target(longest_path: bool = False) -> Key:
         # Some topologies benefit if the node with the most dependencies
         # is used as first choice, others benefit from the opposite.
@@ -433,21 +407,21 @@ def order(
             # with results in memory, these notes can inform our path towards
             # a new preferred leaf node.
             if not preferred_candidates:
-                hull = runnable_hull if runnable_hull else reachable_hull
-                for c in hull:
-                    preferred_candidates.update(leafs_connected[c])
+                for r in processed_roots:
+                    leafs_connected_to_loaded_roots.update(leafs_connected[r])
+                processed_roots.clear()
+
+                leafs_connected_to_loaded_roots.intersection_update(candidates)
+                preferred_candidates = leafs_connected_to_loaded_roots
             candidates = preferred_candidates
+        else:
+            # We reach a new and independent branch, so throw away previous branch
+            leafs_connected_to_loaded_roots.clear()
 
-        if not candidates:
-            if seed := pick_seed():
-                candidates = leafs_connected[seed]
-            else:
-                candidates = runnable_hull or reachable_hull
-
-        # FIXME: This can be very expensive
         if longest_path and not runnable_hull and not reachable_hull:
             return leaf_nodes_sorted.pop()
         else:
+            # FIXME: This can be very expensive
             return min(candidates, key=skey)
 
     def use_longest_path() -> bool:

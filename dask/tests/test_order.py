@@ -575,7 +575,7 @@ def test_map_overlap(abcde):
        |/  | \ | / | \|
       d1  d2  d3  d4  d5
        |       |      |
-      e1      e2      e5
+      e1      e3      e5
 
     Want to finish b1 before we start on e5
     """
