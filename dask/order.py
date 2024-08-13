@@ -399,16 +399,15 @@ def order(
         candidates = leaf_nodes
         skey: Callable = sort_key
 
-        preferred_candidates = set()
         if reachable_hull:
             skey = lambda k: (num_needed[k], sort_key(k))
             preferred_candidates = reachable_hull & candidates
 
-        if reachable_hull:
-            # We can't reach a leaf node directly, but we still have nodes
-            # with results in memory, these notes can inform our path towards
-            # a new preferred leaf node.
             if not preferred_candidates:
+                # We can't reach a leaf node directly, but we still have nodes
+                # with results in memory, these notes can inform our path towards
+                # a new preferred leaf node.
+
                 for r in processed_roots:
                     leafs_connected_to_loaded_roots.update(leafs_connected[r])
                 processed_roots.clear()
