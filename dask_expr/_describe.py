@@ -51,11 +51,16 @@ class DescribeNumeric(Reduction):
             SeriesQuantile(frame, q=percentiles, method=self.percentile_method),
             frame.max(split_every=self.split_every),
         ]
+        try:
+            unit = getattr(self.frame._meta.array, "unit", None)
+        except AttributeError:
+            # cudf Series has no array attribute
+            unit = None
         return DescribeNumericAggregate(
             self.frame._meta.name,
             is_td_col,
             is_dt_col,
-            getattr(self.frame._meta.array, "unit", None),
+            unit,
             *stats,
         )
 
