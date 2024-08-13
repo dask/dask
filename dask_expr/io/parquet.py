@@ -723,9 +723,9 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         if isinstance(parent, Index):
             # Column projection
             columns = determine_column_projection(self, parent, dependents)
+            columns = [col for col in self.columns if col in columns]
             if set(columns) == set(self.columns):
                 return
-            columns = [col for col in self.columns if col in columns]
             return Index(
                 self.substitute_parameters({"columns": columns, "_series": False})
             )
