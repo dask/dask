@@ -567,7 +567,7 @@ def take(outname, inname, chunks, index, axis=0):
     if not np.isnan(chunks[axis]).any():
         from dask.array._shuffle import _shuffle
 
-        # Make sure index is a numpy array (not cupy)
+        # Make sure index is a numpy array
         index = to_numpy_dispatch(index)
         arange = np.arange(np.sum(chunks[axis]))
         if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
