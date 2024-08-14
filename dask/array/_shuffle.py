@@ -15,7 +15,7 @@ from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 
 
-def shuffle(x, indexer: list[list[int]], axis, chunks="auto"):
+def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"]="auto"):
     """
     Reorders one dimensions of a Dask Array based on an indexer.
 
