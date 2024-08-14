@@ -50,7 +50,7 @@ def shuffle(x, indexer: list[list[int]], axis):
     the number of chunks small.
 
     The tolerance of increasing the chunk size is controlled by the configuration
-    "array.shuffle.chunksize-tolerance". The default value is 1.25.
+    "array.chunksize-tolerance". The default value is 1.25.
 
     >>> y.chunks
     ((2,), (5, 3))
@@ -105,7 +105,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     indexer = copy.deepcopy(indexer)
 
-    chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
+    chunksize_tolerance = config.get("array.chunksize-tolerance")
     chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
 
     # Figure out how many groups we can put into one chunk
