@@ -377,6 +377,11 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
 
+@to_numpy_dispatch.register((list, tuple))
+def arraylike_to_numpy(data, **kwargs):
+    return np.asarray(data, **kwargs)
+
+
 @to_numpy_dispatch.register(np.ndarray)
 def to_numpy_dispatch_from_numpy(data, **kwargs):
     return data
