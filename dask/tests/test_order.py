@@ -669,26 +669,26 @@ def test_use_structure_not_keys(abcde):
         assert Bs == [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
 
 
-# def test_dont_run_all_dependents_too_early(abcde):
-#     """From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372"""
-#     a, b, c, d, e = abcde
-#     depth = 10
-#     dsk = {
-#         (a, 0): (f, 0),
-#         (b, 0): (f, 1),
-#         (c, 0): (f, 2),
-#         (d, 0): (f, (a, 0), (b, 0), (c, 0)),
-#     }
-#     for i in range(1, depth):
-#         dsk[(b, i)] = (f, (b, 0))
-#         dsk[(c, i)] = (f, (c, 0))
-#         dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
-#     o = order(dsk)
-#     assert_topological_sort(dsk, o)
-#
-#     expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-#     actual = sorted(v for (letter, num), v in o.items() if letter == d)
-#     assert expected == actual
+def test_dont_run_all_dependents_too_early(abcde):
+    """From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372"""
+    a, b, c, d, e = abcde
+    depth = 10
+    dsk = {
+        (a, 0): (f, 0),
+        (b, 0): (f, 1),
+        (c, 0): (f, 2),
+        (d, 0): (f, (a, 0), (b, 0), (c, 0)),
+    }
+    for i in range(1, depth):
+        dsk[(b, i)] = (f, (b, 0))
+        dsk[(c, i)] = (f, (c, 0))
+        dsk[(d, i)] = (f, (d, i - 1), (b, i), (c, i))
+    o = order(dsk)
+    assert_topological_sort(dsk, o)
+
+    expected = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+    actual = sorted(v for (letter, num), v in o.items() if letter == d)
+    assert expected == actual
 
 
 def test_many_branches_use_ndependencies(abcde):
@@ -732,6 +732,10 @@ def test_many_branches_use_ndependencies(abcde):
 
 
 def test_order_cycle():
+    # Note: We're overriding `order` in this module to run some additional tests
+    # and to queue up the graphs for the distributed scheduler test below. We
+    # don't want to run these broken graphs on the scheduler since the test
+    # below is not robust to broken graphs
     from dask.order import order as _order
 
     with pytest.raises(RuntimeError, match="Cycle detected"):
@@ -1986,7 +1990,7 @@ def test_gh_3055_explicit(abcde):
         (c, 0, 0): (f, (b, 0), (a, 2), (a, 1)),
         (d, 0, 0): (f, (c, 0, 1), (c, 0, 0)),
         (d, 0, 1): (f, (c, 0, 1), (c, 0, 0)),
-        (f, 1, 1): (f, (d, 0, 1)),
+        ("f", 1, 1): (f, (d, 0, 1)),
         (c, 1, 0): (f, (b, 1, 0), (b, 1, 2)),
         (c, 0, 2): (f, (b, 0, 0), (b, 0, 1)),
         (e, 0): (f, (c, 1, 0), (c, 0, 2)),
@@ -2500,17 +2504,20 @@ def test_do_not_mutate_input():
 if HAS_DISTRIBUTED:
     from dask.tests.test_distributed import gen_cluster
 
-    @gen_cluster(client=True, nthreads=[], timeout=300)  # one worker, one thread
+    @pytest.mark.slow
+    @gen_cluster(client=True, nthreads=[])
     async def test_order_on_distributed_cluster(c, s):
-        for test, dsk in GRAPHS_FOR_DISTRIBUTED:
-            from distributed.scheduler import logger
+        # Note: For the GRAPHS_FOR_DISTRIBUTED to be populated, the above tests
+        # have to run first
+        for testname, dsk in GRAPHS_FOR_DISTRIBUTED:
+            if not dsk:
+                continue
 
-            logger.critical("Running test %s", test)
             while s.tasks:
                 await asyncio.sleep(0.01)
             _, dependents = get_deps(dsk)
             output_keys = [k for k, v in dependents.items() if not v]
-            _ = c.get(dsk, output_keys, sync=False)
+            futs = c.get(dsk, output_keys, sync=False)  # noqa: F841
             while not s.tasks:
                 await asyncio.sleep(0.01)
             actual = {ts.key: ts.priority for ts in s.tasks.values()}
@@ -2519,10 +2526,10 @@ if HAS_DISTRIBUTED:
             expected = dask.order.order(dsk)
             expected_keys = sorted(expected, key=expected.__getitem__)
             try:
-                assert actual_keys == expected_keys
-            except Exception:
-                print("one test failed")
-                print(expected_keys)
-                raise RuntimeError(test)
+                assert actual_keys == expected_keys, (
+                    testname,
+                    actual_keys,
+                    expected_keys,
+                )
             finally:
-                del _
+                del futs

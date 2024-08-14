@@ -137,7 +137,7 @@ def order(
     # way that is simpler to handle
     all_tasks = False
     n_removed_leaves = 0
-    requires_data_task = defaultdict(set)
+    requires_data_task = defaultdict(list)
     while not all_tasks:
         all_tasks = True
         for leaf in list(leaf_nodes):
@@ -174,7 +174,7 @@ def order(
                     dependencies = copy.deepcopy(dependencies)
                 root_nodes.remove(root)
                 for dep in dependents[root]:
-                    requires_data_task[dep].add(root)
+                    requires_data_task[dep].append(root)
                     dependencies[dep].remove(root)
                     if not dependencies[dep]:
                         root_nodes.add(dep)
@@ -254,12 +254,7 @@ def order(
                 processed_roots.add(item)
 
             i += 1
-            # Note: This is a `set` and therefore this introduces a certain
-            # randomness. However, this randomness should not have any impact on
-            # the final result since the `process_runnable` should produce
-            # equivalent results regardless of the order in which runnable is
-            # populated (not identical but equivalent)
-            for dep in dependents.get(item, ()):
+            for dep in sorted(dependents.get(item, ()), key=sort_key):
                 num_needed[dep] -= 1
                 reachable_hull.add(dep)
                 if not num_needed[dep]:
@@ -554,11 +549,13 @@ def order(
         next_deps = dependencies[target]
         path_append(target)
 
-        while next_deps:
-            item = max(next_deps, key=sort_key)
-            path_append(item)
-            next_deps = dependencies[item]
-            path_extend(next_deps)
+        if deps_target := dependencies[target]:
+            next_deps = [max(deps_target, key=sort_key)]
+            while next_deps:
+                item = next_deps[-1]
+                path_append(item)
+                next_deps = sorted(dependencies[item], key=sort_key)
+                path_extend(next_deps)
 
         # B. Walk the critical path
 
