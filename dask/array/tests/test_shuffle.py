@@ -111,3 +111,8 @@ def test_resize_other_dimensions():
     result = _resize_other_dimensions(arr, 40, 1, "auto")
     assert result.chunks == ((45, 50, 50, 38, 34, 33), (10,) * 5, (5,) * 4)
     assert_eq(arr, result)
+
+    arr = da.random.random((250, 50, 5), chunks=((45, 100, 38, 67), 10, 1))
+    result = _resize_other_dimensions(arr, 40, 1, "auto")
+    assert result.chunks == ((45, 50, 50, 38, 34, 33), (10,) * 5, (1,) * 5)
+    assert_eq(arr, result)

@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import copy
 import math
-from functools import reduce
 from itertools import count, product
-from operator import mul
+from typing import Literal
 
 import numpy as np
 
@@ -87,7 +86,9 @@ def shuffle(x, indexer: list[list[int]], axis, chunks="auto"):
     return Array(graph, out_name, chunks, meta=x)
 
 
-def _resize_other_dimensions(x: Array, longest_group, axis, chunks):
+def _resize_other_dimensions(
+    x: Array, longest_group: int, axis: int, chunks: Literal["auto"]
+) -> Array:
     assert chunks == "auto", "Only auto is supported for now"
     chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
 
@@ -95,8 +96,8 @@ def _resize_other_dimensions(x: Array, longest_group, axis, chunks):
         # We are staying below our threshold, so don't rechunk
         return x
 
-    max_group = reduce(mul, map(max, x.chunks))
-    new_max_group = max_group / max(x.chunks[axis]) * longest_group
+    # How much the chunksizes on our shuffle axis will increase
+    chunksize_inc_factor = longest_group / max(x.chunks[axis])
 
     new_chunks = []
     for i in range(len(x.chunks)):
@@ -104,24 +105,31 @@ def _resize_other_dimensions(x: Array, longest_group, axis, chunks):
             new_chunks.append(x.chunks[i])
             continue
 
-        new_chunk = []
+        new_chunksizes = []
         # calculate what the max chunk size in this dimension is and split every
         # chunk that is larger than that
-        dimension_max_chunk = max(x.chunks[i]) * (
-            (max_group / new_max_group) ** (1 / (len(x.chunks) - 1))
+        up_chunksize_limit_for_dim = max(x.chunks[i]) / (
+            chunksize_inc_factor ** (1 / (len(x.chunks) - 1))
         )
         for c in x.chunks[i]:
-            if c > chunksize_tolerance * dimension_max_chunk:
-                factor = c / dimension_max_chunk
-                nc = [c // math.ceil(factor)] * math.ceil(factor)
-                for ii in range(c - sum(nc)):
-                    nc[ii] += 1
-                new_chunk.extend(nc)
-            else:
-                new_chunk.append(c)
-        new_chunks.append(new_chunk)
+            if c > chunksize_tolerance * up_chunksize_limit_for_dim:
+                factor = math.ceil(c / up_chunksize_limit_for_dim)
 
-    return x.rechunk(tuple(map(tuple, new_chunks)))
+                # Ensure that we end up at least with chunksize 1
+                factor = min(factor, c)
+
+                chunksize, remainder = divmod(c, factor)
+                nc = [chunksize] * factor
+                for ii in range(remainder):
+                    # Add remainder parts to the first few chunks
+                    nc[ii] += 1
+                new_chunksizes.extend(nc)
+
+            else:
+                new_chunksizes.append(c)
+        new_chunks.append(tuple(new_chunksizes))
+
+    return x.rechunk(tuple(new_chunks))
 
 
 def _validate_indexer(chunks, indexer, axis):
