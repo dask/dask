@@ -378,7 +378,7 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
 
 
 @to_numpy_dispatch.register((list, tuple))
-def arraylike_to_numpy(data, **kwargs):
+def to_numpy_dispatch_from_arraylike(data, **kwargs):
     return np.asarray(data, **kwargs)
 
 
