@@ -546,7 +546,6 @@ def order(
 
         # A. Build the critical path
         target = get_target(longest_path=longest_path)
-        next_deps = dependencies[target]
         path_append(target)
 
         if deps_target := dependencies[target]:
