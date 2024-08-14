@@ -567,6 +567,12 @@ def take(outname, inname, chunks, index, axis=0):
     if not np.isnan(chunks[axis]).any():
         from dask.array._shuffle import _shuffle
 
+        try:
+            # Handle cupy case
+            index = to_numpy_dispatch(index)
+        except TypeError:
+            index = np.asarray(index)
+
         arange = np.arange(np.sum(chunks[axis]))
         if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
             # TODO: This should be a real no-op, but the call stack is
@@ -578,11 +584,6 @@ def take(outname, inname, chunks, index, axis=0):
         average_chunk_size = int(sum(chunks[axis]) / len(chunks[axis]))
 
         indexer = []
-        try:
-            # Handle cupy case
-            index = to_numpy_dispatch(index)
-        except TypeError:
-            index = np.asarray(index)
         for i in range(0, len(index), average_chunk_size):
             indexer.append(index[i : i + average_chunk_size].tolist())
 
