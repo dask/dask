@@ -323,3 +323,10 @@ def test_reshape_split_out_chunks():
         (1, 1, 1, 1),
         (80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80),
     )
+
+
+def test_argwhere_reshaping_not_concating_chunks():
+    # GH#10080
+    arr = da.random.random((500, 500, 500), chunks=(100, 100, 100)) < 0
+    result = da.argwhere(arr)
+    assert result.chunks == ((np.nan,) * 125, (1, 1, 1))
