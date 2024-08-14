@@ -22,7 +22,6 @@ from operator import getitem
 from typing import Any, Literal, TypeVar
 
 import cloudpickle
-import numpy as np
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
@@ -1400,7 +1399,7 @@ def _colorize(t):
     >>> _colorize((0, 32, 128))
     '#002080'
     """
-    t = np.asarray(t[:3], dtype=np.uint64)
+    t = t[:3]
     i = sum(v * 256 ** (len(t) - i - 1) for i, v in enumerate(t))
     h = hex(int(i))[2:].upper()
     h = "0" * (6 - len(h)) + h
