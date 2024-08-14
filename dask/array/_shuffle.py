@@ -15,7 +15,7 @@ from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 
 
-def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"]="auto"):
+def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"] = "auto"):
     """
     Reorders one dimensions of a Dask Array based on an indexer.
 
@@ -37,7 +37,11 @@ def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"]="aut
     axis: int
         The axis to shuffle along.
     chunks: "auto"
-        Hint on how to rechunk if single groups are becoming too large.
+        Hint on how to rechunk if single groups are becoming too large. The default is
+        to split chunks along the other dimensions evenly to keep the chunksize
+        consistent. The rechunking is done in a way that ensures that non all-to-all
+        network communication is necessary, chunks are only split and not combined with
+        other chunks.
 
     Examples
     --------
@@ -72,7 +76,7 @@ def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"]="aut
     assert isinstance(axis, int), "axis must be an integer"
     _validate_indexer(x.chunks, indexer, axis)
 
-    x = _resize_other_dimensions(x, max(map(len, indexer)), axis, chunks)
+    x = _rechunk_other_dimensions(x, max(map(len, indexer)), axis, chunks)
 
     token = tokenize(x, indexer, axis)
     out_name = f"shuffle-{token}"
@@ -86,7 +90,7 @@ def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"]="aut
     return Array(graph, out_name, chunks, meta=x)
 
 
-def _resize_other_dimensions(
+def _rechunk_other_dimensions(
     x: Array, longest_group: int, axis: int, chunks: Literal["auto"]
 ) -> Array:
     assert chunks == "auto", "Only auto is supported for now"
