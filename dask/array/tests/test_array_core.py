@@ -5,7 +5,6 @@ import copy
 import pathlib
 import re
 import xml.etree.ElementTree
-from unittest import mock
 
 import pytest
 
@@ -16,7 +15,6 @@ import operator
 import os
 import time
 import warnings
-from functools import reduce
 from io import StringIO
 from operator import add, sub
 from threading import Lock
@@ -30,7 +28,6 @@ from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
     BlockView,
-    PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
     broadcast_shapes,
@@ -53,7 +50,6 @@ from dask.array.core import (
 )
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reshape import _not_implemented_message
-from dask.array.tests.test_dispatch import EncapsulateNDArray
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import broadcast_dimensions
@@ -62,7 +58,7 @@ from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
-from dask.utils import SerializableLock, key_split, parse_bytes, tmpdir, tmpfile
+from dask.utils import SerializableLock, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, hlg_layer_topological, inc
 
 
@@ -1237,66 +1233,6 @@ def test_reshape_unknown_dimensions():
             assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
     pytest.raises(ValueError, lambda: da.reshape(a, (-1, -1)))
-
-
-@pytest.mark.parametrize(
-    "limit",  # in bytes
-    [
-        None,  # Default value: dask.config.get("array.chunk-size")
-        134217728,  # 128 MiB (default value size on a typical laptop)
-        67108864,  # 64 MiB (half the typical default value size)
-    ],
-)
-@pytest.mark.parametrize(
-    "shape, chunks, reshape_size",
-    [
-        # Test reshape where output chunks would otherwise be too large
-        ((300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)),
-        # Test reshape where multiple chunks match between input and output
-        ((300, 300, 4, 18483), (-1, -1, 1, 183), (300, 300, -1)),
-    ],
-)
-def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
-    array = da.random.default_rng().random(shape, chunks=chunks)
-    if limit is None:
-        with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-            result = array.reshape(*reshape_size, limit=limit)
-    else:
-        result = array.reshape(*reshape_size, limit=limit)
-    nbytes = array.dtype.itemsize
-    max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-    if limit is None:
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-    assert max_chunksize_in_bytes < limit
-
-
-def test_reshape_warns_by_default_if_it_is_producing_large_chunks():
-    # Test reshape where output chunks would otherwise be too large
-    shape, chunks, reshape_size = (300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)
-    array = da.random.default_rng().random(shape, chunks=chunks)
-
-    with pytest.warns(PerformanceWarning) as record:
-        result = array.reshape(*reshape_size)
-        nbytes = array.dtype.itemsize
-        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-        assert max_chunksize_in_bytes > limit
-
-    assert len(record) == 1
-
-    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
-        result = array.reshape(*reshape_size)
-        nbytes = array.dtype.itemsize
-        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-        assert max_chunksize_in_bytes > limit
-
-    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        result = array.reshape(*reshape_size)
-        nbytes = array.dtype.itemsize
-        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-        assert max_chunksize_in_bytes < limit
 
 
 def test_full():
@@ -2769,6 +2705,18 @@ def test_asarray(asarray):
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
+def test_asarray_array_dtype(asarray):
+    # test array input
+    x = asarray([1, 2])
+    assert_eq(asarray(x, dtype=da.float32), np.asarray(x, dtype=np.float32))
+
+    x = asarray(x, dtype=da.float64)
+    assert x.dtype == da.float64
+    x = asarray(x, dtype=da.int32)
+    assert x.dtype == da.int32
+
+
+@pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
 def test_asarray_dask_dataframe(asarray):
     # https://github.com/dask/dask/issues/3885
     pd = pytest.importorskip("pandas")
@@ -2903,24 +2851,6 @@ def test_concatenate3_2():
             ]
         ),
     )
-
-
-@pytest.mark.parametrize("one_d", [True, False])
-@mock.patch.object(da.core, "_concatenate2", wraps=da.core._concatenate2)
-def test_concatenate3_nep18_dispatching(mock_concatenate2, one_d):
-    x = EncapsulateNDArray(np.arange(10))
-    concat = [x, x] if one_d else [[x[None]], [x[None]]]
-    result = concatenate3(concat)
-    assert type(result) is type(x)
-    mock_concatenate2.assert_called()
-    mock_concatenate2.reset_mock()
-
-    # When all the inputs are supported by plain `np.concatenate`, we should take the concatenate3
-    # fastpath of allocating the full array up front and writing blocks into it.
-    concat = [x.arr, x.arr] if one_d else [[x.arr[None]], [x.arr[None]]]
-    plain_np_result = concatenate3(concat)
-    mock_concatenate2.assert_not_called()
-    assert type(plain_np_result) is np.ndarray
 
 
 def test_map_blocks3():
@@ -4557,17 +4487,10 @@ def test_normalize_chunks_nan():
 
 def test_pandas_from_dask_array():
     pd = pytest.importorskip("pandas")
-    from dask.dataframe._compat import PANDAS_GE_131
-
     a = da.ones((12,), chunks=4)
     s = pd.Series(a, index=range(12))
-
-    if not PANDAS_GE_131:
-        # https://github.com/pandas-dev/pandas/issues/38645
-        assert s.dtype != a.dtype
-    else:
-        assert s.dtype == a.dtype
-        assert_eq(s.values, a)
+    assert s.dtype == a.dtype
+    assert_eq(s.values, a)
 
 
 def test_from_zarr_unique_name():
@@ -4708,8 +4631,10 @@ def test_zarr_group():
     ],
 )
 def test_regular_chunks(data):
+    from dask.array.core import _check_regular_chunks
+
     chunkset, expected = data
-    assert da.core._check_regular_chunks(chunkset) == expected
+    assert _check_regular_chunks(chunkset) == expected
 
 
 def test_zarr_nocompute():
