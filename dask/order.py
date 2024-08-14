@@ -208,7 +208,7 @@ def order(
 
     _sort_keys_cache: dict[Key, tuple[int, int, int, int, str]] = {}
 
-    leafs_connected_to_loaded_roots = set()
+    leafs_connected_to_loaded_roots: set[Key] = set()
     processed_roots = set()
 
     def sort_key(x: Key) -> tuple[int, int, int, int, str]:
@@ -393,37 +393,34 @@ def order(
     # writing, the most expensive part of ordering is the prep work (mostly
     # connected roots + sort_key) which can be reused for multiple orderings.
 
-    all_leafs_accessible = set()  # type: ignore[var-annotated]
-
     def get_target(longest_path: bool = False) -> Key:
         # Some topologies benefit if the node with the most dependencies
         # is used as first choice, others benefit from the opposite.
         candidates = leaf_nodes
         skey: Callable = sort_key
-
         if reachable_hull:
             skey = lambda k: (num_needed[k], sort_key(k))
-            preferred_candidates = reachable_hull & candidates
 
-            if not preferred_candidates:
+        all_leafs_accessible = len(leafs_connected_to_loaded_roots) >= len(candidates)
+        if reachable_hull and not all_leafs_accessible:
+            # Avoid this branch if we can already access all leafs. Just pick
+            # one of them without the expensive selection process in this case.
+
+            candidates = reachable_hull & candidates
+            if not candidates:
                 # We can't reach a leaf node directly, but we still have nodes
                 # with results in memory, these notes can inform our path towards
                 # a new preferred leaf node.
-                if not all_leafs_accessible or not longest_path:
-                    for r in processed_roots:
-                        leafs_connected_to_loaded_roots.update(leafs_connected[r])
-                    # Clear the processed roots to avoid updating the set multiple
-                    # times with the same root node
-                    processed_roots.clear()
+                for r in processed_roots:
+                    leafs_connected_to_loaded_roots.update(leafs_connected[r])
+                processed_roots.clear()
 
-                    leafs_connected_to_loaded_roots.intersection_update(candidates)
+                leafs_connected_to_loaded_roots.intersection_update(leaf_nodes)
+                candidates = leafs_connected_to_loaded_roots
+            else:
+                leafs_connected_to_loaded_roots.update(candidates)
 
-                    if len(leafs_connected_to_loaded_roots) == len(leaf_nodes):
-                        all_leafs_accessible.add(True)
-
-                preferred_candidates = leafs_connected_to_loaded_roots
-            candidates = preferred_candidates
-        else:
+        elif not reachable_hull:
             # We reach a new and independent branch, so throw away previous branch
             leafs_connected_to_loaded_roots.clear()
 
