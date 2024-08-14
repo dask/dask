@@ -107,7 +107,8 @@ def _resize_other_dimensions(
 
         new_chunksizes = []
         # calculate what the max chunk size in this dimension is and split every
-        # chunk that is larger than that
+        # chunk that is larger than that. We split the increase factor evenly
+        # between all dimensions that are not shuffled.
         up_chunksize_limit_for_dim = max(x.chunks[i]) / (
             chunksize_inc_factor ** (1 / (len(x.chunks) - 1))
         )
