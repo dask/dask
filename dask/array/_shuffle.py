@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import copy
+import math
+from functools import reduce
 from itertools import count, product
+from operator import mul
 
 import numpy as np
 
@@ -13,7 +16,7 @@ from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 
 
-def shuffle(x, indexer: list[list[int]], axis):
+def shuffle(x, indexer: list[list[int]], axis, chunks="auto"):
     """
     Reorders one dimensions of a Dask Array based on an indexer.
 
@@ -34,6 +37,8 @@ def shuffle(x, indexer: list[list[int]], axis):
         each group will end up in exactly one chunk.
     axis: int
         The axis to shuffle along.
+    chunks: "auto"
+        Hint on how to rechunk if single groups are becoming too large.
 
     Examples
     --------
@@ -66,6 +71,9 @@ def shuffle(x, indexer: list[list[int]], axis):
             f"Shuffling only allowed with known chunk sizes. {unknown_chunk_message}"
         )
     assert isinstance(axis, int), "axis must be an integer"
+    _validate_indexer(x.chunks, indexer, axis)
+
+    x = _resize_other_dimensions(x, max(map(len, indexer)), axis, chunks)
 
     token = tokenize(x, indexer, axis)
     out_name = f"shuffle-{token}"
@@ -79,7 +87,44 @@ def shuffle(x, indexer: list[list[int]], axis):
     return Array(graph, out_name, chunks, meta=x)
 
 
-def _shuffle(chunks, indexer, axis, in_name, out_name, token):
+def _resize_other_dimensions(x: Array, longest_group, axis, chunks):
+    assert chunks == "auto", "Only auto is supported for now"
+    chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
+
+    if longest_group <= max(x.chunks[axis]) * chunksize_tolerance:
+        # We are staying below our threshold, so don't rechunk
+        return x
+
+    max_group = reduce(mul, map(max, x.chunks))
+    new_max_group = max_group / max(x.chunks[axis]) * longest_group
+
+    new_chunks = []
+    for i in range(len(x.chunks)):
+        if i == axis:
+            new_chunks.append(x.chunks[i])
+            continue
+
+        new_chunk = []
+        # calculate what the max chunk size in this dimension is and split every
+        # chunk that is larger than that
+        dimension_max_chunk = max(x.chunks[i]) * (
+            (max_group / new_max_group) ** (1 / (len(x.chunks) - 1))
+        )
+        for c in x.chunks[i]:
+            if c > chunksize_tolerance * dimension_max_chunk:
+                factor = c / dimension_max_chunk
+                nc = [c // math.ceil(factor)] * math.ceil(factor)
+                for ii in range(c - sum(nc)):
+                    nc[ii] += 1
+                new_chunk.extend(nc)
+            else:
+                new_chunk.append(c)
+        new_chunks.append(new_chunk)
+
+    return x.rechunk(tuple(map(tuple, new_chunks)))
+
+
+def _validate_indexer(chunks, indexer, axis):
     if not isinstance(indexer, list) or not all(isinstance(i, list) for i in indexer):
         raise ValueError("indexer must be a list of lists of positional indices")
 
@@ -92,6 +137,10 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         raise IndexError(
             f"Indexer contains out of bounds index. Dimension only has {sum(chunks[axis])} elements."
         )
+
+
+def _shuffle(chunks, indexer, axis, in_name, out_name, token):
+    _validate_indexer(chunks, indexer, axis)
 
     if len(indexer) == len(chunks[axis]):
         # check if the array is already shuffled the way we want
