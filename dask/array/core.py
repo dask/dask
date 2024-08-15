@@ -17,7 +17,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, TypeVar, Union, cast
+from typing import Any, Callable, Literal, TypeVar, Union, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -516,18 +516,18 @@ def _pass_extra_kwargs(func, keys, *args, **kwargs):
 
 
 def map_blocks(
-    func,
-    *args,
-    name=None,
-    token=None,
-    dtype=None,
-    chunks=None,
-    drop_axis=None,
-    new_axis=None,
-    enforce_ndim=False,
-    meta=None,
-    **kwargs,
-):
+    func: Callable,
+    *args: Any,
+    name: str | None = None,
+    token: str | None = None,
+    dtype: np.dtype | None = None,
+    chunks: tuple[Any, ...] | None = None,
+    drop_axis: Number | Iterable[Number] | None = None,
+    new_axis: Number | Iterable[Number] | None = None,
+    enforce_ndim: bool = False,
+    meta: Any | None = None,
+    **kwargs: Any,
+) -> Array:
     """Map a function across all blocks of a dask array.
 
     Note that ``map_blocks`` will attempt to automatically determine the output
@@ -768,7 +768,7 @@ def map_blocks(
         drop_axis = []
 
     if not callable(func):
-        msg = (
+        msg = (  # type: ignore[unreachable]
             "First argument must be callable function, not %s\n"
             "Usage:   da.map_blocks(function, x)\n"
             "   or:   da.map_blocks(function, x, y, z)"
@@ -789,7 +789,8 @@ def map_blocks(
     if isinstance(drop_axis, Number):
         drop_axis = [drop_axis]
     if isinstance(new_axis, Number):
-        new_axis = [new_axis]  # TODO: handle new_axis
+        # TODO: handle new_axis
+        new_axis = [new_axis]
 
     arrs = [a for a in args if isinstance(a, Array)]
 
@@ -814,27 +815,27 @@ def map_blocks(
 
     if drop_axis:
         ndim_out = len(out_ind)
-        if any(i < -ndim_out or i >= ndim_out for i in drop_axis):
+        if any(i < -ndim_out or i >= ndim_out for i in drop_axis):  # type: ignore[operator]
             raise ValueError(
                 f"drop_axis out of range (drop_axis={drop_axis}, "
                 f"but output is {ndim_out}d)."
             )
-        drop_axis = [i % ndim_out for i in drop_axis]
+        drop_axis = [i % ndim_out for i in drop_axis]  # type: ignore
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
     if new_axis is None and chunks is not None and len(out_ind) < len(chunks):
-        new_axis = range(len(chunks) - len(out_ind))
+        new_axis = range(len(chunks) - len(out_ind))  # type: ignore[assignment]
     if new_axis:
         # new_axis = [x + len(drop_axis) for x in new_axis]
-        out_ind = list(out_ind)
-        for ax in sorted(new_axis):
-            n = len(out_ind) + len(drop_axis)
-            out_ind.insert(ax, n)
+        out_ind = list(out_ind)  # type: ignore[assignment]
+        for ax in sorted(new_axis):  # type: ignore[type-var]
+            n = len(out_ind) + len(drop_axis)  # type: ignore[arg-type]
+            out_ind.insert(ax, n)  # type: ignore[attr-defined]
             if chunks is not None:
-                new_axes[n] = chunks[ax]
+                new_axes[n] = chunks[ax]  # type: ignore[call-overload]
             else:
                 new_axes[n] = 1
         out_ind = tuple(out_ind)
-        if max(new_axis) > max(out_ind):
+        if max(new_axis) > max(out_ind):  # type: ignore
             raise ValueError("New_axis values do not fill in all dimensions")
 
     if chunks is not None:
@@ -938,7 +939,7 @@ def map_blocks(
                 # treated as broadcast.
                 arr_k = tuple(
                     location.get(ind, 0) if num_chunks[i][j] > 1 else 0
-                    for j, ind in enumerate(argpairs[i][1])
+                    for j, ind in enumerate(argpairs[i][1])  # type: ignore[arg-type]
                 )
                 info[i] = {
                     "shape": shape,
@@ -950,7 +951,7 @@ def map_blocks(
                     "chunk-location": arr_k,
                 }
 
-            info[None] = {
+            info[None] = {  # type: ignore[index]
                 "shape": out.shape,
                 "num-chunks": out.numblocks,
                 "array-location": [
@@ -3318,16 +3319,16 @@ def _get_chunk_shape(a):
 
 
 def from_array(
-    x,
-    chunks="auto",
-    name=None,
-    lock=False,
-    asarray=None,
-    fancy=True,
-    getitem=None,
-    meta=None,
-    inline_array=False,
-):
+    x: ArrayLike,
+    chunks: int | tuple[int, ...] | str | Literal["auto"] = "auto",
+    name: str | bool | None = None,
+    lock: bool | Lock = False,
+    asarray: bool | None = None,
+    fancy: bool | None = True,
+    getitem: Callable | None = None,
+    meta: ArrayLike | None = None,
+    inline_array: bool = False,
+) -> Array:
     """Create dask array from something that looks like an array.
 
     Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
@@ -3394,6 +3395,11 @@ def from_array(
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
+    getitem: callable, optional
+        Function for indexing the array. If `None`, defaults to an internal
+        indexing function that may use fancy indexing if `fancy` is set to True,
+        otherwise a simpler indexing method is used. Use this to override the
+        standard array slicing behavior with a custom method.
     meta : Array-like, optional
         The metadata for the resulting dask array.  This is the kind of array
         that will result from slicing the input array.
@@ -3499,7 +3505,7 @@ def from_array(
     previous_chunks = getattr(x, "chunks", None)
 
     chunks = normalize_chunks(
-        chunks, x.shape, dtype=x.dtype, previous_chunks=previous_chunks
+        chunks, x.shape, dtype=x.dtype, previous_chunks=previous_chunks  # type: ignore[union-attr]
     )
 
     if name in (None, True):
@@ -3509,23 +3515,23 @@ def from_array(
         name = "array-" + str(uuid.uuid1())
 
     if lock is True:
-        lock = SerializableLock()
+        lock = SerializableLock()  # type: ignore[assignment]
 
     is_ndarray = type(x) in (np.ndarray, np.ma.core.MaskedArray)
-    is_single_block = all(len(c) == 1 for c in chunks)
+    is_single_block = all(len(c) == 1 for c in chunks)  # type: ignore
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
     if is_ndarray and not is_single_block and not lock:
         # eagerly slice numpy arrays to prevent memory blowup
         # GH5367, GH5601
         slices = slices_from_chunks(chunks)
-        keys = product([name], *(range(len(bds)) for bds in chunks))
-        values = [x[slc] for slc in slices]
+        keys = product([name], *(range(len(bds)) for bds in chunks))  # type: ignore
+        values = [x[slc] for slc in slices]  # type: ignore
         dsk = dict(zip(keys, values))
 
     elif is_ndarray and is_single_block:
         # No slicing needed
-        dsk = {(name,) + (0,) * x.ndim: x}
+        dsk = {(name,) + (0,) * x.ndim: x}  # type: ignore
     else:
         if getitem is None:
             if fancy:
@@ -3533,22 +3539,22 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
-        dsk = graph_from_arraylike(
+        dsk = graph_from_arraylike(  # type: ignore[assignment]
             x,
             chunks,
-            x.shape,
+            x.shape,  # type: ignore
             name,
             getitem=getitem,
             lock=lock,
             asarray=asarray,
-            dtype=x.dtype,
+            dtype=x.dtype,  # type: ignore
             inline_array=inline_array,
         )
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
     if x.__class__.__module__.split(".")[0] == "tiledb" and hasattr(x, "_ctx_"):
-        return Array(dsk, name, chunks, dtype=x.dtype)
+        return Array(dsk, name, chunks, dtype=x.dtype)  # type: ignore[union-attr]
 
     if meta is None:
         meta = x
