@@ -375,7 +375,13 @@ def rechunk(
     elif method == "p2p":
         from distributed.shuffle import rechunk_p2p
 
-        return rechunk_p2p(x, chunks)
+        return rechunk_p2p(
+            x,
+            chunks,
+            threshold=threshold,
+            block_size_limit=block_size_limit,
+            balance=balance,
+        )
 
     else:
         raise NotImplementedError(f"Unknown rechunking method '{method}'")
