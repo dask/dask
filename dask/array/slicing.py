@@ -13,7 +13,6 @@ from tlz import concat, memoize, merge, pluck
 
 from dask import core
 from dask.array.chunk import getitem
-from dask.array.utils import arange_safe, asarray_safe
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import _deprecated, cached_cumsum, is_arraylike
@@ -566,6 +565,7 @@ def take(outname, inname, chunks, index, axis=0):
 
     if not np.isnan(chunks[axis]).any():
         from dask.array._shuffle import _shuffle
+        from dask.array.utils import arange_safe, asarray_safe
 
         arange = arange_safe(np.sum(chunks[axis]), like=index)
         if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
