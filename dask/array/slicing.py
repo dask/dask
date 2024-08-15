@@ -566,7 +566,8 @@ def take(outname, inname, chunks, index, axis=0):
     if not np.isnan(chunks[axis]).any():
         from dask.array._shuffle import _shuffle
 
-        arange = np.arange(np.sum(chunks[axis]), like=index)
+        like = None if isinstance(index, (list, tuple)) else index
+        arange = np.arange(np.sum(chunks[axis]), like=like)
         if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
             # TODO: This should be a real no-op, but the call stack is
             # too deep to do this efficiently for now
@@ -577,7 +578,7 @@ def take(outname, inname, chunks, index, axis=0):
         average_chunk_size = int(sum(chunks[axis]) / len(chunks[axis]))
 
         indexer = []
-        index = np.asarray(index, like=index)
+        index = np.asarray(index, like=like)
         for i in range(0, len(index), average_chunk_size):
             indexer.append(index[i : i + average_chunk_size].tolist())
 
