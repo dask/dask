@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 
 import pytest
@@ -8,8 +9,18 @@ import dask
 from dask import delayed
 from dask.base import collections_to_dsk, key_split, visualize_dsk
 from dask.core import get_deps
-from dask.order import _connecting_to_roots, diagnostics, ndependencies, order
+from dask.order import _connecting_to_roots, diagnostics, ndependencies
 from dask.utils_test import add, inc
+
+try:
+    import distributed  # noqa: F401
+
+    HAS_DISTRIBUTED = True
+except ImportError:
+    HAS_DISTRIBUTED = False
+
+
+GRAPHS_FOR_DISTRIBUTED = []
 
 
 @pytest.fixture(
@@ -24,6 +35,16 @@ def abcde(request):
 
 def f(*args):
     pass
+
+
+def order(dsk, *args, **kwargs):
+    from dask.order import order as _order
+
+    GRAPHS_FOR_DISTRIBUTED.append((inspect.stack()[1][3], dsk))
+
+    assert _order(dsk, *args, **kwargs) == _order(dsk, *args, **kwargs)
+
+    return _order(dsk, *args, **kwargs)
 
 
 def visualize(dsk, suffix="", **kwargs):
@@ -711,18 +732,24 @@ def test_many_branches_use_ndependencies(abcde):
 
 
 def test_order_cycle():
+    # Note: We're overriding `order` in this module to run some additional tests
+    # and to queue up the graphs for the distributed scheduler test below. We
+    # don't want to run these broken graphs on the scheduler since the test
+    # below is not robust to broken graphs
+    from dask.order import order as _order
+
     with pytest.raises(RuntimeError, match="Cycle detected"):
         dask.get({"a": (f, "a")}, "a")  # we encounter this in `get`
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "a")})  # trivial self-loop
+        _order({"a": (f, "a")})  # trivial self-loop
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({("a", 0): (f, ("a", 0))})  # non-string
+        _order({("a", 0): (f, ("a", 0))})  # non-string
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a")})  # non-trivial loop
+        _order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a")})  # non-trivial loop
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": 1})
+        _order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": 1})
     with pytest.raises(RuntimeError, match="Cycle detected"):
-        order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": (f, "b")})
+        _order({"a": (f, "b"), "b": (f, "c"), "c": (f, "a", "d"), "d": (f, "b")})
 
 
 def test_order_empty():
@@ -1963,7 +1990,7 @@ def test_gh_3055_explicit(abcde):
         (c, 0, 0): (f, (b, 0), (a, 2), (a, 1)),
         (d, 0, 0): (f, (c, 0, 1), (c, 0, 0)),
         (d, 0, 1): (f, (c, 0, 1), (c, 0, 0)),
-        (f, 1, 1): (f, (d, 0, 1)),
+        ("f", 1, 1): (f, (d, 0, 1)),
         (c, 1, 0): (f, (b, 1, 0), (b, 1, 2)),
         (c, 0, 2): (f, (b, 0, 0), (b, 0, 1)),
         (e, 0): (f, (c, 1, 0), (c, 0, 2)),
@@ -2472,3 +2499,37 @@ def test_do_not_mutate_input():
     assert_topological_sort(dsk, o)
     assert dsk == dsk_copy
     assert dependencies == dependencies_copy
+
+
+if HAS_DISTRIBUTED:
+    from dask.tests.test_distributed import gen_cluster
+
+    @pytest.mark.slow
+    @gen_cluster(client=True, nthreads=[])
+    async def test_order_on_distributed_cluster(c, s):
+        # Note: For the GRAPHS_FOR_DISTRIBUTED to be populated, the above tests
+        # have to run first
+        for testname, dsk in GRAPHS_FOR_DISTRIBUTED:
+            if not dsk:
+                continue
+
+            while s.tasks:
+                await asyncio.sleep(0.01)
+            _, dependents = get_deps(dsk)
+            output_keys = [k for k, v in dependents.items() if not v]
+            futs = c.get(dsk, output_keys, sync=False)  # noqa: F841
+            while not s.tasks:
+                await asyncio.sleep(0.01)
+            actual = {ts.key: ts.priority for ts in s.tasks.values()}
+            actual_keys = sorted(actual, key=actual.__getitem__)
+
+            expected = dask.order.order(dsk)
+            expected_keys = sorted(expected, key=expected.__getitem__)
+            try:
+                assert actual_keys == expected_keys, (
+                    testname,
+                    actual_keys,
+                    expected_keys,
+                )
+            finally:
+                del futs
