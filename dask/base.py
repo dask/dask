@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copyreg
 import dataclasses
 import datetime
 import decimal
@@ -1206,6 +1207,9 @@ def normalize_object(o):
     if type(o) is object:
         return _normalize_pure_object(o)
 
+    if isinstance(o, type):
+        copyreg._slotnames(o)
+
     if dataclasses.is_dataclass(o) and not isinstance(o, type):
         return _normalize_dataclass(o)
 
@@ -1236,19 +1240,28 @@ def _normalize_pure_object(o: object) -> tuple[str, int]:
 
 def _normalize_pickle(o: object) -> tuple:
     buffers: list[pickle.PickleBuffer] = []
-    pik: bytes | None
-    try:
-        pik = pickle.dumps(o, protocol=5, buffer_callback=buffers.append)
-        if b"__main__" in pik:
-            pik = None
-    except Exception:
-        pik = None
+    pik: int | None = None
+    pik2: int
 
+    for mod in [pickle, cloudpickle]:
+        for _ in range(3):
+            buffers.clear()
+            try:
+                out = mod.dumps(o, protocol=5, buffer_callback=buffers.append)
+                mod.loads(out, buffers=buffers)
+                pik2 = hash_buffer_hex(out)
+            except Exception:
+                break
+            if pik == pik2:
+                break
+            pik = pik2
+        else:
+            _maybe_raise_nondeterministic("Failed to tokenize deterministically")
+            break
     if pik is None:
-        buffers.clear()
-        pik = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
-
-    return hash_buffer_hex(pik), [hash_buffer_hex(buf) for buf in buffers]
+        _maybe_raise_nondeterministic("Failed to tokenize deterministically")
+        pik = int(uuid.uuid4())
+    return pik, [hash_buffer_hex(buf) for buf in buffers]
 
 
 def _normalize_dataclass(obj):
@@ -1350,29 +1363,34 @@ def register_pyarrow():
 def register_numpy():
     import numpy as np
 
+    @normalize_token.register(np.ndarray)
+    def normalize_array(x):
+        if not x.shape:
+            return (x.item(), x.dtype)
+        if x.dtype.hasobject:
+            try:
+                try:
+                    # string fast-path
+                    data = hash_buffer_hex(
+                        "-".join(x.flat).encode(
+                            encoding="utf-8", errors="surrogatepass"
+                        )
+                    )
+                except UnicodeDecodeError:
+                    # bytes fast-path
+                    data = hash_buffer_hex(b"-".join(x.flat))
+            except (TypeError, UnicodeDecodeError):
+                return normalize_object(x)
+        else:
+            try:
+                data = hash_buffer_hex(x.ravel(order="K").view("i1"))
+            except (BufferError, AttributeError, ValueError):
+                data = hash_buffer_hex(x.copy().ravel(order="K").view("i1"))
+        return (data, x.dtype, x.shape)
+
     @normalize_token.register(np.memmap)
     def normalize_mmap(mm):
-        if hasattr(mm, "mode") and getattr(mm, "filename", None):
-            if hasattr(mm.base, "ctypes"):
-                offset = (
-                    mm.ctypes._as_parameter_.value - mm.base.ctypes._as_parameter_.value
-                )
-            else:
-                offset = 0  # root memmap's have mmap object as base
-            if hasattr(
-                mm, "offset"
-            ):  # offset numpy used while opening, and not the offset to the beginning of file
-                offset += mm.offset
-            return (
-                mm.filename,
-                os.path.getmtime(mm.filename),
-                mm.dtype,
-                mm.shape,
-                mm.strides,
-                offset,
-            )
-        else:
-            return normalize_object(mm)
+        return normalize_object(mm)
 
     @normalize_token.register(np.ufunc)
     def normalize_ufunc(func):
