@@ -2766,7 +2766,7 @@ class Array(DaskMethodsMixin):
         self,
         indexer: list[list[int]],
         axis: int,
-        chunks: Literal["auto"],
+        chunks: Literal["auto"] = "auto",
     ):
         """Reorders one dimensions of a Dask Array based on an indexer.
 
