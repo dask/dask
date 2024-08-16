@@ -1274,6 +1274,7 @@ def test_tokenize_random_functions(module):
     """random.random() and other methods of the global random state do not compare as
     equal to themselves after a pickle roundtrip"""
     module = eval(module)
+    module.seed(2)
 
     a = module.random
     b = pickle.loads(pickle.dumps(a))

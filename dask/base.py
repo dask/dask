@@ -579,9 +579,9 @@ def optimize(*args, traverse=True, **kwargs):
     >>> a2, b2 = dask.optimize(a, b)
 
     >>> a2.compute() == a.compute()
-    True
+    np.True_
     >>> b2.compute() == b.compute()
-    True
+    np.True_
     """
     collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
@@ -634,12 +634,12 @@ def compute(
     >>> a = da.arange(10, chunks=2).sum()
     >>> b = da.arange(10, chunks=2).mean()
     >>> dask.compute(a, b)
-    (45, 4.5)
+    (np.int64(45), np.float64(4.5))
 
     By default, dask objects inside python collections will also be computed:
 
     >>> dask.compute({'a': a, 'b': b, 'c': 1})
-    ({'a': 45, 'b': 4.5, 'c': 1},)
+    ({'a': np.int64(45), 'b': np.float64(4.5), 'c': 1},)
     """
 
     collections, repack = unpack_collections(*args, traverse=traverse)
