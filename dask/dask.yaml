@@ -21,11 +21,10 @@ dataframe:
 array:
   backend: "numpy"  # Backend array library for input IO and data creation
   chunk-size: "128MiB"
+  chunk-size-tolerance: 1.25  # Tolerance for different algorithms when creating output chunks.
   rechunk:
     method: "tasks"  # Rechunking method to use
     threshold: 4
-  shuffle:
-    chunksize-tolerance: 1.25  # Tolerance for the shuffle algorithm when creating output chunks.
   svg:
     size: 120  # pixels
   slicing:
