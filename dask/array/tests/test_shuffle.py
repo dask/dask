@@ -6,7 +6,7 @@ import pytest
 import dask
 import dask.array as da
 from dask.array import assert_eq, shuffle
-from dask.array._shuffle import _resize_other_dimensions
+from dask.array._shuffle import _rechunk_other_dimensions
 from dask.core import flatten
 
 
@@ -99,20 +99,20 @@ def test_shuffle_no_op_with_correct_indexer():
 
 def test_resize_other_dimensions():
     arr = da.random.random((250, 50), chunks=((45, 100, 38, 67), 10))
-    result = _resize_other_dimensions(arr, 20, 1, "auto")
+    result = _rechunk_other_dimensions(arr, 20, 1, "auto")
     assert result.chunks == ((45, 50, 50, 38, 34, 33), (10,) * 5)
     assert_eq(arr, result)
 
     arr = da.random.random((250, 50, 20), chunks=((45, 100, 38, 67), 10, 10))
-    result = _resize_other_dimensions(arr, 20, 1, "auto")
+    result = _rechunk_other_dimensions(arr, 20, 1, "auto")
     assert result.chunks == ((45, 50, 50, 38, 67), (10,) * 5, (5,) * 4)
     assert_eq(arr, result)
 
-    result = _resize_other_dimensions(arr, 40, 1, "auto")
+    result = _rechunk_other_dimensions(arr, 40, 1, "auto")
     assert result.chunks == ((45, 50, 50, 38, 34, 33), (10,) * 5, (5,) * 4)
     assert_eq(arr, result)
 
     arr = da.random.random((250, 50, 5), chunks=((45, 100, 38, 67), 10, 1))
-    result = _resize_other_dimensions(arr, 40, 1, "auto")
+    result = _rechunk_other_dimensions(arr, 40, 1, "auto")
     assert result.chunks == ((45, 50, 50, 38, 34, 33), (10,) * 5, (1,) * 5)
     assert_eq(arr, result)
