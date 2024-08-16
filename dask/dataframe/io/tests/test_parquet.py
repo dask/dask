@@ -3282,7 +3282,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     # This will raise by default due to overflow
     with pytest.raises(pa.lib.ArrowInvalid) as e:
         dd.read_parquet(str(tmpdir)).compute()
-        assert "out of bounds" in str(e.value)
+    assert "out of bounds" in str(e.value)
 
     from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
