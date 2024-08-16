@@ -41,7 +41,7 @@ dependencies:
   - xarray
   - numexpr>=2.8  # Something is pinning it to 2.7
   - sqlalchemy
-  - pyarrow=10
+  - pyarrow
   - coverage
   - jsonschema
   # other -- IO
