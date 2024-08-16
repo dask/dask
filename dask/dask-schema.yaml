@@ -119,7 +119,7 @@ properties:
         description: |
           The default chunk size to target. Default is "128MiB".
 
-      chunksize-tolerance:
+      chunk-size-tolerance:
         type: number
         description: |
           Upper tolerance for different algorithms when creating output chunks.

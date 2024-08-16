@@ -40,7 +40,7 @@ def test_shuffle(arr, darr, indexer, chunks, other_chunks):
 @pytest.mark.parametrize("tol, chunks", ((1, (3, 2, 3)), (1.4, (5, 3))))
 def test_shuffle_config_tolerance(arr, darr, tol, chunks):
     indexer = [[1, 5, 6], [0, 3], [4, 2, 7]]
-    with dask.config.set({"array.chunksize-tolerance": tol}):
+    with dask.config.set({"array.chunk-size-tolerance": tol}):
         result = darr.shuffle(indexer, axis=1)
     expected = arr[:, [1, 5, 6, 0, 3, 4, 2, 7]]
     assert_eq(result, expected)
