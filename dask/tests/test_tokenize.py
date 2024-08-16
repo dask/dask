@@ -19,7 +19,7 @@ from tlz import compose, curry, partial
 
 import dask
 from dask.base import TokenizationError, normalize_token, tokenize
-from dask.core import literal
+from dask.core import flatten, literal
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
 
@@ -1319,6 +1319,15 @@ def test_tokenize_pyarrow_datatypes_complex():
     assert check_tokenize(a) != check_tokenize(b)
 
 
+@pytest.mark.skipif("not pa")
+def test_pyarrow_table():
+    a = pa.table({"x": [1, 2, 3], "y": ["a", "b", "c"]})
+    b = pa.table({"x": [1, 2, 3], "y": ["a", "b", "c"]})
+    c = pa.table({"x": [1, 2, 3], "y": ["a", "b", "d"]})
+    assert check_tokenize(a) == check_tokenize(b)
+    assert check_tokenize(a) != check_tokenize(c)
+
+
 @pytest.mark.skipif("not np")
 def test_tokenize_opaque_object_with_buffers():
     # pickle will extract PickleBuffer objects out of this
@@ -1424,3 +1433,12 @@ def test_numba_local():
     ]
     tokens = [check_tokenize(func) for func in all_funcs]
     assert len(tokens) == len(set(tokens))
+
+
+@pytest.mark.skipif("not pd")
+def test_tokenize_pandas_arrow_strings():
+    ser = pd.Series(["a", "b"], dtype="string[pyarrow]")
+    check_tokenize(ser)
+    tokens = normalize_token(ser)
+    # Maybe a little brittle but will do for now
+    assert any(str(tok) == "string" for tok in flatten(tokens))

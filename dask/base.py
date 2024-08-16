@@ -1325,6 +1325,10 @@ def register_pandas():
         data = list(mgr.arrays) + [df.columns, df.index]
         return list(map(normalize_token, data))
 
+    @normalize_token.register(pd.arrays.ArrowExtensionArray)
+    def normalize_extension_array(arr):
+        return (type(arr), normalize_token(arr._pa_array))
+
     @normalize_token.register(pd.api.extensions.ExtensionArray)
     def normalize_extension_array(arr):
         import numpy as np
@@ -1356,6 +1360,34 @@ def register_pyarrow():
     @normalize_token.register(pa.DataType)
     def normalize_datatype(dt):
         return pickle.dumps(dt, protocol=4)
+
+    @normalize_token.register(pa.Table)
+    def normalize_table(dt):
+        return (
+            "pa.Table",
+            normalize_token(dt.schema),
+            normalize_token(dt.columns),
+        )
+
+    @normalize_token.register(pa.ChunkedArray)
+    def normalize_chunked_array(arr):
+        return (
+            "pa.ChunkedArray",
+            normalize_token(arr.type),
+            normalize_token(arr.chunks),
+        )
+
+    @normalize_token.register(pa.Array)
+    def normalize_chunked_array(arr):
+        return (
+            "pa.Array",
+            normalize_token(arr.type),
+            normalize_token(arr.buffers()),
+        )
+
+    @normalize_token.register(pa.Buffer)
+    def normalize_chunked_array(buf):
+        return ("pa.Buffer", hash_buffer_hex(buf))
 
 
 @normalize_token.register_lazy("numpy")
