@@ -1,5 +1,17 @@
 ## Dask-expr
 
+# v1.1.11
+
+- Make split_out for categorical default smarter (:pr:`1124`) `Patrick Hoefler`_
+- Avoid calling ``array`` attribute on ``cudf.Series`` (:pr:`1122`) `Richard (Rick) Zamora`_
+- Introduce `ToBackend` expression (:pr:`1115`) `Richard (Rick) Zamora`_
+- Fix result index of merge (:pr:`1121`) `Patrick Hoefler`_
+- Fix projection for Index class in read_parquet (:pr:`1120`) `Patrick Hoefler`_
+- Register `read_parquet` and `read_csv` as "dispatchable" (:pr:`1114`) `Richard (Rick) Zamora`_
+- Fix merging when index name in meta missmatches actual name (:pr:`1119`) `Patrick Hoefler`_
+- Fix tuples as on argument in merge (:pr:`1117`) `Patrick Hoefler`_
+- Drop support for Python 3.9 (:pr:`1109`) `Patrick Hoefler`_
+
 # v1.1.10
 
 - Fixup remaining upstream failures (:pr:`1111`) `Patrick Hoefler`_
