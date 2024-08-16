@@ -39,7 +39,7 @@ dependencies:
   # - tiledb # crashes on Python 3.11
   - xarray
   - sqlalchemy
-  - pyarrow>=13
+  - pyarrow>=14.0.1
   - coverage
   - jsonschema
   # other -- IO

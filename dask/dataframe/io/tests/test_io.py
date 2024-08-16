@@ -5,7 +5,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 
 import dask
 import dask.array as da
@@ -285,11 +284,7 @@ def test_from_pandas_npartitions_duplicates(index):
 
 
 def test_from_pandas_convert_string_config():
-    pa = pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
-    pyarrow_version = Version(pa.__version__)
-    if pyarrow_version.major < 12:
-        pytest.skip("requires arrow 12")
-
+    pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
     # With `dataframe.convert-string=False`, strings should remain objects
     with dask.config.set({"dataframe.convert-string": False}):
         s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])

@@ -378,10 +378,7 @@ def test_read_csv(dd_read, pd_read, text, sep):
 
 
 def test_read_csv_convert_string_config():
-    pa = pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
-    pyarrow_version = Version(pa.__version__)
-    if pyarrow_version.major < 12:
-        pytest.skip("requires arrow 12")
+    pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
     with filetext(csv_text) as fn:
         df = pd.read_csv(fn)
         with dask.config.set({"dataframe.convert-string": True}):
