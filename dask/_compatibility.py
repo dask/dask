@@ -16,6 +16,10 @@ PY_VERSION = Version(".".join(map(str, sys.version_info[:3])))
 
 EMSCRIPTEN = sys.platform == "emscripten"
 
+LINUX = sys.platform == "linux"
+MACOS = sys.platform == "darwin"
+WINDOWS = sys.platform == "win32"
+
 
 def entry_points(group=None):
     warnings.warn(

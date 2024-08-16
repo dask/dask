@@ -7,7 +7,7 @@ dependencies:
   - python=3.10
   - pyyaml=5.4.1
   - click=8.1
-  - cloudpickle=2.0.0
+  - cloudpickle=3.0.0
   - partd=1.4.0
   - fsspec=2021.09.0
   - importlib-metadata=4.13.0

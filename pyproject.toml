@@ -30,7 +30,7 @@ dependencies = [
     # NOTE: These are tested in `continuous_integration/test_imports.sh` If
     # you modify these, make sure to change the corresponding line there.
     "click >= 8.1",
-    "cloudpickle >= 2.0.0",
+    "cloudpickle >= 3.0.0",
     "fsspec >= 2021.09.0",
     "packaging >= 20.0",
     "partd >= 1.4.0",
