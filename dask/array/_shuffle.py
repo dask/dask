@@ -109,6 +109,8 @@ def _rechunk_other_dimensions(
     new_chunks = list(x.chunks)
     new_chunks[axis] = (longest_group,)
 
+    # iterate until we distributed the increase in chunksize accross all dimensions
+    # or every non-shuffle dimension is all 1
     while changeable_dimensions:
         length_changeable_dimensions = len(changeable_dimensions)
         chunksize_inc_factor = reduce(mul, map(max, new_chunks)) / maximum_chunk  # type: ignore[operator]
