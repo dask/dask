@@ -58,7 +58,7 @@ def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"] = "a
     the number of chunks small.
 
     The tolerance of increasing the chunk size is controlled by the configuration
-    "array.shuffle.chunksize-tolerance". The default value is 1.25.
+    "array.chunk-size-tolerance". The default value is 1.25.
 
     >>> y.chunks
     ((2,), (5, 3))
@@ -94,7 +94,7 @@ def _rechunk_other_dimensions(
     x: Array, longest_group: int, axis: int, chunks: Literal["auto"]
 ) -> Array:
     assert chunks == "auto", "Only auto is supported for now"
-    chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
+    chunksize_tolerance = config.get("array.chunk-size-tolerance")
 
     if longest_group <= max(x.chunks[axis]) * chunksize_tolerance:
         # We are staying below our threshold, so don't rechunk
@@ -167,7 +167,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     indexer = copy.deepcopy(indexer)
 
-    chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
+    chunksize_tolerance = config.get("array.chunk-size-tolerance")
     chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
 
     # Figure out how many groups we can put into one chunk
