@@ -94,7 +94,7 @@ def _rechunk_other_dimensions(
     x: Array, longest_group: int, axis: int, chunks: Literal["auto"]
 ) -> Array:
     assert chunks == "auto", "Only auto is supported for now"
-    chunksize_tolerance = config.get("array.shuffle.chunksize-tolerance")
+    chunksize_tolerance = config.get("array.chunksize-tolerance")
 
     if longest_group <= max(x.chunks[axis]) * chunksize_tolerance:
         # We are staying below our threshold, so don't rechunk
