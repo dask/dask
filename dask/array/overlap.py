@@ -613,11 +613,11 @@ def map_overlap(
     >>> x = da.ones(10, dtype='int')
     >>> block_args = dict(chunks=(), drop_axis=0)
     >>> da.map_blocks(func, x, **block_args).compute()
-    10
+    np.int64(10)
     >>> da.map_overlap(func, x, **block_args, boundary='reflect').compute()
-    10
+    np.int64(10)
     >>> da.map_overlap(func, x, **block_args, depth=1, boundary='reflect').compute()
-    12
+    np.int64(12)
 
     For functions that may not handle 0-d arrays, it's also possible to specify
     ``meta`` with an empty array matching the type of the expected result. In

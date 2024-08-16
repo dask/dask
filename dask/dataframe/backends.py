@@ -282,7 +282,7 @@ def make_meta_object(x, index=None):
     >>> make_meta_object(('a', 'f8'))
     Series([], Name: a, dtype: float64)
     >>> make_meta_object('i8')
-    1
+    np.int64(1)
     """
 
     if is_arraylike(x) and x.shape:
