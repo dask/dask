@@ -3616,6 +3616,7 @@ def test_cov_series():
 
 
 @pytest.mark.gpu
+@pytest.mark.skip(reason="https://github.com/rapidsai/cudf/issues/16560")
 @pytest.mark.parametrize(
     "numeric_only",
     [None, True, False],
@@ -3688,6 +3689,7 @@ def test_corr():
 
 
 @pytest.mark.gpu
+@pytest.mark.skip(reason="https://github.com/rapidsai/cudf/issues/16560")
 def test_corr_gpu():
     cudf = pytest.importorskip("cudf")
 
