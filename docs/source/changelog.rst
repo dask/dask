@@ -60,6 +60,43 @@ Drop support for Python 3.9
 This release drops support for Python 3.9 in accordance with NEP 29. Python 3.10
 is now the required minimum version to run Dask.
 
+See :pr:`11245` and :pr-distributed:`8793` by `Patrick Hoefler`_ for more details.
+
+
+.. dropdown:: Additional changes
+
+  - Ensure ``pickle`` does not change tokens (:pr:`11320`) `Florian Jetter`_
+  - Add changelog entry for ``reshape`` and ordering improvements (:pr:`11324`) `Patrick Hoefler`_
+  - Rename ``chunksize-tolerance`` option (:pr:`11317`) `Patrick Hoefler`_
+  - Upgrade gpuCI and fix Dask Array failures with "cupy" backend (:pr:`11309`) `Richard (Rick) Zamora`_
+  - Implement automatic rechunking for ``shuffle`` (:pr:`11311`) `Patrick Hoefler`_
+  - Ensure we test against ``numpy`` 2 in CI (:pr:`11182`) `James Bourbeau`_
+  - Revert "Test ordering on distributed scheduler (:pr:`11310`)" (:pr:`11321`) `Florian Jetter`_
+  - Test ordering on distributed scheduler (:pr:`11310`) `Florian Jetter`_
+  - Add tests to cover more cases of new ``reshape`` implementation (:pr:`11313`) `Patrick Hoefler`_
+  - Order: Choose better target for branches with multiple leaf nodes (:pr:`11303`) `Patrick Hoefler`_
+  - Order: Ensure runnable tasks are certainly runnable (:pr:`11305`) `Florian Jetter`_
+  - Fix upstream ``numpy`` build (:pr:`11304`) `Patrick Hoefler`_
+  - Make ``shuffle`` a no-op if possible (:pr:`11291`) `Patrick Hoefler`_
+  - Keep ``chunksize`` consistent in ``reshape`` (:pr:`11273`) `Patrick Hoefler`_
+  - Enable slicing with only one unknown chunk (:pr:`11301`) `Patrick Hoefler`_
+  - Link to ``dask`` vs ``spark`` benchmarks on Dask docs (:pr:`11289`) `Sarah Charlotte Johnson`_
+  - Fix slicing for masked arrays (:pr:`11300`) `Patrick Hoefler`_
+  - Array: fix ``asarray`` for array input with ``dtype`` (:pr:`11288`) `Lucas Colley`_
+  - Add ``numpy`` constants to array api (:pr:`11287`) `Lucas Colley`_
+  - Ignore typing of return value (:pr:`11286`) `Patrick Hoefler`_
+  - Remove automatic resizing in reshape (:pr:`11269`) `Patrick Hoefler`_
+  - API: expose ``np`` dtypes in ``dask.array`` namespace (:pr:`11178`) `Lucas Colley`_
+
+  - Reduce frequency of unmanaged memory use warning (:pr-distributed:`8834`) `Patrick Hoefler`_
+  - Update gpuCI ``RAPIDS_VER`` to ``24.10`` (:pr-distributed:`8786`)
+  - Avoid ``RuntimeError: dictionary changed size during iteration`` in ``Server._shift_counters()`` (:pr-distributed:`8828`) `Hendrik Makait`_
+  - Improve concurrent close for scheduler (:pr-distributed:`8829`) `Hendrik Makait`_
+  - MINOR: Extract truncation logic out of partial concatenation in P2P rechunking (:pr-distributed:`8826`) `Hendrik Makait`_
+  - avoid excessive attribute access overhead for ``remove_from_task_prefix_count`` (:pr-distributed:`8821`) `Florian Jetter`_
+  - Avoid key validation if validation is disabled (:pr-distributed:`8822`) `Florian Jetter`_
+  - Log ``worker_client`` event (:pr-distributed:`8819`) `James Bourbeau`_
+
 .. _v2024.8.0:
 
 2024.8.0
@@ -8579,3 +8616,4 @@ Other
 .. _`Adam Williamson`: https://github.com/AdamWill
 .. _`Jonas Dedden`: https://github.com/jonded94
 .. _`Bernhard Raml`: https://github.com/SwamyDev
+.. _`Lucas Colley`: https://github.com/lucascolley
