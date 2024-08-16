@@ -9,6 +9,51 @@ Changelog
 Highlights
 ^^^^^^^^^^
 
+Improve output chunksizes for reshaping Dask Arrays
+"""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Reshaping a Dask Array oftentimes squashed the dimensions to reshape into a single
+chunk. This caused very large output chunks and subsequently a lot of out of memory
+errors and performance issues.
+
+.. code-block::
+
+    arr = da.ones(shape=(1000, 100, 48_000), chunks=(1000, 100, 83))
+    arr.reshape(1000, 100, 4, 12_000)
+
+Previously, this put the last dimension into a single chunk of size 12_000.
+
+.. image:: images/changelog/reshape-memory-increase.png
+  :width: 75%
+  :align: center
+  :alt: Size of each individual chunk increases to over 1GB
+
+The new algorithm will ensure that the chunk-size between in- and output is kept
+the same. This will avoid large increases in chunk-size and fragmentation of chunks.
+
+.. image:: images/changelog/reshape-constant-memory.png
+  :width: 75%
+  :align: center
+  :alt: Size of each individual chunk stays the same
+
+Improve scheduling efficiency for Xarray Rechunk-GroupBy-Reduce patterns
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The scheduler previously created an inefficient execution graph for Xarray GroupBy-Reduction
+patterns that use the cohorts strategy:
+
+.. code-block:: python
+
+    import xarray as xr
+
+    arr = xr.open_zarr(...)
+    arr.chunk(time=TimeResampler("ME")).groupby("time.month").mean()
+
+An issue in the algorithm that creates the execution order of the task graph
+lead to an inefficient execution strategy that accumulates a lot of unnecessary memory on
+the cluster. The improvement is very similar to
+:ref:`the previous ordering improvement in 2024.08.0 <label.xarray_groupby_ordering>`.
+
 Drop support for Python 3.9
 """""""""""""""""""""""""""
 
@@ -43,6 +88,7 @@ the same to avoid fragmentation of chunks or a large increase in chunk-size.
 See :pr:`11262` and :pr:`11267` by `Patrick Hoefler`_ for more details and performance
 benchmarks.
 
+.. _label.xarray_groupby_ordering:
 
 Improve scheduling efficiency for Xarray GroupBy-Reduce patterns
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
