@@ -413,10 +413,10 @@ def test_take_sorted():
 
     chunks, dsk = take("y", "x", [(20, 20, 20, 20)], np.arange(0, 80), axis=0)
     expected = {
-        ("y", 0): (getitem, ("x", 0), (np.arange(0, 20),)),
-        ("y", 1): (getitem, ("x", 1), (np.arange(0, 20),)),
-        ("y", 2): (getitem, ("x", 2), (np.arange(0, 20),)),
-        ("y", 3): (getitem, ("x", 3), (np.arange(0, 20),)),
+        ("y", 0): ("x", 0),
+        ("y", 1): ("x", 1),
+        ("y", 2): ("x", 2),
+        ("y", 3): ("x", 3),
     }
     np.testing.assert_equal(dsk, expected)
     assert chunks == ((20, 20, 20, 20),)
@@ -1049,6 +1049,29 @@ def test_shuffle_slice(size, chunks):
     assert_eq(a, b)
 
 
+def test_unknown_chunks_length_one():
+    a = np.arange(256, dtype=int)
+    arr = da.from_array(a, chunks=(256,))
+    # np.flatnonzero dispatches
+    result = np.flatnonzero(arr)
+    assert_eq(result[[0, -1]], np.flatnonzero(a)[[0, -1]])
+
+    result = da.flatnonzero(arr)
+    assert_eq(result[[0, -1]], np.flatnonzero(a)[[0, -1]])
+
+    a = a.reshape(16, 16)
+    arr = da.from_array(a, chunks=(8, 16))
+    arr._chunks = ((8, 8), (np.nan,))
+    result = arr[:, [0, -1]]
+    expected = a[:, [0, -1]]
+    assert_eq(result, expected)
+
+    arr = da.from_array(a, chunks=(8, 8))
+    arr._chunks = ((8, 8), (np.nan, np.nan))
+    with pytest.raises(ValueError, match="Array chunk size or shape"):
+        arr[:, [0, -1]]
+
+
 @pytest.mark.parametrize("lock", [True, False])
 @pytest.mark.parametrize("asarray", [True, False])
 @pytest.mark.parametrize("fancy", [True, False])
@@ -1069,7 +1092,30 @@ def test_slice_array_3d_with_bool_numpy_array():
     assert_eq(actual, expected)
 
 
+def test_slice_masked_arrays():
+    arr = np.ma.array(range(8), mask=[0, 0, 1, 0, 0, 1, 0, 1])
+    darr = da.from_array(arr, chunks=(4, 4))
+    assert_eq(darr[[2, 6]], arr[[2, 6]])
+
+
 def test_slice_array_null_dimension():
     array = da.from_array(np.zeros((3, 0)))
     expected = np.zeros((3, 0))[[0]]
     assert_eq(array[[0]], expected)
+
+
+def test_take_sorted_indexer():
+    arr = da.ones((250, 100), chunks=((50, 100, 33, 67), 100))
+    indexer = list(range(0, 250))
+    result = arr[indexer, :]
+    assert_eq(arr, result)
+    assert {
+        **dict(arr.dask),
+        **{
+            k: k2
+            for k, k2 in zip(
+                [k for k in dict(result.dask) if "getitem" in k[0]],
+                dict(arr.dask).keys(),
+            )
+        },
+    } == dict(result.dask)

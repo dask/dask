@@ -47,3 +47,10 @@ def test_fft():
     result = da.fft.fft(x)
     expected = da.fft.fft(x.data)
     assert_eq(result, expected)
+
+
+def test_polyfit_reshaping():
+    # Regression test for https://github.com/pydata/xarray/issues/4554
+    arr = xr.DataArray(da.ones((10, 20, 30), chunks=(1, 5, 30)), dims=["z", "y", "x"])
+    result = arr.polyfit("x", 1)
+    assert result.polyfit_coefficients.chunks == ((2,), (1,) * 10, (5,) * 4)

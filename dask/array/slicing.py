@@ -531,9 +531,9 @@ def issorted(seq):
     """Is sequence sorted?
 
     >>> issorted([1, 2, 3])
-    True
+    np.True_
     >>> issorted([3, 1, 2])
-    False
+    np.False_
     """
     if len(seq) == 0:
         return True
@@ -575,6 +575,14 @@ def take(outname, inname, chunks, index, axis=0):
     if not np.isnan(chunks[axis]).any():
         from dask.array._shuffle import _shuffle
 
+        arange = np.arange(np.sum(chunks[axis]))
+        if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
+            # TODO: This should be a real no-op, but the call stack is
+            # too deep to do this efficiently for now
+            chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
+            graph = {(outname,) + c: (inname,) + c for c in chunk_tuples}
+            return tuple(chunks), graph
+
         average_chunk_size = int(sum(chunks[axis]) / len(chunks[axis]))
 
         indexer = []
@@ -589,6 +597,15 @@ def take(outname, inname, chunks, index, axis=0):
         )
         chunks, graph = _shuffle(chunks, indexer, axis, inname, outname, token)
         return chunks, graph
+    elif len(chunks[axis]) == 1:
+        slices = [slice(None)] * len(chunks)
+        slices[axis] = list(index)
+        slices = tuple(slices)
+        chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
+        dsk = {
+            (outname,) + ct: (getitem, (inname,) + ct, slices) for ct in chunk_tuples
+        }
+        return chunks, dsk
     else:
         from dask.array.core import unknown_chunk_message
 
