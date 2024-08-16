@@ -1421,7 +1421,7 @@ def register_numpy():
 
     @normalize_token.register(np.memmap)
     def normalize_mmap(mm):
-        return normalize_object(mm)
+        return hash_buffer_hex(np.ascontiguousarray(mm))
 
     @normalize_token.register(np.ufunc)
     def normalize_ufunc(func):
