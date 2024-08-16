@@ -1327,7 +1327,10 @@ def register_pandas():
 
     @normalize_token.register(pd.arrays.ArrowExtensionArray)
     def normalize_extension_array(arr):
-        return (type(arr), normalize_token(arr._pa_array))
+        try:
+            return (type(arr), normalize_token(arr._pa_array))
+        except AttributeError:
+            return (type(arr), normalize_token(arr._data))
 
     @normalize_token.register(pd.api.extensions.ExtensionArray)
     def normalize_extension_array(arr):
