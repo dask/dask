@@ -1313,6 +1313,10 @@ def register_pandas():
         data = list(mgr.arrays) + [df.columns, df.index]
         return list(map(normalize_token, data))
 
+    @normalize_token.register(pd.arrays.ArrowExtensionArray)
+    def normalize_extension_array(arr):
+        return normalize_token(arr._pa_array)
+
     @normalize_token.register(pd.api.extensions.ExtensionArray)
     def normalize_extension_array(arr):
         import numpy as np
