@@ -254,7 +254,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are tested under Python 3.11 on GitHub Actions. You can test
+Docstrings are tested under Python 3.12 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
