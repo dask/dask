@@ -536,3 +536,19 @@ def test_unique_numerical_columns(key):
     assert_eq(
         df[key].unique(), pd.Series(pdf[key].unique(), name=key), check_index=False
     )
+
+
+def test_cat_value_counts_large_unknown_categories():
+    pdf = pd.DataFrame({"x": np.random.randint(1, 1_000_000, (250_000,))})
+    df = from_pandas(pdf, npartitions=50)
+    df["x"] = df["x"].astype("category")
+    result = df.x.value_counts()
+    assert result.npartitions == 50  # unknown
+    pdf["x"] = pdf["x"].astype("category")
+    expected = pdf.x.value_counts()
+    assert_eq(result, expected, check_index=False, check_dtype=False)
+
+    df = from_pandas(pdf, npartitions=50)
+    result = df.x.value_counts()
+    assert result.npartitions == 3  # known but large
+    assert_eq(result, expected, check_index=False, check_dtype=False)
