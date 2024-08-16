@@ -4235,8 +4235,11 @@ class Series(FrameBase):
     ):
         if split_out is no_default:
             if isinstance(self.dtype, CategoricalDtype):
-                # unobserved categories are a pain
-                split_out = 1
+                # unobserved or huge categories will lead to oom errors
+                if self.cat.known:
+                    split_out = 1 + len(self.dtype.categories) // 100_000
+                else:
+                    split_out = True
             else:
                 split_out = True
         if split_out == 1 and split_out is not True and sort is None:
