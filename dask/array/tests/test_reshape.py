@@ -4,10 +4,12 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array import from_array
 from dask.array.reshape import (
     _smooth_chunks,
     contract_tuple,
     expand_tuple,
+    reshape_blockwise,
     reshape_rechunk,
 )
 from dask.array.utils import assert_eq
@@ -53,7 +55,7 @@ from dask.array.utils import assert_eq
     ],
 )
 def test_reshape_rechunk(inshape, outshape, prechunks, inchunks, outchunks):
-    result_in, result_out = reshape_rechunk(inshape, outshape, prechunks)
+    result_in, result_out, _, _ = reshape_rechunk(inshape, outshape, prechunks)
     assert result_in == inchunks
     assert result_out == outchunks
     assert np.prod(list(map(len, result_in))) == np.prod(list(map(len, result_out)))
@@ -127,7 +129,7 @@ def test_reshape_all_chunked_no_merge(inshape, inchunks, outshape, outchunks):
     a = da.from_array(base, chunks=inchunks)
 
     # test directly
-    inchunks2, outchunks2 = reshape_rechunk(a.shape, outshape, inchunks)
+    inchunks2, outchunks2, _, _ = reshape_rechunk(a.shape, outshape, inchunks)
     assert inchunks2 == inchunks
     assert outchunks2 == outchunks
 
@@ -165,7 +167,7 @@ def test_reshape_all_not_chunked_merge(
     a = da.from_array(base, chunks=inchunks)
 
     # test directly
-    inchunks2, outchunks2 = reshape_rechunk(a.shape, outshape, inchunks)
+    inchunks2, outchunks2, _, _ = reshape_rechunk(a.shape, outshape, inchunks)
     assert inchunks2 == expected_inchunks
     assert outchunks2 == outchunks
 
@@ -323,6 +325,71 @@ def test_reshape_split_out_chunks():
         (1, 1, 1, 1),
         (80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80),
     )
+
+
+def test_reshape_blockwise():
+    x = np.arange(0, 54).reshape(6, 3, 3)
+    arr = from_array(x, chunks=(3, 2, (2, 1)))
+    result = reshape_blockwise(arr, (18, 3))
+    assert result.chunks == ((6, 3, 6, 3), (2, 1))
+    expected = [
+        np.concatenate(
+            [x[:3, :2, :2].reshape(6, 2), x[:3, :2, 2:].reshape(6, 1)], axis=1
+        ),
+        np.concatenate(
+            [x[:3, 2:, :2].reshape(3, 2), x[:3, 2:, 2:].reshape(3, 1)], axis=1
+        ),
+        np.concatenate(
+            [x[3:, :2, :2].reshape(6, 2), x[3:, :2, 2:].reshape(6, 1)], axis=1
+        ),
+        np.concatenate(
+            [x[3:, 2:, :2].reshape(3, 2), x[3:, 2:, 2:].reshape(3, 1)], axis=1
+        ),
+    ]
+    expected = np.concatenate(expected, axis=0)
+    assert_eq(result, expected)
+
+    result = reshape_blockwise(arr, (6, 9))
+    assert result.chunks == ((3, 3), (4, 2, 2, 1))
+    expected = [
+        np.concatenate(
+            [
+                x[:3, :2, :2].reshape(3, 4),
+                x[:3, :2, 2:].reshape(3, 2),
+                x[:3, 2:, :2].reshape(3, 2),
+                x[:3, 2:, 2:].reshape(3, 1),
+            ],
+            axis=1,
+        ),
+        np.concatenate(
+            [
+                x[3:, :2, :2].reshape(3, 4),
+                x[3:, :2, 2:].reshape(3, 2),
+                x[3:, 2:, :2].reshape(3, 2),
+                x[3:, 2:, 2:].reshape(3, 1),
+            ],
+            axis=1,
+        ),
+    ]
+
+    # chunks of first half of the array, i.e. arr[:3, :, :]:
+    # [[[0, 1], [3, 4]], [[9, 10], [12, 13]], [[18, 19], [21, 22]]]
+    # [[[2], [5]], [[11], [14]], [[20], [23]]]
+    # [[[6, 7], [15, 16]], [[24, 25]]]
+    # [[[8], [17]], [[26]]]
+    # The inner dimensions are squashed, i.e.
+    # [[ 0  1  3  4  2  5  6  7  8]
+    #  [ 9 10 12 13 11 14 15 16 17]
+    #  [18 19 21 22 20 23 24 25 26]]
+    expected = np.concatenate(expected, axis=0)
+    assert_eq(result, expected)
+
+
+def test_reshape_blockwise_raises_for_exansion():
+    x = np.arange(0, 54).reshape(6, 3, 3)
+    arr = from_array(x, chunks=(3, 2, (2, 1)))
+    with pytest.raises(NotImplementedError, match="not implemented for expanding"):
+        reshape_blockwise(arr, (2, 3, 3, 3))
 
 
 def test_argwhere_reshaping_not_concating_chunks():
