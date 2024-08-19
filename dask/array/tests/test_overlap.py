@@ -830,5 +830,10 @@ def test_sliding_window_errors(window_shape, axis):
 
 def test_map_overlap_new_axis():
     arr = da.arange(6, chunks=2)
+    assert arr.chunks == ((2, 2, 2),)
+
     actual = arr.map_overlap(lambda x: np.stack([x, x + 0.5]), depth=1, new_axis=[0])
-    assert_eq(np.stack([np.arange(6), np.arange(6) + 0.5]), actual.compute())
+    expected = np.stack([np.arange(6), np.arange(6) + 0.5])
+
+    assert actual.chunks == ((1,), (2, 2, 2))
+    assert_eq(expected, actual.compute())
