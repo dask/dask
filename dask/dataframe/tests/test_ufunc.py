@@ -508,7 +508,7 @@ def test_2args_with_array(ufunc, pandas, darray):
         pd.Series(np.abs(np.random.randn(100))),
         pd.DataFrame(
             {
-                "A": np.random.randint(80, 100, size=20),
+                "A": np.random.randint(1, 100, size=20),
                 "B": np.random.randint(1, 100, size=20),
                 "C": np.abs(np.random.randn(20)),
             }
