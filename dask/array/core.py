@@ -17,7 +17,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, TypeVar, Union, cast
+from typing import Any, Literal, TypeVar, Union, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -2762,6 +2762,24 @@ class Array(DaskMethodsMixin):
 
         return rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
+    def shuffle(
+        self,
+        indexer: list[list[int]],
+        axis: int,
+        chunks: Literal["auto"] = "auto",
+    ):
+        """Reorders one dimensions of a Dask Array based on an indexer.
+
+        Refer to :func:`dask.array.shuffle` for full documentation.
+
+        See Also
+        --------
+        dask.array.shuffle : equivalent function
+        """
+        from dask.array._shuffle import shuffle
+
+        return shuffle(self, indexer, axis, chunks)
+
     @property
     def real(self):
         from dask.array.ufunc import real
@@ -4507,6 +4525,13 @@ def retrieve_from_ooc(
     return load_dsk
 
 
+def _as_dtype(a, dtype):
+    if dtype is None:
+        return a
+    else:
+        return a.astype(dtype)
+
+
 def asarray(
     a, allow_unknown_chunksizes=False, dtype=None, order=None, *, like=None, **kwargs
 ):
@@ -4556,16 +4581,22 @@ def asarray(
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
+
+    .. warning::
+        `order` is ignored if `a` is an `Array`, has the attribute ``to_dask_array``,
+        or is a list or tuple of `Array`'s.
     """
     if like is None:
         if isinstance(a, Array):
-            return a
+            return _as_dtype(a, dtype)
         elif hasattr(a, "to_dask_array"):
-            return a.to_dask_array()
+            return _as_dtype(a.to_dask_array(), dtype)
         elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-            return asarray(a.data)
+            return _as_dtype(asarray(a.data, order=order), dtype)
         elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-            return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
+            return _as_dtype(
+                stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes), dtype
+            )
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
     else:
@@ -4624,16 +4655,20 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asanyarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
+
+    .. warning::
+        `order` is ignored if `a` is an `Array`, has the attribute ``to_dask_array``,
+        or is a list or tuple of `Array`'s.
     """
     if like is None:
         if isinstance(a, Array):
-            return a
+            return _as_dtype(a, dtype)
         elif hasattr(a, "to_dask_array"):
-            return a.to_dask_array()
+            return _as_dtype(a.to_dask_array(), dtype)
         elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-            return asanyarray(a.data)
+            return _as_dtype(asarray(a.data, order=order), dtype)
         elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-            return stack(a)
+            return _as_dtype(stack(a), dtype)
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
     else:

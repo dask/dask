@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import math
-import warnings
-from collections import Counter
 from functools import reduce
 from itertools import product
 from operator import mul
 
 import numpy as np
 
-from dask import config
-from dask.array.core import Array, normalize_chunks
+from dask.array.core import Array
 from dask.array.utils import meta_from_array
 from dask.base import tokenize
 from dask.core import flatten
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, parse_bytes
+from dask.utils import M
 
 _not_implemented_message = """
 Dask's reshape only supports operations that merge or split existing dimensions
@@ -78,10 +75,14 @@ def reshape_rechunk(inshape, outshape, inchunks):
                 chunk_reduction = reduce(mul, map(len, inchunks[ileft + 1 : ii + 1]))
                 result_inchunks[ileft] = expand_tuple(inchunks[ileft], chunk_reduction)
 
-                prod = reduce(mul, inshape[ileft + 1 : ii + 1])  # 16
-                result_outchunks[oi] = tuple(
-                    prod * c for c in result_inchunks[ileft]
-                )  # (1, 1, 1, 1) .* 16
+                max_in_chunk = _cal_max_chunk_size(inchunks, ileft, ii)
+                result_inchunks = _smooth_chunks(
+                    ileft, ii, max_in_chunk, result_inchunks
+                )
+                # Build cross product of result_inchunks[ileft:ii+1]
+                result_outchunks[oi] = _calc_lower_dimension_chunks(
+                    result_inchunks, ileft, ii
+                )
 
             oi -= 1
             ii = ileft - 1
@@ -101,10 +102,116 @@ def reshape_rechunk(inshape, outshape, inchunks):
 
             result_outchunks[oleft] = tuple(c // cs for c in result_inchunks[ii])
 
+            max_in_chunk = _cal_max_chunk_size(inchunks, ii, ii)
+            result_outchunks = _smooth_chunks(oleft, oi, max_in_chunk, result_outchunks)
+            # Build cross product of result_outchunks[oleft:oi+1]
+            result_inchunks[ii] = _calc_lower_dimension_chunks(
+                result_outchunks, oleft, oi
+            )
             oi = oleft - 1
             ii -= 1
 
     return tuple(result_inchunks), tuple(result_outchunks)
+
+
+def _calc_lower_dimension_chunks(chunks, start, stop):
+    # We need the lower dimension chunks to match what the higher dimension chunks
+    # can be combined to, i.e. multiply the different dimensions
+    return tuple(
+        map(
+            lambda x: reduce(mul, x),
+            product(*chunks[start : stop + 1]),
+        )
+    )
+
+
+def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
+    # The previous step squashed the whole dimension into a single
+    # chunk for ileft + 1 (and potentially combined too many elements
+    # into a single chunk for ileft as well). We split up the single
+    # chunk into multiple chunks to match the max_in_chunk to keep
+    # chunksizes consistent:
+    # ((1, 1), (200)) -> ((1, 1), (20, ) * 10) for max_in_chunk = 20
+    # It's important to ensure that all dimensions before the dimension
+    # we adjust have all-1 chunks to respect C contiguous arrays
+    # during the reshaping
+    # Example:
+    # Assume arr = da.from_array(np.arange(0, 12).reshape(4, 3), chunks=(2, 3))
+    # Reshaping to arr.reshape(-1, ) will return
+    # [ 0  1  2  3  4  5  6  7  8  9 10 11]
+    # The first dimension of the reshaped axis are the chunks with length 2
+    # Assume we split the second dimension into (2, 1), i.e. setting the chunks to
+    # ((2, 2), (2, 1)) and the output chunks to ((4, 2, 4, 2), )
+    # In this case, the individual chunks do not hold a contiguous sequence.
+    # For example, the first chunk is [[0, 1], [3, 4]].
+    # Then, the result will be different because we first reshape the individual,
+    # non-contiguous chunks before concatenating them:
+    # [ 0  1  3  4  2  5  6  7  9 10  8 11]
+    # This is equivalent to
+    # arr = np.arange(0, 12).reshape(4, 3)
+    # np.concatenate(list(map(lambda x: x.reshape(-1), [arr[:2, :2], arr[:2, 2:], arr[2:, :2], arr[2:, 2:]])))
+
+    ileft_orig = ileft
+    max_result_in_chunk = _cal_max_chunk_size(result_inchunks, ileft, ii)
+    if max_in_chunk == max_result_in_chunk:
+        # reshaping doesn't mess up
+        return result_inchunks
+
+    while all(x == 1 for x in result_inchunks[ileft]):
+        # Find the first dimension where we can split chunks
+        ileft += 1
+
+    if ileft < ii + 1:
+        factor = math.ceil(max_result_in_chunk / max_in_chunk)
+        result_in_chunk = result_inchunks[ileft]
+
+        if len(result_in_chunk) == 1:
+            # This is a trivial case, when we arrive here is the chunk we are
+            # splitting the same length as the whole dimension and all previous
+            # chunks that are reshaped into the same dimension are all-one.
+            # So we can split this dimension.
+            elem = result_in_chunk[0]
+            factor = min(factor, elem)
+            ceil_elem = math.ceil(elem / factor)
+            new_inchunk = [ceil_elem] * factor
+            for i in range(ceil_elem * factor - elem):
+                new_inchunk[i] -= 1
+            result_inchunks[ileft] = tuple(new_inchunk)
+
+            if all(x == 1 for x in new_inchunk) and ileft < ii:
+                # might have to do another round
+                return _smooth_chunks(ileft_orig, ii, max_in_chunk, result_inchunks)
+        else:
+            # We are now in the more complicated case. The first dimension in the set
+            # of dimensions to squash has non-ones and our max chunk is bigger than
+            # what we want. We need to split the non-ones into multiple chunks along
+            # this axis.
+            other_max_chunk = max_result_in_chunk // max(result_inchunks[ileft])
+            result_in = []
+
+            for elem_in in result_in_chunk:
+                if elem_in * other_max_chunk <= max_in_chunk:
+                    result_in.append(elem_in)
+                    continue
+
+                factor = math.ceil(elem_in * other_max_chunk / max_in_chunk)
+                ceil_elem = math.ceil(elem_in / factor)
+                new_in_chunk = [ceil_elem] * math.ceil(factor)
+                for i in range(ceil_elem * factor - elem_in):
+                    new_in_chunk[i] -= 1
+                result_in.extend(new_in_chunk)
+
+            result_inchunks[ileft] = tuple(result_in)
+    return result_inchunks
+
+
+def _cal_max_chunk_size(chunks, start, stop):
+    return int(
+        reduce(
+            mul,
+            [max(chunks[axis]) for axis in range(start, stop + 1)],
+        )
+    )
 
 
 def expand_tuple(chunks, factor):
@@ -203,7 +310,6 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     numpy.reshape
     """
     # Sanitize inputs, look for -1 in shape
-    from dask.array.core import PerformanceWarning
     from dask.array.slicing import sanitize_index
 
     shape = tuple(map(sanitize_index, shape))
@@ -248,48 +354,6 @@ def reshape(x, shape, merge_chunks=True, limit=None):
         x = x.rechunk({i: 1 for i in range(din - dout)})
 
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
-    # Check output chunks are not too large
-    max_chunksize_in_bytes = reduce(mul, [max(i) for i in outchunks]) * x.dtype.itemsize
-
-    if limit is None:
-        limit = parse_bytes(config.get("array.chunk-size"))
-        split = config.get("array.slicing.split-large-chunks", None)
-    else:
-        limit = parse_bytes(limit)
-        split = True
-
-    if max_chunksize_in_bytes > limit:
-        if split is None:
-            msg = (
-                "Reshaping is producing a large chunk. To accept the large\n"
-                "chunk and silence this warning, set the option\n"
-                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': False}):\n"
-                "    ...     array.reshape(shape)\n\n"
-                "To avoid creating the large chunks, set the option\n"
-                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': True}):\n"
-                "    ...     array.reshape(shape)"
-                "Explicitly passing ``limit`` to ``reshape`` will also silence this warning\n"
-                "    >>> array.reshape(shape, limit='128 MiB')"
-            )
-            warnings.warn(msg, PerformanceWarning, stacklevel=6)
-        elif split:
-            # Leave chunk sizes unaltered where possible
-            matching_chunks = Counter(inchunks) & Counter(outchunks)
-            chunk_plan = []
-            for out in outchunks:
-                if matching_chunks[out] > 0:
-                    chunk_plan.append(out)
-                    matching_chunks[out] -= 1
-                else:
-                    chunk_plan.append("auto")
-            outchunks = normalize_chunks(
-                chunk_plan,
-                shape=shape,
-                limit=limit,
-                dtype=x.dtype,
-                previous_chunks=inchunks,
-            )
-
     x2 = x.rechunk(inchunks)
 
     # Construct graph

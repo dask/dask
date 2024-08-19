@@ -119,6 +119,13 @@ properties:
         description: |
           The default chunk size to target. Default is "128MiB".
 
+      chunk-size-tolerance:
+        type: number
+        description: |
+          Upper tolerance for different algorithms when creating output chunks.
+          Default is 1.25. This means that the algorithms can exceed
+          the average input chunk size along this dimension by 25%.
+
       rechunk:
         type: object
         properties:

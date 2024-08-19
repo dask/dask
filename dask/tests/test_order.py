@@ -26,12 +26,12 @@ def f(*args):
     pass
 
 
-def visualize(dsk, **kwargs):
+def visualize(dsk, suffix="", **kwargs):
     """Utility to visualize the raw low level graphs in this tests suite. This
     automatically generates a set of visualizations with different metrics and
     writes them out to a file prefixed by the test name and suffixed by the
     measure used."""
-    funcname = inspect.stack()[1][3]
+    funcname = inspect.stack()[1][3] + suffix
     if hasattr(dsk, "__dask_graph__"):
         dsk = collections_to_dsk([dsk], optimize_graph=True)
 
@@ -256,7 +256,7 @@ def test_prefer_deep(abcde):
     |   |
     d   a
 
-    Prefer longer chains first so we should start with c
+    Prefer longer chains first so we should start with d
     """
     a, b, c, d, e = abcde
     dsk = {a: 1, b: (f, a), c: (f, b), d: 1, e: (f, d)}
@@ -575,7 +575,7 @@ def test_map_overlap(abcde):
        |/  | \ | / | \|
       d1  d2  d3  d4  d5
        |       |      |
-      e1      e2      e5
+      e1      e3      e5
 
     Want to finish b1 before we start on e5
     """
@@ -1195,8 +1195,6 @@ def test_xarray_like_reduction():
 def test_array_vs_dataframe(optimize):
     xr = pytest.importorskip("xarray")
     dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.xfail("doesn't work yet")
 
     import dask.array as da
 
@@ -1221,7 +1219,8 @@ def test_array_vs_dataframe(optimize):
     diag_df = diagnostics(
         collections_to_dsk([mean.to_dask_dataframe()], optimize_graph=optimize)
     )
-    assert max(diag_df[1]) == max(diag_array[1])
+    assert max(diag_df[1]) == (15 if dd._dask_expr_enabled() else 38)
+    assert max(diag_array[1]) == 38
     assert max(diag_array[1]) < 50
 
 
@@ -2020,6 +2019,279 @@ def test_order_flox_reduction_2(abcde):
         # Then, there are exactly four dependencies to load for every final
         # task.
         assert o[final_nodes[ix]] - o[final_nodes[ix - 1]] == 5
+
+
+def test_xarray_map_reduce_with_slicing():
+    # See https://github.com/dask/distributed/pull/8818
+    dsk = {
+        ("transpose", 0, 0, 0): (f, ("groupby-agg", 0, 0, 0)),
+        ("transpose", 0, 0, 1): (f, ("groupby-agg", 0, 0, 1)),
+        ("transpose", 0, 1, 0): (f, ("groupby-agg", 0, 1, 0)),
+        ("transpose", 0, 1, 1): (f, ("groupby-agg", 0, 1, 1)),
+        ("groupby-chunk", 0, 0, 0): (f, ("array", 0), ("getitem", 0, 0, 0)),
+        ("groupby-chunk", 0, 0, 1): (f, ("array", 1), ("getitem", 1, 0, 0)),
+        ("groupby-chunk", 0, 1, 0): (f, ("array", 0), ("getitem", 0, 0, 1)),
+        ("groupby-chunk", 0, 1, 1): (f, ("array", 1), ("getitem", 1, 0, 1)),
+        ("groupby-chunk", 1, 0, 0): (f, ("array", 0), ("getitem", 0, 1, 0)),
+        ("groupby-chunk", 1, 0, 1): (f, ("array", 1), ("getitem", 1, 1, 0)),
+        ("groupby-chunk", 1, 1, 0): (f, ("array", 0), ("getitem", 0, 1, 1)),
+        ("groupby-chunk", 1, 1, 1): (f, ("getitem", 1, 1, 1), ("array", 1)),
+        ("getitem", 0, 0, 0): (f, ("open_data", 0, 0, 0)),
+        ("getitem", 0, 0, 1): (f, ("open_data", 0, 0, 1)),
+        ("getitem", 0, 1, 0): (f, ("open_data", 0, 1, 0)),
+        ("getitem", 0, 1, 1): (f, ("open_data", 0, 1, 1)),
+        ("getitem", 1, 0, 0): (f, ("open_data", 1, 0, 0)),
+        ("getitem", 1, 0, 1): (f, ("open_data", 1, 0, 1)),
+        ("getitem", 1, 1, 0): (f, ("open_data", 1, 1, 0)),
+        ("getitem", 1, 1, 1): (f, ("open_data", 1, 1, 1)),
+        "data": "a",
+        ("array", 0): "b",
+        ("array", 1): "c",
+        ("open_data", 0, 1, 1): (f, "data"),
+        ("groupby-agg", 0, 1, 0): (
+            f,
+            ("groupby-chunk", 1, 0, 1),
+            ("groupby-chunk", 1, 0, 0),
+        ),
+        ("groupby-agg", 0, 1, 1): (
+            f,
+            ("groupby-chunk", 1, 1, 0),
+            ("groupby-chunk", 1, 1, 1),
+        ),
+        ("open_data", 1, 0, 0): (f, "data"),
+        ("open_data", 0, 1, 0): (f, "data"),
+        ("open_data", 1, 0, 1): (f, "data"),
+        ("open_data", 1, 1, 0): (f, "data"),
+        ("groupby-agg", 0, 0, 1): (
+            f,
+            ("groupby-chunk", 0, 1, 0),
+            ("groupby-chunk", 0, 1, 1),
+        ),
+        ("open_data", 0, 0, 1): (f, "data"),
+        ("open_data", 1, 1, 1): (f, "data"),
+        ("groupby-agg", 0, 0, 0): (
+            f,
+            ("groupby-chunk", 0, 0, 0),
+            ("groupby-chunk", 0, 0, 1),
+        ),
+        ("open_data", 0, 0, 0): (f, "data"),
+    }
+    o = order(dsk)
+
+    assert_topological_sort(dsk, o)
+    final_nodes = sorted(
+        [("transpose", 0, ix, jx) for ix in range(2) for jx in range(2)],
+        key=o.__getitem__,
+    )
+    all_diffs = []
+    for ix in range(1, len(final_nodes)):
+        # This assumes that all the data tasks are scheduled first.
+        # Then, there are exactly four dependencies to load for every final
+        # task.
+        all_diffs.append(o[final_nodes[ix]] - o[final_nodes[ix - 1]])
+
+    assert set(all_diffs) == {8}
+
+    _, pressure = diagnostics(dsk, o=o)
+    assert max(pressure) <= 5
+
+
+@pytest.mark.parametrize("use_longest_path", [True, False])
+def test_xarray_rechunk_map_reduce_cohorts(use_longest_path):
+    dsk = {
+        ("transpose", 0, 0, 0): (f, ("concat-groupby", 0, 0, 0)),
+        ("transpose", 0, 1, 0): (f, ("concat-groupby", 0, 1, 0)),
+        ("transpose", 1, 0, 0): (f, ("concat-groupby", 1, 0, 0)),
+        ("transpose", 1, 1, 0): (f, ("concat-groupby", 1, 1, 0)),
+        ("groupby-cohort", 0, 0, 0): (f, ("groupby-chunk", 0, 0, 0)),
+        ("groupby-cohort", 0, 0, 1): (f, ("groupby-chunk", 0, 0, 1)),
+        ("groupby-cohort", 1, 0, 0): (f, ("groupby-chunk", 1, 0, 0)),
+        ("groupby-cohort", 1, 0, 1): (f, ("groupby-chunk", 1, 0, 1)),
+        ("groupby-cohort-2", 0, 0, 0): (f, ("groupby-chunk-2", 0, 0, 0)),
+        ("groupby-cohort-2", 0, 0, 1): (f, ("groupby-chunk-2", 0, 0, 1)),
+        ("groupby-cohort-2", 1, 0, 0): (f, ("groupby-chunk-2", 1, 0, 0)),
+        ("groupby-cohort-2", 1, 0, 1): (f, ("groupby-chunk-2", 1, 0, 1)),
+        ("rechunk-merge", 3, 0, 0): (
+            f,
+            ("concat-shuffle", 4, 0, 0),
+            ("rechunk-split", 12),
+        ),
+        ("rechunk-merge", 0, 0, 0): (
+            f,
+            ("rechunk-split", 1),
+            ("concat-shuffle", 0, 0, 0),
+        ),
+        ("rechunk-merge", 3, 1, 0): (
+            f,
+            ("rechunk-split", 14),
+            ("concat-shuffle", 4, 1, 0),
+        ),
+        ("rechunk-merge", 2, 1, 0): (f, ("rechunk-split", 10), ("rechunk-split", 11)),
+        ("rechunk-split", 12): (f, ("concat-shuffle", 3, 0, 0)),
+        ("rechunk-merge", 0, 1, 0): (
+            f,
+            ("rechunk-split", 3),
+            ("concat-shuffle", 0, 1, 0),
+        ),
+        ("rechunk-merge", 1, 0, 0): (f, ("rechunk-split", 4), ("rechunk-split", 5)),
+        ("rechunk-merge", 1, 1, 0): (f, ("rechunk-split", 7), ("rechunk-split", 6)),
+        ("rechunk-split", 5): (f, ("concat-shuffle", 2, 0, 0)),
+        ("rechunk-split", 11): (f, ("concat-shuffle", 3, 1, 0)),
+        ("rechunk-merge", 2, 0, 0): (f, ("rechunk-split", 8), ("rechunk-split", 9)),
+        ("rechunk-split", 1): (f, ("concat-shuffle", 1, 0, 0)),
+        ("rechunk-split", 14): (f, ("concat-shuffle", 3, 1, 0)),
+        ("rechunk-split", 4): (f, ("concat-shuffle", 1, 0, 0)),
+        ("rechunk-split", 7): (f, ("concat-shuffle", 2, 1, 0)),
+        ("rechunk-split", 10): (f, ("concat-shuffle", 2, 1, 0)),
+        ("rechunk-split", 6): (f, ("concat-shuffle", 1, 1, 0)),
+        ("rechunk-split", 3): (f, ("concat-shuffle", 1, 1, 0)),
+        ("rechunk-split", 9): (f, ("concat-shuffle", 3, 0, 0)),
+        ("rechunk-split", 8): (f, ("concat-shuffle", 2, 0, 0)),
+        ("concat-shuffle", 0, 0, 0): (f, ("shuffle-split", 0), ("shuffle-split", 1)),
+        ("concat-shuffle", 0, 1, 0): (
+            f,
+            ("shuffle-split", 106),
+            ("shuffle-split", 107),
+        ),
+        ("concat-shuffle", 1, 0, 0): (
+            f,
+            ("shuffle-split", 4665),
+            ("shuffle-split", 4664),
+        ),
+        ("concat-shuffle", 1, 1, 0): (
+            f,
+            ("shuffle-split", 4770),
+            ("shuffle-split", 4771),
+        ),
+        ("concat-shuffle", 2, 0, 0): (
+            f,
+            ("shuffle-split", 9328),
+            ("shuffle-split", 9329),
+            ("shuffle-split", 9330),
+        ),
+        ("concat-shuffle", 2, 1, 0): (
+            f,
+            ("shuffle-split", 9487),
+            ("shuffle-split", 9488),
+            ("shuffle-split", 9489),
+        ),
+        ("concat-shuffle", 3, 0, 0): (
+            f,
+            ("shuffle-split", 16324),
+            ("shuffle-split", 16325),
+        ),
+        ("concat-shuffle", 3, 1, 0): (
+            f,
+            ("shuffle-split", 16430),
+            ("shuffle-split", 16431),
+        ),
+        ("concat-shuffle", 4, 0, 0): (
+            f,
+            ("shuffle-split", 20989),
+            ("shuffle-split", 20988),
+        ),
+        ("concat-shuffle", 4, 1, 0): (
+            f,
+            ("shuffle-split", 21094),
+            ("shuffle-split", 21095),
+        ),
+        ("shuffle-split", 9487): (f, ("getitem-2", 2, 1, 0)),
+        ("shuffle-split", 9489): (f, ("getitem-2", 14, 1, 0)),
+        ("shuffle-split", 106): (f, ("getitem-open", 106)),
+        ("shuffle-split", 4664): (f, ("getitem-2", 1, 0, 0)),
+        ("shuffle-split", 16431): (f, ("getitem-2", 15, 1, 0)),
+        ("shuffle-split", 16324): (f, ("getitem-2", 14, 0, 0)),
+        ("shuffle-split", 107): (f, ("getitem-2", 1, 1, 0)),
+        ("shuffle-split", 4665): (f, ("getitem-2", 2, 0, 0)),
+        ("shuffle-split", 4770): (f, ("getitem-2", 1, 1, 0)),
+        ("shuffle-split", 0): (f, ("getitem-open", 0)),
+        ("shuffle-split", 9328): (f, ("getitem-2", 2, 0, 0)),
+        ("shuffle-split", 9488): (f, ("getitem-open", 9488)),
+        ("shuffle-split", 16325): (f, ("getitem-2", 15, 0, 0)),
+        ("shuffle-split", 16430): (f, ("getitem-2", 14, 1, 0)),
+        ("shuffle-split", 20988): (f, ("getitem-2", 15, 0, 0)),
+        ("shuffle-split", 9329): (f, ("getitem-open", 9329)),
+        ("shuffle-split", 4771): (f, ("getitem-2", 2, 1, 0)),
+        ("shuffle-split", 1): (f, ("getitem-2", 1, 0, 0)),
+        ("shuffle-split", 20989): (f, ("getitem-open", 20989)),
+        ("shuffle-split", 9330): (f, ("getitem-2", 14, 0, 0)),
+        ("shuffle-split", 21094): (f, ("getitem-2", 15, 1, 0)),
+        ("shuffle-split", 21095): (f, ("getitem-open", 21095)),
+        ("getitem-2", 1, 0, 0): (f, ("open_dataset", 1, 0, 0)),
+        ("getitem-2", 14, 0, 0): (f, ("open_dataset", 14, 0, 0)),
+        ("getitem-2", 2, 1, 0): (f, ("open_dataset", 2, 1, 0)),
+        ("getitem-2", 15, 0, 0): (f, ("open_dataset", 15, 0, 0)),
+        ("getitem-2", 15, 1, 0): (f, ("open_dataset", 15, 1, 0)),
+        ("getitem-2", 2, 0, 0): (f, ("open_dataset", 2, 0, 0)),
+        ("getitem-2", 1, 1, 0): (f, ("open_dataset", 1, 1, 0)),
+        ("getitem-2", 14, 1, 0): (f, ("open_dataset", 14, 1, 0)),
+        ("groupby-chunk-2", 0, 0, 1): (f, ("rechunk-merge", 2, 0, 0)),
+        ("groupby-chunk-2", 0, 0, 0): (f, ("rechunk-merge", 0, 0, 0)),
+        ("concat-groupby", 0, 0, 0): (
+            f,
+            ("groupby-cohort-2", 0, 0, 0),
+            ("groupby-cohort-2", 0, 0, 1),
+        ),
+        ("groupby-chunk", 0, 0, 1): (f, ("rechunk-merge", 3, 0, 0)),
+        ("groupby-chunk", 0, 0, 0): (f, ("rechunk-merge", 1, 0, 0)),
+        ("concat-groupby", 1, 0, 0): (
+            f,
+            ("groupby-cohort", 0, 0, 0),
+            ("groupby-cohort", 0, 0, 1),
+        ),
+        ("groupby-chunk", 1, 0, 1): (f, ("rechunk-merge", 3, 1, 0)),
+        ("groupby-chunk", 1, 0, 0): (f, ("rechunk-merge", 1, 1, 0)),
+        ("concat-groupby", 1, 1, 0): (
+            f,
+            ("groupby-cohort", 1, 0, 0),
+            ("groupby-cohort", 1, 0, 1),
+        ),
+        ("open_dataset", 14, 1, 0): (f,),
+        ("groupby-chunk-2", 1, 0, 0): (f, ("rechunk-merge", 0, 1, 0)),
+        ("groupby-chunk-2", 1, 0, 1): (f, ("rechunk-merge", 2, 1, 0)),
+        ("concat-groupby", 0, 1, 0): (
+            f,
+            ("groupby-cohort-2", 1, 0, 1),
+            ("groupby-cohort-2", 1, 0, 0),
+        ),
+        ("getitem-open", 9329): (f,),
+        ("open_dataset", 2, 1, 0): (f,),
+        ("open_dataset", 15, 1, 0): (f),
+        ("getitem-open", 20989): (f,),
+        ("getitem-open", 0): (f,),
+        ("open_dataset", 1, 0, 0): (f,),
+        ("getitem-open", 9488): (f,),
+        ("getitem-open", 21095): (f,),
+        ("open_dataset", 2, 0, 0): (f,),
+        ("getitem-open", 106): (f,),
+        ("open_dataset", 1, 1, 0): (f,),
+        ("open_dataset", 14, 0, 0): (f),
+        ("open_dataset", 15, 0, 0): (f),
+    }
+    if use_longest_path:
+        # ensure that we run through longes path True and False
+        keys = [("open-dataset", i, 0, 0) for i in range(20, 35)]
+        dsk.update({("dummy", 0): (f, keys)})
+        dsk.update({k: (f,) for k in keys})
+
+    o = order(dsk)
+
+    assert_topological_sort(dsk, o)
+    _, pressure = diagnostics(dsk, o=o)
+    # cut the dummy tasks in the end
+    assert max(pressure[:99]) <= 7
+
+    final_nodes = sorted(
+        [("transpose", ix, jx, 0) for ix in range(2) for jx in range(2)],
+        key=o.__getitem__,
+    )
+    all_diffs = []
+    for ix in range(1, len(final_nodes)):
+        all_diffs.append(o[final_nodes[ix]] - o[final_nodes[ix - 1]])
+
+    # We process a big chunk first and then a small side-branch
+    # before we repeat this for the next independent branch
+    assert all_diffs == [10, 39, 10]
 
 
 def test_xarray_8414():

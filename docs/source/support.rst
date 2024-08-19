@@ -17,7 +17,7 @@ Community Meeting
     We've combined the monthly Dask Demo Day and Dask Developer Meeting into a single, monthly Dask community meeting.
 
 Join us for the monthly community meetings on the first Thursday of the month at
-10:00 US Central Time. `Join via Zoom <https://us06web.zoom.us/j/87619866741?pwd=S2RxMlRKcnVvakt4NHZoS1cwOGZoZz09>`__.
+10:00 US Central Time. `Join via Zoom <https://us06web.zoom.us/j/89383035703?pwd=WkRJSzNnRTh4T2R1ZjJuVVdJWlMxQT09>`__.
 
 Have something you'd like to share? Let us know by dropping a comment on `this GitHub issue <https://github.com/dask/community/issues/307>`__.
 

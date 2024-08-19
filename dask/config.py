@@ -721,6 +721,7 @@ deprecations: dict[str, str | None] = {
     "dataframe.shuffle.algorithm": "dataframe.shuffle.method",
     "dataframe.shuffle-compression": "dataframe.shuffle.compression",
     "admin.traceback.shorten.what": "admin.traceback.shorten",  # changed in 2023.9.0
+    "array.shuffle.chunksize-tolerance": "array.chunk-size-tolerance",
 }
 
 

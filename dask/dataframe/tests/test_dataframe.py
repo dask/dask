@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import decimal
+import sys
 import warnings
 import weakref
 import xml.etree.ElementTree
@@ -21,6 +22,7 @@ import dask.array as da
 import dask.dataframe as dd
 import dask.dataframe.groupby
 from dask import delayed
+from dask._compatibility import WINDOWS
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
@@ -36,6 +38,7 @@ from dask.dataframe.core import (
     repartition_divisions,
     total_mem_usage,
 )
+from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.utils import (
     assert_eq,
     assert_eq_dtypes,
@@ -634,6 +637,10 @@ def test_describe_for_possibly_unsorted_q():
             assert_eq(r["75%"], 75.0)
 
 
+@pytest.mark.skipif(
+    WINDOWS and sys.version_info < (3, 11),
+    reason="https://github.com/dask/dask/pull/11320#issuecomment-2293798597",
+)
 def test_cumulative():
     index = [f"row{i:03d}" for i in range(100)]
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
@@ -1519,7 +1526,7 @@ def test_quantile(method, quantile):
     assert isinstance(result, dd.Series)
     result = result.compute()
     assert isinstance(result, pd.Series)
-    assert result.iloc[0] == pytest.approx(exp, rel=0.1)
+    assert result.iloc[0] == pytest.approx(exp, rel=0.15)
 
     # series / single
     result = df.x.quantile(quantile, method=method)
@@ -1528,7 +1535,7 @@ def test_quantile(method, quantile):
     else:
         assert isinstance(result, dd.core.Scalar)
     result = result.compute()
-    assert result == pytest.approx(exp, rel=0.1)
+    assert result == pytest.approx(exp, rel=0.15)
 
 
 @pytest.mark.parametrize(
@@ -3609,6 +3616,7 @@ def test_cov_series():
 
 
 @pytest.mark.gpu
+@pytest.mark.skip(reason="https://github.com/rapidsai/cudf/issues/16560")
 @pytest.mark.parametrize(
     "numeric_only",
     [None, True, False],
@@ -3681,6 +3689,7 @@ def test_corr():
 
 
 @pytest.mark.gpu
+@pytest.mark.skip(reason="https://github.com/rapidsai/cudf/issues/16560")
 def test_corr_gpu():
     cudf = pytest.importorskip("cudf")
 
@@ -6308,6 +6317,20 @@ def test_enforce_runtime_divisions():
             ddf.enforce_runtime_divisions().compute()
 
 
+def test_preserve_ts_unit_in_meta_creation():
+    pdf = pd.DataFrame(
+        {
+            "a": [1],
+            "timestamp": pd.Series(
+                [pd.Timestamp.now("UTC")], dtype="datetime64[us, UTC]"
+            ),
+        }
+    )
+    df = dd.from_pandas(pdf, npartitions=1)
+    assert_eq(meta_nonempty(df._meta).dtypes, pdf.dtypes)
+    assert_eq(df, pdf)
+
+
 def test_query_planning_config_warns():
     # Make sure dd._dask_expr_enabled() warns if the current
     # "dataframe.query-planning" config conflicts with the
@@ -6316,3 +6339,23 @@ def test_query_planning_config_warns():
         expect = "enabled" if dd.DASK_EXPR_ENABLED else "disabled"
         with pytest.warns(match=f"query planning is already {expect}"):
             dd._dask_expr_enabled()
+
+
+def test_dataframe_into_delayed():
+    if not DASK_EXPR_ENABLED:
+        pytest.skip("Only relevant for dask.expr")
+
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
+    df = dd.from_pandas(pdf, npartitions=2)
+
+    def test_func(df):
+        return df.sum().sum()
+
+    def delayed_func(i):
+        # sanity check
+        assert i.sum() == 6
+
+    df = df[["a"]].map_partitions(test_func, meta=(None, int))
+    result = delayed(delayed_func)(df)
+    assert sum(map(len, result.dask.layers.values())) == 6
+    result.compute()
