@@ -826,3 +826,17 @@ def test_sliding_window_errors(window_shape, axis):
     arr = da.zeros((4, 3))
     with pytest.raises(ValueError):
         sliding_window_view(arr, window_shape, axis)
+
+
+def test_map_overlap_new_axis():
+    arr = da.arange(6, chunks=2)
+    assert arr.shape == (6,)
+    assert arr.chunks == ((2, 2, 2),)
+
+    actual = arr.map_overlap(lambda x: np.stack([x, x + 0.5]), depth=1, new_axis=[0])
+    expected = np.stack([np.arange(6), np.arange(6) + 0.5])
+
+    assert actual.chunks == ((1,), (2, 2, 2))
+    # Shape and chunks aren't known until array is computed,
+    # so don't expclitly check shape or chunks in assert_eq
+    assert_eq(expected, actual, check_shape=False, check_chunks=False)
