@@ -837,6 +837,6 @@ def test_map_overlap_new_axis():
     expected = np.stack([np.arange(6), np.arange(6) + 0.5])
 
     assert actual.chunks == ((1,), (2, 2, 2))
-    actual = actual.compute()
-    assert actual.shape == (2, 6)
-    assert_eq(expected, actual)
+    # Shape and chunks aren't known until array is computed,
+    # so don't expclitly check shape or chunks in assert_eq
+    assert_eq(expected, actual, check_shape=False, check_chunks=False)
