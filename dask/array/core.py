@@ -5568,7 +5568,7 @@ def _vindex_array(x, dict_indexes):
         + ((remainder,) if remainder > 0 else ())
         if points
         else (0,),
-    )  # WTF???
+    )
     chunks = tuple(chunks)
 
     if points:
