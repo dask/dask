@@ -345,6 +345,7 @@ def tensordot(lhs, rhs, axes=2):
     if concatenate:
         return intermediate
     else:
+        left_axes = [ax if ax >= 0 else lhs.ndim + ax for ax in left_axes]
         return intermediate.sum(axis=left_axes)
 
 
