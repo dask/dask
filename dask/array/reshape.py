@@ -420,9 +420,9 @@ def reshape_blockwise(x: Array, shape: int | tuple[int, ...]) -> Array:
     The resulting chunks are calculated automatically to match the new shape.
 
     >>> result.compute()
-    array([[ 0  1  3  4  2  5  6  7  8],
-           [ 9 10 12 13 11 14 15 16 17],
-           [18 19 21 22 20 23 24 25 26]])
+    array([[ 0,  1,  3,  4,  2,  5,  6,  7,  8],
+           [ 9, 10, 12, 13, 11, 14, 15, 16, 17],
+           [18, 19, 21, 22, 20, 23, 24, 25, 26]])
     """
     if shape in [-1, (-1,)]:
         shape = (reduce(mul, x.shape),)
