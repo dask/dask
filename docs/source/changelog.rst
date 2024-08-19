@@ -1,6 +1,397 @@
 Changelog
 =========
 
+.. _v2024.8.1:
+
+2024.8.1
+--------
+
+Highlights
+^^^^^^^^^^
+
+Improve output chunksizes for reshaping Dask Arrays
+"""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Reshaping a Dask Array oftentimes squashed the dimensions to reshape into a single
+chunk. This caused very large output chunks and subsequently a lot of out of memory
+errors and performance issues.
+
+.. code-block::
+
+    arr = da.ones(shape=(1000, 100, 48_000), chunks=(1000, 100, 83))
+    arr.reshape(1000, 100, 4, 12_000)
+
+Previously, this put the last dimension into a single chunk of size 12_000.
+
+.. image:: images/changelog/reshape-memory-increase.png
+  :width: 75%
+  :align: center
+  :alt: Size of each individual chunk increases to over 1GB
+
+The new algorithm will ensure that the chunk-size between in- and output is kept
+the same. This will avoid large increases in chunk-size and fragmentation of chunks.
+
+.. image:: images/changelog/reshape-constant-memory.png
+  :width: 75%
+  :align: center
+  :alt: Size of each individual chunk stays the same
+
+Improve scheduling efficiency for Xarray Rechunk-GroupBy-Reduce patterns
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The scheduler previously created an inefficient execution graph for Xarray GroupBy-Reduction
+patterns that use the cohorts strategy:
+
+.. code-block:: python
+
+    import xarray as xr
+
+    arr = xr.open_zarr(...)
+    arr.chunk(time=TimeResampler("ME")).groupby("time.month").mean()
+
+An issue in the algorithm that creates the execution order of the task graph
+lead to an inefficient execution strategy that accumulates a lot of unnecessary memory on
+the cluster. The improvement is very similar to
+:ref:`the previous ordering improvement in 2024.08.0 <label.xarray_groupby_ordering>`.
+
+Drop support for Python 3.9
+"""""""""""""""""""""""""""
+
+This release drops support for Python 3.9 in accordance with NEP 29. Python 3.10
+is now the required minimum version to run Dask.
+
+See :pr:`11245` and :pr-distributed:`8793` by `Patrick Hoefler`_ for more details.
+
+
+.. dropdown:: Additional changes
+
+  - Ensure ``pickle`` does not change tokens (:pr:`11320`) `Florian Jetter`_
+  - Add changelog entry for ``reshape`` and ordering improvements (:pr:`11324`) `Patrick Hoefler`_
+  - Rename ``chunksize-tolerance`` option (:pr:`11317`) `Patrick Hoefler`_
+  - Upgrade gpuCI and fix Dask Array failures with "cupy" backend (:pr:`11309`) `Richard (Rick) Zamora`_
+  - Implement automatic rechunking for ``shuffle`` (:pr:`11311`) `Patrick Hoefler`_
+  - Ensure we test against ``numpy`` 2 in CI (:pr:`11182`) `James Bourbeau`_
+  - Revert "Test ordering on distributed scheduler (:pr:`11310`)" (:pr:`11321`) `Florian Jetter`_
+  - Test ordering on distributed scheduler (:pr:`11310`) `Florian Jetter`_
+  - Add tests to cover more cases of new ``reshape`` implementation (:pr:`11313`) `Patrick Hoefler`_
+  - Order: Choose better target for branches with multiple leaf nodes (:pr:`11303`) `Patrick Hoefler`_
+  - Order: Ensure runnable tasks are certainly runnable (:pr:`11305`) `Florian Jetter`_
+  - Fix upstream ``numpy`` build (:pr:`11304`) `Patrick Hoefler`_
+  - Make ``shuffle`` a no-op if possible (:pr:`11291`) `Patrick Hoefler`_
+  - Keep ``chunksize`` consistent in ``reshape`` (:pr:`11273`) `Patrick Hoefler`_
+  - Enable slicing with only one unknown chunk (:pr:`11301`) `Patrick Hoefler`_
+  - Link to ``dask`` vs ``spark`` benchmarks on Dask docs (:pr:`11289`) `Sarah Charlotte Johnson`_
+  - Fix slicing for masked arrays (:pr:`11300`) `Patrick Hoefler`_
+  - Array: fix ``asarray`` for array input with ``dtype`` (:pr:`11288`) `Lucas Colley`_
+  - Add ``numpy`` constants to array api (:pr:`11287`) `Lucas Colley`_
+  - Ignore typing of return value (:pr:`11286`) `Patrick Hoefler`_
+  - Remove automatic resizing in reshape (:pr:`11269`) `Patrick Hoefler`_
+  - API: expose ``np`` dtypes in ``dask.array`` namespace (:pr:`11178`) `Lucas Colley`_
+
+  - Reduce frequency of unmanaged memory use warning (:pr-distributed:`8834`) `Patrick Hoefler`_
+  - Update gpuCI ``RAPIDS_VER`` to ``24.10`` (:pr-distributed:`8786`)
+  - Avoid ``RuntimeError: dictionary changed size during iteration`` in ``Server._shift_counters()`` (:pr-distributed:`8828`) `Hendrik Makait`_
+  - Improve concurrent close for scheduler (:pr-distributed:`8829`) `Hendrik Makait`_
+  - MINOR: Extract truncation logic out of partial concatenation in P2P rechunking (:pr-distributed:`8826`) `Hendrik Makait`_
+  - avoid excessive attribute access overhead for ``remove_from_task_prefix_count`` (:pr-distributed:`8821`) `Florian Jetter`_
+  - Avoid key validation if validation is disabled (:pr-distributed:`8822`) `Florian Jetter`_
+  - Log ``worker_client`` event (:pr-distributed:`8819`) `James Bourbeau`_
+
+.. _v2024.8.0:
+
+2024.8.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+Improve efficiency and performance of slicing with positional indexers
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Performance improvement for slicing a Dask Array with a positional indexer.
+Random access patterns are now more stable and produce easier-to-use results.
+
+.. code-block:: python
+
+    x[slice(None), [1, 1, 3, 6, 3, 4, 5]]
+
+Using a positional indexer was previously prone to drastically increasing the
+number of output chunks and generating a very large task graph. This has been
+fixed with a more efficient algorithm.
+
+The new algorithm will keep the chunk-sizes along the axis that is indexed
+the same to avoid fragmentation of chunks or a large increase in chunk-size.
+
+See :pr:`11262` and :pr:`11267` by `Patrick Hoefler`_ for more details and performance
+benchmarks.
+
+.. _label.xarray_groupby_ordering:
+
+Improve scheduling efficiency for Xarray GroupBy-Reduce patterns
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The scheduler previously created an inefficient execution graph for Xarray GroupBy-Reduction
+patterns like:
+
+.. code-block:: python
+
+    import xarray as xr
+
+    arr = xr.open_zarr(...)
+    arr.groupby("time.month").mean()
+
+An issue in the algorithm that creates the execution order of the task graph
+lead to an inefficient execution strategy that accumulates a lot of unneceessary memory on
+the cluster.
+
+.. image:: images/changelog/dask-order-growing-memory.png
+  :width: 75%
+  :align: center
+  :alt: Memory keeps accumulating on the cluster when running an embarassingly parallel
+    operation.
+
+The operation itself is embarassingly parallel. Using the proper execution strategy
+the scheduler can now execute the operation with constant memory, avoiding spilling
+and allowing us to scale to larger datasets.
+
+.. image:: images/changelog/dask-order-constant-memory.png
+  :width: 75%
+  :align: center
+  :alt: Same operation is running with constant memory usage for the whole computation
+    and can scale for bigger datasets.
+
+See :pr-distributed:`8818` by `Patrick Hoefler`_ for more details and examples.
+
+.. dropdown:: Additional changes
+
+  - Add changelog for dask order patch (:pr:`11278`) `Patrick Hoefler`_
+  - Add regression test for ``xarray`` map reduce (:pr:`11277`) `Florian Jetter`_
+  - Add changelog entry for ``take`` (:pr:`11274`) `Patrick Hoefler`_
+  - Revert "order: remove data task graph normalization" (:pr:`11276`) `Patrick Hoefler`_
+  - Use the shuffle algorithm for ``take`` (:pr:`11267`) `Patrick Hoefler`_
+  - Implement task-based array shuffle (:pr:`11262`) `Patrick Hoefler`_
+  - Remove data task graph normalization (:pr:`11263`) `Florian Jetter`_
+  - Update zoom link for monthly meeting (:pr:`11265`) `Sarah Charlotte Johnson`_
+  - Update data loading section of best practices (:pr:`11247`) `Patrick Hoefler`_
+  - Match default ``chunksize`` in docstring to actual default set in code (:pr:`11254`) `Bernhard Raml`_
+  - Fixup casting error in ``pandas`` 3 (:pr:`11250`) `Patrick Hoefler`_
+  - Skip new warning from ``pandas`` (:pr:`11249`) `Patrick Hoefler`_
+  - Fix ``pandas`` nightly bugs (:pr:`11244`) `Patrick Hoefler`_
+
+  - Run graph normalisation after dask order (:pr-distributed:`8818`) `Patrick Hoefler`_
+  - Update large graph size warning to remove scatter recommendation (:pr-distributed:`8815`) `Patrick Hoefler`_
+  - Fail tasks exceeding ``no-workers-timeout`` (:pr-distributed:`8806`) `Hendrik Makait`_
+  - Fix exception handling for ``NannyPlugin.setup`` and ``NannyPlugin.teardown`` (:pr-distributed:`8811`) `Hendrik Makait`_
+  - Fix exception handling for ``WorkerPlugin.setup`` and ``WorkerPlugin.teardown`` (:pr-distributed:`8810`) `Hendrik Makait`_
+  - typo fix (:pr-distributed:`8812`) `alex-rakowski`_
+  - Fix ``if`` / ``else`` for ``send_recv_from_rpc`` (:pr-distributed:`8809`) `Patrick Hoefler`_
+  - Ensure that adaptive only stops once (:pr-distributed:`8807`) `Hendrik Makait`_
+  - Reduce noise from GC-related logging (:pr-distributed:`8804`) `Hendrik Makait`_
+  - Remove unused ``delete_interval`` and  ``synchronize_worker_interval`` from ``Scheduler`` (:pr-distributed:`8801`) `Hendrik Makait`_
+  - Change log level for Compute Failed log message (:pr-distributed:`8802`) `Patrick Hoefler`_
+  - Add Prometheus metric for time spent on GC (:pr-distributed:`8803`) `Hendrik Makait`_
+  - Add Prometheus metrics for ``dask_worker_{added|removed}_total`` (:pr-distributed:`8798`) `Hendrik Makait`_
+  - Add log event for ``worker-ttl-timed-out`` (:pr-distributed:`8800`) `Hendrik Makait`_
+  - Add Prometheus metrics for ``dask_client_connections_{added|removed}_total`` (:pr-distributed:`8799`) `Hendrik Makait`_
+  - Fix ``PackageInstall`` plugin (:pr-distributed:`8794`) `Hendrik Makait`_
+  - Make stealing more robust (:pr-distributed:`8788`) `Hendrik Makait`_
+  - Leave a warning about future instantiation (:pr-distributed:`8782`) `Florian Jetter`_
+
+
+.. _v2024.7.1:
+
+2024.7.1
+--------
+
+Highlights
+^^^^^^^^^^
+
+More resilient distributed lock
+"""""""""""""""""""""""""""""""
+
+:py:class:`distributed.Lock` is now resilient to worker failures.
+Previously deadlocks were possible in cases where a lock-holding worker
+was lost and/or failed to release the lock due to an error.
+  
+See :pr-distributed:`8770` by `Florian Jetter`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Remove and warn of persist usage (:pr:`11237`) `Patrick Hoefler`_
+  - Preserve ``timestamp`` unit during ``meta`` creation (:pr:`11233`) `Patrick Hoefler`_
+  - Ensure that ``dask-expr`` ``DataFrames`` are optimized when put into ``delayed`` (:pr:`11231`) `Patrick Hoefler`_
+  - Fixes for ``d`` freq deprecation in ``pandas=3`` (:pr:`11228`) `James Bourbeau`_
+  - bump approx threshold for ``test_quantile`` (:pr:`10720`) `Florian Jetter`_
+  - Bump ``xarray-contrib/issue-from-pytest-log`` from 1.2.8 to 1.3.0 (:pr:`11221`)
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.6.1 to 4.6.3 (:pr:`11222`)
+
+  - Ensure ``Lock`` always register with scheduler (:pr-distributed:`8781`) `Florian Jetter`_
+  - Temporarily pin ``setuptools < 71`` (:pr-distributed:`8785`) `James Bourbeau`_
+  - Restore ``len()`` on ``TaskPrefix`` (:pr-distributed:`8783`) `Hendrik Makait`_
+  - Avoid false positives for ``p2p-failed`` log event (:pr-distributed:`8777`) `Hendrik Makait`_
+  - Expose paused and retired workers separately in prometheus (:pr-distributed:`8613`) `Patrick Hoefler`_
+  - Creating transitions-failures log event (:pr-distributed:`8776`) `alex-rakowski`_
+  - Implement HLG layer for P2P rechunking (:pr-distributed:`8751`) `Hendrik Makait`_
+  - Add another test for a possible deadlock scenario caused by (:pr-distributed:`8703`) (:pr-distributed:`8769`) `Hendrik Makait`_
+  - Raise an error if compute on persisted collection with released futures (:pr-distributed:`8764`) `Florian Jetter`_
+  - Re-raise ``P2PConsistencyError`` from failed P2P tasks (:pr-distributed:`8748`) `Hendrik Makait`_
+  - Robuster faster tests memory sampler (:pr-distributed:`8758`) `Florian Jetter`_
+  - Fix ``scheduler_bokeh::test_shuffling`` (:pr-distributed:`8766`) `Florian Jetter`_
+  - Increase timeouts for ``pubsub::test_client_worker`` (:pr-distributed:`8765`) `Florian Jetter`_
+  - Factor out async taskgroup (:pr-distributed:`8756`) `Florian Jetter`_
+  - Don't sort keys lexicographically in worker table (:pr-distributed:`8753`) `Florian Jetter`_
+  - Use ``functools.cache`` instead of ``functools.lru_cache`` for extremely often called functions (:pr-distributed:`8762`) `Jonas Dedden`_
+  - Robuster deeply nested structures (:pr-distributed:`8730`) `Florian Jetter`_
+  - Adding HLG to MAP (:pr-distributed:`8740`) `alex-rakowski`_
+  - Add close worker button to worker info page (:pr-distributed:`8742`) `James Bourbeau`_
+
+
+.. _v2024.7.0:
+
+2024.7.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+Drop support for pandas 1.x
+"""""""""""""""""""""""""""
+
+This release drops support for ``pandas<2``. ``pandas`` 2.0
+is now the required minimum version to run Dask DataFrame.
+
+The mimimum version of ``partd`` was also raised to 1.4.0. Versions before 1.4
+are not compatible with ``pandas`` 2.
+  
+See :pr:`11199` by `Patrick Hoefler`_ for more details.
+
+Publish-subscribe APIs deprecated
+"""""""""""""""""""""""""""""""""
+
+:py:class:`distributed.Pub` and :py:class:`distributed.Sub` have been deprecated and will be removed
+in a future release. Please switch to :py:func:`distributed.Client.log_event` and :py:func:`distributed.Worker.log_event`
+instead.
+
+See :pr-distributed:`8724` by `Hendrik Makait`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Only count data that is in memory for ``xarray`` ``sizeof`` (:pr:`11206`) `Florian Jetter`_
+  - Fix ``botocore`` re-raising error (:pr:`11209`) `Patrick Hoefler`_
+  - Update Coiled links in documentation (:pr:`11211`) `Sarah Charlotte Johnson`_
+  - Add some array-expr methods (:pr:`11210`) `Patrick Hoefler`_
+  - Fix ``quantile`` for arrow dtypes (:pr:`11202`) `Patrick Hoefler`_
+  - Add utility to verify optional dependencies (:pr:`11205`) `Patrick Hoefler`_
+  - Implement array expression switch (:pr:`11203`) `Patrick Hoefler`_
+  - Remove no longer supported ``ipython`` reference (:pr:`11196`) `Patrick Hoefler`_
+  - Remove ``from_delayed`` references (:pr:`11195`) `Patrick Hoefler`_
+  - Add other IO connectors to docs (:pr:`11189`) `Patrick Hoefler`_
+
+  - Fix ``assert_eq`` import from ``cudf`` (:pr-distributed:`8747`) `James Bourbeau`_
+  - Log traceback upon task error (:pr-distributed:`8746`) `Hendrik Makait`_
+  - Update system monitor when polling Prometheus metrics (:pr-distributed:`8745`) `Hendrik Makait`_
+  - Bump ``pandas`` to 2.0 in ``mindeps`` build (:pr-distributed:`8743`) `James Bourbeau`_
+  - Refactor event logging functionality into broker (:pr-distributed:`8731`) `Hendrik Makait`_
+  - Drop support for pandas 1.X (:pr-distributed:`8741`) `Hendrik Makait`_
+  - Remove ``is_python_shutting_down`` (:pr-distributed:`8492`) `Hendrik Makait`_
+  - Fix ``test_task_state_instance_are_garbage_collected`` (:pr-distributed:`8735`) `Hendrik Makait`_
+  - Fix floating-point inaccuracy (:pr-distributed:`8736`) `Hendrik Makait`_
+  - Fix ``pynvml`` handles (:pr-distributed:`8693`) `Benjamin Zaitlen`_
+  - ``get_ip``: handle getting ``0.0.0.0`` (:pr-distributed:`8712`) `Adam Williamson`_
+  - Remove ``FutureWarning`` in ``test_task_state_instance_are_garbage_collected`` (:pr-distributed:`8734`) `Hendrik Makait`_
+  - Fix ``mindeps``-testing on CI (:pr-distributed:`8728`) `Hendrik Makait`_
+  - Extract tests related to event-logging into separate file (:pr-distributed:`8733`) `Hendrik Makait`_
+  - Use safer context for ``ProcessPoolExecutor`` (:pr-distributed:`8715`) `Elliott Sales de Andrade`_
+  - Cache URL encoding of worker addresses in dashboard (:pr-distributed:`8725`) `Florian Jetter`_
+  - More robust ``bokeh`` ``test_shuffling`` (:pr-distributed:`8727`) `Florian Jetter`_
+  - Fix type in actor docs (:pr-distributed:`8711`) `Sultan Orazbayev`_
+  - More useful warning if a plugin type is provided instead of instance (:pr-distributed:`8689`) `Florian Jetter`_
+  - Improve error on cancelled tasks due to disconnect (:pr-distributed:`8705`) `Hendrik Makait`_
+  - Fix wait condition on ``test_forget_errors`` (:pr-distributed:`8714`) `Elliott Sales de Andrade`_
+  - Skip ``test_deadlock_dependency_of_queued_released`` (:pr-distributed:`8723`) `Hendrik Makait`_
+  - Fix ``test_quiet_client_close`` (:pr-distributed:`8722`) `Hendrik Makait`_
+  - Fix cleanup iteration in ``save_sys_modules`` (:pr-distributed:`8713`) `Elliott Sales de Andrade`_
+  - Add quotes to missing ``bokeh`` installation commands (:pr-distributed:`8717`) `James Bourbeau`_
+
+
+.. _v2024.6.2:
+
+2024.6.2
+--------
+
+This is a patch release to update an issue with ``dask`` and ``distributed``
+version pinning in the 2024.6.1 release.
+
+.. dropdown:: Additional changes
+
+  - Get docs build passing (:pr:`11184`) `James Bourbeau`_
+  - ``profile._f_lineno``: handle ``next_line`` being ``None`` in Python 3.13 (:pr:`8710`) `Adam Williamson`_
+
+.. _v2024.6.1:
+
+2024.6.1
+--------
+
+Highlights
+^^^^^^^^^^
+
+This release includes a critical fix that fixes a deadlock that can arise
+when dependencies of root-ish tasks are rescheduled, e.g. due to a worker being
+lost.
+
+See :pr-distributed:`8703` by `Hendrik Makait`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Cache global query-planning config (:pr:`11183`) `Richard (Rick) Zamora`_
+  - Python 3.13 fixes (:pr:`11185`) `Adam Williamson`_
+  - Fix ``test_map_freq_to_period_start`` for ``pandas=3`` (:pr:`11181`) `James Bourbeau`_
+  - Bump release-drafter/release-drafter from 5 to 6 (:pr-distributed:`8699`)
+
+
+.. _v2024.6.0:
+
+2024.6.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+memmap array tokenization
+"""""""""""""""""""""""""
+Tokenizing ``memmap`` arrays will now avoid materializing the array into memory.
+
+See :pr:`11161` by `Florian Jetter`_ for more details.
+
+
+.. dropdown:: Additional changes
+
+  - Fix ``test_dt_accessor`` with query planning disabled (:pr:`11177`) `James Bourbeau`_
+  - Use ``packaging.version.Version`` (:pr:`11171`) `James Bourbeau`_
+  - Remove deprecated ``dask.compatibility`` module (:pr:`11172`) `James Bourbeau`_
+  - Ensure compatibility for ``xarray.NamedArray`` (:pr:`11168`) `Hendrik Makait`_
+  - Estimate sizes of ``xarray`` collections (:pr:`11166`) `Florian Jetter`_
+  - Add section about futures and variables (:pr:`11164`) `Florian Jetter`_
+  - Update docs for combined Dask community meeting info (:pr:`11159`) `Sarah Charlotte Johnson`_
+
+  - Avoid rounding error in ``test_prometheus_collect_count_total_by_cost_multipliers`` (:pr-distributed:`8687`) `Hendrik Makait`_
+  - Log key collision count in ``update_graph`` log event (:pr-distributed:`8692`) `Hendrik Makait`_
+  - Automate GitHub Releases when new tags are pushed (:pr-distributed:`8626`) `Jacob Tomlinson`_
+  - Fix log event with multiple topics (:pr-distributed:`8691`) `Hendrik Makait`_
+  - Rename ``safe`` to ``expected`` in ``Scheduler.remove_worker`` (:pr-distributed:`8686`) `Hendrik Makait`_
+  - Log event during failure (:pr-distributed:`8663`) `Hendrik Makait`_
+  - Eagerly update aggregate statistics for ``TaskPrefix`` instead of calculating them on-demand (:pr-distributed:`8681`) `Hendrik Makait`_
+  - Improve graph submission time for P2P rechunking by avoiding unpack recursion into indices (:pr-distributed:`8672`) `Florian Jetter`_
+  - Add safe keyword to ``remove-worker`` event (:pr-distributed:`8647`) `alex-rakowski`_
+  - Improved errors and reduced logging for P2P RPC calls (:pr-distributed:`8666`) `Hendrik Makait`_
+  - Adjust P2P tests for ``dask-expr`` (:pr-distributed:`8662`) `Hendrik Makait`_
+  - Iterate over copy of ``Server.digests_total_since_heartbeat`` to avoid ``RuntimeError`` (:pr-distributed:`8670`) `Hendrik Makait`_
+  - Log task state in Compute Failed (:pr-distributed:`8668`) `Hendrik Makait`_
+  - Add Prometheus gauge for task groups (:pr-distributed:`8661`) `Hendrik Makait`_
+  - Fix too strict assertion in shuffle code for ``pandas`` subclasses (:pr-distributed:`8667`) `Joris Van den Bossche`_
+  - Reduce noise from erring tasks that are not supposed to be running (:pr-distributed:`8664`) `Hendrik Makait`_
+
+
 .. _v2024.5.2:
 
 2024.5.2
@@ -8221,3 +8612,8 @@ Other
 .. _`M Bussonnier`: https://github.com/Carreau
 .. _`Greg M. Fleishman`: https://github.com/GFleishman
 .. _`Victor Stinner`: https://github.com/vstinner
+.. _`alex-rakowski`: https://github.com/alex-rakowski
+.. _`Adam Williamson`: https://github.com/AdamWill
+.. _`Jonas Dedden`: https://github.com/jonded94
+.. _`Bernhard Raml`: https://github.com/SwamyDev
+.. _`Lucas Colley`: https://github.com/lucascolley

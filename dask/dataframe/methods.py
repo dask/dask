@@ -10,9 +10,6 @@ from pandas.errors import PerformanceWarning
 from tlz import partition
 
 from dask.dataframe._compat import (
-    PANDAS_GE_131,
-    PANDAS_GE_140,
-    PANDAS_GE_200,
     check_apply_dataframe_deprecation,
     check_applymap_dataframe_deprecation,
     check_convert_dtype_deprecation,
@@ -79,7 +76,7 @@ def try_loc(df, iindexer, cindexer=None):
         return df.head(0).loc[:, cindexer]
 
 
-def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kind=None):
+def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True):
     """Index slice start/stop. Can switch include/exclude boundaries.
 
     Examples
@@ -114,20 +111,7 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
     if len(df.index) == 0:
         return df
 
-    if PANDAS_GE_131:
-        if kind is not None:
-            warnings.warn(
-                "The `kind` argument is no longer used/supported. "
-                "It will be dropped in a future release.",
-                category=FutureWarning,
-            )
-        kind_opts = {}
-        kind = "loc"
-    else:
-        kind = kind or "loc"
-        kind_opts = {"kind": kind}
-
-    if kind == "loc" and not df.index.is_monotonic_increasing:
+    if not df.index.is_monotonic_increasing:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
@@ -144,12 +128,12 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
                 df = df[df.index < stop]
         return df
 
-    result = getattr(df, kind)[start:stop]
+    result = df.loc[start:stop]
     if not right_boundary and stop is not None:
-        right_index = result.index.get_slice_bound(stop, "left", **kind_opts)
+        right_index = result.index.get_slice_bound(stop, "left")
         result = result.iloc[:right_index]
     if not left_boundary and start is not None:
-        left_index = result.index.get_slice_bound(start, "right", **kind_opts)
+        left_index = result.index.get_slice_bound(start, "right")
         result = result.iloc[left_index:]
     return result
 
@@ -210,8 +194,13 @@ def describe_aggregate(values):
 
 
 def describe_numeric_aggregate(
-    stats, name=None, is_timedelta_col=False, is_datetime_col=False
+    stats,
+    name=None,
+    is_timedelta_col=False,
+    is_datetime_col=False,
+    unit="ns",
 ):
+    unit = unit or "ns"
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
@@ -221,17 +210,17 @@ def describe_numeric_aggregate(
         typ = type(q)
 
     if is_timedelta_col:
-        mean = pd.to_timedelta(mean)
-        std = pd.to_timedelta(std)
-        min = pd.to_timedelta(min)
-        max = pd.to_timedelta(max)
-        q = q.apply(lambda x: pd.to_timedelta(x))
+        mean = pd.to_timedelta(mean, unit=unit).as_unit(unit)
+        std = pd.to_timedelta(std, unit=unit).as_unit(unit)
+        min = pd.to_timedelta(min, unit=unit).as_unit(unit)
+        max = pd.to_timedelta(max, unit=unit).as_unit(unit)
+        q = q.apply(lambda x: pd.to_timedelta(x, unit=unit).as_unit(unit))
 
     if is_datetime_col:
         # mean is not implemented for datetime
-        min = pd.to_datetime(min)
-        max = pd.to_datetime(max)
-        q = q.apply(lambda x: pd.to_datetime(x))
+        min = pd.to_datetime(min, unit=unit).as_unit(unit)
+        max = pd.to_datetime(max, unit=unit).as_unit(unit)
+        q = q.apply(lambda x: pd.to_datetime(x, unit=unit).as_unit(unit))
 
     if is_datetime_col:
         part1 = typ([count, min], index=["count", "min"])
@@ -354,8 +343,7 @@ def assign(df, *pairs):
     # (to avoid modifying the original)
     # Setitem never modifies an array inplace with pandas 1.4 and up
     pairs = dict(partition(2, pairs))
-    deep = bool(set(pairs) & set(df.columns)) and not PANDAS_GE_140
-    df = df.copy(deep=bool(deep))
+    df = df.copy(deep=False)
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
@@ -390,7 +378,7 @@ def value_counts_aggregate(
         out /= total_length if total_length is not None else out.sum()
     if sort:
         out = out.sort_values(ascending=ascending)
-    if PANDAS_GE_200 and normalize:
+    if normalize:
         out.name = "proportion"
     return out
 

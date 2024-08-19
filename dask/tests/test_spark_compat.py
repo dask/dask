@@ -18,7 +18,6 @@ dd = pytest.importorskip("dask.dataframe")
 import numpy as np
 import pandas as pd
 
-from dask.dataframe._compat import PANDAS_GE_150, PANDAS_GE_200
 from dask.dataframe.utils import assert_eq
 
 pytestmark = [
@@ -26,8 +25,7 @@ pytestmark = [
         sys.platform != "linux",
         reason="Unnecessary, and hard to get spark working on non-linux platforms",
     ),
-    pytest.mark.skipif(
-        PANDAS_GE_200,
+    pytest.mark.skip(
         reason="pyspark doesn't yet have support for pandas 2.0",
     ),
     # we only test with pyarrow strings and pandas 2.0
@@ -175,7 +173,6 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
     assert_eq(ddf, pdf, check_index=False)
 
 
-@pytest.mark.skipif(not PANDAS_GE_150, reason="Requires pyarrow-backed nullable dtypes")
 def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     tmpdir = str(tmpdir)
     npartitions = 3
