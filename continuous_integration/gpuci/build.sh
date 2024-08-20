@@ -38,8 +38,7 @@ rapids-logger "Activate conda env"
 conda activate dask
 
 rapids-logger "Install distributed"
-python -m pip install git+https://github.com/hendrikmakait/distributed@use-rechunking-to-prechunk 
-
+python -m pip install git+https://github.com/dask/distributed
 
 rapids-logger "Install dask"
 python -m pip install --no-deps -e .
