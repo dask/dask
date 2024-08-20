@@ -115,7 +115,7 @@ _out_chunk_fns = {
 }
 
 
-def fft_wrap(fft_func, kind=None, dtype=None):
+def fft_wrap(fft_func, kind=None, dtype=None, allow_fftpack=False):
     """Wrap 1D, 2D, and ND real and complex FFT functions
 
     Takes a function that behaves like ``numpy.fft`` functions and
@@ -147,7 +147,17 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     """
     if scipy is not None:
         if fft_func.__module__.startswith("scipy.fftpack"):
-            raise ValueError("SciPy's `fftpack` functions don't match the NumPy API.")
+            if not allow_fftpack:
+                warnings.warn(
+                    f"Function {fft_func.__name__} from `scipy.fftpack` does not "
+                    "match NumPy's API and is considered legacy. Please use "
+                    "`scipy.fft` instead. To suppress this warning and allow usage"
+                    ", set `allow_fftpack=True`. Support for `scipy.fftpack` will "
+                    "be deprecated in future releases.",
+                    DeprecationWarning,
+                )
+            # If allow_fftpack is True, we proceed but we skip passing the norm
+            # argument.
 
     if kind is None:
         kind = fft_func.__name__
