@@ -277,3 +277,17 @@ def test_fftshift_identity(funcname1, funcname2, shape, chunks, axes):
             assert len(each_d_r_chunks) != 1
 
     assert_eq(d_r, d)
+
+
+@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fft", "scipy.fftpack"])
+def test_scipy_fftpack_future_warning(modname):
+    fft_mod = pytest.importorskip(modname)
+
+    if modname == "scipy.fftpack":
+        # Check that a FutureWarning is raised when using scipy.fftpack with allow_fftpack=False
+        with pytest.warns(
+            FutureWarning, match="does not match NumPy's API and is considered legacy"
+        ):
+            da.fft.fft_wrap(fft_mod.fft, allow_fftpack=False)(np.random.random(16))
+    else:
+        da.fft.fft_wrap(fft_mod.fft, allow_fftpack=False)(np.random.random(16))

@@ -154,7 +154,7 @@ def fft_wrap(fft_func, kind=None, dtype=None, allow_fftpack=False):
                     "`scipy.fft` instead. To suppress this warning and allow usage"
                     ", set `allow_fftpack=True`. Support for `scipy.fftpack` will "
                     "be deprecated in future releases.",
-                    DeprecationWarning,
+                    FutureWarning,
                 )
             # If allow_fftpack is True, we proceed but we skip passing the norm
             # argument.
