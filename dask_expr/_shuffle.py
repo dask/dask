@@ -657,7 +657,7 @@ def _is_column_label_reference(df, key):
     """
     return (
         not isinstance(key, Expr)
-        and (np.isscalar(key) or isinstance(key, tuple))
+        and (np.isscalar(key) or pd.api.types.is_scalar(key) or isinstance(key, tuple))
         and key in df.columns
     )
 
@@ -683,7 +683,7 @@ def _is_index_level_reference(df, key):
     return (
         index_name is not None
         and not isinstance(key, Expr)
-        and (np.isscalar(key) or isinstance(key, tuple))
+        and (np.isscalar(key) or pd.api.types.is_scalar(key) or isinstance(key, tuple))
         and key == index_name
         and key not in getattr(df, "columns", ())
     )

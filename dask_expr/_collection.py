@@ -902,6 +902,8 @@ Expr={expr}"""
                 on = list(on)
             elif isinstance(on, str) or isinstance(on, int):
                 on = [on]
+            elif on_index:
+                on = []
             bad_cols = [
                 index_col
                 for index_col in on

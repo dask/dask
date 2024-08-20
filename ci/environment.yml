@@ -9,6 +9,7 @@ dependencies:
   - pyarrow>=7
   - pandas>=2
   - pre-commit
+  - sqlalchemy
   - xarray
   - pip:
       - git+https://github.com/dask/distributed
