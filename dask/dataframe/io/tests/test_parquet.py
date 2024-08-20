@@ -4888,6 +4888,11 @@ def test_read_parquet_lists_not_converting(tmpdir):
 def test_parquet_string_roundtrip(tmpdir):
     pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
     pdf.to_parquet(tmpdir + "string.parquet")
+    if not pyarrow_strings_enabled():
+        # If auto pyarrow strings aren't enabled, we match pandas behavior.
+        # Pandas currently doesn't roundtrip `string[pyarrow]` through parquet.
+        # See https://github.com/pandas-dev/pandas/issues/42664
+        pdf = pd.read_parquet(tmpdir + "string.parquet")
     df = dd.read_parquet(tmpdir + "string.parquet")
     assert_eq(df, pdf)
     pd.testing.assert_frame_equal(df.compute(), pdf)
