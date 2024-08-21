@@ -11,6 +11,7 @@ import traceback
 import uuid
 import warnings
 from bisect import bisect
+from collections import defaultdict
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
@@ -5540,20 +5541,38 @@ def _vindex_array(x, dict_indexes):
     token = tokenize(x, flat_indexes)
     out_name = "vindex-merge-" + token
 
+    max_chunk_point_dimensions = reduce(
+        mul, map(max, [c for i, c in zip(flat_indexes, x.chunks) if i is not None])
+    )
+
     points = list()
     for i, idx in enumerate(zip(*[i for i in flat_indexes if i is not None])):
         block_idx = [bisect(b, ind) - 1 for b, ind in zip(bounds2, idx)]
         inblock_idx = [
             ind - bounds2[k][j] for k, (ind, j) in enumerate(zip(idx, block_idx))
         ]
-        points.append((i, tuple(block_idx), tuple(inblock_idx)))
+        points.append(
+            (
+                divmod(i, max_chunk_point_dimensions)[1],
+                tuple(block_idx),
+                tuple(inblock_idx),
+                (i // max_chunk_point_dimensions,) + tuple(block_idx),
+            )
+        )
 
     chunks = [c for i, c in zip(flat_indexes, x.chunks) if i is None]
-    chunks.insert(0, (len(points),) if points else (0,))
+    n_chunks, remainder = divmod(len(points), max_chunk_point_dimensions)
+    chunks.insert(
+        0,
+        (max_chunk_point_dimensions,) * n_chunks
+        + ((remainder,) if remainder > 0 else ())
+        if points
+        else (0,),
+    )
     chunks = tuple(chunks)
 
     if points:
-        per_block = groupby(1, points)
+        per_block = groupby(3, points)
         per_block = {k: v for k, v in per_block.items() if v}
 
         other_blocks = list(
@@ -5571,23 +5590,28 @@ def _vindex_array(x, dict_indexes):
         vindex_merge_name = "vindex-merge-" + token
         dsk = {}
         for okey in other_blocks:
+            merge_inputs = defaultdict(list)
+            merge_indexer = defaultdict(list)
             for i, key in enumerate(per_block):
                 dsk[keyname(name, i, okey)] = (
                     _vindex_transpose,
                     (
                         _vindex_slice,
-                        (x.name,) + interleave_none(okey, key),
+                        (x.name,) + interleave_none(okey, tuple(list(key)[1:])),
                         interleave_none(
                             full_slices, list(zip(*pluck(2, per_block[key])))
                         ),
                     ),
                     axis,
                 )
-            dsk[keyname(vindex_merge_name, 0, okey)] = (
-                _vindex_merge,
-                [list(pluck(0, per_block[key])) for key in per_block],
-                [keyname(name, i, okey) for i in range(len(per_block))],
-            )
+                merge_inputs[key[0]].append(keyname(name, i, okey))
+                merge_indexer[key[0]].append(list(pluck(0, per_block[key])))
+            for i in sorted(merge_inputs.keys()):
+                dsk[keyname(vindex_merge_name, i, okey)] = (
+                    _vindex_merge,
+                    merge_indexer[i],
+                    merge_inputs[i],
+                )
 
         result_1d = Array(
             HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),
