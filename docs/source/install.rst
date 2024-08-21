@@ -110,7 +110,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `cityhash`_      | ``>=0.2.4``     | Use CityHash and FarmHash hash functions for array hashing (~2x faster than MurmurHash)                 |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `crick`_         | ``>=0.0.3``     | Use ``tdigest`` internal method for dataframe statistics computation                                    |
+| `crick`_         | ``>=0.0.5``     | Use ``tdigest`` internal method for dataframe statistics computation                                    |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `cytoolz`_       | ``>=0.11.2``    | Faster cythonized implementation of internal iterators, functions, and dictionaries                     |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -154,7 +154,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `scipy`_         | ``>=1.7.2``     | Required for ``dask.array.stats``, ``dask.array.fft``, and :func:`dask.array.linalg.lu`                 |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `sparse`_        | ``>=0.12.0``    | Use sparse arrays as backend for dask arrays                                                            |
+| `sparse`_        | ``>=0.13.0``    | Use sparse arrays as backend for dask arrays                                                            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `sqlalchemy`_    | ``>=1.4.26``    | Writing and reading from SQL databases                                                                  |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+

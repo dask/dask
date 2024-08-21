@@ -39,7 +39,7 @@ dependencies:
   # - tiledb # crashes on Python 3.11
   - xarray
   - sqlalchemy
-  - pyarrow>=13
+  - pyarrow>=14.0.1
   - coverage
   - jsonschema
   # other -- IO
@@ -73,5 +73,8 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
-    - git+https://github.com/dask/dask-expr
+    # TODO: Undo
+    - git+https://github.com/jrbourbeau/distributed.git@numpy-124
+    - git+https://github.com/jrbourbeau/dask-expr.git@pyarrow-14
+    # - git+https://github.com/dask/distributed
+    # - git+https://github.com/dask/dask-expr

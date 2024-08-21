@@ -13,17 +13,17 @@ dependencies:
   - importlib-metadata=4.13.0
   - toolz=0.10.0
   # optional dependencies pulled in by pip install dask[array,dataframe]
-  - numpy=1.21
+  - numpy=1.24
   - pandas=2.0
   # optional dependencies pulled in by pip install dask[diagnostics]
   - bokeh=2.4.2
   - jinja2=2.10.3
   # optional dependencies pulled in by pip install dask[complete]
-  - pyarrow=7.0
+  - pyarrow=14.0.1
   - lz4=4.3.2
   # optional dependencies used by dask
   - cachey=0.1.1
-  - crick=0.0.3
+  - crick=0.0.5
   - cytoolz=0.11.2
   - dask-ml=1.4.0
   - fastavro=1.4.7
@@ -42,7 +42,7 @@ dependencies:
   - s3fs=2021.9.0
   - scikit-image=0.19.0
   - scipy=1.7.2
-  - sparse=0.12.0
+  - sparse=0.13.0
   - sqlalchemy=1.4.26
   - tblib=1.6.0
   - tiledb-py=0.12

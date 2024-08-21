@@ -15,7 +15,7 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.numpy_compat import NUMPY_GE_123, NUMPY_GE_200, AxisError
+from dask.array.numpy_compat import NUMPY_GE_200, AxisError
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -2595,9 +2595,8 @@ def test_average_keepdims(a):
 
     da_avg = da.average(d_a, keepdims=True)
 
-    if NUMPY_GE_123:
-        np_avg = np.average(a, keepdims=True)
-        assert_eq(np_avg, da_avg)
+    np_avg = np.average(a, keepdims=True)
+    assert_eq(np_avg, da_avg)
 
 
 @pytest.mark.parametrize("keepdims", [False, True])
@@ -2610,10 +2609,7 @@ def test_average_weights(keepdims):
 
     da_avg = da.average(d_a, weights=d_weights, axis=1, keepdims=keepdims)
 
-    if NUMPY_GE_123:
-        assert_eq(da_avg, np.average(a, weights=weights, axis=1, keepdims=keepdims))
-    elif not keepdims:
-        assert_eq(da_avg, np.average(a, weights=weights, axis=1))
+    assert_eq(da_avg, np.average(a, weights=weights, axis=1, keepdims=keepdims))
 
 
 def test_average_raises():
