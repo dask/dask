@@ -46,7 +46,7 @@ dynamic = ["version"]
 [project.optional-dependencies]
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
-array = ["numpy >= 1.21"]
+array = ["numpy >= 1.24"]
 # keeping for backwards compatibility
 bag = []
 dataframe = [
@@ -63,10 +63,7 @@ diagnostics = [
 delayed = []
 complete = [
     "dask[array,dataframe,distributed,diagnostics]",
-    "pyarrow >= 7.0",
-    # Can be removed once minimal pyarrow version is >14.0.1
-    # https://lists.apache.org/thread/yhy7tdfjf9hrl9vfrtzo8p2cyjq87v7n
-    "pyarrow_hotfix",
+    "pyarrow >= 14.0.1",
     "lz4 >= 4.3.2",
 ]
 test = [

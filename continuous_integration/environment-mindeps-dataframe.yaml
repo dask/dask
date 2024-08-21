@@ -13,7 +13,7 @@ dependencies:
   - importlib-metadata=4.13.0
   - toolz=0.10.0
   # optional dependencies pulled in by pip install dask[dataframe]
-  - numpy=1.21
+  - numpy=1.24
   - pandas=2.0
   # test dependencies
   - pre-commit

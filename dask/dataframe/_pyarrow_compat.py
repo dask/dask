@@ -1,29 +1,7 @@
 from __future__ import annotations
 
-import warnings
-
-from packaging.version import Version
-
 try:
     import pyarrow as pa
-
-    pa_version = pa.__version__
-    if Version(pa_version) < Version("14.0.1"):
-        try:
-            import pyarrow_hotfix  # noqa: F401
-
-            warnings.warn(
-                "Minimal version of pyarrow will soon be increased to 14.0.1. "
-                f"You are using {pa_version}. Please consider upgrading.",
-                FutureWarning,
-            )
-        except ImportError:
-            warnings.warn(
-                f"You are using pyarrow version {pa_version} which is "
-                "known to be insecure. See https://www.cve.org/CVERecord?id=CVE-2023-47248 "
-                "for further details. Please upgrade to pyarrow>=14.0.1 "
-                "or install pyarrow-hotfix to patch your current version."
-            )
 except ImportError:
     pa = None
 
