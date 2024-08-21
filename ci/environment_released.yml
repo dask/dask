@@ -6,6 +6,6 @@ dependencies:
   - pytest-cov
   - pytest-xdist
   - dask
-  - pyarrow>=7
+  - pyarrow>=14.0.1
   - pandas>=2
   - pre-commit
