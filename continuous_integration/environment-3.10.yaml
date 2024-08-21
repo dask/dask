@@ -75,8 +75,5 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    # TODO: Undo
-    - git+https://github.com/jrbourbeau/distributed.git@numpy-124
-    - git+https://github.com/jrbourbeau/dask-expr.git@pyarrow-14
-    # - git+https://github.com/dask/distributed
-    # - git+https://github.com/dask/dask-expr
+    - git+https://github.com/dask/distributed
+    - git+https://github.com/dask/dask-expr
