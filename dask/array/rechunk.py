@@ -404,7 +404,7 @@ import math
 def _graph_size_threshold(old_chunks, new_chunks):
     n_old_blocks = _number_of_blocks(old_chunks)
     n_new_blocks = _number_of_blocks(new_chunks)
-    return n_old_blocks * n_new_blocks / math.sqrt(n_old_blocks + n_new_blocks)
+    return max(n_old_blocks, n_new_blocks) * math.sqrt(min(n_old_blocks, n_new_blocks))
 
 
 def _number_of_blocks(chunks):
