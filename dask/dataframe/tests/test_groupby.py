@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import operator
+import sys
 import warnings
 from datetime import datetime
 from functools import partial
@@ -12,6 +13,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+from dask._compatibility import WINDOWS
 from dask.dataframe import _compat
 from dask.dataframe._compat import (
     PANDAS_GE_210,
@@ -1641,6 +1643,10 @@ def test_groupby_numeric_column():
     assert_eq(ddf.groupby(ddf.A)[0].sum(), df.groupby(df.A)[0].sum())
 
 
+@pytest.mark.skipif(
+    WINDOWS and sys.version_info < (3, 11),
+    reason="https://github.com/dask/dask/pull/11320#issuecomment-2293798597",
+)
 @pytest.mark.parametrize("sel", ["a", "c", "d", ["a", "b"], ["c", "d"]])
 @pytest.mark.parametrize("key", ["a", ["a", "b"]])
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "cumcount"])
@@ -1667,6 +1673,10 @@ def test_series_groupby_multi_character_column_name():
     assert_eq(df.groupby("aa").aa.cumsum(), ddf.groupby("aa").aa.cumsum())
 
 
+@pytest.mark.skipif(
+    WINDOWS and sys.version_info < (3, 11),
+    reason="https://github.com/dask/dask/pull/11320#issuecomment-2293798597",
+)
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="axis doesn't exist in dask-expr")
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
 def test_cumulative_axis(func):
@@ -1769,6 +1779,10 @@ def test_groupby_string_label():
     tm.assert_frame_equal(result, expected)
 
 
+@pytest.mark.skipif(
+    WINDOWS and sys.version_info < (3, 11),
+    reason="https://github.com/dask/dask/pull/11320#issuecomment-2293798597",
+)
 @pytest.mark.parametrize("op", ["cumsum", "cumprod"])
 def test_groupby_dataframe_cum_caching(op):
     """Test caching behavior of cumulative operations on grouped dataframes.
@@ -1850,6 +1864,10 @@ def test_groupby_agg_grouper_multiple(slice_):
     assert_eq(result, expected)
 
 
+@pytest.mark.skipif(
+    WINDOWS and sys.version_info < (3, 11),
+    reason="https://github.com/dask/dask/pull/11320#issuecomment-2293798597",
+)
 @pytest.mark.parametrize(
     "agg_func",
     [
@@ -3586,6 +3604,10 @@ def test_groupby_numeric_only_not_implemented(func, numeric_only):
         getattr(ddf.groupby("A"), func)(**kwargs)
 
 
+@pytest.mark.skipif(
+    WINDOWS and sys.version_info < (3, 11),
+    reason="https://github.com/dask/dask/pull/11320#issuecomment-2293798597",
+)
 @pytest.mark.parametrize(
     "func",
     [

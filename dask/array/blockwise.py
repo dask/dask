@@ -122,7 +122,7 @@ def blockwise(
 
     >>> z = blockwise(sequence_dot, '', a, 'i', b, 'i', dtype='f8')
     >>> z.compute()
-    250
+    np.int64(250)
 
     Add new single-chunk dimensions with the ``new_axes=`` keyword, including
     the length of the new dimension.  New dimensions will always be in a single
