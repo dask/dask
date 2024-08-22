@@ -392,19 +392,10 @@ def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
     except (ImportError, ValueError):
         return "tasks"
 
-    graph_size = estimate_graph_size(old_chunks, new_chunks)
-
-    graph_size_treshold = _graph_size_threshold(old_chunks, new_chunks)
-    return "tasks" if graph_size < graph_size_treshold else "p2p"
-
-
-import math
-
-
-def _graph_size_threshold(old_chunks, new_chunks):
-    n_old_blocks = _number_of_blocks(old_chunks)
-    n_new_blocks = _number_of_blocks(new_chunks)
-    return max(n_old_blocks, n_new_blocks) * math.sqrt(min(n_old_blocks, n_new_blocks))
+    _old_to_new = old_to_new(old_chunks, new_chunks)
+    graph_size = mul(*(sum(len(ins) for ins in axis) for axis in _old_to_new))
+    graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
+    return "tasks" if graph_size < graph_size_threshold else "p2p"
 
 
 def _number_of_blocks(chunks):
@@ -422,11 +413,7 @@ def estimate_graph_size(old_chunks, new_chunks):
     crossed_size = reduce(
         mul,
         (
-            (
-                len(oc) + len(nc) - 1
-                if np.array_equal(oc, nc, equal_nan=True)
-                else len(oc)
-            )
+            (len(oc) + len(nc) - 1 if oc != nc else len(oc))
             for oc, nc in zip(old_chunks, new_chunks)
         ),
     )
@@ -645,9 +632,7 @@ def plan_rechunk(
     block_size_limit = max([block_size_limit, largest_old_block, largest_new_block])
 
     # The graph size above which to optimize
-    graph_size_threshold = threshold * (
-        _number_of_blocks(old_chunks) + _number_of_blocks(new_chunks)
-    )
+    graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
 
     current_chunks = old_chunks
     first_pass = True
@@ -682,6 +667,10 @@ def plan_rechunk(
         first_pass = False
 
     return steps + [new_chunks]
+
+
+def _graph_size_threshold(old_chunks, new_chunks, threshold):
+    return threshold * (_number_of_blocks(old_chunks) + _number_of_blocks(new_chunks))
 
 
 def _compute_rechunk(x, chunks):
