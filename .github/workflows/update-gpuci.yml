@@ -58,7 +58,7 @@ jobs:
         if: ${{ env.UCX_PY_VER != env.NEW_UCX_PY_VER }}  # make sure new ucx-py nightlies are available
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          draft: true
+          draft: false
           commit-message: "Update gpuCI `RAPIDS_VER` to `${{ env.NEW_RAPIDS_VER }}`"
           title: "Update gpuCI `RAPIDS_VER` to `${{ env.NEW_RAPIDS_VER }}`"
           author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
