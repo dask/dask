@@ -136,7 +136,9 @@ class Concat(Expr):
         dfs = self._frames
         if self.axis == 1:
             if self._are_co_alinged_or_single_partition:
-                return ConcatIndexed(self.ignore_order, self._kwargs, self.axis, *dfs)
+                return ConcatIndexed(
+                    self.ignore_order, self._kwargs, self.axis, self.join, *dfs
+                )
 
             elif (
                 all(not df.known_divisions for df in dfs)
@@ -149,7 +151,9 @@ class Concat(Expr):
                         " are \n aligned. This assumption is not generally "
                         "safe."
                     )
-                return ConcatUnindexed(self.ignore_order, self._kwargs, self.axis, *dfs)
+                return ConcatUnindexed(
+                    self.ignore_order, self._kwargs, self.axis, self.join, *dfs
+                )
             elif self._all_known_divisions:
                 from dask_expr._repartition import Repartition
 
@@ -338,9 +342,9 @@ class StackPartitionInterleaved(StackPartition):
 
 
 class ConcatUnindexed(Blockwise):
-    _parameters = ["ignore_order", "_kwargs", "axis"]
-    _defaults = {"ignore_order": False, "_kwargs": {}, "axis": 1}
-    _keyword_only = ["ignore_order", "_kwargs", "axis"]
+    _parameters = ["ignore_order", "_kwargs", "axis", "join"]
+    _defaults = {"ignore_order": False, "_kwargs": {}, "axis": 1, "join": "outer"}
+    _keyword_only = ["ignore_order", "_kwargs", "axis", "join"]
 
     @functools.cached_property
     def _meta(self):
@@ -348,15 +352,19 @@ class ConcatUnindexed(Blockwise):
             [df._meta for df in self.dependencies()],
             ignore_order=self.ignore_order,
             axis=self.axis,
+            join=self.join,
             **self.operand("_kwargs"),
         )
 
     @staticmethod
-    def operation(*args, ignore_order, _kwargs, axis):
+    def operation(*args, ignore_order, _kwargs, axis, join):
         return concat_and_check(args, ignore_order=ignore_order)
 
 
 class ConcatIndexed(ConcatUnindexed):
     @staticmethod
-    def operation(*args, ignore_order, _kwargs, axis):
-        return methods.concat(args, ignore_order=ignore_order, axis=axis)
+    def operation(*args, ignore_order, _kwargs, axis, join):
+        return methods.concat(args, ignore_order=ignore_order, axis=axis, join=join)
+
+    def _broadcast_dep(self, dep: Expr):
+        return dep.npartitions == 1

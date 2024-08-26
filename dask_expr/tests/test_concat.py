@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from dask_expr import DataFrame, FrameBase, Len, Series, concat, from_pandas
+from dask_expr import DataFrame, FrameBase, Len, Series, concat, from_dict, from_pandas
 from dask_expr.tests._util import _backend_library, assert_eq
 
 # Set DataFrame backend for this module
@@ -348,4 +348,15 @@ def test_concat_series_and_projection(df, pdf):
 
     result = concat([df.x, df.y], axis=1)[["x"]]
     expected = pd.concat([pdf.x, pdf.y], axis=1)[["x"]]
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("npartitions", [1, 2])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+def test_concat_single_partition_known_divisions(join, npartitions):
+    df1 = from_dict({"a": [1, 2, 3], "b": [1, 2, 3]}, npartitions=npartitions)
+    df2 = from_dict({"c": [1, 2]}, npartitions=npartitions)
+
+    result = concat([df1, df2], axis=1, join=join)
+    expected = pd.concat([df1.compute(), df2.compute()], axis=1, join=join)
     assert_eq(result, expected)
