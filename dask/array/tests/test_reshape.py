@@ -348,6 +348,9 @@ def test_reshape_blockwise():
     ]
     expected = np.concatenate(expected, axis=0)
     assert_eq(result, expected)
+    result2 = reshape_blockwise(result, (6, 3, 3), chunks=arr.chunks)
+    assert_eq(arr, result2)
+    assert result2.chunks == arr.chunks
 
     result = reshape_blockwise(arr, (6, 9))
     assert result.chunks == ((3, 3), (4, 2, 2, 1))
@@ -383,12 +386,17 @@ def test_reshape_blockwise():
     #  [18 19 21 22 20 23 24 25 26]]
     expected = np.concatenate(expected, axis=0)
     assert_eq(result, expected)
+    result2 = reshape_blockwise(result, (6, 3, 3), chunks=arr.chunks)
+    assert_eq(arr, result2)
+    assert result2.chunks == arr.chunks
 
 
 def test_reshape_blockwise_raises_for_exansion():
     x = np.arange(0, 54).reshape(6, 3, 3)
     arr = from_array(x, chunks=(3, 2, (2, 1)))
-    with pytest.raises(NotImplementedError, match="not implemented for expanding"):
+    with pytest.raises(
+        TypeError, match="Need to specify chunks if expanding dimensions."
+    ):
         reshape_blockwise(arr, (2, 3, 3, 3))
 
 

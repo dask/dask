@@ -377,7 +377,11 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     return Array(graph, name, outchunks, meta=meta)
 
 
-def reshape_blockwise(x: Array, shape: int | tuple[int, ...]) -> Array:
+def reshape_blockwise(
+    x: Array,
+    shape: int | tuple[int, ...],
+    chunks: tuple[tuple[int], ...] | None = None,
+) -> Array:
     """Blockwise-reshape into a new shape.
 
     The regular reshape operation in Dask preserves C-ordering in the array
@@ -387,7 +391,7 @@ def reshape_blockwise(x: Array, shape: int | tuple[int, ...]) -> Array:
     Blockwise-reshape reshapes every block into the new shape and concatenates
     the results. This is a trivial blockwise computation but will return the
     result in a different order than NumPy. This is a good solution for
-    operations that don't rely on the order.
+    subsequent operations that don't rely on the order.
 
     Parameters
     ----------
@@ -398,6 +402,15 @@ def reshape_blockwise(x: Array, shape: int | tuple[int, ...]) -> Array:
         an integer, then the result will be a 1-D array of that length.
         One shape dimension can be -1. In this case, the value is
         inferred from the length of the array and remaining dimensions.
+    chunks: tuple of ints, default None
+        The chunk sizes for every chunk in the output array. Dask will expand
+        the chunks per dimension into the cross product of chunks for every
+        chunk in the array.
+
+        .. note::
+            This information is required if the number of dimensions is increased.
+            Dask cannot infer the output chunks in this case. The keyword is ignored
+            if the number of dimensions is reduced.
 
     Notes
     -----
@@ -423,6 +436,19 @@ def reshape_blockwise(x: Array, shape: int | tuple[int, ...]) -> Array:
     array([[ 0,  1,  3,  4,  2,  5,  6,  7,  8],
            [ 9, 10, 12, 13, 11, 14, 15, 16, 17],
            [18, 19, 21, 22, 20, 23, 24, 25, 26]])
+
+    >>> result = reshape_blockwise(x, (3, 3, 3), chunks=x.chunks)
+    >>> result.chunks
+    ((3,), (2, 1), (2, 1)
+
+    The resulting chunks are taken from the input. Chaining the reshape operation
+    together like this reverts the previous reshaping operation that reduces the
+    number of dimensions.
+
+    >>> result.compute()
+    array([[ 0,  1,  3,  4,  2,  5,  6,  7,  8],
+           [ 9, 10, 12, 13, 11, 14, 15, 16, 17],
+           [18, 19, 21, 22, 20, 23, 24, 25, 26]])
     """
     if shape in [-1, (-1,)]:
         shape = (reduce(mul, x.shape),)
@@ -430,16 +456,34 @@ def reshape_blockwise(x: Array, shape: int | tuple[int, ...]) -> Array:
     if not isinstance(shape, tuple):
         shape = (shape,)
 
+    outname = "reshape-blockwise-" + tokenize(x, shape)
+    chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(x.chunks))))
+
+    if len(shape) > x.ndim:
+        if chunks is None:
+            raise TypeError("Need to specify chunks if expanding dimensions.")
+        out_shapes = list(product(*(c for c in chunks)))
+        out_chunk_tuples = list(product(*(range(len(c)) for c in chunks)))
+
+        dsk = {
+            (outname,)
+            + tuple(chunk_out): (_reshape_blockwise, (x.name,) + tuple(chunk_in), shape)
+            for chunk_in, chunk_out, shape in zip(
+                chunk_tuples, out_chunk_tuples, out_shapes
+            )
+        }
+
+        graph = HighLevelGraph.from_collections(outname, dsk, dependencies=[x])  # type: ignore[arg-type]
+        return Array(graph, outname, chunks, meta=x._meta)
+
     _, _, mapper_in, one_dimensions = reshape_rechunk(
         x.shape, shape, x.chunks, disallow_dimension_expansion=True
     )
 
-    chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(x.chunks))))
-
     # Convert input chunks to output chunks
     out_shapes = [
         _convert_to_shape(c, mapper_in, one_dimensions)
-        for c in list(product(*(c for i, c in enumerate(x.chunks))))
+        for c in list(product(*(c for c in x.chunks)))
     ]
     # Calculate the number of chunks for each dimension in the output
     nr_out_chunks = _convert_to_shape(
@@ -448,7 +492,6 @@ def reshape_blockwise(x: Array, shape: int | tuple[int, ...]) -> Array:
     # Create output chunk tuples for the graph
     out_chunk_tuples = list(product(*(range(c) for c in nr_out_chunks)))
 
-    outname = "reshape-blockwise-" + tokenize(x, shape)
     dsk = {
         (outname,)
         + tuple(chunk_out): (_reshape_blockwise, (x.name,) + tuple(chunk_in), shape)
