@@ -361,9 +361,7 @@ def rechunk(
 
     _validate_rechunk(x.chunks, chunks)
 
-    method = method or config.get("array.rechunk.method")
-
-    if method == "auto":
+    if method is None:
         method = _choose_rechunk_method(x.chunks, chunks, threshold=threshold)
 
     if method == "tasks":
@@ -391,6 +389,8 @@ def rechunk(
 
 
 def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
+    if method := config.get("array.rechunk.method", None) is not None:
+        return method
     try:
         from distributed import default_client
 
