@@ -46,12 +46,11 @@ graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
 """
-import copy
 from collections import defaultdict, deque, namedtuple
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from typing import Any, Literal, NamedTuple, overload
 
-from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
+from dask.core import get_deps, getcycle, istask, reverse_dict
 from dask.typing import Key
 
 
@@ -106,17 +105,9 @@ def order(
 
     dsk = dict(dsk)
     expected_len = len(dsk)
+    from dask._task_spec import DependenciesMapping
 
-    if dependencies is None:
-        dependencies_are_copy = True
-        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
-    else:
-        # Below we're removing items from the sets in this dict
-        # We need a deepcopy for that but we only want to do this if necessary
-        # since this only happens for special cases.
-        dependencies_are_copy = False
-        dependencies = dict(dependencies)
-
+    dependencies = DependenciesMapping(dsk, include_external=False)
     dependents = reverse_dict(dependencies)
 
     leaf_nodes = {k for k, v in dependents.items() if not v}
@@ -134,8 +125,11 @@ def order(
     # The removal of those tasks typically transforms the graph topology in a
     # way that is simpler to handle
     all_tasks = False
+    recompute_dependents = False
     n_removed_leaves = 0
     requires_data_task = defaultdict(set)
+    removed_leafs = set()
+    removed_roots = set()
     while not all_tasks:
         all_tasks = True
         for leaf in list(leaf_nodes):
@@ -156,29 +150,31 @@ def order(
                     result[leaf] = prio
                 n_removed_leaves += 1
                 leaf_nodes.remove(leaf)
-                del dsk[leaf]
-                del dependents[leaf]
+                removed_leafs.add(leaf)
                 for dep in dependencies[leaf]:
-                    dependents[dep].remove(leaf)
-                    if not dependents[dep]:
+                    if not (dependents[dep] - removed_leafs):
                         leaf_nodes.add(dep)
+                recompute_dependents = True
+                del dsk[leaf]
 
         for root in list(root_nodes):
             if root in leaf_nodes:
                 continue
-            if not istask(dsk[root]) and len(dependents[root]) > 1:
-                if not dependencies_are_copy:
-                    dependencies_are_copy = True
-                    dependencies = copy.deepcopy(dependencies)
+            deps_root = dependents[root] - removed_leafs
+            if not istask(dsk[root]) and len(deps_root) > 1:
+                removed_roots.add(root)
                 root_nodes.remove(root)
-                for dep in dependents[root]:
+                for dep in deps_root:
                     requires_data_task[dep].add(root)
-                    dependencies[dep].remove(root)
-                    if not dependencies[dep]:
+                    if not (dependencies[dep] - removed_roots):
                         root_nodes.add(dep)
+                recompute_dependents = True
                 del dsk[root]
-                del dependencies[root]
-                del dependents[root]
+    del removed_leafs, removed_roots
+    # We have to recompute dependents. Dependencies are automatically updated /
+    # computed on the fly
+    if recompute_dependents:
+        dependents = reverse_dict(dependencies)
 
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     if len(total_dependencies) != len(dsk):

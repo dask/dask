@@ -76,7 +76,6 @@ should contain the dependencies of the task.
 """
 import itertools
 import sys
-from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
 from contextlib import contextmanager
 from functools import partial
@@ -810,21 +809,31 @@ class Task(GraphNode):
 
 
 class DependenciesMapping(Mapping):
-    def __init__(self, dsk):
+    def __init__(self, dsk, include_external=True):
         self.dsk = dsk
-        self.blocklist = None
-        self.removed_keys = set()
+        self.include_external = include_external
+        if not self.include_external:
+            self._cache = {}
+            self._dsk_set = set(dsk)
 
     def __getitem__(self, key):
-        if key in self.removed_keys:
-            raise KeyError(key)
         v = self.dsk[key]
         if not isinstance(v, GraphNode):
             from dask.core import get_dependencies
 
             return get_dependencies(self.dsk, task=self.dsk[key])
-        if self.blocklist and self.blocklist[key]:
-            return self.dsk[key].dependencies - self.blocklist[key]
+        if not self.include_external:
+            if len(self.dsk) != len(self._dsk_set):
+                self._dsk_set = set(self.dsk)
+                self._cache.clear()
+            try:
+                return self._cache[key]
+            except KeyError:
+                self._cache[key] = rv = self.dsk[key].dependencies.intersection(
+                    self._dsk_set
+                )
+                return rv
+
         return self.dsk[key].dependencies
 
     def __iter__(self):
@@ -835,11 +844,6 @@ class DependenciesMapping(Mapping):
 
     def __delitem__(self, key):
         self.removed_keys.add(key)
-
-    def remove_dependency(self, key, dep):
-        if self.blocklist is None:
-            self.blocklist = defaultdict(set)
-        self.blocklist[key].add(dep)
 
     def __len__(self) -> int:
         return len(self.dsk)
