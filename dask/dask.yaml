@@ -23,7 +23,7 @@ array:
   chunk-size: "128MiB"
   chunk-size-tolerance: 1.25  # Tolerance for different algorithms when creating output chunks.
   rechunk:
-    method: "tasks"  # Rechunking method to use
+    method: null  # Rechunking method to use
     threshold: 4
   svg:
     size: 120  # pixels
