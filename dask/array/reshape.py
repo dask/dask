@@ -439,7 +439,7 @@ def reshape_blockwise(
 
     >>> result = reshape_blockwise(x, (3, 3, 3), chunks=x.chunks)
     >>> result.chunks
-    ((3,), (2, 1), (2, 1)
+    ((3,), (2, 1), (2, 1))
 
     The resulting chunks are taken from the input. Chaining the reshape operation
     together like this reverts the previous reshaping operation that reduces the
