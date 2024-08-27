@@ -197,6 +197,7 @@ Top level functions
    remainder
    repeat
    reshape
+   reshape_blockwise
    result_type
    right_shift
    rint
