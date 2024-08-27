@@ -391,6 +391,11 @@ def test_reshape_blockwise():
     assert_eq(arr, result2)
     assert result2.chunks == arr.chunks
 
+    with pytest.raises(
+        ValueError, match="Chunk sizes do not match for the following chunks"
+    ):
+        reshape_blockwise(result, (6, 3, 3), chunks=((3, 4), (3, 1), (3, 1)))
+
 
 def test_reshape_blockwise_raises_for_expansion():
     x = np.arange(0, 54).reshape(6, 3, 3)

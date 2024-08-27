@@ -380,7 +380,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
 def reshape_blockwise(
     x: Array,
     shape: int | tuple[int, ...],
-    chunks: tuple[tuple[int], ...] | None = None,
+    chunks: tuple[tuple[int, ...], ...] | None = None,
 ) -> Array:
     """Blockwise-reshape into a new shape.
 
@@ -475,6 +475,19 @@ def reshape_blockwise(
             raise TypeError("Need to specify chunks if expanding dimensions.")
         out_shapes = list(product(*(c for c in chunks)))
         out_chunk_tuples = list(product(*(range(len(c)) for c in chunks)))
+        in_shapes = list(product(*(c for c in x.chunks)))
+        non_matching_chunks = [
+            (i, in_c, out_c)
+            for i, (in_c, out_c) in enumerate(zip(in_shapes, out_shapes))
+            if math.prod(in_c) != math.prod(out_c)
+        ]
+        if non_matching_chunks:
+            raise ValueError(
+                f"Chunk sizes do not match for the following chunks: "
+                f"{[x[0] for x in non_matching_chunks[:5]]}. \n"
+                f"The corresponding chunksizes are: {[x[1:] for x in non_matching_chunks[:5]]}. "
+                f"(restricted to first 5 entries)."
+            )
 
         dsk = {
             (outname,)
