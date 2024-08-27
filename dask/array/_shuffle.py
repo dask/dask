@@ -112,7 +112,7 @@ def _rechunk_other_dimensions(
     # iterate until we distributed the increase in chunksize accross all dimensions
     # or every non-shuffle dimension is all 1
     while changeable_dimensions:
-        length_changeable_dimensions = len(changeable_dimensions)
+        n_changeable_dimensions = len(changeable_dimensions)
         chunksize_inc_factor = reduce(mul, map(max, new_chunks)) / maximum_chunk  # type: ignore[operator]
         if chunksize_inc_factor <= 1:
             break
@@ -123,7 +123,7 @@ def _rechunk_other_dimensions(
             # chunk that is larger than that. We split the increase factor evenly
             # between all dimensions that are not shuffled.
             up_chunksize_limit_for_dim = max(new_chunks[i]) / (
-                chunksize_inc_factor ** (1 / length_changeable_dimensions)
+                chunksize_inc_factor ** (1 / n_changeable_dimensions)
             )
             for c in x.chunks[i]:
                 if c > chunksize_tolerance * up_chunksize_limit_for_dim:
