@@ -392,13 +392,20 @@ def test_reshape_blockwise():
     assert result2.chunks == arr.chunks
 
 
-def test_reshape_blockwise_raises_for_exansion():
+def test_reshape_blockwise_raises_for_expansion():
     x = np.arange(0, 54).reshape(6, 3, 3)
     arr = from_array(x, chunks=(3, 2, (2, 1)))
     with pytest.raises(
         TypeError, match="Need to specify chunks if expanding dimensions."
     ):
         reshape_blockwise(arr, (2, 3, 3, 3))
+
+
+def test_reshape_blockwise_dimension_reduction_and_chunks():
+    x = np.arange(0, 54).reshape(6, 3, 3)
+    arr = from_array(x, chunks=(3, 2, (2, 1)))
+    with pytest.raises(ValueError, match="Setting chunks is not allowed when"):
+        reshape_blockwise(arr, (18, 3), arr.chunks)
 
 
 def test_argwhere_reshaping_not_concating_chunks():

@@ -407,6 +407,9 @@ def reshape_blockwise(
         the chunks per dimension into the cross product of chunks for every
         chunk in the array.
 
+        An error is raised if chunks is given and the number of dimensions
+        decreases.
+
         .. note::
             This information is required if the number of dimensions is increased.
             Dask cannot infer the output chunks in this case. The keyword is ignored
@@ -483,6 +486,12 @@ def reshape_blockwise(
 
         graph = HighLevelGraph.from_collections(outname, dsk, dependencies=[x])  # type: ignore[arg-type]
         return Array(graph, outname, chunks, meta=x._meta)
+
+    else:
+        if chunks is not None:
+            raise ValueError(
+                "Setting chunks is not allowed when reducing the number of dimensions."
+            )
 
     _, _, mapper_in, one_dimensions = reshape_rechunk(
         x.shape, shape, x.chunks, disallow_dimension_expansion=True
