@@ -440,7 +440,7 @@ def reshape_blockwise(
            [ 9, 10, 12, 13, 11, 14, 15, 16, 17],
            [18, 19, 21, 22, 20, 23, 24, 25, 26]])
 
-    >>> result = reshape_blockwise(x, (3, 3, 3), chunks=x.chunks)
+    >>> result = reshape_blockwise(result, (3, 3, 3), chunks=x.chunks)
     >>> result.chunks
     ((3,), (2, 1), (2, 1))
 
@@ -487,7 +487,7 @@ def reshape_blockwise(
         graph = HighLevelGraph.from_collections(outname, dsk, dependencies=[x])  # type: ignore[arg-type]
         return Array(graph, outname, chunks, meta=x._meta)
 
-    else:
+    elif len(shape) < x.ndim:
         if chunks is not None:
             raise ValueError(
                 "Setting chunks is not allowed when reducing the number of dimensions."
@@ -496,6 +496,9 @@ def reshape_blockwise(
     _, _, mapper_in, one_dimensions = reshape_rechunk(
         x.shape, shape, x.chunks, disallow_dimension_expansion=True
     )
+
+    if len(shape) == x.ndim:
+        return Array(x.dask, x.name, x.chunks, meta=x)
 
     # Convert input chunks to output chunks
     out_shapes = [
