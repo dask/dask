@@ -335,14 +335,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
         missing_size = sanitize_index(x.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
-    if np.isnan(sum(x.shape)):
-        raise ValueError(
-            "Array chunk size or shape is unknown. shape: %s\n\n"
-            "Possible solution with x.compute_chunk_sizes()" % str(x.shape)
-        )
-
-    if reduce(mul, shape, 1) != x.size:
-        raise ValueError("total size of new array must be unchanged")
+    _sanity_checks(x, shape)
 
     if x.shape == shape:
         return x
@@ -375,6 +368,17 @@ def reshape(x, shape, merge_chunks=True, limit=None):
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x2])
     return Array(graph, name, outchunks, meta=meta)
+
+
+def _sanity_checks(x, shape):
+    if np.isnan(sum(x.shape)):
+        raise ValueError(
+            "Array chunk size or shape is unknown. shape: %s\n\n"
+            "Possible solution with x.compute_chunk_sizes()" % str(x.shape)
+        )
+
+    if reduce(mul, shape, 1) != x.size:
+        raise ValueError("total size of new array must be unchanged")
 
 
 def reshape_blockwise(
@@ -467,6 +471,8 @@ def reshape_blockwise(
     if not isinstance(shape, tuple):
         shape = (shape,)
 
+    _sanity_checks(x, shape)
+
     outname = "reshape-blockwise-" + tokenize(x, shape)
     chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(x.chunks))))
 
@@ -500,11 +506,10 @@ def reshape_blockwise(
         graph = HighLevelGraph.from_collections(outname, dsk, dependencies=[x])  # type: ignore[arg-type]
         return Array(graph, outname, chunks, meta=x._meta)
 
-    elif len(shape) < x.ndim:
-        if chunks is not None:
-            raise ValueError(
-                "Setting chunks is not allowed when reducing the number of dimensions."
-            )
+    if chunks is not None:
+        raise ValueError(
+            "Setting chunks is not allowed when reducing the number of dimensions."
+        )
 
     _, _, mapper_in, one_dimensions = reshape_rechunk(
         x.shape, shape, x.chunks, disallow_dimension_expansion=True

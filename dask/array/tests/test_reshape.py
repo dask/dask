@@ -411,11 +411,12 @@ def test_reshape_blockwise_raises_for_expansion():
         reshape_blockwise(arr, (3, 2, 9))
 
 
-def test_reshape_blockwise_dimension_reduction_and_chunks():
+@pytest.mark.parametrize("shape", [(18, 3), (6, 3, 3)])
+def test_reshape_blockwise_dimension_reduction_and_chunks(shape):
     x = np.arange(0, 54).reshape(6, 3, 3)
     arr = from_array(x, chunks=(3, 2, (2, 1)))
     with pytest.raises(ValueError, match="Setting chunks is not allowed when"):
-        reshape_blockwise(arr, (18, 3), arr.chunks)
+        reshape_blockwise(arr, shape, arr.chunks)
 
 
 def test_reshape_blockwise_identity():
@@ -431,3 +432,15 @@ def test_argwhere_reshaping_not_concating_chunks():
     arr = da.random.random((500, 500, 500), chunks=(100, 100, 100)) < 0
     result = da.argwhere(arr)
     assert result.chunks == ((np.nan,) * 125, (1, 1, 1))
+
+
+def test_blockwise_reshape_sanity_checks():
+    x = np.arange(0, 20).reshape(10, 2)
+    arr = from_array(x, chunks=(5, 1))
+    with pytest.raises(ValueError, match="total size of new array must be unchanged"):
+        reshape_blockwise(arr, (10, 6))
+
+    arr = from_array(x, chunks=(5, 1))
+    arr = arr[arr[:, 0] > 0]
+    with pytest.raises(ValueError, match="Array chunk size or shape is unknown"):
+        reshape_blockwise(arr, (5, 2, 2))
