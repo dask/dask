@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import copy
 import math
+from functools import reduce
 from itertools import count, product
+from operator import mul
 from typing import Literal
 
 import numpy as np
@@ -100,40 +102,52 @@ def _rechunk_other_dimensions(
         # We are staying below our threshold, so don't rechunk
         return x
 
-    # How much the chunksizes on our shuffle axis will increase
-    chunksize_inc_factor = longest_group / max(x.chunks[axis])
+    # How large is the largest chunk in the input
+    maximum_chunk = reduce(mul, map(max, x.chunks))
 
-    new_chunks = []
-    for i in range(len(x.chunks)):
-        if i == axis:
-            new_chunks.append(x.chunks[i])
-            continue
+    changeable_dimensions = set(range(len(x.chunks))) - {axis}
+    new_chunks = list(x.chunks)
+    new_chunks[axis] = (longest_group,)
 
-        new_chunksizes = []
-        # calculate what the max chunk size in this dimension is and split every
-        # chunk that is larger than that. We split the increase factor evenly
-        # between all dimensions that are not shuffled.
-        up_chunksize_limit_for_dim = max(x.chunks[i]) / (
-            chunksize_inc_factor ** (1 / (len(x.chunks) - 1))
-        )
-        for c in x.chunks[i]:
-            if c > chunksize_tolerance * up_chunksize_limit_for_dim:
-                factor = math.ceil(c / up_chunksize_limit_for_dim)
+    # iterate until we distributed the increase in chunksize accross all dimensions
+    # or every non-shuffle dimension is all 1
+    while changeable_dimensions:
+        n_changeable_dimensions = len(changeable_dimensions)
+        chunksize_inc_factor = reduce(mul, map(max, new_chunks)) / maximum_chunk  # type: ignore[operator]
+        if chunksize_inc_factor <= 1:
+            break
 
-                # Ensure that we end up at least with chunksize 1
-                factor = min(factor, c)
+        for i in list(changeable_dimensions):
+            new_chunksizes = []
+            # calculate what the max chunk size in this dimension is and split every
+            # chunk that is larger than that. We split the increase factor evenly
+            # between all dimensions that are not shuffled.
+            up_chunksize_limit_for_dim = max(new_chunks[i]) / (
+                chunksize_inc_factor ** (1 / n_changeable_dimensions)
+            )
+            for c in x.chunks[i]:
+                if c > chunksize_tolerance * up_chunksize_limit_for_dim:
+                    factor = math.ceil(c / up_chunksize_limit_for_dim)
 
-                chunksize, remainder = divmod(c, factor)
-                nc = [chunksize] * factor
-                for ii in range(remainder):
-                    # Add remainder parts to the first few chunks
-                    nc[ii] += 1
-                new_chunksizes.extend(nc)
+                    # Ensure that we end up at least with chunksize 1
+                    factor = min(factor, c)
 
-            else:
-                new_chunksizes.append(c)
-        new_chunks.append(tuple(new_chunksizes))
+                    chunksize, remainder = divmod(c, factor)
+                    nc = [chunksize] * factor
+                    for ii in range(remainder):
+                        # Add remainder parts to the first few chunks
+                        nc[ii] += 1
+                    new_chunksizes.extend(nc)
 
+                else:
+                    new_chunksizes.append(c)
+
+            if tuple(new_chunksizes) == new_chunks[i] or max(new_chunksizes) == 1:
+                changeable_dimensions.remove(i)
+
+            new_chunks[i] = tuple(new_chunksizes)
+
+    new_chunks[axis] = x.chunks[axis]
     return x.rechunk(tuple(new_chunks))
 
 
