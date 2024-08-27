@@ -330,6 +330,7 @@ def test_reshape_split_out_chunks():
 def test_reshape_blockwise():
     x = np.arange(0, 54).reshape(6, 3, 3)
     arr = from_array(x, chunks=(3, 2, (2, 1)))
+    assert arr.chunks == ((3, 3), (2, 1), (2, 1))
     result = reshape_blockwise(arr, (18, 3))
     assert result.chunks == ((6, 3, 6, 3), (2, 1))
     expected = [
