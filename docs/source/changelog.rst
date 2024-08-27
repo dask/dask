@@ -11,19 +11,19 @@ Automatically choose P2P rechunking where applicable
 
 TODO (placeholder)
 
-New ``shuffle`` API for Dask Arrays
-"""""""""""""""""""""""""""""""""""
+New shuffle API for Dask Arrays
+"""""""""""""""""""""""""""""""
 
 Dask added a shuffle-API to Dask Arrays. This API allows for shuffling the data
 along a single dimension. It will ensure that every group of elements along this
 dimension are in exactly one chunk. This is a very useful operation for GroupBy-Map
-patterns in Xarray. See :py:func:`dask.arrays.Array.shuffle` for more information
+patterns in Xarray. See :py:func:`~dask.array.Array.shuffle` for more information
 and API signature.
 
 See :pr:`11267`, :pr:`11311` and :pr:`11326` by `Patrick Hoefler`_ for more details.
 
-New ``blockwise_reshape`` API for Dask Arrays
-"""""""""""""""""""""""""""""""""""""""""""""
+New blockwise_reshape API for Dask Arrays
+"""""""""""""""""""""""""""""""""""""""""
 
 Reshaping a Dask Array oftentimes creates a very complicated computations with rechunk
 operations in between because Dask respect the C ordering of the Array by default. This
@@ -64,7 +64,7 @@ See :pr:`11328` by `Patrick Hoefler`_ for more details.
 Mutlidimensional positional indexing keeping chunksizes consistent
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-Indexing a Dask Array with :py:func:`dask.arrays.vindex` previously created a single
+Indexing a Dask Array with :py:func:`~dask.array.vindex` previously created a single
 output chunk along the dimensions that were indexed. ``vindex`` is commonly used in Xarray
 when indexing multiple dimensions in a single step, i.e.:
 
