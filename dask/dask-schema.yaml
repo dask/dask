@@ -131,10 +131,12 @@ properties:
         properties:
           
           method:
-            type: string
+            type:
+            - string
+            - "null"
             description: |
-              The method to use for rechunking. Must be either "tasks" or "p2p";
-              default is "tasks". Using "p2p" requires a distributed cluster.
+              The method to use for rechunking. Possible values are tasks or p2p.
+              If null, pick best method depending on application.
           
           threshold:
             type: integer
