@@ -389,7 +389,7 @@ def rechunk(
 
 
 def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
-    if method := config.get("array.rechunk.method", None) is not None:
+    if method := config.get("array.rechunk.method", None):
         return method
     try:
         from distributed import default_client
