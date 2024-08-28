@@ -3163,7 +3163,7 @@ def _compute_multiplier(limit: int, dtype, largest_block: int, result):
         limit
         / dtype.itemsize
         / largest_block
-        / math.prod(r for r in result.values() if r)
+        / math.prod(max(r) if isinstance(r, tuple) else r for r in result.values() if r)
     )
 
 
@@ -3228,6 +3228,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             )
 
     limit = max(1, limit)
+    chunksize_tolerance = config.get("array.chunk-size-tolerance")
 
     largest_block = math.prod(
         cs if isinstance(cs, Number) else max(cs) for cs in chunks if cs != "auto"
@@ -3235,7 +3236,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
     if previous_chunks:
         # Base ideal ratio on the median chunk size of the previous chunks
-        result = {a: np.median(previous_chunks[a]) for a in autos}
+        result_ = {a: np.median(previous_chunks[a]) for a in autos}
+        result = {}
 
         ideal_shape = []
         for i, s in enumerate(shape):
@@ -3247,7 +3249,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                 ideal_shape.append(s)
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
-        multiplier = _compute_multiplier(limit, dtype, largest_block, result)
+        multiplier = _compute_multiplier(limit, dtype, largest_block, result_)
 
         last_multiplier = 0
         last_autos = set()
@@ -3256,23 +3258,61 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         ):  # while things change
             last_multiplier = multiplier  # record previous values
             last_autos = set(autos)  # record previous values
+            multiplier_left = False
 
             # Expand or contract each of the dimensions appropriately
             for a in sorted(autos):
                 if ideal_shape[a] == 0:
                     result[a] = 0
                     continue
-                proposed = result[a] * multiplier ** (1 / len(autos))
+                this_multiplier = multiplier ** (1 / len(autos))
+
+                proposed = result_[a] * this_multiplier
+                this_chunksize_tolerance = chunksize_tolerance ** (1 / len(autos))
+                this_multiplier = this_multiplier * this_chunksize_tolerance
+                max_chunk_size = proposed * this_chunksize_tolerance
+
                 if proposed > shape[a]:  # we've hit the shape boundary
                     autos.remove(a)
                     largest_block *= shape[a]
                     chunks[a] = shape[a]
-                    del result[a]
+                    del result_[a]
+                    multiplier_left = True
+                elif this_multiplier <= 1:
+                    seen = {}
+                    res = []
+                    for c in previous_chunks[a]:
+                        if c in seen:
+                            res.extend(seen[c])
+                        elif c < max_chunk_size:
+                            res.append(c)
+                            seen[c] = [c]
+                        else:
+                            m = math.ceil(1 / this_multiplier)
+                            new_c, remainder = divmod(c, m)
+                            x = [new_c] * m
+                            for i in range(remainder):
+                                x[i] += 1
+                            seen[c] = x
+                            res.extend(x)
+
+                    result[a] = tuple(res)
                 else:
-                    result[a] = round_to(proposed, ideal_shape[a])
+                    res = []
+                    ctr = 0
+                    for c in previous_chunks[a]:
+                        if c + ctr <= proposed:
+                            ctr += c
+                        else:
+                            res.append(ctr)
+                            ctr = c
+                    if ctr > 0:
+                        res.append(ctr)
+                    result[a] = tuple(res)
 
             # recompute how much multiplier we have left, repeat
-            multiplier = _compute_multiplier(limit, dtype, largest_block, result)
+            if multiplier_left:
+                multiplier = _compute_multiplier(limit, dtype, largest_block, result_)
 
         for k, v in result.items():
             chunks[k] = v
