@@ -3269,7 +3269,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
                 proposed = result_[a] * this_multiplier
                 this_chunksize_tolerance = chunksize_tolerance ** (1 / len(autos))
-                this_multiplier = this_multiplier * this_chunksize_tolerance
+                this_multiplier_tolerance = this_multiplier * this_chunksize_tolerance
                 max_chunk_size = proposed * this_chunksize_tolerance
 
                 if proposed > shape[a]:  # we've hit the shape boundary
@@ -3279,20 +3279,30 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     del result_[a]
                     multiplier_left = True
                 elif this_multiplier <= 1:
+                    if max(previous_chunks[a]) == 1:
+                        res = previous_chunks[a]
+                        multiplier_left = True
+                        result[a] = tuple(res)
+                        autos.remove(a)
+                        continue
+
                     seen = {}
                     res = []
+
+                    m = 1 / this_multiplier
+                    if math.ceil(m) / m > this_chunksize_tolerance:
+                        m = math.ceil(1 / this_multiplier_tolerance)
+                    else:
+                        m = math.ceil(m)
+
                     for c in previous_chunks[a]:
                         if c in seen:
                             res.extend(seen[c])
-                        elif c < max_chunk_size:
+                        elif c <= max(max_chunk_size, 1):
                             res.append(c)
                             seen[c] = [c]
                         else:
-                            m = math.ceil(1 / this_multiplier)
-                            new_c, remainder = divmod(c, m)
-                            x = [new_c] * m
-                            for i in range(remainder):
-                                x[i] += 1
+                            x = _split_up_single_chunk(m, c)
                             seen[c] = x
                             res.extend(x)
 
@@ -3306,6 +3316,11 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                         else:
                             res.append(ctr)
                             ctr = c
+                            if ctr > max_chunk_size:
+                                res.extend(
+                                    _split_up_single_chunk(math.ceil(c / proposed), c)
+                                )
+                                ctr = 0
                     if ctr > 0:
                         res.append(ctr)
                     result[a] = tuple(res)
@@ -3335,6 +3350,14 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             chunks[i] = round_to(size, shape[i])
 
         return tuple(chunks)
+
+
+def _split_up_single_chunk(m, c):
+    new_c, remainder = divmod(c, min(m, c))
+    x = [new_c] * min(m, c)
+    for i in range(remainder):
+        x[i] += 1
+    return x
 
 
 def round_to(c, s):
