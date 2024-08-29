@@ -3116,15 +3116,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     if chunks and shape is not None:
         # allints: did we start with chunks as a simple tuple of ints?
         allints = all(isinstance(c, int) for c in chunks)
-        chunks = sum(
-            (
-                blockdims_from_blockshape((s,), (c,))
-                if not isinstance(c, (tuple, list))
-                else (c,)
-                for s, c in zip(shape, chunks)
-            ),
-            (),
-        )
+        chunks = _convert_int_chunk_to_tuple(shape, chunks)
     for c in chunks:
         if not c:
             raise ValueError(
@@ -3151,6 +3143,18 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
         return tuple(tuple(ch) for ch in chunks)
     return tuple(
         tuple(int(x) if not math.isnan(x) else np.nan for x in c) for c in chunks
+    )
+
+
+def _convert_int_chunk_to_tuple(shape, chunks):
+    return sum(
+        (
+            blockdims_from_blockshape((s,), (c,))
+            if not isinstance(c, (tuple, list))
+            else (c,)
+            for s, c in zip(shape, chunks)
+        ),
+        (),
     )
 
 
@@ -3192,9 +3196,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     normalize_chunks: for full docstring and parameters
     """
     if previous_chunks is not None:
-        previous_chunks = tuple(
-            c if isinstance(c, tuple) else (c,) for c in previous_chunks
-        )
+        previous_chunks = _convert_int_chunk_to_tuple(shape, previous_chunks)
     chunks = list(chunks)
 
     autos = {i for i, c in enumerate(chunks) if c == "auto"}

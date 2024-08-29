@@ -825,14 +825,40 @@ def test_rechunk_avoid_needless_chunking():
         (100, 50, 10, (10,) * 10),
         (100, 100, 10, (10,) * 10),
         (20, 7, 10, (7, 7, 6)),
-        (20, (1, 1, 1, 1, 6, 2, 1, 7), 5, (4, 6, 3, 4, 3)),
-        (20, (1,) * 20, 10, (10, 10)),
+        (
+            20,
+            (1, 1, 1, 1, 6, 2, 1, 7),
+            5,
+            (4, 6, 3, 4, 3),
+        ),  # 6 is in tolerance, 7 is not
+        (21, (1,) * 21, 10, (10, 10, 1)),  # ensure that we squash together properly
+        (20, ((2, 2, 2, 9, 1, 2, 2)), 5, (4, 2, 5, 4, 5)),
+        (20, ((10, 10)), 4, (4, 3, 3, 4, 3, 3)),
+        (21, ((10, 11)), 4, (4, 3, 3, 4, 4, 3)),
     ],
 )
 def test_rechunk_auto_1d(shape, chunks, bs, expected):
     x = da.ones(shape, chunks=(chunks,))
     y = x.rechunk({0: "auto"}, block_size_limit=bs * x.dtype.itemsize)
     assert y.chunks == (expected,)
+
+
+@pytest.mark.parametrize(
+    "previous_chunks,bs,expected",
+    [
+        (((1, 1, 1), (10, 10, 10, 10, 10, 10, 10, 10)), 160, ((3,), (40, 20))),
+    ],
+)
+def test_normalize_chunks_auto_2d(previous_chunks, bs, expected):
+    shape = tuple(map(sum, previous_chunks))
+    result = normalize_chunks(
+        {0: "auto", 1: "auto"},
+        shape,
+        limit=bs,
+        dtype=np.int8,
+        previous_chunks=previous_chunks,
+    )
+    assert result == expected
 
 
 def test_rechunk_auto_2d():
