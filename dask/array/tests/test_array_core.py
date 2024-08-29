@@ -15,7 +15,6 @@ import operator
 import os
 import time
 import warnings
-from functools import reduce
 from io import StringIO
 from operator import add, sub
 from threading import Lock
@@ -29,7 +28,6 @@ from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
     BlockView,
-    PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
     broadcast_shapes,
@@ -60,7 +58,7 @@ from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
-from dask.utils import SerializableLock, key_split, parse_bytes, tmpdir, tmpfile
+from dask.utils import SerializableLock, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, hlg_layer_topological, inc
 
 
@@ -1235,66 +1233,6 @@ def test_reshape_unknown_dimensions():
             assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
     pytest.raises(ValueError, lambda: da.reshape(a, (-1, -1)))
-
-
-@pytest.mark.parametrize(
-    "limit",  # in bytes
-    [
-        None,  # Default value: dask.config.get("array.chunk-size")
-        134217728,  # 128 MiB (default value size on a typical laptop)
-        67108864,  # 64 MiB (half the typical default value size)
-    ],
-)
-@pytest.mark.parametrize(
-    "shape, chunks, reshape_size",
-    [
-        # Test reshape where output chunks would otherwise be too large
-        ((300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)),
-        # Test reshape where multiple chunks match between input and output
-        ((300, 300, 4, 18483), (-1, -1, 1, 183), (300, 300, -1)),
-    ],
-)
-def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
-    array = da.random.default_rng().random(shape, chunks=chunks)
-    if limit is None:
-        with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-            result = array.reshape(*reshape_size, limit=limit)
-    else:
-        result = array.reshape(*reshape_size, limit=limit)
-    nbytes = array.dtype.itemsize
-    max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-    if limit is None:
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-    assert max_chunksize_in_bytes < limit
-
-
-def test_reshape_warns_by_default_if_it_is_producing_large_chunks():
-    # Test reshape where output chunks would otherwise be too large
-    shape, chunks, reshape_size = (300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)
-    array = da.random.default_rng().random(shape, chunks=chunks)
-
-    with pytest.warns(PerformanceWarning) as record:
-        result = array.reshape(*reshape_size)
-        nbytes = array.dtype.itemsize
-        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-        assert max_chunksize_in_bytes > limit
-
-    assert len(record) == 1
-
-    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
-        result = array.reshape(*reshape_size)
-        nbytes = array.dtype.itemsize
-        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-        assert max_chunksize_in_bytes > limit
-
-    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
-        result = array.reshape(*reshape_size)
-        nbytes = array.dtype.itemsize
-        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-        limit = parse_bytes(dask.config.get("array.chunk-size"))
-        assert max_chunksize_in_bytes < limit
 
 
 def test_full():
@@ -2767,6 +2705,18 @@ def test_asarray(asarray):
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
+def test_asarray_array_dtype(asarray):
+    # test array input
+    x = asarray([1, 2])
+    assert_eq(asarray(x, dtype=da.float32), np.asarray(x, dtype=np.float32))
+
+    x = asarray(x, dtype=da.float64)
+    assert x.dtype == da.float64
+    x = asarray(x, dtype=da.int32)
+    assert x.dtype == da.int32
+
+
+@pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
 def test_asarray_dask_dataframe(asarray):
     # https://github.com/dask/dask/issues/3885
     pd = pytest.importorskip("pandas")
@@ -3136,6 +3086,21 @@ def test_vindex_nd():
 
     result = d.vindex[np.arange(7)[None, :], np.arange(8)[:, None]]
     assert_eq(result, x.T)
+
+
+@pytest.mark.parametrize("size", [0, 1])
+def test_vindex_preserve_chunksize(size):
+    np_arr = np.random.rand(10_000 * 40).reshape(100, 100, 40)
+    arr = da.from_array(np_arr, chunks=(50, 50, 20))
+    indices_2d = np.random.choice(np.arange(100), size=(10000 + size, 2))
+    idx1 = indices_2d[:, 0]
+    idx2 = indices_2d[:, 0]
+    result = arr.vindex[idx1, idx2, slice(None)]
+    assert result.chunks == (
+        (2500, 2500, 2500, 2500) + ((1,) if size else ()),
+        (20, 20),
+    )
+    assert_eq(result, np_arr[idx1, idx2, :])
 
 
 def test_vindex_negative():

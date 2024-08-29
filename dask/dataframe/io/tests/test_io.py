@@ -5,7 +5,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 
 import dask
 import dask.array as da
@@ -285,11 +284,7 @@ def test_from_pandas_npartitions_duplicates(index):
 
 
 def test_from_pandas_convert_string_config():
-    pa = pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
-    pyarrow_version = Version(pa.__version__)
-    if pyarrow_version.major < 12:
-        pytest.skip("requires arrow 12")
-
+    pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
     # With `dataframe.convert-string=False`, strings should remain objects
     with dask.config.set({"dataframe.convert-string": False}):
         s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
@@ -1034,29 +1029,30 @@ def test_from_map_other_iterables(iterable):
     assert_eq(ddf.compute(), expect)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="hashing not deterministic")
+class MyFunc:
+    projected: list[str] = []
+
+    def __init__(self, columns=None):
+        self.columns = columns
+
+    def project_columns(self, columns):
+        return MyFunc(columns)
+
+    def __call__(self, t, columns=None):
+        cols = self.columns or columns
+        size = t[0] + 1
+        x = t[1]
+        df = pd.DataFrame({"A": [x] * size, "B": [10] * size})
+        if cols is None:
+            return df
+        MyFunc.projected.extend(cols)
+        return df[cols]
+
+
 def test_from_map_column_projection():
     # Test that column projection works
     # as expected with from_map when
     # enforce_metadata=True
-
-    projected = []
-
-    class MyFunc:
-        def __init__(self, columns=None):
-            self.columns = columns
-
-        def project_columns(self, columns):
-            return MyFunc(columns)
-
-        def __call__(self, t):
-            size = t[0] + 1
-            x = t[1]
-            df = pd.DataFrame({"A": [x] * size, "B": [10] * size})
-            if self.columns is None:
-                return df
-            projected.extend(self.columns)
-            return df[self.columns]
 
     ddf = dd.from_map(
         MyFunc(),
@@ -1072,7 +1068,7 @@ def test_from_map_column_projection():
         index=[0, 0, 1, 0, 1, 2],
     )
     assert_eq(ddf["A"], expect["A"])
-    assert set(projected) == {"A"}
+    assert set(MyFunc.projected) == {"A"}
     assert_eq(ddf, expect)
 
 

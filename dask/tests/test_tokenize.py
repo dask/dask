@@ -19,7 +19,7 @@ from tlz import compose, curry, partial
 
 import dask
 from dask.base import TokenizationError, normalize_token, tokenize
-from dask.core import literal
+from dask.core import flatten, literal
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
 
@@ -57,7 +57,7 @@ def check_tokenize(*args, **kwargs):
         # Test idempotency (the same object tokenizes to the same value)
         after = tokenize(*args, **kwargs)
 
-        assert before == after
+        assert before == after, (args, kwargs)
 
         # Test same-interpreter determinism (two identical objects tokenize to the
         # same value as long as you do it on the same interpreter) We are not
@@ -71,8 +71,10 @@ def check_tokenize(*args, **kwargs):
         args3, kwargs3 = cloudpickle.loads(cloudpickle.dumps((args3, kwargs3)))
 
         tok2 = tokenize(*args2, **kwargs2)
+        assert tok2 == before, (args, kwargs)
+
         tok3 = tokenize(*args3, **kwargs3)
-        assert tok2 == tok3
+        assert tok2 == tok3, (args, kwargs)
 
         # Skip: different interpreter determinism
 
@@ -138,7 +140,8 @@ def test_tokenize_numpy_array_supports_uneven_sizes():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_discontiguous_numpy_array():
-    check_tokenize(np.random.random(8)[::2])
+    arr = np.random.random(8)
+    assert check_tokenize(arr[::2]) != check_tokenize(arr[::3])
 
 
 @pytest.mark.skipif("not np")
@@ -229,7 +232,7 @@ def test_tokenize_numpy_memmap():
         z = check_tokenize(np.load(fn, mmap_mode="r"))
 
     assert check_tokenize(x1) == check_tokenize(x2)
-    assert y != z
+    assert y == z
 
     with tmpfile(".npy") as fn:
         x = np.random.normal(size=(10, 10))
@@ -1271,6 +1274,7 @@ def test_tokenize_random_functions(module):
     """random.random() and other methods of the global random state do not compare as
     equal to themselves after a pickle roundtrip"""
     module = eval(module)
+    module.seed(2)
 
     a = module.random
     b = pickle.loads(pickle.dumps(a))
@@ -1313,6 +1317,15 @@ def test_tokenize_pyarrow_datatypes_complex():
     a = pa.struct({"x": pa.int32(), "y": pa.string()})
     b = pa.struct({"x": pa.float64(), "y": pa.int16()})
     assert check_tokenize(a) != check_tokenize(b)
+
+
+@pytest.mark.skipif("not pa")
+def test_pyarrow_table():
+    a = pa.table({"x": [1, 2, 3], "y": ["a", "b", "c"]})
+    b = pa.table({"x": [1, 2, 3], "y": ["a", "b", "c"]})
+    c = pa.table({"x": [1, 2, 3], "y": ["a", "b", "d"]})
+    assert check_tokenize(a) == check_tokenize(b)
+    assert check_tokenize(a) != check_tokenize(c)
 
 
 @pytest.mark.skipif("not np")
@@ -1420,3 +1433,12 @@ def test_numba_local():
     ]
     tokens = [check_tokenize(func) for func in all_funcs]
     assert len(tokens) == len(set(tokens))
+
+
+@pytest.mark.skipif("not pd")
+def test_tokenize_pandas_arrow_strings():
+    ser = pd.Series(["a", "b"], dtype="string[pyarrow]")
+    check_tokenize(ser)
+    tokens = normalize_token(ser)
+    # Maybe a little brittle but will do for now
+    assert any(str(tok) == "string" for tok in flatten(tokens))

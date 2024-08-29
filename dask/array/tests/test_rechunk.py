@@ -1172,3 +1172,22 @@ def test_old_to_new_with_zero():
         [[(0, slice(0, 4))], [(2, slice(0, 0))], [(2, slice(0, 2))], [(2, slice(2, 4))]]
     ]
     assert result == expected
+
+
+def test_rechunk_non_perfect_slicing_of_dimensions():
+    # GH#7859
+    # this matters -- 1060 and 1058 work
+    shape = (200, 100, 1059)
+    final_chunks = (64, 64, 64)
+
+    arr = da.coarsen(
+        da.mean,
+        da.zeros(shape, chunks=(1, -1, -1)),
+        {0: 2, 1: 2, 2: 2},
+        trim_excess=True,
+    )
+    result = arr.rechunk(*final_chunks)
+    assert_eq(arr, result)
+    result_b = arr.rechunk(final_chunks)
+    assert_eq(arr, result)
+    assert result.chunks == result_b.chunks
