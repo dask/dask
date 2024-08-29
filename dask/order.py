@@ -46,9 +46,10 @@ graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
 """
+import copy
 from collections import defaultdict, deque, namedtuple
-from collections.abc import Iterable, Mapping, MutableMapping
-from typing import Any, Callable, Literal, NamedTuple, overload
+from collections.abc import Callable, Iterable, Mapping, MutableMapping
+from typing import Any, Literal, NamedTuple, overload
 
 from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
 from dask.typing import Key
@@ -109,7 +110,14 @@ def order(
     expected_len = len(dsk)
 
     if dependencies is None:
+        dependencies_are_copy = True
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    else:
+        # Below we're removing items from the sets in this dict
+        # We need a deepcopy for that but we only want to do this if necessary
+        # since this only happens for special cases.
+        dependencies_are_copy = False
+        dependencies = dict(dependencies)
 
     dependents = reverse_dict(dependencies)
 
@@ -129,6 +137,7 @@ def order(
     # way that is simpler to handle
     all_tasks = False
     n_removed_leaves = 0
+    requires_data_task = defaultdict(set)
     while not all_tasks:
         all_tasks = True
         for leaf in list(leaf_nodes):
@@ -156,6 +165,23 @@ def order(
                     if not dependents[dep]:
                         leaf_nodes.add(dep)
 
+        for root in list(root_nodes):
+            if root in leaf_nodes:
+                continue
+            if not istask(dsk[root]) and len(dependents[root]) > 1:
+                if not dependencies_are_copy:
+                    dependencies_are_copy = True
+                    dependencies = copy.deepcopy(dependencies)
+                root_nodes.remove(root)
+                for dep in dependents[root]:
+                    requires_data_task[dep].add(root)
+                    dependencies[dep].remove(root)
+                    if not dependencies[dep]:
+                        root_nodes.add(dep)
+                del dsk[root]
+                del dependencies[root]
+                del dependents[root]
+
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     if len(total_dependencies) != len(dsk):
         cycle = getcycle(dsk, None)
@@ -181,6 +207,9 @@ def order(
     _crit_path_counter_offset: int | float = 0
 
     _sort_keys_cache: dict[Key, tuple[int, int, int, int, str]] = {}
+
+    leafs_connected_to_loaded_roots: set[Key] = set()
+    processed_roots = set()
 
     def sort_key(x: Key) -> tuple[int, int, int, int, str]:
         try:
@@ -213,10 +242,17 @@ def order(
             if item in result:
                 continue
 
+            while requires_data_task[item]:
+                add_to_result(requires_data_task[item].pop())
+
             if return_stats:
                 result[item] = Order(i, crit_path_counter - _crit_path_counter_offset)
             else:
                 result[item] = i
+
+            if item in root_nodes:
+                processed_roots.add(item)
+
             i += 1
             # Note: This is a `set` and therefore this introduces a certain
             # randomness. However, this randomness should not have any impact on
@@ -286,6 +322,8 @@ def order(
                 while branches:
                     path = branches.popleft()
                     while True:
+                        # Loop invariant. Too expensive to compute at runtime
+                        # assert not set(known_runnable_paths).intersection(runnable_hull)
                         current = path[-1]
                         runnable_hull.add(current)
                         deps_downstream = dependents[current]
@@ -297,6 +335,8 @@ def order(
                             if num_needed[current] <= 1:
                                 for k in path:
                                     add_to_result(k)
+                            else:
+                                runnable_hull.discard(current)
                         elif len(path) == 1 or len(deps_upstream) == 1:
                             if len(deps_downstream) > 1:
                                 for d in sorted(deps_downstream, key=sort_key):
@@ -308,11 +348,11 @@ def order(
                                         branch.append(d)
                                         branches.append(branch)
                                 break
-                            runnable_hull.update(deps_downstream)
-                            path.extend(sorted(deps_downstream, key=sort_key))
+                            path.extend(deps_downstream)
                             continue
                         elif current in known_runnable_paths:
                             known_runnable_paths[current].append(path)
+                            runnable_hull.discard(current)
                             if (
                                 len(known_runnable_paths[current])
                                 >= num_needed[current]
@@ -342,6 +382,7 @@ def order(
                                     add_to_result(k)
                             else:
                                 known_runnable_paths[current] = [path]
+                                runnable_hull.discard(current)
                         break
 
     # Pick strategy
@@ -351,6 +392,43 @@ def order(
     # pressure. The only concern to this would be performance but at time of
     # writing, the most expensive part of ordering is the prep work (mostly
     # connected roots + sort_key) which can be reused for multiple orderings.
+
+    def get_target(longest_path: bool = False) -> Key:
+        # Some topologies benefit if the node with the most dependencies
+        # is used as first choice, others benefit from the opposite.
+        candidates = leaf_nodes
+        skey: Callable = sort_key
+        if reachable_hull:
+            skey = lambda k: (num_needed[k], sort_key(k))
+
+        all_leafs_accessible = len(leafs_connected_to_loaded_roots) >= len(candidates)
+        if reachable_hull and not all_leafs_accessible:
+            # Avoid this branch if we can already access all leafs. Just pick
+            # one of them without the expensive selection process in this case.
+
+            candidates = reachable_hull & candidates
+            if not candidates:
+                # We can't reach a leaf node directly, but we still have nodes
+                # with results in memory, these notes can inform our path towards
+                # a new preferred leaf node.
+                for r in processed_roots:
+                    leafs_connected_to_loaded_roots.update(leafs_connected[r])
+                processed_roots.clear()
+
+                leafs_connected_to_loaded_roots.intersection_update(leaf_nodes)
+                candidates = leafs_connected_to_loaded_roots
+            else:
+                leafs_connected_to_loaded_roots.update(candidates)
+
+        elif not reachable_hull:
+            # We reach a new and independent branch, so throw away previous branch
+            leafs_connected_to_loaded_roots.clear()
+
+        if longest_path and (not reachable_hull or all_leafs_accessible):
+            return leaf_nodes_sorted.pop()
+        else:
+            # FIXME: This can be very expensive
+            return min(candidates, key=skey)
 
     def use_longest_path() -> bool:
         size = 0
@@ -370,63 +448,9 @@ def order(
         return True
 
     longest_path = use_longest_path()
-
-    def get_target() -> Key:
-        raise NotImplementedError()
-
-    if not longest_path:
-
-        def _build_get_target() -> Callable[[], Key]:
-            occurrences: defaultdict[Key, int] = defaultdict(int)
-            for t in leaf_nodes:
-                for r in roots_connected[t]:
-                    occurrences[r] += 1
-            occurences_grouped = defaultdict(set)
-            for root, occ in occurrences.items():
-                occurences_grouped[occ].add(root)
-            occurences_grouped_sorted = {}
-            for k, v in occurences_grouped.items():
-                occurences_grouped_sorted[k] = sorted(v, key=sort_key, reverse=True)
-            del occurences_grouped, occurrences
-
-            def pick_seed() -> Key | None:
-                while occurences_grouped_sorted:
-                    key = max(occurences_grouped_sorted)
-                    picked_root = occurences_grouped_sorted[key][-1]
-                    if picked_root in result:
-                        occurences_grouped_sorted[key].pop()
-                        if not occurences_grouped_sorted[key]:
-                            del occurences_grouped_sorted[key]
-                        continue
-                    return picked_root
-                return None
-
-            def get_target() -> Key:
-                candidates = leaf_nodes
-                skey: Callable = sort_key
-
-                if runnable_hull:
-                    skey = lambda k: (num_needed[k], sort_key(k))
-                    candidates = runnable_hull & candidates
-                elif reachable_hull:
-                    skey = lambda k: (num_needed[k], sort_key(k))
-                    candidates = reachable_hull & candidates
-
-                if not candidates:
-                    if seed := pick_seed():
-                        candidates = leafs_connected[seed]
-                    else:
-                        candidates = runnable_hull or reachable_hull
-                # FIXME: This can be very expensive
-                return min(candidates, key=skey)
-
-            return get_target
-
-        get_target = _build_get_target()
-    else:
+    leaf_nodes_sorted = []
+    if longest_path:
         leaf_nodes_sorted = sorted(leaf_nodes, key=sort_key, reverse=False)
-        get_target = leaf_nodes_sorted.pop
-        del leaf_nodes_sorted
 
     # *************************************************************************
     # CORE ALGORITHM STARTS HERE
@@ -461,7 +485,7 @@ def order(
     #   can define any route through the graph that should be considered as top
     #   priority.
     #
-    #   1. Determine the target node by calling `get_target`` and append the
+    #   1. Determine the target node by calling ``get_target`` and append the
     #      target to the critical path stack
     #   2. Take the _most valuable_ (max given a `sort_key`) of its dependents
     #      and append it to the critical path stack. This key is the new target.
@@ -526,7 +550,7 @@ def order(
         assert not scrit_path
 
         # A. Build the critical path
-        target = get_target()
+        target = get_target(longest_path=longest_path)
         next_deps = dependencies[target]
         path_append(target)
 
@@ -544,10 +568,6 @@ def order(
             if item in result:
                 continue
             if num_needed[item]:
-                if item in known_runnable_paths:
-                    for path in known_runnable_paths_pop(item):
-                        path_extend(reversed(path))
-                    continue
                 path_append(item)
                 deps = dependencies[item].difference(result)
                 unknown: list[Key] = []
