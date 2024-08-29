@@ -10,6 +10,7 @@ import random
 import subprocess
 import sys
 import textwrap
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum, Flag, IntEnum, IntFlag
 from typing import Union
 
@@ -50,7 +51,44 @@ def check_contextvars():
         _seen.get()
 
 
+_TPE = None
+USE_TPE = None
+
+
+@pytest.fixture(
+    autouse=True, params=[pytest.param(True, marks=[pytest.mark.slow]), False]
+)
+def use_tpe(request):
+    global USE_TPE
+    USE_TPE = request.param
+
+
+def _init_tpe() -> ThreadPoolExecutor:
+    psutil = pytest.importorskip("psutil")
+    global _TPE
+    if _TPE is not None:
+        return _TPE  # type: ignore[unreachable]
+    cores = psutil.cpu_count(logical=False)
+    _TPE = ThreadPoolExecutor(cores * 4)
+    return _TPE
+
+
 def check_tokenize(*args, **kwargs):
+    def _(x):
+        return _check_tokenize(*args, **kwargs)
+
+    if USE_TPE is None:
+        raise RuntimeError("Error during test setup")
+    if USE_TPE:
+        tpe = _init_tpe()
+        all_tokens = set(tpe.map(_, range(tpe._max_workers * 3)))
+        assert len(all_tokens) == 1
+        return all_tokens.pop()
+    else:
+        return _(0)
+
+
+def _check_tokenize(*args, **kwargs):
     with dask.config.set({"tokenize.ensure-deterministic": True}):
         before = tokenize(*args, **kwargs)
 
@@ -700,16 +738,18 @@ def test_tokenize_slotted_no_value():
     check_tokenize(Foo())
 
 
+class Foo:
+    __slots__ = ("x",)
+
+
+class Bar(Foo):
+    def __init__(self, x, y):
+        self.x = x
+        if y is not None:
+            self.y = y
+
+
 def test_tokenize_slots_and_dict():
-    class Foo:
-        __slots__ = ("x",)
-
-    class Bar(Foo):
-        def __init__(self, x, y):
-            self.x = x
-            if y is not None:
-                self.y = y
-
     assert Bar(1, 2).__dict__ == {"y": 2}
 
     tokens = [
@@ -745,17 +785,19 @@ def test_tokenize_method():
     del normalize_token._lookup[Foo]
 
 
+class C:
+    def __init__(self, x):
+        self.x = x
+
+    def __call__(self):
+        return self.x
+
+
+class D(C):
+    pass
+
+
 def test_tokenize_callable_class():
-    class C:
-        def __init__(self, x):
-            self.x = x
-
-        def __call__(self):
-            return self.x
-
-    class D(C):
-        pass
-
     a, b, c = C(1), C(2), D(1)
     assert check_tokenize(a) != check_tokenize(b)
     assert check_tokenize(a) != check_tokenize(c)

@@ -8,6 +8,7 @@ import hashlib
 import inspect
 import pathlib
 import pickle
+import threading
 import types
 import uuid
 import warnings
@@ -1010,6 +1011,9 @@ class TokenizationError(RuntimeError):
     pass
 
 
+_tokenize_lock = threading.RLock()
+
+
 def tokenize(
     *args: object, ensure_deterministic: bool | None = None, **kwargs: object
 ) -> str:
@@ -1030,7 +1034,11 @@ def tokenize(
         tokenized, e.g. two identical objects will return different tokens.
         Defaults to the `tokenize.ensure-deterministic` configuration parameter.
     """
-    with _seen_ctx(reset=True), _ensure_deterministic_ctx(ensure_deterministic):
+    with (
+        _tokenize_lock,
+        _seen_ctx(reset=True),
+        _ensure_deterministic_ctx(ensure_deterministic),
+    ):
         token: object = _normalize_seq_func(args)
         if kwargs:
             token = token, _normalize_seq_func(sorted(kwargs.items()))
