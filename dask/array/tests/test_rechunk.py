@@ -835,6 +835,8 @@ def test_rechunk_avoid_needless_chunking():
         (20, ((2, 2, 2, 9, 1, 2, 2)), 5, (4, 2, 5, 4, 5)),
         (20, ((10, 10)), 4, (4, 3, 3, 4, 3, 3)),
         (21, ((10, 11)), 4, (4, 3, 3, 4, 4, 3)),
+        (20, ((1, 18, 1)), 5, (1, 5, 5, 4, 4, 1)),
+        (38, ((10, 18, 10)), 5, (5, 5, 5, 5, 4, 4, 5, 5)),
     ],
 )
 def test_rechunk_auto_1d(shape, chunks, bs, expected):
@@ -846,7 +848,9 @@ def test_rechunk_auto_1d(shape, chunks, bs, expected):
 @pytest.mark.parametrize(
     "previous_chunks,bs,expected",
     [
-        (((1, 1, 1), (10, 10, 10, 10, 10, 10, 10, 10)), 160, ((3,), (40, 20))),
+        (((1, 1, 1), (10, 10, 10, 10, 10, 10, 10, 10)), 160, ((3,), (50, 30))),
+        (((2, 2), (20,)), 5, ((1, 1, 1, 1), (5, 5, 5, 5))),
+        (((1, 1), (20,)), 5, ((1, 1), (5, 5, 5, 5))),
     ],
 )
 def test_normalize_chunks_auto_2d(previous_chunks, bs, expected):
