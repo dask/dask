@@ -3009,16 +3009,21 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     Examples
     --------
-    Specify uniform chunk sizes
+    Fully explicit tuple-of-tuples
 
     >>> from dask.array.core import normalize_chunks
+    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))
+    ((2, 2, 1), (2, 2, 2))
+
+    Specify uniform chunk sizes
+
     >>> normalize_chunks((2, 2), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
-    Also passes through fully explicit tuple-of-tuples
+    Cleans up missing outer tuple
 
-    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))
-    ((2, 2, 1), (2, 2, 2))
+    >>> normalize_chunks((3, 2), (5,))
+    ((3, 2),)
 
     Cleans up lists to tuples
 
@@ -3039,6 +3044,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     >>> normalize_chunks((5, -1), shape=(10, 10))
     ((5, 5), (10,))
+    >>> normalize_chunks((5, None), shape=(10, 10))
+    ((5, 5), (10,))
 
     Use the value "auto" to automatically determine chunk sizes along certain
     dimensions.  This uses the ``limit=`` and ``dtype=`` keywords to
@@ -3048,6 +3055,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     >>> normalize_chunks(("auto",), shape=(20,), limit=5, dtype='uint8')
     ((5, 5, 5, 5),)
+    >>> normalize_chunks("auto", (2, 3), dtype=np.int32)
+    ((2,), (3,))
 
     You can also use byte sizes (see :func:`dask.utils.parse_bytes`) in place of
     "auto" to ask for a particular size
@@ -3057,8 +3066,19 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     Respects null dimensions
 
+    >>> normalize_chunks(())
+    ()
+    >>> normalize_chunks((), ())
+    ()
+    >>> normalize_chunks((1,), ())
+    ()
     >>> normalize_chunks((), shape=(0, 0))
     ((0,), (0,))
+
+    Handles NaNs
+
+    >>> normalize_chunks((1, (np.nan,)), (1, np.nan))
+    ((1,), (nan,))
     """
     if dtype and not isinstance(dtype, np.dtype):
         dtype = np.dtype(dtype)
