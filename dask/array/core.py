@@ -3349,7 +3349,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         return tuple(chunks)
 
 
-def _split_up_single_chunk(c, this_chunksize_tolerance, max_chunk_size, proposed):
+def _split_up_single_chunk(
+    c: int, this_chunksize_tolerance: float, max_chunk_size: int, proposed: int
+) -> list[int]:
     # Calculate by what factor we have to split this chunk
     m = c / proposed
     if math.ceil(m) / m > this_chunksize_tolerance:
