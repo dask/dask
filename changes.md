@@ -1,5 +1,11 @@
 ## Dask-expr
 
+# v1.1.12
+
+- Fix concat axis 1 bug in divisions (:pr:`1128`) `Patrick Hoefler`_
+- Bump `pyarrow>=14.0.1` minimum versions (:pr:`1127`) `James Bourbeau`_
+- Fix scalar detection of columns coming from sql (:pr:`1125`) `Patrick Hoefler`_
+
 # v1.1.11
 
 - Make split_out for categorical default smarter (:pr:`1124`) `Patrick Hoefler`_
