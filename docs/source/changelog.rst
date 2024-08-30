@@ -1,6 +1,121 @@
 Changelog
 =========
 
+.. _v2024.8.2:
+
+2024.8.2
+--------
+
+Automatic selection of rechunking method
+""""""""""""""""""""""""""""""""""""""""
+
+To enable users to rechunk data at larger scales than before, Dask now automatically chooses an appropriate rechunking method when rechunking on a cluster.
+This requires no additional configuration and is enabled by default.
+
+Specifically, Dask chooses between task-based and P2P rechunking.
+While task-based rechunking has been the previous default, P2P rechunking is beneficial when rechunking requires almost all-to-all communication between the old and new chunks, e.g., when changing between spacial and temporal chunking.
+In these cases, P2P rechunking offers constant memory usage and creates smaller task graphs.
+As a result, it works for cases where tasks-based rechunking would have previously failed.
+
+To disable automatic selection, users can select their preferred method via the configuration
+
+.. code-block::
+
+    import dask.config
+    # Choose either "tasks" or "p2p"
+    dask.config.set({"array.rechunk.method": "tasks"}) 
+
+or when rechunking
+
+.. code-block::
+
+    import dask.array as da
+    arr = da.random.random(size=(1000, 1000, 365), chunks=(-1, -1, "auto"))
+    # Choose either "tasks" or "p2p" 
+    arr = arr.rechunk(("auto", "auto", -1), method="tasks")
+
+See :pr:`11337` by `Hendrik Makait`_ for more details. 
+
+New shuffle API for Dask Arrays
+"""""""""""""""""""""""""""""""
+
+Dask added a shuffle-API to Dask Arrays. This API allows for shuffling the data
+along a single dimension. It will ensure that every group of elements along this
+dimension are in exactly one chunk. This is a very useful operation for GroupBy-Map
+patterns in Xarray. See :py:func:`~dask.array.Array.shuffle` for more information
+and API signature.
+
+See :pr:`11267`, :pr:`11311` and :pr:`11326` by `Patrick Hoefler`_ for more details.
+
+New blockwise_reshape API for Dask Arrays
+"""""""""""""""""""""""""""""""""""""""""
+
+The new :py:func:`~dask.array.blockwise_reshape` enables an embarassingly parallel
+reshaping operation for cases where you don't care about the order of the underlying
+array. It is embarassingly parallel and doesn't trigger a rechunking operation
+under the hood anymore. This is useful when you don't care about the order of
+the resulting Array, i.e. if a reduction is applied to the array or if the reshaping
+is only temporary.
+
+.. code-block::
+
+    arr = da.random.random(size=(100, 100, 48_000), chunks=(1000, 100, 83)
+    result = reshape_blockwise(arr, (10_000, 48_000))
+    result.sum()
+
+    # or: do something that preserves the shape of each chunk
+
+    result = reshape_blockwise(result, (100, 100, 48_000), chunks=arr.chunks)
+
+Dask will automatically calculate the resulting chunks if the number of dimensions
+is reduced, but you have to specify the resulting chunks if the number of dimensions
+is increased.
+
+Reshaping a Dask Array oftentimes creates a very complicated computations with rechunk
+operations in between because Dask respect the C ordering of the Array by default. This
+ensures that the resulting Dask Array is returned in the same order as the
+corresponding NumPy Array. However, this can lead to very inefficient computations.
+The ``blockwise_reshape`` is a lot more efficient than the default implemenation
+if you don't care about the order.
+
+.. warning::
+
+    Blockwise reshape operations are more efficient as the default, but they will
+    return an Array that is ordered differently. Use with care!
+
+See :pr:`11328` by `Patrick Hoefler`_ for more details.
+
+Mutlidimensional positional indexing keeping chunksizes consistent
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Indexing a Dask Array with :py:func:`~dask.array.vindex` previously created a single
+output chunk along the dimensions that were indexed. ``vindex`` is commonly used in Xarray
+when indexing multiple dimensions in a single step, i.e.:
+
+
+.. code-block::
+
+    arr = xr.DataArray(
+        da.random.random((100, 100, 100), chunks=(5, 5, 50)),
+        dims=['a', "b", "c"],
+    )
+
+Previously, this put the indexed dimensions into a single chunk:
+
+.. image:: images/changelog/vindex-memory-increase.png
+  :width: 75%
+  :align: center
+  :alt: Size of each individual chunk increases to over 1GB
+
+Dask now uses an improved algorithm that ensures that the chunksizes are kept consistent:
+
+.. image:: images/changelog/vindex-memory-constant.png
+  :width: 75%
+  :align: center
+  :alt: Size of each individual chunk increases to over 1GB
+
+See :pr:`11330` by `Patrick Hoefler`_ for more details.
+
 .. _v2024.8.1:
 
 2024.8.1
