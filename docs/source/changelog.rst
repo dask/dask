@@ -116,6 +116,43 @@ Dask now uses an improved algorithm that ensures that the chunksizes are kept co
 
 See :pr:`11330` by `Patrick Hoefler`_ for more details.
 
+.. dropdown:: Additional changes
+
+  - Add changelog entries for shuffle, ``vindex`` and ``blockwise_reshape`` (:pr:`11350`) `Patrick Hoefler`_
+  - Ensure persisted collections are released without GC (:pr:`11348`) `Florian Jetter`_
+  - Update zoom link for dask meeting (:pr:`11357`) `Sarah Charlotte Johnson`_
+  - Add more docstring examples for ``normalize_chunks`` (:pr:`11271`) `Illviljan`_
+  - Choose automatically between tasks-based and p2p rechunking (:pr:`11337`) `Hendrik Makait`_
+  - Implement blockwise reshaping API for arrays (:pr:`11328`) `Patrick Hoefler`_
+  - Make rechunking in shuffle more intelligent to distribute unevenly if necessary (:pr:`11326`) `Patrick Hoefler`_
+  - Increase visibility of GPU CI updates (:pr:`11345`) `Charles Blackmon-Luca`_
+  - Update ``numpy`` and ``pyarrow`` versions in install docs (:pr:`11340`) `James Bourbeau`_
+  - Fixup dask and distributed dependencies (:pr:`11338`) `Patrick Hoefler`_
+  - Bump ``numpy>=1.24`` and ``pyarrow>=14.0.1`` minimum versions (:pr:`11331`) `James Bourbeau`_
+  - Add ``crick`` back to Python 3.11+ CI builds (:pr:`11335`) `James Bourbeau`_
+  - Preserve chunksizes in ``vindex`` (:pr:`11330`) `Patrick Hoefler`_
+  - Fix ``dask.array.fft`` mismatch with Numpy's interface (add support for `norm` argument) (:pr:`10665`) `joanrue`_
+  - Pass additional parameters to ``rechunk_p2p`` (:pr:`11319`) `Hendrik Makait`_
+  - Fix docstring formatting for ``map_overlap`` (:pr:`11332`) `Tao Xin`_
+  - Fix NumPy overflowing for ``prod`` on 2.0 (:pr:`11327`) `Patrick Hoefler`_
+  - Ensure ``axes`` are positive / add tests for negative axes (:pr:`10812`) `joanrue`_
+  - Fix ``map_overlap`` with ``new_axis`` (:pr:`11128`) `David Stansby`_
+
+  - Avoid capturing code of ``xdist`` (:pr-distributed:`8846`) `Florian Jetter`_
+  - Reduce memory footprint of culling P2P rechunking (:pr-distributed:`8845`) `Hendrik Makait`_
+  - Add tests for choosing default rechunking method (:pr-distributed:`8843`) `Hendrik Makait`_
+  - Increase visibility of GPU CI updates (:pr-distributed:`8841`) `Charles Blackmon-Luca`_
+  - Bump ``test_pause_while_idle`` timeout (:pr-distributed:`8844`) `Florian Jetter`_
+  - Concatenate small input chunks before P2P rechunking (:pr-distributed:`8832`) `Hendrik Makait`_
+  - Remove dump cluster from ``gen_cluster`` (:pr-distributed:`8823`) `Florian Jetter`_
+  - Bump ``numpy>=1.24`` and ``pyarrow>=14.0.1`` minimum versions (:pr-distributed:`8837`) `James Bourbeau`_
+  - Fix ``PipInstall`` plugin on ``Worker`` (:pr-distributed:`8839`) `Hendrik Makait`_
+  - Remove more Python 3.10 compatibility code (:pr-distributed:`8824`) `James Bourbeau`_
+  - Use task-based rechunking to prechunk along partial boundaries (:pr-distributed:`8831`) `Hendrik Makait`_
+  - Ensure ``client_desires_keys`` does not corrupt ``Scheduler`` state (:pr-distributed:`8827`) `Florian Jetter`_
+  - Bump minimum ``cloudpickle`` to 3 (:pr-distributed:`8836`) `James Bourbeau`_
+
+
 .. _v2024.8.1:
 
 2024.8.1
@@ -8732,3 +8769,5 @@ Other
 .. _`Jonas Dedden`: https://github.com/jonded94
 .. _`Bernhard Raml`: https://github.com/SwamyDev
 .. _`Lucas Colley`: https://github.com/lucascolley
+.. _`Tao Xin`: https://github.com/Tao-VanJS
+.. _`David Stansby`: https://github.com/dstansby
