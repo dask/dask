@@ -25,7 +25,7 @@ classifiers = [
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "dask == 2024.8.1",
+    "dask == 2024.8.2",
     "pyarrow>=14.0.1",
     "pandas >= 2",
 ]
