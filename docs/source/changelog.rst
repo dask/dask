@@ -50,13 +50,10 @@ See :pr:`11267`, :pr:`11311` and :pr:`11326` by `Patrick Hoefler`_ for more deta
 New blockwise_reshape API for Dask Arrays
 """""""""""""""""""""""""""""""""""""""""
 
-Reshaping a Dask Array oftentimes creates a very complicated computations with rechunk
-operations in between because Dask respect the C ordering of the Array by default. This
-ensures that the resulting Dask Array is returned in the same order as the
-corresponding NumPy Array. However, this can lead to very inefficient computations.
-
-The new ``blockwise_reshape`` API allows for reshaping a Dask Array
-in embarassingly parallel fashion. This is useful when you don't care about the order of
+The new :py:func:`~dask.array.blockwise_reshape` enables an embarassingly parallel
+reshaping operation for cases where you don't care about the order of the underlying
+array. It is embarassingly parallel and doesn't trigger a rechunking operation
+under the hood anymore. This is useful when you don't care about the order of
 the resulting Array, i.e. if a reduction is applied to the array or if the reshaping
 is only temporary.
 
@@ -74,15 +71,17 @@ Dask will automatically calculate the resulting chunks if the number of dimensio
 is reduced, but you have to specify the resulting chunks if the number of dimensions
 is increased.
 
+Reshaping a Dask Array oftentimes creates a very complicated computations with rechunk
+operations in between because Dask respect the C ordering of the Array by default. This
+ensures that the resulting Dask Array is returned in the same order as the
+corresponding NumPy Array. However, this can lead to very inefficient computations.
+The ``blockwise_reshape`` is a lot more efficient than the default implemenation
+if you don't care about the order.
+
 .. warning::
 
     Blockwise reshape operations are more efficient as the default, but they will
     return an Array that is ordered differently. Use with care!
-
-
-Reshaping a Dask Array oftentimes squashed the dimensions to reshape into a single
-chunk. This caused very large output chunks and subsequently a lot of out of memory
-errors and performance issues.
 
 See :pr:`11328` by `Patrick Hoefler`_ for more details.
 
