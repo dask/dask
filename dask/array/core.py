@@ -3290,9 +3290,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                         cache[c] = new_chunks
                         dimension_result.extend(new_chunks)
 
-                        if max(dimension_result) == 1:
-                            # See if we can split up other axes further
-                            multiplier_remaining = _trivial_aggregate(a)
+                    if max(dimension_result) == 1:
+                        # See if we can split up other axes further
+                        multiplier_remaining = _trivial_aggregate(a)
 
                 else:
                     dimension_result, new_chunk = [], 0
