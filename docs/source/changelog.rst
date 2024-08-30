@@ -6,10 +6,35 @@ Changelog
 2024.8.2
 --------
 
-Automatically choose P2P rechunking where applicable
-""""""""""""""""""""""""""""""""""""""""""""""""""""
+Automatic selection of rechunking method
+""""""""""""""""""""""""""""""""""""""""
 
-TODO (placeholder)
+To enable users to rechunk data at larger scales than before, Dask now automatically chooses an appropriate rechunking method when rechunking on a cluster.
+This requires no additional configuration and is enabled by default.
+
+Specifically, Dask chooses between task-based and P2P rechunking.
+While task-based rechunking has been the previous default, P2P rechunking is beneficial when rechunking requires almost all-to-all communication between the old and new chunks, e.g., when changing between spacial and temporal chunking.
+In these cases, P2P rechunking offers constant memory usage and creates smaller task graphs.
+As a result, it works for cases where tasks-based rechunking would have previously failed.
+
+To disable automatic selection, users can select their preferred method via the configuration
+
+.. code-block::
+
+    import dask.config
+    # Choose either "tasks" or "p2p"
+    dask.config.set({"array.rechunk.method": "tasks"}) 
+
+or when rechunking
+
+.. code-block::
+
+    import dask.array as da
+    arr = da.random.random(size=(1000, 1000, 365), chunks=(-1, -1, "auto"))
+    # Choose either "tasks" or "p2p" 
+    arr = arr.rechunk(("auto", "auto", -1), method="tasks")
+
+See :pr:`11337` by `Hendrik Makait`_ for more details. 
 
 New shuffle API for Dask Arrays
 """""""""""""""""""""""""""""""
