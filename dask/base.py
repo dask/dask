@@ -253,7 +253,7 @@ def is_dask_collection(x) -> bool:
 class DaskMethodsMixin:
     """A mixin adding standard dask collection methods"""
 
-    __slots__ = ()
+    __slots__ = ("__weakref__",)
 
     def visualize(self, filename="mydask", format=None, optimize_graph=False, **kwargs):
         """Render the computation of this object's task graph using graphviz.
@@ -383,13 +383,11 @@ class DaskMethodsMixin:
             raise ImportError(
                 "Using async/await with dask requires the `distributed` package"
             ) from e
-        from tornado import gen
 
-        @gen.coroutine
-        def f():
+        async def f():
             if futures_of(self):
-                yield wait(self)
-            raise gen.Return(self)
+                await wait(self)
+            return self
 
         return f().__await__()
 
@@ -540,7 +538,11 @@ def unpack_collections(*args, traverse=True):
         dsk[collections_token] = quote(results)
         return simple_get(dsk, out)
 
-    return collections, repack
+    # The original `collections` is kept alive by the closure
+    # This causes the collection to be only freed by the garbage collector
+    collections2 = list(collections)
+    collections.clear()
+    return collections2, repack
 
 
 def optimize(*args, traverse=True, **kwargs):
