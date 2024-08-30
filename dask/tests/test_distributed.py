@@ -3,14 +3,15 @@ from __future__ import annotations
 import pytest
 
 distributed = pytest.importorskip("distributed")
-
 import asyncio
+import gc
 import os
 import sys
+import weakref
 from functools import partial
 from operator import add
 
-from distributed import Client, SchedulerPlugin, WorkerPlugin
+from distributed import Client, SchedulerPlugin, WorkerPlugin, futures_of, wait
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import (  # noqa F401
@@ -29,7 +30,6 @@ from dask import compute, delayed, persist
 from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
-from dask.distributed import futures_of, wait
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
@@ -1078,3 +1078,33 @@ async def test_bag_groupby_default(c, s, a, b):
     b = db.range(100, npartitions=10)
     b2 = b.groupby(lambda x: x % 13)
     assert not any("partd" in k[0] for k in b2.dask)
+
+
+@gen_cluster(client=True)
+async def test_release_persisted_futures_without_gc(c, s, a, b):
+    pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+    gc.collect()
+    gc.disable()
+    try:
+        x = da.arange(100, chunks=(20,))
+        y = (x + 1).persist()
+        future_refs = []
+        coly = weakref.ref(y)
+        future_refs.extend([weakref.ref(fut) for fut in futures_of(y)])
+        colz = weakref.ref(y)
+        y = await y
+        # The issue only occurs if we persist the future again.
+        z = y[:20].persist()
+
+        future_refs.extend([weakref.ref(fut) for fut in futures_of(z)])
+        colz = weakref.ref(z)
+        z = await z
+        del y, z
+        assert coly() is None
+        assert colz() is None
+        assert all(fut() is None for fut in future_refs)
+        while s.tasks:
+            await asyncio.sleep(0.01)
+    finally:
+        gc.enable()
