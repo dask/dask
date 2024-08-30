@@ -3249,14 +3249,10 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             del median_chunks[a]
             return True
 
-        last_multiplier = 0
-        last_autos = set()
-        while (
-            multiplier != last_multiplier or autos != last_autos
-        ):  # while things change
-            last_multiplier = multiplier  # record previous values
+        multiplier_remaining = True
+        while multiplier_remaining:  # while things change
             last_autos = set(autos)  # record previous values
-            multiplier_left = False
+            multiplier_remaining = False
 
             # Expand or contract each of the dimensions appropriately
             for a in sorted(autos):
@@ -3268,12 +3264,12 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
                 if proposed > shape[a]:  # we've hit the shape boundary
                     chunks[a] = shape[a]
-                    multiplier_left = _trivial_aggregate(a)
+                    multiplier_remaining = _trivial_aggregate(a)
                     largest_block *= shape[a]
                     continue
                 elif this_multiplier <= 1:
                     if max(previous_chunks[a]) == 1:
-                        multiplier_left = _trivial_aggregate(a)
+                        multiplier_remaining = _trivial_aggregate(a)
                         chunks[a] = tuple(previous_chunks[a])
                         continue
 
@@ -3296,7 +3292,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
                         if max(dimension_result) == 1:
                             # See if we can split up other axes further
-                            multiplier_left = _trivial_aggregate(a)
+                            multiplier_remaining = _trivial_aggregate(a)
 
                 else:
                     dimension_result, new_chunk = [], 0
@@ -3325,7 +3321,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                 result[a] = tuple(dimension_result)
 
             # recompute how much multiplier we have left, repeat
-            if multiplier_left:
+            if multiplier_remaining:
                 multiplier = _compute_multiplier(
                     limit, dtype, largest_block, median_chunks
                 )
