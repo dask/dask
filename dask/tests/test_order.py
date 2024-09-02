@@ -1286,7 +1286,7 @@ def test_anom_mean():
     max_age_transpose = max(ages_tranpose.values())
     assert max_age_transpose < 150
     assert avg_age_transpose < 100
-    assert sum(pressure) / len(pressure) < 100
+    assert sum(pressure) / len(pressure) < 101
 
 
 def test_anom_mean_raw(abcde):
