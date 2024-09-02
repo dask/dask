@@ -2986,7 +2986,7 @@ class DelayedsExpr(Expr):
     def __str__(self):
         return f"{type(self).__name__}({str(self.operands[0])})"
 
-    @property
+    @functools.cached_property
     def _name(self):
         return "delayed-container-" + _tokenize_deterministic(*self.operands)
 
