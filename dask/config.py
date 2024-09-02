@@ -198,15 +198,13 @@ def _load_config_file(path: str) -> dict | None:
 @overload
 def collect_yaml(
     paths: Sequence[str], *, return_paths: Literal[False] = False
-) -> Iterator[dict]:
-    ...
+) -> Iterator[dict]: ...
 
 
 @overload
 def collect_yaml(
     paths: Sequence[str], *, return_paths: Literal[True]
-) -> Iterator[tuple[pathlib.Path, dict]]:
-    ...
+) -> Iterator[tuple[pathlib.Path, dict]]: ...
 
 
 def collect_yaml(

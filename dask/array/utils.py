@@ -62,11 +62,11 @@ def meta_from_array(x, ndim=None, dtype=None):
 
     if isinstance(x, list) or isinstance(x, tuple):
         ndims = [
-            0
-            if isinstance(a, numbers.Number)
-            else a.ndim
-            if hasattr(a, "ndim")
-            else len(a)
+            (
+                0
+                if isinstance(a, numbers.Number)
+                else a.ndim if hasattr(a, "ndim") else len(a)
+            )
             for a in x
         ]
         a = [a if nd == 0 else meta_from_array(a, nd) for a, nd in zip(x, ndims)]

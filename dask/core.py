@@ -246,8 +246,7 @@ def get_dependencies(
     key: Key | None = ...,
     task: Key | NoDefault = ...,
     as_list: Literal[False] = ...,
-) -> set[Key]:
-    ...
+) -> set[Key]: ...
 
 
 @overload
@@ -256,8 +255,7 @@ def get_dependencies(
     key: Key | None,
     task: Key | NoDefault,
     as_list: Literal[True],
-) -> list[Key]:
-    ...
+) -> list[Key]: ...
 
 
 def get_dependencies(

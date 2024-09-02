@@ -66,8 +66,7 @@ def order(
     dependencies: Mapping[Key, set[Key]] | None = None,
     *,
     return_stats: Literal[True],
-) -> dict[Key, Order]:
-    ...
+) -> dict[Key, Order]: ...
 
 
 @overload
@@ -76,8 +75,7 @@ def order(
     dependencies: Mapping[Key, set[Key]] | None = None,
     *,
     return_stats: Literal[False] = False,
-) -> dict[Key, int]:
-    ...
+) -> dict[Key, int]: ...
 
 
 def order(
@@ -104,7 +102,7 @@ def order(
     {'a': 0, 'c': 1, 'b': 2, 'd': 3}
     """
     if not dsk:
-        return {}  # type: ignore
+        return {}
 
     dsk = dict(dsk)
     expected_len = len(dsk)
@@ -327,7 +325,7 @@ def order(
                         current = path[-1]
                         runnable_hull.add(current)
                         deps_downstream = dependents[current]
-                        deps_upstream = dependencies[current]  # type: ignore
+                        deps_upstream = dependencies[current]
                         if not deps_downstream:
                             # FIXME: The fact that it is possible for
                             # num_needed[current] == 0 means we're doing some
@@ -343,7 +341,7 @@ def order(
                                     # This ensures we're only considering splitters
                                     # that are genuinely splitting and not
                                     # interleaving
-                                    if len(dependencies[d]) == 1:  # type: ignore
+                                    if len(dependencies[d]) == 1:
                                         branch = path.copy()
                                         branch.append(d)
                                         branches.append(branch)
@@ -375,7 +373,7 @@ def order(
                                             add_to_result(k)
                         else:
                             if (
-                                len(dependencies[current]) > 1  # type: ignore
+                                len(dependencies[current]) > 1
                                 and num_needed[current] <= 1
                             ):
                                 for k in path:
@@ -794,8 +792,7 @@ def diagnostics(
     return rv, pressure
 
 
-def _f() -> None:
-    ...
+def _f() -> None: ...
 
 
 def _convert_task(task: Any) -> Any:

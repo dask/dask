@@ -1815,9 +1815,11 @@ def median(a, axis=None, keepdims=False, out=None):
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
-        chunks=[1 if ax in axis else c for ax, c in enumerate(a.chunks)]
-        if keepdims
-        else None,
+        chunks=(
+            [1 if ax in axis else c for ax, c in enumerate(a.chunks)]
+            if keepdims
+            else None
+        ),
     )
 
     result = handle_out(out, result)
@@ -1850,9 +1852,11 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
-        chunks=[1 if ax in axis else c for ax, c in enumerate(a.chunks)]
-        if keepdims
-        else None,
+        chunks=(
+            [1 if ax in axis else c for ax, c in enumerate(a.chunks)]
+            if keepdims
+            else None
+        ),
     )
 
     result = handle_out(out, result)

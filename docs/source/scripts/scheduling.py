@@ -62,7 +62,7 @@ for get in (dask.get, threaded.get, local.get_sync, multiprocessing.get):
     for n in x:
         dsk, keys = trivial(int(n), 5)
         start = time()
-        get(dsk, keys)  # type: ignore
+        get(dsk, keys)
         end = time()
         y.append(end - start)
     trivial_results[get] = np.array(y)
@@ -96,12 +96,12 @@ plt.savefig("images/scaling-nodes.png")
 
 x = np.linspace(1, 100, 10)
 crosstalk_results = dict()
-for get in [threaded.get, local.get_sync]:
+for get in [threaded.get, local.get_sync]:  # type: ignore[assignment]
     y = list()
     for n in x:
         dsk, keys = crosstalk(1000, 5, int(n))
         start = time()
-        get(dsk, keys)  # type: ignore
+        get(dsk, keys)
         end = time()
         y.append(end - start)
     crosstalk_results[get] = np.array(y)

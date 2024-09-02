@@ -28,6 +28,8 @@ ignore =
     F811
     # No explicit stacklevel in warnings.warn. FIXME we should correct this in the code
     B028
+    # multiple statements on one line; required for black compat
+    E701, E704
 
 max-line-length = 120
 per-file-ignores =

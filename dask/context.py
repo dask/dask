@@ -1,6 +1,7 @@
 """
 Control global computation context
 """
+
 from __future__ import annotations
 
 import threading

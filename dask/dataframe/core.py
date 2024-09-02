@@ -4837,9 +4837,11 @@ class DataFrame(_Frame):
                 "type": typename(type(self)),
                 "dataframe_type": typename(type(self._meta)),
                 "series_dtypes": {
-                    col: self._meta[col].dtype
-                    if hasattr(self._meta[col], "dtype")
-                    else None
+                    col: (
+                        self._meta[col].dtype
+                        if hasattr(self._meta[col], "dtype")
+                        else None
+                    )
                     for col in self._meta.columns
                 },
             }
@@ -4851,9 +4853,11 @@ class DataFrame(_Frame):
                     "type": typename(type(self)),
                     "dataframe_type": typename(type(self._meta)),
                     "series_dtypes": {
-                        col: self._meta[col].dtype
-                        if hasattr(self._meta[col], "dtype")
-                        else None
+                        col: (
+                            self._meta[col].dtype
+                            if hasattr(self._meta[col], "dtype")
+                            else None
+                        )
                         for col in self._meta.columns
                     },
                 }
@@ -6616,11 +6620,15 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
             raise NotImplementedError(msg)
         # For broadcastable series, use no rows.
         parts = [
-            d._meta
-            if _is_broadcastable(d)
-            else np.empty((), dtype=d.dtype)
-            if isinstance(d, Array)
-            else d._meta_nonempty
+            (
+                d._meta
+                if _is_broadcastable(d)
+                else (
+                    np.empty((), dtype=d.dtype)
+                    if isinstance(d, Array)
+                    else d._meta_nonempty
+                )
+            )
             for d in dasks
         ]
         with raise_on_meta_error(funcname(op)):
@@ -6685,9 +6693,12 @@ def _maybe_from_pandas(dfs):
     from dask.dataframe.io import from_pandas
 
     dfs = [
-        from_pandas(df, 1)
-        if (is_series_like(df) or is_dataframe_like(df)) and not is_dask_collection(df)
-        else df
+        (
+            from_pandas(df, 1)
+            if (is_series_like(df) or is_dataframe_like(df))
+            and not is_dask_collection(df)
+            else df
+        )
         for df in dfs
     ]
     return dfs
@@ -6892,9 +6903,9 @@ def apply_concat_apply(
         npartitions,
         partial(_concat, ignore_index=ignore_index),
         partial(combine, **combine_kwargs) if combine_kwargs else combine,
-        finalize_func=partial(aggregate, **aggregate_kwargs)
-        if aggregate_kwargs
-        else aggregate,
+        finalize_func=(
+            partial(aggregate, **aggregate_kwargs) if aggregate_kwargs else aggregate
+        ),
         split_every=split_every,
         split_out=split_out if (split_out and split_out > 1) else None,
         tree_node_name=f"{token or funcname(combine)}-combine-{token_key}",
