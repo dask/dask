@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from collections import defaultdict
 
 import pytest
 
@@ -2416,18 +2417,15 @@ def test_connecting_to_roots_long_linear_chains():
     dsk = {
         "a0": (f, 1),
         "a1": (f, 1),
-
         "b0": (f, "a0"),
         "c0": (f, "b0"),
         "d0": (f, "c0"),
         "d1": (f, "c0"),
         "e1": (f, "d0", "d1"),
-
         "b1": (f, "a1"),
         "c1": (f, "b1"),
         "d2": (f, "c1"),
         "d3": (f, "c1"),
-
         "f": (f, "e1", "d2", "d3", "d1"),
     }
     dependencies, dependents = get_deps(dsk)
@@ -2442,18 +2440,17 @@ def test_connecting_to_roots_long_linear_chains():
         assert id(connected_roots[k]) == id_a0
 
 
-def test_weird_array_foo():
-    import dask.array as da
-    import numpy as np
-
+def test_connected_roots_deduplication_mem_usage():
+    # see https://github.com/dask/dask/issues/11055
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
 
     def rotate(X, n_iter=2):
-        import dask.array as da
         gamma = 1
         n_samples, n_modes = X.shape
         R = np.eye(n_modes)
 
-        for i in range(n_iter):
+        for _ in range(n_iter):
             basis = X @ R
 
             basis2 = basis * basis.conj()
@@ -2462,7 +2459,9 @@ def test_weird_array_foo():
             alpha = gamma / n_samples
 
             transformed = X.conj().T @ (basis3 - (alpha * basis @ W))
-            U, svals, VT = da.linalg.svd_compressed(transformed, k=n_modes, compute=False)
+            U, svals, VT = da.linalg.svd_compressed(
+                transformed, k=n_modes, compute=False
+            )
             R = U @ VT
 
         Xrot = X @ R
@@ -2477,66 +2476,13 @@ def test_weird_array_foo():
     dsk = dict(u_rot.dask)
     dependencies, dependents = get_deps(dsk)
     connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
-    def get_dups_per_len(connected_roots):
-        from collections import defaultdict
-        by_len = defaultdict(list)
-        for k, v in connected_roots.items():
-            by_len[len(v)].append(v)
-        return {
-            l: len({id(v) for v in vs}) for l, vs in by_len.items()
-        }
-    dedup = get_dups_per_len(connected_roots)
-    assert len({id(v) for v in connected_roots.values()})
-    assert connected_roots
-# def test_weird_array_foo2():
 
-#     import dask.array as da
-#     import numpy as np
-#     def rotate(X, n_iter=100):
-#         gamma = 1
-#         n_samples, n_modes = X.shape
-#         R = np.eye(n_modes)
+    hashes = defaultdict(set)
 
-#         for i in range(n_iter):
-#             basis = X @ R
+    for v in connected_roots.values():
+        hashes[tuple(sorted(v))].add(id(v))
 
-#             basis2 = basis * basis.conj()
-#             basis3 = basis2 * basis
-#             W = np.diag(np.sum(basis2, axis=0))
-#             alpha = gamma / n_samples
-
-#             transformed = X.conj().T @ (basis3 - (alpha * basis @ W))
-#             U, svals, VT = da.linalg.svd_compressed(transformed, k=n_modes, compute=False)
-#             R = U @ VT
-
-#         Xrot = X @ R
-#         return Xrot
-
-#     n_modes = 100
-
-#     x = da.random.random((10000, 100), chunks=(200, -1))
-#     u, s, v = da.linalg.svd_compressed(x, k=n_modes, compute=False)
-
-#     u_rot = rotate(u)
-#     dsk = dict(u_rot.dask)
-#     dependencies, dependents = get_deps(dsk)
-#     connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
-#     connected_roots_no_dedup, max_dependents_no_dedup = _connecting_to_roots(dependencies, dependents, dedup=False)
-#     assert max_dependents_no_dedup == max_dependents
-#     assert connected_roots == connected_roots_no_dedup
-
-#     def get_dups_per_len(connected_roots):
-#         from collections import defaultdict
-#         by_len = defaultdict(list)
-#         for k, v in connected_roots.items():
-#             by_len[len(v)].append(v)
-#         return {
-#             l: len({id(v) for v in vs}) for l, vs in by_len.items()
-#         }
-#     no_dedup = get_dups_per_len(connected_roots_no_dedup)
-#     dedup = get_dups_per_len(connected_roots)
-#     assert len({id(v) for v in connected_roots.values()})
-#     assert connected_roots
+    assert set(map(len, hashes.values())) == {1}
 
 
 def test_connecting_to_roots_asym():

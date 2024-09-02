@@ -602,7 +602,7 @@ def order(
 
 def _connecting_to_roots(
     dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
-) -> tuple[dict[Key, set[Key]], dict[Key, int]]:
+) -> tuple[dict[Key, frozenset[Key]], dict[Key, int]]:
     """Determine for every node which root nodes are connected to it (i.e.
     ancestors). If arguments of dependencies and dependents are switched, this
     can also be used to determine which leaf nodes are connected to which node
@@ -634,27 +634,31 @@ def _connecting_to_roots(
                 num_needed[child] -= 1
                 if not num_needed[child]:
                     current.append(child)
-    dedup_mapping = {}
-    reverse_mapping = defaultdict(list)
+
+    dedup_mapping: dict[frozenset[Key], frozenset[Key]] = {}
     while current:
         key = current.pop()
+        if key in result:
+            continue
         for parent in dependents[key]:
             num_needed[parent] -= 1
             if not num_needed[parent]:
                 current.append(parent)
         # At some point, all the roots are the same, particularly for dense
         # graphs. We don't want to create new sets over and over again
-        new_set = None
+        new_set: set | None = None
         identical_sets = True
-        result_first = None
+        result_first: frozenset | None = None
 
-        for child in sorted(dependencies[key], key=len, reverse=True):
+        for child in sorted(
+            dependencies[key], key=lambda k: len(dependents[k]), reverse=True
+        ):
             r_child = result[child]
-            if not result_first:
+            if result_first is None:
                 result_first = r_child
                 max_dependents[key] = max_dependents[child]
             # This clause is written such that it can circuit break early
-            elif not (  # type: ignore[unreachable]
+            elif not (
                 identical_sets
                 and (result_first is r_child or r_child.issubset(result_first))
             ):
@@ -665,30 +669,13 @@ def _connecting_to_roots(
                 new_set.update(r_child)
 
         if new_set:
-            new_set = frozenset(new_set)
-            dedup = dedup_mapping.get(new_set, None)
-            if dedup is None:
-                dedup_mapping[new_set] = dedup = new_set
-            result[key] = rv = dedup
+            new_set_frozen = frozenset(new_set)
+            result[key] = dedup_mapping.get(new_set_frozen, new_set_frozen)
         else:
             assert result_first is not None
-            result[key] = rv = result_first
-        reverse_mapping[rv].append(key)
+            result[key] = result_first
     del dedup_mapping
-    # # Frozensets are otherwise very slow...
-    # all_keys = set(result) - roots
-    # while all_keys:
-    #     key = all_keys.pop()
-    #     frset = result[key]
-    #     mutset = set(frset)
-    #     result[key] = mutset
-    #     for k in reverse_mapping[frset]:
-    #         if k in all_keys:
-    #             all_keys.remove(k)
-    #             result[k] = mutset
-    # result = {k: set(v) for k, v in result.items()}
-    # The order algo doesn't care about this but this makes it easier to
-    # understand and shouldn't take that much time
+
     empty_set: frozenset[Key] = frozenset()
     for r in roots:
         result[r] = empty_set
