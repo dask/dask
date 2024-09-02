@@ -679,7 +679,11 @@ def test_pyarrow_strings_enabled():
         pa = None
 
     # If `pyarrow>=12` are installed, then default to using pyarrow strings
-    if pa is not None and Version(pa.__version__) >= Version("12.0.0"):
+    if (
+        dask.config.get("dataframe.convert-string") in (True, None)
+        and pa is not None
+        and Version(pa.__version__) >= Version("12.0.0")
+    ):
         assert pyarrow_strings_enabled() is True
     else:
         assert pyarrow_strings_enabled() is False

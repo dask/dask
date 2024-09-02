@@ -135,7 +135,7 @@ try:
         trace,
         var,
     )
-    from dask.array.reshape import reshape
+    from dask.array.reshape import reshape, reshape_blockwise
     from dask.array.routines import (
         allclose,
         append,

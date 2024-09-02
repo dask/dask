@@ -6,6 +6,7 @@ import pytest
 import dask
 import dask.array as da
 from dask.array import assert_eq, shuffle
+from dask.array._shuffle import _rechunk_other_dimensions
 from dask.core import flatten
 
 
@@ -20,26 +21,26 @@ def darr(arr):
 
 
 @pytest.mark.parametrize(
-    "indexer, chunks",
+    "indexer, chunks, other_chunks",
     [
-        ([[1, 5, 6], [0, 2, 3, 4, 7]], (3, 5)),
-        ([[1, 5, 6], [0, 3], [4, 2, 7]], (5, 3)),
-        ([[1], [0, 6, 5, 3, 2, 4], [7]], (1, 6, 1)),
-        ([[1, 5, 1, 5, 1, 5], [1, 6, 4, 2, 7]], (6, 5)),
+        ([[1, 5, 6], [0, 2, 3, 4, 7]], (3, 5), (2, 1)),
+        ([[1, 5, 6], [0, 3], [4, 2, 7]], (5, 3), (2, 1)),
+        ([[1], [0, 6, 5, 3, 2, 4], [7]], (1, 6, 1), (1, 1, 1)),
+        ([[1, 5, 1, 5, 1, 5], [1, 6, 4, 2, 7]], (6, 5), (1, 1, 1)),
     ],
 )
-def test_shuffle(arr, darr, indexer, chunks):
+def test_shuffle(arr, darr, indexer, chunks, other_chunks):
     result = darr.shuffle(indexer, axis=1)
     expected = arr[:, list(flatten(indexer))]
     assert_eq(result, expected)
-    assert result.chunks[0] == darr.chunks[0]
+    assert result.chunks[0] == other_chunks
     assert result.chunks[1] == chunks
 
 
 @pytest.mark.parametrize("tol, chunks", ((1, (3, 2, 3)), (1.4, (5, 3))))
 def test_shuffle_config_tolerance(arr, darr, tol, chunks):
     indexer = [[1, 5, 6], [0, 3], [4, 2, 7]]
-    with dask.config.set({"array.shuffle.chunksize-tolerance": tol}):
+    with dask.config.set({"array.chunk-size-tolerance": tol}):
         result = darr.shuffle(indexer, axis=1)
     expected = arr[:, [1, 5, 6, 0, 3, 4, 2, 7]]
     assert_eq(result, expected)
@@ -93,4 +94,49 @@ def test_shuffle_no_op_with_correct_indexer():
     ]
     result = arr.shuffle(indexer, axis=0)
     assert result.dask == arr.dask
+    assert_eq(arr, result)
+
+
+def test_resize_other_dimensions():
+    arr = da.random.random((250, 50), chunks=((45, 100, 38, 67), 10))
+    result = _rechunk_other_dimensions(arr, 20, 1, "auto")
+    assert result.chunks == ((45, 50, 50, 38, 34, 33), (10,) * 5)
+    assert_eq(arr, result)
+
+    arr = da.random.random((250, 50, 20), chunks=((45, 100, 38, 67), 10, 10))
+    result = _rechunk_other_dimensions(arr, 20, 1, "auto")
+    assert result.chunks == ((45, 50, 50, 38, 67), (10,) * 5, (5,) * 4)
+    assert_eq(arr, result)
+
+    result = _rechunk_other_dimensions(arr, 40, 1, "auto")
+    assert result.chunks == ((45, 50, 50, 38, 34, 33), (10,) * 5, (5,) * 4)
+    assert_eq(arr, result)
+
+    arr = da.random.random((250, 50, 5), chunks=((45, 100, 38, 67), 10, 1))
+    result = _rechunk_other_dimensions(arr, 40, 1, "auto")
+    assert result.chunks == (
+        (23, 22, 25, 25, 25, 25, 19, 19, 23, 22, 22),
+        (10,) * 5,
+        (1,) * 5,
+    )
+    assert_eq(arr, result)
+
+    arr = da.random.random((5, 50, 5), chunks=(5, 10, (2, 3)))
+    result = _rechunk_other_dimensions(arr, 100, 1, "auto")
+    assert result.chunks == ((2, 1, 1, 1), (10,) * 5, (1,) * 5)
+    assert_eq(arr, result)
+
+    arr = da.random.random((5, 50, 5), chunks=(5, 10, (2, 3)))
+    result = _rechunk_other_dimensions(arr, 1000, 1, "auto")
+    assert result.chunks == ((1,) * 5, (10,) * 5, (1,) * 5)
+    assert_eq(arr, result)
+
+    arr = da.random.random((5, 50, 5), chunks=(5, 10, (2, 3)))
+    result = _rechunk_other_dimensions(arr, 250, 1, "auto")
+    assert result.chunks == ((1,) * 5, (10,) * 5, (1,) * 5)
+    assert_eq(arr, result)
+
+    arr = da.random.random((2, 1, 2), chunks=(2, 1, 2))
+    result = _rechunk_other_dimensions(arr, 4, 1, "auto")
+    assert result.chunks == ((1, 1), (1,), (1, 1))
     assert_eq(arr, result)

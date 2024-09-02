@@ -1,4 +1,5 @@
 """ A set of NumPy functions to apply per chunk """
+
 from __future__ import annotations
 
 import contextlib

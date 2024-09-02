@@ -39,7 +39,7 @@ dependencies:
   # - tiledb # crashes on Python 3.11
   - xarray
   - sqlalchemy
-  - pyarrow>=13
+  - pyarrow>=14.0.1
   - coverage
   - jsonschema
   # other -- IO
@@ -49,9 +49,7 @@ dependencies:
   - httpretty
   - aiohttp
   - s3fs>=2021.9.0
-  # Need a new `crick` release with support for `numpy=1.24+`
-  # https://github.com/dask/crick/issues/25
-  # - crick
+  - crick
   - cytoolz
   - distributed
   - ipython

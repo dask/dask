@@ -5,6 +5,7 @@ The rechunk module defines:
     rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
+
 from __future__ import annotations
 
 import heapq
@@ -361,7 +362,8 @@ def rechunk(
 
     _validate_rechunk(x.chunks, chunks)
 
-    method = method or config.get("array.rechunk.method")
+    if method is None:
+        method = _choose_rechunk_method(x.chunks, chunks, threshold=threshold)
 
     if method == "tasks":
         steps = plan_rechunk(
@@ -375,10 +377,33 @@ def rechunk(
     elif method == "p2p":
         from distributed.shuffle import rechunk_p2p
 
-        return rechunk_p2p(x, chunks)
+        return rechunk_p2p(
+            x,
+            chunks,
+            threshold=threshold,
+            block_size_limit=block_size_limit,
+            balance=balance,
+        )
 
     else:
         raise NotImplementedError(f"Unknown rechunking method '{method}'")
+
+
+def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
+    if method := config.get("array.rechunk.method", None):
+        return method
+    try:
+        from distributed import default_client
+
+        default_client()
+    except (ImportError, ValueError):
+        return "tasks"
+
+    _old_to_new = old_to_new(old_chunks, new_chunks)
+    graph_size = math.prod(sum(len(ins) for ins in axis) for axis in _old_to_new)
+    threshold = threshold or config.get("array.rechunk.threshold")
+    graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
+    return "tasks" if graph_size < graph_size_threshold else "p2p"
 
 
 def _number_of_blocks(chunks):
@@ -615,9 +640,7 @@ def plan_rechunk(
     block_size_limit = max([block_size_limit, largest_old_block, largest_new_block])
 
     # The graph size above which to optimize
-    graph_size_threshold = threshold * (
-        _number_of_blocks(old_chunks) + _number_of_blocks(new_chunks)
-    )
+    graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
 
     current_chunks = old_chunks
     first_pass = True
@@ -652,6 +675,10 @@ def plan_rechunk(
         first_pass = False
 
     return steps + [new_chunks]
+
+
+def _graph_size_threshold(old_chunks, new_chunks, threshold):
+    return threshold * (_number_of_blocks(old_chunks) + _number_of_blocks(new_chunks))
 
 
 def _compute_rechunk(x, chunks):

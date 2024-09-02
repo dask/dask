@@ -90,6 +90,13 @@ jobs:
           echo "DASK_DATAFRAME__QUERY_PLANNING: $DASK_DATAFRAME__QUERY_PLANNING"
           echo "DASK_DATAFRAME__QUERY_PLANNING=$DASK_DATAFRAME__QUERY_PLANNING" >> $GITHUB_ENV
 
+      - name: Disable auto pyarrow strings for 3.10 builds
+        if: ${{ matrix.environment == '3.10' }}
+        run: |
+          export DASK_DATAFRAME__CONVERT_STRING="False"
+          echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
+          echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
+
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
         if: ${{ matrix.os != 'windows-latest' }}
