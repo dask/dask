@@ -670,7 +670,10 @@ def _connecting_to_roots(
 
         if new_set:
             new_set_frozen = frozenset(new_set)
-            result[key] = dedup_mapping.get(new_set_frozen, new_set_frozen)
+            deduped = dedup_mapping.get(new_set_frozen, None)
+            if deduped is None:
+                dedup_mapping[new_set_frozen] = deduped = new_set_frozen
+            result[key] = deduped
         else:
             assert result_first is not None
             result[key] = result_first
