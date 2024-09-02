@@ -113,7 +113,7 @@ def _rechunk_other_dimensions(
     # or every non-shuffle dimension is all 1
     while changeable_dimensions:
         n_changeable_dimensions = len(changeable_dimensions)
-        chunksize_inc_factor = reduce(mul, map(max, new_chunks)) / maximum_chunk  # type: ignore[operator]
+        chunksize_inc_factor = reduce(mul, map(max, new_chunks)) / maximum_chunk
         if chunksize_inc_factor <= 1:
             break
 

@@ -79,7 +79,9 @@ __all__ = (
     "clone_key",
 )
 
-_annotations: ContextVar[dict[str, Any]] = ContextVar("annotations", default={})
+_annotations: ContextVar[dict[str, Any] | None] = ContextVar(
+    "annotations", default=None
+)
 
 
 def get_annotations() -> dict[str, Any]:
@@ -93,7 +95,7 @@ def get_annotations() -> dict[str, Any]:
     --------
     annotate
     """
-    return _annotations.get()
+    return _annotations.get() or {}
 
 
 @contextmanager
@@ -199,8 +201,10 @@ def annotate(**annotations: Any) -> Iterator[None]:
             "'allow_other_workers' annotations must be a bool or a callable, but got %s"
             % annotations["allow_other_workers"]
         )
-
-    token = _annotations.set(merge(_annotations.get(), annotations))
+    ctx_annot = _annotations.get()
+    if ctx_annot is None:
+        ctx_annot = {}
+    token = _annotations.set(merge(ctx_annot, annotations))
     try:
         yield
     finally:

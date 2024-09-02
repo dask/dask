@@ -250,7 +250,11 @@ class DaskCollection(Protocol):
 
     """
 
-    __dask_scheduler__: staticmethod[SchedulerGetCallable]
+    # FIXME: It is currently not possible to define a staticmethod from a callback protocol
+    # Also, the definition in `is_dask_collection` cannot be satisfied by a
+    # protocol / typing check
+    # staticmethod[SchedulerGetCallable]
+    __dask_scheduler__: staticmethod
     """The default scheduler ``get`` to use for this object.
 
     Usually attached to the class as a staticmethod, e.g.:

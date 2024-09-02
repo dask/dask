@@ -2324,8 +2324,9 @@ def test_df_groupby_idx_axis(func, axis):
     warn = None if DASK_EXPR_ENABLED else FutureWarning
 
     if axis in (1, "columns"):
-        with pytest.raises(NotImplementedError), pytest.warns(
-            warn, match="`axis` parameter is deprecated"
+        with (
+            pytest.raises(NotImplementedError),
+            pytest.warns(warn, match="`axis` parameter is deprecated"),
         ):
             getattr(ddf.groupby("group"), func)(axis=axis)
     else:
