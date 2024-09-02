@@ -87,6 +87,9 @@ class Rechunk(Array):
 
     def _layer(self):
         method = self.method or dask.config.get("array.rechunk.method")
+        # Default to tasks since P2P is not implemented
+        if method is None:
+            method = "tasks"
         if method == "tasks":
             steps = plan_rechunk(
                 self.array.chunks,
