@@ -3,6 +3,7 @@ Support for pandas ExtensionArray in dask.dataframe.
 
 See :ref:`extensionarrays` for more.
 """
+
 from __future__ import annotations
 
 from dask.dataframe.accessor import (

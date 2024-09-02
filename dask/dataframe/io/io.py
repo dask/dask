@@ -162,8 +162,7 @@ def from_pandas(
     chunksize: int | None = None,
     sort: bool = True,
     name: str | None = None,
-) -> DataFrame:
-    ...
+) -> DataFrame: ...
 
 
 # We ignore this overload for now until pandas-stubs can be added.
@@ -175,8 +174,7 @@ def from_pandas(  # type: ignore
     chunksize: int | None = None,
     sort: bool = True,
     name: str | None = None,
-) -> Series:
-    ...
+) -> Series: ...
 
 
 def from_pandas(
@@ -663,9 +661,11 @@ def from_delayed(
             {(i,): inp.key for i, inp in enumerate(dfs)},
             produces_keys=True,
         ),
-        io_func=partial(check_meta, meta=meta, funcname="from_delayed")
-        if verify_meta
-        else lambda x: x,
+        io_func=(
+            partial(check_meta, meta=meta, funcname="from_delayed")
+            if verify_meta
+            else lambda x: x
+        ),
     )
     df = new_dd_object(
         HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs

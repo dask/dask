@@ -106,6 +106,7 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
+
 from __future__ import annotations
 
 import os

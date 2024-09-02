@@ -144,11 +144,11 @@ def _trim(x, axes, boundary, block_info):
     axes = [axes.get(i, 0) for i in range(x.ndim)]
     axes_front = (ax[0] if isinstance(ax, tuple) else ax for ax in axes)
     axes_back = (
-        -ax[1]
-        if isinstance(ax, tuple) and ax[1]
-        else -ax
-        if isinstance(ax, Integral) and ax
-        else None
+        (
+            -ax[1]
+            if isinstance(ax, tuple) and ax[1]
+            else -ax if isinstance(ax, Integral) and ax else None
+        )
         for ax in axes
     )
 
@@ -159,9 +159,11 @@ def _trim(x, axes, boundary, block_info):
         )
     )
     trim_back = (
-        None
-        if (chunk_location == chunks - 1 and boundary.get(i, "none") == "none")
-        else ax
+        (
+            None
+            if (chunk_location == chunks - 1 and boundary.get(i, "none") == "none")
+            else ax
+        )
         for i, (chunks, chunk_location, ax) in enumerate(
             zip(block_info[0]["num-chunks"], block_info[0]["chunk-location"], axes_back)
         )
