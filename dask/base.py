@@ -79,7 +79,9 @@ __all__ = (
     "clone_key",
 )
 
-_annotations: ContextVar[dict[str, Any]] = ContextVar("annotations", default={})
+_annotations: ContextVar[dict[str, Any] | None] = ContextVar(
+    "annotations", default=None
+)
 
 
 def get_annotations() -> dict[str, Any]:
@@ -93,7 +95,7 @@ def get_annotations() -> dict[str, Any]:
     --------
     annotate
     """
-    return _annotations.get()
+    return _annotations.get() or {}
 
 
 @contextmanager
