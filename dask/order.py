@@ -46,6 +46,7 @@ graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
 """
+import itertools
 from collections import defaultdict, deque, namedtuple
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from typing import Any, Literal, NamedTuple, overload
@@ -107,6 +108,9 @@ def order(
     expected_len = len(dsk)
     from dask._task_spec import DependenciesMapping
 
+    # Dask.order cannot handle dependencies that are not part of the graph
+    # itself so we'll have to remove them. This is a rather expensive operation
+    # but DependenciesMapping will cache this
     dependencies = DependenciesMapping(dsk, include_external=False)
     dependents = reverse_dict(dependencies)
 
@@ -169,7 +173,10 @@ def order(
                     if not (dependencies[dep] - removed_roots):
                         root_nodes.add(dep)
                 recompute_dependents = True
-                del dsk[root]
+    # Only delete things later to not disrupt the DependenciesMapping cache.
+    # After this, both dsk and dependencies should not be mutated.
+    for key in itertools.chain(removed_leafs, removed_roots):
+        dsk.pop(key, None)
     del removed_leafs, removed_roots
     # We have to recompute dependents. Dependencies are automatically updated /
     # computed on the fly

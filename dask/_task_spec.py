@@ -821,7 +821,9 @@ class DependenciesMapping(Mapping):
         if not isinstance(v, GraphNode):
             from dask.core import get_dependencies
 
-            return get_dependencies(self.dsk, task=self.dsk[key])
+            deps = get_dependencies(self.dsk, task=self.dsk[key])
+        else:
+            deps = self.dsk[key].dependencies
         if not self.include_external:
             if len(self.dsk) != len(self._dsk_set):
                 self._dsk_set = set(self.dsk)
@@ -829,12 +831,10 @@ class DependenciesMapping(Mapping):
             try:
                 return self._cache[key]
             except KeyError:
-                self._cache[key] = rv = self.dsk[key].dependencies.intersection(
-                    self._dsk_set
-                )
-                return rv
+                self._cache[key] = deps = deps.intersection(self._dsk_set)
+                return deps
 
-        return self.dsk[key].dependencies
+        return deps
 
     def __iter__(self):
         return iter(self.dsk)
