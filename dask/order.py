@@ -318,9 +318,10 @@ def order(
                     add_to_result(key)
                     continue
                 path = [key]
-                branches = deque([path])
+                branches = deque([(0, path)])
+
                 while branches:
-                    path = branches.popleft()
+                    nsplits, path = branches.popleft()
                     while True:
                         # Loop invariant. Too expensive to compute at runtime
                         # assert not set(known_runnable_paths).intersection(runnable_hull)
@@ -339,6 +340,7 @@ def order(
                                 runnable_hull.discard(current)
                         elif len(path) == 1 or len(deps_upstream) == 1:
                             if len(deps_downstream) > 1:
+                                nsplits += 1
                                 for d in sorted(deps_downstream, key=sort_key):
                                     # This ensures we're only considering splitters
                                     # that are genuinely splitting and not
@@ -346,7 +348,7 @@ def order(
                                     if len(dependencies[d]) == 1:  # type: ignore
                                         branch = path.copy()
                                         branch.append(d)
-                                        branches.append(branch)
+                                        branches.append((nsplits, branch))
                                 break
                             path.extend(deps_downstream)
                             continue
@@ -366,6 +368,13 @@ def order(
                                         pruned_branches
                                     )
                                 else:
+                                    if nsplits > 1:
+                                        path = []
+                                        for pruned in pruned_branches:
+                                            path.extend(pruned)
+                                        branches.append((nsplits - 1, path))
+                                        break
+
                                     while pruned_branches:
                                         path = pruned_branches.popleft()
                                         for k in path:
