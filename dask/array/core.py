@@ -447,9 +447,11 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
 
     # make sure that every arg is an evaluated array
     args = [
-        np.ones_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
-        if is_arraylike(x)
-        else x
+        (
+            np.ones_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+            if is_arraylike(x)
+            else x
+        )
         for x in args
     ]
     try:
@@ -3138,9 +3140,11 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
         allints = all(isinstance(c, int) for c in chunks)
         chunks = sum(
             (
-                blockdims_from_blockshape((s,), (c,))
-                if not isinstance(c, (tuple, list))
-                else (c,)
+                (
+                    blockdims_from_blockshape((s,), (c,))
+                    if not isinstance(c, (tuple, list))
+                    else (c,)
+                )
                 for s, c in zip(shape, chunks)
             ),
             (),
@@ -4023,11 +4027,11 @@ def unify_chunks(*args, **kwargs):
             arrays.append(a)
         else:
             chunks = tuple(
-                chunkss[j]
-                if a.shape[n] > 1
-                else a.shape[n]
-                if not np.isnan(sum(chunkss[j]))
-                else None
+                (
+                    chunkss[j]
+                    if a.shape[n] > 1
+                    else a.shape[n] if not np.isnan(sum(chunkss[j])) else None
+                )
                 for n, j in enumerate(i)
             )
             if chunks != a.chunks and all(a.chunks):
@@ -4857,9 +4861,11 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         # them just like other arrays, and if necessary cast the result of op
         # to match.
         vals = [
-            np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
-            if not is_scalar_for_elemwise(a)
-            else a
+            (
+                np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
+                if not is_scalar_for_elemwise(a)
+                else a
+            )
             for a in args
         ]
         try:
@@ -5260,9 +5266,11 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     if axis < 0:
         axis = ndim + axis + 1
     shape = tuple(
-        len(seq)
-        if i == axis
-        else (seq[0].shape[i] if i < axis else seq[0].shape[i - 1])
+        (
+            len(seq)
+            if i == axis
+            else (seq[0].shape[i] if i < axis else seq[0].shape[i - 1])
+        )
         for i in range(meta.ndim)
     )
 
@@ -5584,10 +5592,12 @@ def _vindex_array(x, dict_indexes):
     n_chunks, remainder = divmod(len(points), max_chunk_point_dimensions)
     chunks.insert(
         0,
-        (max_chunk_point_dimensions,) * n_chunks
-        + ((remainder,) if remainder > 0 else ())
-        if points
-        else (0,),
+        (
+            (max_chunk_point_dimensions,) * n_chunks
+            + ((remainder,) if remainder > 0 else ())
+            if points
+            else (0,)
+        ),
     )
     chunks = tuple(chunks)
 

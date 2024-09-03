@@ -113,7 +113,7 @@ def _rechunk_other_dimensions(
     # or every non-shuffle dimension is all 1
     while changeable_dimensions:
         n_changeable_dimensions = len(changeable_dimensions)
-        chunksize_inc_factor = reduce(mul, map(max, new_chunks)) / maximum_chunk  # type: ignore[operator]
+        chunksize_inc_factor = reduce(mul, map(max, new_chunks)) / maximum_chunk
         if chunksize_inc_factor <= 1:
             break
 
@@ -207,6 +207,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     intermediates = dict()
     merges = dict()
+    dtype = _minimal_dtype(max(chunks[axis]))
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()
@@ -219,7 +220,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
         new_chunk_taker = np.array(new_chunk_taker)
-        sorter = np.argsort(new_chunk_taker)
+        sorter = np.argsort(new_chunk_taker).astype(dtype)
         sorter_key = sorter_name + tokenize(sorter)
         # low level fusion can't deal with arrays on first position
         merges[sorter_key] = (1, sorter)
@@ -249,9 +250,10 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
                 if c in taker_cache:
                     taker_key = taker_cache[c]
                 else:
-                    this_slice[axis] = sorted_array[b_start:b_end] - (
-                        chunk_boundaries[c - 1] if c > 0 else 0
-                    )
+                    this_slice[axis] = (
+                        sorted_array[b_start:b_end]
+                        - (chunk_boundaries[c - 1] if c > 0 else 0)
+                    ).astype(dtype)
                     if len(source_chunk_nr) == 1:
                         this_slice[axis] = this_slice[axis][np.argsort(sorter)]
 
@@ -300,3 +302,12 @@ def convert_key(key, chunk, axis):
     key = list(key)
     key.insert(axis, chunk)
     return tuple(key)
+
+
+def _minimal_dtype(max_value):
+    for dtype in [np.uint8, np.uint16, np.uint32, np.uint64]:
+        if max_value <= np.iinfo(dtype).max:
+            return dtype
+    else:
+        # shouldn't happen
+        raise OverflowError(f"Can't find a dtype for {max_value}")
