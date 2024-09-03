@@ -211,8 +211,8 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()
-    sorter_name = "array-sorter-"
-    taker_name = "array-taker-"
+    sorter_name = "shuffle-sorter-"
+    taker_name = "shuffle-taker-"
 
     old_blocks = np.empty([len(c) for c in chunks], dtype="O")
     for old_index in np.ndindex(old_blocks.shape):

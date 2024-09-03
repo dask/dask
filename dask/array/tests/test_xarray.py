@@ -80,5 +80,5 @@ def test_positional_indexer_multiple_variables():
     np.random.shuffle(indexer)
     result = ds.isel(time=indexer)
     graph = result.__dask_graph__()
-    assert len({k for k in graph if "array-taker" in k}) == 4
-    assert len({k for k in graph if "array-sorter" in k}) == 2
+    assert len({k for k in graph if "shuffle-taker" in k}) == 4
+    assert len({k for k in graph if "shuffle-sorter" in k}) == 2
