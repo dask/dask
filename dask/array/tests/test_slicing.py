@@ -958,6 +958,13 @@ def test_shuffle_slice(size, chunks):
     b = shuffle_slice(x, index)
     assert_eq(a, b)
 
+    index = np.arange(1, len(x)).tolist()
+    index.append(0)
+    index = np.array(index)
+    a = x[index]
+    b = shuffle_slice(x, index)
+    assert_eq(a, b)
+
 
 def test_unknown_chunks_length_one():
     a = np.arange(256, dtype=int)
