@@ -2548,3 +2548,101 @@ def test_do_not_mutate_input():
     assert_topological_sort(dsk, o)
     assert dsk == dsk_copy
     assert dependencies == dependencies_copy
+
+
+def test_stackstac():
+    # see https://github.com/dask/dask/issues/11363
+    # and https://github.com/dask/dask/pull/11367
+    final_keys = [
+        ("transpose-9c80c6b26d7ef5cfec7274ee9e6b091e", 0, 0, 0),
+        ("transpose-9c80c6b26d7ef5cfec7274ee9e6b091e", 0, 1, 0),
+    ]
+    dsk = {
+        ("transpose-9c80c6b26d7ef5cfec7274ee9e6b091e", 0, 0, 0): (
+            f,
+            ("vindex-merge", 0, 0, 0),
+        ),
+        ("transpose-9c80c6b26d7ef5cfec7274ee9e6b091e", 0, 1, 0): (
+            f,
+            ("vindex-merge", 0, 1, 0),
+        ),
+        ("vindex-merge", 0, 0, 0): (
+            f,
+            ("vindex-slice", 0, 0, 0),
+            ("vindex-slice", 1, 0, 0),
+            ("vindex-slice", 2, 0, 0),
+            ("vindex-slice", 3, 0, 0),
+        ),
+        ("vindex-slice", 2, 0, 0): (f, ("getitem-vindex", 2, 0, 0)),
+        ("vindex-merge", 0, 1, 0): (
+            f,
+            ("vindex-slice", 0, 0, 1),
+            ("vindex-slice", 1, 0, 1),
+            ("vindex-slice", 2, 0, 1),
+            ("vindex-slice", 3, 0, 1),
+        ),
+        ("vindex-slice", 2, 0, 1): (f, ("getitem-vindex", 2, 0, 1)),
+        ("vindex-slice", 1, 0, 0): (f, ("getitem-vindex", 1, 0, 0)),
+        ("getitem-vindex", 2, 0, 1): (
+            f,
+            ("shuffle-split", 321),
+            ("shuffle-split", 322),
+        ),
+        ("vindex-slice", 3, 0, 1): (f, ("getitem-vindex", 3, 0, 1)),
+        ("vindex-slice", 0, 0, 1): (f, ("getitem-vindex", 0, 0, 1)),
+        ("getitem-vindex", 3, 0, 1): (
+            f,
+            ("shuffle-split", 299),
+            ("shuffle-split", 300),
+        ),
+        ("getitem-vindex", 2, 0, 0): (f, ("concatenate", 0, 1, 9, 1)),
+        ("vindex-slice", 3, 0, 0): (f, ("getitem-vindex", 3, 0, 0)),
+        ("shuffle-split", 322): (f, ("concatenate", 0, 1, 9, 1)),
+        ("vindex-slice", 0, 0, 0): (f, ("getitem-vindex", 0, 0, 0)),
+        ("getitem-vindex", 0, 0, 1): (
+            f,
+            ("shuffle-split", 341),
+            ("shuffle-split", 342),
+        ),
+        ("vindex-slice", 1, 0, 1): (f, ("getitem-vindex", 1, 0, 1)),
+        ("shuffle-split", 321): (f, ("concatenate-getitem", 321)),
+        ("shuffle-split", 299): (f, ("concatenate-getitem", 299)),
+        ("getitem-vindex", 3, 0, 0): (f, ("concatenate", 0, 1, 8, 1)),
+        ("getitem-vindex", 0, 0, 0): (f, ("concatenate", 0, 1, 10, 0)),
+        ("getitem-vindex", 1, 0, 0): (f, ("concatenate", 0, 1, 9, 0)),
+        ("concatenate-getitem", 299): (f, ("fetch-raster", 0, 0, 8, 1)),
+        ("concatenate", 0, 1, 9, 1): (f, ("getitem-sub", 0, 1, 9, 1)),
+        ("concatenate-getitem", 321): (f, ("fetch-raster", 0, 0, 9, 1)),
+        ("fetch-raster", 0, 0, 8, 1): (f, ("asset_table", 0, 0)),
+        ("concatenate", 0, 1, 8, 1): (f, ("getitem-sub", 0, 1, 8, 1)),
+        ("fetch-raster", 0, 0, 9, 1): (f, ("asset_table", 0, 0)),
+        ("concatenate", 0, 1, 9, 0): (f, ("getitem-sub", 0, 1, 9, 0)),
+        ("shuffle-split", 300): (f, ("concatenate", 0, 1, 8, 1)),
+        ("concatenate", 0, 1, 10, 0): (f, ("getitem-sub", 0, 1, 10, 0)),
+        ("asset_table", 0, 0): (f, ("asset-table-data", 0, 0)),
+        ("shuffle-split", 342): (f, ("concatenate", 0, 1, 10, 0)),
+        ("getitem-vindex", 1, 0, 1): (
+            f,
+            ("shuffle-split", 319),
+            ("shuffle-split", 320),
+        ),
+        ("getitem-sub", 0, 1, 10, 0): (f, ("fetch-raster", 0, 0, 10, 0)),
+        ("getitem-sub", 0, 1, 8, 1): (f, ("fetch-raster", 0, 0, 8, 1)),
+        ("shuffle-split", 341): (f, ("concatenate-getitem", 341)),
+        ("getitem-sub", 0, 1, 9, 1): (f, ("fetch-raster", 0, 0, 9, 1)),
+        ("concatenate-getitem", 341): (f, ("fetch-raster", 0, 0, 10, 0)),
+        ("asset-table-data", 0, 0): (f,),
+        ("getitem-sub", 0, 1, 9, 0): (f, ("fetch-raster", 0, 0, 9, 0)),
+        ("fetch-raster", 0, 0, 10, 0): (f, ("asset_table", 0, 0)),
+        ("shuffle-split", 320): (f, ("concatenate", 0, 1, 9, 0)),
+        ("shuffle-split", 319): (f, ("concatenate-getitem", 319)),
+        ("fetch-raster", 0, 0, 9, 0): (f, ("asset_table", 0, 0)),
+        ("concatenate-getitem", 319): (f, ("fetch-raster", 0, 0, 9, 0)),
+    }
+    o = order(dsk, return_stats=True)
+    _, pressure = diagnostics(dsk)
+    assert max(pressure) <= 9, pressure
+    for k in final_keys:
+        # Ensure that we're not processing the entire graph using
+        # process_runnables (fractional values) but are using the critical path
+        assert o[k].critical_path in {1, 2}
