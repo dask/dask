@@ -105,25 +105,21 @@ _anom_count = itertools.count()
 
 
 @overload
-def parse_input(obj: dict) -> DictOfTasks | DataNode:
-    ...
+def parse_input(obj: dict) -> DictOfTasks | DataNode: ...
 
 
 @overload
 def parse_input(
     obj: list | tuple | set | frozenset,
-) -> SequenceOfTasks | DataNode:
-    ...
+) -> SequenceOfTasks | DataNode: ...
 
 
 @overload
-def parse_input(obj: TaskRef) -> Alias:
-    ...
+def parse_input(obj: TaskRef) -> Alias: ...
 
 
 @overload
-def parse_input(obj: _T) -> _T:
-    ...
+def parse_input(obj: _T) -> _T: ...
 
 
 def parse_input(obj: Any) -> GraphNode:
