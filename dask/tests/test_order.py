@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from collections import defaultdict
 
 import pytest
 
@@ -2401,6 +2402,7 @@ def test_connecting_to_roots_tree_reduction():
         "c2": {"a3", "a2"},
         "d": {"a1", "a2", "a3", "a0"},
     }
+    assert len({id(v) for v in connected_roots.values() if len(v) == 0}) == 1
     assert all(v == 1 for v in max_dependents.values())
 
     connected_roots, max_dependents = _connecting_to_roots(dependents, dependencies)
@@ -2409,6 +2411,78 @@ def test_connecting_to_roots_tree_reduction():
         connected_roots.values()
     )
     assert all(v == 2 for v in max_dependents.values())
+
+
+def test_connecting_to_roots_long_linear_chains():
+    dsk = {
+        "a0": (f, 1),
+        "a1": (f, 1),
+        "b0": (f, "a0"),
+        "c0": (f, "b0"),
+        "d0": (f, "c0"),
+        "d1": (f, "c0"),
+        "e1": (f, "d0", "d1"),
+        "b1": (f, "a1"),
+        "c1": (f, "b1"),
+        "d2": (f, "c1"),
+        "d3": (f, "c1"),
+        "f": (f, "e1", "d2", "d3", "d1"),
+    }
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, _ = _connecting_to_roots(dependencies, dependents)
+
+    id_a0 = id(connected_roots["b0"])
+    for k in ["c0", "d0", "d1", "e1"]:
+        assert id(connected_roots[k]) == id_a0
+
+    id_a0 = id(connected_roots["b1"])
+    for k in ["c1", "d2", "d3"]:
+        assert id(connected_roots[k]) == id_a0
+
+
+def test_connected_roots_deduplication_mem_usage():
+    # see https://github.com/dask/dask/issues/11055
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+
+    def rotate(X, n_iter=2):
+        gamma = 1
+        n_samples, n_modes = X.shape
+        R = np.eye(n_modes)
+
+        for _ in range(n_iter):
+            basis = X @ R
+
+            basis2 = basis * basis.conj()
+            basis3 = basis2 * basis
+            W = np.diag(np.sum(basis2, axis=0))
+            alpha = gamma / n_samples
+
+            transformed = X.conj().T @ (basis3 - (alpha * basis @ W))
+            U, svals, VT = da.linalg.svd_compressed(
+                transformed, k=n_modes, compute=False
+            )
+            R = U @ VT
+
+        Xrot = X @ R
+        return Xrot
+
+    n_modes = 100
+
+    x = da.random.random((10_000, 100), chunks=(5_000, -1))
+    u, s, v = da.linalg.svd_compressed(x, k=n_modes, compute=False)
+
+    u_rot = rotate(u)
+    dsk = dict(u_rot.dask)
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
+
+    hashes = defaultdict(set)
+
+    for v in connected_roots.values():
+        hashes[tuple(sorted(v))].add(id(v))
+
+    assert set(map(len, hashes.values())) == {1}
 
 
 def test_connecting_to_roots_asym():
