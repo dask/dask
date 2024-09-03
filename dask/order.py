@@ -316,9 +316,10 @@ def order(
                     add_to_result(key)
                     continue
                 path = [key]
-                branches = deque([path])
+                branches = deque([(0, path)])
+
                 while branches:
-                    path = branches.popleft()
+                    nsplits, path = branches.popleft()
                     while True:
                         # Loop invariant. Too expensive to compute at runtime
                         # assert not set(known_runnable_paths).intersection(runnable_hull)
@@ -337,6 +338,7 @@ def order(
                                 runnable_hull.discard(current)
                         elif len(path) == 1 or len(deps_upstream) == 1:
                             if len(deps_downstream) > 1:
+                                nsplits += 1
                                 for d in sorted(deps_downstream, key=sort_key):
                                     # This ensures we're only considering splitters
                                     # that are genuinely splitting and not
@@ -344,7 +346,7 @@ def order(
                                     if len(dependencies[d]) == 1:
                                         branch = path.copy()
                                         branch.append(d)
-                                        branches.append(branch)
+                                        branches.append((nsplits, branch))
                                 break
                             path.extend(deps_downstream)
                             continue
@@ -364,6 +366,13 @@ def order(
                                         pruned_branches
                                     )
                                 else:
+                                    if nsplits > 1:
+                                        path = []
+                                        for pruned in pruned_branches:
+                                            path.extend(pruned)
+                                        branches.append((nsplits - 1, path))
+                                        break
+
                                     while pruned_branches:
                                         path = pruned_branches.popleft()
                                         for k in path:
@@ -600,7 +609,7 @@ def order(
 
 def _connecting_to_roots(
     dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
-) -> tuple[dict[Key, set[Key]], dict[Key, int]]:
+) -> tuple[dict[Key, frozenset[Key]], dict[Key, int]]:
     """Determine for every node which root nodes are connected to it (i.e.
     ancestors). If arguments of dependencies and dependents are switched, this
     can also be used to determine which leaf nodes are connected to which node
@@ -625,47 +634,59 @@ def _connecting_to_roots(
             # benefit from the speedup of using integers would be to convert
             # this back on demand which makes the code very hard to read.
             roots.add(k)
-            result[k] = {k}
+            result[k] = frozenset({k})
             deps = dependents[k]
             max_dependents[k] = len(deps)
             for child in deps:
                 num_needed[child] -= 1
                 if not num_needed[child]:
                     current.append(child)
+
+    dedup_mapping: dict[frozenset[Key], frozenset[Key]] = {}
     while current:
         key = current.pop()
+        if key in result:
+            continue
         for parent in dependents[key]:
             num_needed[parent] -= 1
             if not num_needed[parent]:
                 current.append(parent)
         # At some point, all the roots are the same, particularly for dense
         # graphs. We don't want to create new sets over and over again
-        new_set = None
+        new_set: set | None = None
         identical_sets = True
-        result_first = None
+        result_first: frozenset | None = None
 
-        for child in dependencies[key]:
+        for child in sorted(
+            dependencies[key], key=lambda k: len(dependents[k]), reverse=True
+        ):
             r_child = result[child]
-            if not result_first:
+            if result_first is None:
                 result_first = r_child
                 max_dependents[key] = max_dependents[child]
             # This clause is written such that it can circuit break early
-            elif not (  # type: ignore[unreachable]
+            elif not (
                 identical_sets
                 and (result_first is r_child or r_child.issubset(result_first))
             ):
                 identical_sets = False
                 if not new_set:
-                    new_set = result_first.copy()
+                    new_set = set(result_first)
                 max_dependents[key] = max(max_dependents[child], max_dependents[key])
                 new_set.update(r_child)
 
-        assert new_set is not None or result_first is not None
-        result[key] = new_set or result_first
+        if new_set:
+            new_set_frozen = frozenset(new_set)
+            deduped = dedup_mapping.get(new_set_frozen, None)
+            if deduped is None:
+                dedup_mapping[new_set_frozen] = deduped = new_set_frozen
+            result[key] = deduped
+        else:
+            assert result_first is not None
+            result[key] = result_first
+    del dedup_mapping
 
-    # The order algo doesn't care about this but this makes it easier to
-    # understand and shouldn't take that much time
-    empty_set: set[Key] = set()
+    empty_set: frozenset[Key] = frozenset()
     for r in roots:
         result[r] = empty_set
     return result, max_dependents

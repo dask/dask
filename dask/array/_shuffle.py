@@ -207,9 +207,12 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     intermediates = dict()
     merges = dict()
+    dtype = np.min_scalar_type(max(chunks[axis]))
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()
+    sorter_name = "shuffle-sorter-"
+    taker_name = "shuffle-taker-"
 
     old_blocks = np.empty([len(c) for c in chunks], dtype="O")
     for old_index in np.ndindex(old_blocks.shape):
@@ -217,7 +220,11 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
         new_chunk_taker = np.array(new_chunk_taker)
-        sorter = np.argsort(new_chunk_taker)
+        sorter = np.argsort(new_chunk_taker).astype(dtype)
+        sorter_key = sorter_name + tokenize(sorter)
+        # low level fusion can't deal with arrays on first position
+        merges[sorter_key] = (1, sorter)
+
         sorted_array = new_chunk_taker[sorter]
         source_chunk_nr, taker_boundary = np.unique(
             np.searchsorted(chunk_boundaries, sorted_array, side="right"),
@@ -241,16 +248,21 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
                 # Cache the takers to allow de-duplication when serializing
                 # Ugly!
                 if c in taker_cache:
-                    this_slice[axis] = taker_cache[c]
+                    taker_key = taker_cache[c]
                 else:
-                    this_slice[axis] = sorted_array[b_start:b_end] - (
-                        chunk_boundaries[c - 1] if c > 0 else 0
-                    )
+                    this_slice[axis] = (
+                        sorted_array[b_start:b_end]
+                        - (chunk_boundaries[c - 1] if c > 0 else 0)
+                    ).astype(dtype)
                     if len(source_chunk_nr) == 1:
                         this_slice[axis] = this_slice[axis][np.argsort(sorter)]
-                    taker_cache[c] = this_slice[axis]
 
-                intermediates[name] = getitem, old_blocks[chunk_key], tuple(this_slice)
+                    taker_key = taker_name + tokenize(this_slice)
+                    # low level fusion can't deal with arrays on first position
+                    intermediates[taker_key] = (1, tuple(this_slice))
+                    taker_cache[c] = taker_key
+
+                intermediates[name] = _getitem, old_blocks[chunk_key], taker_key
                 merge_keys.append(name)
 
             merge_suffix = convert_key(chunk_tuple, new_chunk_idx, axis)
@@ -258,7 +270,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
                 merges[(out_name,) + merge_suffix] = (
                     concatenate_arrays,
                     merge_keys,
-                    sorter,
+                    sorter_key,
                     axis,
                 )
             elif len(merge_keys) == 1:
@@ -277,9 +289,13 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
     return tuple(output_chunks), layer
 
 
+def _getitem(obj, index):
+    return getitem(obj, index[1])
+
+
 def concatenate_arrays(arrs, sorter, axis):
     concatenate = concatenate_lookup.dispatch(type(arrs[0]))
-    return np.take(concatenate(arrs, axis=axis), np.argsort(sorter), axis=axis)
+    return np.take(concatenate(arrs, axis=axis), np.argsort(sorter[1]), axis=axis)
 
 
 def convert_key(key, chunk, axis):
