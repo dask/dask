@@ -207,7 +207,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     intermediates = dict()
     merges = dict()
-    dtype = _minimal_dtype(max(chunks[axis]))
+    dtype = np.min_scalar_type(max(chunks[axis]))
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()
@@ -302,12 +302,3 @@ def convert_key(key, chunk, axis):
     key = list(key)
     key.insert(axis, chunk)
     return tuple(key)
-
-
-def _minimal_dtype(max_value):
-    for dtype in [np.uint8, np.uint16, np.uint32, np.uint64]:
-        if max_value <= np.iinfo(dtype).max:
-            return dtype
-    else:
-        # shouldn't happen
-        raise OverflowError(f"Can't find a dtype for {max_value}")
