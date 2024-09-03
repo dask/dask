@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import decimal
+import sys
 import warnings
 import weakref
 import xml.etree.ElementTree
@@ -21,6 +22,7 @@ import dask.array as da
 import dask.dataframe as dd
 import dask.dataframe.groupby
 from dask import delayed
+from dask._compatibility import WINDOWS
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
@@ -635,6 +637,10 @@ def test_describe_for_possibly_unsorted_q():
             assert_eq(r["75%"], 75.0)
 
 
+@pytest.mark.skipif(
+    WINDOWS and sys.version_info < (3, 11),
+    reason="https://github.com/dask/dask/pull/11320#issuecomment-2293798597",
+)
 def test_cumulative():
     index = [f"row{i:03d}" for i in range(100)]
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
@@ -3610,6 +3616,7 @@ def test_cov_series():
 
 
 @pytest.mark.gpu
+@pytest.mark.skip(reason="https://github.com/rapidsai/cudf/issues/16560")
 @pytest.mark.parametrize(
     "numeric_only",
     [None, True, False],
@@ -3682,6 +3689,7 @@ def test_corr():
 
 
 @pytest.mark.gpu
+@pytest.mark.skip(reason="https://github.com/rapidsai/cudf/issues/16560")
 def test_corr_gpu():
     cudf = pytest.importorskip("cudf")
 
@@ -5515,7 +5523,6 @@ def test_broadcast():
     assert_eq(ddf - (ddf.sum() + 1), df - (df.sum() + 1))
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="array computation doesn't work yet")
 def test_scalar_with_array():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)

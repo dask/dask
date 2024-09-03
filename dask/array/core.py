@@ -11,13 +11,14 @@ import traceback
 import uuid
 import warnings
 from bisect import bisect
+from collections import defaultdict
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, TypeVar, Union, cast
+from typing import Any, Literal, TypeVar, Union, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -446,9 +447,11 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
 
     # make sure that every arg is an evaluated array
     args = [
-        np.ones_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
-        if is_arraylike(x)
-        else x
+        (
+            np.ones_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+            if is_arraylike(x)
+            else x
+        )
         for x in args
     ]
     try:
@@ -2765,7 +2768,8 @@ class Array(DaskMethodsMixin):
     def shuffle(
         self,
         indexer: list[list[int]],
-        axis,
+        axis: int,
+        chunks: Literal["auto"] = "auto",
     ):
         """Reorders one dimensions of a Dask Array based on an indexer.
 
@@ -2777,7 +2781,7 @@ class Array(DaskMethodsMixin):
         """
         from dask.array._shuffle import shuffle
 
-        return shuffle(self, indexer, axis)
+        return shuffle(self, indexer, axis, chunks)
 
     @property
     def real(self):
@@ -3007,16 +3011,21 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     Examples
     --------
-    Specify uniform chunk sizes
+    Fully explicit tuple-of-tuples
 
     >>> from dask.array.core import normalize_chunks
+    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))
+    ((2, 2, 1), (2, 2, 2))
+
+    Specify uniform chunk sizes
+
     >>> normalize_chunks((2, 2), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
-    Also passes through fully explicit tuple-of-tuples
+    Cleans up missing outer tuple
 
-    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))
-    ((2, 2, 1), (2, 2, 2))
+    >>> normalize_chunks((3, 2), (5,))
+    ((3, 2),)
 
     Cleans up lists to tuples
 
@@ -3037,6 +3046,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     >>> normalize_chunks((5, -1), shape=(10, 10))
     ((5, 5), (10,))
+    >>> normalize_chunks((5, None), shape=(10, 10))
+    ((5, 5), (10,))
 
     Use the value "auto" to automatically determine chunk sizes along certain
     dimensions.  This uses the ``limit=`` and ``dtype=`` keywords to
@@ -3046,6 +3057,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     >>> normalize_chunks(("auto",), shape=(20,), limit=5, dtype='uint8')
     ((5, 5, 5, 5),)
+    >>> normalize_chunks("auto", (2, 3), dtype=np.int32)
+    ((2,), (3,))
 
     You can also use byte sizes (see :func:`dask.utils.parse_bytes`) in place of
     "auto" to ask for a particular size
@@ -3055,8 +3068,19 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     Respects null dimensions
 
+    >>> normalize_chunks(())
+    ()
+    >>> normalize_chunks((), ())
+    ()
+    >>> normalize_chunks((1,), ())
+    ()
     >>> normalize_chunks((), shape=(0, 0))
     ((0,), (0,))
+
+    Handles NaNs
+
+    >>> normalize_chunks((1, (np.nan,)), (1, np.nan))
+    ((1,), (nan,))
     """
     if dtype and not isinstance(dtype, np.dtype):
         dtype = np.dtype(dtype)
@@ -3116,9 +3140,11 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
         allints = all(isinstance(c, int) for c in chunks)
         chunks = sum(
             (
-                blockdims_from_blockshape((s,), (c,))
-                if not isinstance(c, (tuple, list))
-                else (c,)
+                (
+                    blockdims_from_blockshape((s,), (c,))
+                    if not isinstance(c, (tuple, list))
+                    else (c,)
+                )
                 for s, c in zip(shape, chunks)
             ),
             (),
@@ -4001,11 +4027,11 @@ def unify_chunks(*args, **kwargs):
             arrays.append(a)
         else:
             chunks = tuple(
-                chunkss[j]
-                if a.shape[n] > 1
-                else a.shape[n]
-                if not np.isnan(sum(chunkss[j]))
-                else None
+                (
+                    chunkss[j]
+                    if a.shape[n] > 1
+                    else a.shape[n] if not np.isnan(sum(chunkss[j])) else None
+                )
                 for n, j in enumerate(i)
             )
             if chunks != a.chunks and all(a.chunks):
@@ -4524,6 +4550,13 @@ def retrieve_from_ooc(
     return load_dsk
 
 
+def _as_dtype(a, dtype):
+    if dtype is None:
+        return a
+    else:
+        return a.astype(dtype)
+
+
 def asarray(
     a, allow_unknown_chunksizes=False, dtype=None, order=None, *, like=None, **kwargs
 ):
@@ -4573,16 +4606,22 @@ def asarray(
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
+
+    .. warning::
+        `order` is ignored if `a` is an `Array`, has the attribute ``to_dask_array``,
+        or is a list or tuple of `Array`'s.
     """
     if like is None:
         if isinstance(a, Array):
-            return a
+            return _as_dtype(a, dtype)
         elif hasattr(a, "to_dask_array"):
-            return a.to_dask_array()
+            return _as_dtype(a.to_dask_array(), dtype)
         elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-            return asarray(a.data)
+            return _as_dtype(asarray(a.data, order=order), dtype)
         elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-            return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
+            return _as_dtype(
+                stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes), dtype
+            )
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
     else:
@@ -4641,16 +4680,20 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asanyarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
+
+    .. warning::
+        `order` is ignored if `a` is an `Array`, has the attribute ``to_dask_array``,
+        or is a list or tuple of `Array`'s.
     """
     if like is None:
         if isinstance(a, Array):
-            return a
+            return _as_dtype(a, dtype)
         elif hasattr(a, "to_dask_array"):
-            return a.to_dask_array()
+            return _as_dtype(a.to_dask_array(), dtype)
         elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-            return asanyarray(a.data)
+            return _as_dtype(asarray(a.data, order=order), dtype)
         elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-            return stack(a)
+            return _as_dtype(stack(a), dtype)
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
     else:
@@ -4818,9 +4861,11 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         # them just like other arrays, and if necessary cast the result of op
         # to match.
         vals = [
-            np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
-            if not is_scalar_for_elemwise(a)
-            else a
+            (
+                np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
+                if not is_scalar_for_elemwise(a)
+                else a
+            )
             for a in args
         ]
         try:
@@ -5221,9 +5266,11 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     if axis < 0:
         axis = ndim + axis + 1
     shape = tuple(
-        len(seq)
-        if i == axis
-        else (seq[0].shape[i] if i < axis else seq[0].shape[i - 1])
+        (
+            len(seq)
+            if i == axis
+            else (seq[0].shape[i] if i < axis else seq[0].shape[i - 1])
+        )
         for i in range(meta.ndim)
     )
 
@@ -5522,20 +5569,40 @@ def _vindex_array(x, dict_indexes):
     token = tokenize(x, flat_indexes)
     out_name = "vindex-merge-" + token
 
+    max_chunk_point_dimensions = reduce(
+        mul, map(max, [c for i, c in zip(flat_indexes, x.chunks) if i is not None])
+    )
+
     points = list()
     for i, idx in enumerate(zip(*[i for i in flat_indexes if i is not None])):
         block_idx = [bisect(b, ind) - 1 for b, ind in zip(bounds2, idx)]
         inblock_idx = [
             ind - bounds2[k][j] for k, (ind, j) in enumerate(zip(idx, block_idx))
         ]
-        points.append((i, tuple(block_idx), tuple(inblock_idx)))
+        points.append(
+            (
+                divmod(i, max_chunk_point_dimensions)[1],
+                tuple(block_idx),
+                tuple(inblock_idx),
+                (i // max_chunk_point_dimensions,) + tuple(block_idx),
+            )
+        )
 
     chunks = [c for i, c in zip(flat_indexes, x.chunks) if i is None]
-    chunks.insert(0, (len(points),) if points else (0,))
+    n_chunks, remainder = divmod(len(points), max_chunk_point_dimensions)
+    chunks.insert(
+        0,
+        (
+            (max_chunk_point_dimensions,) * n_chunks
+            + ((remainder,) if remainder > 0 else ())
+            if points
+            else (0,)
+        ),
+    )
     chunks = tuple(chunks)
 
     if points:
-        per_block = groupby(1, points)
+        per_block = groupby(3, points)
         per_block = {k: v for k, v in per_block.items() if v}
 
         other_blocks = list(
@@ -5553,23 +5620,28 @@ def _vindex_array(x, dict_indexes):
         vindex_merge_name = "vindex-merge-" + token
         dsk = {}
         for okey in other_blocks:
+            merge_inputs = defaultdict(list)
+            merge_indexer = defaultdict(list)
             for i, key in enumerate(per_block):
                 dsk[keyname(name, i, okey)] = (
                     _vindex_transpose,
                     (
                         _vindex_slice,
-                        (x.name,) + interleave_none(okey, key),
+                        (x.name,) + interleave_none(okey, tuple(list(key)[1:])),
                         interleave_none(
                             full_slices, list(zip(*pluck(2, per_block[key])))
                         ),
                     ),
                     axis,
                 )
-            dsk[keyname(vindex_merge_name, 0, okey)] = (
-                _vindex_merge,
-                [list(pluck(0, per_block[key])) for key in per_block],
-                [keyname(name, i, okey) for i in range(len(per_block))],
-            )
+                merge_inputs[key[0]].append(keyname(name, i, okey))
+                merge_indexer[key[0]].append(list(pluck(0, per_block[key])))
+            for i in sorted(merge_inputs.keys()):
+                dsk[keyname(vindex_merge_name, i, okey)] = (
+                    _vindex_merge,
+                    merge_indexer[i],
+                    merge_inputs[i],
+                )
 
         result_1d = Array(
             HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),

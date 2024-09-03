@@ -941,12 +941,14 @@ class BroadcastJoinLayer(Layer):
                 # Specify arg list for `merge_chunk`
                 _merge_args = [
                     (
-                        operator.getitem,
-                        (split_name, i),
-                        j,
-                    )
-                    if self.how != "inner"
-                    else (other_name, i),
+                        (
+                            operator.getitem,
+                            (split_name, i),
+                            j,
+                        )
+                        if self.how != "inner"
+                        else (other_name, i)
+                    ),
                     (bcast_name, j),
                 ]
                 if bcast_side == "left":

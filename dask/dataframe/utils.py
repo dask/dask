@@ -145,13 +145,11 @@ T = TypeVar("T", bound=Callable)
 
 
 @overload
-def insert_meta_param_description(func: T) -> T:
-    ...
+def insert_meta_param_description(func: T) -> T: ...
 
 
 @overload
-def insert_meta_param_description(pad: int) -> Callable[[T], T]:
-    ...
+def insert_meta_param_description(pad: int) -> Callable[[T], T]: ...
 
 
 def insert_meta_param_description(*args, **kwargs):

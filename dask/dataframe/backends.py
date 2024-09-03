@@ -282,7 +282,7 @@ def make_meta_object(x, index=None):
     >>> make_meta_object(('a', 'f8'))
     Series([], Name: a, dtype: float64)
     >>> make_meta_object('i8')
-    1
+    np.int64(1)
     """
 
     if is_arraylike(x) and x.shape:
@@ -636,9 +636,11 @@ def concat_pandas(
             # converts series to dataframes with a single column named 0, then
             # concatenates.
             dfs3 = [
-                df
-                if isinstance(df, pd.DataFrame)
-                else df.to_frame().rename(columns={df.name: 0})
+                (
+                    df
+                    if isinstance(df, pd.DataFrame)
+                    else df.to_frame().rename(columns={df.name: 0})
+                )
                 for df in dfs2
             ]
             # pandas may raise a RuntimeWarning for comparing ints and strs

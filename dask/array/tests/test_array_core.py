@@ -2705,6 +2705,18 @@ def test_asarray(asarray):
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
+def test_asarray_array_dtype(asarray):
+    # test array input
+    x = asarray([1, 2])
+    assert_eq(asarray(x, dtype=da.float32), np.asarray(x, dtype=np.float32))
+
+    x = asarray(x, dtype=da.float64)
+    assert x.dtype == da.float64
+    x = asarray(x, dtype=da.int32)
+    assert x.dtype == da.int32
+
+
+@pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
 def test_asarray_dask_dataframe(asarray):
     # https://github.com/dask/dask/issues/3885
     pd = pytest.importorskip("pandas")
@@ -3074,6 +3086,21 @@ def test_vindex_nd():
 
     result = d.vindex[np.arange(7)[None, :], np.arange(8)[:, None]]
     assert_eq(result, x.T)
+
+
+@pytest.mark.parametrize("size", [0, 1])
+def test_vindex_preserve_chunksize(size):
+    np_arr = np.random.rand(10_000 * 40).reshape(100, 100, 40)
+    arr = da.from_array(np_arr, chunks=(50, 50, 20))
+    indices_2d = np.random.choice(np.arange(100), size=(10000 + size, 2))
+    idx1 = indices_2d[:, 0]
+    idx2 = indices_2d[:, 0]
+    result = arr.vindex[idx1, idx2, slice(None)]
+    assert result.chunks == (
+        (2500, 2500, 2500, 2500) + ((1,) if size else ()),
+        (20, 20),
+    )
+    assert_eq(result, np_arr[idx1, idx2, :])
 
 
 def test_vindex_negative():
