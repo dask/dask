@@ -207,6 +207,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     intermediates = dict()
     merges = dict()
+    dtype = _minimal_dtype(max(chunks[axis]))
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()
@@ -217,7 +218,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
         new_chunk_taker = np.array(new_chunk_taker)
-        sorter = np.argsort(new_chunk_taker)
+        sorter = np.argsort(new_chunk_taker).astype(dtype)
         sorted_array = new_chunk_taker[sorter]
         source_chunk_nr, taker_boundary = np.unique(
             np.searchsorted(chunk_boundaries, sorted_array, side="right"),
@@ -243,9 +244,10 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
                 if c in taker_cache:
                     this_slice[axis] = taker_cache[c]
                 else:
-                    this_slice[axis] = sorted_array[b_start:b_end] - (
-                        chunk_boundaries[c - 1] if c > 0 else 0
-                    )
+                    this_slice[axis] = (
+                        sorted_array[b_start:b_end]
+                        - (chunk_boundaries[c - 1] if c > 0 else 0)
+                    ).astype(dtype)
                     if len(source_chunk_nr) == 1:
                         this_slice[axis] = this_slice[axis][np.argsort(sorter)]
                     taker_cache[c] = this_slice[axis]
@@ -286,3 +288,12 @@ def convert_key(key, chunk, axis):
     key = list(key)
     key.insert(axis, chunk)
     return tuple(key)
+
+
+def _minimal_dtype(max_value):
+    for dtype in [np.uint8, np.uint16, np.uint32, np.uint64]:
+        if max_value <= np.iinfo(dtype).max:
+            return dtype
+    else:
+        # shouldn't happen
+        raise OverflowError(f"Can't find a dtype for {max_value}")
