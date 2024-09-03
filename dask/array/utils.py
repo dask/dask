@@ -213,13 +213,18 @@ def _check_dsk(dsk):
     non_one = {k: v for k, v in freqs.items() if v != 1}
     key_collisions = set()
     # Allow redundant keys if the values are equivalent
+    collisions = set()
     for k in non_one.keys():
         for layer in dsk.layers.values():
             try:
                 key_collisions.add(tokenize(layer[k]))
             except KeyError:
                 pass
-    assert len(key_collisions) < 2, non_one
+        if len(key_collisions) >= 2:
+            collisions.add(k)
+        key_collisions.clear()
+
+    assert len(collisions) == 0, {k: non_one[k] for k in collisions}
 
 
 def assert_eq_shape(a, b, check_ndim=True, check_nan=True):
