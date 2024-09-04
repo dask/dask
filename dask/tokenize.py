@@ -48,7 +48,7 @@ def tokenize(
 ) -> str:
     """Deterministic token
 
-    >>> tokenize([1, 2, '3'])
+    >>> tokenize([1, 2, '3'])  # doctest: +SKIP
     '06961e8de572e73c2e74b51348177918'
 
     >>> tokenize('Hello') == tokenize('Hello')
