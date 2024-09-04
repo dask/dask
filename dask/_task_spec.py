@@ -91,6 +91,15 @@ from dask.sizeof import sizeof
 from dask.typing import Key as KeyType
 from dask.utils import is_namedtuple_instance
 
+try:
+    from distributed.collections import LRU
+except ImportError:
+
+    class LRU(dict):  # type: ignore[no-redef]
+        def __init__(self, *args, maxsize=None, **kwargs):
+            super().__init__(*args, **kwargs)
+
+
 if TYPE_CHECKING:
     from typing import TypeVar
 
@@ -365,8 +374,8 @@ class TaskRef:
         return hash(self.key)
 
 
-_func_cache: MutableMapping = {}
-_func_cache_reverse: MutableMapping = {}
+_func_cache: MutableMapping = LRU(maxsize=1000)
+_func_cache_reverse: MutableMapping = LRU(maxsize=1000)
 
 
 class GraphNode:
