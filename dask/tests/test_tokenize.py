@@ -18,8 +18,8 @@ import pytest
 from tlz import compose, curry, partial
 
 import dask
-from dask.base import TokenizationError, normalize_token, tokenize
 from dask.core import flatten, literal
+from dask.tokenize import TokenizationError, normalize_token, tokenize
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
 
@@ -37,7 +37,7 @@ def check_contextvars():
     """Test that tokenize() and normalize_token() properly clean up context
     variables at all times
     """
-    from dask.base import _ensure_deterministic, _seen
+    from dask.tokenize import _ensure_deterministic, _seen
 
     with pytest.raises(LookupError):
         _ensure_deterministic.get()
