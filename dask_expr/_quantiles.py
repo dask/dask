@@ -2,7 +2,6 @@ import functools
 
 import numpy as np
 import toolz
-from dask.base import tokenize
 from dask.dataframe.partitionquantiles import (
     create_merge_tree,
     dtype_info,
@@ -10,6 +9,7 @@ from dask.dataframe.partitionquantiles import (
     percentiles_summary,
     process_val_weights,
 )
+from dask.tokenize import tokenize
 from dask.utils import random_state_data
 
 from dask_expr._expr import Expr

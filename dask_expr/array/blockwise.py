@@ -16,9 +16,10 @@ from dask.array.core import (
     normalize_arg,
 )
 from dask.array.utils import compute_meta
-from dask.base import is_dask_collection, tokenize
+from dask.base import is_dask_collection
 from dask.blockwise import blockwise as core_blockwise
 from dask.delayed import unpack_collections
+from dask.tokenize import tokenize
 from dask.utils import cached_property, funcname
 
 from dask_expr.array.core import Array, asarray
