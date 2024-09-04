@@ -84,7 +84,8 @@ def _ensure_deterministic_ctx(ensure_deterministic: bool | None) -> Iterator[boo
         # Outermost tokenize(), or normalize_token() was called directly
         if ensure_deterministic is None:
             ensure_deterministic = config.get("tokenize.ensure-deterministic")
-        assert isinstance(ensure_deterministic, bool)
+            if ensure_deterministic is None:
+                ensure_deterministic = False
         tok = _ensure_deterministic.set(ensure_deterministic)
 
     try:
