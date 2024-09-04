@@ -12,8 +12,8 @@ from dask.array.backends import array_creation_dispatch
 from dask.array.core import asarray, broadcast_shapes, normalize_chunks
 from dask.array.creation import arange
 from dask.array.utils import asarray_safe
-from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
+from dask.tokenize import tokenize
 from dask.utils import cached_property, derived_from, random_state_data, typename
 
 from dask_expr.array.core import IO, Array

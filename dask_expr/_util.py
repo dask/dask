@@ -9,9 +9,9 @@ import dask
 import numpy as np
 import pandas as pd
 from dask import config
-from dask.base import normalize_token, tokenize
 from dask.dataframe._compat import is_string_dtype
 from dask.dataframe.core import is_dask_collection, is_dataframe_like, is_series_like
+from dask.tokenize import normalize_token, tokenize
 from dask.utils import get_default_shuffle_method
 from packaging.version import Version
 

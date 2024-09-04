@@ -13,8 +13,8 @@ from dask.array.core import _concatenate2, asanyarray, broadcast_to, implements
 from dask.array.dispatch import divide_lookup, nannumel_lookup, numel_lookup
 from dask.array.reductions import array_safe
 from dask.array.utils import compute_meta, is_arraylike, validate_axis
-from dask.base import tokenize
 from dask.blockwise import lol_tuples
+from dask.tokenize import tokenize
 from dask.utils import (
     cached_property,
     deepmap,

@@ -12,7 +12,6 @@ import dask
 import numpy as np
 import pandas as pd
 from dask.array import Array
-from dask.base import normalize_token
 from dask.core import flatten
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -39,6 +38,7 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
     valid_divisions,
 )
+from dask.tokenize import normalize_token
 from dask.typing import no_default
 from dask.utils import (
     M,

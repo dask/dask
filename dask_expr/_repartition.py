@@ -5,10 +5,10 @@ from pprint import pformat
 
 import numpy as np
 import pandas as pd
-from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import _concat, _map_freq_to_period_start, split_evenly
 from dask.dataframe.utils import is_series_like
+from dask.tokenize import tokenize
 from dask.utils import iter_chunks, parse_bytes
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 from tlz import unique

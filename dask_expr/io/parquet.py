@@ -21,7 +21,6 @@ import pyarrow.dataset as pa_ds
 import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 import tlz as toolz
-from dask.base import normalize_token, tokenize
 from dask.core import flatten
 from dask.dataframe.io.parquet.core import (
     ParquetFunctionWrapper,
@@ -35,6 +34,7 @@ from dask.dataframe.io.parquet.core import (
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.dataframe.io.utils import _is_local_fs
 from dask.delayed import delayed
+from dask.tokenize import normalize_token, tokenize
 from dask.utils import apply, funcname, natural_sort_key, parse_bytes, typename
 from fsspec.utils import stringify_path
 from toolz import identity
