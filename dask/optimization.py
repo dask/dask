@@ -7,7 +7,6 @@ from enum import Enum
 from typing import Any
 
 from dask import config, core, utils
-from dask.base import normalize_token, tokenize
 from dask.core import (
     flatten,
     get_dependencies,
@@ -17,6 +16,7 @@ from dask.core import (
     subs,
     toposort,
 )
+from dask.tokenize import normalize_token, tokenize
 from dask.typing import Graph, Key
 
 
