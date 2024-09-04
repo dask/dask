@@ -20,7 +20,7 @@ import cloudpickle
 from tlz import curry, identity
 from tlz.functoolz import Compose
 
-from dask.config import config
+from dask import config
 from dask.core import literal
 from dask.hashing import hash_buffer_hex
 from dask.utils import Dispatch
