@@ -814,18 +814,9 @@ def test_tokenize_sequences():
     assert check_tokenize([1]) == check_tokenize([1])
 
     # You can call normalize_token directly.
-    # Repeated objects are memoized.
     x = (1, 2)
     y = [x, x, [x, (2, 3)]]
     assert normalize_token(y)
-    # == (
-    #     "list",
-    #     [
-    #         ("tuple", [1, 2]),
-    #         ("__seen", 0),
-    #         ("list", [("__seen", 0), ("tuple", [2, 3])]),
-    #     ],
-    # )
 
 
 def test_nested_tokenize_seen():
