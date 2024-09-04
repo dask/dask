@@ -18,8 +18,8 @@ import pytest
 from tlz import compose, curry, partial
 
 import dask
-from dask.base import TokenizationError, normalize_token, tokenize
 from dask.core import flatten, literal
+from dask.tokenize import TokenizationError, normalize_token, tokenize
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
 
