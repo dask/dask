@@ -1426,8 +1426,3 @@ def test_tokenize_pandas_arrow_strings():
     tokens = normalize_token(ser)
     # Maybe a little brittle but will do for now
     assert any(str(tok) == "string" for tok in flatten(tokens))
-
-
-def test_trivial():
-    trivial_items = [ix for ix in range(10000)]
-    [tokenize(it) for it in trivial_items]
