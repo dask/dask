@@ -3171,9 +3171,11 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 def _convert_int_chunk_to_tuple(shape, chunks):
     return sum(
         (
-            blockdims_from_blockshape((s,), (c,))
-            if not isinstance(c, (tuple, list))
-            else (c,)
+            (
+                blockdims_from_blockshape((s,), (c,))
+                if not isinstance(c, (tuple, list))
+                else (c,)
+            )
             for s, c in zip(shape, chunks)
         ),
         (),
