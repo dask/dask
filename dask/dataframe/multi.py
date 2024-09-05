@@ -496,35 +496,79 @@ def single_partition_join(left, right, **kwargs):
     return joined
 
 
-def warn_dtype_mismatch(left, right, left_on, right_on):
-    """Checks for merge column dtype mismatches and throws a warning (#4574)"""
+def handle_dtype_mismatch(lhs, rhs, left_on, right_on):
+    """Checks for merge column dtype mismatches, and
+    throws a warning if the mismatch cannot be addressed
+    by a simple integer up-cast (#4574)
+    """
 
+    left, right = lhs, rhs
     if not isinstance(left_on, list):
         left_on = [left_on]
     if not isinstance(right_on, list):
         right_on = [right_on]
 
-    if all(col in left.columns for col in left_on) and all(
-        col in right.columns for col in right_on
-    ):
-        dtype_mism = [
-            ((lo, ro), left.dtypes[lo], right.dtypes[ro])
-            for lo, ro in zip(left_on, right_on)
-            if not is_dtype_equal(left.dtypes[lo], right.dtypes[ro])
-        ]
+    def _get(df, key):
+        # Get column or index of `df`
+        if key in df.columns:
+            return df[key]
+        elif key == df.index.name:
+            return df.index
+        else:
+            raise KeyError
 
-        if dtype_mism:
-            col_tb = asciitable(
-                ("Merge columns", "left dtype", "right dtype"), dtype_mism
-            )
+    def _set(df, key, value):
+        # Set column or index of `df` to `value`
+        if key in df.columns:
+            df[key] = value
+        elif key == df.index.name:
+            df.set_index(value)
+        else:
+            raise KeyError
 
-            warnings.warn(
-                (
-                    "Merging dataframes with merge column data "
-                    "type mismatches: \n{}\nCast dtypes explicitly to "
-                    "avoid unexpected results."
-                ).format(col_tb)
-            )
+    dtype_mism = []
+    for lo, ro in zip(left_on, right_on):
+        _left, _right = _get(left, lo), _get(right, ro)
+        if not is_dtype_equal(_left.dtype, _right.dtype):
+            try:
+                simple_numpy_int = np.issubdtype(
+                    _left.dtype, np.integer
+                ) and np.issubdtype(_right.dtype, np.integer)
+            except TypeError:
+                simple_numpy_int = False
+            if simple_numpy_int:
+                # Upcast lower dtype if both sides
+                # are simple numpy integers
+                typ = max(_left.dtype, _right.dtype)
+                if _left.dtype != typ:
+                    _set(left, lo, _left.astype(typ))
+                elif _right.dtype != typ:
+                    _set(right, ro, _right.astype(typ))
+            else:
+                # Raise a warning for all other mismatches
+                dtype_mism.append(
+                    (
+                        (
+                            lo if lo in left.columns else "index",
+                            ro if ro in right.columns else "index",
+                        ),
+                        _left.dtype,
+                        _right.dtype,
+                    )
+                )
+
+    if dtype_mism:
+        col_tb = asciitable(("Merge columns", "left dtype", "right dtype"), dtype_mism)
+
+        warnings.warn(
+            (
+                "Merging dataframes with merge column data "
+                "type mismatches: \n{}\nCast dtypes explicitly to "
+                "avoid unexpected results."
+            ).format(col_tb)
+        )
+
+    return left, right
 
 
 @_deprecated_kwarg("shuffle", "shuffle_method")
@@ -698,8 +742,13 @@ def merge(
         )
     # Catch all hash join
     else:
-        if left_on and right_on:
-            warn_dtype_mismatch(left, right, left_on, right_on)
+
+        left, right = handle_dtype_mismatch(
+            left,
+            right,
+            left.index.name if left_index else left_on,
+            right.index.name if right_index else right_on,
+        )
 
         # Check if we should use a broadcast_join
         # See note on `broadcast_bias` below.
