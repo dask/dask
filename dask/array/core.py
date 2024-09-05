@@ -52,7 +52,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.context import globalmethod
 from dask.core import quote
 from dask.delayed import Delayed, delayed
-from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 from dask.layers import ArraySliceDep, reshapelist
 from dask.sizeof import sizeof
 from dask.typing import Graph, Key, NestedKeys
@@ -1196,8 +1196,7 @@ def store(
 
     for s, t, n, r in zip(sources, targets, map_names, regions_list):
         map_layer = insert_to_ooc(
-            keys=s.__dask_keys__(),
-            chunks=s.chunks,
+            arr=s,
             out=t.key if isinstance(t, Delayed) else t,
             name=n,
             lock=lock,
@@ -1210,7 +1209,7 @@ def store(
             dependencies[n] = {sources_name, targets_name}
         else:
             dependencies[n] = {sources_name}
-        map_keys += map_layer.keys()
+        map_keys += map_layer.get_output_keys()  # FIXME materializes
 
     if return_stored:
         store_dsk = HighLevelGraph(layers, dependencies)
@@ -4372,9 +4371,10 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
 
 def load_store_chunk(
-    x: Any,
+    x: Any | None,
+    index: tuple[slice, ...] | slice,
+    region: tuple[slice, ...] | slice | None,
     out: Any,
-    index: slice,
     lock: Any,
     return_stored: bool,
     load_stored: bool,
@@ -4386,10 +4386,12 @@ def load_store_chunk(
     ----------
     x: array-like
         An array (potentially a NumPy one)
-    out: array-like
-        Where to store results.
     index: slice-like
         Where to store result from ``x`` in ``out``.
+    region: slice-like
+        Sub-select ``out`` by this slice before slicing it by ``index``.
+    out: array-like
+        Where to store results.
     lock: Lock-like or False
         Lock to use before writing to ``out``.
     return_stored: bool
@@ -4415,6 +4417,9 @@ def load_store_chunk(
     >>> b = np.empty(a.shape)
     >>> load_store_chunk(a, b, (slice(None), slice(None)), False, False, False)
     """
+    if region:
+        # Equivalent to `out[region][index]`
+        index = fuse_slice(region, index)
     if lock:
         lock.acquire()
     try:
@@ -4436,21 +4441,25 @@ def load_store_chunk(
 
 
 def store_chunk(
-    x: ArrayLike, out: ArrayLike, index: slice, lock: Any, return_stored: bool
+    x: ArrayLike,
+    index: slice,
+    region: slice | None,
+    out: ArrayLike,
+    lock: Any,
+    return_stored: bool,
 ):
-    return load_store_chunk(x, out, index, lock, return_stored, False)
+    return load_store_chunk(x, index, region, out, lock, return_stored, False)
 
 
 A = TypeVar("A", bound=ArrayLike)
 
 
 def load_chunk(out: A, index: slice, lock: Any) -> A:
-    return load_store_chunk(None, out, index, lock, True, True)
+    return load_store_chunk(None, index, None, out, lock, True, True)
 
 
 def insert_to_ooc(
-    keys: list,
-    chunks: tuple[tuple[int, ...], ...],
+    arr: Array,
     out: ArrayLike,
     name: str,
     *,
@@ -4458,18 +4467,16 @@ def insert_to_ooc(
     region: tuple[slice, ...] | slice | None = None,
     return_stored: bool = False,
     load_stored: bool = False,
-) -> dict:
+) -> Layer:
     """
-    Creates a Dask graph for storing chunks from ``arr`` in ``out``.
+    Creates a Blockwise layer for storing chunks from ``arr`` in ``out``.
 
     Parameters
     ----------
-    keys: list
-        Dask keys of the input array
-    chunks: tuple
-        Dask chunks of the input array
+    arr: dask array
+        Input Dask array
     out: array-like
-        Where to store results to
+        Where to store results to. *Not* a dask array.
     name: str
         First element of dask keys
     lock: Lock-like or bool, optional
@@ -4488,35 +4495,60 @@ def insert_to_ooc(
 
     Returns
     -------
-    dask graph of store operation
+    Blockwise layer of store operation
 
     Examples
     --------
     >>> import dask.array as da
     >>> d = da.ones((5, 6), chunks=(2, 3))
     >>> a = np.empty(d.shape)
-    >>> insert_to_ooc(d.__dask_keys__(), d.chunks, a, "store-123")  # doctest: +SKIP
+    >>> insert_to_ooc(d, a, "store-123")  # doctest: +SKIP
     """
 
     if lock is True:
         lock = Lock()
 
-    slices = slices_from_chunks(chunks)
-    if region:
-        slices = [fuse_slice(region, slc) for slc in slices]
-
     if return_stored and load_stored:
         func = load_store_chunk
-        args = (load_stored,)
+        # TODO all this different functions to save serializing an arg is silly. Can't we just `partial` this?
+        args = (load_stored, None)
     else:
         func = store_chunk  # type: ignore
         args = ()  # type: ignore
 
-    dsk = {
-        (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
-        for t, slc in zip(core.flatten(keys), slices)
-    }
-    return dsk
+    slices = ArraySliceDep(arr.chunks)
+    inds = tuple(range(arr.ndim))
+    return core_blockwise(
+        func,
+        # NOTE: tuples just for readability
+        *(name, inds),
+        *(arr.name, inds),
+        *(slices, inds),
+        *(region, None),
+        *(out, None),
+        *(lock, None),
+        *(return_stored, None),
+        *args,
+        numblocks={arr.name: arr.numblocks},  # derp
+    )
+    # TODO would prefer `map_blocks` for readability, but can't because:
+    # 1. It adds its own token to the layer, so we can't easily select out the layer
+    # 2. Graph can't actually execute (I think it's forgetting to pass `numblocks` to core blockwise correctly?)
+    # result = map_blocks(
+    #     func,
+    #     arr,
+    #     slices,
+    #     region,
+    #     out,
+    #     lock,
+    #     return_stored,
+    #     *args,
+    #     name=name,
+    #     meta=arr,
+    # )
+    # from dask.utils_test import hlg_layer_topological
+
+    # return hlg_layer_topological(result.dask, -1)
 
 
 def retrieve_from_ooc(
