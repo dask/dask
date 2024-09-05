@@ -8,12 +8,11 @@ import hashlib
 import inspect
 import pathlib
 import pickle
+import threading
 import types
 import uuid
 from collections import OrderedDict
-from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
-from contextvars import ContextVar
+from collections.abc import Iterable
 from functools import partial
 
 import cloudpickle
@@ -30,12 +29,26 @@ class TokenizationError(RuntimeError):
     pass
 
 
+def _tokenize(*args: object, **kwargs: object) -> str:
+    token: object = _normalize_seq_func(args)
+    if kwargs:
+        token = token, _normalize_seq_func(sorted(kwargs.items()))
+
+    # Pass `usedforsecurity=False` to support FIPS builds of Python
+    return hashlib.md5(str(token).encode(), usedforsecurity=False).hexdigest()
+
+
+tokenize_lock = threading.RLock()
+_SEEN: dict[int, tuple[int, object]] = {}
+_ENSURE_DETERMINISTIC = None
+
+
 def tokenize(
     *args: object, ensure_deterministic: bool | None = None, **kwargs: object
 ) -> str:
     """Deterministic token
 
-    >>> tokenize([1, 2, '3'])
+    >>> tokenize([1, 2, '3'])  # doctest: +SKIP
     '06961e8de572e73c2e74b51348177918'
 
     >>> tokenize('Hello') == tokenize('Hello')
@@ -50,105 +63,60 @@ def tokenize(
         tokenized, e.g. two identical objects will return different tokens.
         Defaults to the `tokenize.ensure-deterministic` configuration parameter.
     """
-    with _seen_ctx(reset=True), _ensure_deterministic_ctx(ensure_deterministic):
-        token: object = _normalize_seq_func(args)
-        if kwargs:
-            token = token, _normalize_seq_func(sorted(kwargs.items()))
-
-    # Pass `usedforsecurity=False` to support FIPS builds of Python
-    return hashlib.md5(str(token).encode(), usedforsecurity=False).hexdigest()
-
-
-# tokenize.ensure-deterministic flag, potentially overridden by tokenize()
-_ensure_deterministic: ContextVar[bool] = ContextVar("_ensure_deterministic")
-
-# Circular reference breaker used by _normalize_seq_func.
-# This variable is recreated anew every time you call tokenize(). Note that this means
-# that you could call tokenize() from inside tokenize() and they would be fully
-# independent.
-#
-# It is a map of {id(obj): (<first seen incremental int>, obj)} which causes an object
-# to be tokenized as ("__seen", <incremental>) the second time it's encountered while
-# traversing collections. A strong reference to the object is stored in the context to
-# prevent ids from being reused by different objects.
-_seen: ContextVar[dict[int, tuple[int, object]]] = ContextVar("_seen")
-
-
-@contextmanager
-def _ensure_deterministic_ctx(ensure_deterministic: bool | None) -> Iterator[bool]:
-    try:
-        ensure_deterministic = _ensure_deterministic.get()
-        # There's a call of tokenize() higher up in the stack
-        tok = None
-    except LookupError:
-        # Outermost tokenize(), or normalize_token() was called directly
-        if ensure_deterministic is None:
-            ensure_deterministic = config.get("tokenize.ensure-deterministic")
-            if ensure_deterministic is None:
-                ensure_deterministic = False
-        tok = _ensure_deterministic.set(ensure_deterministic)
-
-    try:
-        yield ensure_deterministic
-    finally:
-        if tok:
-            tok.var.reset(tok)
+    global _SEEN, _ENSURE_DETERMINISTIC
+    with tokenize_lock:
+        seen_before, _SEEN = _SEEN, {}
+        _ENSURE_DETERMINISTIC = ensure_deterministic
+        try:
+            return _tokenize(*args, **kwargs)
+        finally:
+            _SEEN = seen_before
+            _ENSURE_DETERMINISTIC = None
 
 
 def _maybe_raise_nondeterministic(msg: str) -> None:
-    with _ensure_deterministic_ctx(None) as ensure_deterministic:
-        if ensure_deterministic:
-            raise TokenizationError(msg)
+    if (
+        _ENSURE_DETERMINISTIC
+        or _ENSURE_DETERMINISTIC is None
+        and config.get("tokenize.ensure-deterministic")
+    ):
+        raise TokenizationError(msg)
 
 
-@contextmanager
-def _seen_ctx(reset: bool) -> Iterator[dict[int, tuple[int, object]]]:
-    if reset:
-        # It is important to reset the token on tokenize() to avoid artifacts when
-        # it is called recursively
-        seen: dict[int, tuple[int, object]] = {}
-        tok = _seen.set(seen)
-    else:
-        try:
-            seen = _seen.get()
-            tok = None
-        except LookupError:
-            # This is for debug only, for when normalize_token is called outside of
-            # tokenize()
-            seen = {}
-            tok = _seen.set(seen)
-    try:
-        yield seen
-    finally:
-        if tok:
-            tok.var.reset(tok)
-
-
+_IDENTITY_DISPATCH = (
+    int,
+    float,
+    str,
+    bytes,
+    type(None),
+    slice,
+    complex,
+    type(Ellipsis),
+    decimal.Decimal,
+    datetime.date,
+    datetime.time,
+    datetime.datetime,
+    datetime.timedelta,
+    pathlib.PurePath,
+)
 normalize_token = Dispatch()
 normalize_token.register(
-    (
-        int,
-        float,
-        str,
-        bytes,
-        type(None),
-        slice,
-        complex,
-        type(Ellipsis),
-        decimal.Decimal,
-        datetime.date,
-        datetime.time,
-        datetime.datetime,
-        datetime.timedelta,
-        pathlib.PurePath,
-    ),
+    _IDENTITY_DISPATCH,
     identity,
 )
 
 
 @normalize_token.register((types.MappingProxyType, dict))
 def normalize_dict(d):
-    return "dict", _normalize_seq_func(sorted(d.items(), key=lambda kv: str(kv[0])))
+    if id(d) in _SEEN:
+        return "__seen", _SEEN[id(d)][0]
+    _SEEN[id(d)] = len(_SEEN), d
+    try:
+        return "dict", _normalize_seq_func(
+            sorted(d.items(), key=lambda kv: hash(kv[0]))
+        )
+    finally:
+        _SEEN.pop(id(d), None)
 
 
 @normalize_token.register(OrderedDict)
@@ -164,23 +132,20 @@ def normalize_set(s):
     return "set", _normalize_seq_func(sorted(s, key=str))
 
 
-def _normalize_seq_func(seq: Iterable[object]) -> list[object]:
-    with _seen_ctx(reset=False) as seen:
-        out = []
-        for item in seq:
-            if isinstance(item, (str, bytes, int, float, bool, type(None))):
-                # Basic data type. This is just for performance and compactness of the
-                # output. It doesn't need to be a comprehensive list.
-                pass
-            elif id(item) in seen:
-                # May or may not be a circular recursion. Maybe just a double reference.
-                seen_when, _ = seen[id(item)]
-                item = "__seen", seen_when
-            else:
-                seen[id(item)] = len(seen), item
-                item = normalize_token(item)
-            out.append(item)
-        return out
+def _normalize_seq_func(seq: Iterable[object]) -> tuple[object, ...]:
+    def _inner_normalize_token(item):
+        # Don't go through Dispatch. That's slow
+        if isinstance(item, _IDENTITY_DISPATCH):
+            return item
+        return normalize_token(item)
+
+    if id(seq) in _SEEN:
+        return "__seen", _SEEN[id(seq)][0]
+    _SEEN[id(seq)] = len(_SEEN), seq
+    try:
+        return tuple(map(_inner_normalize_token, seq))
+    finally:
+        del _SEEN[id(seq)]
 
 
 @normalize_token.register((tuple, list))

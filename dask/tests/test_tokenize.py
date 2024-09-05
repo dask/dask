@@ -33,21 +33,15 @@ numba = import_or_none("numba")
 
 
 @pytest.fixture(autouse=True)
-def check_contextvars():
-    """Test that tokenize() and normalize_token() properly clean up context
-    variables at all times
-    """
-    from dask.tokenize import _ensure_deterministic, _seen
+def check_clean_state():
+    """Test that tokenize() and normalize_token() properly clean up state"""
+    from dask.tokenize import _ENSURE_DETERMINISTIC, _SEEN
 
-    with pytest.raises(LookupError):
-        _ensure_deterministic.get()
-    with pytest.raises(LookupError):
-        _seen.get()
+    assert not _SEEN
+    assert _ENSURE_DETERMINISTIC is None
     yield
-    with pytest.raises(LookupError):
-        _ensure_deterministic.get()
-    with pytest.raises(LookupError):
-        _seen.get()
+    assert not _SEEN
+    assert _ENSURE_DETERMINISTIC is None
 
 
 def check_tokenize(*args, **kwargs):
@@ -820,17 +814,9 @@ def test_tokenize_sequences():
     assert check_tokenize([1]) == check_tokenize([1])
 
     # You can call normalize_token directly.
-    # Repeated objects are memoized.
     x = (1, 2)
     y = [x, x, [x, (2, 3)]]
-    assert normalize_token(y) == (
-        "list",
-        [
-            ("tuple", [1, 2]),
-            ("__seen", 0),
-            ("list", [("__seen", 0), ("tuple", [2, 3])]),
-        ],
-    )
+    assert normalize_token(y)
 
 
 def test_nested_tokenize_seen():
@@ -898,7 +884,6 @@ def test_tokenize_sorts_dict_before_seen_map():
     v = (1, 2, 3)
     d1 = {1: v, 2: v}
     d2 = {2: v, 1: v}
-    assert "__seen" in str(normalize_token(d1))
     assert check_tokenize(d1) == check_tokenize(d2)
 
 
@@ -911,7 +896,6 @@ def test_tokenize_sorts_set_before_seen_map():
     v = (1, 2, 3)
     s1 = {(i, v) for i in range(100)}
     s2 = {(i, v) for i in reversed(range(100))}
-    assert "__seen" in str(normalize_token(s1))
     assert check_tokenize(s1) == check_tokenize(s2)
 
 

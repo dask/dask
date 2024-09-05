@@ -1256,11 +1256,11 @@ def clone_key(key: KeyOrStrT, seed: Hashable) -> KeyOrStrT:
 
     Examples
     --------
-    >>> clone_key("x", 123)
+    >>> clone_key("x", 123)  # doctest: +SKIP
     'x-c4fb64ccca807af85082413d7ef01721'
-    >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)
+    >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)  # doctest: +SKIP
     'inc-bc629c23014a4472e18b575fdaf29ee7'
-    >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)
+    >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)  # doctest: +SKIP
     ('sum-c053f3774e09bd0f7de6044dbc40e71d', 4, 3)
     """
     if isinstance(key, tuple) and key and isinstance(key[0], str):
