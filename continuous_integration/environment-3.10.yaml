@@ -75,5 +75,5 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/fjetter/distributed@support_task_spec
+    - git+https://github.com/dask/distributed
     - git+https://github.com/dask/dask-expr
