@@ -94,7 +94,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         if not isinstance(part, list):
             part = [part]
 
-        return read_parquet_part(
+        df = read_parquet_part(
             self.fs,
             self.engine,
             self.meta,
@@ -112,6 +112,15 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             self.index,
             self.common_kwargs,
         )
+
+        if not self.index and "range" in part[0]:
+            offset = part[0]["range"][0]
+            row_count = part[0]["range"][1]
+            for p in part[1:]:
+                row_count += p["range"][1]
+            return df.set_index(pd.RangeIndex(offset, offset + len(df)))
+
+        return df
 
 
 class ToParquetFunctionWrapper:
@@ -574,6 +583,7 @@ def read_parquet(
         split_row_groups,
         fs,
         aggregation_depth,
+        calculate_divisions=calculate_divisions,
     )
 
     # Account for index and columns arguments.
@@ -1448,6 +1458,24 @@ def apply_filters(parts, statistics, filters):
     return out_parts, out_statistics
 
 
+def _attach_range(parts, statistics):
+    if statistics:
+        new_parts = []
+        offset = 0
+        for i, part_stat in enumerate(statistics):
+            num_rows = part_stat.get("num-rows", None)
+            if num_rows is None:
+                # Bail
+                return parts
+            else:
+                new_part = parts[i].copy()
+                new_part["range"] = (offset, num_rows)
+                new_parts.append(new_part)
+                offset += num_rows
+        return new_parts
+    return parts
+
+
 def process_statistics(
     parts,
     statistics,
@@ -1457,6 +1485,7 @@ def process_statistics(
     split_row_groups,
     fs,
     aggregation_depth,
+    calculate_divisions=False,
 ):
     """Process row-group column statistics in metadata
     Used in read_parquet.
@@ -1489,6 +1518,9 @@ def process_statistics(
         parts, statistics = result or [[], []]
         if filters:
             parts, statistics = apply_filters(parts, statistics, filters)
+
+        # Use statistics to attach row-count metadata
+        parts = _attach_range(parts, statistics)
 
         # Aggregate parts/statistics if we are splitting by row-group
         if blocksize or (split_row_groups and int(split_row_groups) > 1):
@@ -1528,8 +1560,30 @@ def process_statistics(
                     UserWarning,
                 )
 
-    divisions = divisions or (None,) * (len(parts) + 1)
-    return parts, divisions, index
+    return parts, _set_divisions(divisions, parts, index, calculate_divisions), index
+
+
+def _set_divisions(divisions, parts, index, calculate_divisions):
+    npartitions = len(parts)
+    if divisions or index or not calculate_divisions:
+        return divisions or (None,) * (npartitions + 1)
+    else:
+        divisions = []
+        for part in parts:
+            offset, size = None, 0
+            for p in part if isinstance(part, list) else [part]:
+                _range = p.get("range", None)
+                if _range:
+                    if offset is None:
+                        offset = _range[0]
+                        divisions.append(offset)
+                    size += _range[1]
+                else:
+                    return (None,) * (npartitions + 1)
+        if divisions:
+            divisions.append(divisions[-1] + size)
+            return tuple(divisions)
+        return (None,) * (npartitions + 1)
 
 
 def set_index_columns(meta, index, columns, auto_index_allowed):
@@ -1595,6 +1649,7 @@ def aggregate_row_groups(
     next_part, next_stat = [parts[0].copy()], stats[0].copy()
     for i in range(1, len(parts)):
         stat, part = stats[i], parts[i]
+        _range = part.get("range", None)
 
         # Criteria #1 for aggregating parts: parts are within the same file
         same_path = stat["file_path_0"] == next_stat["file_path_0"]
@@ -1659,6 +1714,11 @@ def aggregate_row_groups(
                 and this_piece[1] != [None]
             ):
                 next_piece[1].extend(this_piece[1])
+                if _range and "range" in next_part[-1]:
+                    next_part[-1]["range"] = (
+                        next_part[-1]["range"][0],
+                        next_part[-1]["range"][1] + _range[1],
+                    )
             else:
                 next_part.append(part)
 
@@ -1682,6 +1742,29 @@ def aggregate_row_groups(
     stats_agg.append(next_stat)
 
     return parts_agg, stats_agg
+
+
+def _pq_range_index_length(layer):
+    # Simple utility to use range information in the layer
+    # to calculate the number of rows in a Dask-DataFrame
+    _len = None
+    if (
+        isinstance(layer, DataFrameIOLayer)
+        and isinstance(layer.io_func, ParquetFunctionWrapper)
+        and layer.io_func.common_kwargs.get("filters", None) is None
+    ):
+        _len = 0
+        for part in layer.inputs:
+            for p in part if isinstance(part, list) else [part]:
+                _range = p.get("range", None)
+                if _range:
+                    _len += _range[1]
+                else:
+                    _len = None
+                    break
+            if _len is None:
+                break
+    return _len
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__
