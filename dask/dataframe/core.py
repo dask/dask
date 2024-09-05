@@ -4917,6 +4917,15 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
+        # Project to an empty column list to improve
+        # DataFrameIOLayer column-projection (if applicable).
+        # Use index to avoid unnecessary work
+        length = len(self[[]].index)
+        if length:
+            # Can only return here if this is a non-zero value,
+            # becuase the underlying IO engine may return an
+            # empty DataFrame for an empty column selection
+            return length
         try:
             s = self.iloc[:, 0]
         except IndexError:
