@@ -1686,9 +1686,11 @@ def unique_no_structured_arr(
         (name, 0): (
             (np.unique,)
             + tuple(
-                (np.concatenate, o.__dask_keys__())
-                if hasattr(o, "__dask_keys__")
-                else o
+                (
+                    (np.concatenate, o.__dask_keys__())
+                    if hasattr(o, "__dask_keys__")
+                    else o
+                )
                 for o in out_parts
             )
         )
@@ -1773,9 +1775,11 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         (name, 0): (
             (_unique_internal,)
             + tuple(
-                (np.concatenate, o.__dask_keys__())
-                if hasattr(o, "__dask_keys__")
-                else o
+                (
+                    (np.concatenate, o.__dask_keys__())
+                    if hasattr(o, "__dask_keys__")
+                    else o
+                )
                 for o in out_parts
             )
             + (return_inverse,)
@@ -2419,11 +2423,16 @@ def delete(arr, obj, axis):
     target_arr = split_at_breaks(arr, obj, axis)
 
     target_arr = [
-        arr[
-            tuple(slice(1, None) if axis == n else slice(None) for n in range(arr.ndim))
-        ]
-        if i != 0
-        else arr
+        (
+            arr[
+                tuple(
+                    slice(1, None) if axis == n else slice(None)
+                    for n in range(arr.ndim)
+                )
+            ]
+            if i != 0
+            else arr
+        )
         for i, arr in enumerate(target_arr)
     ]
     return concatenate(target_arr, axis=axis)

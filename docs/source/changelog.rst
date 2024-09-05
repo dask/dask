@@ -1,6 +1,158 @@
 Changelog
 =========
 
+.. _v2024.8.2:
+
+2024.8.2
+--------
+
+Automatic selection of rechunking method
+""""""""""""""""""""""""""""""""""""""""
+
+To enable users to rechunk data at larger scales than before, Dask now automatically chooses an appropriate rechunking method when rechunking on a cluster.
+This requires no additional configuration and is enabled by default.
+
+Specifically, Dask chooses between task-based and P2P rechunking.
+While task-based rechunking has been the previous default, P2P rechunking is beneficial when rechunking requires almost all-to-all communication between the old and new chunks, e.g., when changing between spacial and temporal chunking.
+In these cases, P2P rechunking offers constant memory usage and creates smaller task graphs.
+As a result, it works for cases where tasks-based rechunking would have previously failed.
+
+To disable automatic selection, users can select their preferred method via the configuration
+
+.. code-block::
+
+    import dask.config
+    # Choose either "tasks" or "p2p"
+    dask.config.set({"array.rechunk.method": "tasks"}) 
+
+or when rechunking
+
+.. code-block::
+
+    import dask.array as da
+    arr = da.random.random(size=(1000, 1000, 365), chunks=(-1, -1, "auto"))
+    # Choose either "tasks" or "p2p" 
+    arr = arr.rechunk(("auto", "auto", -1), method="tasks")
+
+See :pr:`11337` by `Hendrik Makait`_ for more details. 
+
+New shuffle API for Dask Arrays
+"""""""""""""""""""""""""""""""
+
+Dask added a shuffle-API to Dask Arrays. This API allows for shuffling the data
+along a single dimension. It will ensure that every group of elements along this
+dimension are in exactly one chunk. This is a very useful operation for GroupBy-Map
+patterns in Xarray. See :py:func:`~dask.array.Array.shuffle` for more information
+and API signature.
+
+See :pr:`11267`, :pr:`11311` and :pr:`11326` by `Patrick Hoefler`_ for more details.
+
+New blockwise_reshape API for Dask Arrays
+"""""""""""""""""""""""""""""""""""""""""
+
+The new :py:func:`~dask.array.blockwise_reshape` enables an embarassingly parallel
+reshaping operation for cases where you don't care about the order of the underlying
+array. It is embarassingly parallel and doesn't trigger a rechunking operation
+under the hood anymore. This is useful when you don't care about the order of
+the resulting Array, i.e. if a reduction is applied to the array or if the reshaping
+is only temporary.
+
+.. code-block::
+
+    arr = da.random.random(size=(100, 100, 48_000), chunks=(1000, 100, 83)
+    result = reshape_blockwise(arr, (10_000, 48_000))
+    result.sum()
+
+    # or: do something that preserves the shape of each chunk
+
+    result = reshape_blockwise(result, (100, 100, 48_000), chunks=arr.chunks)
+
+Dask will automatically calculate the resulting chunks if the number of dimensions
+is reduced, but you have to specify the resulting chunks if the number of dimensions
+is increased.
+
+Reshaping a Dask Array oftentimes creates a very complicated computations with rechunk
+operations in between because Dask respect the C ordering of the Array by default. This
+ensures that the resulting Dask Array is returned in the same order as the
+corresponding NumPy Array. However, this can lead to very inefficient computations.
+The ``blockwise_reshape`` is a lot more efficient than the default implemenation
+if you don't care about the order.
+
+.. warning::
+
+    Blockwise reshape operations are more efficient as the default, but they will
+    return an Array that is ordered differently. Use with care!
+
+See :pr:`11328` by `Patrick Hoefler`_ for more details.
+
+Mutlidimensional positional indexing keeping chunksizes consistent
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Indexing a Dask Array with :py:func:`~dask.array.vindex` previously created a single
+output chunk along the dimensions that were indexed. ``vindex`` is commonly used in Xarray
+when indexing multiple dimensions in a single step, i.e.:
+
+
+.. code-block::
+
+    arr = xr.DataArray(
+        da.random.random((100, 100, 100), chunks=(5, 5, 50)),
+        dims=['a', "b", "c"],
+    )
+
+Previously, this put the indexed dimensions into a single chunk:
+
+.. image:: images/changelog/vindex-memory-increase.png
+  :width: 75%
+  :align: center
+  :alt: Size of each individual chunk increases to over 1GB
+
+Dask now uses an improved algorithm that ensures that the chunksizes are kept consistent:
+
+.. image:: images/changelog/vindex-memory-constant.png
+  :width: 75%
+  :align: center
+  :alt: Size of each individual chunk increases to over 1GB
+
+See :pr:`11330` by `Patrick Hoefler`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Add changelog entries for shuffle, ``vindex`` and ``blockwise_reshape`` (:pr:`11350`) `Patrick Hoefler`_
+  - Ensure persisted collections are released without GC (:pr:`11348`) `Florian Jetter`_
+  - Update zoom link for dask meeting (:pr:`11357`) `Sarah Charlotte Johnson`_
+  - Add more docstring examples for ``normalize_chunks`` (:pr:`11271`) `Illviljan`_
+  - Choose automatically between tasks-based and p2p rechunking (:pr:`11337`) `Hendrik Makait`_
+  - Implement blockwise reshaping API for arrays (:pr:`11328`) `Patrick Hoefler`_
+  - Make rechunking in shuffle more intelligent to distribute unevenly if necessary (:pr:`11326`) `Patrick Hoefler`_
+  - Increase visibility of GPU CI updates (:pr:`11345`) `Charles Blackmon-Luca`_
+  - Update ``numpy`` and ``pyarrow`` versions in install docs (:pr:`11340`) `James Bourbeau`_
+  - Fixup dask and distributed dependencies (:pr:`11338`) `Patrick Hoefler`_
+  - Bump ``numpy>=1.24`` and ``pyarrow>=14.0.1`` minimum versions (:pr:`11331`) `James Bourbeau`_
+  - Add ``crick`` back to Python 3.11+ CI builds (:pr:`11335`) `James Bourbeau`_
+  - Preserve chunksizes in ``vindex`` (:pr:`11330`) `Patrick Hoefler`_
+  - Fix ``dask.array.fft`` mismatch with Numpy's interface (add support for `norm` argument) (:pr:`10665`) `joanrue`_
+  - Pass additional parameters to ``rechunk_p2p`` (:pr:`11319`) `Hendrik Makait`_
+  - Fix docstring formatting for ``map_overlap`` (:pr:`11332`) `Tao Xin`_
+  - Fix NumPy overflowing for ``prod`` on 2.0 (:pr:`11327`) `Patrick Hoefler`_
+  - Ensure ``axes`` are positive / add tests for negative axes (:pr:`10812`) `joanrue`_
+  - Fix ``map_overlap`` with ``new_axis`` (:pr:`11128`) `David Stansby`_
+
+  - Avoid capturing code of ``xdist`` (:pr-distributed:`8846`) `Florian Jetter`_
+  - Reduce memory footprint of culling P2P rechunking (:pr-distributed:`8845`) `Hendrik Makait`_
+  - Add tests for choosing default rechunking method (:pr-distributed:`8843`) `Hendrik Makait`_
+  - Increase visibility of GPU CI updates (:pr-distributed:`8841`) `Charles Blackmon-Luca`_
+  - Bump ``test_pause_while_idle`` timeout (:pr-distributed:`8844`) `Florian Jetter`_
+  - Concatenate small input chunks before P2P rechunking (:pr-distributed:`8832`) `Hendrik Makait`_
+  - Remove dump cluster from ``gen_cluster`` (:pr-distributed:`8823`) `Florian Jetter`_
+  - Bump ``numpy>=1.24`` and ``pyarrow>=14.0.1`` minimum versions (:pr-distributed:`8837`) `James Bourbeau`_
+  - Fix ``PipInstall`` plugin on ``Worker`` (:pr-distributed:`8839`) `Hendrik Makait`_
+  - Remove more Python 3.10 compatibility code (:pr-distributed:`8824`) `James Bourbeau`_
+  - Use task-based rechunking to prechunk along partial boundaries (:pr-distributed:`8831`) `Hendrik Makait`_
+  - Ensure ``client_desires_keys`` does not corrupt ``Scheduler`` state (:pr-distributed:`8827`) `Florian Jetter`_
+  - Bump minimum ``cloudpickle`` to 3 (:pr-distributed:`8836`) `James Bourbeau`_
+
+
 .. _v2024.8.1:
 
 2024.8.1
@@ -8617,3 +8769,5 @@ Other
 .. _`Jonas Dedden`: https://github.com/jonded94
 .. _`Bernhard Raml`: https://github.com/SwamyDev
 .. _`Lucas Colley`: https://github.com/lucascolley
+.. _`Tao Xin`: https://github.com/Tao-VanJS
+.. _`David Stansby`: https://github.com/dstansby
