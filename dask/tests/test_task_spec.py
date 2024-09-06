@@ -7,7 +7,7 @@ from collections import namedtuple
 import pytest
 
 import dask
-from dask._task_spec import (  # DictOfTasks,; SequenceOfTasks,
+from dask._task_spec import (
     Alias,
     DataNode,
     DependenciesMapping,
@@ -15,6 +15,7 @@ from dask._task_spec import (  # DictOfTasks,; SequenceOfTasks,
     TaskRef,
     convert_legacy_graph,
     convert_legacy_task,
+    execute_graph,
     no_function_cache,
     resolve_aliases,
 )
@@ -359,7 +360,7 @@ def test_subgraph_callable():
         "c": (subgraph, "a", "b"),
     }
     new_dsk = convert_legacy_graph(dsk)
-    # _assert_dsk_conversion(new_dsk)
+    _assert_dsk_conversion(new_dsk)
     assert new_dsk["c"].dependencies == {"a", "b", "add-123"}
     assert (
         new_dsk["c"](
@@ -711,9 +712,6 @@ def test_sizeof():
     assert sizeof(t) > 100_000
     t = DataNode("key", SizeOf(100_000))
     assert sizeof(t) > 100_000
-
-
-from dask._task_spec import execute_graph
 
 
 def test_execute_tasks_in_graph():
