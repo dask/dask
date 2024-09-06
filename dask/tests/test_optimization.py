@@ -7,6 +7,7 @@ from functools import partial
 import pytest
 
 import dask
+from dask._task_spec import Alias, Task, TaskRef, convert_legacy_graph
 from dask.base import tokenize
 from dask.core import get_dependencies
 from dask.local import get_sync
@@ -1493,3 +1494,194 @@ def test_fused_keys_max_length():  # generic fix for gh-5999
     fused, deps = fuse(d, rename_keys=True)
     for key in fused:
         assert len(key) < 150
+
+
+def func(*args):
+    try:
+        return "-".join(args)
+    except TypeError:
+        return "-".join(map(str, args))
+
+
+def func2(*args):
+    return "=".join(args)
+
+
+def func3(*args, **kwargs):
+    return "+".join(args) + "//" + "+".join(f"{k}={v}" for k, v in kwargs.items())
+
+
+def test_hybrid_legacy_new():
+    # e.g. after low level fusion
+
+    dsk = {
+        "foo": (func, Task("bar", func2, Alias("a"), "b"), "c"),
+    }
+    new_dsk = convert_legacy_graph(dsk)
+    assert new_dsk["foo"]({"a": "a"}) == "a=b-c"
+
+
+def test_fusion_legacy_hybrid():
+    dsk = {
+        "foo": (func, "a", "b"),
+        "bar": (func2, "foo", "c"),
+    }
+    from dask.optimization import fuse
+
+    # The first part of this test just tests a couple of basic assumptions about
+    # how fusing works. We want to make sure that this topology is detected by
+    # the fusion logic since otherwise the test below won't make any sense
+    fused, fused_deps = fuse(dsk, ["bar"])
+    assert len(fused) == 2
+    assert "bar" in fused
+    keys = set(fused)
+    keys.remove("bar")
+    fused_task_key = keys.pop()
+    assert fused["bar"] == fused_task_key
+    assert not fused_deps[fused_task_key]
+
+    new_dsk = convert_legacy_graph(fused)
+    assert isinstance(new_dsk["bar"], Alias)
+    assert new_dsk["bar"].key == fused_task_key
+    assert not new_dsk[fused_task_key].dependencies
+    assert new_dsk[fused_task_key]() == "a-b=c"
+
+    # Below this is the real test. Fusion should block when encountering a
+    # new style task
+
+    dsk = {
+        "foo": Task("foo", func, "a", "b"),
+        "bar": (func2, "foo", "c"),
+    }
+    fused, fused_deps = fuse(dsk, ["bar"])
+    assert len(fused) == 2
+    assert dsk == fused
+
+    dsk = {
+        "foo": (func, "a", "b"),
+        "bar": Task("bar", func2, TaskRef("foo"), "c"),
+    }
+    fused, fused_deps = fuse(dsk, ["bar"])
+    assert len(fused) == 2
+    assert dsk == fused
+
+
+def test_fusion_wide_legacy_hybrid():
+    with dask.config.set({"optimization.fuse.ave-width": 2}):
+        dsk = {
+            ("foo", 0): (func, "a", "b"),
+            ("foo", 1): (func, "a", "b"),
+            "bar": (func2, ("foo", 1), ("foo", 0)),
+        }
+        from dask.optimization import fuse
+
+        # The first part of this test just tests a couple of basic assumptions
+        # about how fusing works. We want to make sure that this topology is
+        # detected by the fusion logic since otherwise the test below won't make
+        # any sense
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert len(fused) == 2
+
+        keys = set(fused)
+        keys.remove("bar")
+        fused_task_key = keys.pop()
+        assert fused["bar"] == fused_task_key
+        assert not fused_deps[fused_task_key]
+
+        new_dsk = convert_legacy_graph(fused)
+        assert isinstance(new_dsk["bar"], Alias)
+        assert new_dsk["bar"].key == fused_task_key
+        assert not new_dsk[fused_task_key].dependencies
+        assert new_dsk[fused_task_key]() == "a-b=a-b"
+
+        # Below this is the real test. Fusion should block when encountering a
+        # new style tasks
+
+        t = Task(("foo", 0), func, "a", "b")
+        dsk = {
+            ("foo", 0): t,
+            ("foo", 1): (func, "a", "b"),
+            "bar": (func2, ("foo", 1), ("foo", 0)),
+        }
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert fused == {
+            ("foo", 0): t,
+            "foo-bar": (func2, (func, "a", "b"), ("foo", 0)),
+            "bar": "foo-bar",
+        }
+
+        t = Task(("foo", 1), func, "a", "b")
+        dsk = {
+            ("foo", 0): (func, "a", "b"),
+            ("foo", 1): t,
+            "bar": (func2, ("foo", 1), ("foo", 0)),
+        }
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert fused == {
+            ("foo", 1): t,
+            "foo-bar": (func2, ("foo", 1), (func, "a", "b")),
+            "bar": "foo-bar",
+        }
+
+        dsk = {
+            ("foo", 0): Task(("foo", 0), func, "a", "b"),
+            ("foo", 1): Task(("foo", 1), func, "a", "b"),
+            "bar": (func2, ("foo", 1), ("foo", 0)),
+        }
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert dsk == fused
+
+        dsk = {
+            ("foo", 0): (func, "a", "b"),
+            ("foo", 1): (func, "a", "b"),
+            "bar": Task("bar", func2, TaskRef(("foo", 1)), TaskRef(("foo", 0))),
+        }
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert dsk == fused
+
+
+def test_do_not_inline_legacy_hybrid():
+    from dask.core import get
+
+    dsk = {
+        "out": (func, "i", "d"),  # doctest: +SKIP
+        "i": (func2, "x"),
+        "d": (func3, "y"),
+        "x": "1",
+        "y": "1",
+    }
+    inlined = inline_functions(dsk, [], [func2])
+    assert get(inlined, ["out"]) == get(dsk, ["out"])
+    dsk = {
+        "foo": (func, "a", "b"),
+        "bar": (func2, "foo", "c"),
+        "baz": "bar",
+    }
+
+    inlined = inline_functions(
+        dsk,
+        {"baz"},
+        fast_functions=(func,),
+    )
+    assert len(inlined) == 2
+    assert inlined["baz"] == "bar"
+    assert get(dsk, ["baz"]) == get(inlined, ["baz"])
+
+    dsk = {
+        "foo": (func, "a", "b"),
+        "bar": Task("bar", func2, (TaskRef("foo"), "c")),
+        "baz": "bar",
+    }
+
+    inlined = inline_functions(
+        dsk,
+        {"baz"},
+        fast_functions=set(),
+    )
+    assert dsk == inlined
+    inlined = inline_functions(
+        dsk,
+        {"baz"},
+        fast_functions=(func,),
+    )
+    assert dsk == inlined
