@@ -871,19 +871,33 @@ def no_function_cache():
         _func_cache, _func_cache_reverse = cache_before
 
 
-def execute_graph(dsk: list[GraphNode] | dict[KeyType, GraphNode]) -> dict:
+def execute_graph(
+    dsk: Iterable[GraphNode] | Mapping[KeyType, GraphNode],
+    cache: MutableMapping[KeyType, object] | None = None,
+    keys: Container[KeyType] | None = None,
+) -> MutableMapping[KeyType, object]:
+    """Execute a given graph.
+
+    The graph is exceuted in topological order as defined by dask.order until
+    all leaf nodes, i.e. nodes without any dependents, are reached. The returned
+    dictionary contains the results of the leaf nodes.
+
+    If keys are required that are not part of the graph, they can be provided in the `cache` argument.
+
+    If `keys` is provided, the result will contain only values that are part of the `keys` set.
+
+    """
     if isinstance(dsk, (list, tuple, set, frozenset)):
         dsk = {t.key: t for t in dsk}
     else:
         assert isinstance(dsk, dict)
-    dependencies = dict(DependenciesMapping(dsk))
 
     refcount: defaultdict[KeyType, int] = defaultdict(int)
-    for vals in dependencies.values():
+    for vals in DependenciesMapping(dsk).values():
         for val in vals:
             refcount[val] += 1
 
-    cache: dict[KeyType, object] = {}
+    cache = cache or {}
     from dask.order import order
 
     priorities = order(dsk)
@@ -892,7 +906,7 @@ def execute_graph(dsk: list[GraphNode] | dict[KeyType, GraphNode]) -> dict:
         cache[key] = node(cache)
         for dep in node.dependencies:
             refcount[dep] -= 1
-            if refcount[dep] == 0:
+            if refcount[dep] == 0 and keys and dep not in keys:
                 del cache[dep]
 
     return cache
