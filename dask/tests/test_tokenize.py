@@ -877,10 +877,6 @@ def test_tokenize_dict_doesnt_call_str_on_values():
 
 
 def test_tokenize_sorts_dict_before_seen_map():
-    """When sequence values are repeated, the 2nd+ entry is tokenized as (__seen, 0).
-    This makes it important to ensure that dicts are sorted *before* you call
-    normalize_token() on their elements.
-    """
     v = (1, 2, 3)
     d1 = {1: v, 2: v}
     d2 = {2: v, 1: v}
@@ -888,11 +884,6 @@ def test_tokenize_sorts_dict_before_seen_map():
 
 
 def test_tokenize_sorts_set_before_seen_map():
-    """Same as test_tokenize_sorts_dict_before_seen_map, but for sets.
-
-    Note that this test is only meaningful if set insertion order impacts iteration
-    order, which is an implementation detail of the Python interpreter.
-    """
     v = (1, 2, 3)
     s1 = {(i, v) for i in range(100)}
     s2 = {(i, v) for i in reversed(range(100))}
