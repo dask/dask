@@ -24,7 +24,7 @@ dependencies:
   - moto<5
   # Optional dependencies
   - mimesis
-  - numpy=1.23
+  - numpy=1.24
   - pandas=2.1
   - numba
   - flask
@@ -41,7 +41,7 @@ dependencies:
   - xarray
   - numexpr>=2.8  # Something is pinning it to 2.7
   - sqlalchemy
-  - pyarrow=10
+  - pyarrow=14.0.1
   - coverage
   - jsonschema
   # other -- IO

@@ -18,7 +18,6 @@ from packaging.version import Version
 import dask
 import dask.dataframe as dd
 import dask.multiprocessing
-from dask.array.numpy_compat import NUMPY_GE_124
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GE_202, PANDAS_GE_300
 from dask.dataframe.io.parquet.core import get_engine
@@ -688,10 +687,7 @@ def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
         arrow_to_pandas={"types_mapper": types_mapper.get},
     )
     expected = df.astype({"a": pd.Float32Dtype()})
-    if pyarrow_version.major >= 12:
-        # types_mapper impacts index
-        # https://github.com/apache/arrow/issues/34283
-        expected.index = expected.index.astype(pd.Float32Dtype())
+    expected.index = expected.index.astype(pd.Float32Dtype())
     assert_eq(result, expected)
 
 
@@ -1176,10 +1172,6 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         assert_eq(ddf, ddf2, check_divisions=False)
 
 
-@pytest.mark.xfail(
-    pyarrow_strings_enabled() and pyarrow_version < Version("12.0.0"),
-    reason="Known failure with pyarrow strings: https://github.com/apache/arrow/issues/33727",
-)
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
@@ -2355,20 +2347,8 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}),  # us
         pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"),
         # pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), # Casting errors
-        pytest.param(
-            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
-            marks=pytest.mark.xfail(
-                pyarrow_version < Version("13.0.0.dev"),
-                reason="https://github.com/apache/arrow/issues/15079",
-            ),
-        ),
-        pytest.param(
-            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
-            marks=pytest.mark.xfail(
-                pyarrow_version < Version("13.0.0.dev"),
-                reason="https://github.com/apache/arrow/issues/15079",
-            ),
-        ),
+        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
+        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
         pd.DataFrame({"x": [3, 2, 1]}).astype("uint16"),
         pd.DataFrame({"x": [3, 2, 1]}).astype("float32"),
         pd.DataFrame({"x": [3, 1, 2]}, index=[3, 2, 1]),
@@ -2829,9 +2809,6 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 )
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
-    if engine == "pyarrow" and Version(pa.__version__) < Version("8.0.0"):
-        # See: https://issues.apache.org/jira/browse/ARROW-15312
-        pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
     path = tmpdir.join("test.parquet")
     df = pd.DataFrame(
         {
@@ -2855,9 +2832,6 @@ def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_isna(tmpdir, split_row_groups):
-    if Version(pa.__version__) < Version("8.0.0"):
-        # See: https://issues.apache.org/jira/browse/ARROW-15312
-        pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
     path = tmpdir.join("test.parquet")
     pd.DataFrame({"a": [1, None] * 5 + [None] * 5}).to_parquet(path, row_group_size=10)
 
@@ -3294,11 +3268,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     info = np.iinfo(np.dtype("int64"))
     # In `numpy=1.24.0` NumPy warns when an overflow is encountered when casting from float to int
     # https://numpy.org/doc/stable/release/1.24.0-notes.html#numpy-now-gives-floating-point-errors-in-casts
-    if NUMPY_GE_124:
-        ctx = pytest.warns(RuntimeWarning, match="invalid value encountered in cast")
-    else:
-        ctx = contextlib.nullcontext()
-    with ctx:
+    with pytest.warns(RuntimeWarning, match="invalid value encountered in cast"):
         arr_numeric = np.linspace(
             start=info.min + 2, stop=info.max, num=1024, dtype="int64"
         )
@@ -3309,13 +3279,8 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
         table, f"{tmpdir}/file.parquet", use_deprecated_int96_timestamps=False
     )
 
-    if pyarrow_version < Version("13.0.0.dev"):
-        # This will raise by default due to overflow
-        with pytest.raises(pa.lib.ArrowInvalid) as e:
-            dd.read_parquet(str(tmpdir)).compute()
-            assert "out of bounds" in str(e.value)
-    else:
-        dd.read_parquet(str(tmpdir)).compute()
+    # This will not raise by default due to overflow
+    dd.read_parquet(str(tmpdir)).compute()
 
     from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
@@ -3639,10 +3604,9 @@ def test_null_partition_pyarrow(tmpdir, scheduler):
         },
     )
 
-    if pyarrow_version.major >= 12:
-        # pyarrow>=12 would also convert index dtype to nullable
-        # see https://github.com/apache/arrow/pull/34445
-        ddf.index = ddf.index.astype("Int64")
+    # pyarrow>=12 would also convert index dtype to nullable
+    # see https://github.com/apache/arrow/pull/34445
+    ddf.index = ddf.index.astype("Int64")
 
     assert_eq(
         ddf[["x", "id"]],
@@ -4921,10 +4885,14 @@ def test_read_parquet_lists_not_converting(tmpdir):
 
 
 @PYARROW_MARK
-@pytest.mark.skipif(pyarrow_version.major < 12, reason="Requires arrow >= 12")
 def test_parquet_string_roundtrip(tmpdir):
     pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
     pdf.to_parquet(tmpdir + "string.parquet")
+    if not pyarrow_strings_enabled():
+        # If auto pyarrow strings aren't enabled, we match pandas behavior.
+        # Pandas currently doesn't roundtrip `string[pyarrow]` through parquet.
+        # See https://github.com/pandas-dev/pandas/issues/42664
+        pdf = pd.read_parquet(tmpdir + "string.parquet")
     df = dd.read_parquet(tmpdir + "string.parquet")
     assert_eq(df, pdf)
     pd.testing.assert_frame_equal(df.compute(), pdf)

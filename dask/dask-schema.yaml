@@ -119,32 +119,30 @@ properties:
         description: |
           The default chunk size to target. Default is "128MiB".
 
+      chunk-size-tolerance:
+        type: number
+        description: |
+          Upper tolerance for different algorithms when creating output chunks.
+          Default is 1.25. This means that the algorithms can exceed
+          the average input chunk size along this dimension by 25%.
+
       rechunk:
         type: object
         properties:
           
           method:
-            type: string
+            type:
+            - string
+            - "null"
             description: |
-              The method to use for rechunking. Must be either "tasks" or "p2p";
-              default is "tasks". Using "p2p" requires a distributed cluster.
+              The method to use for rechunking. Possible values are tasks or p2p.
+              If null, pick best method depending on application.
           
           threshold:
             type: integer
             description: |
               The graph growth factor above which task-based shuffling introduces
               an intermediate step.
-
-      shuffle:
-        type: object
-        properties:
-
-          chunksize-tolerance:
-            type: number
-            description: |
-              Upper tolerance for the shuffle algorithm when creating output chunks.
-              Default is 1.25. This means that the shuffle algorithm can exceed
-              the average input chunk size along this dimension by 25%.
 
       svg:
         type: object

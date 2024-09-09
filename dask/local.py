@@ -106,6 +106,7 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
+
 from __future__ import annotations
 
 import os
@@ -226,7 +227,7 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
         id = get_id()
         result = dumps((result, id))
         failed = False
-    except BaseException as e:
+    except BaseException as e:  # noqa: B036
         result = pack_exception(e, dumps)
         failed = True
     return key, result, failed
@@ -541,7 +542,7 @@ class SynchronousExecutor(Executor):
         fut = Future()
         try:
             fut.set_result(fn(*args, **kwargs))
-        except BaseException as e:
+        except BaseException as e:  # noqa: B036
             fut.set_exception(e)
         return fut
 

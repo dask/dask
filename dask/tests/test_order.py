@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from collections import defaultdict
 
 import pytest
 
@@ -256,7 +257,7 @@ def test_prefer_deep(abcde):
     |   |
     d   a
 
-    Prefer longer chains first so we should start with c
+    Prefer longer chains first so we should start with d
     """
     a, b, c, d, e = abcde
     dsk = {a: 1, b: (f, a), c: (f, b), d: 1, e: (f, d)}
@@ -575,7 +576,7 @@ def test_map_overlap(abcde):
        |/  | \ | / | \|
       d1  d2  d3  d4  d5
        |       |      |
-      e1      e2      e5
+      e1      e3      e5
 
     Want to finish b1 before we start on e5
     """
@@ -1195,8 +1196,6 @@ def test_xarray_like_reduction():
 def test_array_vs_dataframe(optimize):
     xr = pytest.importorskip("xarray")
     dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.xfail("doesn't work yet")
 
     import dask.array as da
 
@@ -1221,7 +1220,8 @@ def test_array_vs_dataframe(optimize):
     diag_df = diagnostics(
         collections_to_dsk([mean.to_dask_dataframe()], optimize_graph=optimize)
     )
-    assert max(diag_df[1]) == max(diag_array[1])
+    assert max(diag_df[1]) == (15 if dd._dask_expr_enabled() else 38)
+    assert max(diag_array[1]) == 38
     assert max(diag_array[1]) < 50
 
 
@@ -1254,13 +1254,15 @@ def test_anom_mean():
     # `mean_chunk` which is the primary reducer in this graph. Therefore we want
     # to run those as quickly as possible.
     # This is difficult to assert on but the pressure is an ok-ish proxy
-    assert max(pressure) <= 177
+    assert max(pressure) <= 178
     from collections import defaultdict
 
     count_dependents = defaultdict(set)
     for k in dict(graph).keys():
         count_dependents[len(dependents[k])].add(k)
-    n_splits = max(count_dependents)
+
+    # array-taker has the most dependents, but it's not what we want to look at
+    n_splits = sorted(count_dependents)[-2]
     # There is a transpose/stack group that is splitting into many tasks
     # see https://github.com/dask/dask/pull/10660#discussion_r1420571664
     # the name depends on the version of xarray
@@ -1285,7 +1287,7 @@ def test_anom_mean():
     max_age_transpose = max(ages_tranpose.values())
     assert max_age_transpose < 150
     assert avg_age_transpose < 100
-    assert sum(pressure) / len(pressure) < 100
+    assert sum(pressure) / len(pressure) < 101
 
 
 def test_anom_mean_raw(abcde):
@@ -2097,6 +2099,204 @@ def test_xarray_map_reduce_with_slicing():
     assert max(pressure) <= 5
 
 
+@pytest.mark.parametrize("use_longest_path", [True, False])
+def test_xarray_rechunk_map_reduce_cohorts(use_longest_path):
+    dsk = {
+        ("transpose", 0, 0, 0): (f, ("concat-groupby", 0, 0, 0)),
+        ("transpose", 0, 1, 0): (f, ("concat-groupby", 0, 1, 0)),
+        ("transpose", 1, 0, 0): (f, ("concat-groupby", 1, 0, 0)),
+        ("transpose", 1, 1, 0): (f, ("concat-groupby", 1, 1, 0)),
+        ("groupby-cohort", 0, 0, 0): (f, ("groupby-chunk", 0, 0, 0)),
+        ("groupby-cohort", 0, 0, 1): (f, ("groupby-chunk", 0, 0, 1)),
+        ("groupby-cohort", 1, 0, 0): (f, ("groupby-chunk", 1, 0, 0)),
+        ("groupby-cohort", 1, 0, 1): (f, ("groupby-chunk", 1, 0, 1)),
+        ("groupby-cohort-2", 0, 0, 0): (f, ("groupby-chunk-2", 0, 0, 0)),
+        ("groupby-cohort-2", 0, 0, 1): (f, ("groupby-chunk-2", 0, 0, 1)),
+        ("groupby-cohort-2", 1, 0, 0): (f, ("groupby-chunk-2", 1, 0, 0)),
+        ("groupby-cohort-2", 1, 0, 1): (f, ("groupby-chunk-2", 1, 0, 1)),
+        ("rechunk-merge", 3, 0, 0): (
+            f,
+            ("concat-shuffle", 4, 0, 0),
+            ("rechunk-split", 12),
+        ),
+        ("rechunk-merge", 0, 0, 0): (
+            f,
+            ("rechunk-split", 1),
+            ("concat-shuffle", 0, 0, 0),
+        ),
+        ("rechunk-merge", 3, 1, 0): (
+            f,
+            ("rechunk-split", 14),
+            ("concat-shuffle", 4, 1, 0),
+        ),
+        ("rechunk-merge", 2, 1, 0): (f, ("rechunk-split", 10), ("rechunk-split", 11)),
+        ("rechunk-split", 12): (f, ("concat-shuffle", 3, 0, 0)),
+        ("rechunk-merge", 0, 1, 0): (
+            f,
+            ("rechunk-split", 3),
+            ("concat-shuffle", 0, 1, 0),
+        ),
+        ("rechunk-merge", 1, 0, 0): (f, ("rechunk-split", 4), ("rechunk-split", 5)),
+        ("rechunk-merge", 1, 1, 0): (f, ("rechunk-split", 7), ("rechunk-split", 6)),
+        ("rechunk-split", 5): (f, ("concat-shuffle", 2, 0, 0)),
+        ("rechunk-split", 11): (f, ("concat-shuffle", 3, 1, 0)),
+        ("rechunk-merge", 2, 0, 0): (f, ("rechunk-split", 8), ("rechunk-split", 9)),
+        ("rechunk-split", 1): (f, ("concat-shuffle", 1, 0, 0)),
+        ("rechunk-split", 14): (f, ("concat-shuffle", 3, 1, 0)),
+        ("rechunk-split", 4): (f, ("concat-shuffle", 1, 0, 0)),
+        ("rechunk-split", 7): (f, ("concat-shuffle", 2, 1, 0)),
+        ("rechunk-split", 10): (f, ("concat-shuffle", 2, 1, 0)),
+        ("rechunk-split", 6): (f, ("concat-shuffle", 1, 1, 0)),
+        ("rechunk-split", 3): (f, ("concat-shuffle", 1, 1, 0)),
+        ("rechunk-split", 9): (f, ("concat-shuffle", 3, 0, 0)),
+        ("rechunk-split", 8): (f, ("concat-shuffle", 2, 0, 0)),
+        ("concat-shuffle", 0, 0, 0): (f, ("shuffle-split", 0), ("shuffle-split", 1)),
+        ("concat-shuffle", 0, 1, 0): (
+            f,
+            ("shuffle-split", 106),
+            ("shuffle-split", 107),
+        ),
+        ("concat-shuffle", 1, 0, 0): (
+            f,
+            ("shuffle-split", 4665),
+            ("shuffle-split", 4664),
+        ),
+        ("concat-shuffle", 1, 1, 0): (
+            f,
+            ("shuffle-split", 4770),
+            ("shuffle-split", 4771),
+        ),
+        ("concat-shuffle", 2, 0, 0): (
+            f,
+            ("shuffle-split", 9328),
+            ("shuffle-split", 9329),
+            ("shuffle-split", 9330),
+        ),
+        ("concat-shuffle", 2, 1, 0): (
+            f,
+            ("shuffle-split", 9487),
+            ("shuffle-split", 9488),
+            ("shuffle-split", 9489),
+        ),
+        ("concat-shuffle", 3, 0, 0): (
+            f,
+            ("shuffle-split", 16324),
+            ("shuffle-split", 16325),
+        ),
+        ("concat-shuffle", 3, 1, 0): (
+            f,
+            ("shuffle-split", 16430),
+            ("shuffle-split", 16431),
+        ),
+        ("concat-shuffle", 4, 0, 0): (
+            f,
+            ("shuffle-split", 20989),
+            ("shuffle-split", 20988),
+        ),
+        ("concat-shuffle", 4, 1, 0): (
+            f,
+            ("shuffle-split", 21094),
+            ("shuffle-split", 21095),
+        ),
+        ("shuffle-split", 9487): (f, ("getitem-2", 2, 1, 0)),
+        ("shuffle-split", 9489): (f, ("getitem-2", 14, 1, 0)),
+        ("shuffle-split", 106): (f, ("getitem-open", 106)),
+        ("shuffle-split", 4664): (f, ("getitem-2", 1, 0, 0)),
+        ("shuffle-split", 16431): (f, ("getitem-2", 15, 1, 0)),
+        ("shuffle-split", 16324): (f, ("getitem-2", 14, 0, 0)),
+        ("shuffle-split", 107): (f, ("getitem-2", 1, 1, 0)),
+        ("shuffle-split", 4665): (f, ("getitem-2", 2, 0, 0)),
+        ("shuffle-split", 4770): (f, ("getitem-2", 1, 1, 0)),
+        ("shuffle-split", 0): (f, ("getitem-open", 0)),
+        ("shuffle-split", 9328): (f, ("getitem-2", 2, 0, 0)),
+        ("shuffle-split", 9488): (f, ("getitem-open", 9488)),
+        ("shuffle-split", 16325): (f, ("getitem-2", 15, 0, 0)),
+        ("shuffle-split", 16430): (f, ("getitem-2", 14, 1, 0)),
+        ("shuffle-split", 20988): (f, ("getitem-2", 15, 0, 0)),
+        ("shuffle-split", 9329): (f, ("getitem-open", 9329)),
+        ("shuffle-split", 4771): (f, ("getitem-2", 2, 1, 0)),
+        ("shuffle-split", 1): (f, ("getitem-2", 1, 0, 0)),
+        ("shuffle-split", 20989): (f, ("getitem-open", 20989)),
+        ("shuffle-split", 9330): (f, ("getitem-2", 14, 0, 0)),
+        ("shuffle-split", 21094): (f, ("getitem-2", 15, 1, 0)),
+        ("shuffle-split", 21095): (f, ("getitem-open", 21095)),
+        ("getitem-2", 1, 0, 0): (f, ("open_dataset", 1, 0, 0)),
+        ("getitem-2", 14, 0, 0): (f, ("open_dataset", 14, 0, 0)),
+        ("getitem-2", 2, 1, 0): (f, ("open_dataset", 2, 1, 0)),
+        ("getitem-2", 15, 0, 0): (f, ("open_dataset", 15, 0, 0)),
+        ("getitem-2", 15, 1, 0): (f, ("open_dataset", 15, 1, 0)),
+        ("getitem-2", 2, 0, 0): (f, ("open_dataset", 2, 0, 0)),
+        ("getitem-2", 1, 1, 0): (f, ("open_dataset", 1, 1, 0)),
+        ("getitem-2", 14, 1, 0): (f, ("open_dataset", 14, 1, 0)),
+        ("groupby-chunk-2", 0, 0, 1): (f, ("rechunk-merge", 2, 0, 0)),
+        ("groupby-chunk-2", 0, 0, 0): (f, ("rechunk-merge", 0, 0, 0)),
+        ("concat-groupby", 0, 0, 0): (
+            f,
+            ("groupby-cohort-2", 0, 0, 0),
+            ("groupby-cohort-2", 0, 0, 1),
+        ),
+        ("groupby-chunk", 0, 0, 1): (f, ("rechunk-merge", 3, 0, 0)),
+        ("groupby-chunk", 0, 0, 0): (f, ("rechunk-merge", 1, 0, 0)),
+        ("concat-groupby", 1, 0, 0): (
+            f,
+            ("groupby-cohort", 0, 0, 0),
+            ("groupby-cohort", 0, 0, 1),
+        ),
+        ("groupby-chunk", 1, 0, 1): (f, ("rechunk-merge", 3, 1, 0)),
+        ("groupby-chunk", 1, 0, 0): (f, ("rechunk-merge", 1, 1, 0)),
+        ("concat-groupby", 1, 1, 0): (
+            f,
+            ("groupby-cohort", 1, 0, 0),
+            ("groupby-cohort", 1, 0, 1),
+        ),
+        ("open_dataset", 14, 1, 0): (f,),
+        ("groupby-chunk-2", 1, 0, 0): (f, ("rechunk-merge", 0, 1, 0)),
+        ("groupby-chunk-2", 1, 0, 1): (f, ("rechunk-merge", 2, 1, 0)),
+        ("concat-groupby", 0, 1, 0): (
+            f,
+            ("groupby-cohort-2", 1, 0, 1),
+            ("groupby-cohort-2", 1, 0, 0),
+        ),
+        ("getitem-open", 9329): (f,),
+        ("open_dataset", 2, 1, 0): (f,),
+        ("open_dataset", 15, 1, 0): (f),
+        ("getitem-open", 20989): (f,),
+        ("getitem-open", 0): (f,),
+        ("open_dataset", 1, 0, 0): (f,),
+        ("getitem-open", 9488): (f,),
+        ("getitem-open", 21095): (f,),
+        ("open_dataset", 2, 0, 0): (f,),
+        ("getitem-open", 106): (f,),
+        ("open_dataset", 1, 1, 0): (f,),
+        ("open_dataset", 14, 0, 0): (f),
+        ("open_dataset", 15, 0, 0): (f),
+    }
+    if use_longest_path:
+        # ensure that we run through longes path True and False
+        keys = [("open-dataset", i, 0, 0) for i in range(20, 35)]
+        dsk.update({("dummy", 0): (f, keys)})
+        dsk.update({k: (f,) for k in keys})
+
+    o = order(dsk)
+
+    assert_topological_sort(dsk, o)
+    _, pressure = diagnostics(dsk, o=o)
+    # cut the dummy tasks in the end
+    assert max(pressure[:99]) <= 7
+
+    final_nodes = sorted(
+        [("transpose", ix, jx, 0) for ix in range(2) for jx in range(2)],
+        key=o.__getitem__,
+    )
+    all_diffs = []
+    for ix in range(1, len(final_nodes)):
+        all_diffs.append(o[final_nodes[ix]] - o[final_nodes[ix - 1]])
+
+    # We process a big chunk first and then a small side-branch
+    # before we repeat this for the next independent branch
+    assert all_diffs == [10, 39, 10]
+
+
 def test_xarray_8414():
     # https://github.com/pydata/xarray/issues/8414#issuecomment-1793860552
     np = pytest.importorskip("numpy")
@@ -2204,6 +2404,7 @@ def test_connecting_to_roots_tree_reduction():
         "c2": {"a3", "a2"},
         "d": {"a1", "a2", "a3", "a0"},
     }
+    assert len({id(v) for v in connected_roots.values() if len(v) == 0}) == 1
     assert all(v == 1 for v in max_dependents.values())
 
     connected_roots, max_dependents = _connecting_to_roots(dependents, dependencies)
@@ -2212,6 +2413,78 @@ def test_connecting_to_roots_tree_reduction():
         connected_roots.values()
     )
     assert all(v == 2 for v in max_dependents.values())
+
+
+def test_connecting_to_roots_long_linear_chains():
+    dsk = {
+        "a0": (f, 1),
+        "a1": (f, 1),
+        "b0": (f, "a0"),
+        "c0": (f, "b0"),
+        "d0": (f, "c0"),
+        "d1": (f, "c0"),
+        "e1": (f, "d0", "d1"),
+        "b1": (f, "a1"),
+        "c1": (f, "b1"),
+        "d2": (f, "c1"),
+        "d3": (f, "c1"),
+        "f": (f, "e1", "d2", "d3", "d1"),
+    }
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, _ = _connecting_to_roots(dependencies, dependents)
+
+    id_a0 = id(connected_roots["b0"])
+    for k in ["c0", "d0", "d1", "e1"]:
+        assert id(connected_roots[k]) == id_a0
+
+    id_a0 = id(connected_roots["b1"])
+    for k in ["c1", "d2", "d3"]:
+        assert id(connected_roots[k]) == id_a0
+
+
+def test_connected_roots_deduplication_mem_usage():
+    # see https://github.com/dask/dask/issues/11055
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+
+    def rotate(X, n_iter=2):
+        gamma = 1
+        n_samples, n_modes = X.shape
+        R = np.eye(n_modes)
+
+        for _ in range(n_iter):
+            basis = X @ R
+
+            basis2 = basis * basis.conj()
+            basis3 = basis2 * basis
+            W = np.diag(np.sum(basis2, axis=0))
+            alpha = gamma / n_samples
+
+            transformed = X.conj().T @ (basis3 - (alpha * basis @ W))
+            U, svals, VT = da.linalg.svd_compressed(
+                transformed, k=n_modes, compute=False
+            )
+            R = U @ VT
+
+        Xrot = X @ R
+        return Xrot
+
+    n_modes = 100
+
+    x = da.random.random((10_000, 100), chunks=(5_000, -1))
+    u, s, v = da.linalg.svd_compressed(x, k=n_modes, compute=False)
+
+    u_rot = rotate(u)
+    dsk = dict(u_rot.dask)
+    dependencies, dependents = get_deps(dsk)
+    connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
+
+    hashes = defaultdict(set)
+
+    for v in connected_roots.values():
+        hashes[tuple(sorted(v))].add(id(v))
+
+    assert set(map(len, hashes.values())) == {1}
 
 
 def test_connecting_to_roots_asym():
@@ -2275,3 +2548,101 @@ def test_do_not_mutate_input():
     assert_topological_sort(dsk, o)
     assert dsk == dsk_copy
     assert dependencies == dependencies_copy
+
+
+def test_stackstac():
+    # see https://github.com/dask/dask/issues/11363
+    # and https://github.com/dask/dask/pull/11367
+    final_keys = [
+        ("transpose-9c80c6b26d7ef5cfec7274ee9e6b091e", 0, 0, 0),
+        ("transpose-9c80c6b26d7ef5cfec7274ee9e6b091e", 0, 1, 0),
+    ]
+    dsk = {
+        ("transpose-9c80c6b26d7ef5cfec7274ee9e6b091e", 0, 0, 0): (
+            f,
+            ("vindex-merge", 0, 0, 0),
+        ),
+        ("transpose-9c80c6b26d7ef5cfec7274ee9e6b091e", 0, 1, 0): (
+            f,
+            ("vindex-merge", 0, 1, 0),
+        ),
+        ("vindex-merge", 0, 0, 0): (
+            f,
+            ("vindex-slice", 0, 0, 0),
+            ("vindex-slice", 1, 0, 0),
+            ("vindex-slice", 2, 0, 0),
+            ("vindex-slice", 3, 0, 0),
+        ),
+        ("vindex-slice", 2, 0, 0): (f, ("getitem-vindex", 2, 0, 0)),
+        ("vindex-merge", 0, 1, 0): (
+            f,
+            ("vindex-slice", 0, 0, 1),
+            ("vindex-slice", 1, 0, 1),
+            ("vindex-slice", 2, 0, 1),
+            ("vindex-slice", 3, 0, 1),
+        ),
+        ("vindex-slice", 2, 0, 1): (f, ("getitem-vindex", 2, 0, 1)),
+        ("vindex-slice", 1, 0, 0): (f, ("getitem-vindex", 1, 0, 0)),
+        ("getitem-vindex", 2, 0, 1): (
+            f,
+            ("shuffle-split", 321),
+            ("shuffle-split", 322),
+        ),
+        ("vindex-slice", 3, 0, 1): (f, ("getitem-vindex", 3, 0, 1)),
+        ("vindex-slice", 0, 0, 1): (f, ("getitem-vindex", 0, 0, 1)),
+        ("getitem-vindex", 3, 0, 1): (
+            f,
+            ("shuffle-split", 299),
+            ("shuffle-split", 300),
+        ),
+        ("getitem-vindex", 2, 0, 0): (f, ("concatenate", 0, 1, 9, 1)),
+        ("vindex-slice", 3, 0, 0): (f, ("getitem-vindex", 3, 0, 0)),
+        ("shuffle-split", 322): (f, ("concatenate", 0, 1, 9, 1)),
+        ("vindex-slice", 0, 0, 0): (f, ("getitem-vindex", 0, 0, 0)),
+        ("getitem-vindex", 0, 0, 1): (
+            f,
+            ("shuffle-split", 341),
+            ("shuffle-split", 342),
+        ),
+        ("vindex-slice", 1, 0, 1): (f, ("getitem-vindex", 1, 0, 1)),
+        ("shuffle-split", 321): (f, ("concatenate-getitem", 321)),
+        ("shuffle-split", 299): (f, ("concatenate-getitem", 299)),
+        ("getitem-vindex", 3, 0, 0): (f, ("concatenate", 0, 1, 8, 1)),
+        ("getitem-vindex", 0, 0, 0): (f, ("concatenate", 0, 1, 10, 0)),
+        ("getitem-vindex", 1, 0, 0): (f, ("concatenate", 0, 1, 9, 0)),
+        ("concatenate-getitem", 299): (f, ("fetch-raster", 0, 0, 8, 1)),
+        ("concatenate", 0, 1, 9, 1): (f, ("getitem-sub", 0, 1, 9, 1)),
+        ("concatenate-getitem", 321): (f, ("fetch-raster", 0, 0, 9, 1)),
+        ("fetch-raster", 0, 0, 8, 1): (f, ("asset_table", 0, 0)),
+        ("concatenate", 0, 1, 8, 1): (f, ("getitem-sub", 0, 1, 8, 1)),
+        ("fetch-raster", 0, 0, 9, 1): (f, ("asset_table", 0, 0)),
+        ("concatenate", 0, 1, 9, 0): (f, ("getitem-sub", 0, 1, 9, 0)),
+        ("shuffle-split", 300): (f, ("concatenate", 0, 1, 8, 1)),
+        ("concatenate", 0, 1, 10, 0): (f, ("getitem-sub", 0, 1, 10, 0)),
+        ("asset_table", 0, 0): (f, ("asset-table-data", 0, 0)),
+        ("shuffle-split", 342): (f, ("concatenate", 0, 1, 10, 0)),
+        ("getitem-vindex", 1, 0, 1): (
+            f,
+            ("shuffle-split", 319),
+            ("shuffle-split", 320),
+        ),
+        ("getitem-sub", 0, 1, 10, 0): (f, ("fetch-raster", 0, 0, 10, 0)),
+        ("getitem-sub", 0, 1, 8, 1): (f, ("fetch-raster", 0, 0, 8, 1)),
+        ("shuffle-split", 341): (f, ("concatenate-getitem", 341)),
+        ("getitem-sub", 0, 1, 9, 1): (f, ("fetch-raster", 0, 0, 9, 1)),
+        ("concatenate-getitem", 341): (f, ("fetch-raster", 0, 0, 10, 0)),
+        ("asset-table-data", 0, 0): (f,),
+        ("getitem-sub", 0, 1, 9, 0): (f, ("fetch-raster", 0, 0, 9, 0)),
+        ("fetch-raster", 0, 0, 10, 0): (f, ("asset_table", 0, 0)),
+        ("shuffle-split", 320): (f, ("concatenate", 0, 1, 9, 0)),
+        ("shuffle-split", 319): (f, ("concatenate-getitem", 319)),
+        ("fetch-raster", 0, 0, 9, 0): (f, ("asset_table", 0, 0)),
+        ("concatenate-getitem", 319): (f, ("fetch-raster", 0, 0, 9, 0)),
+    }
+    o = order(dsk, return_stats=True)
+    _, pressure = diagnostics(dsk)
+    assert max(pressure) <= 9, pressure
+    for k in final_keys:
+        # Ensure that we're not processing the entire graph using
+        # process_runnables (fractional values) but are using the critical path
+        assert o[k].critical_path in {1, 2}

@@ -11,7 +11,7 @@ import tempfile
 import types
 import uuid
 import warnings
-from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Set
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
@@ -20,7 +20,7 @@ from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import Any, Callable, ClassVar, Literal, TypeVar, cast, overload
+from typing import Any, ClassVar, Literal, TypeVar, cast, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
@@ -1832,15 +1832,13 @@ timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
 @overload
-def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None:
-    ...
+def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None: ...
 
 
 @overload
 def parse_timedelta(
     s: str | float | timedelta, default: str | Literal[False] = "seconds"
-) -> float:
-    ...
+) -> float: ...
 
 
 def parse_timedelta(s, default="seconds"):

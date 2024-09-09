@@ -1,5 +1,4 @@
 PYTHON_VER:
-- "3.9"
 - "3.10"
 - "3.11"
 
@@ -10,6 +9,6 @@ LINUX_VER:
 - ubuntu20.04
 
 RAPIDS_VER:
-- "24.08"
+- "24.10"
 
 excludes:

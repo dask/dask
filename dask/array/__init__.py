@@ -25,12 +25,34 @@ def _array_expr_enabled() -> bool:
                 "The query-planning config can only be changed before "
                 "`dask.dataframe` is first imported!"
             )
-        return ARRAY_EXPR_ENABLED
+        return ARRAY_EXPR_ENABLED  # type: ignore[return-value]
 
     return use_array_expr if use_array_expr is not None else False
 
 
 try:
+    from numpy import bool_ as bool
+    from numpy import (
+        complex64,
+        complex128,
+        e,
+        euler_gamma,
+        float32,
+        float64,
+        inf,
+        int8,
+        int16,
+        int32,
+        int64,
+        nan,
+        newaxis,
+        pi,
+        uint8,
+        uint16,
+        uint32,
+        uint64,
+    )
+
     from dask.array import backends, fft, lib, linalg, ma, overlap, random
     from dask.array._shuffle import shuffle
     from dask.array.blockwise import atop, blockwise
@@ -113,7 +135,7 @@ try:
         trace,
         var,
     )
-    from dask.array.reshape import reshape
+    from dask.array.reshape import reshape, reshape_blockwise
     from dask.array.routines import (
         allclose,
         append,

@@ -6,6 +6,7 @@ Some differences
 - We don't handle missing values at all
 
 """
+
 from __future__ import annotations
 
 # This is lightly adapted from scipy.stats 0.19
