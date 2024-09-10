@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import gzip
 import os
 import warnings
@@ -21,7 +22,7 @@ from dask.base import compute_as_if_collection
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GE_140, PANDAS_GE_200, PANDAS_GE_220, tm
+from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300, tm
 from dask.dataframe.io.csv import (
     _infer_block_size,
     auto_blocksize,
@@ -102,13 +103,9 @@ Date,Open,High,Low,Close,Volume,Adj Close
 """.strip()
 
 csv_files = {
-    "2014-01-01.csv": (
-        b"name,amount,id\n" b"Alice,100,1\n" b"Bob,200,2\n" b"Charlie,300,3\n"
-    ),
+    "2014-01-01.csv": b"name,amount,id\nAlice,100,1\nBob,200,2\nCharlie,300,3\n",
     "2014-01-02.csv": b"name,amount,id\n",
-    "2014-01-03.csv": (
-        b"name,amount,id\n" b"Dennis,400,4\n" b"Edith,500,5\n" b"Frank,600,6\n"
-    ),
+    "2014-01-03.csv": b"name,amount,id\nDennis,400,4\nEdith,500,5\nFrank,600,6\n",
 }
 
 tsv_files = {k: v.replace(b",", b"\t") for (k, v) in csv_files.items()}
@@ -380,9 +377,6 @@ def test_read_csv(dd_read, pd_read, text, sep):
         assert_eq(result, pd_read(fn, sep=sep))
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_200, reason="dataframe.convert-string requires pandas>=2.0"
-)
 def test_read_csv_convert_string_config():
     pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
     with filetext(csv_text) as fn:
@@ -981,7 +975,10 @@ def test_late_dtypes():
     )
 
     with filetext(text) as fn:
-        sol = pd.read_csv(fn)
+        if PANDAS_GE_300:
+            sol = pd.read_csv(fn, parse_dates=["dates"])
+        else:
+            sol = pd.read_csv(fn)
         msg = (
             "Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
             "\n"
@@ -1039,6 +1036,17 @@ def test_late_dtypes():
         with pytest.raises(ValueError) as e:
             dd.read_csv(fn, sample=50, dtype={"names": "O"}).compute(scheduler="sync")
         assert str(e.value) == msg
+
+        if PANDAS_GE_300:
+            # Specifying dtypes works
+            res = dd.read_csv(
+                fn,
+                sample=50,
+                dtype={"more_numbers": float, "names": object, "numbers": float},
+                parse_dates=["dates"],
+            )
+            assert_eq(res, sol)
+            return
 
         with pytest.raises(ValueError) as e:
             dd.read_csv(
@@ -1210,15 +1218,15 @@ def test_parse_dates_multi_column():
     """
     )
 
-    if PANDAS_GE_220:
-        with pytest.warns(FutureWarning, match="nested"):
-            with filetext(pdmc_text) as fn:
-                ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
-                df = pd.read_csv(fn, parse_dates=[["date", "time"]])
+    ctx = contextlib.nullcontext()
+    if PANDAS_GE_300:
+        # Removed in pandas=3.0
+        ctx = pytest.raises(TypeError, match="list indices")
+    elif PANDAS_GE_220:
+        # Deprecated in pandas=2.2.0
+        ctx = pytest.warns(FutureWarning, match="nested")
 
-                assert (df.columns == ddf.columns).all()
-                assert len(df) == len(ddf)
-    else:
+    with ctx:
         with filetext(pdmc_text) as fn:
             ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
             df = pd.read_csv(fn, parse_dates=[["date", "time"]])
@@ -1263,7 +1271,6 @@ def test_read_csv_singleton_dtype():
         assert_eq(pd.read_csv(fn, dtype=float), dd.read_csv(fn, dtype=float))
 
 
-@pytest.mark.skipif(not PANDAS_GE_140, reason="arrow engine available from 1.4")
 def test_read_csv_arrow_engine():
     pytest.importorskip("pyarrow")
     sep_text = normalize_text(
@@ -1823,6 +1830,7 @@ def test_csv_getitem_column_order(tmpdir):
 
 
 @pytest.mark.skip_with_pyarrow_strings  # checks graph layers
+@pytest.mark.skipif(dd._dask_expr_enabled(), reason="layers not supported")
 def test_getitem_optimization_after_filter():
     with filetext(timeseries) as fn:
         expect = pd.read_csv(fn)

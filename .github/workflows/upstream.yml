@@ -20,7 +20,7 @@ jobs:
     outputs:
       test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
     steps:
-      - uses: actions/checkout@v4.1.3
+      - uses: actions/checkout@v4.1.5
         with:
           fetch-depth: 2
       - uses: xarray-contrib/ci-trigger@v1
@@ -47,10 +47,10 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4.1.3
+        uses: actions/checkout@v4.1.5
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.0.3
+        uses: conda-incubator/setup-miniconda@v3.0.4
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
@@ -80,7 +80,7 @@ jobs:
           && github.event_name != 'pull_request'
           && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: xarray-contrib/issue-from-pytest-log@v1.2.8
+        uses: xarray-contrib/issue-from-pytest-log@v1.3.0
         with:
           log-path: output-log.jsonl
           issue-title: ⚠️ Upstream CI failed ⚠️

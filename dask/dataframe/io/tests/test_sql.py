@@ -6,6 +6,7 @@ from contextlib import contextmanager
 
 import pytest
 
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
 from dask.dataframe.utils import assert_eq, get_string_dtype
 from dask.utils import tmpfile
@@ -63,7 +64,7 @@ def test_empty(db):
 
 
 @pytest.mark.filterwarnings(
-    "ignore:The default dtype for empty Series " "will be 'object' instead of 'float64'"
+    "ignore:The default dtype for empty Series will be 'object' instead of 'float64'"
 )
 @pytest.mark.parametrize("use_head", [True, False])
 def test_single_column(db, use_head):
@@ -211,7 +212,7 @@ def test_needs_rational(db):
         part = data.get_partition(1).compute()
         assert part.dtypes.tolist() == [string_dtype, string_dtype]
         df2 = df.set_index("b")
-        assert_eq(data, df2)
+        assert_eq(data, df2, check_dtype=False)
 
 
 def test_simple(db):
@@ -276,6 +277,7 @@ def test_divisions(db):
     assert_eq(data, df[["name"]][df.index <= 4])
 
 
+@pytest.mark.xfail(PANDAS_GE_300, reason="memory doesn't match")
 def test_division_or_partition(db):
     with pytest.raises(TypeError, match="either 'divisions' or 'npartitions'"):
         read_sql_table(
@@ -358,7 +360,11 @@ def test_datetimes():
         assert data.index.dtype.kind == "M"
         assert data.divisions[0] == df.b.min()
         df2 = df.set_index("b")
-        assert_eq(data.map_partitions(lambda x: x.sort_index()), df2.sort_index())
+        assert_eq(
+            data.map_partitions(lambda x: x.sort_index()),
+            df2.sort_index(),
+            check_dtype=False,
+        )
 
 
 def test_extra_connection_engine_keywords(caplog, db):

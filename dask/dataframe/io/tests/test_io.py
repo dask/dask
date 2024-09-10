@@ -11,7 +11,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask import config
 from dask.blockwise import Blockwise
-from dask.dataframe._compat import PANDAS_GE_200, tm
+from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
@@ -283,12 +283,8 @@ def test_from_pandas_npartitions_duplicates(index):
     assert ddf.divisions == ("A", "B", "C", "C")
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_200, reason="dataframe.convert-string requires pandas>=2.0"
-)
 def test_from_pandas_convert_string_config():
     pytest.importorskip("pyarrow", reason="Requires pyarrow strings")
-
     # With `dataframe.convert-string=False`, strings should remain objects
     with dask.config.set({"dataframe.convert-string": False}):
         s = pd.Series(["foo", "bar", "ricky", "bobby"], index=["a", "b", "c", "d"])
@@ -319,24 +315,6 @@ def test_from_pandas_convert_string_config():
     df_pyarrow.index = df_pyarrow.index.astype("string[pyarrow]")
     assert_eq(s_pyarrow, ds)
     assert_eq(df_pyarrow, ddf)
-
-
-@pytest.mark.skipif(PANDAS_GE_200, reason="Requires pandas<2.0")
-def test_from_pandas_convert_string_config_raises():
-    pytest.importorskip("pyarrow", reason="Different error without pyarrow")
-    df = pd.DataFrame(
-        {
-            "x": [1, 2, 3, 4],
-            "y": [5.0, 6.0, 7.0, 8.0],
-            "z": ["foo", "bar", "ricky", "bobby"],
-        },
-        index=["a", "b", "c", "d"],
-    )
-    with dask.config.set({"dataframe.convert-string": True}):
-        with pytest.raises(
-            RuntimeError, match="requires `pandas>=2.0` to be installed"
-        ):
-            dd.from_pandas(df, npartitions=2)
 
 
 @pytest.mark.parametrize("index", [[1, 2, 3], [3, 2, 1]])
@@ -1051,29 +1029,30 @@ def test_from_map_other_iterables(iterable):
     assert_eq(ddf.compute(), expect)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="hashing not deterministic")
+class MyFunc:
+    projected: list[str] = []
+
+    def __init__(self, columns=None):
+        self.columns = columns
+
+    def project_columns(self, columns):
+        return MyFunc(columns)
+
+    def __call__(self, t, columns=None):
+        cols = self.columns or columns
+        size = t[0] + 1
+        x = t[1]
+        df = pd.DataFrame({"A": [x] * size, "B": [10] * size})
+        if cols is None:
+            return df
+        MyFunc.projected.extend(cols)
+        return df[cols]
+
+
 def test_from_map_column_projection():
     # Test that column projection works
     # as expected with from_map when
     # enforce_metadata=True
-
-    projected = []
-
-    class MyFunc:
-        def __init__(self, columns=None):
-            self.columns = columns
-
-        def project_columns(self, columns):
-            return MyFunc(columns)
-
-        def __call__(self, t):
-            size = t[0] + 1
-            x = t[1]
-            df = pd.DataFrame({"A": [x] * size, "B": [10] * size})
-            if self.columns is None:
-                return df
-            projected.extend(self.columns)
-            return df[self.columns]
 
     ddf = dd.from_map(
         MyFunc(),
@@ -1089,7 +1068,7 @@ def test_from_map_column_projection():
         index=[0, 0, 1, 0, 1, 2],
     )
     assert_eq(ddf["A"], expect["A"])
-    assert set(projected) == {"A"}
+    assert set(MyFunc.projected) == {"A"}
     assert_eq(ddf, expect)
 
 

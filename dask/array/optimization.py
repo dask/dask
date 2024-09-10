@@ -157,7 +157,7 @@ def _is_getter_task(
         # getter defaults to asarray=True, getitem is semantically False
         return get, value[1], value[2], get is not getitem, None
     elif length == 5:
-        return get, *value[1:]  # type: ignore
+        return get, *value[1:]
 
     return None
 

@@ -23,9 +23,6 @@ cd "$WORKSPACE"
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
 
-# TODO: remove once RAPIDS 24.06 has full support for dask-expr
-export DASK_DATAFRAME__QUERY_PLANNING=false
-
 ################################################################################
 # SETUP - Check environment
 ################################################################################
@@ -57,5 +54,8 @@ conda info
 conda config --show-sources
 conda list --show-channel-urls
 
-rapids-logger "Python py.test for dask"
-py.test $WORKSPACE -n 3 -v -m gpu --junitxml="$WORKSPACE/junit-dask.xml" --cov-config="$WORKSPACE/pyproject.toml" --cov=dask --cov-report=xml:"$WORKSPACE/dask-coverage.xml" --cov-report term
+rapids-logger "Python py.test for dask-dataframe (LEGACY)"
+DASK_DATAFRAME__QUERY_PLANNING=False py.test "$WORKSPACE/dask/dataframe" -n 3 -v -m gpu --junitxml="$WORKSPACE/junit-dask-legacy.xml" --cov-config="$WORKSPACE/pyproject.toml" --cov=dask --cov-report=xml:"$WORKSPACE/dask-coverage-legacy.xml" --cov-report term
+
+rapids-logger "Python py.test for dask (NEW)"
+DASK_DATAFRAME__QUERY_PLANNING=True py.test $WORKSPACE -n 3 -v -m gpu --junitxml="$WORKSPACE/junit-dask.xml" --cov-config="$WORKSPACE/pyproject.toml" --cov=dask --cov-report=xml:"$WORKSPACE/dask-coverage.xml" --cov-report term

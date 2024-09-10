@@ -13,19 +13,13 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
 import dask.multiprocessing
-from dask.array.numpy_compat import NUMPY_GE_124
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import (
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_202,
-    PANDAS_GE_300,
-)
+from dask.dataframe._compat import PANDAS_GE_202, PANDAS_GE_300
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -41,18 +35,18 @@ try:
         import fastparquet
 except ImportError:
     fastparquet = False
-    fastparquet_version = parse_version("0")
+    fastparquet_version = Version("0")
 else:
-    fastparquet_version = parse_version(fastparquet.__version__)
+    fastparquet_version = Version(fastparquet.__version__)
 
 
 try:
     import pyarrow as pa
 
-    pyarrow_version = parse_version(pa.__version__)
+    pyarrow_version = Version(pa.__version__)
 except ImportError:
     pa = False
-    pyarrow_version = parse_version("0")
+    pyarrow_version = Version("0")
 
 try:
     import pyarrow.parquet as pq
@@ -480,7 +474,6 @@ def test_calculate_divisions_no_index(tmpdir, write_engine, read_engine):
     assert not df.known_divisions
 
 
-@pytest.mark.xfail(PANDAS_GE_300, reason="KeyError")
 def test_columns_index_with_multi_index(tmpdir, engine):
     fn = os.path.join(str(tmpdir), "test.parquet")
     index = pd.MultiIndex.from_arrays(
@@ -616,12 +609,7 @@ def test_roundtrip_nullable_dtypes(tmp_path):
     "dtype_backend",
     [
         "pandas",
-        pytest.param(
-            "pyarrow",
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_150, reason="Requires pyarrow-backed nullable dtypes"
-            ),
-        ),
+        "pyarrow",
     ],
 )
 def test_use_nullable_dtypes(tmp_path, dtype_backend, engine):
@@ -699,10 +687,7 @@ def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
         arrow_to_pandas={"types_mapper": types_mapper.get},
     )
     expected = df.astype({"a": pd.Float32Dtype()})
-    if pyarrow_version.major >= 12:
-        # types_mapper impacts index
-        # https://github.com/apache/arrow/issues/34283
-        expected.index = expected.index.astype(pd.Float32Dtype())
+    expected.index = expected.index.astype(pd.Float32Dtype())
     assert_eq(result, expected)
 
 
@@ -738,8 +723,6 @@ def test_categorical(tmpdir, write_engine, read_engine):
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append(tmpdir, engine, metadata_file):
     """Test that appended parquet equal to the original one."""
-    if DASK_EXPR_ENABLED and metadata_file:
-        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir)
     df = pd.DataFrame(
         {
@@ -926,8 +909,6 @@ def test_partition_on_cats_2(tmpdir, engine):
 @pytest.mark.parametrize("metadata_file", [False, True])
 def test_append_wo_index(tmpdir, engine, metadata_file):
     """Test append with write_index=False."""
-    if DASK_EXPR_ENABLED and metadata_file:
-        pytest.xfail("doesn't work yet")
     tmp = str(tmpdir.join("tmp1.parquet"))
     df = pd.DataFrame(
         {
@@ -996,7 +977,6 @@ def test_append_overlapping_divisions(tmpdir, engine, metadata_file, index, offs
     ddf2.to_parquet(tmp, engine=engine, append=True, ignore_divisions=True)
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="will be supported after string option")
 def test_append_known_divisions_to_unknown_divisions_works(tmpdir, engine):
     tmp = str(tmpdir)
 
@@ -1161,20 +1141,14 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         "x" in df
         and df.x.dtype == "M8[ns]"
         and engine == "fastparquet"
-        and fastparquet_version <= parse_version("0.6.3")
+        and fastparquet_version <= Version("0.6.3")
     ):
         pytest.xfail(reason="fastparquet doesn't support nanosecond precision yet")
     # non-ns times
-    if (
-        PANDAS_GE_200
-        and "x" in df
-        and (df.x.dtype == "M8[ms]" or df.x.dtype == "M8[us]")
-    ):
+    if "x" in df and (df.x.dtype == "M8[ms]" or df.x.dtype == "M8[us]"):
         if engine == "pyarrow":
             pytest.xfail("https://github.com/apache/arrow/issues/15079")
-        elif engine == "fastparquet" and fastparquet_version <= parse_version(
-            "2022.12.0"
-        ):
+        elif engine == "fastparquet" and fastparquet_version <= Version("2022.12.0"):
             pytest.xfail(reason="https://github.com/dask/fastparquet/issues/837")
 
     tmp = str(tmpdir)
@@ -1198,10 +1172,6 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         assert_eq(ddf, ddf2, check_divisions=False)
 
 
-@pytest.mark.xfail(
-    pyarrow_strings_enabled() and pyarrow_version < parse_version("12.0.0"),
-    reason="Known failure with pyarrow strings: https://github.com/apache/arrow/issues/33727",
-)
 def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": list("caaab")})
@@ -1406,7 +1376,8 @@ def test_pyarrow_schema_inference(tmpdir, index, schema):
                     "2017-01-02",
                     "2017-01-06",
                     "2017-01-09",
-                ]
+                ],
+                unit=None if not PANDAS_GE_300 else "ms",
             ),
             "amount": [100, 200, 300, 400, 500, 600, 700],
         },
@@ -2376,20 +2347,8 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}),  # us
         pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"),
         # pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), # Casting errors
-        pytest.param(
-            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
-            marks=pytest.mark.xfail(
-                PANDAS_GE_200 and pyarrow_version < parse_version("13.0.0.dev"),
-                reason="https://github.com/apache/arrow/issues/15079",
-            ),
-        ),
-        pytest.param(
-            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
-            marks=pytest.mark.xfail(
-                PANDAS_GE_200 and pyarrow_version < parse_version("13.0.0.dev"),
-                reason="https://github.com/apache/arrow/issues/15079",
-            ),
-        ),
+        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
+        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
         pd.DataFrame({"x": [3, 2, 1]}).astype("uint16"),
         pd.DataFrame({"x": [3, 2, 1]}).astype("float32"),
         pd.DataFrame({"x": [3, 1, 2]}, index=[3, 2, 1]),
@@ -2419,7 +2378,7 @@ def test_roundtrip_arrow(tmpdir, df):
 def test_datasets_timeseries(tmpdir, engine):
     tmp_path = str(tmpdir)
     df = dask.datasets.timeseries(
-        start="2000-01-01", end="2000-01-10", freq="1d"
+        start="2000-01-01", end="2000-01-10", freq="1D"
     ).persist()
     df.to_parquet(tmp_path, engine=engine)
 
@@ -2850,9 +2809,6 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 )
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
-    if engine == "pyarrow" and parse_version(pa.__version__) < parse_version("8.0.0"):
-        # See: https://issues.apache.org/jira/browse/ARROW-15312
-        pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
     path = tmpdir.join("test.parquet")
     df = pd.DataFrame(
         {
@@ -2876,9 +2832,6 @@ def test_filter_nulls(tmpdir, filters, op, length, split_row_groups, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_filter_isna(tmpdir, split_row_groups):
-    if parse_version(pa.__version__) < parse_version("8.0.0"):
-        # See: https://issues.apache.org/jira/browse/ARROW-15312
-        pytest.skip("pyarrow>=8.0.0 needed for correct null filtering")
     path = tmpdir.join("test.parquet")
     pd.DataFrame({"a": [1, None] * 5 + [None] * 5}).to_parquet(path, row_group_size=10)
 
@@ -3315,11 +3268,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     info = np.iinfo(np.dtype("int64"))
     # In `numpy=1.24.0` NumPy warns when an overflow is encountered when casting from float to int
     # https://numpy.org/doc/stable/release/1.24.0-notes.html#numpy-now-gives-floating-point-errors-in-casts
-    if NUMPY_GE_124:
-        ctx = pytest.warns(RuntimeWarning, match="invalid value encountered in cast")
-    else:
-        ctx = contextlib.nullcontext()
-    with ctx:
+    with pytest.warns(RuntimeWarning, match="invalid value encountered in cast"):
         arr_numeric = np.linspace(
             start=info.min + 2, stop=info.max, num=1024, dtype="int64"
         )
@@ -3330,13 +3279,8 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
         table, f"{tmpdir}/file.parquet", use_deprecated_int96_timestamps=False
     )
 
-    if pyarrow_version < parse_version("13.0.0.dev"):
-        # This will raise by default due to overflow
-        with pytest.raises(pa.lib.ArrowInvalid) as e:
-            dd.read_parquet(str(tmpdir)).compute()
-            assert "out of bounds" in str(e.value)
-    else:
-        dd.read_parquet(str(tmpdir)).compute()
+    # This will not raise by default due to overflow
+    dd.read_parquet(str(tmpdir)).compute()
 
     from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
@@ -3439,7 +3383,7 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
         path = str(tmpdir)
 
     expect = pd.concat([_df1, _df2], ignore_index=True)
-    if engine == "fastparquet" and fastparquet_version > parse_version("0.8.3"):
+    if engine == "fastparquet" and fastparquet_version > Version("0.8.3"):
         # columns will change order and partitions will be categorical
         result = dd.read_parquet(path, engine=engine)
         assert result.compute().reset_index(drop=True).to_dict() == expect.to_dict()
@@ -3529,7 +3473,7 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     df1.to_parquet(tmp, partition_on="B", engine=write_engine)
 
     expect = data[data["B"] == 1]
-    if PANDAS_GE_200 and read_engine == "fastparquet":
+    if read_engine == "fastparquet":
         # fastparquet does not preserve dtype of cats
         expect = expect.copy()  # SettingWithCopyWarning
         expect["B"] = expect["B"].astype(
@@ -3660,10 +3604,9 @@ def test_null_partition_pyarrow(tmpdir, scheduler):
         },
     )
 
-    if pyarrow_version.major >= 12:
-        # pyarrow>=12 would also convert index dtype to nullable
-        # see https://github.com/apache/arrow/pull/34445
-        ddf.index = ddf.index.astype("Int64")
+    # pyarrow>=12 would also convert index dtype to nullable
+    # see https://github.com/apache/arrow/pull/34445
+    ddf.index = ddf.index.astype("Int64")
 
     assert_eq(
         ddf[["x", "id"]],
@@ -4076,7 +4019,11 @@ def test_roundtrip_decimal_dtype(tmpdir):
         ddf1 = ddf1.astype({"col1": pd.ArrowDtype(pa.decimal128(5, 2))})
     else:
         assert ddf1["col1"].dtype == ddf2["col1"].dtype
-    assert_eq(ddf1, ddf2, check_divisions=False)
+
+    # seems to be a Pyarrow bug
+    assert_eq(ddf1, ddf2, check_divisions=False, check_dtype=not PANDAS_GE_300)
+    if PANDAS_GE_300:
+        assert ddf2["ts"].dtype != ddf1["ts"].dtype
 
 
 @PYARROW_MARK
@@ -4101,7 +4048,10 @@ def test_roundtrip_date_dtype(tmpdir):
         ddf1 = ddf1.astype({"col1": pd.ArrowDtype(pa.date32())})
     else:
         assert ddf1["col1"].dtype == ddf2["col1"].dtype
-    assert_eq(ddf1, ddf2, check_divisions=False)
+    # seems to be a Pyarrow bug
+    assert_eq(ddf1, ddf2, check_divisions=False, check_dtype=not PANDAS_GE_300)
+    if PANDAS_GE_300:
+        assert ddf2["ts"].dtype != ddf1["ts"].dtype
 
 
 def test_roundtrip_rename_columns(tmpdir, engine):
@@ -4357,7 +4307,6 @@ def test_custom_filename(tmpdir, engine):
     assert_eq(df, dd.read_parquet(fn, engine=engine, calculate_divisions=True))
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="Can't hash metadata file at the moment")
 @PYARROW_MARK
 def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir):
     fn = str(tmpdir)
@@ -4451,7 +4400,7 @@ def test_custom_filename_with_partition(tmpdir, engine):
 def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/8650
 
-    if engine == "fastparquet" and PANDAS_GE_200:
+    if engine == "fastparquet":
         # https://github.com/dask/dask/issues/9966
         pytest.xfail("fastparquet reads as int64 while pyarrow does as int32")
 
@@ -4688,6 +4637,7 @@ def test_pyarrow_filesystem_option(tmp_path, fs):
 @PYARROW_MARK
 @pytest.mark.network
 @pytest.mark.slow
+@pytest.mark.skipif(pyarrow_version.major < 15, reason="Requires arrow 15")
 def test_pyarrow_filesystem_option_real_data():
     # See: https://github.com/dask/dask/pull/10590
     dd.read_parquet(
@@ -4768,9 +4718,6 @@ def test_select_filtered_column_no_stats(tmp_path, engine):
 
 @PYARROW_MARK
 @pytest.mark.parametrize("convert_string", [True, False])
-@pytest.mark.skipif(
-    not PANDAS_GE_200, reason="dataframe.convert-string requires pandas>=2.0"
-)
 def test_read_parquet_convert_string(tmp_path, convert_string, engine):
     df = pd.DataFrame(
         {"A": ["def", "abc", "ghi"], "B": [5, 2, 3], "C": ["x", "y", "z"]}
@@ -4801,9 +4748,6 @@ def test_read_parquet_convert_string(tmp_path, convert_string, engine):
 
 
 @PYARROW_MARK
-@pytest.mark.skipif(
-    not PANDAS_GE_200, reason="dataframe.convert-string requires pandas>=2.0"
-)
 def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
     """Make sure that when convert_string, dtype_backend and types_mapper are set,
     all three are used."""
@@ -4845,7 +4789,6 @@ def test_read_parquet_convert_string_nullable_mapper(tmp_path, engine):
 
 @PYARROW_MARK
 @pytest.mark.parametrize("dtype_backend", ["numpy_nullable", "pyarrow"])
-@pytest.mark.skipif(not PANDAS_GE_150, reason="Requires pyarrow-backed nullable dtypes")
 def test_dtype_backend(tmp_path, dtype_backend, engine):
     """
     Test reading a parquet file without pandas metadata,
@@ -4887,9 +4830,6 @@ def test_dtype_backend(tmp_path, dtype_backend, engine):
 
 
 @PYARROW_MARK
-@pytest.mark.skipif(
-    not PANDAS_GE_200, reason="pd.Index does not support int32 before 2.0"
-)
 def test_read_parquet_preserve_categorical_column_dtype(tmp_path):
     df = pd.DataFrame({"a": [1, 2], "b": ["x", "y"]})
 
@@ -4905,7 +4845,6 @@ def test_read_parquet_preserve_categorical_column_dtype(tmp_path):
 
 
 @PYARROW_MARK
-@pytest.mark.skipif(not PANDAS_GE_200, reason="Requires pd.ArrowDtype")
 def test_dtype_backend_categoricals(tmp_path):
     df = pd.DataFrame({"a": pd.Series(["x", "y"], dtype="category"), "b": [1, 2]})
     outdir = tmp_path / "out.parquet"
@@ -4946,10 +4885,36 @@ def test_read_parquet_lists_not_converting(tmpdir):
 
 
 @PYARROW_MARK
-@pytest.mark.skipif(not PANDAS_GE_200, reason="Requires pandas>=2.0")
 def test_parquet_string_roundtrip(tmpdir):
     pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
     pdf.to_parquet(tmpdir + "string.parquet")
+    if not pyarrow_strings_enabled():
+        # If auto pyarrow strings aren't enabled, we match pandas behavior.
+        # Pandas currently doesn't roundtrip `string[pyarrow]` through parquet.
+        # See https://github.com/pandas-dev/pandas/issues/42664
+        pdf = pd.read_parquet(tmpdir + "string.parquet")
     df = dd.read_parquet(tmpdir + "string.parquet")
     assert_eq(df, pdf)
     pd.testing.assert_frame_equal(df.compute(), pdf)
+
+
+def test_parquet_botocore_exception(tmpdir):
+    pytest.importorskip("botocore")
+
+    from unittest.mock import patch
+
+    from botocore.exceptions import BotoCoreError
+
+    pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
+    pdf.to_parquet(tmpdir + "string.parquet")
+
+    def mock_get_engine(engine):
+        raise BotoCoreError
+
+    with pytest.raises(BotoCoreError, match="An unspecified error occurred"):
+        if dd._dask_expr_enabled():
+            with patch("dask_expr.io.parquet.get_engine", mock_get_engine):
+                dd.read_parquet(tmpdir + "string.parquet")
+        else:
+            with patch("dask.dataframe.io.parquet.core.get_engine", mock_get_engine):
+                dd.read_parquet(tmpdir + "string.parquet")

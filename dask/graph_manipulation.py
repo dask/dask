@@ -2,6 +2,7 @@
 output collections produced by this module are typically not functionally equivalent to
 their inputs.
 """
+
 from __future__ import annotations
 
 import uuid

@@ -286,6 +286,7 @@ def test_rechunk_same():
 
 
 def test_rechunk_same_fully_unknown():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 10))
     y = dd.from_array(x).values
@@ -299,6 +300,7 @@ def test_rechunk_same_fully_unknown_floats():
     """Similar to test_rechunk_same_fully_unknown but testing the behavior if
     ``float("nan")`` is used instead of the recommended ``np.nan``
     """
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 10))
     y = dd.from_array(x).values
@@ -308,6 +310,7 @@ def test_rechunk_same_fully_unknown_floats():
 
 
 def test_rechunk_same_partially_unknown():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 10))
     y = dd.from_array(x).values
@@ -592,8 +595,8 @@ def test_intersect_nan_long():
 
 
 def test_rechunk_unknown_from_pandas():
-    dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
 
     arr = np.random.default_rng().standard_normal((50, 10))
     x = dd.from_pandas(pd.DataFrame(arr), 2).values
@@ -606,6 +609,7 @@ def test_rechunk_unknown_from_pandas():
 
 
 def test_rechunk_unknown_from_array():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     # pd = pytest.importorskip('pandas')
     x = dd.from_array(da.ones(shape=(4, 4), chunks=(2, 2))).values
@@ -635,6 +639,7 @@ def test_rechunk_unknown_from_array():
     ],
 )
 def test_rechunk_with_fully_unknown_dimension(x, chunks):
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     y = dd.from_array(x).values
     result = y.rechunk(chunks)
@@ -661,6 +666,7 @@ def test_rechunk_with_fully_unknown_dimension(x, chunks):
     ],
 )
 def test_rechunk_with_partially_unknown_dimension(x, chunks):
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     y = dd.from_array(x).values
     z = da.concatenate([x, y])
@@ -680,6 +686,7 @@ def test_rechunk_with_partially_unknown_dimension(x, chunks):
     ],
 )
 def test_rechunk_with_fully_unknown_dimension_explicit(new_chunks):
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 2))
     y = dd.from_array(x).values
@@ -698,6 +705,7 @@ def test_rechunk_with_fully_unknown_dimension_explicit(new_chunks):
     ],
 )
 def test_rechunk_with_partially_unknown_dimension_explicit(new_chunks):
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 2))
     y = dd.from_array(x).values
@@ -715,6 +723,7 @@ def assert_chunks_match(left, right):
 
 
 def test_rechunk_unknown_raises():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
     x = da.ones(shape=(10, 10), chunks=(5, 5))
@@ -816,13 +825,44 @@ def test_rechunk_avoid_needless_chunking():
         (100, 50, 10, (10,) * 10),
         (100, 100, 10, (10,) * 10),
         (20, 7, 10, (7, 7, 6)),
-        (20, (1, 1, 1, 1, 6, 2, 1, 7), 5, (5, 5, 5, 5)),
+        (
+            20,
+            (1, 1, 1, 1, 6, 2, 1, 7),
+            5,
+            (4, 6, 3, 4, 3),
+        ),  # 6 is in tolerance, 7 is not
+        (21, (1,) * 21, 10, (10, 10, 1)),  # ensure that we squash together properly
+        (20, ((2, 2, 2, 9, 1, 2, 2)), 5, (4, 2, 5, 4, 5)),
+        (20, ((10, 10)), 4, (4, 3, 3, 4, 3, 3)),
+        (21, ((10, 11)), 4, (4, 3, 3, 4, 4, 3)),
+        (20, ((1, 18, 1)), 5, (1, 5, 5, 4, 4, 1)),
+        (38, ((10, 18, 10)), 5, (5, 5, 5, 5, 4, 4, 5, 5)),
     ],
 )
 def test_rechunk_auto_1d(shape, chunks, bs, expected):
     x = da.ones(shape, chunks=(chunks,))
     y = x.rechunk({0: "auto"}, block_size_limit=bs * x.dtype.itemsize)
     assert y.chunks == (expected,)
+
+
+@pytest.mark.parametrize(
+    "previous_chunks,bs,expected",
+    [
+        (((1, 1, 1), (10, 10, 10, 10, 10, 10, 10, 10)), 160, ((3,), (50, 30))),
+        (((2, 2), (20,)), 5, ((1, 1, 1, 1), (5, 5, 5, 5))),
+        (((1, 1), (20,)), 5, ((1, 1), (5, 5, 5, 5))),
+    ],
+)
+def test_normalize_chunks_auto_2d(previous_chunks, bs, expected):
+    shape = tuple(map(sum, previous_chunks))
+    result = normalize_chunks(
+        {0: "auto", 1: "auto"},
+        shape,
+        limit=bs,
+        dtype=np.int8,
+        previous_chunks=previous_chunks,
+    )
+    assert result == expected
 
 
 def test_rechunk_auto_2d():
@@ -871,7 +911,12 @@ def test_rechunk_auto_image_stack(n):
     with dask.config.set({"array.chunk-size": "1MiB"}):
         x = da.ones((n, 1000, 1000), chunks=(1, 1000, 1000), dtype="float64")
         z = x.rechunk("auto")
-        assert z.chunks == ((1,) * n, (362, 362, 276), (362, 362, 276))
+        assert z.chunks == ((1,) * n, (334, 333, 333), (334, 333, 333))
+
+    with dask.config.set({"array.chunk-size": "1MiB"}):
+        x = da.ones((n, 2000, 2000), chunks=(1, 1000, 1000), dtype="float64")
+        z = x.rechunk("auto")
+        assert z.chunks == ((1,) * n, (334, 333, 333) * 2, (334, 333, 333) * 2)
 
 
 def test_rechunk_down():
@@ -882,14 +927,14 @@ def test_rechunk_down():
 
     with dask.config.set({"array.chunk-size": "1MiB"}):
         z = y.rechunk("auto")
-        assert z.chunks == ((4,) * 25, (511, 489), (511, 489))
+        assert z.chunks == ((5,) * 20, (500, 500), (500, 500))
 
     with dask.config.set({"array.chunk-size": "1MiB"}):
         z = y.rechunk({0: "auto"})
         assert z.chunks == ((1,) * 100, (1000,), (1000,))
 
         z = y.rechunk({1: "auto"})
-        assert z.chunks == ((10,) * 10, (104,) * 9 + (64,), (1000,))
+        assert z.chunks == ((10,) * 10, (100,) * 10, (1000,))
 
 
 def test_rechunk_zero():
@@ -1163,3 +1208,22 @@ def test_old_to_new_with_zero():
         [[(0, slice(0, 4))], [(2, slice(0, 0))], [(2, slice(0, 2))], [(2, slice(2, 4))]]
     ]
     assert result == expected
+
+
+def test_rechunk_non_perfect_slicing_of_dimensions():
+    # GH#7859
+    # this matters -- 1060 and 1058 work
+    shape = (200, 100, 1059)
+    final_chunks = (64, 64, 64)
+
+    arr = da.coarsen(
+        da.mean,
+        da.zeros(shape, chunks=(1, -1, -1)),
+        {0: 2, 1: 2, 2: 2},
+        trim_excess=True,
+    )
+    result = arr.rechunk(*final_chunks)
+    assert_eq(arr, result)
+    result_b = arr.rechunk(final_chunks)
+    assert_eq(arr, result)
+    assert result.chunks == result_b.chunks

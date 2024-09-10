@@ -144,11 +144,11 @@ def _trim(x, axes, boundary, block_info):
     axes = [axes.get(i, 0) for i in range(x.ndim)]
     axes_front = (ax[0] if isinstance(ax, tuple) else ax for ax in axes)
     axes_back = (
-        -ax[1]
-        if isinstance(ax, tuple) and ax[1]
-        else -ax
-        if isinstance(ax, Integral) and ax
-        else None
+        (
+            -ax[1]
+            if isinstance(ax, tuple) and ax[1]
+            else -ax if isinstance(ax, Integral) and ax else None
+        )
         for ax in axes
     )
 
@@ -159,9 +159,11 @@ def _trim(x, axes, boundary, block_info):
         )
     )
     trim_back = (
-        None
-        if (chunk_location == chunks - 1 and boundary.get(i, "none") == "none")
-        else ax
+        (
+            None
+            if (chunk_location == chunks - 1 and boundary.get(i, "none") == "none")
+            else ax
+        )
         for i, (chunks, chunk_location, ax) in enumerate(
             zip(block_info[0]["num-chunks"], block_info[0]["chunk-location"], axes_back)
         )
@@ -354,7 +356,7 @@ def ensure_minimum_chunksize(size, chunks):
         output[-1] += new
     else:
         raise ValueError(
-            f"The overlapping depth {size} is larger than your " f"array {sum(chunks)}."
+            f"The overlapping depth {size} is larger than your array {sum(chunks)}."
         )
 
     return tuple(output)
@@ -613,11 +615,11 @@ def map_overlap(
     >>> x = da.ones(10, dtype='int')
     >>> block_args = dict(chunks=(), drop_axis=0)
     >>> da.map_blocks(func, x, **block_args).compute()
-    10
+    np.int64(10)
     >>> da.map_overlap(func, x, **block_args, boundary='reflect').compute()
-    10
+    np.int64(10)
     >>> da.map_overlap(func, x, **block_args, depth=1, boundary='reflect').compute()
-    12
+    np.int64(12)
 
     For functions that may not handle 0-d arrays, it's also possible to specify
     ``meta`` with an empty array matching the type of the expected result. In
@@ -741,6 +743,27 @@ def map_overlap(
             # note that keys are relabeled to match values in range(x.ndim)
             depth = {n: depth[ax] for n, ax in enumerate(kept_axes)}
             boundary = {n: boundary[ax] for n, ax in enumerate(kept_axes)}
+
+        # add any new axes to depth and boundary variables
+        new_axis = kwargs.pop("new_axis", None)
+        if new_axis is not None:
+            if isinstance(new_axis, Number):
+                new_axis = [new_axis]
+
+            # convert negative new_axis to equivalent positive value
+            ndim_out = max(a.ndim for a in args if isinstance(a, Array))
+            new_axis = [d % ndim_out for d in new_axis]
+
+            for axis in new_axis:
+                for existing_axis in list(depth.keys()):
+                    if existing_axis >= axis:
+                        # Shuffle existing axis forward to give room to insert new_axis
+                        depth[existing_axis + 1] = depth[existing_axis]
+                        boundary[existing_axis + 1] = boundary[existing_axis]
+
+                depth[axis] = 0
+                boundary[axis] = "none"
+
         return trim_internal(x, depth, boundary)
     else:
         return x

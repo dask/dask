@@ -447,8 +447,14 @@ def test_modification_time_read_bytes(s3, s3so):
     ]
 )
 def engine(request):
-    pytest.importorskip(request.param)
     import dask.dataframe as dd
+    from dask.array.numpy_compat import NUMPY_GE_200
+
+    if NUMPY_GE_200 and request.param == "fastparquet":
+        # https://github.com/dask/fastparquet/issues/923
+        pytest.skip("fastparquet doesn't work with Numpy 2")
+
+    pytest.importorskip(request.param)
 
     if dd._dask_expr_enabled() and request.param == "fastparquet":
         pytest.skip("not supported")
@@ -556,8 +562,6 @@ def test_parquet_append(s3, engine, s3so):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
-    if dd._dask_expr_enabled():
-        pytest.skip("need convert string option")
 
     url = "s3://%s/test.parquet.append" % test_bucket_name
 
