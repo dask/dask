@@ -22,7 +22,7 @@ from typing import Any, Literal, TypeVar, Union, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
-from tlz import accumulate, concat, first, groupby, partition
+from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
 from dask import compute, config, core
@@ -3138,7 +3138,17 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     if chunks and shape is not None:
         # allints: did we start with chunks as a simple tuple of ints?
         allints = all(isinstance(c, int) for c in chunks)
-        chunks = _convert_int_chunk_to_tuple(shape, chunks)
+        chunks = sum(
+            (
+                (
+                    blockdims_from_blockshape((s,), (c,))
+                    if not isinstance(c, (tuple, list))
+                    else (c,)
+                )
+                for s, c in zip(shape, chunks)
+            ),
+            (),
+        )
     for c in chunks:
         if not c:
             raise ValueError(
@@ -3168,20 +3178,6 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     )
 
 
-def _convert_int_chunk_to_tuple(shape, chunks):
-    return sum(
-        (
-            (
-                blockdims_from_blockshape((s,), (c,))
-                if not isinstance(c, (tuple, list))
-                else (c,)
-            )
-            for s, c in zip(shape, chunks)
-        ),
-        (),
-    )
-
-
 def _compute_multiplier(limit: int, dtype, largest_block: int, result):
     """
     Utility function for auto_chunk, to fin how much larger or smaller the ideal
@@ -3191,7 +3187,7 @@ def _compute_multiplier(limit: int, dtype, largest_block: int, result):
         limit
         / dtype.itemsize
         / largest_block
-        / math.prod(max(r) if isinstance(r, tuple) else r for r in result.values() if r)
+        / math.prod(r for r in result.values() if r)
     )
 
 
@@ -3220,7 +3216,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     normalize_chunks: for full docstring and parameters
     """
     if previous_chunks is not None:
-        previous_chunks = _convert_int_chunk_to_tuple(shape, previous_chunks)
+        previous_chunks = tuple(
+            c if isinstance(c, tuple) else (c,) for c in previous_chunks
+        )
     chunks = list(chunks)
 
     autos = {i for i, c in enumerate(chunks) if c == "auto"}
@@ -3254,7 +3252,6 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             )
 
     limit = max(1, limit)
-    chunksize_tolerance = config.get("array.chunk-size-tolerance")
 
     largest_block = math.prod(
         cs if isinstance(cs, Number) else max(cs) for cs in chunks if cs != "auto"
@@ -3262,96 +3259,47 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
     if previous_chunks:
         # Base ideal ratio on the median chunk size of the previous chunks
-        median_chunks = {a: np.median(previous_chunks[a]) for a in autos}
-        result = {}
+        result = {a: np.median(previous_chunks[a]) for a in autos}
+
+        ideal_shape = []
+        for i, s in enumerate(shape):
+            chunk_frequencies = frequencies(previous_chunks[i])
+            mode, count = max(chunk_frequencies.items(), key=lambda kv: kv[1])
+            if mode > 1 and count >= len(previous_chunks[i]) / 2:
+                ideal_shape.append(mode)
+            else:
+                ideal_shape.append(s)
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
-        multiplier = _compute_multiplier(limit, dtype, largest_block, median_chunks)
+        multiplier = _compute_multiplier(limit, dtype, largest_block, result)
 
-        def _trivial_aggregate(a):
-            autos.remove(a)
-            del median_chunks[a]
-            return True
-
-        multiplier_remaining = True
-        while multiplier_remaining:  # while things change
+        last_multiplier = 0
+        last_autos = set()
+        while (
+            multiplier != last_multiplier or autos != last_autos
+        ):  # while things change
+            last_multiplier = multiplier  # record previous values
             last_autos = set(autos)  # record previous values
-            multiplier_remaining = False
 
             # Expand or contract each of the dimensions appropriately
             for a in sorted(autos):
-                this_multiplier = multiplier ** (1 / len(last_autos))
-
-                proposed = median_chunks[a] * this_multiplier
-                this_chunksize_tolerance = chunksize_tolerance ** (1 / len(last_autos))
-                max_chunk_size = proposed * this_chunksize_tolerance
-
-                if proposed > shape[a]:  # we've hit the shape boundary
-                    chunks[a] = shape[a]
-                    multiplier_remaining = _trivial_aggregate(a)
-                    largest_block *= shape[a]
+                if ideal_shape[a] == 0:
+                    result[a] = 0
                     continue
-                elif this_multiplier <= 1:
-                    if max(previous_chunks[a]) == 1:
-                        multiplier_remaining = _trivial_aggregate(a)
-                        chunks[a] = tuple(previous_chunks[a])
-                        continue
-
-                    cache, dimension_result = {}, []
-                    for c in previous_chunks[a]:
-                        if c in cache:
-                            # We potentially split the same chunk over and over again
-                            # so cache that
-                            dimension_result.extend(cache[c])
-                            continue
-                        elif c <= max(max_chunk_size, 1):
-                            new_chunks = [c]
-                        else:
-                            new_chunks = _split_up_single_chunk(
-                                c, this_chunksize_tolerance, max_chunk_size, proposed
-                            )
-
-                        cache[c] = new_chunks
-                        dimension_result.extend(new_chunks)
-
-                    if max(dimension_result) == 1:
-                        # See if we can split up other axes further
-                        multiplier_remaining = _trivial_aggregate(a)
-
+                proposed = result[a] * multiplier ** (1 / len(autos))
+                if proposed > shape[a]:  # we've hit the shape boundary
+                    autos.remove(a)
+                    largest_block *= shape[a]
+                    chunks[a] = shape[a]
+                    del result[a]
                 else:
-                    dimension_result, new_chunk = [], 0
-                    for c in previous_chunks[a]:
-                        if c + new_chunk <= proposed:
-                            # keep increasing the chunk
-                            new_chunk += c
-                        else:
-                            # We reach the boundary so start a new chunk
-                            dimension_result.append(new_chunk)
-                            new_chunk = c
-                            if new_chunk > max_chunk_size:
-                                # our new chunk is greater than the allowed, so split it up
-                                dimension_result.extend(
-                                    _split_up_single_chunk(
-                                        c,
-                                        this_chunksize_tolerance,
-                                        max_chunk_size,
-                                        proposed,
-                                    )
-                                )
-                                new_chunk = 0
-                    if new_chunk > 0:
-                        dimension_result.append(new_chunk)
-
-                result[a] = tuple(dimension_result)
+                    result[a] = round_to(proposed, ideal_shape[a])
 
             # recompute how much multiplier we have left, repeat
-            if multiplier_remaining:
-                multiplier = _compute_multiplier(
-                    limit, dtype, largest_block, median_chunks
-                )
+            multiplier = _compute_multiplier(limit, dtype, largest_block, result)
 
         for k, v in result.items():
-            chunks[k] = v if v else 0
+            chunks[k] = v
         return tuple(chunks)
 
     else:
@@ -3371,25 +3319,6 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             chunks[i] = round_to(size, shape[i])
 
         return tuple(chunks)
-
-
-def _split_up_single_chunk(
-    c: int, this_chunksize_tolerance: float, max_chunk_size: int, proposed: int
-) -> list[int]:
-    # Calculate by what factor we have to split this chunk
-    m = c / proposed
-    if math.ceil(m) / m > this_chunksize_tolerance:
-        # We want to smooth things potentially if rounding up would change the result
-        # by a lot
-        m = math.ceil(c / max_chunk_size)
-    else:
-        m = math.ceil(m)
-    # split the chunk
-    new_c, remainder = divmod(c, min(m, c))
-    x = [new_c] * min(m, c)
-    for i in range(remainder):
-        x[i] += 1
-    return x
 
 
 def round_to(c, s):
