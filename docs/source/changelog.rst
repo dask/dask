@@ -1,10 +1,56 @@
 Changelog
 =========
 
+.. _v2024.9.0:
+
+2024.9.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+Bump Bokeh minimum version to 3.1.0
+"""""""""""""""""""""""""""""""""""
+``bokeh>=3.1.0`` is now required for diagnostics and the distributed cluster dashboard.
+
+See :pr:`11375` and :pr-distributed:`8861` by `James Bourbeau`_ for more details.
+
+Introduce new Task class
+""""""""""""""""""""""""
+Add a ``Task`` class to replace tuples for task specification.
+
+See :pr:`11248` by `Florian Jetter`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Bump ``peter-evans/create-pull-request`` from 6 to 7 (:pr:`11380`)
+  - Reduce overhead in tokenize (:pr:`11373`) `Florian Jetter`_
+  - Move ``tokenize`` to dedicated submodule (:pr:`11371`) `Florian Jetter`_
+  - Ensure ``process_runnables`` is not too eager in the presence of multiple splits (:pr:`11367`) `Florian Jetter`_
+  - Use ``np.min_scalar_type`` in shuffle (:pr:`11369`) `James Bourbeau`_
+  - Write indexing arrays into dask graph to reduce size for multiple xarray variables (:pr:`11362`) `Patrick Hoefler`_
+  - Cast indexer to minimal ``dtype`` in shuffle (:pr:`11364`) `Patrick Hoefler`_
+  - Reduce memory usage of ``dask.order`` (:pr:`11361`) `Florian Jetter`_
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.6.3 to 4.6.4 (:pr:`11366`)
+  - ``precommit`` autoupdate (:pr:`11360`) `Florian Jetter`_
+
+  - Homogeneously schedule P2P's unpack tasks (:pr-distributed:`8873`) `Hendrik Makait`_
+  - Work/fix firewall for localhost (:pr-distributed:`8868`) `Mario Linker`_
+  - Use new ``tokenize`` module (:pr-distributed:`8858`) `James Bourbeau`_
+  - Point to user code with idempotent plugin warning (:pr-distributed:`8856`) `James Bourbeau`_
+  - Fix test nanny timeout (:pr-distributed:`8847`) `Florian Jetter`_
+  - Bump JamesIves/github-pages-deploy-action from 4.5.0 to 4.6.4 (:pr-distributed:`8853`)
+  - Speed up ``Client.map`` by computing ``token`` only once for ``func`` and ``kwargs`` (:pr-distributed:`8855`) `Florian Jetter`_
+  - Update ``pre-commit`` (:pr-distributed:`8852`) `Florian Jetter`_
+
+
 .. _v2024.8.2:
 
 2024.8.2
 --------
+
+Highlights
+^^^^^^^^^^
 
 Automatic selection of rechunking method
 """"""""""""""""""""""""""""""""""""""""
@@ -8771,3 +8817,4 @@ Other
 .. _`Lucas Colley`: https://github.com/lucascolley
 .. _`Tao Xin`: https://github.com/Tao-VanJS
 .. _`David Stansby`: https://github.com/dstansby
+.. _`Mario Linker`: https://github.com/maldag
