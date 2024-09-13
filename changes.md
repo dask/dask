@@ -1,5 +1,11 @@
 ## Dask-expr
 
+# v1.1.14
+
+- Import from tokenize (:pr:`1133`) `Patrick Hoefler`_
+
+# v1.1.13
+
 # v1.1.12
 
 - Fix concat axis 1 bug in divisions (:pr:`1128`) `Patrick Hoefler`_
