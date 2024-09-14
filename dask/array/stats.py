@@ -91,8 +91,8 @@ __all__ = [
 def ttest_ind(a, b, axis=0, equal_var=True):
     v1 = da.var(a, axis, ddof=1)  # XXX: np -> da
     v2 = da.var(b, axis, ddof=1)  # XXX: np -> da
-    n1 = a.shape[axis]
-    n2 = b.shape[axis]
+    n1 = _lazy_shape(a, axis)
+    n2 = _lazy_shape(b, axis)
 
     if equal_var:
         df, denom = _equal_var_ttest_denom(v1, n1, v2, n2)
@@ -110,7 +110,7 @@ def ttest_1samp(a, popmean, axis=0, nan_policy="propagate"):
         raise NotImplementedError(
             "`nan_policy` other than 'propagate' have not been implemented."
         )
-    n = a.shape[axis]
+    n = _lazy_shape(a, axis)
     df = n - 1
 
     d = da.mean(a, axis) - popmean
@@ -130,7 +130,7 @@ def ttest_rel(a, b, axis=0, nan_policy="propagate"):
             "`nan_policy` other than 'propagate' have not been implemented."
         )
 
-    n = a.shape[axis]
+    n = _lazy_shape(a, axis)
     df = float(n - 1)
 
     d = (a - b).astype(np.float64)
@@ -242,7 +242,7 @@ def skew(a, axis=0, bias=True, nan_policy="propagate"):
             "`nan_policy` other than 'propagate' have not been implemented."
         )
 
-    n = a.shape[axis]  # noqa; for bias
+    n = _lazy_shape(a, axis)  # noqa; for bias
     m2 = moment(a, 2, axis)
     m3 = moment(a, 3, axis)
     zero = m2 == 0
@@ -269,12 +269,14 @@ def skewtest(a, axis=0, nan_policy="propagate"):
         )
 
     b2 = skew(a, axis)
-    n = float(a.shape[axis])
-    if n < 8:
+    n = _lazy_shape(a, axis)
+    if a.shape[axis] < 8:
+        # fails to catch nan dimensional inputs with <8 samples
         raise ValueError(
             "skewtest is not valid with less than 8 samples; %i samples"
             " were given." % int(n)
         )
+
     y = b2 * math.sqrt(((n + 1) * (n + 3)) / (6.0 * (n - 2)))
     beta2 = (
         3.0
@@ -298,7 +300,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
         raise NotImplementedError(
             "`nan_policy` other than 'propagate' have not been implemented."
         )
-    n = a.shape[axis]  # noqa; for bias
+    n = _lazy_shape(a, axis)  # noqa; for bias
     m2 = moment(a, 2, axis)
     m4 = moment(a, 4, axis)
     zero = m2 == 0
@@ -329,7 +331,7 @@ def kurtosistest(a, axis=0, nan_policy="propagate"):
             "`nan_policy` other than 'propagate' have not been implemented."
         )
 
-    n = float(a.shape[axis])
+    n = float(_lazy_shape(a, axis))
     b2 = kurtosis(a, axis, fisher=False)
 
     E = 3.0 * (n - 1) / (n + 1)
@@ -472,6 +474,16 @@ def _count(x, axis=None):
         return x.size
     else:
         return x.shape[axis]
+
+
+def _lazy_shape(x, axis):
+    """lazy evaluation of array shape along the specified axis"""
+
+    @delayed
+    def delayed_shape(x, axis):
+        return x.shape[axis]
+
+    return da.from_delayed(delayed_shape(x, axis), shape=(1,), dtype=int)
 
 
 def _sum_of_squares(a, axis=0):
