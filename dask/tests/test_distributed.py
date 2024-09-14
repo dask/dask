@@ -11,6 +11,8 @@ import weakref
 from functools import partial
 from operator import add
 
+from packaging.version import Version
+
 from distributed import Client, SchedulerPlugin, WorkerPlugin, futures_of, wait
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
@@ -361,8 +363,11 @@ def test_zarr_distributed_with_explicit_directory_store(c):
     with tmpdir() as d:
         chunks = (1, 1)
         a = da.zeros((3, 3), chunks=chunks)
-        s = zarr.storage.DirectoryStore(d)
-        z = zarr.creation.open_array(
+        if Version(zarr.__version__) < Version("3.0.0.a0"):
+            s = zarr.storage.DirectoryStore(d)
+        else:
+            s = zarr.store.LocalStore(d, mode="a")
+        z = zarr.open_array(
             shape=a.shape,
             chunks=chunks,
             dtype=a.dtype,
@@ -382,8 +387,11 @@ def test_zarr_distributed_with_explicit_memory_store(c):
 
     chunks = (1, 1)
     a = da.zeros((3, 3), chunks=chunks)
-    s = zarr.storage.MemoryStore()
-    z = zarr.creation.open_array(
+    if Version(zarr.__version__) < Version("3.0.0.a0"):
+        s = zarr.storage.MemoryStore()
+    else:
+        s = zarr.store.MemoryStore()
+    z = zarr.open_array(
         shape=a.shape,
         chunks=chunks,
         dtype=a.dtype,
