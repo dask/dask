@@ -3636,7 +3636,7 @@ def from_zarr(
             if Version(zarr.__version__) < Version("3.0.0.a0"):
                 store = zarr.storage.FSStore(url, **storage_options)
             else:
-                zarr.store.RemoteStore(url, **storage_options)
+                store = zarr.store.RemoteStore(url, **storage_options)
         else:
             store = url
         z = zarr.open_array(store=store, read_only=True, path=component, **kwargs)
