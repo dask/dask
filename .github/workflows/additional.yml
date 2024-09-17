@@ -1,0 +1,63 @@
+name: Additional
+
+on: [push, pull_request]
+
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
+jobs:
+  doctest:
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 90
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4.1.5
+
+      - name: Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v3.0.4
+        with:
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          use-mamba: true
+          channel-priority: strict
+          environment-file: continuous_integration/environment-3.12.yaml
+          activate-environment: test-environment
+          auto-activate-base: false
+
+      - name: Install
+        run: source continuous_integration/scripts/install.sh
+
+      - name: Turn off dask-expr config option for legacy doctests
+        run: echo DASK_DATAFRAME__QUERY_PLANNING=False >> $GITHUB_ENV
+
+      - name: Run tests
+        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
+
+  imports:
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4.1.5
+
+      - name: Setup Conda
+        uses: conda-incubator/setup-miniconda@v3.0.4
+        with:
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          use-mamba: true
+          channel-priority: strict
+          python-version: "3.10"
+          activate-environment: test-environment
+          auto-activate-base: false
+
+      - name: Run import tests
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
+        run: source continuous_integration/scripts/test_imports.sh

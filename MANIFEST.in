@@ -1,0 +1,16 @@
+recursive-include dask *.py
+recursive-include dask *.j2
+recursive-include docs/source *
+include docs/Makefile docs/make.bat
+
+include setup.py
+include README.rst
+include MANIFEST.in
+include dask/dask.yaml
+include dask/dask-schema.yaml
+include dask/py.typed
+
+include versioneer.py
+include dask/_version.py
+
+include conftest.py

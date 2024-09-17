@@ -1,0 +1,20 @@
+name: 'Label stale issues and PRs'
+on:
+  schedule:
+    - cron: '30 1 * * 1' # runs once a week
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-issue-message: '' # no comment left if string is empty
+          stale-pr-message: '' # no comment left if string is empty
+          days-before-stale: 30
+          days-before-close: -1
+          stale-issue-label: 'needs attention'
+          stale-pr-label: 'needs attention'
+          exempt-issue-labels: 'good intro to dask,good first issue,Good First Issue,good second issue,feature request'
+          exempt-draft-pr: true
+          start-date: '2020-04-18T00:00:00Z' # ignore before this date, ISO 8601 or RFC 2822

@@ -1,0 +1,79 @@
+# This job includes coverage
+name: test-environment-310
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  # required dependencies
+  - python=3.10
+  - packaging
+  - pyyaml
+  - click
+  - cloudpickle
+  - partd
+  - fsspec
+  - importlib_metadata
+  - toolz
+  # test dependencies
+  - pre-commit
+  - pytest
+  - pytest-cov
+  - pytest-rerunfailures
+  - pytest-timeout
+  - pytest-xdist
+  - moto<5
+  # Optional dependencies
+  - mimesis
+  - numpy=1.24
+  - pandas=2.1
+  - numba
+  - flask
+  - fastparquet
+  - h5py
+  - pytables
+  - zarr
+  # `tiledb-py=0.17.5` lead to strange seg faults in CI.
+  # We should unpin when possible.
+  # https://github.com/dask/dask/pull/9569
+  - tiledb-py<0.17.4
+  - pyspark
+  - tiledb
+  - xarray
+  - numexpr>=2.8  # Something is pinning it to 2.7
+  - sqlalchemy
+  - pyarrow=14.0.1
+  - coverage
+  - jsonschema
+  # other -- IO
+  - boto3
+  - botocore
+  - bokeh
+  - httpretty
+  - aiohttp
+  - s3fs>=2021.9.0
+  - crick
+  - cytoolz
+  - distributed
+  - ipython
+  - ipycytoscape
+  # until https://github.com/jupyter-widgets/ipywidgets/issues/3731 is fixed
+  - ipywidgets<8.0.5
+  - ipykernel<6.22.0
+  - lz4
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - python-snappy
+  - sparse
+  - cachey
+  - python-graphviz
+  - python-cityhash
+  - python-xxhash
+  - mmh3
+  - jinja2
+  - pip
+  - pip:
+    - git+https://github.com/dask/distributed
+    - git+https://github.com/dask/dask-expr

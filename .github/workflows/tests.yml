@@ -1,0 +1,140 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6,18 * * *"  
+
+# When this workflow is queued, automatically cancel any previous running
+# or pending jobs from the same branch
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["windows-latest", "ubuntu-latest", "macos-14"]
+        environment: ["3.10", "3.11", "3.12"]
+        extra: [null]
+        exclude:
+          - os: "macos-14"
+            environment: "3.10"
+          - os: "macos-14"
+            environment: "3.11"
+        include:
+          # Minimum dependencies
+          - os: "ubuntu-latest"
+            environment: "mindeps-array"
+          - os: "ubuntu-latest"
+            environment: "mindeps-dataframe"
+          - os: "ubuntu-latest"
+            environment: "mindeps-distributed"
+          - os: "ubuntu-latest"
+            environment: "mindeps-non-optional"
+          - os: "ubuntu-latest"
+            environment: "mindeps-optional"
+          # Experimental setups
+          - os: "ubuntu-latest"
+            environment: "3.12"
+            extra: "pandas-nightly"
+
+    env:
+      PARALLEL: "true"
+      COVERAGE: "true"
+      HDF5_USE_FILE_LOCKING: "FALSE"
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4.1.5
+        with:
+          fetch-depth: 0  # Needed by codecov.io
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        with:
+          distribution: "zulu"
+          java-version: "11"
+
+      - name: Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v3.0.4
+        with:
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          use-mamba: true
+          channel-priority: strict
+          environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
+          activate-environment: test-environment
+          auto-activate-base: false
+
+      - name: Test pandas nightlies (only with dask-expr)
+        if: ${{ matrix.extra == 'pandas-nightly' }}
+        run: python -m pip install --pre --extra-index https://pypi.anaconda.org/scientific-python-nightly-wheels/simple pandas -U
+
+      - name: Disable query planning for 3.10 builds
+        if: ${{ matrix.environment == '3.10' }}
+        run: |
+          export DASK_DATAFRAME__QUERY_PLANNING="False"
+          echo "DASK_DATAFRAME__QUERY_PLANNING: $DASK_DATAFRAME__QUERY_PLANNING"
+          echo "DASK_DATAFRAME__QUERY_PLANNING=$DASK_DATAFRAME__QUERY_PLANNING" >> $GITHUB_ENV
+
+      - name: Disable auto pyarrow strings for 3.10 builds
+        if: ${{ matrix.environment == '3.10' }}
+        run: |
+          export DASK_DATAFRAME__CONVERT_STRING="False"
+          echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
+          echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
+
+      - name: Reconfigure pytest-timeout
+        # No SIGALRM available on Windows
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
+
+      - name: Install
+        run: source continuous_integration/scripts/install.sh
+
+      - name: Run tests
+        id: run_tests
+        run: source continuous_integration/scripts/run_tests.sh
+
+      - name: Coverage
+        uses: codecov/codecov-action@v3
+
+      # The environment file is created in continuous_integration/scripts/install.sh
+      # and can be useful when debugging locally
+      - name: Upload conda environment and test results
+        # ensure this runs even if pytest fails
+        if: >
+          always() &&
+          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.environment }}-${{ matrix.extra }}
+          path: |
+            pytest.xml
+            env.yaml
+
+  # Publish an artifact for the event; used by publish-test-results.yaml
+  event_file:
+    # Do not run the schedule job on forks
+    if: github.repository == 'dask/dask' || github.event_name != 'schedule'
+    name: "Event File"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Event File
+          path: ${{ github.event_path }}

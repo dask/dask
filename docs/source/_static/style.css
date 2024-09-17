@@ -1,0 +1,25 @@
+.configTextArea {
+    font-family: SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",Courier,monospace;
+    margin-bottom: 24px;
+}
+
+.classifier::before {
+    content: ": ";
+}
+
+/* options for jupyter-sphinx extension */
+div.jupyter_container {
+    box-shadow: None;
+    font-family: var(--pst-font-family-monospace);
+    border-radius: 0.4em;
+}
+
+.jupyter_container div.code_cell {
+    padding: 10px;
+    max-width: None !important;
+}
+
+.jupyter_container .output {
+    font-size: 16px;
+    padding: 10px
+}

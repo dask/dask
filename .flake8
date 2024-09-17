@@ -1,0 +1,41 @@
+# flake8 doesn't support pyproject.toml yet https://github.com/PyCQA/flake8/issues/234
+[flake8]
+# References:
+# https://flake8.readthedocs.io/en/latest/user/configuration.html
+# https://flake8.readthedocs.io/en/latest/user/error-codes.html
+# https://pycodestyle.pycqa.org/en/latest/intro.html#error-codes
+exclude = __init__.py
+ignore =
+    # Extra space in brackets
+    E20
+    # Multiple spaces around ","
+    E231,E241
+    # Comments
+    E26
+    # Import formatting
+    E4
+    # Comparing types instead of isinstance
+    E721
+    # Assigning lambda expression
+    E731
+    # Ambiguous variable names
+    E741
+    # Line break before binary operator
+    W503
+    # Line break after binary operator
+    W504
+    # Redefinition of unused 'loop' from line 10
+    F811
+    # No explicit stacklevel in warnings.warn. FIXME we should correct this in the code
+    B028
+    # multiple statements on one line; required for black compat
+    E701, E704
+
+max-line-length = 120
+per-file-ignores =
+    *_test.py:
+        # Do not call assert False since python -O removes these calls
+        B011,
+    **/tests/*:
+        # Do not call assert False since python -O removes these calls
+        B011,

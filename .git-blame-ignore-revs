@@ -1,0 +1,24 @@
+# .git-blame-ignore-revs
+# absolufy-imports - No relative - PEP8 (#8796)
+cccb9d8d8e33a891396b1275c2448c352ef40c27
+
+# Update `pre-commit` version (#8691)
+510bbc380531cbf56a409f1ae68e6fd84a9599e6
+
+# Run pyupgrade in CI (#8246)
+80a82008d5b02a08f6ff59d802defcc43247eb1a
+
+# Bump pre-commit hook versions (#7676)
+d6bbbb08c92652eae2820e93edc2f3fe502391d3
+
+# Start adding isort (#7370)
+a31c0fc72e1cc59b8b0254965824abb0718c5f56
+
+# Rerun with latest black release (#6568)
+64e2a9b3b9992503221a074a547827501927d1fa
+
+# LINT: Fixup black string normalization (#5227)
+d92f4015a1da3da10c04c682ed2acae8469e9576
+
+# Apply Black formatting (#4983)
+7e4beffb339c69278091d4e305c2ae18ddf8c74f

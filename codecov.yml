@@ -1,0 +1,25 @@
+codecov:
+  require_ci_to_pass: yes
+  # codecov pushes a failing status update to github actions before all the
+  # test runs have completed (this is later updated to passing after more test
+  # runs pass, but the initial red X is annoying). As far as I can tell from
+  # https://docs.codecov.com/docs/merging-reports this shouldn't be happening,
+  # but it is. Here we set a minimum number of builds before notifying in the
+  # hopes that it will stop this behavior.
+  notify:
+    after_n_builds: 10
+
+coverage:
+  precision: 2
+  round: down
+  range: "90...100"
+
+  status:
+    project:
+      default:
+        target: 90%
+        threshold: 1%
+    patch: no
+    changes: no
+
+comment: off
