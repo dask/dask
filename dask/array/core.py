@@ -3713,7 +3713,7 @@ def to_zarr(
     if Version(zarr.__version__) < Version("3.0.0.a0"):
         zarr_mem_store_types = (dict, zarr.storage.MemoryStore, zarr.storage.KVStore)
     else:
-        zarr_mem_store_types = (zarr.store.MemoryStore,)
+        zarr_mem_store_types = (zarr.storage.MemoryStore,)
 
     if isinstance(url, zarr.Array):
         z = url
@@ -3763,7 +3763,9 @@ def to_zarr(
         if Version(zarr.__version__) < Version("3.0.0.a0"):
             store = zarr.storage.FSStore(url, **storage_options)
         else:
-            store = zarr.store.RemoteStore(url, **storage_options)
+            store = zarr.storage.RemoteStore(
+                url, mode=kwargs.pop("mode", "a"), **storage_options
+            )
     else:
         store = url
 

@@ -366,13 +366,13 @@ def test_zarr_distributed_with_explicit_directory_store(c):
         if Version(zarr.__version__) < Version("3.0.0.a0"):
             s = zarr.storage.DirectoryStore(d)
         else:
-            s = zarr.store.LocalStore(d, mode="a")
+            s = zarr.storage.LocalStore(d, mode="a")
         z = zarr.open_array(
             shape=a.shape,
             chunks=chunks,
             dtype=a.dtype,
             store=s,
-            mode="a",
+            # mode="a",
         )
         a.to_zarr(z)
         a2 = da.from_zarr(d)
@@ -390,13 +390,13 @@ def test_zarr_distributed_with_explicit_memory_store(c):
     if Version(zarr.__version__) < Version("3.0.0.a0"):
         s = zarr.storage.MemoryStore()
     else:
-        s = zarr.store.MemoryStore()
+        s = zarr.storage.MemoryStore(mode="a")
     z = zarr.open_array(
         shape=a.shape,
         chunks=chunks,
         dtype=a.dtype,
         store=s,
-        mode="a",
+        # mode="a",
     )
     with pytest.raises(RuntimeError, match="distributed scheduler"):
         a.to_zarr(z)
