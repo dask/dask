@@ -1896,8 +1896,6 @@ class Array(DaskMethodsMixin):
         if isinstance(key, Array):
             from dask.array.routines import where
 
-            if isinstance(value, Array) and value.ndim > 1:
-                raise ValueError("boolean index array should have 1 dimension")
             try:
                 y = where(key, value, self)
             except ValueError as e:
