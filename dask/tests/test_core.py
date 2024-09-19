@@ -3,8 +3,11 @@ from __future__ import annotations
 import pickle
 from collections import namedtuple
 
+import numpy as np
+import pandas as pd
 import pytest
 
+import dask.dataframe as dd
 from dask.core import (
     flatten,
     get,
@@ -21,9 +24,9 @@ from dask.core import (
     subs,
     validate_key,
 )
+from dask.dataframe.utils import assert_eq
 from dask.utils_test import GetFunctionTestMixin, add, inc
-
-
+ 
 def contains(a, b):
     """
 
@@ -322,3 +325,93 @@ def test_getcycle():
         9: [38, 32, 38, 7, 31, 34, 39, 20, 30, 18],
     }
     assert len(getcycle(dsk, list(dsk))) <= 4  # 0->1->2->0
+
+def test_dataframe_mode():
+    # GH#11389 - Dask issue related to adding row-wise mode functionality
+    # GH#1136 - Dask-Expr specific implementation for row-wise mode functionality
+    # Contributor: @thyripian
+    
+    # Create sample data for axis=0 (column-wise mode)
+    data_axis0 = {
+        'int_col': [1, 2, 2, 3, 4, 4, 5],
+        'float_col': [1.0, 2.0, 2.0, 3.0, np.nan, 4.0, 5.0],
+        'str_col': ['a', 'b', 'b', 'c', 'd', 'd', 'e'],
+        'nan_col': [np.nan] * 7,
+        'unique_col': [1, 2, 3, 4, 5, 6, 7],
+        'identical_col': [9] * 7,
+    }
+    pdf_axis0 = pd.DataFrame(data_axis0)
+    ddf_axis0 = dd.from_pandas(pdf_axis0, npartitions=2)
+
+    # Column-wise mode (axis=0)
+    expected_col_mode = pdf_axis0.mode(axis=0)
+    result_col_mode = ddf_axis0.mode(axis=0).compute()
+    assert_eq(result_col_mode, expected_col_mode)
+
+    # Create sample data for axis=1 (row-wise mode)
+    data_axis1 = {
+        'col1': [1, 2, 2, 3, 4, 4, 5],
+        'col2': [2, 2, 3, 3, 4, 5, 5],
+        'col3': [1, 2, 3, 4, 5, 6, 7],
+        'col4': [5, 4, 3, 2, 1, 0, -1],
+    }
+    pdf_axis1 = pd.DataFrame(data_axis1)
+    ddf_axis1 = dd.from_pandas(pdf_axis1, npartitions=2)
+
+    # Row-wise mode (axis=1)
+    expected_row_mode = pdf_axis1.mode(axis=1)
+    result_row_mode = ddf_axis1.mode(axis=1).compute()
+    # Trim the Dask result to match pandas result
+    expected_num_cols = expected_row_mode.shape[1]
+    result_row_mode = result_row_mode.iloc[:, :expected_num_cols]
+    assert_eq(result_row_mode, expected_row_mode, check_dtype=False)
+
+    # Test with numeric_only=True
+    expected_numeric_mode = pdf_axis0.mode(axis=0, numeric_only=True)
+    result_numeric_mode = ddf_axis0.mode(axis=0, numeric_only=True).compute()
+    assert_eq(result_numeric_mode, expected_numeric_mode)
+
+    # Test with dropna=False
+    expected_dropna_mode = pdf_axis0.mode(axis=0, dropna=False)
+    result_dropna_mode = ddf_axis0.mode(axis=0, dropna=False).compute()
+    assert_eq(result_dropna_mode, expected_dropna_mode)
+
+    # Test DataFrame with all NaN values
+    nan_pdf = pd.DataFrame({'A': [np.nan, np.nan], 'B': [np.nan, np.nan]})
+    nan_ddf = dd.from_pandas(nan_pdf, npartitions=1)
+    expected_nan_mode = nan_pdf.mode(axis=0)
+    result_nan_mode = nan_ddf.mode(axis=0).compute()
+    assert_eq(result_nan_mode, expected_nan_mode)
+
+    # Test DataFrame with multiple modes per column
+    multi_mode_pdf = pd.DataFrame({
+        'A': [1, 2, 2, 3, 3],
+        'B': [4, 4, 5, 5, 6],
+        'C': [7, 8, 7, 8, 9]
+    })
+    multi_mode_ddf = dd.from_pandas(multi_mode_pdf, npartitions=2)
+    expected_multi_mode_col = multi_mode_pdf.mode(axis=0)
+    result_multi_mode_col = multi_mode_ddf.mode(axis=0).compute()
+    assert_eq(result_multi_mode_col, expected_multi_mode_col)
+
+    # Test DataFrame with multiple modes per row
+    expected_multi_mode_row = multi_mode_pdf.mode(axis=1)
+    result_multi_mode_row = multi_mode_ddf.mode(axis=1).compute()
+    # Trim the Dask result to match pandas result
+    expected_num_cols = expected_multi_mode_row.shape[1]
+    result_multi_mode_row = result_multi_mode_row.iloc[:, :expected_num_cols]
+    assert_eq(result_multi_mode_row, expected_multi_mode_row, check_dtype=False)
+
+    # Test large DataFrame
+    large_pdf = pd.DataFrame(np.random.randint(0, 10, size=(1000, 10)))
+    large_ddf = dd.from_pandas(large_pdf, npartitions=5)
+    expected_large_mode_col = large_pdf.mode(axis=0)
+    result_large_mode_col = large_ddf.mode(axis=0).compute()
+    assert_eq(result_large_mode_col, expected_large_mode_col)
+
+    expected_large_mode_row = large_pdf.mode(axis=1)
+    result_large_mode_row = large_ddf.mode(axis=1).compute()
+    # Trim the Dask result to match pandas result
+    expected_num_cols = expected_large_mode_row.shape[1]
+    result_large_mode_row = result_large_mode_row.iloc[:, :expected_num_cols]
+    assert_eq(result_large_mode_row, expected_large_mode_row, check_dtype=False)
