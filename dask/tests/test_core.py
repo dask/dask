@@ -26,7 +26,8 @@ from dask.core import (
 )
 from dask.dataframe.utils import assert_eq
 from dask.utils_test import GetFunctionTestMixin, add, inc
- 
+
+
 def contains(a, b):
     """
 
@@ -326,19 +327,20 @@ def test_getcycle():
     }
     assert len(getcycle(dsk, list(dsk))) <= 4  # 0->1->2->0
 
+
 def test_dataframe_mode():
     # GH#11389 - Dask issue related to adding row-wise mode functionality
     # GH#1136 - Dask-Expr specific implementation for row-wise mode functionality
     # Contributor: @thyripian
-    
+
     # Create sample data for axis=0 (column-wise mode)
     data_axis0 = {
-        'int_col': [1, 2, 2, 3, 4, 4, 5],
-        'float_col': [1.0, 2.0, 2.0, 3.0, np.nan, 4.0, 5.0],
-        'str_col': ['a', 'b', 'b', 'c', 'd', 'd', 'e'],
-        'nan_col': [np.nan] * 7,
-        'unique_col': [1, 2, 3, 4, 5, 6, 7],
-        'identical_col': [9] * 7,
+        "int_col": [1, 2, 2, 3, 4, 4, 5],
+        "float_col": [1.0, 2.0, 2.0, 3.0, np.nan, 4.0, 5.0],
+        "str_col": ["a", "b", "b", "c", "d", "d", "e"],
+        "nan_col": [np.nan] * 7,
+        "unique_col": [1, 2, 3, 4, 5, 6, 7],
+        "identical_col": [9] * 7,
     }
     pdf_axis0 = pd.DataFrame(data_axis0)
     ddf_axis0 = dd.from_pandas(pdf_axis0, npartitions=2)
@@ -350,10 +352,10 @@ def test_dataframe_mode():
 
     # Create sample data for axis=1 (row-wise mode)
     data_axis1 = {
-        'col1': [1, 2, 2, 3, 4, 4, 5],
-        'col2': [2, 2, 3, 3, 4, 5, 5],
-        'col3': [1, 2, 3, 4, 5, 6, 7],
-        'col4': [5, 4, 3, 2, 1, 0, -1],
+        "col1": [1, 2, 2, 3, 4, 4, 5],
+        "col2": [2, 2, 3, 3, 4, 5, 5],
+        "col3": [1, 2, 3, 4, 5, 6, 7],
+        "col4": [5, 4, 3, 2, 1, 0, -1],
     }
     pdf_axis1 = pd.DataFrame(data_axis1)
     ddf_axis1 = dd.from_pandas(pdf_axis1, npartitions=2)
@@ -377,18 +379,16 @@ def test_dataframe_mode():
     assert_eq(result_dropna_mode, expected_dropna_mode)
 
     # Test DataFrame with all NaN values
-    nan_pdf = pd.DataFrame({'A': [np.nan, np.nan], 'B': [np.nan, np.nan]})
+    nan_pdf = pd.DataFrame({"A": [np.nan, np.nan], "B": [np.nan, np.nan]})
     nan_ddf = dd.from_pandas(nan_pdf, npartitions=1)
     expected_nan_mode = nan_pdf.mode(axis=0)
     result_nan_mode = nan_ddf.mode(axis=0).compute()
     assert_eq(result_nan_mode, expected_nan_mode)
 
     # Test DataFrame with multiple modes per column
-    multi_mode_pdf = pd.DataFrame({
-        'A': [1, 2, 2, 3, 3],
-        'B': [4, 4, 5, 5, 6],
-        'C': [7, 8, 7, 8, 9]
-    })
+    multi_mode_pdf = pd.DataFrame(
+        {"A": [1, 2, 2, 3, 3], "B": [4, 4, 5, 5, 6], "C": [7, 8, 7, 8, 9]}
+    )
     multi_mode_ddf = dd.from_pandas(multi_mode_pdf, npartitions=2)
     expected_multi_mode_col = multi_mode_pdf.mode(axis=0)
     result_multi_mode_col = multi_mode_ddf.mode(axis=0).compute()
