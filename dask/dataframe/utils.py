@@ -434,10 +434,14 @@ def check_matching_columns(meta, actual):
         if extra or missing:
             extra_info = f"  Extra:   {extra}\n  Missing: {missing}"
         else:
-            extra_info = "Order of columns does not match"
+            extra_info = (
+                f"Order of columns does not match."
+                f"\nActual:   {actual.columns.tolist()}"
+                f"\nExpected: {meta.columns.tolist()}"
+            )
         raise ValueError(
             "The columns in the computed data do not match"
-            " the columns in the provided metadata\n"
+            " the columns in the provided metadata.\n"
             f"{extra_info}"
         )
 

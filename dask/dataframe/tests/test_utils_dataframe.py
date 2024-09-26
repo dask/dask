@@ -463,7 +463,12 @@ def test_check_matching_columns_raises_appropriate_errors():
     df = pd.DataFrame(columns=["a", "b", "c"])
 
     meta = pd.DataFrame(columns=["b", "a", "c"])
-    with pytest.raises(ValueError, match="Order of columns does not match"):
+    with pytest.raises(
+        ValueError,
+        match="Order of columns does not match."
+        "\nActual:   \\['a', 'b', 'c'\\]"
+        "\nExpected: \\['b', 'a', 'c'\\]",
+    ):
         assert check_matching_columns(meta, df)
 
     meta = pd.DataFrame(columns=["a", "b", "c", "d"])
