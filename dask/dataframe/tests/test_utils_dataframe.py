@@ -466,8 +466,8 @@ def test_check_matching_columns_raises_appropriate_errors():
     with pytest.raises(
         ValueError,
         match="Order of columns does not match."
-        "\nActual:   {'b': 'object', 'a': 'object', 'c': 'object'}"
-        "\nExpected: {'a': 'object', 'b': 'object', 'c': 'object'}",
+        "\nActual:   \\['a', 'b', 'c'\\]"
+        "\nExpected: \\['b', 'a', 'c'\\]",
     ):
         assert check_matching_columns(meta, df)
 

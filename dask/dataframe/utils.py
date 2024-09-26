@@ -436,12 +436,12 @@ def check_matching_columns(meta, actual):
         else:
             extra_info = (
                 f"Order of columns does not match."
-                f"\nActual:   { { c: str(t) for c, t in meta.dtypes.items() } }"
-                f"\nExpected: { { c: str(t) for c, t in actual.dtypes.items() } }"
+                f"\nActual:   {actual.columns.tolist()}"
+                f"\nExpected: {meta.columns.tolist()}"
             )
         raise ValueError(
             "The columns in the computed data do not match"
-            " the columns in the provided metadata\n"
+            " the columns in the provided metadata.\n"
             f"{extra_info}"
         )
 
