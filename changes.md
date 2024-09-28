@@ -1,5 +1,13 @@
 ## Dask-expr
 
+# v1.1.15
+
+- Add concatenate flag to .compute() (:pr:`1138`) `Hendrik Makait`_
+
+# v1.1.14
+
+- Import from tokenize (:pr:`1133`) `Patrick Hoefler`_
+
 # v1.1.14
 
 - Import from tokenize (:pr:`1133`) `Patrick Hoefler`_
