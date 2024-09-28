@@ -1,6 +1,32 @@
 Changelog
 =========
 
+.. _v2024.9.1:
+
+2024.9.1
+--------
+
+Highlights
+^^^^^^^^^^
+
+Improved adaptive scaling resilience
+""""""""""""""""""""""""""""""""""""
+Adaptive scaling clusters now recover from spurious errors during scaling.
+
+See :pr-distributed:`8871` by `Hendrik Makait`_ for more details.
+  
+.. dropdown:: Additional changes
+
+  - Improve error message for incorrect columns order in meta information (:pr:`11393`) `Dmitry Balabka`_
+  - Update gpuCI ``RAPIDS_VER`` to ``24.12`` (:pr:`11407`)
+  - Bump ``jacobtomlinson/gha-anaconda-package-version`` from 0.1.3 to 0.1.4 (:pr:`11405`)
+  - Switch to using ``zarr.open_array`` instead of using the ``zarr.Array`` constructor (:pr:`11387`) `Joe Hamman`_
+
+  - Update gpuCI ``RAPIDS_VER`` to ``24.12`` (:pr-distributed:`8879`)
+  - Don't consider scheduler idle while executing ``Scheduler.update_graph`` (:pr-distributed:`8877`) `Hendrik Makait`_
+  - Bump ``jacobtomlinson/gha-anaconda-package-version`` from 0.1.3 to 0.1.4 (:pr-distributed:`8878`)
+  - Support P2P rechunking datetime arrays (:pr-distributed:`8875`) `James Bourbeau`_
+
 .. _v2024.9.0:
 
 2024.9.0
@@ -8818,3 +8844,4 @@ Other
 .. _`Tao Xin`: https://github.com/Tao-VanJS
 .. _`David Stansby`: https://github.com/dstansby
 .. _`Mario Linker`: https://github.com/maldag
+.. _`Dmitry Balabka`: https://github.com/dbalabka
