@@ -372,7 +372,7 @@ def test_zarr_distributed_with_explicit_directory_store(c):
             chunks=chunks,
             dtype=a.dtype,
             store=s,
-            # mode="a",
+            mode="a",
         )
         a.to_zarr(z)
         a2 = da.from_zarr(d)
@@ -396,7 +396,7 @@ def test_zarr_distributed_with_explicit_memory_store(c):
         chunks=chunks,
         dtype=a.dtype,
         store=s,
-        # mode="a",
+        mode="a",
     )
     with pytest.raises(RuntimeError, match="distributed scheduler"):
         a.to_zarr(z)
