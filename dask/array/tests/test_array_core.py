@@ -4627,9 +4627,8 @@ def test_zarr_group():
         a.to_zarr(d, component="test2", overwrite=False)
         a.to_zarr(d, component="nested/test", overwrite=False)
 
-        # currently failing here. zarr may not be creating the root group node
         group = zarr.open_group(store=d, mode="r")
-        assert list(group) == ["nested", "test", "test2"]
+        assert set(group) == {"nested", "test", "test2"}
         assert "test" in group["nested"]
 
         a2 = da.from_zarr(d, component="test")
