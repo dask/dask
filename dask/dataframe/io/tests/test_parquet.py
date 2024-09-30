@@ -4557,6 +4557,32 @@ def test_gpu_write_parquet_simple(tmpdir):
 
 @pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
 @PYARROW_MARK
+@pytest.mark.gpu
+def test_gpu_nullable_schema_aggregate_files(tmpdir):
+    # See: https://github.com/rapidsai/cudf/issues/12702
+    pytest.importorskip("dask_cudf")
+
+    # Write cudf-backed collction with null value in
+    # only one of two partitions
+    data = {"a": pd.Series([0, 1, 2, 3, 4, None], dtype="Int64")}
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        dd.from_dict(data, npartitions=2).to_parquet(tmpdir)
+    expect = dd.from_dict(data, npartitions=2)
+
+    # Read back with `aggregate_files=True`.
+    # This requires concatenation of inconsistent parquet schemas
+    # ("int not null" vs "int")
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+        assert_eq(
+            expect,
+            dd.read_parquet(
+                tmpdir, engine="pyarrow", aggregate_files=True, use_nullable_dtypes=True
+            ),
+            check_divisions=False,
+        )
+
+
+@PYARROW_MARK
 def test_retries_on_remote_filesystem(tmpdir):
     # Fake a remote filesystem with a cached one
     fn = str(tmpdir)
