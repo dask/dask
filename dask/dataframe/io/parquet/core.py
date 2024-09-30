@@ -170,7 +170,7 @@ class ToParquetFunctionWrapper:
         )
 
         # Write out data
-        return self.engine.write_partition(
+        out = self.engine.write_partition(
             df,
             self.path,
             self.fs,
@@ -179,6 +179,10 @@ class ToParquetFunctionWrapper:
             self.write_metadata_file,
             **(dict(self.kwargs_pass, head=True) if part_i == 0 else self.kwargs_pass),
         )
+
+        # Return a value compatible with dask dataframe format
+        # (value will be empty list when write_metadata_file=False)
+        return out if self.write_metadata_file else 0
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
@@ -1032,18 +1036,31 @@ def to_parquet(
                 {"append": append, "compression": compression},
             )
         }
-    else:
-        # NOTE: We still define a single task to tie everything together
-        # when we are not writing a _metadata file. We do not want to
-        # return `data_write` (or a `data_write.to_bag()`), because calling
-        # `compute()` on a multi-partition collection requires the overhead
-        # of trying to concatenate results on the client.
-        final_name = "store-" + data_write._name
-        dsk = {(final_name, 0): (lambda x: None, data_write.__dask_keys__())}
 
-    # Convert data_write + dsk to computable collection
-    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=(data_write,))
-    out = Scalar(graph, final_name, "")
+        # Convert data_write + dsk to computable collection
+        graph = HighLevelGraph.from_collections(
+            final_name, dsk, dependencies=(data_write,)
+        )
+        out = Scalar(graph, final_name, "")
+    else:
+        if compute:
+            # NOTE: We still define a single task to tie everything together
+            # when we are not writing a _metadata file. We do not want to
+            # return `data_write` (or a `data_write.to_bag()`), because calling
+            # `compute()` on a multi-partition collection requires the overhead
+            # of trying to concatenate results on the client.
+            final_name = "store-" + data_write._name
+            dsk = {(final_name, 0): (lambda x: None, data_write.__dask_keys__())}
+            # Convert data_write + dsk to computable collection
+            graph = HighLevelGraph.from_collections(
+                final_name, dsk, dependencies=(data_write,)
+            )
+            out = Scalar(graph, final_name, "")
+        else:
+            # We let the user have more control over the task in that case
+            # for usage where for instance you would want to release memory
+            # earlier.
+            out = data_write
 
     if compute:
         out = out.compute(**compute_kwargs)
