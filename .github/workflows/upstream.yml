@@ -54,7 +54,6 @@ jobs:
         with:
           miniforge-version: latest
           use-mamba: true
-          mamba-version: "1.5.10"
           channel-priority: strict
           environment-file: continuous_integration/environment-3.12.yaml
           activate-environment: test-environment
