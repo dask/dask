@@ -36,6 +36,7 @@ jobs:
         with:
           miniforge-variant: Mambaforge
           use-mamba: true
+          mamba-version: "1.5.10"
           python-version: 3.9
           channel-priority: strict
       - name: Install dependencies

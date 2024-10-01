@@ -32,6 +32,7 @@ jobs:
           miniforge-version: latest
           condarc-file: continuous_integration/condarc
           use-mamba: true
+          mamba-version: "1.5.10"
           # Note: this file is in the dask/distributed repo
           environment-file: continuous_integration/scripts/test-report-environment.yml
           activate-environment: dask
