@@ -50,7 +50,6 @@ jobs:
       - name: Setup Conda
         uses: conda-incubator/setup-miniconda@v3.0.4
         with:
-          miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           mamba-version: "1.5.10"
