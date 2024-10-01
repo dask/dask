@@ -34,7 +34,7 @@ jobs:
       - name: Set up Python
         uses: conda-incubator/setup-miniconda@v3.0.4
         with:
-          miniforge-variant: Mambaforge
+          miniforge-version: latest
           use-mamba: true
           python-version: 3.9
           channel-priority: strict
