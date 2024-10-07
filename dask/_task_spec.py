@@ -810,12 +810,8 @@ class Task(GraphNode):
 
 
 class DependenciesMapping(Mapping):
-    def __init__(self, dsk, include_external=True):
+    def __init__(self, dsk):
         self.dsk = dsk
-        self.include_external = include_external
-        if not self.include_external:
-            self._cache = {}
-            self._dsk_set = set(dsk)
 
     def __getitem__(self, key):
         v = self.dsk[key]
@@ -825,26 +821,10 @@ class DependenciesMapping(Mapping):
             deps = get_dependencies(self.dsk, task=self.dsk[key])
         else:
             deps = self.dsk[key].dependencies
-        if not self.include_external:
-            if len(self.dsk) != len(self._dsk_set):
-                self._dsk_set = set(self.dsk)
-                self._cache.clear()
-            try:
-                return self._cache[key]
-            except KeyError:
-                self._cache[key] = deps = deps.intersection(self._dsk_set)
-                return deps
-
         return deps
 
     def __iter__(self):
         return iter(self.dsk)
-
-    def copy(self):
-        return DependenciesMapping(self.dsk)
-
-    def __delitem__(self, key):
-        self.removed_keys.add(key)
 
     def __len__(self) -> int:
         return len(self.dsk)

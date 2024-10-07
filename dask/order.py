@@ -108,10 +108,7 @@ def order(
     expected_len = len(dsk)
     from dask._task_spec import DependenciesMapping
 
-    # Dask.order cannot handle dependencies that are not part of the graph
-    # itself so we'll have to remove them. This is a rather expensive operation
-    # but DependenciesMapping will cache this
-    dependencies = DependenciesMapping(dsk, include_external=False)
+    dependencies = DependenciesMapping(dsk)
     dependents = reverse_dict(dependencies)
 
     leaf_nodes = {k for k, v in dependents.items() if not v}
@@ -181,15 +178,43 @@ def order(
     # We have to recompute dependents. Dependencies are automatically updated /
     # computed on the fly
     if recompute_dependents:
+        # Note: Recomputing the entire thing is relatively expensive, primarily
+        # the allocation of all those sets. This is easy, though. If perf
+        # becomes a problem we may want to update the dependents in place while
+        # parsing the graph above.
         dependents = reverse_dict(dependencies)
 
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     if len(total_dependencies) != len(dsk):
-        cycle = getcycle(dsk, None)
-        raise RuntimeError(
-            "Cycle detected between the following keys:\n  -> %s"
-            % "\n  -> ".join(str(x) for x in cycle)
-        )
+        from dask._task_spec import DataNode
+
+        all_keys = set(dsk)
+        external_keys = set()
+        for deps in dependencies.values():
+            if any(externals := deps - all_keys):
+                external_keys.update(externals)
+        if external_keys:
+            # This is a bit convoluted. We're adding data nodes and are calling
+            # dask.order again. However, dask.order will strip those data nodes
+            # again (see the root node normalization above) so this is a
+            # computational overhead. However, this makes the code easier to
+            # read and ensures all state is properly initialized for the actual
+            # ordering. This should affect primarily results that depend on
+            # previously persisted results. If this becomes a performance
+            # problem we may refactor the state initialization to be more
+            # efficient
+            for k in external_keys:
+                dsk[k] = DataNode(None, object())
+            o = order(dsk, return_stats=return_stats)  # type: ignore
+            for k in external_keys:
+                o.pop(k)
+            return o
+        if len(total_dependencies) != len(dsk):
+            cycle = getcycle(dsk, None)
+            raise RuntimeError(
+                "Cycle detected between the following keys:\n  -> %s"
+                % "\n  -> ".join(str(x) for x in cycle)
+            )
     assert dependencies is not None
     roots_connected, max_dependents = _connecting_to_roots(dependencies, dependents)
     leafs_connected, _ = _connecting_to_roots(dependents, dependencies)
