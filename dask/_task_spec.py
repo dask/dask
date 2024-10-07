@@ -3,7 +3,7 @@ from __future__ import annotations
 """ Task specification for dask
 
 This module contains the task specification for dask. It is used to represent
-runnable and non-runnable (i.e. literals) tasks in a dask graph.
+runnable (task) and non-runnable (data) nodes in a dask graph.
 
 Simple examples of how to express tasks in dask
 -----------------------------------------------
@@ -12,14 +12,11 @@ Simple examples of how to express tasks in dask
 
     func("a", "b") ~ Task("key", func, "a", "b")
 
-    [func("a"), func("b")] ~ SequenceOfTasks(
-        "key",
-        [Task("key-1", func, "a"), Task("key-2", func, "b")]
-    )
+    [func("a"), func("b")] ~ [Task("key-1", func, "a"), Task("key-2", func, "b")]
 
-    {"a": func("b")} ~ DictOfTasks("key", {"a": Task("a", func, "b")})
+    {"a": func("b")} ~ {"a": Task("a", func, "b")}
 
-    "literal-string" ~ Literal("key", "literal-string")
+    "literal-string" ~ DataNode("key", "literal-string")
 
 
 Keys, Aliases and TaskRefs
@@ -52,7 +49,7 @@ Tasks can be nested in a dict or list. This is useful for expressing more comple
 
     func(func2("a", "b"), "c") ~ Task("key", func, [Task("key-1", func2, "a", "b"), "c"])
 
-    {"a": func("b")} ~ DictOfTasks("key", {"a": Task("a", func, "b")})
+    {"a": func("b")} ~ {"a": Task("a", func, "b")}
 
 This kind of nesting is often a byproduct of an optimizer step that inlines the
 tasks explicitly. This is done by calling the `inline` method on a task.
@@ -83,7 +80,7 @@ from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
 from contextlib import contextmanager
 from functools import partial
-from typing import TYPE_CHECKING, Any, overload
+from typing import Any, TypeVar, cast, overload
 
 from dask.base import tokenize
 from dask.core import reverse_dict
@@ -100,27 +97,24 @@ except ImportError:
             super().__init__(*args, **kwargs)
 
 
-if TYPE_CHECKING:
-    from typing import TypeVar
-
-    _T = TypeVar("_T", bound="GraphNode")
+_T = TypeVar("_T")
+_T_GraphNode = TypeVar("_T_GraphNode", bound="GraphNode")
+_T_Iterable = TypeVar("_T_Iterable", bound=Iterable)
 
 
 def identity(*args):
     return args
 
 
+def _identity_cast(*args, typ):
+    return typ(args)
+
+
 _anom_count = itertools.count()
 
 
 @overload
-def parse_input(obj: dict) -> DictOfTasks | DataNode: ...
-
-
-@overload
-def parse_input(
-    obj: list | tuple | set | frozenset,
-) -> SequenceOfTasks | DataNode: ...
+def parse_input(obj: _T_Iterable) -> _T_Iterable: ...
 
 
 @overload
@@ -128,10 +122,10 @@ def parse_input(obj: TaskRef) -> Alias: ...
 
 
 @overload
-def parse_input(obj: _T) -> _T: ...
+def parse_input(obj: _T_GraphNode) -> _T_GraphNode: ...
 
 
-def parse_input(obj: Any) -> GraphNode:
+def parse_input(obj: Any) -> object:
     """Tokenize user input into GraphNode objects
 
     Note: This is similar to `convert_old_style_task` but does not
@@ -152,11 +146,11 @@ def parse_input(obj: Any) -> GraphNode:
     if isinstance(obj, GraphNode):
         return obj
     elif isinstance(obj, dict):
-        return DictOfTasks(None, obj).propagate_literal()
+        return {k: parse_input(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple, set, frozenset)):
         if is_namedtuple_instance(obj):
             return _wrap_namedtuple_task(None, obj, parse_input)
-        return SequenceOfTasks(None, obj).propagate_literal()
+        return type(obj)(map(parse_input, obj))
 
     if isinstance(obj, TaskRef):
         return Alias(obj.key)
@@ -172,9 +166,7 @@ def _wrap_namedtuple_task(k, obj, parser):
         new_args = obj.__getnewargs__()
         kwargs = {}
 
-    args_converted = SequenceOfTasks(
-        None, map(parser, new_args), typ=type(new_args)
-    ).propagate_literal()
+    args_converted = type(new_args)(map(parser, new_args))
 
     return Task(
         k, partial(_instantiate_named_tuple, type(obj)), *args_converted, **kwargs
@@ -185,114 +177,151 @@ def _instantiate_named_tuple(typ, *args, **kwargs):
     return typ(*args, **kwargs)
 
 
-class _MultiSet(Container):
-    sets: tuple
-    __slots__ = ("sets",)
+class _MultiContainer(Container):
+    container: tuple
+    __slots__ = ("container",)
 
-    def __init__(self, *sets):
-        self.sets = sets
+    def __init__(self, *container):
+        self.container = container
 
     def __contains__(self, o: object) -> bool:
-        return any(o in s for s in self.sets)
+        for c in self.container:
+            if o in c:
+                return True
+        return False
+
+
+def _to_dict(*args: Any) -> dict:
+    vals = args[:-1]
+    keys = args[-1]
+    return {key: v for key, v in zip(keys, vals)}
+
+
+def _wrap_dict_in_task(d: dict) -> Task:
+    return Task(None, _to_dict, *d.values(), d.keys())
 
 
 SubgraphType = None
 
 
+def _execute_subgraph(inner_dsk, outkey, inkeys, external_deps):
+    final = {}
+    final.update(inner_dsk)
+    for k, v in inkeys.items():
+        final[k] = DataNode(None, v)
+    for k, v in external_deps.items():
+        final[k] = DataNode(None, v)
+    res = execute_graph(final)
+    return res[outkey]
+
+
 def convert_legacy_task(
     k: KeyType | None,
-    arg: Any,
+    task: _T,
     all_keys: Container,
     only_refs: bool,
-    cache: MutableMapping,
-) -> GraphNode:
+) -> GraphNode | _T:
     global SubgraphType
     if SubgraphType is None:
         from dask.optimization import SubgraphCallable
 
         SubgraphType = SubgraphCallable
 
-    if isinstance(arg, GraphNode):
-        return arg
-    rv: GraphNode
-    inner = partial(convert_legacy_task, None, only_refs=only_refs, cache=cache)
+    if isinstance(task, GraphNode):
+        return task
 
-    inner_args = partial(inner, all_keys=all_keys)
-    if type(arg) is tuple and arg and callable(arg[0]):
+    if type(task) is tuple and task and callable(task[0]):
         if k is None:
             k = ("anom", next(_anom_count))
 
-        func, args = arg[0], arg[1:]
+        func, args = task[0], task[1:]
         if isinstance(func, SubgraphType):
-            # FIXME: This parsing is inlining tasks of the subgraph, i.e. it can
-            # multiply work if the subgraph has keys that are reused in the
-            # subgraph
             subgraph = func
-            all_keys_inner = _MultiSet(all_keys, set(subgraph.inkeys), subgraph.dsk)
-            if subgraph.name in cache:
-                func = cache[subgraph.name]
-            else:
-                sub_dsk = convert_legacy_graph(
-                    subgraph.dsk, all_keys_inner, only_refs, cache
-                )
-                cache[subgraph.name] = func = sub_dsk[subgraph.outkey].inline(sub_dsk)
-                del sub_dsk
+            all_keys_inner = _MultiContainer(
+                subgraph.dsk, set(subgraph.inkeys), all_keys
+            )
+            sub_dsk = subgraph.dsk
+            converted_graph = convert_legacy_graph(sub_dsk, all_keys_inner, only_refs)
+            external_deps = (
+                _get_dependencies(converted_graph)
+                - set(converted_graph)
+                - set(subgraph.inkeys)
+            )
 
-            new_args_l = map(partial(inner, all_keys=all_keys_inner), args)
+            converted_sub_dsk = DataNode(None, converted_graph)
 
-            func2 = func.inline(dict(zip(subgraph.inkeys, new_args_l)))
-            dct = {k: Alias(k) for k in func2.dependencies}
-            return Task(k, func2, dct)
+            return Task(
+                k,
+                _execute_subgraph,
+                converted_sub_dsk,
+                func.outkey,
+                {
+                    k: convert_legacy_task(None, target, all_keys, only_refs)
+                    for k, target in zip(subgraph.inkeys, args)
+                },
+                {ext_dep: Alias(ext_dep) for ext_dep in external_deps},
+            )
         else:
-            new_args = map(inner_args, args)
+            new_args = tuple(
+                convert_legacy_task(None, a, all_keys, only_refs) for a in args
+            )
             if only_refs:
-                # this can't be a literal since the literal wouldn't execute
-                # new_args in case there were runnable tasks or other literals
-                # See test_convert_task_only_ref
-                return Task(k, identity, func, *new_args)
+                if any(isinstance(a, GraphNode) for a in new_args):
+                    return Task(k, identity, func, *new_args)
+                else:
+                    return DataNode(k, (func, *new_args))
             return Task(k, func, *new_args)
     try:
-        if isinstance(arg, (bytes, int, float, str, tuple)) and arg in all_keys:
-            if arg in cache:
-                return cache[arg]
-            cache[arg] = rv = Alias(arg)
-            return rv
+        if isinstance(task, (bytes, int, float, str, tuple)):
+            if task in all_keys:
+                return Alias(task)
     except TypeError:
         # Unhashable
         pass
 
-    if isinstance(arg, (list, tuple, set, frozenset)):
-        if is_namedtuple_instance(arg):
-            rv = _wrap_namedtuple_task(k, arg, inner_args)
+    if isinstance(task, (list, tuple, set, frozenset)):
+        if is_namedtuple_instance(task):
+            return _wrap_namedtuple_task(
+                k,
+                task,
+                partial(
+                    convert_legacy_task, None, all_keys=all_keys, only_refs=only_refs
+                ),
+            )
         else:
-            rv = SequenceOfTasks(k, map(inner_args, arg), typ=type(arg))
-        return rv.propagate_literal()
-    elif isinstance(arg, dict):
-        new_dsk = convert_legacy_graph(
-            arg, all_keys=all_keys, only_refs=True, cache=cache
+            parsed_args = tuple(
+                convert_legacy_task(None, t, all_keys, only_refs) for t in task
+            )
+            if any(isinstance(a, GraphNode) for a in parsed_args):
+                return Task(
+                    k, _identity_cast, *parsed_args, typ=DataNode(None, type(task))
+                )
+            else:
+                return cast(_T, type(task)(parsed_args))
+    elif isinstance(task, dict):
+        return _wrap_dict_in_task(
+            {
+                k: convert_legacy_task(k, v, all_keys, only_refs=True)
+                for k, v in task.items()
+            }
         )
 
-        return DictOfTasks(None, new_dsk).propagate_literal()
-
-    elif isinstance(arg, TaskRef):
-        return Alias(arg.key)
+    elif isinstance(task, TaskRef):
+        return Alias(task.key)
     else:
-        return arg
+        return task
 
 
 def convert_legacy_graph(
     dsk: Mapping,
     all_keys: Container | None = None,
     only_refs: bool = False,
-    cache: MutableMapping | None = None,
 ):
     if not all_keys:
         all_keys = set(dsk)
     new_dsk = {}
-    if cache is None:
-        cache = {}
     for k, arg in dsk.items():
-        t = convert_legacy_task(k, arg, all_keys, only_refs, cache=cache)
+        t = convert_legacy_task(k, arg, all_keys, only_refs)
         if not only_refs and isinstance(t, Alias) and t.key == k:
             continue
         new_dsk[k] = t
@@ -380,7 +409,7 @@ _func_cache_reverse: MutableMapping = LRU(maxsize=1000)
 
 class GraphNode:
     key: KeyType
-    dependencies: set | frozenset | tuple
+    dependencies: set | frozenset
 
     __slots__ = tuple(__annotations__)
 
@@ -399,10 +428,6 @@ class GraphNode:
     def inline(self, dsk) -> GraphNode:
         raise NotImplementedError("Not implemented")
 
-    def propagate_literal(self) -> GraphNode:
-        """Return a literal if all tasks are literals"""
-        return self
-
     def __call__(self, values) -> Any:
         raise NotImplementedError("Not implemented")
 
@@ -414,7 +439,7 @@ class GraphNode:
         return sys.getsizeof(type(self)) + sizeof(self.key) + sizeof(self.dependencies)
 
 
-_no_deps: set = set()
+_no_deps: frozenset = frozenset()
 
 
 class Alias(GraphNode):
@@ -498,7 +523,7 @@ class DataNode(GraphNode):
         return self.value
 
     def __repr__(self):
-        return f"Literal({self.key}, type={self.typ}, {self.value})"
+        return f"DataNode({self.key}, type={self.typ}, {self.value})"
 
     def __dask_tokenize__(self):
         return (type(self).__name__, tokenize(self.value))
@@ -520,12 +545,50 @@ class DataNode(GraphNode):
         return iter(self.value)
 
 
+def _inline_recursively(obj, values, seen=None):
+    seen = seen or set()
+    if id(obj) in seen:
+        return obj
+    seen.add(id(obj))
+    if isinstance(obj, GraphNode):
+        return obj.inline(values)
+    elif isinstance(obj, dict):
+        return {k: _inline_recursively(v, values, seen=seen) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, frozenset, set)):
+        return type(obj)(_inline_recursively(v, values, seen=seen) for v in obj)
+    return obj
+
+
+def _call_recursively(obj, values):
+    if isinstance(obj, GraphNode):
+        return obj(values)
+    elif isinstance(obj, dict):
+        return {k: _call_recursively(v, values) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, frozenset, set)):
+        return type(obj)(_call_recursively(v, values) for v in obj)
+    return obj
+
+
+def _get_dependencies(obj: object) -> set | frozenset:
+    if isinstance(obj, GraphNode):
+        return obj.dependencies
+    elif isinstance(obj, dict):
+        if not obj:
+            return _no_deps
+        return set().union(*map(_get_dependencies, obj.values()))
+    elif isinstance(obj, (list, tuple, frozenset, set)):
+        if not obj:
+            return _no_deps
+        return set().union(*map(_get_dependencies, obj))
+    return _no_deps
+
+
 class Task(GraphNode):
     func: Callable | None
-    args: SequenceOfTasks | DataNode
-    kwargs: DictOfTasks | DataNode
+    args: tuple
+    kwargs: dict
     packed_func: None | bytes
-    _token: tuple | None
+    _token: str | None
     _is_coro: bool | None
 
     __slots__ = tuple(__annotations__)
@@ -541,11 +604,11 @@ class Task(GraphNode):
         self.key = key
         self.func = func
         self.packed_func = None
-        dependencies: set = set()
         self.args = parse_input(args)
-        dependencies.update(self.args.dependencies)
         self.kwargs = parse_input(kwargs)
-        dependencies.update(self.kwargs.dependencies)
+        dependencies: set = set()
+        dependencies.update(_get_dependencies(self.args))
+        dependencies.update(_get_dependencies(self.kwargs.values()))
         if dependencies:
             self.dependencies = dependencies
         else:
@@ -555,8 +618,7 @@ class Task(GraphNode):
 
     def copy(self):
         self.unpack()
-        kwargs = self.kwargs.value if isinstance(self.kwargs, DataNode) else self.kwargs
-        return Task(self.key, self.func, *self.args, **kwargs)
+        return Task(self.key, self.func, *self.args, **self.kwargs)
 
     def __hash__(self):
         return hash(self._get_token())
@@ -564,7 +626,7 @@ class Task(GraphNode):
     def is_packed(self):
         return self.packed_func is not None
 
-    def _get_token(self):
+    def _get_token(self) -> str:
         if self._token:
             return self._token
         self.unpack()
@@ -603,9 +665,9 @@ class Task(GraphNode):
                 f"Exception occured during deserialization of function for task {self.key}"
             ) from exc
         assert self.func is not None
-        new_argspec = self.args(values)
+        new_argspec = _call_recursively(self.args, values)
         if self.kwargs:
-            kwargs = self.kwargs(values)
+            kwargs = _call_recursively(self.kwargs, values)
             return self.func(*new_argspec, **kwargs)
         return self.func(*new_argspec)
 
@@ -656,14 +718,10 @@ class Task(GraphNode):
 
     def inline(self, dsk) -> Task:
         self.unpack()
-        new_args = self.args.inline(dsk)
-        new_kwargs = self.kwargs.inline(dsk)
-        if isinstance(new_kwargs, DataNode):
-            kwargs = new_kwargs.value
-        else:
-            kwargs = new_kwargs.tasks
+        new_args = _inline_recursively(self.args, dsk)
+        new_kwargs = _inline_recursively(self.kwargs, dsk)
         assert self.func is not None
-        return Task(self.key, self.func, *new_args, **kwargs)
+        return Task(self.key, self.func, *new_args, **new_kwargs)
 
     def unpack(self):
         if not self.is_packed():
@@ -751,115 +809,6 @@ class Task(GraphNode):
         return self._is_coro
 
 
-class DictOfTasks(GraphNode):
-    tasks: dict
-    __slots__ = tuple(__annotations__)
-
-    def __init__(self, key: Any, nested_tasks: dict):
-        self.key = key
-        self.dependencies = set()
-        self.tasks = {}
-        for k, task in nested_tasks.items():
-            self.tasks[k] = task = parse_input(task)
-            if isinstance(task, GraphNode):
-                self.dependencies.update(task.dependencies)
-
-    def inline(self, dsk) -> DictOfTasks:
-        new_tasks = {k: task.inline(dsk) for k, task in self.tasks.items()}
-        return DictOfTasks(self.key, new_tasks)
-
-    def __iter__(self):
-        return iter(self.tasks)
-
-    def __call__(self, values=()) -> dict:
-        self._verify_values(values)
-        return {
-            k: task(values) if isinstance(task, GraphNode) else task
-            for k, task in self.tasks.items()
-        }
-
-    def copy(self):
-        return DictOfTasks(self.key, self.tasks)
-
-    def propagate_literal(self) -> GraphNode:
-        """Return a literal if all tasks are literals"""
-        if any(
-            isinstance(t, GraphNode) and not isinstance(t, DataNode)
-            for t in self.tasks.values()
-        ):
-            return self
-        return DataNode(self.key, self())
-
-    def __sizeof__(self):
-        return super().__sizeof__() + sizeof(self.tasks)
-
-
-class SequenceOfTasks(GraphNode):
-    typ: type
-    _isnamed_tuple: bool
-    tasks: list | tuple
-    _constructor_kwargs: dict
-
-    __slots__ = tuple(__annotations__)
-
-    def __init__(
-        self,
-        key: Any,
-        nested_tasks: list | tuple | Iterable,
-        typ: type | None = None,
-    ):
-        self.key = key
-        self.dependencies = set()
-        self.tasks = []
-        self.typ = typ or type(nested_tasks)
-        for task in nested_tasks:
-            task = parse_input(task)
-            self.tasks.append(task)
-            if isinstance(task, GraphNode):
-                self.dependencies.update(task.dependencies)
-
-    def __iter__(self):
-        return iter(self.tasks)
-
-    def copy(self):
-        return SequenceOfTasks(self.key, self.tasks, self.typ)
-
-    def inline(self, dsk: dict) -> SequenceOfTasks | DataNode:
-        new_tasks = []
-        all_literals = True
-        for task in self.tasks:
-            if not isinstance(task, GraphNode):
-                new_tasks.append(task)
-                continue
-            new_tasks.append(inner := task.inline(dsk))
-            if all_literals and not isinstance(inner, DataNode):
-                all_literals = False
-        rv = SequenceOfTasks(self.key, new_tasks)
-        if all_literals:
-            return DataNode(self.key, rv())
-        return rv
-
-    def __dask_tokenize__(self):
-        return (type(self).__name__, tokenize(self.tasks))
-
-    def __call__(self, values=()) -> list | tuple:
-        self._verify_values(values)
-        return self.typ(
-            task(values) if isinstance(task, GraphNode) else task for task in self.tasks
-        )
-
-    def propagate_literal(self):
-        """Return a literal if all tasks are literals"""
-        if any(
-            isinstance(t, GraphNode) and not isinstance(t, DataNode) for t in self.tasks
-        ):
-            return self
-        return DataNode(self.key, self())
-
-    def __sizeof__(self):
-        return super().__sizeof__() + sizeof(self.tasks) + sizeof(self.typ)
-
-
 class DependenciesMapping(Mapping):
     def __init__(self, dsk):
         self.dsk = dsk
@@ -935,3 +884,30 @@ def no_function_cache():
         yield
     finally:
         _func_cache, _func_cache_reverse = cache_before
+
+
+def execute_graph(dsk: list[GraphNode] | dict[KeyType, GraphNode]) -> dict:
+    if isinstance(dsk, (list, tuple, set, frozenset)):
+        dsk = {t.key: t for t in dsk}
+    else:
+        assert isinstance(dsk, dict)
+    dependencies = dict(DependenciesMapping(dsk))
+
+    refcount: defaultdict[KeyType, int] = defaultdict(int)
+    for vals in dependencies.values():
+        for val in vals:
+            refcount[val] += 1
+
+    cache: dict[KeyType, object] = {}
+    from dask.order import order
+
+    priorities = order(dsk)
+
+    for key, node in sorted(dsk.items(), key=lambda it: priorities[it[0]]):
+        cache[key] = node(cache)
+        for dep in node.dependencies:
+            refcount[dep] -= 1
+            if refcount[dep] == 0:
+                del cache[dep]
+
+    return cache
