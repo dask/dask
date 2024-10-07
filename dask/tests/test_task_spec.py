@@ -11,11 +11,11 @@ from dask._task_spec import (
     Alias,
     DataNode,
     DependenciesMapping,
-    DictOfTasks,
-    SequenceOfTasks,
     Task,
     TaskRef,
     convert_legacy_graph,
+    convert_legacy_task,
+    execute_graph,
     no_function_cache,
     resolve_aliases,
 )
@@ -31,6 +31,10 @@ def clear_func_cache():
 
     _func_cache.clear()
     _func_cache_reverse.clear()
+
+
+def identity(x):
+    return x
 
 
 def func(*args):
@@ -100,7 +104,7 @@ def test_convert_legacy_dsk():
     v3 = t3({"key-1": v1, "key-2": v2})
     assert v3 == func(func2("c", func("a", "b")), func2(func("a", "b"), "c"))
     t4 = new_dsk["key-4"]
-    assert isinstance(t4, SequenceOfTasks)
+    assert isinstance(t4, Task)
     assert t4.dependencies == {"key-1", "key-2", "key-3", "const"}
     assert t4(
         {
@@ -120,6 +124,20 @@ def test_convert_legacy_dsk():
 def test_task_executable():
     t1 = Task("key-1", func, "a", "b")
     assert t1() == func("a", "b")
+
+
+def test_task_nested_sequence():
+    t1 = Task("key-1", func, "a", "b")
+    t2 = Task("key-2", func2, "c", "d")
+
+    tseq = Task("seq", identity, [t1, t2])
+    assert tseq() == [func("a", "b"), func2("c", "d")]
+
+    tseq = Task("set", identity, {t1, t2})
+    assert tseq() == {func("a", "b"), func2("c", "d")}
+
+    tseq = Task("dict", identity, {"a": t1, "b": t2})
+    assert tseq() == {"a": func("a", "b"), "b": func2("c", "d")}
 
 
 def test_reference_remote():
@@ -272,6 +290,14 @@ def test_avoid_cycles():
     assert not new_dsk
 
 
+def test_convert_tasks_only_ref_lowlevel():
+    t = convert_legacy_task(None, (func, "a", "b"), set(), only_refs=True)
+    assert t() == (func, "a", "b")
+
+    t = convert_legacy_task(None, (func, "a", "b"), {"a"}, only_refs=True)
+    assert t({"a": "c"}) == (func, "c", "b")
+
+
 def test_convert_task_only_ref():
     # This is for support of legacy subgraphs
     # We'll only want to insert pack/unpack dependencies but don't want to touch
@@ -390,14 +416,14 @@ def test_inline():
 
     assert inline2({"b": "foo"}) == "a-foo"
 
-    t = SequenceOfTasks("key-1", [t, t2])
+    t = Task("foo", identity, [t, t2])
     assert t.dependencies == {"b", "a"}
     inlined = t.inline({"a": DataNode(None, "foo")})
     assert inlined.dependencies == {"b"}
     assert inlined({"b": "bar"}) == ["a-bar", "foo-bar"]
 
-    t = SequenceOfTasks("key-2", [t, t2])
-    t = DictOfTasks("key-2", {"foo": t, "bar": t2})
+    t = Task("key-2", identity, [t, t2])
+    t = Task("key-2", identity, {"foo": t, "bar": t2})
     inlined = t.inline(
         {
             "a": DataNode(None, "foo"),
@@ -406,9 +432,8 @@ def test_inline():
     )
     assert inlined({"b": "bar"})
 
-    t = SequenceOfTasks("key-1", [TaskRef("a"), TaskRef("b")])
+    t = Task("key-1", identity, [TaskRef("a"), TaskRef("b")])
     inlined = t.inline({"a": DataNode(None, "a"), "b": DataNode(None, "b")})
-    assert isinstance(inlined, DataNode)
     assert inlined() == ["a", "b"]
 
 
@@ -416,8 +441,6 @@ def test_inline():
     "inst",
     [
         Task("key-1", func, "a", "b"),
-        SequenceOfTasks("key-1", [DataNode(None, "foo")]),
-        DictOfTasks("key-1", {"foo": DataNode(None, "foo")}),
         Alias("key-1"),
         DataNode("key-1", 1),
     ],
@@ -689,3 +712,15 @@ def test_sizeof():
     assert sizeof(t) > 100_000
     t = DataNode("key", SizeOf(100_000))
     assert sizeof(t) > 100_000
+
+
+def test_execute_tasks_in_graph():
+    dsk = [
+        t1 := Task("key-1", func, "a", "b"),
+        t2 := Task("key-2", func2, t1.ref(), "c"),
+        t3 := Task("key-3", func, "foo", "bar"),
+        Task("key-4", func, t3.ref(), t2.ref()),
+    ]
+    res = execute_graph(dsk)
+    assert len(res) == 1
+    assert res["key-4"] == "foo-bar-a-b=c"
