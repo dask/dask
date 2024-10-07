@@ -809,9 +809,10 @@ class Task(GraphNode):
         return self._is_coro
 
 
-class DependenciesMapping(Mapping):
+class DependenciesMapping(MutableMapping):
     def __init__(self, dsk):
         self.dsk = dsk
+        self._removed = set()
 
     def __getitem__(self, key):
         v = self.dsk[key]
@@ -821,10 +822,18 @@ class DependenciesMapping(Mapping):
             deps = get_dependencies(self.dsk, task=self.dsk[key])
         else:
             deps = self.dsk[key].dependencies
+        if self._removed:
+            deps -= self._removed
         return deps
 
     def __iter__(self):
         return iter(self.dsk)
+
+    def __delitem__(self, key: Any) -> None:
+        self._removed.add(key)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        raise NotImplementedError
 
     def __len__(self) -> int:
         return len(self.dsk)

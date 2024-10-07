@@ -46,7 +46,6 @@ graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
 """
-import itertools
 from collections import defaultdict, deque, namedtuple
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from typing import Any, Literal, NamedTuple, overload
@@ -105,12 +104,22 @@ def order(
         return {}
 
     dsk = dict(dsk)
-    expected_len = len(dsk)
-    from dask._task_spec import DependenciesMapping
+    from dask._task_spec import DataNode, DependenciesMapping
 
     dependencies = DependenciesMapping(dsk)
     dependents = reverse_dict(dependencies)
 
+    external_keys = set()
+    if len(dependents) != len(dependencies):
+        # There are external keys. Let's add a DataNode to ensure the algo below
+        # is encountering a complete graph. Those artificial data nodes will be
+        # ignored when assigning results
+        for k in dependents:
+            if k not in dependencies:
+                external_keys.add(k)
+                dsk[k] = DataNode(k, object())
+
+    expected_len = len(dsk)
     leaf_nodes = {k for k, v in dependents.items() if not v}
     root_nodes = {k for k, v in dependencies.items() if not v}
 
@@ -126,11 +135,9 @@ def order(
     # The removal of those tasks typically transforms the graph topology in a
     # way that is simpler to handle
     all_tasks = False
-    recompute_dependents = False
     n_removed_leaves = 0
     requires_data_task = defaultdict(set)
-    removed_leafs = set()
-    removed_roots = set()
+
     while not all_tasks:
         all_tasks = True
         for leaf in list(leaf_nodes):
@@ -151,70 +158,35 @@ def order(
                     result[leaf] = prio
                 n_removed_leaves += 1
                 leaf_nodes.remove(leaf)
-                removed_leafs.add(leaf)
                 for dep in dependencies[leaf]:
-                    if not (dependents[dep] - removed_leafs):
+                    dependents[dep].remove(leaf)
+                    if not dependents[dep]:
                         leaf_nodes.add(dep)
-                recompute_dependents = True
                 del dsk[leaf]
+                del dependencies[leaf]
+                del dependents[leaf]
 
         for root in list(root_nodes):
             if root in leaf_nodes:
                 continue
-            deps_root = dependents[root] - removed_leafs
+            deps_root = dependents[root]
             if not istask(dsk[root]) and len(deps_root) > 1:
-                removed_roots.add(root)
+                del dsk[root]
+                del dependencies[root]
                 root_nodes.remove(root)
+                del dependents[root]
                 for dep in deps_root:
                     requires_data_task[dep].add(root)
-                    if not (dependencies[dep] - removed_roots):
+                    if not dependencies[dep]:
                         root_nodes.add(dep)
-                recompute_dependents = True
-    # Only delete things later to not disrupt the DependenciesMapping cache.
-    # After this, both dsk and dependencies should not be mutated.
-    for key in itertools.chain(removed_leafs, removed_roots):
-        dsk.pop(key, None)
-    del removed_leafs, removed_roots
-    # We have to recompute dependents. Dependencies are automatically updated /
-    # computed on the fly
-    if recompute_dependents:
-        # Note: Recomputing the entire thing is relatively expensive, primarily
-        # the allocation of all those sets. This is easy, though. If perf
-        # becomes a problem we may want to update the dependents in place while
-        # parsing the graph above.
-        dependents = reverse_dict(dependencies)
 
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     if len(total_dependencies) != len(dsk):
-        from dask._task_spec import DataNode
-
-        all_keys = set(dsk)
-        external_keys = set()
-        for deps in dependencies.values():
-            if any(externals := deps - all_keys):
-                external_keys.update(externals)
-        if external_keys:
-            # This is a bit convoluted. We're adding data nodes and are calling
-            # dask.order again. However, dask.order will strip those data nodes
-            # again (see the root node normalization above) so this is a
-            # computational overhead. However, this makes the code easier to
-            # read and ensures all state is properly initialized for the actual
-            # ordering. This should affect primarily results that depend on
-            # previously persisted results. If this becomes a performance
-            # problem we may refactor the state initialization to be more
-            # efficient
-            for k in external_keys:
-                dsk[k] = DataNode(None, object())
-            o = order(dsk, return_stats=return_stats)  # type: ignore
-            for k in external_keys:
-                o.pop(k)
-            return o
-        if len(total_dependencies) != len(dsk):
-            cycle = getcycle(dsk, None)
-            raise RuntimeError(
-                "Cycle detected between the following keys:\n  -> %s"
-                % "\n  -> ".join(str(x) for x in cycle)
-            )
+        cycle = getcycle(dsk, None)
+        raise RuntimeError(
+            "Cycle detected between the following keys:\n  -> %s"
+            % "\n  -> ".join(str(x) for x in cycle)
+        )
     assert dependencies is not None
     roots_connected, max_dependents = _connecting_to_roots(dependencies, dependents)
     leafs_connected, _ = _connecting_to_roots(dependents, dependencies)
@@ -270,16 +242,14 @@ def order(
 
             while requires_data_task[item]:
                 add_to_result(requires_data_task[item].pop())
-
             if return_stats:
                 result[item] = Order(i, crit_path_counter - _crit_path_counter_offset)
             else:
                 result[item] = i
-
+            if item not in external_keys:
+                i += 1
             if item in root_nodes:
                 processed_roots.add(item)
-
-            i += 1
             # Note: This is a `set` and therefore this introduces a certain
             # randomness. However, this randomness should not have any impact on
             # the final result since the `process_runnable` should produce
@@ -632,6 +602,8 @@ def order(
         process_runnables()
 
     assert len(result) == expected_len
+    for k in external_keys:
+        del result[k]
     return result  # type: ignore
 
 
