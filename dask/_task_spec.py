@@ -76,6 +76,7 @@ should contain the dependencies of the task.
 """
 import itertools
 import sys
+from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
 from contextlib import contextmanager
 from functools import partial
