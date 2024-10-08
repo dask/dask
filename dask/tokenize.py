@@ -342,6 +342,15 @@ def register_pandas():
         return offset.freqstr
 
 
+@normalize_token.register_lazy("numba")
+def register_numba():
+    import numba
+
+    @normalize_token.register(numba.core.serialize.ReduceMixin)
+    def normalize_numba_ufunc(obj):
+        return normalize_token((obj._reduce_class(), obj._reduce_states()))
+
+
 @normalize_token.register_lazy("pyarrow")
 def register_pyarrow():
     import pyarrow as pa
