@@ -4793,9 +4793,9 @@ class Scalar(FrameBase):
         # Otherwise, above op results in pd.Series of Scalar (object dtype)
         return np.asarray(self.compute())
 
-    @property
+    @functools.cached_property
     def dtype(self):
-        return self._meta.dtype
+        return pd.Series(self._meta).dtype
 
 
 def new_collection(expr):

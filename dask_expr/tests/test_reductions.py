@@ -552,3 +552,9 @@ def test_cat_value_counts_large_unknown_categories():
     result = df.x.value_counts()
     assert result.npartitions == 3  # known but large
     assert_eq(result, expected, check_index=False, check_dtype=False)
+
+
+def test_reductions_timestamps_display():
+    data = pd.to_datetime(["2024-10-02 12:00:00", "2024-10-02 14:00:00"])
+    df = from_pandas(pd.DataFrame({"valid_time": data}))
+    assert df["valid_time"].min().__repr__()
