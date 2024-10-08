@@ -1326,11 +1326,14 @@ def _clean_by_expr(obj, by):
         return by.name
     elif isinstance(by, Index) and by._name == obj.index._name:
         return by.expr
-    elif isinstance(by, Series):
+    elif isinstance(by, (Series, Index)):
         if not are_co_aligned(obj.expr, by.expr):
             raise NotImplementedError(
                 "by must be in the DataFrames columns or aligned with the DataFrame."
             )
+        if isinstance(by, Index):
+            by = by.to_series()
+            by.index = obj.index
         return by.expr
 
     # By is a column name, e.g. str or int

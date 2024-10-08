@@ -1025,3 +1025,19 @@ def test_get_group_multiple_keys():
     result = df.groupby(["x", "y"]).get_group((1, 1))
     expected = pdf.groupby(["x", "y"]).get_group((1, 1))
     assert_eq(result, expected)
+
+
+def test_groupby_index_modified_divisions():
+    date_range = pd.date_range(start="2023-01-01", end="2023-01-02", freq="1min")
+    data = {
+        "timestamp": date_range,
+        "upper_bound_enter": [1] * len(date_range),
+        "vwap": [2] * len(date_range),
+    }
+    pdf = pd.DataFrame(data, index=pd.Index(date_range, name="timestamp"))
+
+    df = from_pandas(pdf, npartitions=8).repartition(freq="1D")
+    assert_eq(
+        df.groupby(df.index.dt.date).count(),
+        pdf.groupby(pdf.index.date).count(),
+    )
