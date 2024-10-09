@@ -11,7 +11,7 @@ from operator import itemgetter
 import numpy as np
 from tlz import concat, memoize, merge, pluck
 
-from dask import core
+from dask import config, core
 from dask.array.chunk import getitem
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -562,6 +562,15 @@ def take(outname, inname, chunks, index, axis=0):
     dask.config.array.chunk-size, we will split them to avoid
     growing chunksizes.
     """
+
+    if config.get("array.slicing.split-large-chunks", None):
+        warnings.warn(
+            "The 'array.slicing.split-large-chunks' option is deprecated "
+            "and will be removed in a future release. Dask automatically "
+            "handles the chunksizes now.",
+            FutureWarning,
+            stacklevel=2,
+        )
 
     if not np.isnan(chunks[axis]).any():
         from dask.array._shuffle import _shuffle
