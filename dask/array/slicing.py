@@ -1338,7 +1338,7 @@ def parse_assignment_indices(indices, shape):
             # Index is an integer
             index = int(index)
 
-        elif isinstance(index, np.ndarray) or is_dask_collection(index):
+        elif is_arraylike(index) or is_dask_collection(index):
             # Index is 1-d array
             n_lists += 1
             if n_lists > 1:
