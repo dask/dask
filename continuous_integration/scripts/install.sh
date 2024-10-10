@@ -27,7 +27,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/distributed \
         git+https://github.com/dask/dask-expr \
         git+https://github.com/dask/fastparquet \
-        git+https://github.com/zarr-developers/zarr-python.git@v3
+        git+https://github.com/jhamman/zarr-python.git@fix/thread-cleanup
         # Zarr's default branch (`v3`) is still under development.
         # Explicitly specify `main` until their default branch is ready.
         # https://github.com/zarr-developers/zarr-python/issues/1922
