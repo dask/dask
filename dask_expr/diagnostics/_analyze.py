@@ -1,21 +1,20 @@
+from __future__ import annotations
+
 import functools
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from dask.base import DaskMethodsMixin
 from dask.sizeof import sizeof
-from dask.utils import format_bytes
+from dask.utils import format_bytes, import_required
 
 from dask_expr._expr import Blockwise, Expr
 from dask_expr._util import _tokenize_deterministic, is_scalar
-from dask_expr.diagnostics._analyze_plugin import (
-    AnalyzePlugin,
-    ExpressionStatistics,
-    Statistics,
-    get_worker_plugin,
-)
 from dask_expr.diagnostics._explain import _add_graphviz_edges, _explain_info
 from dask_expr.io.io import FusedIO
+
+if TYPE_CHECKING:
+    from dask_expr.diagnostics._analyze_plugin import ExpressionStatistics, Statistics
 
 
 def inject_analyze(expr: Expr, id: str, injected: dict) -> Expr:
@@ -36,14 +35,26 @@ def inject_analyze(expr: Expr, id: str, injected: dict) -> Expr:
 def analyze(
     expr: Expr, filename: str | None = None, format: str | None = None, **kwargs: Any
 ):
-    import graphviz
+    import_required(
+        "distributed",
+        "distributed is a required dependency for using the analyze method.",
+    )
+    import_required(
+        "crick", "crick is a required dependency for using the analyze method."
+    )
+    graphviz = import_required(
+        "graphviz", "graphviz is a required dependency for using the analyze method."
+    )
     from dask.dot import graphviz_to_file
     from distributed import get_client, wait
 
     from dask_expr import new_collection
+    from dask_expr.diagnostics._analyze_plugin import AnalyzePlugin
 
-    client = get_client()
-
+    try:
+        client = get_client()
+    except ValueError:
+        raise RuntimeError("analyze must be run in a distributed context.")
     client.register_plugin(AnalyzePlugin())
 
     # TODO: Make this work with fuse=True
@@ -156,6 +167,8 @@ def _statistics_info(statistics: ExpressionStatistics):
 
 
 def collect_statistics(frame, analysis_id, expr_name):
+    from dask_expr.diagnostics._analyze_plugin import get_worker_plugin
+
     worker_plugin = get_worker_plugin()
     if isinstance(frame, pd.DataFrame):
         size = frame.memory_usage(deep=True).sum()

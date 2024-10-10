@@ -1,9 +1,13 @@
-from collections import defaultdict
-from typing import ClassVar
+from __future__ import annotations
 
-from crick import TDigest
+from collections import defaultdict
+from typing import TYPE_CHECKING, ClassVar
+
 from distributed import Scheduler, SchedulerPlugin, Worker, WorkerPlugin
 from distributed.protocol.pickle import dumps
+
+if TYPE_CHECKING:
+    from crick import TDigest
 
 
 class Digest:
@@ -12,6 +16,8 @@ class Digest:
     sketch: TDigest
 
     def __init__(self) -> None:
+        from crick import TDigest
+
         self.count = 0
         self.total = 0.0
         self.sketch = TDigest()
@@ -21,7 +27,7 @@ class Digest:
         self.total = self.total + sample
         self.sketch.add(sample)
 
-    def merge(self, other: "Digest") -> None:
+    def merge(self, other: Digest) -> None:
         self.count = self.count + other.count
         self.total = self.total + other.total
         self.sketch.merge(other.sketch)
@@ -70,7 +76,7 @@ class ExpressionStatistics:
     def add(self, metric: str, value: float) -> None:
         self._metric_digests[metric].add(value)
 
-    def merge(self, other: "ExpressionStatistics") -> None:
+    def merge(self, other: ExpressionStatistics) -> None:
         for metric, digest in other._metric_digests.items():
             self._metric_digests[metric].merge(digest)
 
@@ -84,7 +90,7 @@ class Statistics:
     def add(self, expr: str, metric: str, value: float):
         self._expr_statistics[expr].add(metric, value)
 
-    def merge(self, other: "Statistics"):
+    def merge(self, other: Statistics):
         for expr, statistics in other._expr_statistics.items():
             self._expr_statistics[expr].merge(statistics)
 
