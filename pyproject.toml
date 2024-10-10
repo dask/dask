@@ -33,7 +33,7 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-analyze = ["crick", "distributed"]
+analyze = ["crick", "distributed", "graphviz"]
 
 [project.urls]
 "Source code" = "https://github.com/dask-contrib/dask-expr/"

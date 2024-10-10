@@ -1,4 +1,4 @@
-from dask.utils import funcname
+from dask.utils import funcname, import_required
 
 from dask_expr._core import OptimizerStage
 from dask_expr._expr import Expr, Projection, optimize_until
@@ -16,7 +16,9 @@ STAGE_LABELS: dict[OptimizerStage, str] = {
 
 
 def explain(expr: Expr, stage: OptimizerStage = "fused", format: str | None = None):
-    import graphviz
+    graphviz = import_required(
+        "graphviz", "graphviz is a required dependency for using the explain method."
+    )
 
     if format is None:
         format = "png"
