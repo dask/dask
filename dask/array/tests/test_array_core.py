@@ -19,6 +19,7 @@ from io import StringIO
 from operator import add, sub
 from threading import Lock
 
+from packaging.version import Version
 from tlz import concat, merge
 from tlz.curried import identity
 
@@ -4598,15 +4599,17 @@ def test_read_zarr_chunks():
         assert arr.chunks == ((5, 4),)
 
 
-def test_zarr_pass_mapper():
-    pytest.importorskip("zarr")
-    import zarr.storage
+def test_zarr_pass_store():
+    zarr = pytest.importorskip("zarr")
 
     with tmpdir() as d:
-        mapper = zarr.storage.DirectoryStore(d)
+        if Version(zarr.__version__) < Version("3.0.0.a0"):
+            store = zarr.storage.DirectoryStore(d)
+        else:
+            store = zarr.storage.LocalStore(d, mode="w")
         a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(mapper)
-        a2 = da.from_zarr(mapper)
+        a.to_zarr(store)
+        a2 = da.from_zarr(store)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
 
@@ -4623,8 +4626,9 @@ def test_zarr_group():
         # second time is fine, group exists
         a.to_zarr(d, component="test2", overwrite=False)
         a.to_zarr(d, component="nested/test", overwrite=False)
-        group = zarr.open_group(d, mode="r")
-        assert list(group) == ["nested", "test", "test2"]
+
+        group = zarr.open_group(store=d, mode="r")
+        assert set(group) == {"nested", "test", "test2"}
         assert "test" in group["nested"]
 
         a2 = da.from_zarr(d, component="test")

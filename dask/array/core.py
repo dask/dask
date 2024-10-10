@@ -13,7 +13,7 @@ import warnings
 from bisect import bisect
 from collections import defaultdict
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
-from functools import partial, reduce, wraps
+from functools import lru_cache, partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
@@ -22,6 +22,7 @@ from typing import Any, Literal, TypeVar, Union, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
+from packaging.version import Version
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
@@ -3582,6 +3583,16 @@ def from_array(
     return Array(dsk, name, chunks, meta=meta, dtype=getattr(x, "dtype", None))
 
 
+@lru_cache
+def _zarr_v3() -> bool:
+    try:
+        import zarr
+    except ImportError:
+        return False
+    else:
+        return Version(zarr.__version__).major >= 3
+
+
 def from_zarr(
     url,
     component=None,
@@ -3632,12 +3643,15 @@ def from_zarr(
         if isinstance(url, os.PathLike):
             url = os.fspath(url)
         if storage_options:
-            store = zarr.storage.FSStore(url, **storage_options)
+            if _zarr_v3():
+                store = zarr.store.RemoteStore(url, **storage_options)
+            else:
+                store = zarr.storage.FSStore(url, **storage_options)
         else:
             store = url
-        z = zarr.open_array(store, read_only=True, path=component, **kwargs)
+        z = zarr.open_array(store=store, read_only=True, path=component, **kwargs)
     else:
-        z = zarr.open_array(url, read_only=True, path=component, **kwargs)
+        z = zarr.open_array(store=url, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
@@ -3706,9 +3720,14 @@ def to_zarr(
             "currently supported by Zarr.%s" % unknown_chunk_message
         )
 
+    if _zarr_v3():
+        zarr_mem_store_types = (zarr.storage.MemoryStore,)
+    else:
+        zarr_mem_store_types = (dict, zarr.storage.MemoryStore, zarr.storage.KVStore)
+
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, zarr.storage.MemoryStore, zarr.storage.KVStore)):
+        if isinstance(z.store, zarr_mem_store_types):
             try:
                 from distributed import default_client
 
@@ -3751,7 +3770,12 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if storage_options:
-        store = zarr.storage.FSStore(url, **storage_options)
+        if _zarr_v3():
+            store = zarr.storage.RemoteStore(
+                url, mode=kwargs.pop("mode", "a"), **storage_options
+            )
+        else:
+            store = zarr.storage.FSStore(url, **storage_options)
     else:
         store = url
 
