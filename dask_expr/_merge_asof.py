@@ -108,10 +108,30 @@ class MergeAsof(Merge):
                 .expr
             )
 
-        if not left.known_divisions or not right.known_divisions:
+        if (
+            not left.known_divisions
+            and left.npartitions > 1
+            or not right.known_divisions
+            and right.npartitions > 1
+        ):
             raise ValueError("merge_asof input must be sorted!")
 
         left_index, right_index = True, True
+
+        if left.npartitions == right.npartitions == 1:
+            return MapPartitions(
+                self.left,
+                pd.merge_asof,
+                self._meta,
+                True,
+                True,
+                False,
+                True,
+                None,
+                None,
+                self._kwargs,
+                self.right,
+            )
 
         if all(map(pd.isnull, left.divisions)):
             return FromPandas(
