@@ -844,7 +844,7 @@ def test_map_overlap_new_axis():
     assert_eq(expected, actual, check_shape=False, check_chunks=False)
 
 
-def test_overlap_now_blowing_up_graph():
+def test_overlap_not_blowing_up_graph():
     xr = pytest.importorskip("xarray")
 
     arr = xr.DataArray(
