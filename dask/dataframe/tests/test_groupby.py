@@ -602,9 +602,6 @@ def test_series_groupby_errors():
         ss.groupby("x")  # dask should raise the same error
 
 
-@pytest.mark.xfail(
-    DASK_EXPR_ENABLED, reason="grouper does not have divisions and groupby aligns"
-)
 def test_groupby_index_array():
     df = _compat.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
