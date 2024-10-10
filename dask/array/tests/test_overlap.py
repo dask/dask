@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from dask.base import collections_to_dsk
+
 pytest.importorskip("numpy")
 
 import numpy as np
@@ -840,3 +842,15 @@ def test_map_overlap_new_axis():
     # Shape and chunks aren't known until array is computed,
     # so don't expclitly check shape or chunks in assert_eq
     assert_eq(expected, actual, check_shape=False, check_chunks=False)
+
+
+def test_overlap_not_blowing_up_graph():
+    xr = pytest.importorskip("xarray")
+
+    arr = xr.DataArray(
+        da.random.random((2, 10, 5, 121), chunks=(1, 2, 1, 121)),
+        dims=["x", "y", "z", "year"],
+    )
+    result = arr.rolling(dim={"year": 11}, center=True).construct("window_dim")
+    dc = collections_to_dsk([result.data])
+    assert len(dc) < 1000  # previously 3000
