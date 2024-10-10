@@ -32,3 +32,25 @@ def test_merge_asof_on_basic():
     c = merge_asof(a, b, on="a")
     # merge_asof does not preserve index
     assert_eq(c, C, check_index=False)
+
+
+def test_merge_asof_one_partition():
+    left = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    right = pd.DataFrame({"a": [1, 2, 3], "c": [4, 5, 6]})
+
+    ddf_left = from_pandas(left, npartitions=1)
+    ddf_left = ddf_left.set_index("a", sort=True)
+    ddf_right = from_pandas(right, npartitions=1)
+    ddf_right = ddf_right.set_index("a", sort=True)
+
+    result = merge_asof(
+        ddf_left, ddf_right, left_index=True, right_index=True, direction="nearest"
+    )
+    expected = pd.merge_asof(
+        left.set_index("a"),
+        right.set_index("a"),
+        left_index=True,
+        right_index=True,
+        direction="nearest",
+    )
+    assert_eq(result, expected)
