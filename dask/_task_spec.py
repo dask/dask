@@ -809,37 +809,31 @@ class Task(GraphNode):
         return self._is_coro
 
 
-class DependenciesMapping(Mapping):
+class DependenciesMapping(MutableMapping):
     def __init__(self, dsk):
         self.dsk = dsk
-        self.blocklist = None
-        self.removed_keys = set()
+        self._removed = set()
 
     def __getitem__(self, key):
-        if key in self.removed_keys:
-            raise KeyError(key)
         v = self.dsk[key]
         if not isinstance(v, GraphNode):
             from dask.core import get_dependencies
 
-            return get_dependencies(self.dsk, task=self.dsk[key])
-        if self.blocklist and self.blocklist[key]:
-            return self.dsk[key].dependencies - self.blocklist[key]
-        return self.dsk[key].dependencies
+            deps = get_dependencies(self.dsk, task=self.dsk[key])
+        else:
+            deps = self.dsk[key].dependencies
+        if self._removed:
+            deps -= self._removed
+        return deps
 
     def __iter__(self):
         return iter(self.dsk)
 
-    def copy(self):
-        return DependenciesMapping(self.dsk)
+    def __delitem__(self, key: Any) -> None:
+        self._removed.add(key)
 
-    def __delitem__(self, key):
-        self.removed_keys.add(key)
-
-    def remove_dependency(self, key, dep):
-        if self.blocklist is None:
-            self.blocklist = defaultdict(set)
-        self.blocklist[key].add(dep)
+    def __setitem__(self, key: Any, value: Any) -> None:
+        raise NotImplementedError
 
     def __len__(self) -> int:
         return len(self.dsk)
