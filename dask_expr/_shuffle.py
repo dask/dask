@@ -1369,6 +1369,10 @@ def _calculate_divisions(
                 f"This is probably due to the presence of nulls, which Dask does not entirely support in the index.\n"
                 f"We suggest you try with {suggested_method}."
             ) from e
+        # For numeric types there shouldn't be problems with nulls, so we raise as-it-is this particular TypeError
+        else:
+            raise e
+
     sizes = []
 
     empty_dataframe_detected = pd.isna(divisions).all()
