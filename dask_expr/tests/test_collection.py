@@ -2667,6 +2667,28 @@ def test_empty_from_pandas_projection():
     assert_eq(df["foo"], pdf["foo"])
 
 
+def test_binop_scalar_left():
+    pdf = pd.DataFrame(
+        {
+            "x": [0, 1, 0, 1],
+            "y": [0, 0, 1, 1],
+            "z": [1, 2, 3, 4],
+            "beam_flag": [5, 0, 0, 0],
+            "ping_number": [0] * 4,
+            "beam_number": [0] * 4,
+            "filename": [0] * 4,
+        }
+    )
+    df = from_pandas(pdf, npartitions=1)
+
+    df["cell_x"] = ((df.x - df.x.min()) // 1).astype("uint32")
+    df["cell_y"] = ((df.y.max() - df.y) // 1).astype("uint32")
+
+    pdf["cell_x"] = ((pdf.x - pdf.x.min()) // 1).astype("uint32")
+    pdf["cell_y"] = ((pdf.y.max() - pdf.y) // 1).astype("uint32")
+    assert_eq(df, pdf)
+
+
 def test_to_backend_simplify():
     with dask.config.set({"dataframe.backend": "pandas"}):
         df = from_dict({"x": [1, 2, 3], "y": [4, 5, 6]}, npartitions=2)
