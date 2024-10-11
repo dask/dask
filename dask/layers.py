@@ -253,13 +253,20 @@ def _expand_keys_around_center(k, dims, name=None, axes=None):
             num += 1
         shape.append(num)
 
+    def _valid_depth(depth):
+        if isinstance(depth, tuple):
+            return any(x != 0 for x in depth)
+        else:
+            return depth != 0
+
     args = [
-        inds(i, ind) if any((axes.get(i, 0),)) else [ind] for i, ind in enumerate(k[1:])
+        inds(i, ind) if _valid_depth(axes.get(i, 0)) else [ind]
+        for i, ind in enumerate(k[1:])
     ]
     if name is not None:
         args = [[name]] + args
     seq = list(product(*args))
-    shape2 = [d if any((axes.get(i, 0),)) else 1 for i, d in enumerate(shape)]
+    shape2 = [d if _valid_depth(axes.get(i, 0)) else 1 for i, d in enumerate(shape)]
     result = reshapelist(shape2, seq)
     return result
 
