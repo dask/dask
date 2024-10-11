@@ -5,6 +5,7 @@ import sys
 from array import array
 
 import pytest
+from packaging.version import Version
 
 from dask.multiprocessing import get_context
 from dask.sizeof import sizeof
@@ -276,11 +277,18 @@ def test_xarray():
 
 def test_xarray_not_in_memory():
     xr = pytest.importorskip("xarray")
+    zarr = pytest.importorskip("zarr")
     np = pytest.importorskip("numpy")
     pytest.importorskip("zarr")
 
     ind = np.arange(-66, 67, 1).astype(float)
     arr = np.random.random((len(ind),))
+
+    # TODO: remove this conditional after consolidated metadata lands in v3
+    if Version(zarr.__version__) > Version("3.0.0.a0") and Version(
+        zarr.__version__
+    ) < Version("3.0.0"):
+        pytest.xfail("consolidated metadata and xarray support is not complete")
 
     with tmpdir() as path:
         xr.DataArray(

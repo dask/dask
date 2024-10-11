@@ -4,6 +4,7 @@ import inspect
 from collections import defaultdict
 
 import pytest
+from packaging.version import Version
 
 import dask
 from dask import delayed
@@ -891,7 +892,11 @@ def test_array_store_final_order(tmpdir):
     arrays = [da.ones((110, 4), chunks=(100, 2)) for i in range(4)]
     x = da.concatenate(arrays, axis=0).rechunk((100, 2))
 
-    store = zarr.DirectoryStore(tmpdir)
+    if Version(zarr.__version__) < Version("3.0.0.a0"):
+        store = zarr.storage.DirectoryStore(tmpdir)
+    else:
+        store = zarr.storage.LocalStore(str(tmpdir), mode="w")
+
     root = zarr.group(store, overwrite=True)
     dest = root.empty_like(name="dest", data=x, chunks=x.chunksize, overwrite=True)
     d = x.store(dest, lock=False, compute=False)

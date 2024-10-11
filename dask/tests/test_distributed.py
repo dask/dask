@@ -11,6 +11,8 @@ import weakref
 from functools import partial
 from operator import add
 
+from packaging.version import Version
+
 from distributed import Client, SchedulerPlugin, WorkerPlugin, futures_of, wait
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
@@ -340,10 +342,33 @@ def test_futures_in_graph(c):
     assert xxyy3.compute(scheduler="dask.distributed") == ((1 + 1) + (2 + 2)) + 10
 
 
-def test_zarr_distributed_roundtrip(c):
+@pytest.fixture(scope="function")
+def zarr(c):
+    zarr_lib = pytest.importorskip("zarr")
+    # Zarr-Python 3 lazily allocates a dedicated thread/IO loop
+    # for to execute async tasks. To avoid having this thread
+    # be picked up as a "leaked thread", we manually trigger it's
+    # creation before using zarr
+    try:
+        _ = zarr_lib.core.sync._get_loop()
+        _ = zarr_lib.core.sync._get_executor()
+        yield zarr_lib
+    except AttributeError:
+        yield zarr_lib
+    finally:
+        # Zarr-Python 3 lazily allocates a IO thread, a thread pool executor, and
+        # an IO loop. Here we clean up these resources to avoid leaking threads
+        # In normal operations, this is done as by an atexit handler when Zarr
+        # is shutting down.
+        try:
+            zarr_lib.core.sync.cleanup_resources()
+        except AttributeError:
+            pass
+
+
+def test_zarr_distributed_roundtrip(c, zarr):
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
-    pytest.importorskip("zarr")
 
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
@@ -353,16 +378,18 @@ def test_zarr_distributed_roundtrip(c):
         assert a2.chunks == a.chunks
 
 
-def test_zarr_distributed_with_explicit_directory_store(c):
+def test_zarr_distributed_with_explicit_directory_store(c, zarr):
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
-    zarr = pytest.importorskip("zarr")
 
     with tmpdir() as d:
         chunks = (1, 1)
         a = da.zeros((3, 3), chunks=chunks)
-        s = zarr.storage.DirectoryStore(d)
-        z = zarr.creation.open_array(
+        if Version(zarr.__version__) < Version("3.0.0.a0"):
+            s = zarr.storage.DirectoryStore(d)
+        else:
+            s = zarr.storage.LocalStore(d, mode="a")
+        z = zarr.open_array(
             shape=a.shape,
             chunks=chunks,
             dtype=a.dtype,
@@ -375,15 +402,17 @@ def test_zarr_distributed_with_explicit_directory_store(c):
         assert a2.chunks == a.chunks
 
 
-def test_zarr_distributed_with_explicit_memory_store(c):
+def test_zarr_distributed_with_explicit_memory_store(c, zarr):
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
-    zarr = pytest.importorskip("zarr")
 
     chunks = (1, 1)
     a = da.zeros((3, 3), chunks=chunks)
-    s = zarr.storage.MemoryStore()
-    z = zarr.creation.open_array(
+    if Version(zarr.__version__) < Version("3.0.0.a0"):
+        s = zarr.storage.MemoryStore()
+    else:
+        s = zarr.storage.MemoryStore(mode="a")
+    z = zarr.open_array(
         shape=a.shape,
         chunks=chunks,
         dtype=a.dtype,
@@ -394,10 +423,9 @@ def test_zarr_distributed_with_explicit_memory_store(c):
         a.to_zarr(z)
 
 
-def test_zarr_in_memory_distributed_err(c):
+def test_zarr_in_memory_distributed_err(c, zarr):
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
-    zarr = pytest.importorskip("zarr")
 
     chunks = (1, 1)
     a = da.ones((3, 3), chunks=chunks)
