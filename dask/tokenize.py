@@ -13,6 +13,7 @@ import types
 import uuid
 from collections import OrderedDict
 from collections.abc import Iterable
+from contextvars import ContextVar
 from functools import partial
 
 import cloudpickle
@@ -40,7 +41,7 @@ def _tokenize(*args: object, **kwargs: object) -> str:
 
 tokenize_lock = threading.RLock()
 _SEEN: dict[int, tuple[int, object]] = {}
-_ENSURE_DETERMINISTIC = None
+_ENSURE_DETERMINISTIC: ContextVar[bool | None] = ContextVar("_ENSURE_DETERMINISTIC")
 
 
 def tokenize(
@@ -66,20 +67,25 @@ def tokenize(
     global _SEEN, _ENSURE_DETERMINISTIC
     with tokenize_lock:
         seen_before, _SEEN = _SEEN, {}
-        _ENSURE_DETERMINISTIC = ensure_deterministic
+        token = None
+        try:
+            _ENSURE_DETERMINISTIC.get()
+        except LookupError:
+            token = _ENSURE_DETERMINISTIC.set(ensure_deterministic)
         try:
             return _tokenize(*args, **kwargs)
         finally:
+            if token:
+                _ENSURE_DETERMINISTIC.reset(token)
             _SEEN = seen_before
-            _ENSURE_DETERMINISTIC = None
 
 
 def _maybe_raise_nondeterministic(msg: str) -> None:
-    if (
-        _ENSURE_DETERMINISTIC
-        or _ENSURE_DETERMINISTIC is None
-        and config.get("tokenize.ensure-deterministic")
-    ):
+    try:
+        val = _ENSURE_DETERMINISTIC.get()
+    except LookupError:
+        val = None
+    if val or val is None and config.get("tokenize.ensure-deterministic"):
         raise TokenizationError(msg)
 
 
