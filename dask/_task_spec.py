@@ -576,7 +576,7 @@ def _get_dependencies(obj: object) -> set | frozenset:
         if not obj:
             return _no_deps
         return set().union(*map(_get_dependencies, obj.values()))
-    elif isinstance(obj, Iterable) and not isinstance(obj, str):
+    elif isinstance(obj, (list, tuple, frozenset, set)):
         if not obj:
             return _no_deps
         return set().union(*map(_get_dependencies, obj))
@@ -608,7 +608,7 @@ class Task(GraphNode):
         self.kwargs = parse_input(kwargs)
         dependencies: set = set()
         dependencies.update(_get_dependencies(self.args))
-        dependencies.update(_get_dependencies(self.kwargs.values()))
+        dependencies.update(_get_dependencies(tuple(self.kwargs.values())))
         if dependencies:
             self.dependencies = dependencies
         else:
