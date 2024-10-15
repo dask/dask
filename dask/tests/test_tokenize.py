@@ -38,10 +38,12 @@ def check_clean_state():
     from dask.tokenize import _ENSURE_DETERMINISTIC, _SEEN
 
     assert not _SEEN
-    assert _ENSURE_DETERMINISTIC is None
+    with pytest.raises(LookupError):
+        _ENSURE_DETERMINISTIC.get()
     yield
     assert not _SEEN
-    assert _ENSURE_DETERMINISTIC is None
+    with pytest.raises(LookupError):
+        _ENSURE_DETERMINISTIC.get()
 
 
 def check_tokenize(*args, **kwargs):
@@ -1423,3 +1425,12 @@ def test_tokenize_pandas_arrow_strings():
     tokens = normalize_token(ser)
     # Maybe a little brittle but will do for now
     assert any(str(tok) == "string" for tok in flatten(tokens))
+
+
+def test_tokenize_recursive_respects_ensure_deterministic():
+    class Foo:
+        def __dask_tokenize__(self):
+            return tokenize(object())
+
+    with pytest.raises(RuntimeError):
+        tokenize(Foo(), ensure_deterministic=True)
