@@ -745,3 +745,8 @@ def test_execute_tasks_in_graph():
     res = execute_graph(dsk)
     assert len(res) == 1
     assert res["key-4"] == "foo-bar-a-b=c"
+
+
+def test_deterministic_tokenization_respected():
+    with pytest.raises(RuntimeError, match="deterministic"):
+        tokenize(Task("key", func, object()), ensure_deterministic=True)
