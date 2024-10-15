@@ -195,6 +195,7 @@ def register_cupyx():
 @concatenate_lookup.register_lazy("sparse")
 @nannumel_lookup.register_lazy("sparse")
 @numel_lookup.register_lazy("sparse")
+@take_lookup.register_lazy("sparse")
 def register_sparse():
     import sparse
 
@@ -205,6 +206,7 @@ def register_sparse():
     # https://github.com/dask/dask/issues/7169
     numel_lookup.register(sparse.COO, _numel_ndarray)
     nannumel_lookup.register(sparse.COO, _nannumel_sparse)
+    take_lookup.register(sparse.COO, np.take)
 
 
 @tensordot_lookup.register_lazy("scipy")
