@@ -310,14 +310,12 @@ def concatenate_arrays(arrs, sorter, axis):
     idx = np.argsort(sorter[1])
     array = concatenate(arrs, axis=axis)
     if issubclass(typ, spmatrix | cp_spmatrix):
-        if axis == 0:
-            return array[idx, :]
-        elif axis == 1:
-            return array[:, idx]
-        else:
+        if axis not in {0, 1}:  # pragma: no cover
             raise ValueError(
                 "Sparse matrices can only be concatenated along axis 0 or 1"
             )
+        indexer = (slice(None), idx) if axis else (idx, slice(None))
+        return array[indexer]
     else:
         return np.take(array, idx, axis=axis)
 
