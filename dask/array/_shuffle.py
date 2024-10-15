@@ -315,7 +315,9 @@ def concatenate_arrays(arrs, sorter, axis):
         elif axis == 1:
             return array[:, idx]
         else:
-            raise ValueError()
+            raise ValueError(
+                "Sparse matrices can only be concatenated along axis 0 or 1"
+            )
     else:
         return np.take(array, idx, axis=axis)
 
