@@ -294,8 +294,30 @@ def _getitem(obj, index):
 
 
 def concatenate_arrays(arrs, sorter, axis):
-    concatenate = concatenate_lookup.dispatch(type(arrs[0]))
-    return np.take(concatenate(arrs, axis=axis), np.argsort(sorter[1]), axis=axis)
+    try:
+        from scipy.sparse import spmatrix
+    except ImportError:
+        spmatrix = None
+
+    try:
+        from cupyx.scipy.sparse import cp_spmatrix
+    except ImportError:
+        cp_spmatrix = None
+
+    typ = type(arrs[0])
+
+    concatenate = concatenate_lookup.dispatch(typ)
+    idx = np.argsort(sorter[1])
+    array = concatenate(arrs, axis=axis)
+    if issubclass(typ, spmatrix | cp_spmatrix):
+        if axis == 0:
+            return array[idx, :]
+        elif axis == 1:
+            return array[:, idx]
+        else:
+            raise ValueError()
+    else:
+        return np.take(array, idx, axis=axis)
 
 
 def convert_key(key, chunk, axis):
