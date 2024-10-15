@@ -82,8 +82,6 @@ from contextlib import contextmanager
 from functools import partial
 from typing import Any, TypeVar, cast, overload
 
-from dask.base import tokenize
-from dask.core import reverse_dict
 from dask.sizeof import sizeof
 from dask.typing import Key as KeyType
 from dask.utils import is_namedtuple_instance
@@ -526,6 +524,8 @@ class DataNode(GraphNode):
         return f"DataNode({self.key}, type={self.typ}, {self.value})"
 
     def __dask_tokenize__(self):
+        from dask.base import tokenize
+
         return (type(self).__name__, tokenize(self.value))
 
     def __reduce__(self) -> str | tuple[Any, ...]:
@@ -837,14 +837,6 @@ class DependenciesMapping(MutableMapping):
 
     def __len__(self) -> int:
         return len(self.dsk)
-
-
-def get_deps(dsk):
-    # FIXME: I think we don't need this function
-    assert all(isinstance(v, GraphNode) for v in dsk.values())
-    dependencies = DependenciesMapping(dsk)
-    dependents = reverse_dict(dependencies)
-    return dependencies, dependents
 
 
 class _DevNullMapping(MutableMapping):

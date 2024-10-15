@@ -50,6 +50,7 @@ from collections import defaultdict, deque, namedtuple
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from typing import Any, Literal, NamedTuple, overload
 
+from dask._task_spec import DataNode, DependenciesMapping
 from dask.core import get_deps, getcycle, istask, reverse_dict
 from dask.typing import Key
 
@@ -104,7 +105,6 @@ def order(
         return {}
 
     dsk = dict(dsk)
-    from dask._task_spec import DataNode, DependenciesMapping
 
     dependencies = DependenciesMapping(dsk)
     dependents = reverse_dict(dependencies)

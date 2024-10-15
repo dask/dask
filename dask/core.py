@@ -4,6 +4,7 @@ from collections import defaultdict
 from collections.abc import Collection, Iterable, Mapping
 from typing import Any, Literal, TypeVar, cast, overload
 
+from dask._task_spec import DependenciesMapping
 from dask.typing import Graph, Key, NoDefault, no_default
 
 
@@ -418,7 +419,6 @@ def subs(task, key, val):
 
 
 def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
-    from dask._task_spec import DependenciesMapping
 
     # Stack-based depth-first search traversal.  This is based on Tarjan's
     # method for topological sorting (see wikipedia for pseudocode)
@@ -441,6 +441,7 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
     seen = set()
 
     if dependencies is None:
+
         dependencies = DependenciesMapping(dsk)
 
     for key in keys:
