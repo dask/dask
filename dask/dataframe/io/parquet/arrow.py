@@ -619,6 +619,7 @@ class ArrowDatasetEngine(Engine):
             pieces = [pieces]
 
         tables = []
+        empty_rows = 0
         multi_read = len(pieces) > 1
         for piece in pieces:
             if isinstance(piece, str):
@@ -650,6 +651,8 @@ class ArrowDatasetEngine(Engine):
                 **kwargs,
             )
             if multi_read:
+                if columns == []:
+                    empty_rows += len(arrow_table)
                 tables.append(arrow_table)
 
         if multi_read:
@@ -659,6 +662,10 @@ class ArrowDatasetEngine(Engine):
         df = cls._arrow_table_to_pandas(
             arrow_table, categories, dtype_backend=dtype_backend, **kwargs
         )
+
+        # Make up for lost rows in `pa.concat_tables`
+        if multi_read and columns == [] and empty_rows > 0 and len(df) == 0:
+            df = pd.DataFrame(index=pd.RangeIndex(start=0, stop=empty_rows))
 
         # For pyarrow.dataset api, need to convert partition columns
         # to categorigal manually for integer types.
