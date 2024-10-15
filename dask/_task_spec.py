@@ -576,7 +576,7 @@ def _get_dependencies(obj: object) -> set | frozenset:
         if not obj:
             return _no_deps
         return set().union(*map(_get_dependencies, obj.values()))
-    elif isinstance(obj, (list, tuple, frozenset, set)):
+    elif isinstance(obj, Iterable) and not isinstance(obj, str):
         if not obj:
             return _no_deps
         return set().union(*map(_get_dependencies, obj))
