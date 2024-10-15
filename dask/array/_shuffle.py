@@ -12,7 +12,7 @@ import numpy as np
 from dask import config
 from dask.array.chunk import getitem
 from dask.array.core import Array, unknown_chunk_message
-from dask.array.dispatch import concatenate_lookup
+from dask.array.dispatch import concatenate_lookup, take_lookup
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 
@@ -294,36 +294,10 @@ def _getitem(obj, index):
 
 
 def concatenate_arrays(arrs, sorter, axis):
-    try:
-        from scipy.sparse import spmatrix
-    except ImportError:
-
-        class spmatrix:
-            def __init__():
-                raise ImportError("scipy is required for sparse matrices")
-
-    try:
-        from cupyx.scipy.sparse import cp_spmatrix
-    except ImportError:
-
-        class cp_spmatrix:
-            def __init__():
-                raise ImportError("cupyx is required for sparse matrices")
-
     typ = type(arrs[0])
-
+    take = take_lookup.dispatch(typ)
     concatenate = concatenate_lookup.dispatch(typ)
-    idx = np.argsort(sorter[1])
-    array = concatenate(arrs, axis=axis)
-    if issubclass(typ, spmatrix | cp_spmatrix):
-        if axis not in {0, 1}:  # pragma: no cover
-            raise ValueError(
-                "Sparse matrices can only be concatenated along axis 0 or 1"
-            )
-        indexer = (slice(None), idx) if axis else (idx, slice(None))
-        return array[indexer]
-    else:
-        return np.take(array, idx, axis=axis)
+    return take(concatenate(arrs, axis=axis), np.argsort(sorter[1]), axis=axis)
 
 
 def convert_key(key, chunk, axis):
