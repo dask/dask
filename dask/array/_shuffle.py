@@ -297,12 +297,18 @@ def concatenate_arrays(arrs, sorter, axis):
     try:
         from scipy.sparse import spmatrix
     except ImportError:
-        spmatrix = None
+
+        class spmatrix:
+            def __init__():
+                raise ImportError("scipy is required for sparse matrices")
 
     try:
         from cupyx.scipy.sparse import cp_spmatrix
     except ImportError:
-        cp_spmatrix = None
+
+        class cp_spmatrix:
+            def __init__():
+                raise ImportError("cupyx is required for sparse matrices")
 
     typ = type(arrs[0])
 
