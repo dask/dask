@@ -4795,7 +4795,7 @@ def broadcast_shapes(*shapes):
         if np.isnan(sizes).any():
             dim = np.nan
         else:
-            dim = 0 if 0 in sizes else np.max(sizes)
+            dim = 0 if 0 in sizes else np.max(sizes).item()
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError(
                 "operands could not be broadcast together with "
