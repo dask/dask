@@ -294,10 +294,11 @@ def _getitem(obj, index):
 
 
 def concatenate_arrays(arrs, sorter, axis):
-    typ = type(arrs[0])
-    take = take_lookup.dispatch(typ)
-    concatenate = concatenate_lookup.dispatch(typ)
-    return take(concatenate(arrs, axis=axis), np.argsort(sorter[1]), axis=axis)
+    return take_lookup(
+        concatenate_lookup.dispatch(type(arrs[0]))(arrs, axis=axis),
+        np.argsort(sorter[1]),
+        axis=axis,
+    )
 
 
 def convert_key(key, chunk, axis):
