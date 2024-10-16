@@ -4905,6 +4905,30 @@ def test_dask_array_holds_scipy_sparse_containers():
     assert (zz == xx.T).all()
 
 
+@pytest.mark.parametrize(
+    "index",
+    [
+        [5, 8],
+        0,
+        slice(5, 8),
+        np.array([5, 8]),
+        np.array([True, False] * 500),
+        [True, False] * 500,
+    ],
+)
+@pytest.mark.parametrize("sparse_module_path", ["scipy.sparse", "cupyx.scipy.sparse"])
+def test_scipy_sparse_indexing(index, sparse_module_path):
+    sp = pytest.importorskip(sparse_module_path)
+    x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
+    x[x < 0.9] = 0
+    y = x.map_blocks(sp.csr_matrix)
+
+    assert not (
+        x[index, :].compute(scheduler="single-threaded")
+        != y[index, :].compute(scheduler="single-threaded")
+    ).sum()
+
+
 @pytest.mark.parametrize("axis", [0, 1])
 def test_scipy_sparse_concatenate(axis):
     pytest.importorskip("scipy.sparse")

@@ -14,6 +14,7 @@ from dask.array.dispatch import (
     nannumel_lookup,
     numel_lookup,
     percentile_lookup,
+    take_lookup,
     tensordot_lookup,
     to_cupy_dispatch,
     to_numpy_dispatch,
@@ -24,6 +25,7 @@ from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
+take_lookup.register((object, np.ndarray, np.ma.masked_array), np.take)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
 einsum_lookup.register((object, np.ndarray), np.einsum)
 empty_lookup.register((object, np.ndarray), np.empty)
@@ -123,6 +125,7 @@ def _tensordot(a, b, axes=2):
 
 @tensordot_lookup.register_lazy("cupy")
 @concatenate_lookup.register_lazy("cupy")
+@take_lookup.register_lazy("cupy")
 @nannumel_lookup.register_lazy("cupy")
 @numel_lookup.register_lazy("cupy")
 @to_numpy_dispatch.register_lazy("cupy")
@@ -130,6 +133,7 @@ def register_cupy():
     import cupy
 
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
+    take_lookup.register(cupy.ndarray, cupy.take)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
     percentile_lookup.register(cupy.ndarray, percentile)
     numel_lookup.register(cupy.ndarray, _numel_arraylike)
@@ -149,6 +153,13 @@ def register_cupy():
         kwargs.pop("casting", None)
         kwargs.pop("order", None)
         return cupy.einsum(*args, **kwargs)
+
+
+def sparse_take(array, idx, axis=0):
+    if axis not in {0, 1}:  # pragma: no cover
+        raise ValueError("Sparse matrices can only be concatenated along axis 0 or 1")
+    indexer = (slice(None), idx) if axis else (idx, slice(None))
+    return array[indexer]
 
 
 @tensordot_lookup.register_lazy("cupyx")
@@ -177,12 +188,14 @@ def register_cupyx():
 
     concatenate_lookup.register(spmatrix, _concat_cupy_sparse)
     tensordot_lookup.register(spmatrix, _tensordot_scipy_sparse)
+    take_lookup.register(spmatrix, sparse_take)
 
 
 @tensordot_lookup.register_lazy("sparse")
 @concatenate_lookup.register_lazy("sparse")
 @nannumel_lookup.register_lazy("sparse")
 @numel_lookup.register_lazy("sparse")
+@take_lookup.register_lazy("sparse")
 def register_sparse():
     import sparse
 
@@ -193,10 +206,12 @@ def register_sparse():
     # https://github.com/dask/dask/issues/7169
     numel_lookup.register(sparse.COO, _numel_ndarray)
     nannumel_lookup.register(sparse.COO, _nannumel_sparse)
+    take_lookup.register(sparse.COO, np.take)
 
 
 @tensordot_lookup.register_lazy("scipy")
 @concatenate_lookup.register_lazy("scipy")
+@take_lookup.register_lazy("scipy")
 def register_scipy_sparse():
     import scipy.sparse
 
@@ -214,6 +229,7 @@ def register_scipy_sparse():
 
     concatenate_lookup.register(scipy.sparse.spmatrix, _concatenate)
     tensordot_lookup.register(scipy.sparse.spmatrix, _tensordot_scipy_sparse)
+    take_lookup.register(scipy.sparse.spmatrix, sparse_take)
 
 
 def _tensordot_scipy_sparse(a, b, axes):

@@ -12,7 +12,7 @@ import numpy as np
 from dask import config
 from dask.array.chunk import getitem
 from dask.array.core import Array, unknown_chunk_message
-from dask.array.dispatch import concatenate_lookup
+from dask.array.dispatch import concatenate_lookup, take_lookup
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 
@@ -294,8 +294,11 @@ def _getitem(obj, index):
 
 
 def concatenate_arrays(arrs, sorter, axis):
-    concatenate = concatenate_lookup.dispatch(type(arrs[0]))
-    return np.take(concatenate(arrs, axis=axis), np.argsort(sorter[1]), axis=axis)
+    return take_lookup(
+        concatenate_lookup.dispatch(type(arrs[0]))(arrs, axis=axis),
+        np.argsort(sorter[1]),
+        axis=axis,
+    )
 
 
 def convert_key(key, chunk, axis):
