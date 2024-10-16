@@ -13,6 +13,7 @@ from dask._task_spec import (
     DependenciesMapping,
     Task,
     TaskRef,
+    _get_dependencies,
     convert_legacy_graph,
     convert_legacy_task,
     execute_graph,
@@ -360,6 +361,17 @@ def test_dependency_as_kwarg():
     # exception may be raised recursively
     assert t2.dependencies
     assert t2({"key-1": t1()}) == "ab3"
+
+
+def test_array_as_argument():
+    np = pytest.importorskip("numpy")
+    t = Task("key-1", func, np.array([1, 2]), "b")
+    assert t() == "[1 2]-b"
+
+    # This will **not** work since we do not want to recurse into an array!
+    t2 = Task("key-2", func, np.array([1, t.ref()]), "b")
+    assert t2({"key-1": "foo"}) != "[1 foo]-b"
+    assert not _get_dependencies(np.array([1, t.ref()]))
 
 
 def test_subgraph_callable():
