@@ -871,6 +871,8 @@ def test_broadcast_shapes():
     assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
     assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
 
+    assert all(isinstance(i, int) for i in broadcast_shapes((2, 5)))
+
     pytest.raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (1, np.nan)))
