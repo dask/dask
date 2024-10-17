@@ -142,6 +142,7 @@ filterwarnings = [
     'ignore:The current Dask DataFrame implementation is deprecated.*:DeprecationWarning',
     "ignore:Minimal version of pyarrow will soon be increased to 14.0.1",
     "ignore:You are using pyarrow version .* pyarrow-hotfix",
+    "ignore:The legacy Dask DataFrame implementation is deprecated.*:FutureWarning",
 ]
 xfail_strict = true
 # pytest-timeout settings

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import decimal
+import importlib
 import sys
 import warnings
 import weakref
@@ -6358,3 +6359,17 @@ def test_dataframe_into_delayed():
     result = delayed(delayed_func)(df)
     assert sum(map(len, result.dask.layers.values())) == 6
     result.compute()
+
+
+@pytest.mark.filterwarnings(
+    "error:The legacy Dask DataFrame implementation is deprecated.*:FutureWarning"
+)
+def test_import_raises_warning():
+    try:
+        import dask
+
+        with dask.config.set({"dataframe.query-planning": False}):
+            with pytest.raises(FutureWarning, match="The legacy"):
+                importlib.reload(dask.dataframe)
+    finally:
+        importlib.reload(dask.dataframe)
