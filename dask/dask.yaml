@@ -43,6 +43,9 @@ optimization:
     subgraphs: null  # true for dask.dataframe, false for everything else
     rename-keys: true
 
+delayed:
+  fuse: false
+
 admin:
   traceback:
     shorten:
