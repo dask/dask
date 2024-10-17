@@ -6373,7 +6373,7 @@ def test_import_raises_warning():
             with pytest.raises(FutureWarning, match="The legacy"):
                 importlib.reload(dask.dataframe)
     finally:
-        if PY_VERSION == Version("3.10"):
+        if PY_VERSION < Version("3.11"):
             # Build without dask-expr and config is False
             with pytest.raises(FutureWarning, match="The legacy"):
                 importlib.reload(dask.dataframe)
