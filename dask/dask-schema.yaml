@@ -245,12 +245,13 @@ properties:
               to create the new name is also accepted.
 
   delayed:
-    fuse:
-      type: boolean
-      description: |
-        Whether to fuse adjacent delayed calls together. This can be useful to ensure 
-        that an independent chain of delayed calls is executed in a single task to
-        reduce the memory footprint on a single worker.
+    properties:
+      fuse:
+        type: boolean
+        description: |
+          Whether to fuse adjacent delayed calls together. This can be useful to ensure 
+          that an independent chain of delayed calls is executed in a single task to
+          reduce the memory footprint on a single worker.
 
   admin:
     type: object
