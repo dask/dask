@@ -124,7 +124,8 @@ def test_avoid_broker_nodes(abcde):
     assert o[(a, 1)] < o[(b, 0)] or (o[(b, 1)] < o[(a, 0)] and o[(b, 2)] < o[(a, 0)])
 
 
-def test_base_of_reduce_preferred(abcde):
+@pytest.mark.parametrize("data_root", [True, False])
+def test_base_of_reduce_preferred(abcde, data_root):
     r"""
                a3
               /|
@@ -144,7 +145,10 @@ def test_base_of_reduce_preferred(abcde):
     dsk = {(a, i): (f, (a, i - 1), (b, i)) for i in [1, 2, 3]}
     dsk[(a, 0)] = (f, (b, 0))
     dsk.update({(b, i): (f, c, 1) for i in [0, 1, 2, 3]})
-    dsk[c] = 1
+    if data_root:
+        dsk[c] = 1
+    else:
+        dsk[c] = (f, 1)
 
     o = order(dsk)
     assert_topological_sort(dsk, o)
@@ -243,7 +247,13 @@ def test_deep_bases_win_over_dependents(abcde):
        e    d
     """
     a, b, c, d, e = abcde
-    dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1, e: 2}
+    dsk = {
+        a: (f, b, c, d),
+        b: (f, d, e),
+        c: (f, d),
+        d: (f, 1),
+        e: (f, 2),
+    }
 
     o = order(dsk)
     assert_topological_sort(dsk, o)
@@ -2651,3 +2661,14 @@ def test_stackstac():
         # Ensure that we're not processing the entire graph using
         # process_runnables (fractional values) but are using the critical path
         assert o[k].critical_path in {1, 2}
+
+
+def test_handle_out_of_graph_dependencies():
+    from dask._task_spec import Task
+
+    ta = Task("a", f, ())
+    tb = Task("b", f, (ta.ref(),))
+    tc = Task("c", f, (tb.ref(),))
+    dsk = {t.key: t for t in [tb, tc]}
+    o = order(dsk)
+    assert len(o) == 2

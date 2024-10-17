@@ -46,12 +46,12 @@ graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
 """
-import copy
 from collections import defaultdict, deque, namedtuple
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from typing import Any, Literal, NamedTuple, overload
 
-from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
+from dask._task_spec import DataNode, DependenciesMapping
+from dask.core import get_deps, getcycle, istask, reverse_dict
 from dask.typing import Key
 
 
@@ -105,20 +105,21 @@ def order(
         return {}
 
     dsk = dict(dsk)
-    expected_len = len(dsk)
 
-    if dependencies is None:
-        dependencies_are_copy = True
-        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
-    else:
-        # Below we're removing items from the sets in this dict
-        # We need a deepcopy for that but we only want to do this if necessary
-        # since this only happens for special cases.
-        dependencies_are_copy = False
-        dependencies = dict(dependencies)
-
+    dependencies = DependenciesMapping(dsk)
     dependents = reverse_dict(dependencies)
 
+    external_keys = set()
+    if len(dependents) != len(dependencies):
+        # There are external keys. Let's add a DataNode to ensure the algo below
+        # is encountering a complete graph. Those artificial data nodes will be
+        # ignored when assigning results
+        for k in dependents:
+            if k not in dependencies:
+                external_keys.add(k)
+                dsk[k] = DataNode(k, object())
+
+    expected_len = len(dsk)
     leaf_nodes = {k for k, v in dependents.items() if not v}
     root_nodes = {k for k, v in dependencies.items() if not v}
 
@@ -136,6 +137,7 @@ def order(
     all_tasks = False
     n_removed_leaves = 0
     requires_data_task = defaultdict(set)
+
     while not all_tasks:
         all_tasks = True
         for leaf in list(leaf_nodes):
@@ -156,29 +158,27 @@ def order(
                     result[leaf] = prio
                 n_removed_leaves += 1
                 leaf_nodes.remove(leaf)
-                del dsk[leaf]
-                del dependents[leaf]
                 for dep in dependencies[leaf]:
                     dependents[dep].remove(leaf)
                     if not dependents[dep]:
                         leaf_nodes.add(dep)
+                del dsk[leaf]
+                del dependencies[leaf]
+                del dependents[leaf]
 
         for root in list(root_nodes):
             if root in leaf_nodes:
                 continue
-            if not istask(dsk[root]) and len(dependents[root]) > 1:
-                if not dependencies_are_copy:
-                    dependencies_are_copy = True
-                    dependencies = copy.deepcopy(dependencies)
-                root_nodes.remove(root)
-                for dep in dependents[root]:
-                    requires_data_task[dep].add(root)
-                    dependencies[dep].remove(root)
-                    if not dependencies[dep]:
-                        root_nodes.add(dep)
+            deps_root = dependents[root]
+            if not istask(dsk[root]) and len(deps_root) > 1:
                 del dsk[root]
                 del dependencies[root]
+                root_nodes.remove(root)
                 del dependents[root]
+                for dep in deps_root:
+                    requires_data_task[dep].add(root)
+                    if not dependencies[dep]:
+                        root_nodes.add(dep)
 
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     if len(total_dependencies) != len(dsk):
@@ -242,16 +242,14 @@ def order(
 
             while requires_data_task[item]:
                 add_to_result(requires_data_task[item].pop())
-
             if return_stats:
                 result[item] = Order(i, crit_path_counter - _crit_path_counter_offset)
             else:
                 result[item] = i
-
+            if item not in external_keys:
+                i += 1
             if item in root_nodes:
                 processed_roots.add(item)
-
-            i += 1
             # Note: This is a `set` and therefore this introduces a certain
             # randomness. However, this randomness should not have any impact on
             # the final result since the `process_runnable` should produce
@@ -604,6 +602,8 @@ def order(
         process_runnables()
 
     assert len(result) == expected_len
+    for k in external_keys:
+        del result[k]
     return result  # type: ignore
 
 

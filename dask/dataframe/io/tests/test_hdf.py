@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+from functools import lru_cache
 from time import sleep
 
 import numpy as np
@@ -12,11 +13,12 @@ from packaging.version import Version
 import dask
 import dask.dataframe as dd
 from dask._compatibility import PY_VERSION
+from dask.core import get_deps
 from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
-from dask.utils import dependency_depth, tmpdir, tmpfile
+from dask.utils import tmpdir, tmpfile
 
 # there's no support in upstream for writing HDF with extension dtypes yet.
 # see https://github.com/pandas-dev/pandas/issues/31199
@@ -331,6 +333,20 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(fn, "/data", mode="a", append=False)
         out = dd.read_hdf(fn, "/data")
         assert_eq(dd.concat([df, df]), out)
+
+
+def dependency_depth(dsk):
+    deps, _ = get_deps(dsk)
+
+    @lru_cache(maxsize=None)
+    def max_depth_by_deps(key):
+        if not deps[key]:
+            return 1
+
+        d = 1 + max(max_depth_by_deps(dep_key) for dep_key in deps[key])
+        return d
+
+    return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
 
 
 def test_to_hdf_link_optimizations():

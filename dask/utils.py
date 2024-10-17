@@ -15,7 +15,7 @@ from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Set
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
-from functools import lru_cache, wraps
+from functools import wraps
 from importlib import import_module
 from numbers import Integral, Number
 from operator import add
@@ -26,7 +26,6 @@ from weakref import WeakValueDictionary
 import tlz as toolz
 
 from dask import config
-from dask.core import get_deps
 from dask.typing import no_default
 
 K = TypeVar("K")
@@ -1159,20 +1158,6 @@ def insert(tup, loc, val):
     L = list(tup)
     L[loc] = val
     return tuple(L)
-
-
-def dependency_depth(dsk):
-    deps, _ = get_deps(dsk)
-
-    @lru_cache(maxsize=None)
-    def max_depth_by_deps(key):
-        if not deps[key]:
-            return 1
-
-        d = 1 + max(max_depth_by_deps(dep_key) for dep_key in deps[key])
-        return d
-
-    return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
 
 
 def memory_repr(num):
