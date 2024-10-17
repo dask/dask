@@ -82,8 +82,6 @@ from contextlib import contextmanager
 from functools import partial
 from typing import Any, TypeVar, cast, overload
 
-from dask.base import tokenize
-from dask.core import reverse_dict
 from dask.sizeof import sizeof
 from dask.typing import Key as KeyType
 from dask.utils import is_namedtuple_instance
@@ -526,6 +524,8 @@ class DataNode(GraphNode):
         return f"DataNode({self.key}, type={self.typ}, {self.value})"
 
     def __dask_tokenize__(self):
+        from dask.base import tokenize
+
         return (type(self).__name__, tokenize(self.value))
 
     def __reduce__(self) -> str | tuple[Any, ...]:
@@ -809,48 +809,34 @@ class Task(GraphNode):
         return self._is_coro
 
 
-class DependenciesMapping(Mapping):
+class DependenciesMapping(MutableMapping):
     def __init__(self, dsk):
         self.dsk = dsk
-        self.blocklist = None
-        self.removed_keys = set()
+        self._removed = set()
 
     def __getitem__(self, key):
-        if key in self.removed_keys:
-            raise KeyError(key)
         v = self.dsk[key]
         if not isinstance(v, GraphNode):
             from dask.core import get_dependencies
 
-            return get_dependencies(self.dsk, task=self.dsk[key])
-        if self.blocklist and self.blocklist[key]:
-            return self.dsk[key].dependencies - self.blocklist[key]
-        return self.dsk[key].dependencies
+            deps = get_dependencies(self.dsk, task=self.dsk[key])
+        else:
+            deps = self.dsk[key].dependencies
+        if self._removed:
+            deps -= self._removed
+        return deps
 
     def __iter__(self):
         return iter(self.dsk)
 
-    def copy(self):
-        return DependenciesMapping(self.dsk)
+    def __delitem__(self, key: Any) -> None:
+        self._removed.add(key)
 
-    def __delitem__(self, key):
-        self.removed_keys.add(key)
-
-    def remove_dependency(self, key, dep):
-        if self.blocklist is None:
-            self.blocklist = defaultdict(set)
-        self.blocklist[key].add(dep)
+    def __setitem__(self, key: Any, value: Any) -> None:
+        raise NotImplementedError
 
     def __len__(self) -> int:
         return len(self.dsk)
-
-
-def get_deps(dsk):
-    # FIXME: I think we don't need this function
-    assert all(isinstance(v, GraphNode) for v in dsk.values())
-    dependencies = DependenciesMapping(dsk)
-    dependents = reverse_dict(dependencies)
-    return dependencies, dependents
 
 
 class _DevNullMapping(MutableMapping):
