@@ -15,7 +15,6 @@ from textwrap import dedent
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 from pandas.errors import PerformanceWarning
 from pandas.io.formats import format as pandas_format
 
@@ -24,7 +23,7 @@ import dask.array as da
 import dask.dataframe as dd
 import dask.dataframe.groupby
 from dask import delayed
-from dask._compatibility import PY_VERSION, WINDOWS
+from dask._compatibility import WINDOWS
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
@@ -6366,14 +6365,14 @@ def test_dataframe_into_delayed():
     "error:The legacy Dask DataFrame implementation is deprecated.*:FutureWarning"
 )
 def test_import_raises_warning():
-    try:
-        import dask
+    import dask
 
+    try:
         with dask.config.set({"dataframe.query-planning": False}):
             with pytest.raises(FutureWarning, match="The legacy"):
                 importlib.reload(dask.dataframe)
     finally:
-        if PY_VERSION < Version("3.11"):
+        if dask.config.get("dataframe.query-planning") is False:
             # Build without dask-expr and config is False
             with pytest.raises(FutureWarning, match="The legacy"):
                 importlib.reload(dask.dataframe)
