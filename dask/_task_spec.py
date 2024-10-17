@@ -407,7 +407,7 @@ _func_cache_reverse: MutableMapping = LRU(maxsize=1000)
 
 class GraphNode:
     key: KeyType
-    dependencies: set | frozenset
+    dependencies: frozenset
 
     __slots__ = tuple(__annotations__)
 
@@ -610,7 +610,7 @@ class Task(GraphNode):
         dependencies.update(_get_dependencies(self.args))
         dependencies.update(_get_dependencies(tuple(self.kwargs.values())))
         if dependencies:
-            self.dependencies = dependencies
+            self.dependencies = frozenset(dependencies)
         else:
             self.dependencies = _no_deps
         self._is_coro = None
