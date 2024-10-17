@@ -31,7 +31,7 @@ Releasing dask and distributed:
 
 *   Commit
 
-        git commit -a -m "bump version to YYYY.M.X"
+        git commit -a -m "Version YYYY.M.X"
 
 *   Tag commit
 

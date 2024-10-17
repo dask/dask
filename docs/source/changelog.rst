@@ -1,6 +1,39 @@
 Changelog
 =========
 
+.. note::
+
+    This is not exhaustive. For an exhaustive list of changes, see the git log.
+
+.. _v2024.10.0:
+
+2024.10.0
+---------
+
+Notable Changes
+^^^^^^^^^^^^^^^
+
+- Zarr-Python 3 compatibility  (:pr:`11388`)
+- Avoid exponentially increasing taskgraph in overlap (:pr:`11423`)
+- Ensure numba tokenization does not use slow pickle path (:pr:`11419`)
+
+.. dropdown:: Additional changes
+
+  - Ensure `broadcast_shapes()` returns integers, not NumPy scalars. (:pr:`11434`) `Martin Yeo`_
+  - (fix): sparse indexing (:pr:`11430`) `Ilan Gold`_
+  - Ensure that recursively calling tokenize respects ensure_deterministic (:pr:`11431`) `Florian Jetter`_
+  - Make P2P more configurable (:pr-distributed:`8469`) `Hendrik Makait`_
+  - Fit Dashboard worker table to page width (:pr-distributed:`8897`) `Jacob Tomlinson`_
+  - Raise helpful error when using the wrong plugin base classes (:pr-distributed:`8893`) `Jacob Tomlinson`_
+  - Fix url escaping on exceptions dashboard for non-string keys (:pr-distributed:`8891`) `Patrick Hoefler`_
+  - Add meaningful error for out of disk exception during write (:pr-distributed:`8886`) `Hendrik Makait`_
+  - Fix binary operations with scalar on the left (:pr-expr:`1150`) `Patrick Hoefler`_
+  - Raise exception when calculating divisons (:pr-expr:`1149`) `Patrick Hoefler`_
+  - Fix merge_asof for single partition (:pr-expr:`1145`) `Patrick Hoefler`_
+  - Improve handling of optional dependencies in `analyze` and `explain` (:pr-expr:`1146`) `Hendrik Makait`_
+  - Fix alignment issue with groupby index accessors (:pr-expr:`1142`) `Patrick Hoefler`_
+  - Fix displaying timestamp scalar (:pr-expr:`1141`) `Patrick Hoefler`_
+
 .. _v2024.9.1:
 
 2024.9.1
@@ -14,7 +47,7 @@ Improved adaptive scaling resilience
 Adaptive scaling clusters now recover from spurious errors during scaling.
 
 See :pr-distributed:`8871` by `Hendrik Makait`_ for more details.
-  
+
 .. dropdown:: Additional changes
 
   - Improve error message for incorrect columns order in meta information (:pr:`11393`) `Dmitry Balabka`_
@@ -95,7 +128,7 @@ To disable automatic selection, users can select their preferred method via the 
 
     import dask.config
     # Choose either "tasks" or "p2p"
-    dask.config.set({"array.rechunk.method": "tasks"}) 
+    dask.config.set({"array.rechunk.method": "tasks"})
 
 or when rechunking
 
@@ -103,10 +136,10 @@ or when rechunking
 
     import dask.array as da
     arr = da.random.random(size=(1000, 1000, 365), chunks=(-1, -1, "auto"))
-    # Choose either "tasks" or "p2p" 
+    # Choose either "tasks" or "p2p"
     arr = arr.rechunk(("auto", "auto", -1), method="tasks")
 
-See :pr:`11337` by `Hendrik Makait`_ for more details. 
+See :pr:`11337` by `Hendrik Makait`_ for more details.
 
 New shuffle API for Dask Arrays
 """""""""""""""""""""""""""""""
@@ -436,7 +469,7 @@ More resilient distributed lock
 :py:class:`distributed.Lock` is now resilient to worker failures.
 Previously deadlocks were possible in cases where a lock-holding worker
 was lost and/or failed to release the lock due to an error.
-  
+
 See :pr-distributed:`8770` by `Florian Jetter`_ for more details.
 
 .. dropdown:: Additional changes
@@ -486,7 +519,7 @@ is now the required minimum version to run Dask DataFrame.
 
 The mimimum version of ``partd`` was also raised to 1.4.0. Versions before 1.4
 are not compatible with ``pandas`` 2.
-  
+
 See :pr:`11199` by `Patrick Hoefler`_ for more details.
 
 Publish-subscribe APIs deprecated
@@ -8845,3 +8878,5 @@ Other
 .. _`David Stansby`: https://github.com/dstansby
 .. _`Mario Linker`: https://github.com/maldag
 .. _`Dmitry Balabka`: https://github.com/dbalabka
+.. _`Martin Yeo`: https://github.com/trexfeathers
+.. _`Ilan Gold`: https://github.com/ilan-gold
