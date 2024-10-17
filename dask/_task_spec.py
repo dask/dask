@@ -407,7 +407,7 @@ _func_cache_reverse: MutableMapping = LRU(maxsize=1000)
 
 class GraphNode:
     key: KeyType
-    dependencies: set | frozenset
+    _dependencies: frozenset
 
     __slots__ = tuple(__annotations__)
 
@@ -416,6 +416,10 @@ class GraphNode:
 
     def copy(self):
         raise NotImplementedError
+
+    @property
+    def dependencies(self) -> frozenset:
+        return self._dependencies
 
     def _verify_values(self, values: tuple | dict) -> None:
         if not self.dependencies:
@@ -442,7 +446,6 @@ _no_deps: frozenset = frozenset()
 
 class Alias(GraphNode):
     __weakref__: Any = None
-    _dependencies: set | None
     target: TaskRef
     __slots__ = tuple(__annotations__)
 
@@ -455,13 +458,7 @@ class Alias(GraphNode):
         if not isinstance(target, TaskRef):
             target = TaskRef(target)
         self.target = target
-        self._dependencies = None
-
-    @property
-    def dependencies(self):
-        if self._dependencies is None:
-            self._dependencies = {self.target.key}
-        return self._dependencies
+        self._dependencies = frozenset([target.key])
 
     def copy(self):
         return Alias(self.key, self.target)
@@ -509,7 +506,7 @@ class DataNode(GraphNode):
         self.key = key
         self.value = value
         self.typ = type(value)
-        self.dependencies = _no_deps
+        self._dependencies = _no_deps
 
     def inline(self, dsk) -> DataNode:
         return self
@@ -610,9 +607,9 @@ class Task(GraphNode):
         dependencies.update(_get_dependencies(self.args))
         dependencies.update(_get_dependencies(tuple(self.kwargs.values())))
         if dependencies:
-            self.dependencies = dependencies
+            self._dependencies = frozenset(dependencies)
         else:
-            self.dependencies = _no_deps
+            self._dependencies = _no_deps
         self._is_coro = None
         self._token = None
 
@@ -771,7 +768,7 @@ class Task(GraphNode):
     def __setstate__(self, state):
         self.key = state["key"]
         self.packed_func = state["packed_func"]
-        self.dependencies = state["dependencies"]
+        self._dependencies = state["dependencies"]
         self.kwargs = state["kwargs"]
         self.args = state["args"]
         self._is_coro = state["_is_coro"]
@@ -823,7 +820,9 @@ class DependenciesMapping(MutableMapping):
         else:
             deps = self.dsk[key].dependencies
         if self._removed:
-            deps -= self._removed
+            # deps is a frozenset but for good measure, let's not use -= since
+            # that _may_ perform an inplace mutation
+            deps = deps - self._removed
         return deps
 
     def __iter__(self):

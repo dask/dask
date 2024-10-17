@@ -762,3 +762,18 @@ def test_execute_tasks_in_graph():
 def test_deterministic_tokenization_respected():
     with pytest.raises(RuntimeError, match="deterministic"):
         tokenize(Task("key", func, object()), ensure_deterministic=True)
+
+
+def test_dependencies_mapping_doesnt_mutate_task():
+
+    t = Task("key", func, "a", "b")
+    t2 = Task("key2", func, "a", t.ref())
+
+    assert t2.dependencies == {"key"}
+
+    dsk = {t.key: t, t2.key: t2}
+    deps = DependenciesMapping(dsk)
+    del deps[t.key]
+    # The getitem is doing weird stuff and could mutate the task state
+    deps[t2.key]
+    assert t2.dependencies == {"key"}
