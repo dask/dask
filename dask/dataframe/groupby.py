@@ -1621,9 +1621,11 @@ class _GroupBy:
 
         cumpart_ext = cumpart_raw_frame.assign(
             **{
-                i: self.obj[i]
-                if np.isscalar(i) and i in getattr(self.obj, "columns", [])
-                else self.obj.index
+                i: (
+                    self.obj[i]
+                    if np.isscalar(i) and i in getattr(self.obj, "columns", [])
+                    else self.obj.index
+                )
                 for i in by
             }
         )
@@ -2033,9 +2035,11 @@ class _GroupBy:
     def var(self, ddof=1, split_every=None, split_out=1, numeric_only=no_default):
         levels = _determine_levels(self.by)
         result = aca(
-            [self.obj, self.by]
-            if not isinstance(self.by, list)
-            else [self.obj] + self.by,
+            (
+                [self.obj, self.by]
+                if not isinstance(self.by, list)
+                else [self.obj] + self.by
+            ),
             chunk=_var_chunk,
             aggregate=_var_agg,
             combine=_var_combine,
@@ -2114,9 +2118,11 @@ class _GroupBy:
                 self.obj = self.obj[sliced_plus]
 
         result = aca(
-            [self.obj, self.by]
-            if not isinstance(self.by, list)
-            else [self.obj] + self.by,
+            (
+                [self.obj, self.by]
+                if not isinstance(self.by, list)
+                else [self.obj] + self.by
+            ),
             chunk=_cov_chunk,
             aggregate=_cov_agg,
             combine=_cov_combine,
@@ -2995,9 +3001,11 @@ class SeriesGroupBy(_GroupBy):
             chunk = _nunique_series_chunk
 
         return aca(
-            [self.obj, self.by]
-            if not isinstance(self.by, list)
-            else [self.obj] + self.by,
+            (
+                [self.obj, self.by]
+                if not isinstance(self.by, list)
+                else [self.obj] + self.by
+            ),
             chunk=chunk,
             aggregate=_nunique_df_aggregate,
             combine=_nunique_df_combine,

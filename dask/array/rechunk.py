@@ -5,6 +5,7 @@ The rechunk module defines:
     rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
+
 from __future__ import annotations
 
 import heapq

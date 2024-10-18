@@ -140,3 +140,15 @@ def test_resize_other_dimensions():
     result = _rechunk_other_dimensions(arr, 4, 1, "auto")
     assert result.chunks == ((1, 1), (1,), (1, 1))
     assert_eq(arr, result)
+
+
+def test_dtype_taker(arr, darr):
+    indexer = [[1, 5, 6], [0, 3], [4, 2, 7]]
+    result = darr.shuffle(indexer, axis=1)
+    expected = arr[:, [1, 5, 6, 0, 3, 4, 2, 7]]
+    assert_eq(result, expected)
+    assert all(
+        v[1][1].dtype == np.uint8
+        for k, v in dict(result.dask).items()
+        if "shuffle-taker" in k
+    )

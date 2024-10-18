@@ -5523,7 +5523,6 @@ def test_broadcast():
     assert_eq(ddf - (ddf.sum() + 1), df - (df.sum() + 1))
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="array computation doesn't work yet")
 def test_scalar_with_array():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)

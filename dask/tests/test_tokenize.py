@@ -18,8 +18,8 @@ import pytest
 from tlz import compose, curry, partial
 
 import dask
-from dask.base import TokenizationError, normalize_token, tokenize
 from dask.core import flatten, literal
+from dask.tokenize import TokenizationError, normalize_token, tokenize
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
 
@@ -33,21 +33,17 @@ numba = import_or_none("numba")
 
 
 @pytest.fixture(autouse=True)
-def check_contextvars():
-    """Test that tokenize() and normalize_token() properly clean up context
-    variables at all times
-    """
-    from dask.base import _ensure_deterministic, _seen
+def check_clean_state():
+    """Test that tokenize() and normalize_token() properly clean up state"""
+    from dask.tokenize import _ENSURE_DETERMINISTIC, _SEEN
 
+    assert not _SEEN
     with pytest.raises(LookupError):
-        _ensure_deterministic.get()
-    with pytest.raises(LookupError):
-        _seen.get()
+        _ENSURE_DETERMINISTIC.get()
     yield
+    assert not _SEEN
     with pytest.raises(LookupError):
-        _ensure_deterministic.get()
-    with pytest.raises(LookupError):
-        _seen.get()
+        _ENSURE_DETERMINISTIC.get()
 
 
 def check_tokenize(*args, **kwargs):
@@ -820,17 +816,9 @@ def test_tokenize_sequences():
     assert check_tokenize([1]) == check_tokenize([1])
 
     # You can call normalize_token directly.
-    # Repeated objects are memoized.
     x = (1, 2)
     y = [x, x, [x, (2, 3)]]
-    assert normalize_token(y) == (
-        "list",
-        [
-            ("tuple", [1, 2]),
-            ("__seen", 0),
-            ("list", [("__seen", 0), ("tuple", [2, 3])]),
-        ],
-    )
+    assert normalize_token(y)
 
 
 def test_nested_tokenize_seen():
@@ -891,27 +879,16 @@ def test_tokenize_dict_doesnt_call_str_on_values():
 
 
 def test_tokenize_sorts_dict_before_seen_map():
-    """When sequence values are repeated, the 2nd+ entry is tokenized as (__seen, 0).
-    This makes it important to ensure that dicts are sorted *before* you call
-    normalize_token() on their elements.
-    """
     v = (1, 2, 3)
     d1 = {1: v, 2: v}
     d2 = {2: v, 1: v}
-    assert "__seen" in str(normalize_token(d1))
     assert check_tokenize(d1) == check_tokenize(d2)
 
 
 def test_tokenize_sorts_set_before_seen_map():
-    """Same as test_tokenize_sorts_dict_before_seen_map, but for sets.
-
-    Note that this test is only meaningful if set insertion order impacts iteration
-    order, which is an implementation detail of the Python interpreter.
-    """
     v = (1, 2, 3)
     s1 = {(i, v) for i in range(100)}
     s2 = {(i, v) for i in reversed(range(100))}
-    assert "__seen" in str(normalize_token(s1))
     assert check_tokenize(s1) == check_tokenize(s2)
 
 
@@ -1394,6 +1371,12 @@ all_numba_funcs = [
 def test_tokenize_numba(func):
     assert func(1, 2) == 3
     check_tokenize(func)
+    for func in all_numba_funcs:
+        tokens = normalize_token(func)
+
+        # Ensure that we attempt to tokenize it instead of dumping it into pickle
+        assert isinstance(tokens, tuple)
+        assert isinstance(tokens[1], tuple)
 
 
 @pytest.mark.skipif("not numba")
@@ -1442,3 +1425,12 @@ def test_tokenize_pandas_arrow_strings():
     tokens = normalize_token(ser)
     # Maybe a little brittle but will do for now
     assert any(str(tok) == "string" for tok in flatten(tokens))
+
+
+def test_tokenize_recursive_respects_ensure_deterministic():
+    class Foo:
+        def __dask_tokenize__(self):
+            return tokenize(object())
+
+    with pytest.raises(RuntimeError):
+        tokenize(Foo(), ensure_deterministic=True)

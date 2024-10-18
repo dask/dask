@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v4.6.0
     hooks:
       - id: end-of-file-fixer
       - id: debug-statements
@@ -15,29 +15,29 @@ repos:
       - id: isort
         language_version: python3
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.15.0
+    rev: v3.17.0
     hooks:
       - id: pyupgrade
         args:
           - --py310-plus
   - repo: https://github.com/psf/black
-    rev: 23.12.1
+    rev: 24.8.0
     hooks:
       - id: black
         language_version: python3
         args:
           - --target-version=py310
   - repo: https://github.com/pycqa/flake8
-    rev: 7.0.0
+    rev: 7.1.1
     hooks:
       - id: flake8
         language_version: python3
         additional_dependencies:
           # NOTE: autoupdate does not pick up flake8-bugbear since it is a transitive
           #  dependency. Make sure to update flake8-bugbear manually on a regular basis.
-          - flake8-bugbear==23.12.2
+          - flake8-bugbear==24.8.19
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.6
+    rev: v2.3.0
     hooks:
       -   id: codespell
           types_or: [rst, markdown]
@@ -48,7 +48,7 @@ repos:
     # pinned due to
     # https://github.com/python/typeshed/pull/9771 and
     # https://github.com/python/mypy/issues/15257 for DaskCollection.__dask_scheduler__
-    rev: v1.1.1
+    rev: v1.11.2
     hooks:
       - id: mypy
         # Override default --ignore-missing-imports

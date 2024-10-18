@@ -602,9 +602,6 @@ def test_series_groupby_errors():
         ss.groupby("x")  # dask should raise the same error
 
 
-@pytest.mark.xfail(
-    DASK_EXPR_ENABLED, reason="grouper does not have divisions and groupby aligns"
-)
 def test_groupby_index_array():
     df = _compat.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2324,8 +2321,9 @@ def test_df_groupby_idx_axis(func, axis):
     warn = None if DASK_EXPR_ENABLED else FutureWarning
 
     if axis in (1, "columns"):
-        with pytest.raises(NotImplementedError), pytest.warns(
-            warn, match="`axis` parameter is deprecated"
+        with (
+            pytest.raises(NotImplementedError),
+            pytest.warns(warn, match="`axis` parameter is deprecated"),
         ):
             getattr(ddf.groupby("group"), func)(axis=axis)
     else:

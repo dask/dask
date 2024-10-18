@@ -46,12 +46,12 @@ graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
 """
-import copy
 from collections import defaultdict, deque, namedtuple
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from typing import Any, Literal, NamedTuple, overload
 
-from dask.core import get_dependencies, get_deps, getcycle, istask, reverse_dict
+from dask._task_spec import DataNode, DependenciesMapping
+from dask.core import get_deps, getcycle, istask, reverse_dict
 from dask.typing import Key
 
 
@@ -66,8 +66,7 @@ def order(
     dependencies: Mapping[Key, set[Key]] | None = None,
     *,
     return_stats: Literal[True],
-) -> dict[Key, Order]:
-    ...
+) -> dict[Key, Order]: ...
 
 
 @overload
@@ -76,8 +75,7 @@ def order(
     dependencies: Mapping[Key, set[Key]] | None = None,
     *,
     return_stats: Literal[False] = False,
-) -> dict[Key, int]:
-    ...
+) -> dict[Key, int]: ...
 
 
 def order(
@@ -104,23 +102,24 @@ def order(
     {'a': 0, 'c': 1, 'b': 2, 'd': 3}
     """
     if not dsk:
-        return {}  # type: ignore
+        return {}
 
     dsk = dict(dsk)
-    expected_len = len(dsk)
 
-    if dependencies is None:
-        dependencies_are_copy = True
-        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
-    else:
-        # Below we're removing items from the sets in this dict
-        # We need a deepcopy for that but we only want to do this if necessary
-        # since this only happens for special cases.
-        dependencies_are_copy = False
-        dependencies = dict(dependencies)
-
+    dependencies = DependenciesMapping(dsk)
     dependents = reverse_dict(dependencies)
 
+    external_keys = set()
+    if len(dependents) != len(dependencies):
+        # There are external keys. Let's add a DataNode to ensure the algo below
+        # is encountering a complete graph. Those artificial data nodes will be
+        # ignored when assigning results
+        for k in dependents:
+            if k not in dependencies:
+                external_keys.add(k)
+                dsk[k] = DataNode(k, object())
+
+    expected_len = len(dsk)
     leaf_nodes = {k for k, v in dependents.items() if not v}
     root_nodes = {k for k, v in dependencies.items() if not v}
 
@@ -138,6 +137,7 @@ def order(
     all_tasks = False
     n_removed_leaves = 0
     requires_data_task = defaultdict(set)
+
     while not all_tasks:
         all_tasks = True
         for leaf in list(leaf_nodes):
@@ -158,29 +158,27 @@ def order(
                     result[leaf] = prio
                 n_removed_leaves += 1
                 leaf_nodes.remove(leaf)
-                del dsk[leaf]
-                del dependents[leaf]
                 for dep in dependencies[leaf]:
                     dependents[dep].remove(leaf)
                     if not dependents[dep]:
                         leaf_nodes.add(dep)
+                del dsk[leaf]
+                del dependencies[leaf]
+                del dependents[leaf]
 
         for root in list(root_nodes):
             if root in leaf_nodes:
                 continue
-            if not istask(dsk[root]) and len(dependents[root]) > 1:
-                if not dependencies_are_copy:
-                    dependencies_are_copy = True
-                    dependencies = copy.deepcopy(dependencies)
-                root_nodes.remove(root)
-                for dep in dependents[root]:
-                    requires_data_task[dep].add(root)
-                    dependencies[dep].remove(root)
-                    if not dependencies[dep]:
-                        root_nodes.add(dep)
+            deps_root = dependents[root]
+            if not istask(dsk[root]) and len(deps_root) > 1:
                 del dsk[root]
                 del dependencies[root]
+                root_nodes.remove(root)
                 del dependents[root]
+                for dep in deps_root:
+                    requires_data_task[dep].add(root)
+                    if not dependencies[dep]:
+                        root_nodes.add(dep)
 
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     if len(total_dependencies) != len(dsk):
@@ -244,16 +242,14 @@ def order(
 
             while requires_data_task[item]:
                 add_to_result(requires_data_task[item].pop())
-
             if return_stats:
                 result[item] = Order(i, crit_path_counter - _crit_path_counter_offset)
             else:
                 result[item] = i
-
+            if item not in external_keys:
+                i += 1
             if item in root_nodes:
                 processed_roots.add(item)
-
-            i += 1
             # Note: This is a `set` and therefore this introduces a certain
             # randomness. However, this randomness should not have any impact on
             # the final result since the `process_runnable` should produce
@@ -318,16 +314,17 @@ def order(
                     add_to_result(key)
                     continue
                 path = [key]
-                branches = deque([path])
+                branches = deque([(0, path)])
+
                 while branches:
-                    path = branches.popleft()
+                    nsplits, path = branches.popleft()
                     while True:
                         # Loop invariant. Too expensive to compute at runtime
                         # assert not set(known_runnable_paths).intersection(runnable_hull)
                         current = path[-1]
                         runnable_hull.add(current)
                         deps_downstream = dependents[current]
-                        deps_upstream = dependencies[current]  # type: ignore
+                        deps_upstream = dependencies[current]
                         if not deps_downstream:
                             # FIXME: The fact that it is possible for
                             # num_needed[current] == 0 means we're doing some
@@ -339,14 +336,15 @@ def order(
                                 runnable_hull.discard(current)
                         elif len(path) == 1 or len(deps_upstream) == 1:
                             if len(deps_downstream) > 1:
+                                nsplits += 1
                                 for d in sorted(deps_downstream, key=sort_key):
                                     # This ensures we're only considering splitters
                                     # that are genuinely splitting and not
                                     # interleaving
-                                    if len(dependencies[d]) == 1:  # type: ignore
+                                    if len(dependencies[d]) == 1:
                                         branch = path.copy()
                                         branch.append(d)
-                                        branches.append(branch)
+                                        branches.append((nsplits, branch))
                                 break
                             path.extend(deps_downstream)
                             continue
@@ -366,6 +364,13 @@ def order(
                                         pruned_branches
                                     )
                                 else:
+                                    if nsplits > 1:
+                                        path = []
+                                        for pruned in pruned_branches:
+                                            path.extend(pruned)
+                                        branches.append((nsplits - 1, path))
+                                        break
+
                                     while pruned_branches:
                                         path = pruned_branches.popleft()
                                         for k in path:
@@ -375,7 +380,7 @@ def order(
                                             add_to_result(k)
                         else:
                             if (
-                                len(dependencies[current]) > 1  # type: ignore
+                                len(dependencies[current]) > 1
                                 and num_needed[current] <= 1
                             ):
                                 for k in path:
@@ -597,12 +602,14 @@ def order(
         process_runnables()
 
     assert len(result) == expected_len
+    for k in external_keys:
+        del result[k]
     return result  # type: ignore
 
 
 def _connecting_to_roots(
     dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
-) -> tuple[dict[Key, set[Key]], dict[Key, int]]:
+) -> tuple[dict[Key, frozenset[Key]], dict[Key, int]]:
     """Determine for every node which root nodes are connected to it (i.e.
     ancestors). If arguments of dependencies and dependents are switched, this
     can also be used to determine which leaf nodes are connected to which node
@@ -627,47 +634,59 @@ def _connecting_to_roots(
             # benefit from the speedup of using integers would be to convert
             # this back on demand which makes the code very hard to read.
             roots.add(k)
-            result[k] = {k}
+            result[k] = frozenset({k})
             deps = dependents[k]
             max_dependents[k] = len(deps)
             for child in deps:
                 num_needed[child] -= 1
                 if not num_needed[child]:
                     current.append(child)
+
+    dedup_mapping: dict[frozenset[Key], frozenset[Key]] = {}
     while current:
         key = current.pop()
+        if key in result:
+            continue
         for parent in dependents[key]:
             num_needed[parent] -= 1
             if not num_needed[parent]:
                 current.append(parent)
         # At some point, all the roots are the same, particularly for dense
         # graphs. We don't want to create new sets over and over again
-        new_set = None
+        new_set: set | None = None
         identical_sets = True
-        result_first = None
+        result_first: frozenset | None = None
 
-        for child in dependencies[key]:
+        for child in sorted(
+            dependencies[key], key=lambda k: len(dependents[k]), reverse=True
+        ):
             r_child = result[child]
-            if not result_first:
+            if result_first is None:
                 result_first = r_child
                 max_dependents[key] = max_dependents[child]
             # This clause is written such that it can circuit break early
-            elif not (  # type: ignore[unreachable]
+            elif not (
                 identical_sets
                 and (result_first is r_child or r_child.issubset(result_first))
             ):
                 identical_sets = False
                 if not new_set:
-                    new_set = result_first.copy()
+                    new_set = set(result_first)
                 max_dependents[key] = max(max_dependents[child], max_dependents[key])
                 new_set.update(r_child)
 
-        assert new_set is not None or result_first is not None
-        result[key] = new_set or result_first
+        if new_set:
+            new_set_frozen = frozenset(new_set)
+            deduped = dedup_mapping.get(new_set_frozen, None)
+            if deduped is None:
+                dedup_mapping[new_set_frozen] = deduped = new_set_frozen
+            result[key] = deduped
+        else:
+            assert result_first is not None
+            result[key] = result_first
+    del dedup_mapping
 
-    # The order algo doesn't care about this but this makes it easier to
-    # understand and shouldn't take that much time
-    empty_set: set[Key] = set()
+    empty_set: frozenset[Key] = frozenset()
     for r in roots:
         result[r] = empty_set
     return result, max_dependents
@@ -794,8 +813,7 @@ def diagnostics(
     return rv, pressure
 
 
-def _f() -> None:
-    ...
+def _f() -> None: ...
 
 
 def _convert_task(task: Any) -> Any:

@@ -636,9 +636,11 @@ def concat_pandas(
             # converts series to dataframes with a single column named 0, then
             # concatenates.
             dfs3 = [
-                df
-                if isinstance(df, pd.DataFrame)
-                else df.to_frame().rename(columns={df.name: 0})
+                (
+                    df
+                    if isinstance(df, pd.DataFrame)
+                    else df.to_frame().rename(columns={df.name: 0})
+                )
                 for df in dfs2
             ]
             # pandas may raise a RuntimeWarning for comparing ints and strs

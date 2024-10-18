@@ -10,6 +10,7 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
+import itertools
 import math
 import operator
 import os
@@ -19,6 +20,7 @@ from io import StringIO
 from operator import add, sub
 from threading import Lock
 
+from packaging.version import Version
 from tlz import concat, merge
 from tlz.curried import identity
 
@@ -869,6 +871,10 @@ def test_broadcast_shapes():
     assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
     assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
     assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
+
+    assert all(
+        isinstance(i, int) for i in itertools.chain(*broadcast_shapes([(1, 2), (3, 1)]))
+    )
 
     pytest.raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
@@ -4598,15 +4604,17 @@ def test_read_zarr_chunks():
         assert arr.chunks == ((5, 4),)
 
 
-def test_zarr_pass_mapper():
-    pytest.importorskip("zarr")
-    import zarr.storage
+def test_zarr_pass_store():
+    zarr = pytest.importorskip("zarr")
 
     with tmpdir() as d:
-        mapper = zarr.storage.DirectoryStore(d)
+        if Version(zarr.__version__) < Version("3.0.0.a0"):
+            store = zarr.storage.DirectoryStore(d)
+        else:
+            store = zarr.storage.LocalStore(d, mode="w")
         a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(mapper)
-        a2 = da.from_zarr(mapper)
+        a.to_zarr(store)
+        a2 = da.from_zarr(store)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
 
@@ -4623,8 +4631,9 @@ def test_zarr_group():
         # second time is fine, group exists
         a.to_zarr(d, component="test2", overwrite=False)
         a.to_zarr(d, component="nested/test", overwrite=False)
-        group = zarr.open_group(d, mode="r")
-        assert list(group) == ["nested", "test", "test2"]
+
+        group = zarr.open_group(store=d, mode="r")
+        assert set(group) == {"nested", "test", "test2"}
         assert "test" in group["nested"]
 
         a2 = da.from_zarr(d, component="test")
@@ -4899,6 +4908,30 @@ def test_dask_array_holds_scipy_sparse_containers():
     zz = z.compute(scheduler="single-threaded")
     assert isinstance(zz, scipy.sparse.spmatrix)
     assert (zz == xx.T).all()
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        [5, 8],
+        0,
+        slice(5, 8),
+        np.array([5, 8]),
+        np.array([True, False] * 500),
+        [True, False] * 500,
+    ],
+)
+@pytest.mark.parametrize("sparse_module_path", ["scipy.sparse", "cupyx.scipy.sparse"])
+def test_scipy_sparse_indexing(index, sparse_module_path):
+    sp = pytest.importorskip(sparse_module_path)
+    x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
+    x[x < 0.9] = 0
+    y = x.map_blocks(sp.csr_matrix)
+
+    assert not (
+        x[index, :].compute(scheduler="single-threaded")
+        != y[index, :].compute(scheduler="single-threaded")
+    ).sum()
 
 
 @pytest.mark.parametrize("axis", [0, 1])
