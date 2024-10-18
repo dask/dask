@@ -1232,7 +1232,7 @@ def _finalize_mean(df, sum_column, count_column):
 
 
 def _adjust_for_arrow_na(result, df, check_for_isna=False):
-    if PANDAS_GE_150 and isinstance(result.dtype, pd.ArrowDtype):
+    if isinstance(result.dtype, pd.ArrowDtype):
         # Our mean computation results in np.nan here but pandas doesn't
         if check_for_isna:
             result[df.isna()] = pd.NA
