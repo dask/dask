@@ -3768,7 +3768,16 @@ def test_agg_pyarrow_casts():
     )
 
     ddf = dd.from_pandas(df, npartitions=2)
+    if PANDAS_GE_220:
+        # np.sqrt doesn't work before 2.2
+        additional_aggs = {"z": ("z", "std")}
+    else:
+        additional_aggs = {}
 
-    result = ddf.groupby("group").agg(x=("y", "var"), y=("y", "mean"), z=("y", "std"))
-    expected = df.groupby("group").agg(x=("y", "var"), y=("y", "mean"), z=("y", "std"))
+    result = ddf.groupby("group").agg(
+        x=("y", "var"), y=("y", "mean"), **additional_aggs
+    )
+    expected = df.groupby("group").agg(
+        x=("y", "var"), y=("y", "mean"), **additional_aggs
+    )
     assert_eq(result, expected)
