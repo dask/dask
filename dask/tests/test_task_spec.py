@@ -766,12 +766,17 @@ def test_deterministic_tokenization_respected():
 
 def test_keys_in_tasks():
     b = Task("b", func, "1", "2")
+    b_legacy = Task("b", func, "1", "2")
+
     a = Task("a", func, "1", b.ref())
+    a_legacy = (func, "1", "b")
 
-    assert keys_in_tasks({"a"}, [a]) == {"a"}
+    for task in [a, a_legacy]:
+        assert not keys_in_tasks({"a"}, [task])
 
-    assert keys_in_tasks({"a"}, [a, b]) == {"a"}
+        assert keys_in_tasks({"a", "b"}, [task]) == {"b"}
 
-    assert keys_in_tasks({"a", "b"}, [a]) == {"a", "b"}
+        assert keys_in_tasks({"a", "b", "c"}, [task]) == {"b"}
 
-    assert keys_in_tasks({"a", "b", "c"}, [a]) == {"a", "b"}
+    for tasks in [[a, b], [a_legacy, b_legacy]]:
+        assert keys_in_tasks({"a", "b"}, tasks) == {"b"}

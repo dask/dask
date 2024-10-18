@@ -199,7 +199,6 @@ def keys_in_tasks(keys: Collection[Key], tasks: Iterable[Any], as_list: bool = F
             elif typ is dict:
                 work.extend(w.values())
             elif isinstance(w, GraphNode):
-                work.append(w.key)
                 work.extend(w.dependencies)
             else:
                 try:
