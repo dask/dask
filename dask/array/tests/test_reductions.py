@@ -908,3 +908,10 @@ def test_weighted_reduction():
     # Non-broadcastable weights (too many dims)
     with pytest.raises(ValueError):
         da.reduction(dx, w_sum, np.sum, weights=[[[2]]])
+
+
+def test_cumreduction_no_rechunk_on_1d_array():
+    x = da.ones((5,))
+    y = da.cumsum(x)
+    no_rechunk = "rechunk" not in str(dict(y.__dask_graph__()))
+    assert no_rechunk
