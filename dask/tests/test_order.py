@@ -256,6 +256,7 @@ def _rechunk_merge_graph():
 
 def test_visualize_int_overflow():
     pytest.importorskip("graphviz")
+    pytest.importorskip("matplotlib")
     # regression test for https://github.com/dask/dask/pull/11440
     visualize(_rechunk_merge_graph())
 
