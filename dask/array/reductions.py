@@ -1538,7 +1538,8 @@ def cumreduction(
         )
 
     if axis is None:
-        x = x.flatten().rechunk(chunks=x.npartitions)
+        if x.ndim > 1:
+            x = x.flatten().rechunk(chunks=x.npartitions)
         axis = 0
     if dtype is None:
         dtype = getattr(func(np.ones((0,), dtype=x.dtype)), "dtype", object)
