@@ -9,6 +9,7 @@ from __future__ import annotations
 from dask.utils import Dispatch
 
 concatenate_lookup = Dispatch("concatenate")
+take_lookup = Dispatch("take")
 tensordot_lookup = Dispatch("tensordot")
 einsum_lookup = Dispatch("einsum")
 empty_lookup = Dispatch("empty")

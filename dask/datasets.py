@@ -11,7 +11,7 @@ def timeseries(
     start="2000-01-01",
     end="2000-01-31",
     freq="1s",
-    partition_freq="1d",
+    partition_freq="1D",
     dtypes=None,
     seed=None,
     **kwargs,

@@ -52,7 +52,6 @@ jobs:
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v3.0.4
         with:
-          miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
@@ -80,7 +79,7 @@ jobs:
           && github.event_name != 'pull_request'
           && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: xarray-contrib/issue-from-pytest-log@v1.2.8
+        uses: xarray-contrib/issue-from-pytest-log@v1.3.0
         with:
           log-path: output-log.jsonl
           issue-title: ⚠️ Upstream CI failed ⚠️

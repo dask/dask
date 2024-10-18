@@ -128,6 +128,7 @@ Dask-Array compute-based dispatch functions (as defined in ``dask.array.dispatch
    - numel_lookup
    - percentile_lookup
    - tensordot_lookup
+   - take_lookup
 
 Dask-Dataframe compute-based dispatch functions (as defined in ``dask.dataframe.dispatch``, and defined for Pandas in ``dask.dataframe.backends``):
 

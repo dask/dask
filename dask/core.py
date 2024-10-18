@@ -4,6 +4,7 @@ from collections import defaultdict
 from collections.abc import Collection, Iterable, Mapping
 from typing import Any, Literal, TypeVar, cast, overload
 
+from dask._task_spec import DependenciesMapping
 from dask.typing import Graph, Key, NoDefault, no_default
 
 
@@ -43,6 +44,12 @@ def istask(x):
     >>> istask(1)
     False
     """
+    from dask._task_spec import DataNode, GraphNode
+
+    if isinstance(x, GraphNode):
+        if isinstance(x, DataNode):
+            return False
+        return True
     return type(x) is tuple and x and callable(x[0])
 
 
@@ -178,7 +185,9 @@ def keys_in_tasks(keys: Collection[Key], tasks: Iterable[Any], as_list: bool = F
     >>> keys_in_tasks(dsk, ['x', 'y', 'j'])  # doctest: +SKIP
     {'x', 'y'}
     """
-    ret = []
+    from dask._task_spec import GraphNode
+
+    ret: list[Key] = []
     while tasks:
         work = []
         for w in tasks:
@@ -189,6 +198,8 @@ def keys_in_tasks(keys: Collection[Key], tasks: Iterable[Any], as_list: bool = F
                 work.extend(w)
             elif typ is dict:
                 work.extend(w.values())
+            elif isinstance(w, GraphNode):
+                work.extend(w.dependencies)
             else:
                 try:
                     if w in keys:
@@ -246,8 +257,7 @@ def get_dependencies(
     key: Key | None = ...,
     task: Key | NoDefault = ...,
     as_list: Literal[False] = ...,
-) -> set[Key]:
-    ...
+) -> set[Key]: ...
 
 
 @overload
@@ -256,8 +266,7 @@ def get_dependencies(
     key: Key | None,
     task: Key | NoDefault,
     as_list: Literal[True],
-) -> list[Key]:
-    ...
+) -> list[Key]: ...
 
 
 def get_dependencies(
@@ -410,6 +419,7 @@ def subs(task, key, val):
 
 
 def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
+
     # Stack-based depth-first search traversal.  This is based on Tarjan's
     # method for topological sorting (see wikipedia for pseudocode)
     if keys is None:
@@ -431,7 +441,8 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
     seen = set()
 
     if dependencies is None:
-        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+
+        dependencies = DependenciesMapping(dsk)
 
     for key in keys:
         if key in completed:

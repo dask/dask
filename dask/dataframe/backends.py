@@ -282,7 +282,7 @@ def make_meta_object(x, index=None):
     >>> make_meta_object(('a', 'f8'))
     Series([], Name: a, dtype: float64)
     >>> make_meta_object('i8')
-    1
+    np.int64(1)
     """
 
     if is_arraylike(x) and x.shape:
@@ -371,7 +371,12 @@ def _nonempty_index(idx):
         # `self.monotonic_increasing` or `self.monotonic_decreasing`
         try:
             return pd.date_range(
-                start=start, periods=2, freq=idx.freq, tz=idx.tz, name=idx.name
+                start=start,
+                periods=2,
+                freq=idx.freq,
+                tz=idx.tz,
+                name=idx.name,
+                unit=idx.unit,
             )
         except ValueError:  # older pandas versions
             data = [start, "1970-01-02"] if idx.freq is None else None
@@ -436,7 +441,7 @@ def _nonempty_series(s, idx=None):
         data = [s.iloc[0]] * 2
     elif isinstance(dtype, pd.DatetimeTZDtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
-        data = [entry, entry]
+        data = pd.array([entry, entry], dtype=dtype)
     elif isinstance(dtype, pd.CategoricalDtype):
         if len(s.cat.categories):
             data = [s.cat.categories[0]] * 2
@@ -631,9 +636,11 @@ def concat_pandas(
             # converts series to dataframes with a single column named 0, then
             # concatenates.
             dfs3 = [
-                df
-                if isinstance(df, pd.DataFrame)
-                else df.to_frame().rename(columns={df.name: 0})
+                (
+                    df
+                    if isinstance(df, pd.DataFrame)
+                    else df.to_frame().rename(columns={df.name: 0})
+                )
                 for df in dfs2
             ]
             # pandas may raise a RuntimeWarning for comparing ints and strs
@@ -734,6 +741,8 @@ def get_grouper_pandas(obj):
 
 @percentile_lookup.register((pd.Series, pd.Index))
 def percentile(a, q, interpolation="linear"):
+    if isinstance(a.dtype, pd.ArrowDtype):
+        a = a.to_numpy()
     return _percentile(a, q, interpolation)
 
 

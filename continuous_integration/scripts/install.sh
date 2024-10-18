@@ -11,7 +11,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
     mamba uninstall --force bokeh
     mamba install -y -c bokeh/label/dev bokeh
 
-    mamba uninstall --force pyarrow
+    mamba uninstall --force pyarrow pyarrow-core
     python -m pip install --no-deps \
         --extra-index-url https://pypi.fury.io/arrow-nightlies/ \
         --prefer-binary --pre pyarrow

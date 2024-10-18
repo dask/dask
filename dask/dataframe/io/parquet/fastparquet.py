@@ -10,7 +10,7 @@ from contextlib import ExitStack
 import numpy as np
 import pandas as pd
 import tlz as toolz
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 from dask.core import flatten
 from dask.dataframe._compat import PANDAS_GE_201
@@ -1114,7 +1114,7 @@ class FastParquetEngine(Engine):
         size = sum(rg.num_rows for rg in rgs)
         df, views = pf.pre_allocate(size, columns, categories, index)
         if (
-            parse_version(fastparquet.__version__) <= parse_version("2023.02.0")
+            Version(fastparquet.__version__) <= Version("2023.02.0")
             and PANDAS_GE_201
             and df.columns.empty
         ):
@@ -1327,7 +1327,7 @@ class FastParquetEngine(Engine):
             rgs = []
         elif partition_on:
             mkdirs = lambda x: fs.mkdirs(x, exist_ok=True)
-            if parse_version(fastparquet.__version__) >= parse_version("0.1.4"):
+            if Version(fastparquet.__version__) >= Version("0.1.4"):
                 rgs = partition_on_columns(
                     df, partition_on, path, filename, fmd, compression, fs.open, mkdirs
                 )

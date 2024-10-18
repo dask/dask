@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from dask.callbacks import Callback
 from dask.local import get_sync
 from dask.threaded import get as get_threaded
@@ -67,11 +69,9 @@ def test_finish_always_called():
 
     dsk = {"x": (raise_keyboard,)}
     flag[0] = False
-    try:
+    with pytest.raises(KeyboardInterrupt):
         with MyCallback():
             get_sync(dsk, "x")
-    except BaseException as e:
-        assert isinstance(e, KeyboardInterrupt)
     assert flag[0]
 
 

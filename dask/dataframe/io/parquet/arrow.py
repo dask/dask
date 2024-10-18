@@ -21,7 +21,6 @@ from pyarrow import dataset as pa_ds
 from pyarrow import fs as pa_fs
 
 import dask
-from dask.base import normalize_token, tokenize
 from dask.core import flatten
 from dask.dataframe._compat import PANDAS_GE_220
 from dask.dataframe.backends import pyarrow_schema_dispatch
@@ -39,6 +38,7 @@ from dask.dataframe.io.parquet.utils import (
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
 from dask.dataframe.utils import clear_known_categories, pyarrow_strings_enabled
 from dask.delayed import Delayed
+from dask.tokenize import normalize_token, tokenize
 from dask.utils import getargspec, natural_sort_key
 
 PYARROW_NULLABLE_DTYPE_MAPPING = {

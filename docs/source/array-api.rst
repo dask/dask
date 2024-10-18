@@ -197,6 +197,7 @@ Top level functions
    remainder
    repeat
    reshape
+   reshape_blockwise
    result_type
    right_shift
    rint
@@ -207,6 +208,7 @@ Top level functions
    searchsorted
    select
    shape
+   shuffle
    sign
    signbit
    sin
@@ -300,6 +302,7 @@ Array
    Array.reshape
    Array.round
    Array.shape
+   Array.shuffle
    Array.size
    Array.squeeze
    Array.std

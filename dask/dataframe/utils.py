@@ -21,7 +21,7 @@ from dask.dataframe import (  # noqa: F401 register pandas extension types
     _dtypes,
     methods,
 )
-from dask.dataframe._compat import PANDAS_GE_150, tm  # noqa: F401
+from dask.dataframe._compat import tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
     is_categorical_dtype_dispatch,
     make_meta,
@@ -145,13 +145,11 @@ T = TypeVar("T", bound=Callable)
 
 
 @overload
-def insert_meta_param_description(func: T) -> T:
-    ...
+def insert_meta_param_description(func: T) -> T: ...
 
 
 @overload
-def insert_meta_param_description(pad: int) -> Callable[[T], T]:
-    ...
+def insert_meta_param_description(pad: int) -> Callable[[T], T]: ...
 
 
 def insert_meta_param_description(*args, **kwargs):
@@ -436,10 +434,14 @@ def check_matching_columns(meta, actual):
         if extra or missing:
             extra_info = f"  Extra:   {extra}\n  Missing: {missing}"
         else:
-            extra_info = "Order of columns does not match"
+            extra_info = (
+                f"Order of columns does not match."
+                f"\nActual:   {actual.columns.tolist()}"
+                f"\nExpected: {meta.columns.tolist()}"
+            )
         raise ValueError(
             "The columns in the computed data do not match"
-            " the columns in the provided metadata\n"
+            " the columns in the provided metadata.\n"
             f"{extra_info}"
         )
 
@@ -849,7 +851,7 @@ def get_numeric_only_kwargs(numeric_only: bool | NoDefault) -> dict:
 
 
 def check_numeric_only_valid(numeric_only: bool | NoDefault, name: str) -> dict:
-    if PANDAS_GE_150 and numeric_only is not no_default:
+    if numeric_only is not no_default:
         return {"numeric_only": numeric_only}
     elif numeric_only is no_default:
         return {}
