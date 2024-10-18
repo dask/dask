@@ -3770,7 +3770,7 @@ def test_agg_pyarrow_casts():
     ddf = dd.from_pandas(df, npartitions=2)
     if PANDAS_GE_220:
         # np.sqrt doesn't work before 2.2
-        additional_aggs = {"z": ("z", "std")}
+        additional_aggs = {"z": ("y", "std")}
     else:
         additional_aggs = {}
 
