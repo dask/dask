@@ -21,7 +21,7 @@ from dask._task_spec import (
     resolve_aliases,
 )
 from dask.base import tokenize
-from dask.core import reverse_dict
+from dask.core import keys_in_tasks, reverse_dict
 from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
 
@@ -762,3 +762,16 @@ def test_execute_tasks_in_graph():
 def test_deterministic_tokenization_respected():
     with pytest.raises(RuntimeError, match="deterministic"):
         tokenize(Task("key", func, object()), ensure_deterministic=True)
+
+
+def test_keys_in_tasks():
+    b = Task("b", func, "1", "2")
+    a = Task("a", func, "1", b.ref())
+
+    assert keys_in_tasks({"a"}, [a]) == {"a"}
+
+    assert keys_in_tasks({"a"}, [a, b]) == {"a"}
+
+    assert keys_in_tasks({"a", "b"}, [a]) == {"a", "b"}
+
+    assert keys_in_tasks({"a", "b", "c"}, [a]) == {"a", "b"}
