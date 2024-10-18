@@ -858,12 +858,11 @@ def visualize_dsk(
             for k, v in values.items()
         }
         if data_values is None:
-            data_values = values
             data_colors = colors
         else:
             data_colors = {
-                k: _colorize(cmap(v / maxval, bytes=True))
-                for k, v in data_values.items()
+                k: _colorize(tuple(map(int, cmap(v / maxval, bytes=True))))
+                for k, v in values.items()
             }
 
         kwargs["function_attributes"] = {

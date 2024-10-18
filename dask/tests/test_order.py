@@ -2311,6 +2311,9 @@ def test_xarray_rechunk_map_reduce_cohorts(use_longest_path):
     # before we repeat this for the next independent branch
     assert all_diffs == [10, 39, 10]
 
+    # regression test for https://github.com/dask/dask/pull/11440
+    visualize(dsk)
+
 
 def test_xarray_8414():
     # https://github.com/pydata/xarray/issues/8414#issuecomment-1793860552
