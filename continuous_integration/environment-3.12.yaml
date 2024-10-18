@@ -71,6 +71,7 @@ dependencies:
   - python-xxhash
   - mmh3
   - jinja2
+  - matplotlib  # visualize test
   - pip
   - pip:
     - git+https://github.com/dask/distributed
