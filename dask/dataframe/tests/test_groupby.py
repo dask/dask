@@ -3759,8 +3759,6 @@ def test_groupby_value_counts_all_na_partitions():
 
 def test_agg_pyarrow_casts():
     pytest.importorskip("pyarrow")
-    if not PANDAS_GE_150:
-        pytest.skip("arrow dtypes not supported")
     df = pd.DataFrame(
         {
             "x": range(15),
