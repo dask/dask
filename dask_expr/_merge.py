@@ -254,13 +254,18 @@ class Merge(Expr):
                 self.broadcast_side == "left"
                 and set(self.right._meta.index.names) == meta_index_names
             ):
-                return self._bcast_right._divisions()
+                if self.right_index:
+                    return self._bcast_right.divisions
+                _npartitions = self._bcast_right.npartitions
             elif (
                 self.broadcast_side == "right"
                 and set(self.left._meta.index.names) == meta_index_names
             ):
-                return self._bcast_left._divisions()
-            _npartitions = max(self.left.npartitions, self.right.npartitions)
+                if self.left_index:
+                    return self._bcast_left.divisions
+                _npartitions = self._bcast_left.npartitions
+            else:
+                _npartitions = max(self.left.npartitions, self.right.npartitions)
 
         else:
             _npartitions = self._npartitions
@@ -282,7 +287,7 @@ class Merge(Expr):
 
         s_method = self.shuffle_method or get_default_shuffle_method()
         if (
-            s_method in ("tasks", "p2p")
+            s_method in ("disk", "tasks", "p2p")
             and self.how in ("inner", "left", "right", "leftsemi")
             and self.how != broadcast_side
             and broadcast is not False
@@ -718,8 +723,14 @@ class BroadcastJoin(Merge, PartitionsFiltered):
 
     def _divisions(self):
         if self.broadcast_side == "left":
-            return self.right._divisions()
-        return self.left._divisions()
+            if self.right_index:
+                return self.right.divisions
+            npartitions = self.right.npartitions
+        else:
+            if self.left_index:
+                return self.left.divisions
+            npartitions = self.left.npartitions
+        return (None,) * (npartitions + 1)
 
     def _simplify_up(self, parent, dependents):
         return
