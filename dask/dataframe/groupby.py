@@ -1241,7 +1241,9 @@ def _adjust_for_arrow_na(result, df, check_for_isna=False):
     return result
 
 
-def _finalize_var(df, count_column, sum_column, sum2_column, **kwargs):
+def _finalize_var(
+    df, count_column, sum_column, sum2_column, adjust_arrow=True, **kwargs
+):
     # arguments are being checked when building the finalizer. As of this moment,
     # we're only using ddof, and raising an error on other keyword args.
     ddof = kwargs.get("ddof", 1)
@@ -1254,11 +1256,16 @@ def _finalize_var(df, count_column, sum_column, sum2_column, **kwargs):
     div[div < 0] = 0
     result /= div
     result[(n - ddof) == 0] = np.nan
-    return _adjust_for_arrow_na(result, div)
+    if adjust_arrow:
+        return _adjust_for_arrow_na(result, div)
+    else:
+        return result
 
 
 def _finalize_std(df, count_column, sum_column, sum2_column, **kwargs):
-    result = _finalize_var(df, count_column, sum_column, sum2_column, **kwargs)
+    result = _finalize_var(
+        df, count_column, sum_column, sum2_column, adjust_arrow=False, **kwargs
+    )
     res = np.sqrt(result)
     if res.dtype != result.dtype:
         res = res.astype(result.dtype)
