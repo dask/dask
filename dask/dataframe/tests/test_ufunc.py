@@ -4,6 +4,8 @@ import warnings
 
 import pytest
 
+from dask.array.numpy_compat import NUMPY_GE_200
+
 pd = pytest.importorskip("pandas")
 
 import numpy as np
@@ -518,6 +520,14 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
 
     np_redfunc = getattr(np, redfunc)
     np_ufunc = getattr(np, ufunc)
+
+    if (
+        NUMPY_GE_200
+        and redfunc == "prod"
+        and ufunc in ("floor", "ceil", "trunc")
+        and isinstance(pandas, pd.DataFrame)
+    ):
+        pytest.skip("Numpy started overflowing while we are casting to float")
 
     if (
         redfunc == "prod"

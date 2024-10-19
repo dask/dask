@@ -11,20 +11,21 @@ from packaging.version import Version
 from dask.utils import derived_from
 
 _np_version = Version(np.__version__)
-NUMPY_GE_122 = _np_version.release >= (1, 22)
-NUMPY_GE_123 = _np_version.release >= (1, 23)
-NUMPY_GE_124 = _np_version.release >= (1, 24)
 NUMPY_GE_125 = _np_version.release >= (1, 25)
 NUMPY_GE_200 = _np_version.release >= (2, 0)
+NUMPY_GE_210 = _np_version.release >= (2, 1)
 
 
 if NUMPY_GE_200:
     from numpy.exceptions import AxisError, ComplexWarning  # noqa: F401
     from numpy.lib.array_utils import normalize_axis_index, normalize_axis_tuple
 else:
-    from numpy import AxisError, ComplexWarning  # noqa: F401
-    from numpy.core.numeric import normalize_axis_index  # type: ignore[attr-defined]
-    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[attr-defined]
+    from numpy import (  # type: ignore[no-redef, attr-defined] # noqa: F401
+        AxisError,
+        ComplexWarning,
+    )
+    from numpy.core.numeric import normalize_axis_index  # type: ignore[no-redef]
+    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[no-redef]
 
 
 # Taken from scikit-learn:
@@ -184,11 +185,3 @@ def rollaxis(a, axis, start=0):
     axes.remove(axis)
     axes.insert(start, axis)
     return a.transpose(axes)
-
-
-# kwarg is renamed in numpy 1.22.0
-def percentile(a, q, method="linear"):
-    if NUMPY_GE_122:
-        return np.percentile(a, q, method=method)
-    else:
-        return np.percentile(a, q, interpolation=method)

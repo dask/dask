@@ -211,17 +211,11 @@ def visualize(
             f.x_range = top.x_range
             f.title = None
             f.min_border_top = 20
-            if BOKEH_VERSION().major < 3:
-                f.plot_height -= 30
-            else:
-                f.height -= 30
+            f.height -= 30
         for f in figs[:-1]:
             f.xaxis.axis_label = None
             f.min_border_bottom = 20
-            if BOKEH_VERSION().major < 3:
-                f.plot_height -= 30
-            else:
-                f.height -= 30
+            f.height -= 30
         for f in figs:
             f.min_border_left = 75
             f.min_border_right = 75

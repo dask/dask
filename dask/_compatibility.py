@@ -16,6 +16,10 @@ PY_VERSION = Version(".".join(map(str, sys.version_info[:3])))
 
 EMSCRIPTEN = sys.platform == "emscripten"
 
+LINUX = sys.platform == "linux"
+MACOS = sys.platform == "darwin"
+WINDOWS = sys.platform == "win32"
+
 
 def entry_points(group=None):
     warnings.warn(
@@ -30,7 +34,7 @@ def entry_points(group=None):
 VERSIONS = {
     "numpy": "1.21.0",
     "pandas": "2.0.0",
-    "bokeh": "2.4.2",
+    "bokeh": "3.1.0",
     "jinja2": "2.10.3",
     "pyarrow": "7.0.0",
     "lz4": "4.3.2",

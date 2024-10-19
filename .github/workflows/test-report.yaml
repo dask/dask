@@ -28,7 +28,6 @@ jobs:
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v3.0.4
         with:
-          miniforge-variant: Mambaforge
           miniforge-version: latest
           condarc-file: continuous_integration/condarc
           use-mamba: true
@@ -61,7 +60,7 @@ jobs:
           mv test_report.html test_short_report.html deploy/
 
       - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@v4.6.3
+        uses: JamesIves/github-pages-deploy-action@v4.6.8
         with:
           branch: gh-pages
           folder: deploy

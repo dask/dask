@@ -5,6 +5,7 @@ See Also
 distributed/tests/test_client.py::test_short_tracebacks
 distributed/tests/test_client.py::test_short_tracebacks_async
 """
+
 from __future__ import annotations
 
 import traceback

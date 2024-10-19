@@ -345,6 +345,7 @@ def tensordot(lhs, rhs, axes=2):
     if concatenate:
         return intermediate
     else:
+        left_axes = [ax if ax >= 0 else lhs.ndim + ax for ax in left_axes]
         return intermediate.sum(axis=left_axes)
 
 
@@ -1312,7 +1313,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     >>> w = da.random.uniform(0, 1, size=(1000,), chunks=x.chunksize[0])
     >>> h, edges = da.histogramdd(x, bins=bins, range=ranges, weights=w)
     >>> np.isclose(h.sum().compute(), w.sum().compute())
-    True
+    np.True_
 
     Using a sequence of 1D arrays as the input:
 
@@ -1685,9 +1686,11 @@ def unique_no_structured_arr(
         (name, 0): (
             (np.unique,)
             + tuple(
-                (np.concatenate, o.__dask_keys__())
-                if hasattr(o, "__dask_keys__")
-                else o
+                (
+                    (np.concatenate, o.__dask_keys__())
+                    if hasattr(o, "__dask_keys__")
+                    else o
+                )
                 for o in out_parts
             )
         )
@@ -1772,9 +1775,11 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         (name, 0): (
             (_unique_internal,)
             + tuple(
-                (np.concatenate, o.__dask_keys__())
-                if hasattr(o, "__dask_keys__")
-                else o
+                (
+                    (np.concatenate, o.__dask_keys__())
+                    if hasattr(o, "__dask_keys__")
+                    else o
+                )
                 for o in out_parts
             )
             + (return_inverse,)
@@ -2270,11 +2275,11 @@ def aligned_coarsen_chunks(chunks: list[int], multiple: int) -> tuple[int, ...]:
     Examples
     --------
     >>> aligned_coarsen_chunks(chunks=(1, 2, 3), multiple=4)
-    (4, 2)
+    (np.int64(4), np.int64(2))
     >>> aligned_coarsen_chunks(chunks=(1, 20, 3, 4), multiple=4)
-    (4, 20, 4)
+    (np.int64(4), np.int64(20), np.int64(4))
     >>> aligned_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multiple=10)
-    (20, 10, 20, 20, 20, 2)
+    (np.int64(20), np.int64(10), np.int64(20), np.int64(20), np.int64(20), np.int64(2))
     """
     overflow = np.array(chunks) % multiple
     excess = overflow.sum()
@@ -2418,11 +2423,16 @@ def delete(arr, obj, axis):
     target_arr = split_at_breaks(arr, obj, axis)
 
     target_arr = [
-        arr[
-            tuple(slice(1, None) if axis == n else slice(None) for n in range(arr.ndim))
-        ]
-        if i != 0
-        else arr
+        (
+            arr[
+                tuple(
+                    slice(1, None) if axis == n else slice(None)
+                    for n in range(arr.ndim)
+                )
+            ]
+            if i != 0
+            else arr
+        )
         for i, arr in enumerate(target_arr)
     ]
     return concatenate(target_arr, axis=axis)

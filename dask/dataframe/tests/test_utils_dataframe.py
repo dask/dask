@@ -463,7 +463,12 @@ def test_check_matching_columns_raises_appropriate_errors():
     df = pd.DataFrame(columns=["a", "b", "c"])
 
     meta = pd.DataFrame(columns=["b", "a", "c"])
-    with pytest.raises(ValueError, match="Order of columns does not match"):
+    with pytest.raises(
+        ValueError,
+        match="Order of columns does not match."
+        "\nActual:   \\['a', 'b', 'c'\\]"
+        "\nExpected: \\['b', 'a', 'c'\\]",
+    ):
         assert check_matching_columns(meta, df)
 
     meta = pd.DataFrame(columns=["a", "b", "c", "d"])
@@ -679,7 +684,11 @@ def test_pyarrow_strings_enabled():
         pa = None
 
     # If `pyarrow>=12` are installed, then default to using pyarrow strings
-    if pa is not None and Version(pa.__version__) >= Version("12.0.0"):
+    if (
+        dask.config.get("dataframe.convert-string") in (True, None)
+        and pa is not None
+        and Version(pa.__version__) >= Version("12.0.0")
+    ):
         assert pyarrow_strings_enabled() is True
     else:
         assert pyarrow_strings_enabled() is False

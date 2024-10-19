@@ -52,7 +52,6 @@ jobs:
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v3.0.4
         with:
-          miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict

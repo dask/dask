@@ -56,9 +56,7 @@ if DASK_EXPR_ENABLED:
     shuffle = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs)
 else:
     d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
-    shuffle_func = (
-        shuffle  # type: ignore[assignment]  # conflicts with keyword argument
-    )
+    shuffle_func = shuffle  # conflicts with keyword argument
 full = d.compute()
 
 

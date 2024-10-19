@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 import string
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd

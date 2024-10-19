@@ -1408,7 +1408,7 @@ Dask Name: {name}, {layers}"""
         >>> res = ddf.x.reduction(count_greater, aggregate=lambda x: x.sum(),
         ...                       chunk_kwargs={'value': 25})
         >>> res.compute()
-        25
+        np.int64(25)
 
         Aggregate both the sum and count of a Series at the same time:
 
@@ -4837,9 +4837,11 @@ class DataFrame(_Frame):
                 "type": typename(type(self)),
                 "dataframe_type": typename(type(self._meta)),
                 "series_dtypes": {
-                    col: self._meta[col].dtype
-                    if hasattr(self._meta[col], "dtype")
-                    else None
+                    col: (
+                        self._meta[col].dtype
+                        if hasattr(self._meta[col], "dtype")
+                        else None
+                    )
                     for col in self._meta.columns
                 },
             }
@@ -4851,9 +4853,11 @@ class DataFrame(_Frame):
                     "type": typename(type(self)),
                     "dataframe_type": typename(type(self._meta)),
                     "series_dtypes": {
-                        col: self._meta[col].dtype
-                        if hasattr(self._meta[col], "dtype")
-                        else None
+                        col: (
+                            self._meta[col].dtype
+                            if hasattr(self._meta[col], "dtype")
+                            else None
+                        )
                         for col in self._meta.columns
                     },
                 }
@@ -6616,11 +6620,15 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
             raise NotImplementedError(msg)
         # For broadcastable series, use no rows.
         parts = [
-            d._meta
-            if _is_broadcastable(d)
-            else np.empty((), dtype=d.dtype)
-            if isinstance(d, Array)
-            else d._meta_nonempty
+            (
+                d._meta
+                if _is_broadcastable(d)
+                else (
+                    np.empty((), dtype=d.dtype)
+                    if isinstance(d, Array)
+                    else d._meta_nonempty
+                )
+            )
             for d in dasks
         ]
         with raise_on_meta_error(funcname(op)):
@@ -6685,9 +6693,12 @@ def _maybe_from_pandas(dfs):
     from dask.dataframe.io import from_pandas
 
     dfs = [
-        from_pandas(df, 1)
-        if (is_series_like(df) or is_dataframe_like(df)) and not is_dask_collection(df)
-        else df
+        (
+            from_pandas(df, 1)
+            if (is_series_like(df) or is_dataframe_like(df))
+            and not is_dask_collection(df)
+            else df
+        )
         for df in dfs
     ]
     return dfs
@@ -6892,9 +6903,9 @@ def apply_concat_apply(
         npartitions,
         partial(_concat, ignore_index=ignore_index),
         partial(combine, **combine_kwargs) if combine_kwargs else combine,
-        finalize_func=partial(aggregate, **aggregate_kwargs)
-        if aggregate_kwargs
-        else aggregate,
+        finalize_func=(
+            partial(aggregate, **aggregate_kwargs) if aggregate_kwargs else aggregate
+        ),
         split_every=split_every,
         split_out=split_out if (split_out and split_out > 1) else None,
         tree_node_name=f"{token or funcname(combine)}-combine-{token_key}",
@@ -8589,21 +8600,37 @@ def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs)
                 category=RuntimeWarning,
                 message="invalid value encountered in cast",
             )
-            return pd.to_timedelta(M.std(partition, *args, axis=axis, **kwargs))
+            unit = kwargs.pop("unit", None)
+            result = pd.to_timedelta(
+                M.std(partition, *args, axis=axis, **kwargs), unit=unit
+            )
+            if unit is not None and dtype is not None:
+                result = result.astype(dtype)
+            return result
 
     is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
 
     sqrt = np.sqrt(partition)
 
     if not is_df_like:
-        return pd.to_timedelta(sqrt)
+        result = pd.to_timedelta(sqrt, unit=kwargs.get("unit", None))
+        if kwargs.get("unit", None) is not None:
+            result = result.as_unit(kwargs["unit"])
+        return result
 
     time_col_mask = sqrt.index.isin(time_cols)
     matching_vals = sqrt[time_col_mask]
     if len(time_cols) > 0:
         sqrt = sqrt.astype(object)
-    for time_col, matching_val in zip(time_cols, matching_vals):
-        sqrt[time_col] = pd.to_timedelta(matching_val)
+
+    units = kwargs.get("units", None)
+    if units is None:
+        units = [None] * len(time_cols)
+    for time_col, matching_val, unit in zip(time_cols, matching_vals, units):
+        result = pd.to_timedelta(matching_val, unit=unit)
+        if unit is not None:
+            result = result.as_unit(unit)
+        sqrt[time_col] = result
 
     if dtype is not None:
         sqrt = sqrt.astype(dtype)
