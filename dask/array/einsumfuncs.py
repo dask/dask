@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from functools import reduce
+from operator import mul
+
 import numpy as np
 
 from dask.array.core import asarray, blockwise, einsum_lookup
@@ -7,6 +10,7 @@ from dask.utils import derived_from
 
 einsum_symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 einsum_symbols_set = set(einsum_symbols)
+from dask import config
 
 
 def chunk_einsum(*operands, **kwargs):
@@ -228,6 +232,33 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
     # Which indices are contracted?
     contract_inds = all_inds - set(outputs)
     ncontract_inds = len(contract_inds)
+
+    if len(inputs) > 1:
+        max_chunk_sizes = {}
+        max_chunk_size_inuput = 0
+        for op, input in zip(ops, inputs):
+            max_chunk_size_inuput = max(
+                reduce(mul, map(max, op.chunks)), max_chunk_size_inuput
+            )
+            max_chunk_sizes.update(
+                {inp: max(op.chunks[i]) for i, inp in enumerate(input)}
+            )
+
+        for contract_ind in contract_inds:
+            max_chunk_sizes[contract_ind] = 1
+
+        max_chunk_size_output = reduce(mul, max_chunk_sizes.values())
+        factor = max_chunk_size_output // (
+            max_chunk_size_inuput * config.get("array.chunk-size-tolerance")
+        )
+        factor_each = factor ** (1 / len(outputs))
+
+        for op, input in zip(ops, inputs):
+            nr_outputs = len([i for i in input if i in outputs])
+            if nr_outputs == 0:
+                continue
+
+            pass
 
     # Introduce the contracted indices into the blockwise product
     # so that we get numpy arrays, not lists

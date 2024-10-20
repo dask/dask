@@ -92,22 +92,12 @@ def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"] = "a
     return Array(graph, out_name, chunks, meta=x)
 
 
-def _rechunk_other_dimensions(
-    x: Array, longest_group: int, axis: int, chunks: Literal["auto"]
-) -> Array:
-    assert chunks == "auto", "Only auto is supported for now"
-    chunksize_tolerance = config.get("array.chunk-size-tolerance")
+def _calculate_new_chunksizes(x, new_chunks, changeable_dimensions):
 
-    if longest_group <= max(x.chunks[axis]) * chunksize_tolerance:
-        # We are staying below our threshold, so don't rechunk
-        return x
+    chunksize_tolerance = config.get("array.chunk-size-tolerance")
 
     # How large is the largest chunk in the input
     maximum_chunk = reduce(mul, map(max, x.chunks))
-
-    changeable_dimensions = set(range(len(x.chunks))) - {axis}
-    new_chunks = list(x.chunks)
-    new_chunks[axis] = (longest_group,)
 
     # iterate until we distributed the increase in chunksize accross all dimensions
     # or every non-shuffle dimension is all 1
@@ -146,7 +136,24 @@ def _rechunk_other_dimensions(
                 changeable_dimensions.remove(i)
 
             new_chunks[i] = tuple(new_chunksizes)
+    return new_chunks
 
+
+def _rechunk_other_dimensions(
+    x: Array, longest_group: int, axis: int, chunks: Literal["auto"]
+) -> Array:
+    assert chunks == "auto", "Only auto is supported for now"
+    chunksize_tolerance = config.get("array.chunk-size-tolerance")
+
+    if longest_group <= max(x.chunks[axis]) * chunksize_tolerance:
+        # We are staying below our threshold, so don't rechunk
+        return x
+
+    changeable_dimensions = set(range(len(x.chunks))) - {axis}
+    new_chunks = list(x.chunks)
+    new_chunks[axis] = (longest_group,)
+
+    new_chunks = _calculate_new_chunksizes(x, new_chunks, changeable_dimensions)
     new_chunks[axis] = x.chunks[axis]
     return x.rechunk(tuple(new_chunks))
 
