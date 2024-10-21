@@ -1461,6 +1461,10 @@ class ToDatetime(Elemwise):
     _defaults = {"kwargs": None}
     _keyword_only = ["kwargs", "meta"]
 
+    @functools.cached_property
+    def _meta(self):
+        return self.operand("meta")
+
     @staticmethod
     def operation(*args, **kwargs):
         return get_meta_library(args[0]).to_datetime(*args, **kwargs)
