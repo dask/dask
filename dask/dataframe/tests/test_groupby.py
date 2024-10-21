@@ -3755,3 +3755,29 @@ def test_groupby_value_counts_all_na_partitions():
         ddf.groupby("A")["B"].value_counts(),
         df.groupby("A")["B"].value_counts(),
     )
+
+
+def test_agg_pyarrow_casts():
+    pytest.importorskip("pyarrow")
+    df = pd.DataFrame(
+        {
+            "x": range(15),
+            "y": pd.Series([pd.NA] * 10 + [1.0] * 5, dtype="double[pyarrow]"),
+            "group": ["a"] * 5 + ["b"] * 5 + ["c"] * 5,
+        }
+    )
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    if PANDAS_GE_220:
+        # np.sqrt doesn't work before 2.2
+        additional_aggs = {"z": ("y", "std")}
+    else:
+        additional_aggs = {}
+
+    result = ddf.groupby("group").agg(
+        x=("y", "var"), y=("y", "mean"), **additional_aggs
+    )
+    expected = df.groupby("group").agg(
+        x=("y", "var"), y=("y", "mean"), **additional_aggs
+    )
+    assert_eq(result, expected)
