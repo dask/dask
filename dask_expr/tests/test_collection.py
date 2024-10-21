@@ -815,6 +815,14 @@ def test_abs_errors():
     pytest.raises((TypeError, NotImplementedError), lambda: ddf.abs())
 
 
+def test_to_datetime_timezone():
+    pdf = pd.DataFrame({"a": ["2023-04-01 22:12:11.932417+00:00"]})
+    df = from_pandas(pdf)
+    df["a"] = to_datetime(df.a, format="ISO8601", meta=("a", "datetime64[ns, UTC]"))
+    pdf["a"] = to_datetime(pdf.a, format="ISO8601")
+    assert_eq(df, pdf)
+
+
 def test_to_datetime():
     pdf = pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
     df = from_pandas(pdf, npartitions=2)
