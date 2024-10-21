@@ -544,7 +544,7 @@ def optimize(dsk, keys, **kwargs):
     if not isinstance(keys, (list, set)):
         keys = [keys]
 
-    if config.get("delayed.fuse"):
+    if config.get("optimization.fuse.delayed"):
         dsk = _fuse_delayed(dsk, keys, **kwargs)
 
     if not isinstance(dsk, HighLevelGraph):

@@ -876,7 +876,7 @@ def test_delayed_fusion():
     assert len(dsk) == 3
 
     obj2 = test3(test2(test(10)))
-    with dask.config.set({"delayed.fuse": True}):
+    with dask.config.set({"optimization.fuse.delayed": True}):
         dsk2 = dict(collections_to_dsk([obj]))
     assert len(dsk2) == 2
     assert dask.compute(obj) == dask.compute(obj2)
