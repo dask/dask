@@ -1227,10 +1227,23 @@ def _apply_func_to_columns(df_like, prefix, func):
 
 
 def _finalize_mean(df, sum_column, count_column):
-    return df[sum_column] / df[count_column]
+    result = df[sum_column] / df[count_column]
+    return _adjust_for_arrow_na(result, df[count_column])
 
 
-def _finalize_var(df, count_column, sum_column, sum2_column, **kwargs):
+def _adjust_for_arrow_na(result, df, check_for_isna=False):
+    if isinstance(result.dtype, pd.ArrowDtype):
+        # Our mean computation results in np.nan here but pandas doesn't
+        if check_for_isna:
+            result[df.isna()] = pd.NA
+        else:
+            result[df == 0] = pd.NA
+    return result
+
+
+def _finalize_var(
+    df, count_column, sum_column, sum2_column, adjust_arrow=True, **kwargs
+):
     # arguments are being checked when building the finalizer. As of this moment,
     # we're only using ddof, and raising an error on other keyword args.
     ddof = kwargs.get("ddof", 1)
@@ -1243,13 +1256,20 @@ def _finalize_var(df, count_column, sum_column, sum2_column, **kwargs):
     div[div < 0] = 0
     result /= div
     result[(n - ddof) == 0] = np.nan
-
-    return result
+    if adjust_arrow:
+        return _adjust_for_arrow_na(result, div)
+    else:
+        return result
 
 
 def _finalize_std(df, count_column, sum_column, sum2_column, **kwargs):
-    result = _finalize_var(df, count_column, sum_column, sum2_column, **kwargs)
-    return np.sqrt(result)
+    result = _finalize_var(
+        df, count_column, sum_column, sum2_column, adjust_arrow=False, **kwargs
+    )
+    res = np.sqrt(result)
+    if res.dtype != result.dtype:
+        res = res.astype(result.dtype)
+    return _adjust_for_arrow_na(res, result, check_for_isna=True)
 
 
 def _cum_agg_aligned(part, cum_last, index, columns, func, initial):
