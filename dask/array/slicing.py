@@ -329,7 +329,11 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     all_slices = list(product(*[pluck(1, s) for s in sorted_block_slices]))
 
     dsk_out = {
-        out_name: (getitem, in_name, slices)
+        out_name: (
+            (getitem, in_name, slices)
+            if not all(sl == slice(None, None, None) for sl in slices)
+            else in_name
+        )
         for out_name, in_name, slices in zip(out_names, in_names, all_slices)
     }
 
