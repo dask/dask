@@ -28,6 +28,13 @@ def _dask_expr_enabled() -> bool:
         return DASK_EXPR_ENABLED
 
     if use_dask_expr is False:
+        warnings.warn(
+            "The legacy Dask DataFrame implementation is deprecated and will "
+            "be removed in a future version. Set the configuration option "
+            "`dataframe.query-planning` to `True` or None to enable the new Dask "
+            "Dataframe implementation and silence this warning.",
+            FutureWarning,
+        )
         return (DASK_EXPR_ENABLED := False)
     try:
         import dask_expr  # noqa: F401
