@@ -44,9 +44,6 @@ optimization:
     rename-keys: true
     delayed: false
 
-delayed:
-  fuse: false
-
 admin:
   traceback:
     shorten:
