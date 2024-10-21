@@ -22,10 +22,12 @@ from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
+from dask.optimization import fuse
 from dask.typing import Graph, NestedKeys
 from dask.utils import (
     OperatorMethodMixin,
     apply,
+    ensure_dict,
     funcname,
     is_namedtuple_instance,
     methodcaller,
@@ -522,9 +524,29 @@ def right(method):
     return partial(_swap, method)
 
 
+def _fuse_delayed(dsk, keys, **kwargs):
+    dependencies = dsk.get_all_dependencies()
+    dsk = ensure_dict(dsk)
+
+    fuse_subgraphs = config.get("optimization.fuse.subgraphs")
+    if fuse_subgraphs is None:
+        fuse_subgraphs = True
+    dsk, _ = fuse(
+        dsk,
+        keys,
+        dependencies=dependencies,
+        fuse_subgraphs=fuse_subgraphs,
+    )
+    return dsk
+
+
 def optimize(dsk, keys, **kwargs):
     if not isinstance(keys, (list, set)):
         keys = [keys]
+
+    if config.get("optimization.fuse.delayed"):
+        dsk = _fuse_delayed(dsk, keys, **kwargs)
+
     if not isinstance(dsk, HighLevelGraph):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
     dsk = dsk.cull(set(flatten(keys)))
