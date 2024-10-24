@@ -42,6 +42,7 @@ optimization:
     max-depth-new-edges: null  # ave_width * 1.5
     subgraphs: null  # true for dask.dataframe, false for everything else
     rename-keys: true
+    delayed: false
 
 admin:
   traceback:
