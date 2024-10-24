@@ -16,6 +16,7 @@ from tlz import merge
 import dask
 import dask.bag as db
 from dask import compute
+from dask.base import collections_to_dsk
 from dask.delayed import Delayed, delayed, to_task_dask
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import inc
@@ -855,3 +856,28 @@ def test_delayed_function_attributes_forwarded():
     assert add.__name__ == "add"
     assert add.__doc__ == "This is a docstring"
     assert add.__wrapped__(1, 2) == 3
+
+
+def test_delayed_fusion():
+    @delayed
+    def test(i):
+        return i + 1
+
+    @delayed
+    def test2(i):
+        return i + 2
+
+    @delayed
+    def test3(i):
+        return i + 3
+
+    obj = test3(test2(test(10)))
+    dsk = dict(collections_to_dsk([obj]))
+    assert len(dsk) == 3
+
+    obj2 = test3(test2(test(10)))
+    with dask.config.set({"optimization.fuse.delayed": True}):
+        dsk2 = dict(collections_to_dsk([obj]))
+        result = dask.compute(obj2)
+    assert len(dsk2) == 2
+    assert dask.compute(obj) == result
