@@ -1,5 +1,5 @@
 # This job includes coverage
-name: test-environment-313
+name: test-environment
 channels:
   - conda-forge
 dependencies:
