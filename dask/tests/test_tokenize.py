@@ -15,9 +15,11 @@ from typing import Union
 
 import cloudpickle
 import pytest
+from packaging.version import Version
 from tlz import compose, curry, partial
 
 import dask
+from dask._compatibility import PY_VERSION
 from dask.core import flatten, literal
 from dask.tokenize import TokenizationError, normalize_token, tokenize
 from dask.utils import tmpfile
@@ -976,7 +978,11 @@ def test_tokenize_dataclass():
     ADataClassRedefinedDifferently = dataclasses.make_dataclass(
         "ADataClass", [("a", Union[int, str])]
     )
-    assert check_tokenize(a1) != check_tokenize(ADataClassRedefinedDifferently(1))
+    if PY_VERSION >= Version("3.13"):
+        with pytest.raises(AssertionError):
+            check_tokenize(ADataClassRedefinedDifferently(1))
+    else:
+        assert check_tokenize(a1) != check_tokenize(ADataClassRedefinedDifferently(1))
 
     # Dataclass with unpopulated value
     nv = NoValueDataClass()
