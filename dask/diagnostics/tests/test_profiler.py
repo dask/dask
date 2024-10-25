@@ -8,6 +8,7 @@ from timeit import default_timer
 
 import pytest
 
+from dask._task_spec import Task
 from dask.diagnostics import CacheProfiler, Profiler, ResourceProfiler
 from dask.diagnostics.profile_visualize import BOKEH_VERSION
 from dask.threaded import get
@@ -40,7 +41,8 @@ def test_profiler():
     keys = [i.key for i in prof_data]
     assert keys == ["c", "d", "e"]
     tasks = [i.task for i in prof_data]
-    assert tasks == [(add, "a", "b"), (mul, "a", "b"), (mul, "c", "d")]
+    assert len(tasks) == 3
+    assert all(isinstance(t, Task) for t in tasks)
     prof.clear()
     assert prof.results == []
 

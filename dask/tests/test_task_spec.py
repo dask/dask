@@ -754,7 +754,7 @@ def test_execute_tasks_in_graph():
         t3 := Task("key-3", func, "foo", "bar"),
         Task("key-4", func, t3.ref(), t2.ref()),
     ]
-    res = execute_graph(dsk)
+    res = execute_graph(dsk, keys=["key-4"])
     assert len(res) == 1
     assert res["key-4"] == "foo-bar-a-b=c"
 
