@@ -568,12 +568,8 @@ class P2PShuffle(SimpleShuffle):
         return self.frame._meta.drop(columns=self.partitioning_index)
 
     def _layer(self):
-        from distributed.shuffle._shuffle import (
-            ShuffleId,
-            barrier_key,
-            shuffle_barrier,
-            shuffle_unpack,
-        )
+        from distributed.shuffle._core import p2p_barrier
+        from distributed.shuffle._shuffle import ShuffleId, barrier_key, shuffle_unpack
 
         dsk = {}
         token = self._name.split("-")[-1]
@@ -604,7 +600,7 @@ class P2PShuffle(SimpleShuffle):
                 True,
             )
 
-        dsk[_barrier_key] = (shuffle_barrier, token, transfer_keys)
+        dsk[_barrier_key] = (p2p_barrier, token, transfer_keys)
 
         # TODO: Decompose p2p Into transfer/barrier + unpack
         name = self._name

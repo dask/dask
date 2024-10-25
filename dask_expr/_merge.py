@@ -607,9 +607,8 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         return None
 
     def _layer(self) -> dict:
-        from distributed.shuffle._core import ShuffleId, barrier_key
+        from distributed.shuffle._core import ShuffleId, barrier_key, p2p_barrier
         from distributed.shuffle._merge import merge_unpack
-        from distributed.shuffle._shuffle import shuffle_barrier
 
         dsk = {}
         token_left = _tokenize_deterministic(
@@ -667,9 +666,9 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self.right_index,
             )
 
-        dsk[_barrier_key_left] = (shuffle_barrier, token_left, transfer_keys_left)
+        dsk[_barrier_key_left] = (p2p_barrier, token_left, transfer_keys_left)
         dsk[_barrier_key_right] = (
-            shuffle_barrier,
+            p2p_barrier,
             token_right,
             transfer_keys_right,
         )
