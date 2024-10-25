@@ -328,7 +328,7 @@ class Aggregation:
     agg : callable
         a function that will be called to aggregate the results of each chunk.
         Again the argument(s) will be a Pandas SeriesGroupBy. If ``chunk``
-        returned a tuple, ``agg`` will be called with all of them as 
+        returned a tuple, ``agg`` will be called with all of them as
         individual positional arguments.
     finalize : callable
         an optional finalizer that will be called with the results from the
