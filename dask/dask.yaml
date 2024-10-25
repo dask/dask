@@ -51,6 +51,7 @@ admin:
       - dask[\\\/](base|core|local|multiprocessing|optimization|threaded|utils)\.py
       - dask[\\\/]array[\\\/]core\.py
       - dask[\\\/]dataframe[\\\/](core|methods)\.py
+      - dask[\\\/]_task_spec\.py
       - distributed[\\\/](client|scheduler|utils|worker)\.py
       - tornado[\\\/]gen\.py
       - pandas[\\\/]core[\\\/]
