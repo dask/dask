@@ -116,6 +116,7 @@ from functools import partial
 from queue import Empty, Queue
 
 from dask import config
+from dask._task_spec import DataNode, DependenciesMapping, convert_legacy_graph
 from dask.callbacks import local_callbacks, unpack_callbacks
 from dask.core import flatten, get_dependencies, reverse_dict
 from dask.order import order
@@ -165,7 +166,6 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
         cache = config.get("cache", None)
     if cache is None:
         cache = dict()
-    from dask._task_spec import DataNode, DependenciesMapping, convert_legacy_graph
 
     dsk = convert_legacy_graph(dsk, all_keys=set(dsk) | set(cache))
     data_keys = set()
@@ -425,7 +425,6 @@ def get_async(
     else:
         result_flat = {result}
     results = set(result_flat)
-    from dask._task_spec import convert_legacy_graph
 
     dsk = dict(convert_legacy_graph(dsk))
     with local_callbacks(callbacks) as callbacks:

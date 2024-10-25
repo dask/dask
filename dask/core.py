@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Collection, Iterable, Mapping, MutableMapping
 from typing import Any, Literal, TypeVar, cast, overload
 
-from dask._task_spec import DependenciesMapping
+from dask._task_spec import DependenciesMapping, convert_legacy_graph, execute_graph
 from dask.typing import Graph, Key, NoDefault, no_default
 
 
@@ -97,7 +97,6 @@ def get(dsk: Mapping, out: list | Key, cache: MutableMapping | None = None) -> A
             raise KeyError(f"{k} is not a key in the graph")
     if cache is None:
         cache = {}
-    from dask._task_spec import convert_legacy_graph, execute_graph
 
     dsk2 = convert_legacy_graph(dsk, all_keys=set(dsk) | set(cache))
     result = execute_graph(dsk2, cache, keys=set(flatten([out])))
