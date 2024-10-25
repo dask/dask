@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import tlz as toolz
 from dask import compute
+from dask._task_spec import Task, TaskRef
 from dask.dataframe.core import _concat, make_meta
 from dask.dataframe.dispatch import is_categorical_dtype
 from dask.dataframe.shuffle import (
@@ -575,7 +576,6 @@ class P2PShuffle(SimpleShuffle):
         token = self._name.split("-")[-1]
         _barrier_key = barrier_key(ShuffleId(token))
         name = "shuffle-transfer-" + token
-        transfer_keys = list()
 
         parts_out = (
             self._partitions if self._filtered else list(range(self.npartitions_out))
@@ -585,11 +585,12 @@ class P2PShuffle(SimpleShuffle):
             set(self._partitions) if self._filtered else self.npartitions_out
         )
 
+        transfer_keys = list()
         for i in range(self.frame.npartitions):
-            transfer_keys.append((name, i))
-            dsk[(name, i)] = (
+            t = Task(
+                (name, i),
                 _shuffle_transfer,
-                (self.frame._name, i),
+                TaskRef((self.frame._name, i)),
                 token,
                 i,
                 self.npartitions_out,
@@ -599,18 +600,23 @@ class P2PShuffle(SimpleShuffle):
                 True,
                 True,
             )
+            dsk[t.key] = t
+            transfer_keys.append(t.ref())
 
-        dsk[_barrier_key] = (p2p_barrier, token, transfer_keys)
+        barrier = Task(_barrier_key, p2p_barrier, token, transfer_keys)
+        dsk[barrier.key] = barrier
 
         # TODO: Decompose p2p Into transfer/barrier + unpack
         name = self._name
         for i, part_out in enumerate(parts_out):
-            dsk[(name, i)] = (
+            t = Task(
+                (name, i),
                 shuffle_unpack,
                 token,
                 part_out,
-                _barrier_key,
+                barrier.ref(),
             )
+            dsk[t.key] = t
         return dsk
 
 
