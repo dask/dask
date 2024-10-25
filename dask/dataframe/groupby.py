@@ -322,13 +322,14 @@ class Aggregation:
         result will be identified by this name.
     chunk : callable
         a function that will be called with the grouped column of each
-        partition. It can either return a single series or a tuple of series.
+        partition, takes a Pandas SeriesGroupBy in input.
+        It can either return a single series or a tuple of series.
         The index has to be equal to the groups.
     agg : callable
         a function that will be called to aggregate the results of each chunk.
-        Again the argument(s) will be grouped series. If ``chunk`` returned a
-        tuple, ``agg`` will be called with all of them as individual positional
-        arguments.
+        Again the argument(s) will be a Pandas SeriesGroupBy. If ``chunk``
+        returned a tuple, ``agg`` will be called with all of them as
+        individual positional arguments.
     finalize : callable
         an optional finalizer that will be called with the results from the
         aggregation.
