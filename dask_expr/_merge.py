@@ -3,6 +3,7 @@ import math
 import operator
 
 import numpy as np
+from dask._task_spec import Task, TaskRef
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.multi import (
     _concat_wrapper,
@@ -638,10 +639,10 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         transfer_keys_right = list()
         func = create_assign_index_merge_transfer()
         for i in range(self.left.npartitions):
-            transfer_keys_left.append((transfer_name_left, i))
-            dsk[(transfer_name_left, i)] = (
+            t = Task(
+                (transfer_name_left, i),
                 func,
-                (self.left._name, i),
+                TaskRef((self.left._name, i)),
                 self.shuffle_left_on,
                 _HASH_COLUMN_NAME,
                 self.npartitions,
@@ -651,11 +652,14 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self._partitions,
                 self.left_index,
             )
+            dsk[t.key] = t
+            transfer_keys_left.append(t.ref())
+
         for i in range(self.right.npartitions):
-            transfer_keys_right.append((transfer_name_right, i))
-            dsk[(transfer_name_right, i)] = (
+            t = Task(
+                (transfer_name_right, i),
                 func,
-                (self.right._name, i),
+                TaskRef((self.right._name, i)),
                 self.shuffle_right_on,
                 _HASH_COLUMN_NAME,
                 self.npartitions,
@@ -665,22 +669,28 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self._partitions,
                 self.right_index,
             )
+            dsk[t.key] = t
+            transfer_keys_right.append(t.ref())
 
-        dsk[_barrier_key_left] = (p2p_barrier, token_left, transfer_keys_left)
-        dsk[_barrier_key_right] = (
-            p2p_barrier,
-            token_right,
-            transfer_keys_right,
+        barrier_left = Task(
+            _barrier_key_left, p2p_barrier, token_left, transfer_keys_left
         )
+        dsk[barrier_left.key] = barrier_left
+
+        barrier_right = Task(
+            _barrier_key_right, p2p_barrier, token_right, transfer_keys_right
+        )
+        dsk[barrier_right.key] = barrier_right
 
         for part_out in self._partitions:
-            dsk[(self._name, part_out)] = (
+            t = Task(
+                (self._name, part_out),
                 merge_unpack,
                 token_left,
                 token_right,
                 part_out,
-                _barrier_key_left,
-                _barrier_key_right,
+                barrier_left.ref(),
+                barrier_right.ref(),
                 self.how,
                 self.left_on,
                 self.right_on,
@@ -690,6 +700,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self.right_index,
                 self.indicator,
             )
+            dsk[t.key] = t
         return dsk
 
     def _simplify_up(self, parent, dependents):
