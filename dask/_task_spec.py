@@ -84,7 +84,7 @@ from typing import Any, TypeVar, cast, overload
 
 from dask.sizeof import sizeof
 from dask.typing import Key as KeyType
-from dask.utils import is_namedtuple_instance
+from dask.utils import funcname, is_namedtuple_instance
 
 try:
     from distributed.collections import LRU
@@ -483,7 +483,7 @@ class Alias(GraphNode):
             return self
 
     def __repr__(self):
-        return f"Alias(key={self.key}, target={self.target})"
+        return f"Alias({self.key}->{self.target})"
 
     def __eq__(self, value: object) -> bool:
         if not isinstance(value, Alias):
@@ -587,6 +587,7 @@ class Task(GraphNode):
     packed_func: None | bytes
     _token: str | None
     _is_coro: bool | None
+    _repr: str | None
 
     __slots__ = tuple(__annotations__)
 
@@ -612,6 +613,7 @@ class Task(GraphNode):
             self._dependencies = _no_deps
         self._is_coro = None
         self._token = None
+        self._repr = None
 
     def copy(self):
         self.unpack()
@@ -651,7 +653,36 @@ class Task(GraphNode):
         )
 
     def __repr__(self) -> str:
-        return f"Task({self.key!r})"
+        if not self._repr:
+            self.unpack()
+            head = funcname(self.func)
+            tail = ")"
+            label_size = 40
+            args = self.args
+            kwargs = self.kwargs
+            if args or kwargs:
+                label_size2 = int(
+                    (label_size - len(head) - len(tail) - len(str(self.key)))
+                    // (len(args) + len(kwargs))
+                )
+            if args:
+                if label_size2 > 5:
+                    args_repr = ", ".join(repr(t) for t in args)
+                else:
+                    args_repr = "..."
+            else:
+                args_repr = ""
+            if kwargs:
+                if label_size2 > 5:
+                    kwargs_repr = ", " + ", ".join(
+                        f"{k}={repr(v)}" for k, v in sorted(kwargs.items())
+                    )
+                else:
+                    kwargs_repr = ", ..."
+            else:
+                kwargs_repr = ""
+            self._repr = f"<Task {self.key!r} {head}({args_repr}{kwargs_repr}{tail}>"
+        return self._repr
 
     def __call__(self, values=()):
         self._verify_values(values)
