@@ -25,6 +25,8 @@ Array
   on top of ``numpy`` and ``scipy.sparse``.
 - `pint <https://pint.readthedocs.io>`_: Allows arithmetic operations between them and conversions
   from and to different units.
+- `HyperSpy <https://hyperspy.org>`_: Uses dask to allow for scalability on multi-dimensional datasets
+  where navigation and signal axes can be separated (e.g. hyperspectral images).
 
 DataFrame
 ~~~~~~~~~

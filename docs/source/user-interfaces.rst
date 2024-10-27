@@ -171,6 +171,13 @@ consider writing it to disk instead.
 Persist into Distributed Memory
 -------------------------------
 
+.. warning::
+
+    persist will store the full dataset in memory. This has the disadvantage that
+    the available memory must actually exceed the size of the dataset. Use persist
+    only when interactively iterating on the same dataset over and over again and
+    avoid it in productive use-cases as much as possible.
+
 Alternatively, if you are on a cluster, then you may want to trigger a
 computation and store the results in distributed memory.  In this case you do
 not want to call ``compute``, which would create a single Pandas, NumPy, or

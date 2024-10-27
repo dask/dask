@@ -1621,7 +1621,15 @@ class Bag(DaskMethodsMixin):
             dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
-        return dd.DataFrame(dsk, dfs.name, meta, divisions)
+        if not dd._dask_expr_enabled():
+            return dd.DataFrame(dsk, dfs.name, meta, divisions)
+        else:
+            from dask_expr import from_legacy_dataframe
+
+            from dask.dataframe.core import DataFrame
+
+            df = DataFrame(dsk, dfs.name, meta, divisions)
+            return from_legacy_dataframe(df)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
@@ -1735,7 +1743,7 @@ def partition(grouper, sequence, npartitions, p, nelements=2**20):
         d = groupby(grouper, block)
         d2 = defaultdict(list)
         for k, v in d.items():
-            d2[abs(hash(k)) % npartitions].extend(v)
+            d2[abs(int(tokenize(k), 16)) % npartitions].extend(v)
         p.append(d2, fsync=True)
     return p
 
@@ -2355,7 +2363,7 @@ def make_group(k, stage):
     return h
 
 
-def groupby_tasks(b, grouper, hash=hash, max_branch=32):
+def groupby_tasks(b, grouper, hash=lambda x: int(tokenize(x), 16), max_branch=32):
     max_branch = max_branch or 32
     n = b.npartitions
 
@@ -2596,13 +2604,16 @@ def split(seq, n):
 
 def to_dataframe(seq, columns, dtypes):
     import pandas as pd
+    from packaging.version import Version
 
     seq = reify(seq)
     # pd.DataFrame expects lists, only copy if necessary
     if not isinstance(seq, list):
         seq = list(seq)
+
+    kwargs = {} if Version(pd.__version__).major >= 3 else {"copy": False}
     res = pd.DataFrame(seq, columns=list(columns))
-    return res.astype(dtypes, copy=False)
+    return res.astype(dtypes, **kwargs)
 
 
 def repartition_npartitions(bag, npartitions):

@@ -128,12 +128,13 @@ Dask-Array compute-based dispatch functions (as defined in ``dask.array.dispatch
    - numel_lookup
    - percentile_lookup
    - tensordot_lookup
+   - take_lookup
 
 Dask-Dataframe compute-based dispatch functions (as defined in ``dask.dataframe.dispatch``, and defined for Pandas in ``dask.dataframe.backends``):
 
    - categorical_dtype_dispatch
    - concat_dispatch
-   - get_parallel_type
+   - get_collection_type
    - group_split_dispatch
    - grouper_dispatch
    - hash_object_dispatch

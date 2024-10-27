@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 pytestmark = pytest.mark.gpu
 
@@ -10,7 +10,7 @@ import dask.array as da
 from dask.array.utils import assert_eq, same_keys
 
 cupy = pytest.importorskip("cupy")
-cupy_version = parse_version(cupy.__version__)
+cupy_version = Version(cupy.__version__)
 
 
 def test_overlap_internal():
@@ -88,7 +88,7 @@ def test_nearest():
 
 
 @pytest.mark.skipif(
-    cupy_version < parse_version("6.4.0"),
+    cupy_version < Version("6.4.0"),
     reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
 )
 def test_constant():
@@ -104,7 +104,7 @@ def test_constant():
 
 
 @pytest.mark.skipif(
-    cupy_version < parse_version("6.4.0"),
+    cupy_version < Version("6.4.0"),
     reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
 )
 def test_boundaries():

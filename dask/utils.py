@@ -11,22 +11,21 @@ import tempfile
 import types
 import uuid
 import warnings
-from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Set
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
-from functools import lru_cache, wraps
+from functools import wraps
 from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import Any, Callable, ClassVar, Literal, TypeVar, cast, overload
+from typing import Any, ClassVar, Literal, TypeVar, cast, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
 
 from dask import config
-from dask.core import get_deps
 from dask.typing import no_default
 
 K = TypeVar("K")
@@ -557,7 +556,7 @@ def random_state_data(n: int, random_state=None) -> list:
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
-    l = list(np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1)))
+    l = list(np.frombuffer(random_data, dtype="<u4").reshape((n, -1)))
     assert len(l) == n
     return l
 
@@ -1159,20 +1158,6 @@ def insert(tup, loc, val):
     L = list(tup)
     L[loc] = val
     return tuple(L)
-
-
-def dependency_depth(dsk):
-    deps, _ = get_deps(dsk)
-
-    @lru_cache(maxsize=None)
-    def max_depth_by_deps(key):
-        if not deps[key]:
-            return 1
-
-        d = 1 + max(max_depth_by_deps(dep_key) for dep_key in deps[key])
-        return d
-
-    return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
 
 
 def memory_repr(num):
@@ -1832,15 +1817,13 @@ timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
 @overload
-def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None:
-    ...
+def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None: ...
 
 
 @overload
 def parse_timedelta(
     s: str | float | timedelta, default: str | Literal[False] = "seconds"
-) -> float:
-    ...
+) -> float: ...
 
 
 def parse_timedelta(s, default="seconds"):
@@ -2174,10 +2157,11 @@ def cached_cumsum(seq, initial_zero=False):
 def show_versions() -> None:
     """Provide version information for bug reports."""
 
-    from importlib.metadata import PackageNotFoundError, version
     from json import dumps
     from platform import uname
     from sys import stdout, version_info
+
+    from dask._compatibility import importlib_metadata
 
     try:
         from distributed import __version__ as distributed_version
@@ -2206,8 +2190,8 @@ def show_versions() -> None:
 
     for modname in deps:
         try:
-            result[modname] = version(modname)
-        except PackageNotFoundError:
+            result[modname] = importlib_metadata.version(modname)
+        except importlib_metadata.PackageNotFoundError:
             result[modname] = None
 
     stdout.writelines(dumps(result, indent=2))

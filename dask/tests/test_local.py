@@ -173,6 +173,7 @@ def test_ordering():
 
 
 def test_complex_ordering():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     from dask.diagnostics import Callback
 

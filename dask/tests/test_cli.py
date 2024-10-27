@@ -7,13 +7,13 @@ import platform
 import sys
 
 import click
-import importlib_metadata
 import pytest
 import yaml
 from click.testing import CliRunner
 
 import dask
 import dask.cli
+from dask._compatibility import importlib_metadata
 
 
 def test_config_get_no_key():
@@ -226,7 +226,7 @@ def test_register_command_ep():
     with pytest.warns(UserWarning, match="must be instances of"):
         _register_command_ep(dummy_cli, bad_ep)
 
-    with pytest.warns(UserWarning, match="exception ocurred"):
+    with pytest.warns(UserWarning, match="exception occurred"):
         _register_command_ep(dummy_cli, ErrorEP())
 
     _register_command_ep(dummy_cli, good_ep)

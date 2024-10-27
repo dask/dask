@@ -107,7 +107,7 @@ files need to be divided into multiple row-group ranges, and the dataset
 does not contain a ``_metadata`` file, Dask will need to load all footer
 metadata up-front.
 
-We recommend aiming for 10-250 MiB in-memory size per file once loaded into
+We recommend aiming for 100-300 MiB in-memory size per file once loaded into
 pandas. Oversized partitions can lead to excessive memory usage on a single
 worker, while undersized partitions can lead to poor performance as the
 overhead of Dask dominates.
@@ -204,7 +204,7 @@ For more information on connecting to remote data, see
 
 Dask will write one file per Dask dataframe partition to this directory. To
 optimize access for downstream consumers, we recommend aiming for an in-memory
-size of 10-250 MiB per partition. This helps balance worker memory usage
+size of 100-300 MiB per partition. This helps balance worker memory usage
 against Dask overhead. You may find the
 :meth:`DataFrame.memory_usage_per_partition` method useful for determining if
 your data is partitioned optimally.

@@ -111,7 +111,7 @@ def make_meta(x, index=None, parent_meta=None):
         determine which back-end to select and dispatch to. To use
         utilize this parameter ``make_meta_obj`` has be dispatched.
         If ``parent_meta`` is ``None``, a pandas DataFrame is used for
-        ``parent_meta`` thats chooses pandas as the backend.
+        ``parent_meta`` that chooses pandas as the backend.
 
     Returns
     -------

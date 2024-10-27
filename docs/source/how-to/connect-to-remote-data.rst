@@ -34,6 +34,8 @@ codebase:
 
 - **Microsoft Azure Storage**: ``adl://``, ``abfs://`` or ``az://`` - Microsoft Azure Storage using adlfs_.
 
+- **Hugging Face**: ``hf://`` - Hugging Face Hub of datasets for AI, using the huggingface_hub_ library.
+
 - **HTTP(s)**: ``http://`` or ``https://`` for reading data directly from HTTP web servers.
 
 `fsspec`_ also provides other file systems that may be of interest to Dask users, such as
@@ -48,6 +50,7 @@ file system is assumed (same as ``file://``).
 .. _adlfs: https://github.com/dask/adlfs
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
 .. _PyArrow: https://arrow.apache.org/docs/python/
+.. _huggingface_hub: https://huggingface.co/docs/huggingface_hub
 
 Lower-level details on how Dask handles remote data is described
 below in the Internals section

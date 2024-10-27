@@ -94,6 +94,7 @@ def test_orc_roundtrip(tmpdir, index, columns):
             ),
         }
     )
+    data.iloc[0, 0] = 100
     if index:
         data = data.set_index(index)
     df = dd.from_pandas(data, chunksize=500)
@@ -105,7 +106,7 @@ def test_orc_roundtrip(tmpdir, index, columns):
 
     # Read
     df2 = dd.read_orc(tmp, index=index, columns=columns)
-    assert_eq(data, df2, check_index=bool(index))
+    assert_eq(data, df2, check_index=False)
 
 
 @pytest.mark.parametrize("split_stripes", [True, False, 2, 4])

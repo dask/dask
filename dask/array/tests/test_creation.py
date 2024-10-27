@@ -11,7 +11,7 @@ from tlz import concat
 import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
-from dask.array.numpy_compat import AxisError
+from dask.array.numpy_compat import NUMPY_GE_210, AxisError
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -381,7 +381,7 @@ def test_meshgrid(shapes, chunks, indexing, sparse):
     r_a = np.meshgrid(*xi_a, indexing=indexing, sparse=sparse)
     r_d = da.meshgrid(*xi_d, indexing=indexing, sparse=sparse)
 
-    assert isinstance(r_d, list)
+    assert type(r_d) is type(r_a)
     assert len(r_a) == len(r_d)
 
     for e_r_a, e_r_d, i in zip(r_a, r_d, do):
@@ -975,6 +975,8 @@ def test_nan_empty_like(shape_chunks, dtype):
 @pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
 @pytest.mark.parametrize("dtype", ["u4", np.float32, None, np.int64])
 def test_nan_full_like(val, shape_chunks, dtype):
+    if NUMPY_GE_210 and val == -1 and dtype == "u4":
+        pytest.xfail("can't insert negative numbers into unsigned integer")
     shape, chunks = shape_chunks
     x1 = da.random.standard_normal(size=shape, chunks=chunks)
     y1 = x1[x1 < 0.5]

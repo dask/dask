@@ -75,10 +75,6 @@ maintains that index, like Parquet.
     left.to_parquet("left", overwrite=True)
     left = dd.read_parquet("left")
 
-    # If the dataframe can fit in RAM, you can also use persist
-
-    # left = left.persist()
-
     right_one = dask.datasets.timeseries(dtypes={"bar": int})
     right_two = dask.datasets.timeseries(dtypes={"baz": int})
 

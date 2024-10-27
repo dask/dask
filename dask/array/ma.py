@@ -9,7 +9,7 @@ from dask.array.core import asanyarray, blockwise, elemwise, map_blocks
 from dask.array.reductions import reduction
 from dask.array.routines import _average
 from dask.array.routines import nonzero as _nonzero
-from dask.base import normalize_token
+from dask.tokenize import normalize_token
 from dask.utils import derived_from
 
 
@@ -78,7 +78,7 @@ def masked_where(condition, a):
     cshape = getattr(condition, "shape", ())
     if cshape and cshape != a.shape:
         raise IndexError(
-            "Inconsistant shape between the condition and the "
+            "Inconsistent shape between the condition and the "
             "input (got %s and %s)" % (cshape, a.shape)
         )
     condition = asanyarray(condition)

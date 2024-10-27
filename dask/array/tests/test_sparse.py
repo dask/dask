@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 import dask
 import dask.array as da
@@ -10,7 +10,7 @@ from dask.array.reductions import nannumel, numel
 from dask.array.utils import assert_eq
 
 sparse = pytest.importorskip("sparse")
-SPARSE_VERSION = parse_version(sparse.__version__)
+SPARSE_VERSION = Version(sparse.__version__)
 if sparse:
     # Test failures on older versions of Numba.
     # Conda-Forge provides 0.35.0 on windows right now, causing failures like
@@ -69,27 +69,9 @@ functions = [
     lambda x: x.rechunk((2, 2, 1)),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
-    pytest.param(
-        lambda x: np.zeros_like(x),
-        marks=pytest.mark.xfail(
-            SPARSE_VERSION < parse_version("0.13.0"),
-            reason="https://github.com/pydata/xarray/issues/5654",
-        ),
-    ),
-    pytest.param(
-        lambda x: np.ones_like(x),
-        marks=pytest.mark.xfail(
-            SPARSE_VERSION < parse_version("0.13.0"),
-            reason="https://github.com/pydata/xarray/issues/5654",
-        ),
-    ),
-    pytest.param(
-        lambda x: np.full_like(x, fill_value=2),
-        marks=pytest.mark.xfail(
-            SPARSE_VERSION < parse_version("0.13.0"),
-            reason="https://github.com/pydata/xarray/issues/5654",
-        ),
-    ),
+    lambda x: np.zeros_like(x),
+    lambda x: np.ones_like(x),
+    lambda x: np.full_like(x, fill_value=2),
 ]
 
 
@@ -111,10 +93,6 @@ def test_basic(func):
             assert (zz != 1).sum() > np.prod(zz.shape) / 2  # mostly dense
 
 
-@pytest.mark.skipif(
-    SPARSE_VERSION < parse_version("0.7.0+10"),
-    reason="fixed in https://github.com/pydata/sparse/pull/256",
-)
 def test_tensordot():
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
     x[x < 0.8] = 0

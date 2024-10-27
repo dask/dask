@@ -557,6 +557,7 @@ def test_rolling_agg_aggregate():
     )
 
 
+@pytest.mark.skipif(not PANDAS_GE_210, reason="buggy pandas implementation")
 def test_rolling_numba_engine():
     pytest.importorskip("numba")
     df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})

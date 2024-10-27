@@ -26,6 +26,8 @@ except ImportError:
     DisplayObject = Any
 
 
+pytest.importorskip("numpy")
+pytest.importorskip("pandas")
 da = pytest.importorskip("dask.array")
 db = pytest.importorskip("dask.bag")
 dds = pytest.importorskip("dask.datasets")

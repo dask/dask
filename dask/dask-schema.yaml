@@ -84,19 +84,21 @@ properties:
               The number of files to handle within each metadata-processing
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
+          minimum-partition-size:
+            type: integer
+            description: |
+              The minimum in-memory size of a single partition after reading
+              from parquet. Smaller parquet files will be combined into
+              a single partitions to reach this threshold.
 
       convert-string:
         type: [boolean, 'null']
         description: |
           Whether to convert string-like data to pyarrow strings.
       query-planning:
-        type: [boolean]
+        type: [boolean, "null"]
         description: |
           Whether to use query planning.
-      query-planning-warning:
-        type: [boolean]
-        description: |
-          Whether to warn about future use of query planning.
 
   array:
     type: object
@@ -117,15 +119,24 @@ properties:
         description: |
           The default chunk size to target. Default is "128MiB".
 
+      chunk-size-tolerance:
+        type: number
+        description: |
+          Upper tolerance for different algorithms when creating output chunks.
+          Default is 1.25. This means that the algorithms can exceed
+          the average input chunk size along this dimension by 25%.
+
       rechunk:
         type: object
         properties:
           
           method:
-            type: string
+            type:
+            - string
+            - "null"
             description: |
-              The method to use for rechunking. Must be either "tasks" or "p2p";
-              default is "tasks". Using "p2p" requires a distributed cluster.
+              The method to use for rechunking. Possible values are tasks or p2p.
+              If null, pick best method depending on application.
           
           threshold:
             type: integer
@@ -153,6 +164,10 @@ properties:
               warning is produced. Set to ``False`` to silence the warning
               and allow large output chunks. Set to ``True`` to silence the
               warning and avoid large output chunks.
+      query-planning:
+        type: [boolean, "null"]
+        description: |
+          Whether to use query planning for arrays.
 
   optimization:
     type: object
@@ -228,6 +243,13 @@ properties:
               comprehensible, but it comes at the cost of additional processing. If
               False, then the top-most key will be used. For advanced usage, a function
               to create the new name is also accepted.
+
+          delayed:
+            type: boolean
+            description: |
+              Whether to fuse adjacent delayed calls together. This can be useful to ensure 
+              that an independent chain of delayed calls is executed in a single task to
+              reduce the memory footprint on a single worker.
 
   admin:
     type: object

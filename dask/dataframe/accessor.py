@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import warnings
 
 import numpy as np
@@ -29,8 +30,17 @@ def _bind_property(cls, pd_cls, attr, min_version=None):
     func.__name__ = attr
     func.__qualname__ = f"{cls.__name__}.{attr}"
     try:
-        func.__wrapped__ = getattr(pd_cls, attr)
+        # Attempt to determine the method we are wrapping
+        original_prop = getattr(pd_cls, attr)
+        if isinstance(original_prop, property):
+            method = original_prop.fget
+        elif isinstance(original_prop, functools.cached_property):
+            method = original_prop.func
+        else:
+            method = original_prop
+            func.__wrapped__ = method
     except Exception:
+        # If we can't then no matter, the function still works.
         pass
     setattr(cls, attr, property(derived_from(pd_cls, version=min_version)(func)))
 

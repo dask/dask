@@ -16,6 +16,7 @@ from tlz import merge
 import dask
 import dask.bag as db
 from dask import compute
+from dask.base import collections_to_dsk
 from dask.delayed import Delayed, delayed, to_task_dask
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import inc
@@ -571,8 +572,8 @@ def test_array_delayed():
 
 
 def test_array_bag_delayed():
-    da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
 
     arr1 = np.arange(100).reshape((10, 10))
     arr2 = arr1.dot(arr1.T)
@@ -675,6 +676,7 @@ def test_delayed_name():
 
 
 def test_finalize_name():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
 
     x = da.ones(10, chunks=5)
@@ -691,6 +693,7 @@ def test_finalize_name():
 
 
 def test_keys_from_array():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     from dask.array.utils import _check_dsk
 
@@ -752,6 +755,7 @@ def test_attribute_of_attribute():
 
 
 def test_check_meta_flag():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     from pandas import Series
 
@@ -852,3 +856,28 @@ def test_delayed_function_attributes_forwarded():
     assert add.__name__ == "add"
     assert add.__doc__ == "This is a docstring"
     assert add.__wrapped__(1, 2) == 3
+
+
+def test_delayed_fusion():
+    @delayed
+    def test(i):
+        return i + 1
+
+    @delayed
+    def test2(i):
+        return i + 2
+
+    @delayed
+    def test3(i):
+        return i + 3
+
+    obj = test3(test2(test(10)))
+    dsk = dict(collections_to_dsk([obj]))
+    assert len(dsk) == 3
+
+    obj2 = test3(test2(test(10)))
+    with dask.config.set({"optimization.fuse.delayed": True}):
+        dsk2 = dict(collections_to_dsk([obj]))
+        result = dask.compute(obj2)
+    assert len(dsk2) == 2
+    assert dask.compute(obj) == result

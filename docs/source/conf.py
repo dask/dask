@@ -14,6 +14,10 @@ from __future__ import annotations
 
 import os
 
+# Build docs with option disabled until we move dask-expr over, otherwise
+# we run into a lot of circular issues that sphinx can't resolve properly
+os.environ["DASK_DATAFRAME__QUERY_PLANNING"] = "false"
+
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
@@ -313,9 +317,10 @@ epub_copyright = "2014-2018, Anaconda, Inc. and contributors"
 # epub_tocdup = True
 
 extlinks = {
-    "issue": ("https://github.com/dask/dask/issues/%s", "GH#"),
-    "pr": ("https://github.com/dask/dask/pull/%s", "GH#"),
-    "pr-distributed": ("https://github.com/dask/distributed/pull/%s", "GH#"),
+    "issue": ("https://github.com/dask/dask/issues/%s", "dask#"),
+    "pr": ("https://github.com/dask/dask/pull/%s", "dask#"),
+    "pr-distributed": ("https://github.com/dask/distributed/pull/%s", "distributed#"),
+    "pr-expr": ("https://github.com/dask/dask-expr/pull/%s", "dask-expr#"),
 }
 
 #  --Options for sphinx extensions -----------------------------------------------
@@ -345,7 +350,7 @@ intersphinx_mapping = {
         "https://filesystem-spec.readthedocs.io/en/latest/",
         "https://filesystem-spec.readthedocs.io/en/latest/objects.inv",
     ),
-    "click": ("https://click.palletsprojects.com/en/latest/", None),
+    "click": ("https://click.palletsprojects.com/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy", None),
 }
 

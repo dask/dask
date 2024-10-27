@@ -1,5 +1,5 @@
 # This job includes coverage
-name: test-environment
+name: test-environment-310
 channels:
   - conda-forge
   - nodefaults
@@ -24,9 +24,9 @@ dependencies:
   - moto<5
   # Optional dependencies
   - mimesis
-  - numpy=1.23
-  - pandas=1.5
-  - numba<0.59.0  # Removed numba.generated_jit which pandas<2.1 uses
+  - numpy=1.24
+  - pandas=2.1
+  - numba
   - flask
   - fastparquet
   - h5py
@@ -39,8 +39,9 @@ dependencies:
   - pyspark
   - tiledb
   - xarray
-  - sqlalchemy<2  # `pandas=1.5` doesn't support `sqlalchemy=2`
-  - pyarrow=10
+  - numexpr>=2.8  # Something is pinning it to 2.7
+  - sqlalchemy
+  - pyarrow=14.0.1
   - coverage
   - jsonschema
   # other -- IO
@@ -75,3 +76,4 @@ dependencies:
   - pip
   - pip:
     - git+https://github.com/dask/distributed
+    - git+https://github.com/dask/dask-expr

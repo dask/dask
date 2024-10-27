@@ -21,7 +21,6 @@ from pyarrow import dataset as pa_ds
 from pyarrow import fs as pa_fs
 
 import dask
-from dask.base import normalize_token, tokenize
 from dask.core import flatten
 from dask.dataframe._compat import PANDAS_GE_220
 from dask.dataframe.backends import pyarrow_schema_dispatch
@@ -39,6 +38,7 @@ from dask.dataframe.io.parquet.utils import (
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
 from dask.dataframe.utils import clear_known_categories, pyarrow_strings_enabled
 from dask.delayed import Delayed
+from dask.tokenize import normalize_token, tokenize
 from dask.utils import getargspec, natural_sort_key
 
 PYARROW_NULLABLE_DTYPE_MAPPING = {
@@ -1373,7 +1373,7 @@ class ArrowDatasetEngine(Engine):
         for i, name in enumerate(schema.names):
             if name in _index_cols or name in filter_columns:
                 if name in partition_names:
-                    # Partition columns wont have statistics
+                    # Partition columns won't have statistics
                     continue
                 stat_col_indices[name] = i
 
@@ -1408,7 +1408,7 @@ class ArrowDatasetEngine(Engine):
                 common_kwargs,
             )
 
-        # Get/transate filters
+        # Get/translate filters
         ds_filters = None
         if filters is not None:
             ds_filters = _filters_to_expression(filters)
@@ -1545,7 +1545,7 @@ class ArrowDatasetEngine(Engine):
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
         blocksize = dataset_info_kwargs["blocksize"]
 
-        # Intialize row-group and statistics data structures
+        # Initialize row-group and statistics data structures
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
@@ -1908,7 +1908,7 @@ class ArrowDatasetEngine(Engine):
             metadata_path = fs.sep.join([out_path, "_metadata"])
             with fs.open(metadata_path, "wb") as fil:
                 if not meta:
-                    raise ValueError("Cannot write empty metdata!")
+                    raise ValueError("Cannot write empty metadata!")
                 meta.write_metadata_file(fil)
             return None
         else:
