@@ -1960,11 +1960,14 @@ def test_store_compute_false():
     at = np.zeros(shape=(4, 4))
     bt = np.zeros(shape=(4, 4))
 
-    dat, dbt = store([a, b], [at, bt], compute=False, return_stored=True)
-    assert isinstance(dat, Array) and isinstance(dbt, Array)
-    assert (at == 0).all() and (bt == 0).all()
-    assert (dat.compute() == at).all() and (dbt.compute() == bt).all()
-    assert (at == 2).all() and (bt == 3).all()
+    for load_stored in [None, False, True]:
+        dat, dbt = store(
+            [a, b], [at, bt], compute=False, return_stored=True, load_stored=load_stored
+        )
+        assert isinstance(dat, Array) and isinstance(dbt, Array)
+        assert (at == 0).all() and (bt == 0).all()
+        assert (dat.compute() == at).all() and (dbt.compute() == bt).all()
+        assert (at == 2).all() and (bt == 3).all()
 
 
 def test_store_nocompute_regions():
