@@ -670,12 +670,12 @@ def _connecting_to_roots(
                 and (result_first is r_child or r_child.issubset(result_first))
             ):
                 identical_sets = False
-                if not new_set:
+                if new_set is None:
                     new_set = set(result_first)
                 max_dependents[key] = max(max_dependents[child], max_dependents[key])
                 new_set.update(r_child)
 
-        if new_set:
+        if new_set is not None:
             new_set_frozen = frozenset(new_set)
             deduped = dedup_mapping.get(new_set_frozen, None)
             if deduped is None:
