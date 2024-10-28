@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Collection, Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping, MutableMapping
 from typing import Any, Literal, TypeVar, cast, overload
 
-from dask._task_spec import DependenciesMapping
+from dask._task_spec import DependenciesMapping, convert_legacy_graph, execute_graph
 from dask.typing import Graph, Key, NoDefault, no_default
 
 
@@ -53,28 +53,6 @@ def istask(x):
     return type(x) is tuple and x and callable(x[0])
 
 
-def has_tasks(dsk, x):
-    """Whether ``x`` has anything to compute.
-
-    Returns True if:
-    - ``x`` is a task
-    - ``x`` is a key in ``dsk``
-    - ``x`` is a list that contains any tasks or keys
-    """
-    if istask(x):
-        return True
-    try:
-        if x in dsk:
-            return True
-    except Exception:
-        pass
-    if isinstance(x, list):
-        for i in x:
-            if has_tasks(dsk, i):
-                return True
-    return False
-
-
 def preorder_traversal(task):
     """A generator to preorder-traverse a task."""
 
@@ -94,53 +72,13 @@ def lists_to_tuples(res, keys):
     return res
 
 
-def _execute_task(arg, cache, dsk=None):
-    """Do the actual work of collecting data and executing a function
-
-    Examples
-    --------
-
-    >>> inc = lambda x: x + 1
-    >>> add = lambda x, y: x + y
-    >>> cache = {'x': 1, 'y': 2}
-
-    Compute tasks against a cache
-    >>> _execute_task((add, 'x', 1), cache)  # Compute task in naive manner
-    2
-    >>> _execute_task((add, (inc, 'x'), 1), cache)  # Support nested computation
-    3
-
-    Also grab data from cache
-    >>> _execute_task('x', cache)
-    1
-
-    Support nested lists
-    >>> list(_execute_task(['x', 'y'], cache))
-    [1, 2]
-
-    >>> list(map(list, _execute_task([['x', 'y'], ['y', 'x']], cache)))
-    [[1, 2], [2, 1]]
-
-    >>> _execute_task('foo', cache)  # Passes through on non-keys
-    'foo'
-    """
-    if isinstance(arg, list):
-        return [_execute_task(a, cache) for a in arg]
-    elif istask(arg):
-        func, args = arg[0], arg[1:]
-        # Note: Don't assign the subtask results to a variable. numpy detects
-        # temporaries by their reference count and can execute certain
-        # operations in-place.
-        return func(*(_execute_task(a, cache) for a in args))
-    elif not ishashable(arg):
-        return arg
-    elif arg in cache:
-        return cache[arg]
-    else:
-        return arg
+def _pack_result(result: Mapping, keys: list | Key) -> Any:
+    if isinstance(keys, list):
+        return tuple(_pack_result(result, k) for k in keys)
+    return result[keys]
 
 
-def get(dsk, out, cache=None):
+def get(dsk: Mapping, out: list | Key, cache: MutableMapping | None = None) -> Any:
     """Get value from Dask
 
     Examples
@@ -154,19 +92,15 @@ def get(dsk, out, cache=None):
     >>> get(d, 'y')
     2
     """
-    for k in flatten(out) if isinstance(out, list) else [out]:
+    for k in flatten(out):
         if k not in dsk:
             raise KeyError(f"{k} is not a key in the graph")
     if cache is None:
         cache = {}
-    for key in toposort(dsk):
-        task = dsk[key]
-        result = _execute_task(task, cache)
-        cache[key] = result
-    result = _execute_task(out, cache)
-    if isinstance(out, list):
-        result = lists_to_tuples(result, out)
-    return result
+
+    dsk2 = convert_legacy_graph(dsk, all_keys=set(dsk) | set(cache))
+    result = execute_graph(dsk2, cache, keys=set(flatten([out])))
+    return _pack_result(result, out)
 
 
 def keys_in_tasks(keys: Collection[Key], tasks: Iterable[Any], as_list: bool = False):

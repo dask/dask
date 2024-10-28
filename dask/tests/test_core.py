@@ -11,7 +11,6 @@ from dask.core import (
     get_dependencies,
     get_deps,
     getcycle,
-    has_tasks,
     ishashable,
     iskey,
     istask,
@@ -86,23 +85,6 @@ def test_istask():
     assert not istask((1, 2))
     f = namedtuple("f", ["x", "y"])
     assert not istask(f(sum, 2))
-
-
-def test_has_tasks():
-    dsk = {
-        "a": [1, 2, 3],
-        "b": "a",
-        "c": [1, (inc, 1)],
-        "d": [(sum, "a")],
-        "e": ["a", "b"],
-        "f": [["a", "b"], 2, 3],
-    }
-    assert not has_tasks(dsk, dsk["a"])
-    assert has_tasks(dsk, dsk["b"])
-    assert has_tasks(dsk, dsk["c"])
-    assert has_tasks(dsk, dsk["d"])
-    assert has_tasks(dsk, dsk["e"])
-    assert has_tasks(dsk, dsk["f"])
 
 
 def test_preorder_traversal():
