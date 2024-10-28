@@ -62,6 +62,28 @@ def test_convert_legacy_dsk_skip_new():
     assert converted == dsk
 
 
+def test_repr():
+    t = Task("key", func, "a", "b")
+    assert repr(t) == "<Task 'key' func('a', 'b')>"
+
+    t = Task("nested", func2, t, t.ref())
+    assert (
+        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
+    )
+
+    def long_function_name_longer_even_longer(a, b):
+        return a + b
+
+    t = Task("long", long_function_name_longer_even_longer, t, t.ref())
+    assert repr(t) == "<Task 'long' long_function_name_longer_even_longer(...)>"
+
+    def use_kwargs(a, kwarg=None):
+        return a + kwarg
+
+    t = Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value")
+    assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
+
+
 def _assert_dsk_conversion(new_dsk):
     vals = [(k, v.key) for k, v in new_dsk.items()]
     assert all(v[0] == v[1] for v in vals), vals
@@ -754,7 +776,7 @@ def test_execute_tasks_in_graph():
         t3 := Task("key-3", func, "foo", "bar"),
         Task("key-4", func, t3.ref(), t2.ref()),
     ]
-    res = execute_graph(dsk)
+    res = execute_graph(dsk, keys=["key-4"])
     assert len(res) == 1
     assert res["key-4"] == "foo-bar-a-b=c"
 

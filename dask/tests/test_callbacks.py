@@ -27,7 +27,7 @@ def test_start_state_callback():
     class MyCallback(Callback):
         def _start_state(self, dsk, state):
             flag[0] = True
-            assert dsk["x"] == 1
+            assert dsk["x"]() == 1
             assert len(state["cache"]) == 1
 
     with MyCallback():
@@ -98,8 +98,8 @@ def test_nested_schedulers():
         get_threaded(outer_dsk, "b")
 
     assert not Callback.active
-    assert outer_callback.dsk == outer_dsk
-    assert inner_callback.dsk == inner_dsk
+    assert outer_callback.dsk.keys() == outer_dsk.keys()
+    assert inner_callback.dsk.keys() == inner_dsk.keys()
     assert not Callback.active
 
 
