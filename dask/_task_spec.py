@@ -327,6 +327,7 @@ def convert_legacy_graph(
             not only_refs
             and isinstance(t, Alias)
             and isinstance(arg, TaskRef)
+            and not hasattr(arg, "client")  # Futures
             and t.key == arg.key
         ):
             # This detects cycles?
