@@ -84,6 +84,32 @@ def test_repr():
     assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
 
 
+def test_unpickled_repr():
+    t = pickle.loads(pickle.dumps(Task("key", func, "a", "b")))
+    assert repr(t) == "<Task 'key' func('a', 'b')>"
+
+    t = pickle.loads(pickle.dumps(Task("nested", func2, t, t.ref())))
+    assert (
+        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
+    )
+
+    def long_function_name_longer_even_longer(a, b):
+        return a + b
+
+    t = pickle.loads(
+        pickle.dumps(Task("long", long_function_name_longer_even_longer, t, t.ref()))
+    )
+    assert repr(t) == "<Task 'long' long_function_name_longer_even_longer(...)>"
+
+    def use_kwargs(a, kwarg=None):
+        return a + kwarg
+
+    t = pickle.loads(
+        pickle.dumps(Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value"))
+    )
+    assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
+
+
 def _assert_dsk_conversion(new_dsk):
     vals = [(k, v.key) for k, v in new_dsk.items()]
     assert all(v[0] == v[1] for v in vals), vals

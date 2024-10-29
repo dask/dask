@@ -653,7 +653,9 @@ class Task(GraphNode):
         )
 
     def __repr__(self) -> str:
-        if not self._repr:
+        # When `Task` is deserialized the constructor will not run and
+        # `self._repr` is thus undefined.
+        if not hasattr(self, "_repr") or not self._repr:
             self.unpack()
             head = funcname(self.func)
             tail = ")"
