@@ -843,25 +843,34 @@ class DependenciesMapping(MutableMapping):
     def __init__(self, dsk):
         self.dsk = dsk
         self._removed = set()
+        # Set a copy of dsk to avoid dct resizing
+        self._cache = dsk.copy()
+        self._cache.clear()
 
     def __getitem__(self, key):
-        v = self.dsk[key]
-        if not isinstance(v, GraphNode):
-            from dask.core import get_dependencies
-
-            deps = get_dependencies(self.dsk, task=self.dsk[key])
+        if (val := self._cache.get(key)) is not None:
+            return val
         else:
-            deps = self.dsk[key].dependencies
-        if self._removed:
-            # deps is a frozenset but for good measure, let's not use -= since
-            # that _may_ perform an inplace mutation
-            deps = deps - self._removed
-        return deps
+            v = self.dsk[key]
+            try:
+                deps = v.dependencies
+            except AttributeError:
+                from dask.core import get_dependencies
+
+                deps = get_dependencies(self.dsk, task=v)
+
+            if self._removed:
+                # deps is a frozenset but for good measure, let's not use -= since
+                # that _may_ perform an inplace mutation
+                deps = deps - self._removed
+            self._cache[key] = deps
+            return deps
 
     def __iter__(self):
         return iter(self.dsk)
 
     def __delitem__(self, key: Any) -> None:
+        self._cache.clear()
         self._removed.add(key)
 
     def __setitem__(self, key: Any, value: Any) -> None:
