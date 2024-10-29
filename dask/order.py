@@ -562,7 +562,7 @@ def order(
         while next_deps:
             item = max(next_deps, key=sort_key)
             path_append(item)
-            next_deps = dependencies[item]
+            next_deps = dependencies[item].difference(result)
             path_extend(next_deps)
 
         # B. Walk the critical path
