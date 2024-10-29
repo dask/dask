@@ -25,6 +25,7 @@ from numpy.typing import ArrayLike
 from packaging.version import Version
 from tlz import accumulate, concat, first, groupby, partition
 from tlz.curried import pluck
+from toolz import frequencies
 
 from dask import compute, config, core
 from dask.array import chunk
@@ -3269,6 +3270,15 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         # How much larger or smaller the ideal chunk size is relative to what we have now
         multiplier = _compute_multiplier(limit, dtype, largest_block, median_chunks)
 
+        ideal_shape = []
+        for i, s in enumerate(shape):
+            chunk_frequencies = frequencies(previous_chunks[i])
+            mode, count = max(chunk_frequencies.items(), key=lambda kv: kv[1])
+            if mode > 1 and count >= len(previous_chunks[i]) / 2:
+                ideal_shape.append(mode)
+            else:
+                ideal_shape.append(s)
+
         def _trivial_aggregate(a):
             autos.remove(a)
             del median_chunks[a]
@@ -3292,33 +3302,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     multiplier_remaining = _trivial_aggregate(a)
                     largest_block *= shape[a]
                     continue
-                elif this_multiplier <= 1:
-                    if max(previous_chunks[a]) == 1:
-                        multiplier_remaining = _trivial_aggregate(a)
-                        chunks[a] = tuple(previous_chunks[a])
-                        continue
-
-                    cache, dimension_result = {}, []
-                    for c in previous_chunks[a]:
-                        if c in cache:
-                            # We potentially split the same chunk over and over again
-                            # so cache that
-                            dimension_result.extend(cache[c])
-                            continue
-                        elif c <= max(max_chunk_size, 1):
-                            new_chunks = [c]
-                        else:
-                            new_chunks = _split_up_single_chunk(
-                                c, this_chunksize_tolerance, max_chunk_size, proposed
-                            )
-
-                        cache[c] = new_chunks
-                        dimension_result.extend(new_chunks)
-
-                    if max(dimension_result) == 1:
-                        # See if we can split up other axes further
-                        multiplier_remaining = _trivial_aggregate(a)
-
+                elif this_multiplier <= 1 or max(previous_chunks[a]) > max_chunk_size:
+                    result[a] = round_to(proposed, ideal_shape[a])
+                    continue
                 else:
                     dimension_result, new_chunk = [], 0
                     for c in previous_chunks[a]:
@@ -3329,17 +3315,6 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                             # We reach the boundary so start a new chunk
                             dimension_result.append(new_chunk)
                             new_chunk = c
-                            if new_chunk > max_chunk_size:
-                                # our new chunk is greater than the allowed, so split it up
-                                dimension_result.extend(
-                                    _split_up_single_chunk(
-                                        c,
-                                        this_chunksize_tolerance,
-                                        max_chunk_size,
-                                        proposed,
-                                    )
-                                )
-                                new_chunk = 0
                     if new_chunk > 0:
                         dimension_result.append(new_chunk)
 
