@@ -3260,7 +3260,14 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
     if previous_chunks:
         # Base ideal ratio on the median chunk size of the previous chunks
-        result = {a: np.median(previous_chunks[a]) for a in autos}
+        result = {}
+        for a in autos:
+            prev_chunks = [x for x in previous_chunks[a] if x > 0]
+            result[a] = (
+                np.median(prev_chunks)
+                if len(prev_chunks)
+                else np.median(previous_chunks[a])
+            )
 
         ideal_shape = []
         for i, s in enumerate(shape):
