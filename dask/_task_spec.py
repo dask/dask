@@ -308,7 +308,10 @@ def convert_legacy_task(
         )
 
     elif isinstance(task, TaskRef):
-        return Alias(task.key)
+        if k is None:
+            return Alias(task.key)
+        else:
+            return Alias(k, target=task.key)
     else:
         return task
 
@@ -327,7 +330,6 @@ def convert_legacy_graph(
             not only_refs
             and isinstance(t, Alias)
             and isinstance(arg, TaskRef)
-            and not hasattr(arg, "client")  # Futures
             and t.key == arg.key
         ):
             # This detects cycles?
