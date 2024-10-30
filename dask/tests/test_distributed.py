@@ -906,8 +906,6 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     # See https://github.com/dask/dask/issues/8773
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("we don't offer a public reduction")
 
     class SomeObject:
         def __init__(self, val):
