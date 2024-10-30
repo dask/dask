@@ -28,7 +28,7 @@ from dask.array.core import (
 )
 from dask.array.creation import arange, diagonal
 from dask.array.dispatch import divide_lookup, nannumel_lookup, numel_lookup
-from dask.array.numpy_compat import ComplexWarning
+from dask.array.numpy_compat import NUMPY_GE_200, ComplexWarning
 from dask.array.utils import (
     array_safe,
     asarray_safe,
@@ -1899,17 +1899,22 @@ def quantile(
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
+    if NUMPY_GE_200:
+        kwargs = {"weights": weights}
+    else:
+        kwargs = {}
+
     result = a.map_blocks(
         np.quantile,
         q=q,
         method=method,
-        weights=weights,
         interpolation=interpolation,
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
         new_axis=0 if isinstance(q, Iterable) else None,
         chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        **kwargs,
     )
 
     result = handle_out(out, result)
@@ -1939,8 +1944,8 @@ def _custom_quantile(
     axis=None,
     method="linear",
     interpolation=None,
-    weights=None,
     keepdims=False,
+    **kwargs,
 ):
     if (
         not {method, interpolation}.issubset({"linear", None})
@@ -1956,9 +1961,9 @@ def _custom_quantile(
             q,
             axis=axis,
             method=method,
-            weights=weights,
             interpolation=interpolation,
             keepdims=keepdims,
+            **kwargs,
         )
     # nanquantile in NumPy is pretty slow if the quantile axis is slow because
     # each quantile has overhead.
@@ -2045,17 +2050,22 @@ def nanquantile(
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
+    if NUMPY_GE_200:
+        kwargs = {"weights": weights}
+    else:
+        kwargs = {}
+
     result = a.map_blocks(
         _custom_quantile,
         q=q,
         method=method,
-        weights=weights,
         interpolation=interpolation,
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
         new_axis=0 if isinstance(q, Iterable) else None,
         chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        **kwargs,
     )
 
     result = handle_out(out, result)
