@@ -39,6 +39,7 @@ from dask.array.dispatch import (  # noqa: F401
 )
 from dask.array.numpy_compat import NUMPY_GE_200, _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
+from dask.array.utils import compute_meta, meta_from_array
 from dask.base import (
     DaskMethodsMixin,
     compute_as_if_collection,
@@ -5953,4 +5954,3 @@ class BlockView:
 
 
 from dask.array.blockwise import blockwise
-from dask.array.utils import compute_meta, meta_from_array

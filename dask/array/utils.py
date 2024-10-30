@@ -10,7 +10,6 @@ import warnings
 import numpy as np
 from tlz import concat, frequencies
 
-from dask.array.core import Array
 from dask.array.numpy_compat import AxisError
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -440,6 +439,8 @@ def arange_safe(*args, like, **kwargs):
 
 
 def _array_like_safe(np_func, da_func, a, like, **kwargs):
+    from dask.array.core import Array
+
     if like is a and hasattr(a, "__array_function__"):
         return a
 
