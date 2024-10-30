@@ -608,8 +608,14 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         return None
 
     def _layer(self) -> dict:
-        from distributed.shuffle._core import ShuffleId, barrier_key, p2p_barrier
+        from distributed.shuffle._core import (
+            P2PBarrierTask,
+            ShuffleId,
+            barrier_key,
+            p2p_barrier,
+        )
         from distributed.shuffle._merge import merge_unpack
+        from distributed.shuffle._shuffle import DataFrameShuffleSpec
 
         dsk = {}
         token_left = _tokenize_deterministic(
@@ -648,8 +654,6 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self.npartitions,
                 token_left,
                 i,
-                self.left._meta,
-                self._partitions,
                 self.left_index,
             )
             dsk[t.key] = t
@@ -665,20 +669,44 @@ class HashJoinP2P(Merge, PartitionsFiltered):
                 self.npartitions,
                 token_right,
                 i,
-                self.right._meta,
-                self._partitions,
                 self.right_index,
             )
             dsk[t.key] = t
             transfer_keys_right.append(t.ref())
 
-        barrier_left = Task(
-            _barrier_key_left, p2p_barrier, token_left, transfer_keys_left
+        meta_left = self.left._meta.assign(**{_HASH_COLUMN_NAME: 0})
+        barrier_left = P2PBarrierTask(
+            _barrier_key_left,
+            p2p_barrier,
+            token_left,
+            transfer_keys_left,
+            spec=DataFrameShuffleSpec(
+                id=token_left,
+                npartitions=self.npartitions,
+                column=_HASH_COLUMN_NAME,
+                meta=meta_left,
+                parts_out=self._partitions,
+                disk=True,
+                drop_column=True,
+            ),
         )
         dsk[barrier_left.key] = barrier_left
 
-        barrier_right = Task(
-            _barrier_key_right, p2p_barrier, token_right, transfer_keys_right
+        meta_right = self.right._meta.assign(**{_HASH_COLUMN_NAME: 0})
+        barrier_right = P2PBarrierTask(
+            _barrier_key_right,
+            p2p_barrier,
+            token_right,
+            transfer_keys_right,
+            spec=DataFrameShuffleSpec(
+                id=token_right,
+                npartitions=self.npartitions,
+                column=_HASH_COLUMN_NAME,
+                meta=meta_right,
+                parts_out=self._partitions,
+                disk=True,
+                drop_column=True,
+            ),
         )
         dsk[barrier_right.key] = barrier_right
 
@@ -813,7 +841,6 @@ class BroadcastJoin(Merge, PartitionsFiltered):
 
 
 def create_assign_index_merge_transfer():
-    import pandas as pd
     from distributed.shuffle._core import ShuffleId
     from distributed.shuffle._merge import merge_transfer
 
@@ -824,8 +851,6 @@ def create_assign_index_merge_transfer():
         npartitions,
         id: ShuffleId,
         input_partition: int,
-        meta: pd.DataFrame,
-        parts_out: set[int],
         index_merge,
     ):
         if index_merge:
@@ -847,10 +872,7 @@ def create_assign_index_merge_transfer():
 
         index = partitioning_index(index, npartitions)
         df = df.assign(**{name: index})
-        meta = meta.assign(**{name: 0})
-        return merge_transfer(
-            df, id, input_partition, npartitions, meta, parts_out, True
-        )
+        return merge_transfer(df, id, input_partition)
 
     return assign_index_merge_transfer
 
