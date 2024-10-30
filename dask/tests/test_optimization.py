@@ -1542,7 +1542,7 @@ def test_fusion_legacy_hybrid():
 
     new_dsk = convert_legacy_graph(fused)
     assert isinstance(new_dsk["bar"], Alias)
-    assert new_dsk["bar"].key == fused_task_key
+    assert new_dsk["bar"].key == "bar"
     assert not new_dsk[fused_task_key].dependencies
     assert new_dsk[fused_task_key]() == "a-b=c"
 
@@ -1590,7 +1590,7 @@ def test_fusion_wide_legacy_hybrid():
 
         new_dsk = convert_legacy_graph(fused)
         assert isinstance(new_dsk["bar"], Alias)
-        assert new_dsk["bar"].key == fused_task_key
+        assert new_dsk["bar"].key == "bar"
         assert not new_dsk[fused_task_key].dependencies
         assert new_dsk[fused_task_key]() == "a-b=a-b"
 
