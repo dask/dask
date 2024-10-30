@@ -546,8 +546,6 @@ def test_blockwise_array_creation(c, io, fuse):
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.xfail("doesn't work yet")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 
