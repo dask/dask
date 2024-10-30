@@ -536,28 +536,13 @@ def _shuffle_transfer(
     input: pd.DataFrame,
     id,
     input_partition: int,
-    npartitions: int,
-    column: str,
-    meta: pd.DataFrame,
-    parts_out: set[int] | int,
-    disk: bool,
-    drop_column: bool,
 ) -> int:
     from distributed.shuffle._shuffle import shuffle_transfer
-
-    if isinstance(parts_out, int):
-        parts_out = list(range(parts_out))
 
     return shuffle_transfer(
         input,
         id,
         input_partition,
-        npartitions,
-        column,
-        meta,
-        parts_out,
-        disk,
-        drop_column,
     )
 
 
@@ -569,12 +554,18 @@ class P2PShuffle(SimpleShuffle):
         return self.frame._meta.drop(columns=self.partitioning_index)
 
     def _layer(self):
-        from distributed.shuffle._core import p2p_barrier
-        from distributed.shuffle._shuffle import ShuffleId, barrier_key, shuffle_unpack
+        from distributed.shuffle._core import (
+            P2PBarrierTask,
+            ShuffleId,
+            barrier_key,
+            p2p_barrier,
+        )
+        from distributed.shuffle._shuffle import DataFrameShuffleSpec, shuffle_unpack
 
         dsk = {}
         token = self._name.split("-")[-1]
-        _barrier_key = barrier_key(ShuffleId(token))
+        shuffle_id = ShuffleId(token)
+        _barrier_key = barrier_key(shuffle_id)
         name = "shuffle-transfer-" + token
 
         parts_out = (
@@ -582,7 +573,7 @@ class P2PShuffle(SimpleShuffle):
         )
         # Avoid embedding a materialized list unless necessary
         parts_out_arg = (
-            set(self._partitions) if self._filtered else self.npartitions_out
+            tuple(self._partitions) if self._filtered else self.npartitions_out
         )
 
         transfer_keys = list()
@@ -593,17 +584,25 @@ class P2PShuffle(SimpleShuffle):
                 TaskRef((self.frame._name, i)),
                 token,
                 i,
-                self.npartitions_out,
-                self.partitioning_index,
-                self.frame._meta,
-                parts_out_arg,
-                True,
-                True,
             )
             dsk[t.key] = t
             transfer_keys.append(t.ref())
 
-        barrier = Task(_barrier_key, p2p_barrier, token, transfer_keys)
+        barrier = P2PBarrierTask(
+            _barrier_key,
+            p2p_barrier,
+            token,
+            transfer_keys,
+            spec=DataFrameShuffleSpec(
+                id=shuffle_id,
+                npartitions=self.npartitions_out,
+                column=self.partitioning_index,
+                meta=self.frame._meta,
+                parts_out=parts_out_arg,
+                disk=True,
+                drop_column=True,
+            ),
+        )
         dsk[barrier.key] = barrier
 
         # TODO: Decompose p2p Into transfer/barrier + unpack
