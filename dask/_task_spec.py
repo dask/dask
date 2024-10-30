@@ -272,7 +272,10 @@ def convert_legacy_task(
     try:
         if isinstance(task, (bytes, int, float, str, tuple)):
             if task in all_keys:
-                return Alias(task)
+                if k is None:
+                    return Alias(task)
+                else:
+                    return Alias(k, target=task)
     except TypeError:
         # Unhashable
         pass
@@ -305,7 +308,10 @@ def convert_legacy_task(
         )
 
     elif isinstance(task, TaskRef):
-        return Alias(task.key)
+        if k is None:
+            return Alias(task.key)
+        else:
+            return Alias(k, target=task.key)
     else:
         return task
 
@@ -320,7 +326,13 @@ def convert_legacy_graph(
     new_dsk = {}
     for k, arg in dsk.items():
         t = convert_legacy_task(k, arg, all_keys, only_refs)
-        if not only_refs and isinstance(t, Alias) and t.key == k:
+        if (
+            not only_refs
+            and isinstance(t, Alias)
+            and isinstance(arg, TaskRef)
+            and t.key == arg.key
+        ):
+            # This detects cycles?
             continue
         new_dsk[k] = t
     new_dsk2 = {
@@ -379,6 +391,8 @@ def resolve_aliases(dsk: dict, keys: set, dependents: dict) -> dict:
                 if isinstance(tnew, Alias):
                     work.append(k)
                     seen.discard(k)
+                else:
+                    work.extend(tnew.dependencies)
 
         work.extend(t.dependencies)
     return dsk

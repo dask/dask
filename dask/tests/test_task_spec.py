@@ -661,6 +661,51 @@ def test_resolve_aliases():
     assert optimized == dsk
 
 
+def test_resolve_multiple_aliases():
+
+    tasks = [
+        Task("first", func, 10),
+        Alias("second", "first"),
+        Task("third", func, TaskRef("second")),
+        Alias("fourth", "third"),
+        Task("fifth", func, TaskRef("fourth")),
+    ]
+    dsk = {t.key: t for t in tasks}
+    assert len(dsk) == 5
+
+    optimized = resolve_aliases(dsk, {"fifth"}, reverse_dict(DependenciesMapping(dsk)))
+    assert len(optimized) == 3
+    expected = dsk["third"].copy()
+    expected.key = "fourth"
+    assert optimized["fourth"] == expected
+
+    expected = dsk["first"].copy()
+    expected.key = "second"
+    assert optimized["second"] == expected
+
+
+def test_convert_resolve():
+    dsk = {
+        "first": (func, 10),
+        "second": "first",
+        "third": (func, "second"),
+        "fourth": "third",
+        "fifth": (func, "fourth"),
+    }
+    dsk = convert_legacy_graph(dsk)
+    assert len(dsk) == 5
+
+    optimized = resolve_aliases(dsk, {"fifth"}, reverse_dict(DependenciesMapping(dsk)))
+    assert len(optimized) == 3
+    expected = dsk["third"].copy()
+    expected.key = "fourth"
+    assert optimized["fourth"] == expected
+
+    expected = dsk["first"].copy()
+    expected.key = "second"
+    assert optimized["second"] == expected
+
+
 def test_parse_nested():
     t = Task(
         "key",
