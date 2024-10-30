@@ -825,13 +825,45 @@ def test_rechunk_avoid_needless_chunking():
         (100, 50, 10, (10,) * 10),
         (100, 100, 10, (10,) * 10),
         (20, 7, 10, (7, 7, 6)),
-        (20, (1, 1, 1, 1, 6, 2, 1, 7), 5, (5, 5, 5, 5)),
+        (
+            20,
+            (1, 1, 1, 1, 6, 2, 1, 7),
+            5,
+            (5, 5, 5, 5),
+        ),  # This should be smarter
+        (21, (1,) * 21, 10, (10, 10, 1)),  # ensure that we squash together properly
+        (30, (3,) * 10, 7, (6,) * 5),  # ensure that we squash together properly
+        (20, ((2, 2, 2, 9, 1, 2, 2)), 5, (4, 4, 4, 4, 4)),
+        (20, ((10, 10)), 4, (4,) * 5),  # this should split branches evenly
+        (21, ((10, 11)), 4, (4, 4, 4, 4, 4, 1)),  # this should split branches evenly
+        (20, ((1, 18, 1)), 5, (5,) * 4),
+        (38, ((10, 18, 10)), 5, (5, 5, 5, 5, 5, 5, 5, 3)),
     ],
 )
 def test_rechunk_auto_1d(shape, chunks, bs, expected):
     x = da.ones(shape, chunks=(chunks,))
     y = x.rechunk({0: "auto"}, block_size_limit=bs * x.dtype.itemsize)
     assert y.chunks == (expected,)
+
+
+@pytest.mark.parametrize(
+    "previous_chunks,bs,expected",
+    [
+        (((1, 1, 1), (10, 10, 10, 10, 10, 10, 10, 10)), 160, ((3,), (50, 30))),
+        (((2, 2), (20,)), 5, ((1, 1, 1, 1), (7, 7, 6))),
+        (((1, 1), (20,)), 5, ((1, 1), (10, 10))),
+    ],
+)
+def test_normalize_chunks_auto_2d(previous_chunks, bs, expected):
+    shape = tuple(map(sum, previous_chunks))
+    result = normalize_chunks(
+        {0: "auto", 1: "auto"},
+        shape,
+        limit=bs,
+        dtype=np.int8,
+        previous_chunks=previous_chunks,
+    )
+    assert result == expected
 
 
 def test_rechunk_auto_2d():
@@ -880,7 +912,12 @@ def test_rechunk_auto_image_stack(n):
     with dask.config.set({"array.chunk-size": "1MiB"}):
         x = da.ones((n, 1000, 1000), chunks=(1, 1000, 1000), dtype="float64")
         z = x.rechunk("auto")
-        assert z.chunks == ((1,) * n, (362, 362, 276), (362, 362, 276))
+        assert z.chunks == ((1,) * n, (507, 493), (507, 493))
+
+    with dask.config.set({"array.chunk-size": "1MiB"}):
+        x = da.ones((n, 2000, 2000), chunks=(1, 1000, 1000), dtype="float64")
+        z = x.rechunk("auto")
+        assert z.chunks == ((1,) * n, (507, 507, 507, 479), (507, 507, 507, 479))
 
 
 def test_rechunk_down():
@@ -891,7 +928,7 @@ def test_rechunk_down():
 
     with dask.config.set({"array.chunk-size": "1MiB"}):
         z = y.rechunk("auto")
-        assert z.chunks == ((4,) * 25, (511, 489), (511, 489))
+        assert z.chunks == ((4,) * 25, (471, 471, 58), (471, 471, 58))
 
     with dask.config.set({"array.chunk-size": "1MiB"}):
         z = y.rechunk({0: "auto"})
