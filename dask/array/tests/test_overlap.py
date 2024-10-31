@@ -837,6 +837,16 @@ def test_sliding_window_errors(window_shape, axis):
         (((25, 6), (5,) * 10, (5,) * 10, (20,)), 20, 0),
         (
             (
+                (11,),
+                (3, 3, 3, 3, 3, 3, 3, 2, 2) * 2,
+                (3, 3, 3, 3, 3, 3, 3, 2, 2) * 2,
+                (40,),
+            ),
+            40,
+            0,
+        ),
+        (
+            (
                 (25, 21),
                 (2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) * 2,
                 (25, 22),
@@ -868,6 +878,15 @@ def test_sliding_window_view_chunking(output_chunks, window_shape, axis):
     assert_eq(result, expected)
 
 
+def test_sliding_window_view_no_chunking():
+    arr = np.random.randn(50, 50, 50)
+    darr = da.from_array(arr, chunks=(25, 25, 25))
+    result = sliding_window_view(darr, 30, 0, automatic_rechunk=False)
+    assert result.chunks == ((21,), (25, 25), (25, 25), (30,))
+    expected = np.lib.stride_tricks.sliding_window_view(arr, 30, 0)
+    assert_eq(result, expected)
+
+
 def test_map_overlap_new_axis():
     arr = da.arange(6, chunks=2)
     assert arr.shape == (6,)
@@ -891,4 +910,4 @@ def test_overlap_not_blowing_up_graph():
     )
     result = arr.rolling(dim={"year": 11}, center=True).construct("window_dim")
     dc = collections_to_dsk([result.data])
-    assert len(dc) < 1000  # previously 3000
+    assert len(dc) <= 1651  # previously 3000

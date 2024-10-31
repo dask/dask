@@ -808,7 +808,7 @@ def coerce_boundary(ndim, boundary):
 
 
 @derived_from(np.lib.stride_tricks)
-def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=False):
+def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
     window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
 
     window_shape_array = np.array(window_shape)
