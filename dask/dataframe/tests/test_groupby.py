@@ -2645,6 +2645,9 @@ def test_groupby_shift_lazy_input():
         )
 
 
+@pytest.mark.skipif(
+    not DASK_EXPR_ENABLED, reason="flaky with a weird deprecation warning"
+)
 @pytest.mark.filterwarnings("ignore:`meta` is not specified")
 def test_groupby_shift_within_partition_sorting():
     # Result is non-deterministic. We run the assertion a few times to keep
