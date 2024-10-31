@@ -11,17 +11,29 @@ from dask._task_spec import (
     Alias,
     DataNode,
     DependenciesMapping,
+    Dict,
+    List,
+    Set,
     Task,
     TaskRef,
+    Tuple,
     _get_dependencies,
     convert_legacy_graph,
     execute_graph,
+    parse_input,
     resolve_aliases,
 )
 from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
 from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
+
+
+def convert_and_verify_keys(dsk):
+    new_dsk = convert_legacy_graph(dsk)
+    vals = [(k, v.key) for k, v in new_dsk.items()]
+    assert all(v[0] == v[1] for v in vals), vals
+    return new_dsk
 
 
 def identity(x):
@@ -47,7 +59,7 @@ def test_convert_legacy_dsk_skip_new():
     dsk = {
         "key-1": Task("key-1", func, "a", "b"),
     }
-    converted = convert_legacy_graph(dsk)
+    converted = convert_and_verify_keys(dsk)
     assert converted["key-1"] is dsk["key-1"]
     assert converted == dsk
 
@@ -102,11 +114,6 @@ def test_unpickled_repr():
     assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
 
 
-def _assert_dsk_conversion(new_dsk):
-    vals = [(k, v.key) for k, v in new_dsk.items()]
-    assert all(v[0] == v[1] for v in vals), vals
-
-
 def test_convert_legacy_dsk():
     def func(*args):
         return "-".join(args)
@@ -126,8 +133,7 @@ def test_convert_legacy_dsk():
             (func, "const", "bar"),
         ],
     }
-    new_dsk = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(new_dsk)
+    new_dsk = convert_and_verify_keys(dsk)
     t1 = new_dsk["key-1"]
     assert isinstance(t1, Task)
     assert t1.func == func
@@ -168,17 +174,19 @@ def test_task_executable():
 
 
 def test_task_nested_sequence():
+    # We do **not** recurse into structures since this kills performance
+    # we're only considering top-level task objects as arguments or kwargs
     t1 = Task("key-1", func, "a", "b")
     t2 = Task("key-2", func2, "c", "d")
 
     tseq = Task("seq", identity, [t1, t2])
-    assert tseq() == [func("a", "b"), func2("c", "d")]
+    assert tseq() == [t1, t2]
 
     tseq = Task("set", identity, {t1, t2})
-    assert tseq() == {func("a", "b"), func2("c", "d")}
+    assert tseq() == {t1, t2}
 
     tseq = Task("dict", identity, {"a": t1, "b": t2})
-    assert tseq() == {"a": func("a", "b"), "b": func2("c", "d")}
+    assert tseq() == {"a": t1, "b": t2}
 
 
 def test_reference_remote():
@@ -288,8 +296,7 @@ def test_parse_curry():
     dsk = {
         "key-1": (curry, func, "a", "b"),
     }
-    converted = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(converted)
+    converted = convert_and_verify_keys(dsk)
     t = Task("key-1", curry, func, "a", "b")
     assert converted["key-1"]() == t()
     assert t() == "a-bc"
@@ -310,7 +317,7 @@ def test_avoid_cycles():
     dsk = {
         "key": TaskRef("key"),  # e.g. a persisted key
     }
-    new_dsk = convert_legacy_graph(dsk)
+    new_dsk = convert_and_verify_keys(dsk)
     assert not new_dsk
 
 
@@ -378,8 +385,7 @@ def test_subgraph_callable():
         "b": 2,
         "c": (subgraph, "a", "b"),
     }
-    new_dsk = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(new_dsk)
+    new_dsk = convert_and_verify_keys(dsk)
     assert new_dsk["c"].dependencies == {"a", "b", "add-123"}
     assert (
         new_dsk["c"](
@@ -409,51 +415,14 @@ def test_redirect_to_subgraph_callable():
         "alias": "foo",
         "foo": (func, (subgraph, (func2, "bar", "baz")), "second_arg"),
     }
-    new_dsk = convert_legacy_graph(dsk)
-    from dask import get
+    new_dsk = convert_and_verify_keys(dsk)
 
-    expected = get(dsk, ["foo"])[0]
-    assert expected == "bar=baz//some=dict-second_arg"
     t = new_dsk["alias"]
     assert t.dependencies == {"foo"}
     t = new_dsk["foo"]
     assert not t.dependencies
 
-    assert t() == expected
-
-
-def test_inline():
-    t = Task("key-1", func, "a", TaskRef("b"))
-
-    assert t.inline({"b": DataNode(None, "b")})() == "a-b"
-
-    assert t.inline({"b": Task(None, func, "b", "c")})() == "a-b-c"
-
-    t2 = Task("key-1", func, TaskRef("a"), TaskRef("b"))
-    inline2 = t2.inline({"a": DataNode(None, "a")})
-    assert inline2.dependencies == {"b"}
-
-    assert inline2({"b": "foo"}) == "a-foo"
-
-    t = Task("foo", identity, [t, t2])
-    assert t.dependencies == {"b", "a"}
-    inlined = t.inline({"a": DataNode(None, "foo")})
-    assert inlined.dependencies == {"b"}
-    assert inlined({"b": "bar"}) == ["a-bar", "foo-bar"]
-
-    t = Task("key-2", identity, [t, t2])
-    t = Task("key-2", identity, {"foo": t, "bar": t2})
-    inlined = t.inline(
-        {
-            "a": DataNode(None, "foo"),
-            "bar": DataNode(None, "bar"),
-        }
-    )
-    assert inlined({"b": "bar"})
-
-    t = Task("key-1", identity, [TaskRef("a"), TaskRef("b")])
-    inlined = t.inline({"a": DataNode(None, "a"), "b": DataNode(None, "b")})
-    assert inlined() == ["a", "b"]
+    assert t() == "bar=baz//some=dict-second_arg"
 
 
 @pytest.mark.parametrize(
@@ -505,8 +474,7 @@ def test_parse_graph_namedtuple_legacy(typ, args, kwargs):
         return x
 
     dsk = {"foo": (func, typ(*args, **kwargs))}
-    new_dsk = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(new_dsk)
+    new_dsk = convert_and_verify_keys(dsk)
 
     assert new_dsk["foo"]() == typ(*args, **kwargs)
 
@@ -524,7 +492,7 @@ def test_parse_namedtuple(typ, args, kwargs):
         return x
 
     obj = typ(*args, **kwargs)
-    t = Task("foo", func, obj)
+    t = Task("foo", func, parse_input(obj))
 
     assert t() == obj
 
@@ -532,7 +500,7 @@ def test_parse_namedtuple(typ, args, kwargs):
     if typ is PlainNamedTuple:
         args = tuple([TaskRef("b")] + list(args)[1:])
         obj = typ(*args, **kwargs)
-        t = Task("foo", func, obj)
+        t = Task("foo", func, parse_input(obj))
         assert t.dependencies == {"b"}
         assert t({"b": "foo"}) == typ(*tuple(["foo"] + list(args)[1:]), **kwargs)
 
@@ -630,7 +598,7 @@ def test_convert_resolve():
         "fourth": "third",
         "fifth": (func, "fourth"),
     }
-    dsk = convert_legacy_graph(dsk)
+    dsk = convert_and_verify_keys(dsk)
     assert len(dsk) == 5
 
     optimized = resolve_aliases(dsk, {"fifth"}, reverse_dict(DependenciesMapping(dsk)))
@@ -901,3 +869,45 @@ def test_subgraph_dont_hold_in_memory_too_long_legacy():
     converted = convert_legacy_graph(dsk)
     assert converted["bar"]()
     assert OnlyTwice.total == 10
+
+
+def test_nested_containers():
+    t = List(Task("key-1", func, "a", "b"), Task("key-2", func, "c", "d"))
+    assert not t.dependencies
+    assert t() == ["a-b", "c-d"]
+
+    t = List(Task("key-1", func, "a", TaskRef("b")), Task("key-2", func, "c", "d"))
+    assert t.dependencies == {"b"}
+    assert t({"b": "b"}) == ["a-b", "c-d"]
+
+    t = Dict(k=Task("key-1", func, "a", "b"), v=Task("key-2", func, "c", "d"))
+    assert not t.dependencies
+    assert t() == {"k": "a-b", "v": "c-d"}
+    t = Dict(k=Task("key-1", func, "a", TaskRef("b")), v=Task("key-2", func, "c", "d"))
+    assert t.dependencies == {"b"}
+    assert t({"b": "b"}) == {"k": "a-b", "v": "c-d"}
+
+    t = Dict(
+        {
+            "k": Task("key-1", func, "a", TaskRef("b")),
+            # Use a hashable key that isn't a string. This cannot be used as
+            # kwargs, for instance
+            ("v", 1): Task("key-2", func, "c", "d"),
+        }
+    )
+    assert t.dependencies == {"b"}
+    assert t({"b": "b"}) == {"k": "a-b", ("v", 1): "c-d"}
+
+
+@pytest.mark.parametrize(
+    "task_type, python_type",
+    [
+        (Tuple, tuple),
+        (List, list),
+        (Set, set),
+    ],
+)
+def test_nested_containers_different_types(task_type, python_type):
+    t = task_type(Task("key-1", func, "a", TaskRef("b")), Task("key-2", func, "c", "d"))
+    assert t.dependencies == {"b"}
+    assert t({"b": "b"}) == python_type(("a-b", "c-d"))
