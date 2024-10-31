@@ -830,6 +830,44 @@ def test_sliding_window_errors(window_shape, axis):
         sliding_window_view(arr, window_shape, axis)
 
 
+@pytest.mark.parametrize(
+    "output_chunks, window_shape, axis",
+    [
+        (((25, 21), (9, 8, 8, 9, 8, 8), (9, 8, 8, 9, 8, 8), (5,)), 5, 0),
+        (((25, 6), (5,) * 10, (5,) * 10, (20,)), 20, 0),
+        (
+            (
+                (25, 21),
+                (2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) * 2,
+                (25, 22),
+                (5,),
+                (4,),
+            ),
+            (5, 4),
+            (0, 2),
+        ),
+        (
+            (
+                (25, 21),
+                (25, 22),
+                (2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) * 2,
+                (5,),
+                (4,),
+            ),
+            (5, 4),
+            (0, 1),
+        ),
+    ],
+)
+def test_sliding_window_view_chunking(output_chunks, window_shape, axis):
+    arr = np.random.randn(50, 50, 50)
+    darr = da.from_array(arr, chunks=(25, 25, 25))
+    result = sliding_window_view(darr, window_shape, axis, automatic_rechunk=True)
+    assert result.chunks == output_chunks
+    expected = np.lib.stride_tricks.sliding_window_view(arr, window_shape, axis)
+    assert_eq(result, expected)
+
+
 def test_map_overlap_new_axis():
     arr = da.arange(6, chunks=2)
     assert arr.shape == (6,)
