@@ -905,7 +905,7 @@ def map_blocks(
             name,
             getitem=_getter_item,
             dtype=keyword_arr.dtype,
-            inline_array=True,
+            inline_array=False,
         )
         return Array(dsk, name, chunks=cs, dtype=keyword_arr.dtype)
 
@@ -1010,7 +1010,7 @@ def map_blocks(
             block_info_name,
             getitem=_getter_item,
             dtype=block_info_arr.dtype,
-            inline_array=True,
+            inline_array=False,
         )
         block_info = Array(dsk, block_info_name, chunks=cs, dtype=np.object_)
         extra_argpairs.append((block_info, out_ind))
