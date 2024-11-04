@@ -890,6 +890,7 @@ def map_blocks(
 
     def _getter_item(a, b, **kwargs):
         if len(a.shape) == 0:
+            # meta
             return a.item()
         return getter(a, b, **kwargs).item()
 
