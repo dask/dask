@@ -54,9 +54,11 @@ from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reshape import _not_implemented_message
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
-from dask.blockwise import broadcast_dimensions
-from dask.blockwise import make_blockwise_graph as top
-from dask.blockwise import optimize_blockwise
+from dask.blockwise import (
+    broadcast_dimensions,
+    make_blockwise_graph,
+    optimize_blockwise,
+)
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
@@ -90,14 +92,14 @@ def test_graph_from_arraylike(inline_array):
 
 
 def test_top():
-    assert top(inc, "z", "ij", "x", "ij", numblocks={"x": (2, 2)}) == {
+    assert make_blockwise_graph(inc, "z", "ij", "x", "ij", numblocks={"x": (2, 2)}) == {
         ("z", 0, 0): (inc, ("x", 0, 0)),
         ("z", 0, 1): (inc, ("x", 0, 1)),
         ("z", 1, 0): (inc, ("x", 1, 0)),
         ("z", 1, 1): (inc, ("x", 1, 1)),
     }
 
-    assert top(
+    assert make_blockwise_graph(
         add, "z", "ij", "x", "ij", "y", "ij", numblocks={"x": (2, 2), "y": (2, 2)}
     ) == {
         ("z", 0, 0): (add, ("x", 0, 0), ("y", 0, 0)),
@@ -106,7 +108,7 @@ def test_top():
         ("z", 1, 1): (add, ("x", 1, 1), ("y", 1, 1)),
     }
 
-    assert top(
+    assert make_blockwise_graph(
         dotmany, "z", "ik", "x", "ij", "y", "jk", numblocks={"x": (2, 2), "y": (2, 2)}
     ) == {
         ("z", 0, 0): (dotmany, [("x", 0, 0), ("x", 0, 1)], [("y", 0, 0), ("y", 1, 0)]),
@@ -115,13 +117,13 @@ def test_top():
         ("z", 1, 1): (dotmany, [("x", 1, 0), ("x", 1, 1)], [("y", 0, 1), ("y", 1, 1)]),
     }
 
-    assert top(identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}) == {
-        ("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])
-    }
+    assert make_blockwise_graph(
+        identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}
+    ) == {("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])}
 
 
 def test_top_supports_broadcasting_rules():
-    assert top(
+    assert make_blockwise_graph(
         add, "z", "ij", "x", "ij", "y", "ij", numblocks={"x": (1, 2), "y": (2, 1)}
     ) == {
         ("z", 0, 0): (add, ("x", 0, 0), ("y", 0, 0)),
@@ -132,7 +134,9 @@ def test_top_supports_broadcasting_rules():
 
 
 def test_top_literals():
-    assert top(add, "z", "ij", "x", "ij", 123, None, numblocks={"x": (2, 2)}) == {
+    assert make_blockwise_graph(
+        add, "z", "ij", "x", "ij", 123, None, numblocks={"x": (2, 2)}
+    ) == {
         ("z", 0, 0): (add, ("x", 0, 0), 123),
         ("z", 0, 1): (add, ("x", 0, 1), 123),
         ("z", 1, 0): (add, ("x", 1, 0), 123),
@@ -216,7 +220,7 @@ def test_chunked_dot_product():
     getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), name="x")
     geto = graph_from_arraylike(o, (5, 5), shape=(20, 20), name="o")
 
-    result = top(
+    result = make_blockwise_graph(
         dotmany, "out", "ik", "x", "ij", "o", "jk", numblocks={"x": (4, 4), "o": (4, 4)}
     )
 
@@ -232,7 +236,7 @@ def test_chunked_transpose_plus_one():
     getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), name="x")
 
     f = lambda x: x.T + 1
-    comp = top(f, "out", "ij", "x", "ji", numblocks={"x": (4, 4)})
+    comp = make_blockwise_graph(f, "out", "ij", "x", "ji", numblocks={"x": (4, 4)})
 
     dsk = merge(getx, comp)
     out = dask.get(dsk, [[("out", i, j) for j in range(4)] for i in range(4)])
@@ -1643,7 +1647,7 @@ def test_map_blocks_optimize_blockwise(func):
 
     # Everything should be fused into a single layer.
     # If the lambda includes block_info, there will be two layers.
-    assert len(optimized.layers) == len(dsk.layers) - 6
+    assert len(optimized.layers) == max(len(dsk.layers) - 7, 1)
 
 
 def test_repr():
@@ -2911,6 +2915,19 @@ def test_normalize_chunks():
         normalize_chunks(((10,),), (11,))
     with pytest.raises(ValueError):
         normalize_chunks(((5,), (5,)), (5,))
+
+
+def test_single_element_tuple():
+    assert normalize_chunks(
+        (100, "auto"), (500, 500_000), dtype=np.int64, previous_chunks=((1,), (500,))
+    ) == (
+        (100,) * 5,
+        (
+            167_500,
+            167_500,
+            165_000,
+        ),
+    )
 
 
 def test_align_chunks_to_previous_chunks():

@@ -9,7 +9,7 @@ from tlz.curried import map
 
 from dask.array import chunk
 from dask.array.core import Array, concatenate, map_blocks, unify_chunks
-from dask.array.creation import empty_like, full_like
+from dask.array.creation import empty_like, full_like, repeat
 from dask.array.numpy_compat import normalize_axis_tuple
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -134,13 +134,15 @@ def trim_internal(x, axes, boundary=None):
     )
 
 
-def _trim(x, axes, boundary, block_info):
+def _trim(x, axes, boundary, _overlap_trim_info):
     """Similar to dask.array.chunk.trim but requires one to specify the
     boundary condition.
 
     ``axes``, and ``boundary`` are assumed to have been coerced.
 
     """
+    chunk_location = _overlap_trim_info[0]
+    num_chunks = _overlap_trim_info[1]
     axes = [axes.get(i, 0) for i in range(x.ndim)]
     axes_front = (ax[0] if isinstance(ax, tuple) else ax for ax in axes)
     axes_back = (
@@ -154,9 +156,7 @@ def _trim(x, axes, boundary, block_info):
 
     trim_front = (
         0 if (chunk_location == 0 and boundary.get(i, "none") == "none") else ax
-        for i, (chunk_location, ax) in enumerate(
-            zip(block_info[0]["chunk-location"], axes_front)
-        )
+        for i, (chunk_location, ax) in enumerate(zip(chunk_location, axes_front))
     )
     trim_back = (
         (
@@ -165,7 +165,7 @@ def _trim(x, axes, boundary, block_info):
             else ax
         )
         for i, (chunks, chunk_location, ax) in enumerate(
-            zip(block_info[0]["num-chunks"], block_info[0]["chunk-location"], axes_back)
+            zip(num_chunks, chunk_location, axes_back)
         )
     )
     ind = tuple(slice(front, back) for front, back in zip(trim_front, trim_back))
@@ -243,8 +243,8 @@ def nearest(x, axis, depth):
         + (slice(None, None, None),) * (x.ndim - axis - 1)
     )
 
-    l = concatenate([x[left]] * depth, axis=axis)
-    r = concatenate([x[right]] * depth, axis=axis)
+    l = repeat(x[left], depth, axis=axis)
+    r = repeat(x[right], depth, axis=axis)
 
     l, r = _remove_overlap_boundaries(l, r, axis, depth)
 

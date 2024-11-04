@@ -15,13 +15,7 @@ from dask.core import flatten, ishashable, keys_in_tasks, reverse_dict
 from dask.highlevelgraph import HighLevelGraph, Layer
 from dask.optimization import SubgraphCallable, fuse
 from dask.typing import Graph, Key
-from dask.utils import (
-    _deprecated,
-    apply,
-    ensure_dict,
-    homogeneous_deepmap,
-    stringify_collection_keys,
-)
+from dask.utils import _deprecated, apply, ensure_dict, homogeneous_deepmap
 
 
 class BlockwiseDep:
@@ -768,9 +762,6 @@ def make_blockwise_graph(
     new_axes=None,
     output_blocks=None,
     dims=None,
-    deserializing=False,
-    func_future_args=None,
-    return_key_deps=False,
     io_deps=None,
 ):
     """Tensor operation
@@ -883,12 +874,6 @@ def make_blockwise_graph(
     io_deps = io_deps or {}
     argpairs = list(toolz.partition(2, arrind_pairs))
 
-    if return_key_deps:
-        key_deps = {}
-
-    if deserializing:
-        from distributed.protocol.serialize import to_serialize
-
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
@@ -924,10 +909,7 @@ def make_blockwise_graph(
         args = []
         for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
             if ind is None:
-                if deserializing:
-                    args.append(stringify_collection_keys(arg))
-                else:
-                    args.append(arg)
+                args.append(arg)
             else:
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
@@ -947,44 +929,14 @@ def make_blockwise_graph(
                     # we are replacing here
                     idx = tups[1:]
                     args.append(io_deps[arg].get(idx, idx))
-                elif deserializing:
-                    args.append(stringify_collection_keys(tups))
                 else:
                     args.append(tups)
         out_key = (output,) + out_coords
 
-        if deserializing:
-            deps.update(func_future_args)
-            args += list(func_future_args)
+        args.insert(0, func)
+        dsk[out_key] = tuple(args)
 
-        # Construct a function/args/kwargs dict if we
-        # do not have a nested task (i.e. concatenate=False).
-        # TODO: Avoid using the iterate_collection-version
-        # of to_serialize if we know that are no embedded
-        # Serialized/Serialize objects in args and/or kwargs.
-        if deserializing and isinstance(func, bytes):
-            dsk[out_key] = {"function": func, "args": to_serialize(args)}
-        else:
-            args.insert(0, func)
-            val = tuple(args)
-            # May still need to serialize (if concatenate=True)
-            dsk[out_key] = to_serialize(val) if deserializing else val
-
-        if return_key_deps:
-            key_deps[out_key] = deps
-
-    if return_key_deps:
-        # Add valid-key dependencies from io_deps
-        for key, io_dep in io_deps.items():
-            if io_dep.produces_keys:
-                for out_coords in output_blocks:
-                    key = (output,) + out_coords
-                    valid_key_dep = io_dep[out_coords]
-                    key_deps[key] |= {valid_key_dep}
-
-        return dsk, key_deps
-    else:
-        return dsk
+    return dsk
 
 
 def lol_product(head, values):

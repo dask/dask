@@ -23,8 +23,9 @@ from typing import Any, Literal, TypeVar, Union, cast
 import numpy as np
 from numpy.typing import ArrayLike
 from packaging.version import Version
-from tlz import accumulate, concat, first, frequencies, groupby, partition
+from tlz import accumulate, concat, first, groupby, partition
 from tlz.curried import pluck
+from toolz import frequencies
 
 from dask import compute, config, core
 from dask.array import chunk
@@ -886,24 +887,55 @@ def map_blocks(
     extra_names = []
     # If func has block_id as an argument, construct an array of block IDs and
     # prepare to inject it.
-    if has_keyword(func, "block_id"):
-        block_id_name = "block-id-" + out.name
-        block_id_dsk = {
-            (block_id_name,) + block_id: block_id
-            for block_id in product(*(range(len(c)) for c in out.chunks))
-        }
-        block_id_array = Array(
-            block_id_dsk,
-            block_id_name,
-            chunks=tuple((1,) * len(c) for c in out.chunks),
-            dtype=np.object_,
+
+    def _getter_item(a, b, **kwargs):
+        if len(a.shape) == 0:
+            # meta
+            return a.item()
+        return getter(a, b, **kwargs).item()
+
+    def _add_blockwise_layer_for_keyword(keyword_arr, prefix):
+        name = prefix + out.name
+        cs = tuple((1,) * len(c) for c in out.chunks)
+
+        dsk = graph_from_arraylike(
+            keyword_arr,
+            cs,
+            keyword_arr.shape,
+            name,
+            getitem=_getter_item,
+            dtype=keyword_arr.dtype,
+            inline_array=False,
         )
+        return Array(dsk, name, chunks=cs, dtype=keyword_arr.dtype)
+
+    if has_keyword(func, "block_id"):
+        # put block_id into a Blockwise layer so that we can fuse it
+        # with the other blockwise layers
+        block_id_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
+        for block_id in product(*(range(len(c)) for c in out.chunks)):
+            block_id_arr[block_id] = block_id
+        block_id_array = _add_blockwise_layer_for_keyword(block_id_arr, "block-id-")
         extra_argpairs.append((block_id_array, out_ind))
         extra_names.append("block_id")
+
+    if has_keyword(func, "_overlap_trim_info"):
+        # Internal for map overlap to reduce size of graph
+        num_chunks = out.numblocks
+        block_id_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
+        for block_id in product(*(range(len(c)) for c in out.chunks)):
+            block_id_arr[block_id] = (block_id, num_chunks)
+        block_id_array = _add_blockwise_layer_for_keyword(
+            block_id_arr, "_overlap_trim_info-id-"
+        )
+        extra_argpairs.append((block_id_array, out_ind))
+        extra_names.append("_overlap_trim_info")
 
     # If func has block_info as an argument, construct an array of block info
     # objects and prepare to inject it.
     if has_keyword(func, "block_info"):
+        # put block_info into a Blockwise layer so that we can fuse it
+        # with the other blockwise layers
         starts = {}
         num_chunks = {}
         shapes = {}
@@ -931,7 +963,7 @@ def map_blocks(
         out_starts = [cached_cumsum(c, initial_zero=True) for c in out.chunks]
 
         block_info_name = "block-info-" + out.name
-        block_info_dsk = {}
+        block_info_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
         for block_id in product(*(range(len(c)) for c in out.chunks)):
             # Get position of chunk, indexed by axis labels
             location = {out_ind[i]: loc for i, loc in enumerate(block_id)}
@@ -968,14 +1000,19 @@ def map_blocks(
                 ),
                 "dtype": dtype,
             }
-            block_info_dsk[(block_info_name,) + block_id] = info
+            block_info_arr[block_id] = info
 
-        block_info = Array(
-            block_info_dsk,
+        cs = tuple((1,) * len(c) for c in out.chunks)
+        dsk = graph_from_arraylike(
+            block_info_arr,
+            cs,
+            block_info_arr.shape,
             block_info_name,
-            chunks=tuple((1,) * len(c) for c in out.chunks),
-            dtype=np.object_,
+            getitem=_getter_item,
+            dtype=block_info_arr.dtype,
+            inline_array=False,
         )
+        block_info = Array(dsk, block_info_name, chunks=cs, dtype=np.object_)
         extra_argpairs.append((block_info, out_ind))
         extra_names.append("block_info")
 
@@ -3140,17 +3177,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     if chunks and shape is not None:
         # allints: did we start with chunks as a simple tuple of ints?
         allints = all(isinstance(c, int) for c in chunks)
-        chunks = sum(
-            (
-                (
-                    blockdims_from_blockshape((s,), (c,))
-                    if not isinstance(c, (tuple, list))
-                    else (c,)
-                )
-                for s, c in zip(shape, chunks)
-            ),
-            (),
-        )
+        chunks = _convert_int_chunk_to_tuple(shape, chunks)
     for c in chunks:
         if not c:
             raise ValueError(
@@ -3180,6 +3207,20 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     )
 
 
+def _convert_int_chunk_to_tuple(shape, chunks):
+    return sum(
+        (
+            (
+                blockdims_from_blockshape((s,), (c,))
+                if not isinstance(c, (tuple, list))
+                else (c,)
+            )
+            for s, c in zip(shape, chunks)
+        ),
+        (),
+    )
+
+
 def _compute_multiplier(limit: int, dtype, largest_block: int, result):
     """
     Utility function for auto_chunk, to fin how much larger or smaller the ideal
@@ -3189,7 +3230,7 @@ def _compute_multiplier(limit: int, dtype, largest_block: int, result):
         limit
         / dtype.itemsize
         / largest_block
-        / math.prod(r for r in result.values() if r)
+        / math.prod(max(r) if isinstance(r, tuple) else r for r in result.values() if r)
     )
 
 
@@ -3218,9 +3259,13 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     normalize_chunks: for full docstring and parameters
     """
     if previous_chunks is not None:
-        previous_chunks = tuple(
-            c if isinstance(c, tuple) else (c,) for c in previous_chunks
+        # rioxarray is passing ((1, ), (x,)) for shapes like (100, 5x),
+        # so add this compat code for now
+        # https://github.com/corteva/rioxarray/pull/820
+        previous_chunks = (
+            c[0] if isinstance(c, tuple) and len(c) == 1 else c for c in previous_chunks
         )
+        previous_chunks = _convert_int_chunk_to_tuple(shape, previous_chunks)
     chunks = list(chunks)
 
     autos = {i for i, c in enumerate(chunks) if c == "auto"}
@@ -3254,6 +3299,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             )
 
     limit = max(1, limit)
+    chunksize_tolerance = config.get("array.chunk-size-tolerance")
 
     largest_block = math.prod(
         cs if isinstance(cs, Number) else max(cs) for cs in chunks if cs != "auto"
@@ -3261,7 +3307,14 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
     if previous_chunks:
         # Base ideal ratio on the median chunk size of the previous chunks
-        result = {a: np.median(previous_chunks[a]) for a in autos}
+        median_chunks = {a: np.median(previous_chunks[a]) for a in autos}
+        result = {}
+
+        # How much larger or smaller the ideal chunk size is relative to what we have now
+        multiplier = _compute_multiplier(limit, dtype, largest_block, median_chunks)
+        if multiplier < 1:
+            # we want to update inplace, algorithm relies on it in this case
+            result = median_chunks
 
         ideal_shape = []
         for i, s in enumerate(shape):
@@ -3272,36 +3325,62 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             else:
                 ideal_shape.append(s)
 
-        # How much larger or smaller the ideal chunk size is relative to what we have now
-        multiplier = _compute_multiplier(limit, dtype, largest_block, result)
+        def _trivial_aggregate(a):
+            autos.remove(a)
+            del median_chunks[a]
+            return True
 
-        last_multiplier = 0
-        last_autos = set()
-        while (
-            multiplier != last_multiplier or autos != last_autos
-        ):  # while things change
-            last_multiplier = multiplier  # record previous values
+        multiplier_remaining = True
+        reduce_case = multiplier < 1
+        while multiplier_remaining:  # while things change
             last_autos = set(autos)  # record previous values
+            multiplier_remaining = False
 
             # Expand or contract each of the dimensions appropriately
             for a in sorted(autos):
-                if ideal_shape[a] == 0:
-                    result[a] = 0
-                    continue
-                proposed = result[a] * multiplier ** (1 / len(autos))
+                this_multiplier = multiplier ** (1 / len(last_autos))
+
+                proposed = median_chunks[a] * this_multiplier
+                this_chunksize_tolerance = chunksize_tolerance ** (1 / len(last_autos))
+                max_chunk_size = proposed * this_chunksize_tolerance
+
                 if proposed > shape[a]:  # we've hit the shape boundary
-                    autos.remove(a)
-                    largest_block *= shape[a]
                     chunks[a] = shape[a]
-                    del result[a]
-                else:
+                    multiplier_remaining = _trivial_aggregate(a)
+                    largest_block *= shape[a]
+                    continue
+                elif reduce_case or max(previous_chunks[a]) > max_chunk_size:
                     result[a] = round_to(proposed, ideal_shape[a])
+                    if proposed < 1:
+                        multiplier_remaining = True
+                        autos.discard(a)
+                    continue
+                else:
+                    dimension_result, new_chunk = [], 0
+                    for c in previous_chunks[a]:
+                        if c + new_chunk <= proposed:
+                            # keep increasing the chunk
+                            new_chunk += c
+                        else:
+                            # We reach the boundary so start a new chunk
+                            dimension_result.append(new_chunk)
+                            new_chunk = c
+                    if new_chunk > 0:
+                        dimension_result.append(new_chunk)
+
+                result[a] = tuple(dimension_result)
 
             # recompute how much multiplier we have left, repeat
-            multiplier = _compute_multiplier(limit, dtype, largest_block, result)
+            if multiplier_remaining or reduce_case:
+                last_multiplier = multiplier
+                multiplier = _compute_multiplier(
+                    limit, dtype, largest_block, median_chunks
+                )
+                if multiplier != last_multiplier:
+                    multiplier_remaining = True
 
         for k, v in result.items():
-            chunks[k] = v
+            chunks[k] = v if v else 0
         return tuple(chunks)
 
     else:
@@ -3321,6 +3400,25 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             chunks[i] = round_to(size, shape[i])
 
         return tuple(chunks)
+
+
+def _split_up_single_chunk(
+    c: int, this_chunksize_tolerance: float, max_chunk_size: int, proposed: int
+) -> list[int]:
+    # Calculate by what factor we have to split this chunk
+    m = c / proposed
+    if math.ceil(m) / m > this_chunksize_tolerance:
+        # We want to smooth things potentially if rounding up would change the result
+        # by a lot
+        m = math.ceil(c / max_chunk_size)
+    else:
+        m = math.ceil(m)
+    # split the chunk
+    new_c, remainder = divmod(c, min(m, c))
+    x = [new_c] * min(m, c)
+    for i in range(remainder):
+        x[i] += 1
+    return x
 
 
 def round_to(c, s):

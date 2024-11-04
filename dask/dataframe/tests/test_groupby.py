@@ -18,6 +18,7 @@ from dask.dataframe import _compat
 from dask.dataframe._compat import (
     PANDAS_GE_210,
     PANDAS_GE_220,
+    PANDAS_GE_230,
     PANDAS_GE_300,
     check_observed_deprecation,
     tm,
@@ -2166,7 +2167,7 @@ def record_numeric_only_warnings():
         pytest.param(
             "sum",
             marks=pytest.mark.xfail(
-                pyarrow_strings_enabled(),
+                pyarrow_strings_enabled() and not PANDAS_GE_230,
                 reason="works in dask-expr",
             ),
         ),
@@ -2645,6 +2646,9 @@ def test_groupby_shift_lazy_input():
         )
 
 
+@pytest.mark.skipif(
+    not DASK_EXPR_ENABLED, reason="flaky with a weird deprecation warning"
+)
 @pytest.mark.filterwarnings("ignore:`meta` is not specified")
 def test_groupby_shift_within_partition_sorting():
     # Result is non-deterministic. We run the assertion a few times to keep

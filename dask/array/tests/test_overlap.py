@@ -123,6 +123,7 @@ def test_overlap_internal_asymmetric_small():
 def test_trim_internal():
     d = da.ones((40, 60), chunks=(10, 10))
     e = trim_internal(d, axes={0: 1, 1: 2}, boundary="reflect")
+    assert any("_overlap_trim_info" in k[0] for k in dict(e.dask))
 
     assert e.chunks == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
 
@@ -698,17 +699,17 @@ def test_overlap_few_dimensions_small():
     a = x.map_overlap(lambda x: x, depth={0: 1}, boundary="none")
     assert_eq(x, a)
     assert any(isinstance(k[1], float) for k in a.dask)
-    assert all(isinstance(k[2], int) for k in a.dask)
+    assert all(isinstance(k[2], int) for k in a.dask if "_overlap_trim_info" not in k)
 
     b = x.map_overlap(lambda x: x, depth={1: 1}, boundary="none")
     assert_eq(x, b)
-    assert all(isinstance(k[1], int) for k in b.dask)
-    assert any(isinstance(k[2], float) for k in b.dask)
+    assert all(isinstance(k[1], int) for k in b.dask if "_overlap_trim_info" not in k)
+    assert any(isinstance(k[2], float) for k in b.dask if "_overlap_trim_info" not in k)
 
     c = x.map_overlap(lambda x: x, depth={0: 1, 1: 1}, boundary="none")
     assert_eq(x, c)
-    assert any(isinstance(k[1], float) for k in c.dask)
-    assert any(isinstance(k[2], float) for k in c.dask)
+    assert any(isinstance(k[1], float) for k in c.dask if "_overlap_trim_info" not in k)
+    assert any(isinstance(k[2], float) for k in c.dask if "_overlap_trim_info" not in k)
 
 
 def test_overlap_few_dimensions():
@@ -828,6 +829,27 @@ def test_sliding_window_errors(window_shape, axis):
     arr = da.zeros((4, 3))
     with pytest.raises(ValueError):
         sliding_window_view(arr, window_shape, axis)
+
+
+def test_overlap_not_adding_empty_tasks():
+    arr = da.zeros((30, 5), chunks=(10, 5))
+
+    def dummy(x):
+        return x
+
+    result = arr.map_overlap(dummy, depth={0: (0, 1)})
+    dsk = dict(result.dask)
+
+    def check(v):
+        return (
+            isinstance(v, tuple)
+            and len(v) >= 3
+            and isinstance(v[2], tuple)
+            and v[2] == (slice(0, 0, None), slice(None))
+        )
+
+    assert not any(check(v) for v in dsk.values())
+    result.compute()
 
 
 def test_map_overlap_new_axis():
