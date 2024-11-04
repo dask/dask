@@ -3311,6 +3311,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     continue
                 elif this_multiplier <= 1 or max(previous_chunks[a]) > max_chunk_size:
                     result[a] = round_to(proposed, ideal_shape[a])
+                    if proposed < 1:
+                        multiplier_remaining = True
+                        autos.discard(a)
                     continue
                 else:
                     dimension_result, new_chunk = [], 0
