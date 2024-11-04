@@ -889,7 +889,25 @@ def map_blocks(
     # prepare to inject it.
 
     def _getter_item(a, b, **kwargs):
+        if len(a.shape) == 0:
+            # meta
+            return a.item()
         return getter(a, b, **kwargs).item()
+
+    def _add_blockwise_layer_for_keyword(keyword_arr, prefix):
+        name = prefix + out.name
+        cs = tuple((1,) * len(c) for c in out.chunks)
+
+        dsk = graph_from_arraylike(
+            keyword_arr,
+            cs,
+            keyword_arr.shape,
+            name,
+            getitem=_getter_item,
+            dtype=keyword_arr.dtype,
+            inline_array=False,
+        )
+        return Array(dsk, name, chunks=cs, dtype=keyword_arr.dtype)
 
     if has_keyword(func, "block_id"):
         # put block_id into a Blockwise layer so that we can fuse it
@@ -897,22 +915,21 @@ def map_blocks(
         block_id_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
         for block_id in product(*(range(len(c)) for c in out.chunks)):
             block_id_arr[block_id] = block_id
-
-        block_id_name = "block-id-" + out.name
-        cs = tuple((1,) * len(c) for c in out.chunks)
-
-        dsk = graph_from_arraylike(
-            block_id_arr,
-            cs,
-            block_id_arr.shape,
-            block_id_name,
-            getitem=_getter_item,
-            dtype=block_id_arr.dtype,
-            inline_array=True,
-        )
-        block_id_array = Array(dsk, block_id_name, chunks=cs, dtype=np.object_)
+        block_id_array = _add_blockwise_layer_for_keyword(block_id_arr, "block-id-")
         extra_argpairs.append((block_id_array, out_ind))
         extra_names.append("block_id")
+
+    if has_keyword(func, "_overlap_trim_info"):
+        # Internal for map overlap to reduce size of graph
+        num_chunks = out.numblocks
+        block_id_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
+        for block_id in product(*(range(len(c)) for c in out.chunks)):
+            block_id_arr[block_id] = (block_id, num_chunks)
+        block_id_array = _add_blockwise_layer_for_keyword(
+            block_id_arr, "_overlap_trim_info-id-"
+        )
+        extra_argpairs.append((block_id_array, out_ind))
+        extra_names.append("_overlap_trim_info")
 
     # If func has block_info as an argument, construct an array of block info
     # objects and prepare to inject it.
@@ -993,7 +1010,7 @@ def map_blocks(
             block_info_name,
             getitem=_getter_item,
             dtype=block_info_arr.dtype,
-            inline_array=True,
+            inline_array=False,
         )
         block_info = Array(dsk, block_info_name, chunks=cs, dtype=np.object_)
         extra_argpairs.append((block_info, out_ind))
