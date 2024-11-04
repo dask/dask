@@ -2614,6 +2614,14 @@ def test_einsum_broadcasting_contraction3():
     assert_eq(np_res, da_res)
 
 
+def test_einsum_empty_dimension():
+    arr = np.random.random((10, 10))
+    darr = da.from_array(arr, chunks=(5, 5))
+    darr = darr[:0]
+    result = da.einsum("ca,ca->c", darr, darr)
+    assert_eq(result, np.einsum("ca,ca->c", arr[:0], arr[:0]))
+
+
 @pytest.mark.parametrize("a", [np.arange(11), np.arange(6).reshape((3, 2))])
 @pytest.mark.parametrize("returned", [True, False])
 def test_average(a, returned):
