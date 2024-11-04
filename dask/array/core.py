@@ -3295,6 +3295,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
         multiplier = _compute_multiplier(limit, dtype, largest_block, median_chunks)
+        if multiplier < 1:
+            # we want to update inplace, algorithm relies on it in this case
+            result = median_chunks
 
         ideal_shape = []
         for i, s in enumerate(shape):
@@ -3311,6 +3314,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             return True
 
         multiplier_remaining = True
+        reduce_case = multiplier < 1
         while multiplier_remaining:  # while things change
             last_autos = set(autos)  # record previous values
             multiplier_remaining = False
@@ -3328,8 +3332,11 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     multiplier_remaining = _trivial_aggregate(a)
                     largest_block *= shape[a]
                     continue
-                elif this_multiplier <= 1 or max(previous_chunks[a]) > max_chunk_size:
+                elif reduce_case or max(previous_chunks[a]) > max_chunk_size:
                     result[a] = round_to(proposed, ideal_shape[a])
+                    if proposed < 1:
+                        multiplier_remaining = True
+                        autos.discard(a)
                     continue
                 else:
                     dimension_result, new_chunk = [], 0
@@ -3347,10 +3354,13 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                 result[a] = tuple(dimension_result)
 
             # recompute how much multiplier we have left, repeat
-            if multiplier_remaining:
+            if multiplier_remaining or reduce_case:
+                last_multiplier = multiplier
                 multiplier = _compute_multiplier(
                     limit, dtype, largest_block, median_chunks
                 )
+                if multiplier != last_multiplier:
+                    multiplier_remaining = True
 
         for k, v in result.items():
             chunks[k] = v if v else 0
