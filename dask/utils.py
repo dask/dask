@@ -2064,29 +2064,6 @@ def stringify(obj, exclusive: Iterable | None = None):
     return obj
 
 
-def stringify_collection_keys(obj):
-    """Convert all collection keys in ``obj`` to strings.
-
-    This is a specialized version of ``stringify()`` that only converts keys
-    of the form: ``("a string", ...)``
-    """
-
-    typ = type(obj)
-    if typ is tuple and obj:
-        obj0 = obj[0]
-        if type(obj0) is str or type(obj0) is bytes:
-            return stringify(obj)
-        if callable(obj0):
-            return (obj0,) + tuple(stringify_collection_keys(x) for x in obj[1:])
-    if typ is list:
-        return [stringify_collection_keys(v) for v in obj]
-    if typ is dict:
-        return {k: stringify_collection_keys(v) for k, v in obj.items()}
-    if typ is tuple:  # If the tuple itself isn't a key, check its elements
-        return tuple(stringify_collection_keys(v) for v in obj)
-    return obj
-
-
 class cached_property(functools.cached_property):
     """Read only version of functools.cached_property."""
 
