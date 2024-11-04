@@ -6,9 +6,10 @@ import math
 import operator
 import warnings
 from collections.abc import Iterable
-from functools import partial
+from functools import partial, reduce
 from itertools import product, repeat
 from numbers import Integral, Number
+from operator import mul
 
 import numpy as np
 from tlz import accumulate, compose, drop, get, partition_all, pluck
@@ -27,7 +28,7 @@ from dask.array.core import (
 )
 from dask.array.creation import arange, diagonal
 from dask.array.dispatch import divide_lookup, nannumel_lookup, numel_lookup
-from dask.array.numpy_compat import ComplexWarning
+from dask.array.numpy_compat import NUMPY_GE_200, ComplexWarning
 from dask.array.utils import (
     array_safe,
     asarray_safe,
@@ -1861,3 +1862,221 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
 
     result = handle_out(out, result)
     return result
+
+
+@derived_from(np)
+def quantile(
+    a,
+    q,
+    axis=None,
+    out=None,
+    overwrite_input=False,
+    method="linear",
+    keepdims=False,
+    *,
+    weights=None,
+    interpolation=None,
+):
+    """
+    This works by automatically chunking the reduced axes to a single chunk if necessary
+    and then calling ``numpy.quantile`` function across the remaining dimensions
+    """
+    if axis is None:
+        if any(n_blocks > 1 for n_blocks in a.numblocks):
+            raise NotImplementedError(
+                "The da.quantile function only works along an axis.  "
+                "The full algorithm is difficult to do in parallel"
+            )
+        else:
+            axis = tuple(range(len(a.shape)))
+
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
+
+    axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
+
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+
+    if NUMPY_GE_200:
+        kwargs = {"weights": weights}
+    else:
+        kwargs = {}
+
+    result = a.map_blocks(
+        np.quantile,
+        q=q,
+        method=method,
+        interpolation=interpolation,
+        axis=axis,
+        keepdims=keepdims,
+        drop_axis=axis if not keepdims else None,
+        new_axis=0 if isinstance(q, Iterable) else None,
+        chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        **kwargs,
+    )
+
+    result = handle_out(out, result)
+    return result
+
+
+def _span_indexers(a):
+    # We have to create an indexer so that we can index into every quantile slice
+    # The method relies on the quantile axis being the last axis, which means that
+    # we have to calculate reduce(mul, list(a.shape)[:-1]) number of quantiles
+    # We create an indexer combination for each of these quantiles
+
+    shapes = reduce(mul, list(a.shape)[1:-1])
+    original_shapes = shapes * a.shape[0]
+    indexers = [tuple(np.repeat(np.arange(a.shape[0]), shapes))]
+
+    for i in range(1, len(a.shape) - 1):
+        indexer = np.repeat(np.arange(a.shape[i]), shapes // a.shape[i])
+        indexers.append(tuple(np.tile(indexer, original_shapes // shapes)))
+        shapes //= a.shape[i]
+    return indexers
+
+
+def _custom_quantile(
+    a,
+    q,
+    axis=None,
+    method="linear",
+    interpolation=None,
+    keepdims=False,
+    **kwargs,
+):
+    if (
+        not {method, interpolation}.issubset({"linear", None})
+        or len(axis) != 1
+        or axis[0] != len(a.shape) - 1
+        or len(a.shape) == 1
+        or a.shape[-1] > 1000
+    ):
+        # bail to nanquantile. Assumptions are pretty strict for now but we
+        # do cover the xarray.quantile case.
+        return np.nanquantile(
+            a,
+            q,
+            axis=axis,
+            method=method,
+            interpolation=interpolation,
+            keepdims=keepdims,
+            **kwargs,
+        )
+    # nanquantile in NumPy is pretty slow if the quantile axis is slow because
+    # each quantile has overhead.
+    # This method works around this by calculating the quantile manually.
+    # Steps:
+    # 1. Sort the array along the quantile axis (this is the most expensive step
+    # 2. Calculate which positions are the quantile positions
+    #    (respecting NaN values, so each quantile can have a different indexer)
+    # 3. Get the neighboring values of the quantile positions
+    # 4. Perform linear interpolation between the neighboring values
+    #
+    # The main advantage is that we get rid of the overhead, removing GIL blockage
+    # and just generally making things faster.
+
+    sorted_arr = np.sort(a, axis=-1)
+    indexers = _span_indexers(a)
+    nr_quantiles = len(indexers[0])
+
+    is_scalar = False
+    if not isinstance(q, Iterable):
+        is_scalar = True
+        q = [q]
+
+    quantiles = []
+    reshape_shapes = (1,) + tuple(sorted_arr.shape[:-1]) + ((1,) if keepdims else ())
+    for single_q in list(q):
+        i = (
+            np.ones(nr_quantiles) * (a.shape[-1] - 1)
+            - np.isnan(sorted_arr).sum(axis=-1).reshape(-1)
+        ) * single_q
+        lower_value, higher_value = np.floor(i).astype(int), np.ceil(i).astype(int)
+
+        # Get neighboring values
+        lower = sorted_arr[tuple(indexers) + (tuple(lower_value),)]
+        higher = sorted_arr[tuple(indexers) + (tuple(higher_value),)]
+
+        # Perform linear interpolation
+        factor_higher = i - lower_value
+        factor_higher = np.where(factor_higher == 0.0, 1.0, factor_higher)
+        factor_lower = higher_value - i
+
+        quantiles.append(
+            (higher * factor_higher + lower * factor_lower).reshape(*reshape_shapes)
+        )
+
+    if is_scalar:
+        return quantiles[0].squeeze(axis=0)
+    else:
+        return np.concatenate(quantiles, axis=0)
+
+
+@derived_from(np)
+def nanquantile(
+    a,
+    q,
+    axis=None,
+    out=None,
+    overwrite_input=False,
+    method="linear",
+    keepdims=False,
+    *,
+    weights=None,
+    interpolation=None,
+):
+    """
+    This works by automatically chunking the reduced axes to a single chunk
+    and then calling ``numpy.nanquantile`` function across the remaining dimensions
+    """
+    if axis is None:
+        if any(n_blocks > 1 for n_blocks in a.numblocks):
+            raise NotImplementedError(
+                "The da.nanquantile function only works along an axis.  "
+                "The full algorithm is difficult to do in parallel"
+            )
+        else:
+            axis = tuple(range(len(a.shape)))
+
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
+
+    axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
+
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+
+    if NUMPY_GE_200:
+        kwargs = {"weights": weights}
+    else:
+        kwargs = {}
+
+    result = a.map_blocks(
+        _custom_quantile,
+        q=q,
+        method=method,
+        interpolation=interpolation,
+        axis=axis,
+        keepdims=keepdims,
+        drop_axis=axis if not keepdims else None,
+        new_axis=0 if isinstance(q, Iterable) else None,
+        chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        **kwargs,
+    )
+
+    result = handle_out(out, result)
+    return result
+
+
+def _get_quantile_chunks(a, q, axis, keepdims):
+    quantile_chunk = [len(q)] if isinstance(q, Iterable) else []
+    if keepdims:
+        return quantile_chunk + [
+            1 if ax in axis else c for ax, c in enumerate(a.chunks)
+        ]
+    else:
+        return quantile_chunk + [c for ax, c in enumerate(a.chunks) if ax not in axis]

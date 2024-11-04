@@ -908,3 +908,67 @@ def test_weighted_reduction():
     # Non-broadcastable weights (too many dims)
     with pytest.raises(ValueError):
         da.reduction(dx, w_sum, np.sum, weights=[[[2]]])
+
+
+@pytest.mark.parametrize("axis", [3, 0, [1, 3]])
+@pytest.mark.parametrize("q", [0.75, [0.75], [0.75, 0.4]])
+@pytest.mark.parametrize("rechunk", [True, False])
+def test_nanquantile(rechunk, q, axis):
+    shape = 10, 15, 10, 15
+    arr = np.random.randn(*shape)
+    indexer = np.random.randint(0, 10, size=shape)
+    arr[indexer >= 8] = np.nan
+
+    darr = da.from_array(arr, chunks=(2, 3, 4, (5 if rechunk else -1)))
+    assert_eq(da.nanquantile(darr, q, axis=axis), np.nanquantile(arr, q, axis=axis))
+    assert_eq(
+        da.nanquantile(darr, q, axis=axis, keepdims=True),
+        np.nanquantile(arr, q, axis=axis, keepdims=True),
+    )
+
+
+@pytest.mark.parametrize("axis", [3, [1, 3]])
+@pytest.mark.parametrize("q", [0.75, [0.75]])
+@pytest.mark.parametrize("rechunk", [True, False])
+def test_quantile(rechunk, q, axis):
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    indexer = np.random.randint(0, 10, size=shape)
+    arr[indexer >= 8] = np.nan
+
+    darr = da.from_array(arr, chunks=(2, 3, 4, (5 if rechunk else -1)))
+    assert_eq(da.quantile(darr, q, axis=axis), np.quantile(arr, q, axis=axis))
+    assert_eq(
+        da.quantile(darr, q, axis=axis, keepdims=True),
+        np.quantile(arr, q, axis=axis, keepdims=True),
+    )
+
+
+def test_nanquantile_all_nan():
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    arr[:] = np.nan
+    darr = da.from_array(arr, chunks=(2, 3, 4, -1))
+    da.nanquantile(darr, 0.75, axis=-1).compute()
+    with pytest.raises(RuntimeWarning):
+        assert_eq(
+            da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1)
+        )
+
+
+def test_nanquantile_method():
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    indexer = np.random.randint(0, 10, size=shape)
+    arr[indexer >= 8] = np.nan
+    darr = da.from_array(arr, chunks=(2, 3, 4, -1))
+    assert_eq(
+        da.nanquantile(darr, 0.75, axis=-1, method="weibull"),
+        np.nanquantile(arr, 0.75, axis=-1, method="weibull"),
+    )
+
+
+def test_nanquantile_one_dim():
+    arr = np.random.randn(10)
+    darr = da.from_array(arr, chunks=(2,))
+    assert_eq(da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1))
