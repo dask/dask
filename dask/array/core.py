@@ -889,6 +889,8 @@ def map_blocks(
     # prepare to inject it.
 
     def _getter_item(a, b, **kwargs):
+        if len(a.shape) == 0:
+            return a.item()
         return getter(a, b, **kwargs).item()
 
     def _add_blockwise_layer_for_keyword(keyword_arr, prefix):
