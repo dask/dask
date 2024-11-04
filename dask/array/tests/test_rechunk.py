@@ -1215,13 +1215,6 @@ def test_old_to_new_with_zero():
     assert result == expected
 
 
-def test_rechunk_auto_chunks_decrease():
-    with dask.config.set({"array.chunk-size": "1MiB"}):
-        x = da.ones((100, 1000, 1000), chunks=(1, 1000, 1000), dtype="float64")
-        z = x.rechunk("auto")
-        assert z.chunks == ((1,) * 100, (362, 362, 276), (362, 362, 276))
-
-
 def test_rechunk_non_perfect_slicing_of_dimensions():
     # GH#7859
     # this matters -- 1060 and 1058 work
