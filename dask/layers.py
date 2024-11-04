@@ -196,6 +196,8 @@ class ArrayOverlapLayer(Layer):
         overlap_blocks = {}
         for k in interior_keys:
             frac_slice = fractional_slice((name,) + k, axes)
+            if frac_slice is False:
+                continue
             if (name,) + k != frac_slice:
                 interior_slices[(getitem_name,) + k] = frac_slice
             else:
@@ -235,21 +237,28 @@ def _expand_keys_around_center(k, dims, name=None, axes=None):
      [('y', 0.9, 3.1), ('y', 0.9,   4)]]
     """
 
-    def inds(i, ind):
+    def convert_depth(depth):
+        if not isinstance(depth, tuple):
+            depth = (depth, depth)
+        return depth
+
+    def inds(i, ind, depth):
+        depth = convert_depth(depth)
         rv = []
-        if ind - 0.9 > 0:
+        if ind - 0.9 > 0 and depth[0] != 0:
             rv.append(ind - 0.9)
         rv.append(ind)
-        if ind + 0.9 < dims[i] - 1:
+        if ind + 0.9 < dims[i] - 1 and depth[1] != 0:
             rv.append(ind + 0.9)
         return rv
 
     shape = []
     for i, ind in enumerate(k[1:]):
+        depth = convert_depth(axes.get(i, 0))
         num = 1
-        if ind > 0:
+        if ind > 0 and depth[0] != 0:
             num += 1
-        if ind < dims[i] - 1:
+        if ind < dims[i] - 1 and depth[1] != 0:
             num += 1
         shape.append(num)
 
@@ -260,7 +269,7 @@ def _expand_keys_around_center(k, dims, name=None, axes=None):
             return depth != 0
 
     args = [
-        inds(i, ind) if _valid_depth(axes.get(i, 0)) else [ind]
+        inds(i, ind, axes.get(i, 0)) if _valid_depth(axes.get(i, 0)) else [ind]
         for i, ind in enumerate(k[1:])
     ]
     if name is not None:
@@ -315,7 +324,7 @@ def fractional_slice(task, axes):
         elif t > r and left_depth:
             index.append(slice(-left_depth, None))
         else:
-            index.append(slice(0, 0))
+            return False
     index = tuple(index)
 
     if all(ind == slice(None, None, None) for ind in index):
