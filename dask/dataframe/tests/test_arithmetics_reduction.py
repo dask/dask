@@ -1373,7 +1373,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             match="'DatetimeArray' with dtype datetime64.*|"
             "'DatetimeArray' does not implement reduction|could not convert|"
             "'ArrowStringArray' with dtype string"
-            "|unsupported operand|no kernel|not supported",
+            "|unsupported operand|no kernel|not supported"
+            "|Cannot perform reduction",
         ):
             getattr(ddf, func)(numeric_only=False)
 
@@ -1390,7 +1391,8 @@ def test_reductions_frame_dtypes_numeric_only_supported(func):
             match="'DatetimeArray' with dtype datetime64.*|"
             "'DatetimeArray' does not implement reduction|could not convert|"
             "'ArrowStringArray' with dtype string"
-            "|unsupported operand|no kernel|not supported",
+            "|unsupported operand|no kernel|not supported"
+            "|Cannot perform reduction",
         ):
             getattr(ddf, func)()
     else:

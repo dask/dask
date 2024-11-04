@@ -18,6 +18,7 @@ from dask.dataframe import _compat
 from dask.dataframe._compat import (
     PANDAS_GE_210,
     PANDAS_GE_220,
+    PANDAS_GE_230,
     PANDAS_GE_300,
     check_observed_deprecation,
     tm,
@@ -2166,7 +2167,7 @@ def record_numeric_only_warnings():
         pytest.param(
             "sum",
             marks=pytest.mark.xfail(
-                pyarrow_strings_enabled(),
+                pyarrow_strings_enabled() and not PANDAS_GE_230,
                 reason="works in dask-expr",
             ),
         ),
