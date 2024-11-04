@@ -562,7 +562,9 @@ def map_blocks(
         Dimensions lost by the function.
     new_axis : number or iterable, optional
         New dimensions created by the function. Note that these are applied
-        after ``drop_axis`` (if present).
+        after ``drop_axis`` (if present). The size of each chunked along this
+        dimension will be set to 1. Please specify ``chunks`` if the individual
+        chunks have a different size.
     enforce_ndim : bool, default False
         Whether to enforce at runtime that the dimensionality of the array
         produced by ``func`` actually matches that of the array returned by
