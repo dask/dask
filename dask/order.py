@@ -653,37 +653,45 @@ def _connecting_to_roots(
                 current.append(parent)
         # At some point, all the roots are the same, particularly for dense
         # graphs. We don't want to create new sets over and over again
-        new_set: set | None = None
-        identical_sets = True
-        result_first: frozenset | None = None
-
-        for child in sorted(
-            dependencies[key], key=lambda k: len(dependents[k]), reverse=True
-        ):
+        transitive_deps = []
+        transitive_deps_ids = set()
+        max_dependents_key = list()
+        for child in dependencies[key]:
             r_child = result[child]
-            if result_first is None:
-                result_first = r_child
-                max_dependents[key] = max_dependents[child]
-            # This clause is written such that it can circuit break early
-            elif not (
-                identical_sets
-                and (result_first is r_child or r_child.issubset(result_first))
-            ):
-                identical_sets = False
-                if new_set is None:
-                    new_set = set(result_first)
-                max_dependents[key] = max(max_dependents[child], max_dependents[key])
-                new_set.update(r_child)
+            if id(r_child) in transitive_deps_ids:
+                continue
+            transitive_deps.append(r_child)
+            transitive_deps_ids.add(id(r_child))
+            max_dependents_key.append(max_dependents[child])
 
-        if new_set is not None:
-            new_set_frozen = frozenset(new_set)
-            deduped = dedup_mapping.get(new_set_frozen, None)
-            if deduped is None:
-                dedup_mapping[new_set_frozen] = deduped = new_set_frozen
-            result[key] = deduped
+        max_dependents[key] = max(max_dependents_key)
+        if len(transitive_deps_ids) == 1:
+            result[key] = transitive_deps[0]
         else:
-            assert result_first is not None
-            result[key] = result_first
+            prev: set | frozenset | None = None
+            new_set = None
+            for tdeps in transitive_deps:
+                if prev is None:
+                    prev = tdeps
+                    continue
+                if tdeps.issubset(prev):
+                    continue
+                if new_set is None:
+                    prev = new_set = set(prev)
+                prev.update(tdeps)
+            if new_set is not None:
+                # frozenset is unfortunately triggering a copy. In the event of
+                # a cache hit, this is wasted time but we can't hash the set
+                # otherwise (unless we did it manually) and can therefore not
+                # deduplicate without this copy
+                frozen_res = frozenset(new_set)
+                try:
+                    result[key] = dedup_mapping[frozen_res]
+                except KeyError:
+                    dedup_mapping[frozen_res] = frozen_res
+                    result[key] = frozen_res
+            else:
+                result[key] = prev  # type: ignore
     del dedup_mapping
 
     empty_set: frozenset[Key] = frozenset()
@@ -816,36 +824,14 @@ def diagnostics(
 def _f() -> None: ...
 
 
-def _convert_task(task: Any) -> Any:
-    if istask(task):
-        assert callable(task[0])
-        new_spec: list[Any] = []
-        for el in task[1:]:
-            if isinstance(el, (str, int)):
-                new_spec.append(el)
-            elif isinstance(el, tuple):
-                if istask(el):
-                    new_spec.append(_convert_task(el))
-                else:
-                    new_spec.append(el)
-            elif isinstance(el, list):
-                new_spec.append([_convert_task(e) for e in el])
-        return (_f, *new_spec)
-    elif isinstance(task, tuple):
-        return (_f, task)
-    else:
-        return (_f, *task)
-
-
 def sanitize_dsk(dsk: MutableMapping[Key, Any]) -> dict:
     """Take a dask graph and replace callables with a dummy function and remove
     payload data like numpy arrays, dataframes, etc.
     """
+    from dask._task_spec import Task, TaskRef
+
     new = {}
-    for key, values in dsk.items():
-        new_key = key
-        new[new_key] = _convert_task(values)
-    if get_deps(new) != get_deps(dsk):
-        # The switch statement in _convert likely dropped some keys
-        raise RuntimeError("Sanitization failed to preserve topology.")
+    deps = DependenciesMapping(dsk)
+    for key, values in deps.items():
+        new[key] = Task(key, _f, *(TaskRef(k) for k in values))
     return new
