@@ -972,3 +972,9 @@ def test_nanquantile_one_dim():
     arr = np.random.randn(10)
     darr = da.from_array(arr, chunks=(2,))
     assert_eq(da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1))
+
+
+def test_nanquantile_two_dims():
+    arr = np.random.randn(10, 10)
+    darr = da.from_array(arr, chunks=(2, -1))
+    assert_eq(da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1))
