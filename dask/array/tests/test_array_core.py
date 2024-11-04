@@ -1646,8 +1646,7 @@ def test_map_blocks_optimize_blockwise(func):
     optimized = optimize_blockwise(dsk)
 
     # Everything should be fused into a single layer.
-    # If the lambda includes block_info, there will be two layers.
-    assert len(optimized.layers) == len(dsk.layers) - 6
+    assert len(optimized.layers) == 1
 
 
 def test_repr():
