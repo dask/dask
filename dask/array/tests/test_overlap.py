@@ -831,7 +831,7 @@ def test_sliding_window_errors(window_shape, axis):
 
 
 def test_overlap_not_adding_empty_tasks():
-    arr = da.zeros((20, 10), chunks=(5, 5))
+    arr = da.zeros((30, 5), chunks=(10, 5))
 
     def dummy(x):
         return x
@@ -848,6 +848,7 @@ def test_overlap_not_adding_empty_tasks():
         )
 
     assert not any(check(v) for v in dsk.values())
+    result.compute()
 
 
 def test_map_overlap_new_axis():
