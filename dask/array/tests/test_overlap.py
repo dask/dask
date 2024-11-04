@@ -830,6 +830,26 @@ def test_sliding_window_errors(window_shape, axis):
         sliding_window_view(arr, window_shape, axis)
 
 
+def test_overlap_not_adding_empty_tasks():
+    arr = da.zeros((20, 10), chunks=(5, 5))
+
+    def dummy(x):
+        return x
+
+    result = arr.map_overlap(dummy, depth={0: (0, 1)})
+    dsk = dict(result.dask)
+
+    def check(v):
+        return (
+            isinstance(v, tuple)
+            and len(v) >= 3
+            and isinstance(v[2], tuple)
+            and v[2] == (slice(0, 0, None), slice(None))
+        )
+
+    assert not any(check(v) for v in dsk.values())
+
+
 def test_map_overlap_new_axis():
     arr = da.arange(6, chunks=2)
     assert arr.shape == (6,)

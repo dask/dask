@@ -196,6 +196,8 @@ class ArrayOverlapLayer(Layer):
         overlap_blocks = {}
         for k in interior_keys:
             frac_slice = fractional_slice((name,) + k, axes)
+            if frac_slice is False:
+                continue
             if (name,) + k != frac_slice:
                 interior_slices[(getitem_name,) + k] = frac_slice
             else:
@@ -315,7 +317,7 @@ def fractional_slice(task, axes):
         elif t > r and left_depth:
             index.append(slice(-left_depth, None))
         else:
-            index.append(slice(0, 0))
+            return False
     index = tuple(index)
 
     if all(ind == slice(None, None, None) for ind in index):
