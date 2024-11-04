@@ -1147,7 +1147,10 @@ def store(
     load_stored: boolean, optional
         Optionally return the stored result, loaded in to memory (default None).
         If None, ``load_stored`` is True if ``return_stored`` is True and
-        ``compute`` is False.
+        ``compute`` is False. *This is an advanced option.*
+        When False, store will return the appropriate ``target`` for each chunk that is stored.
+        Directly computing this result is not what you want.
+        Instead, you can use the returned ``target`` to execute followup operations to the store.
     kwargs:
         Parameters passed to compute/persist (only used if compute=True)
 
