@@ -2913,6 +2913,19 @@ def test_normalize_chunks():
         normalize_chunks(((5,), (5,)), (5,))
 
 
+def test_single_element_tuple():
+    assert normalize_chunks(
+        (100, "auto"), (500, 500_000), dtype=np.int64, previous_chunks=((1,), (500,))
+    ) == (
+        (100,) * 5,
+        (
+            167_500,
+            167_500,
+            165_000,
+        ),
+    )
+
+
 def test_align_chunks_to_previous_chunks():
     chunks = normalize_chunks(
         "auto", shape=(2000,), previous_chunks=(512,), limit="600 B", dtype=np.uint8
