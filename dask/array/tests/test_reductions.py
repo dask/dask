@@ -936,7 +936,7 @@ def test_quantile(rechunk, q, axis):
     indexer = np.random.randint(0, 10, size=shape)
     arr[indexer >= 8] = np.nan
 
-    darr = da.from_array(arr, chunks=(2, 3, 4, (-1 if not rechunk else 5)))
+    darr = da.from_array(arr, chunks=(2, 3, 4, (5 if rechunk else -1)))
     assert_eq(da.quantile(darr, q, axis=axis), np.quantile(arr, q, axis=axis))
     assert_eq(
         da.quantile(darr, q, axis=axis, keepdims=True),
