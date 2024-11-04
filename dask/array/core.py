@@ -887,24 +887,38 @@ def map_blocks(
     extra_names = []
     # If func has block_id as an argument, construct an array of block IDs and
     # prepare to inject it.
+
+    def _getter_item(a, b, **kwargs):
+        return getter(a, b, **kwargs).item()
+
     if has_keyword(func, "block_id"):
+        # put block_id into a Blockwise layer so that we can fuse it
+        # with the other blockwise layers
+        block_id_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
+        for block_id in product(*(range(len(c)) for c in out.chunks)):
+            block_id_arr[block_id] = block_id
+
         block_id_name = "block-id-" + out.name
-        block_id_dsk = {
-            (block_id_name,) + block_id: block_id
-            for block_id in product(*(range(len(c)) for c in out.chunks))
-        }
-        block_id_array = Array(
-            block_id_dsk,
+        cs = tuple((1,) * len(c) for c in out.chunks)
+
+        dsk = graph_from_arraylike(
+            block_id_arr,
+            cs,
+            block_id_arr.shape,
             block_id_name,
-            chunks=tuple((1,) * len(c) for c in out.chunks),
-            dtype=np.object_,
+            getitem=_getter_item,
+            dtype=block_id_arr.dtype,
+            inline_array=True,
         )
+        block_id_array = Array(dsk, block_id_name, chunks=cs, dtype=np.object_)
         extra_argpairs.append((block_id_array, out_ind))
         extra_names.append("block_id")
 
     # If func has block_info as an argument, construct an array of block info
     # objects and prepare to inject it.
     if has_keyword(func, "block_info"):
+        # put block_info into a Blockwise layer so that we can fuse it
+        # with the other blockwise layers
         starts = {}
         num_chunks = {}
         shapes = {}
@@ -932,7 +946,7 @@ def map_blocks(
         out_starts = [cached_cumsum(c, initial_zero=True) for c in out.chunks]
 
         block_info_name = "block-info-" + out.name
-        block_info_dsk = {}
+        block_info_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
         for block_id in product(*(range(len(c)) for c in out.chunks)):
             # Get position of chunk, indexed by axis labels
             location = {out_ind[i]: loc for i, loc in enumerate(block_id)}
@@ -969,14 +983,19 @@ def map_blocks(
                 ),
                 "dtype": dtype,
             }
-            block_info_dsk[(block_info_name,) + block_id] = info
+            block_info_arr[block_id] = info
 
-        block_info = Array(
-            block_info_dsk,
+        cs = tuple((1,) * len(c) for c in out.chunks)
+        dsk = graph_from_arraylike(
+            block_info_arr,
+            cs,
+            block_info_arr.shape,
             block_info_name,
-            chunks=tuple((1,) * len(c) for c in out.chunks),
-            dtype=np.object_,
+            getitem=_getter_item,
+            dtype=block_info_arr.dtype,
+            inline_array=True,
         )
+        block_info = Array(dsk, block_info_name, chunks=cs, dtype=np.object_)
         extra_argpairs.append((block_info, out_ind))
         extra_names.append("block_info")
 
