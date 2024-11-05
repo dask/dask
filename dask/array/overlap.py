@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import warnings
+from functools import reduce
 from numbers import Integral, Number
+from operator import mul
 
 import numpy as np
 from tlz import concat, get, partial
 from tlz.curried import map
 
 from dask.array import chunk
+from dask.array._shuffle import _calculate_new_chunksizes
 from dask.array.core import Array, concatenate, map_blocks, unify_chunks
 from dask.array.creation import empty_like, full_like, repeat
 from dask.array.numpy_compat import normalize_axis_tuple
@@ -805,7 +808,7 @@ def coerce_boundary(ndim, boundary):
 
 
 @derived_from(np.lib.stride_tricks)
-def sliding_window_view(x, window_shape, axis=None):
+def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
     window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
 
     window_shape_array = np.array(window_shape)
@@ -836,10 +839,25 @@ def sliding_window_view(x, window_shape, axis=None):
 
     # Ensure that each chunk is big enough to leave at least a size-1 chunk
     # after windowing (this is only really necessary for the last chunk).
-    safe_chunks = tuple(
+    safe_chunks = list(
         ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, x.chunks)
     )
-    x = x.rechunk(safe_chunks)
+    if automatic_rechunk:
+        safe_chunks = [
+            s if d != 0 else c for d, c, s in zip(depths, x.chunks, safe_chunks)
+        ]
+        # safe chunks is our output chunks, so add the new dimensions
+        safe_chunks.extend([(w,) for w in window_shape])
+        max_chunk = reduce(mul, map(max, x.chunks))
+        new_chunks = _calculate_new_chunksizes(
+            x.chunks,
+            safe_chunks.copy(),
+            {i for i, d in enumerate(depths) if d == 0},
+            max_chunk,
+        )
+        x = x.rechunk(tuple(new_chunks))
+    else:
+        x = x.rechunk(tuple(safe_chunks))
 
     # result.shape = x_shape_trimmed + window_shape,
     # where x_shape_trimmed is x.shape with every entry
