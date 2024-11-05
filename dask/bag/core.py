@@ -38,6 +38,7 @@ from tlz import (
 )
 
 from dask import config
+from dask._task_spec import GraphNode
 from dask.bag import chunk
 from dask.bag.avro import to_avro
 from dask.base import (
@@ -94,6 +95,8 @@ def lazify_task(task, start=True):
     >>> lazify_task(task)  # doctest: +ELLIPSIS
     (<built-in function sum>, (<class 'map'>, <function inc at ...>, [1, 2, 3]))
     """
+    if isinstance(task, GraphNode):
+        return task
     if type(task) is list and len(task) < 50:
         return [lazify_task(arg, False) for arg in task]
     if not istask(task):
@@ -134,7 +137,11 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
     inline_keys = {
         k
         for k, v in dsk.items()
-        if istask(v) and v and v[0] is list and len(dependents[k]) == 1
+        if istask(v)
+        and not isinstance(v, GraphNode)
+        and v
+        and v[0] is list
+        and len(dependents[k]) == 1
     }
     inline_keys.difference_update(flatten(keys))
     dsk = inline(dsk, inline_keys, inline_constants=False)
