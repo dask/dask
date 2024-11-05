@@ -1111,6 +1111,7 @@ def store(
     regions: tuple[slice, ...] | Collection[tuple[slice, ...]] | None = None,
     compute: bool = True,
     return_stored: bool = False,
+    load_stored: bool | None = None,
     **kwargs,
 ):
     """Store dask arrays in array-like objects, overwrite data in target
@@ -1145,6 +1146,13 @@ def store(
         If true compute immediately; return :class:`dask.delayed.Delayed` otherwise.
     return_stored: boolean, optional
         Optionally return the stored result (default False).
+    load_stored: boolean, optional
+        Optionally return the stored result, loaded in to memory (default None).
+        If None, ``load_stored`` is True if ``return_stored`` is True and
+        ``compute`` is False. *This is an advanced option.*
+        When False, store will return the appropriate ``target`` for each chunk that is stored.
+        Directly computing this result is not what you want.
+        Instead, you can use the returned ``target`` to execute followup operations to the store.
     kwargs:
         Parameters passed to compute/persist (only used if compute=True)
 
@@ -1227,7 +1235,8 @@ def store(
         layers[targets_name] = targets_layer
         dependencies[targets_name] = set()
 
-    load_stored = return_stored and not compute
+    if load_stored is None:
+        load_stored = return_stored and not compute
 
     map_names = [
         "store-map-" + tokenize(s, t if isinstance(t, Delayed) else id(t), r)
