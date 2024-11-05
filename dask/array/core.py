@@ -562,7 +562,9 @@ def map_blocks(
         Dimensions lost by the function.
     new_axis : number or iterable, optional
         New dimensions created by the function. Note that these are applied
-        after ``drop_axis`` (if present).
+        after ``drop_axis`` (if present). The size of each chunk along this
+        dimension will be set to 1. Please specify ``chunks`` if the individual
+        chunks have a different size.
     enforce_ndim : bool, default False
         Whether to enforce at runtime that the dimensionality of the array
         produced by ``func`` actually matches that of the array returned by
@@ -887,24 +889,55 @@ def map_blocks(
     extra_names = []
     # If func has block_id as an argument, construct an array of block IDs and
     # prepare to inject it.
-    if has_keyword(func, "block_id"):
-        block_id_name = "block-id-" + out.name
-        block_id_dsk = {
-            (block_id_name,) + block_id: block_id
-            for block_id in product(*(range(len(c)) for c in out.chunks))
-        }
-        block_id_array = Array(
-            block_id_dsk,
-            block_id_name,
-            chunks=tuple((1,) * len(c) for c in out.chunks),
-            dtype=np.object_,
+
+    def _getter_item(a, b, **kwargs):
+        if len(a.shape) == 0:
+            # meta
+            return a.item()
+        return getter(a, b, **kwargs).item()
+
+    def _add_blockwise_layer_for_keyword(keyword_arr, prefix):
+        name = prefix + out.name
+        cs = tuple((1,) * len(c) for c in out.chunks)
+
+        dsk = graph_from_arraylike(
+            keyword_arr,
+            cs,
+            keyword_arr.shape,
+            name,
+            getitem=_getter_item,
+            dtype=keyword_arr.dtype,
+            inline_array=False,
         )
+        return Array(dsk, name, chunks=cs, dtype=keyword_arr.dtype)
+
+    if has_keyword(func, "block_id"):
+        # put block_id into a Blockwise layer so that we can fuse it
+        # with the other blockwise layers
+        block_id_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
+        for block_id in product(*(range(len(c)) for c in out.chunks)):
+            block_id_arr[block_id] = block_id
+        block_id_array = _add_blockwise_layer_for_keyword(block_id_arr, "block-id-")
         extra_argpairs.append((block_id_array, out_ind))
         extra_names.append("block_id")
+
+    if has_keyword(func, "_overlap_trim_info"):
+        # Internal for map overlap to reduce size of graph
+        num_chunks = out.numblocks
+        block_id_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
+        for block_id in product(*(range(len(c)) for c in out.chunks)):
+            block_id_arr[block_id] = (block_id, num_chunks)
+        block_id_array = _add_blockwise_layer_for_keyword(
+            block_id_arr, "_overlap_trim_info-id-"
+        )
+        extra_argpairs.append((block_id_array, out_ind))
+        extra_names.append("_overlap_trim_info")
 
     # If func has block_info as an argument, construct an array of block info
     # objects and prepare to inject it.
     if has_keyword(func, "block_info"):
+        # put block_info into a Blockwise layer so that we can fuse it
+        # with the other blockwise layers
         starts = {}
         num_chunks = {}
         shapes = {}
@@ -932,7 +965,7 @@ def map_blocks(
         out_starts = [cached_cumsum(c, initial_zero=True) for c in out.chunks]
 
         block_info_name = "block-info-" + out.name
-        block_info_dsk = {}
+        block_info_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
         for block_id in product(*(range(len(c)) for c in out.chunks)):
             # Get position of chunk, indexed by axis labels
             location = {out_ind[i]: loc for i, loc in enumerate(block_id)}
@@ -969,14 +1002,19 @@ def map_blocks(
                 ),
                 "dtype": dtype,
             }
-            block_info_dsk[(block_info_name,) + block_id] = info
+            block_info_arr[block_id] = info
 
-        block_info = Array(
-            block_info_dsk,
+        cs = tuple((1,) * len(c) for c in out.chunks)
+        dsk = graph_from_arraylike(
+            block_info_arr,
+            cs,
+            block_info_arr.shape,
             block_info_name,
-            chunks=tuple((1,) * len(c) for c in out.chunks),
-            dtype=np.object_,
+            getitem=_getter_item,
+            dtype=block_info_arr.dtype,
+            inline_array=False,
         )
+        block_info = Array(dsk, block_info_name, chunks=cs, dtype=np.object_)
         extra_argpairs.append((block_info, out_ind))
         extra_names.append("block_info")
 
@@ -3223,6 +3261,12 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     normalize_chunks: for full docstring and parameters
     """
     if previous_chunks is not None:
+        # rioxarray is passing ((1, ), (x,)) for shapes like (100, 5x),
+        # so add this compat code for now
+        # https://github.com/corteva/rioxarray/pull/820
+        previous_chunks = (
+            c[0] if isinstance(c, tuple) and len(c) == 1 else c for c in previous_chunks
+        )
         previous_chunks = _convert_int_chunk_to_tuple(shape, previous_chunks)
     chunks = list(chunks)
 
@@ -3270,6 +3314,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
         multiplier = _compute_multiplier(limit, dtype, largest_block, median_chunks)
+        if multiplier < 1:
+            # we want to update inplace, algorithm relies on it in this case
+            result = median_chunks
 
         ideal_shape = []
         for i, s in enumerate(shape):
@@ -3286,6 +3333,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             return True
 
         multiplier_remaining = True
+        reduce_case = multiplier < 1
         while multiplier_remaining:  # while things change
             last_autos = set(autos)  # record previous values
             multiplier_remaining = False
@@ -3303,8 +3351,11 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     multiplier_remaining = _trivial_aggregate(a)
                     largest_block *= shape[a]
                     continue
-                elif this_multiplier <= 1 or max(previous_chunks[a]) > max_chunk_size:
+                elif reduce_case or max(previous_chunks[a]) > max_chunk_size:
                     result[a] = round_to(proposed, ideal_shape[a])
+                    if proposed < 1:
+                        multiplier_remaining = True
+                        autos.discard(a)
                     continue
                 else:
                     dimension_result, new_chunk = [], 0
@@ -3322,10 +3373,13 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                 result[a] = tuple(dimension_result)
 
             # recompute how much multiplier we have left, repeat
-            if multiplier_remaining:
+            if multiplier_remaining or reduce_case:
+                last_multiplier = multiplier
                 multiplier = _compute_multiplier(
                     limit, dtype, largest_block, median_chunks
                 )
+                if multiplier != last_multiplier:
+                    multiplier_remaining = True
 
         for k, v in result.items():
             chunks[k] = v if v else 0

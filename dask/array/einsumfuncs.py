@@ -236,10 +236,10 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
 
     if len(inputs) > 1 and len(outputs) > 0:
         # Calculate the increase in chunk size compared to the largest input chunk
-        max_chunk_sizes, max_chunk_size_inuput = [], 0
+        max_chunk_sizes, max_chunk_size_input = [], 1
         for op, input in zip(ops, inputs):
-            max_chunk_size_inuput = max(
-                reduce(mul, map(max, op.chunks)), max_chunk_size_inuput
+            max_chunk_size_input = max(
+                reduce(mul, map(max, op.chunks)), max_chunk_size_input
             )
             max_chunk_sizes.extend(
                 max(op.chunks[i])
@@ -249,7 +249,7 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
 
         max_chunk_size_output = reduce(mul, max_chunk_sizes)
         factor = max_chunk_size_output / (
-            max_chunk_size_inuput * config.get("array.chunk-size-tolerance")
+            max_chunk_size_input * config.get("array.chunk-size-tolerance")
         )
 
         # Rechunk inputs to make input chunks smaller to avoid an increase in
@@ -257,7 +257,7 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
         new_ops = []
         for op, input in zip(ops, inputs):
             changeable_dimensions = {ctr for ctr, i in enumerate(input) if i in outputs}
-            f = factor ** (len(changeable_dimensions) / len(outputs))
+            f = max(factor ** (len(changeable_dimensions) / len(outputs)), 1)
             result = _calculate_new_chunksizes(
                 op.chunks,
                 list(op.chunks),

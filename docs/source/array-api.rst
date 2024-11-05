@@ -165,6 +165,7 @@ Top level functions
    nanmedian
    nanmin
    nanprod
+   nanquantile
    nanstd
    nansum
    nanvar
@@ -185,6 +186,7 @@ Top level functions
    power
    prod
    ptp
+   quantile
    rad2deg
    radians
    ravel
