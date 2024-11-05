@@ -69,7 +69,7 @@ jobs:
           java-version: "11"
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.0.4
+        uses: conda-incubator/setup-miniconda@v3.1.0
         with:
           miniforge-version: latest
           use-mamba: true
