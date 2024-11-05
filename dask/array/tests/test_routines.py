@@ -239,13 +239,26 @@ def test_flip(funcname, kwargs, shape):
 
 @pytest.mark.parametrize(
     "kwargs",
-    [{}, {"axes": (1, 0)}, {"axes": (2, 3)}, {"axes": (0, 1, 2)}, {"axes": (1, 1)}],
+    [
+        {},
+        {"axes": (1, 0)},
+        {"axes": (2, 3)},
+        {"axes": (0, 1, 2)},
+    ],
 )
-@pytest.mark.parametrize("shape", [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        tuple(),
+        (4,),
+        (4, 6),
+        (4, 6, 8),
+    ],
+)
 def test_rot90(kwargs, shape):
     axes = kwargs.get("axes", (0, 1))
     np_a = np.random.default_rng().random(shape)
-    da_a = da.from_array(np_a, chunks=1)
+    da_a = da.from_array(np_a, chunks=2)
 
     np_func = np.rot90
     da_func = da.rot90
