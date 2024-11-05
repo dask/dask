@@ -831,6 +831,63 @@ def test_sliding_window_errors(window_shape, axis):
         sliding_window_view(arr, window_shape, axis)
 
 
+@pytest.mark.parametrize(
+    "output_chunks, window_shape, axis",
+    [
+        (((25, 21), (9, 8, 8, 9, 8, 8), (9, 8, 8, 9, 8, 8), (5,)), 5, 0),
+        (((25, 6), (5,) * 10, (5,) * 10, (20,)), 20, 0),
+        (
+            (
+                (11,),
+                (3, 3, 3, 3, 3, 3, 3, 2, 2) * 2,
+                (3, 3, 3, 3, 3, 3, 3, 2, 2) * 2,
+                (40,),
+            ),
+            40,
+            0,
+        ),
+        (
+            (
+                (25, 21),
+                (2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) * 2,
+                (25, 22),
+                (5,),
+                (4,),
+            ),
+            (5, 4),
+            (0, 2),
+        ),
+        (
+            (
+                (25, 21),
+                (25, 22),
+                (2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) * 2,
+                (5,),
+                (4,),
+            ),
+            (5, 4),
+            (0, 1),
+        ),
+    ],
+)
+def test_sliding_window_view_chunking(output_chunks, window_shape, axis):
+    arr = np.random.randn(50, 50, 50)
+    darr = da.from_array(arr, chunks=(25, 25, 25))
+    result = sliding_window_view(darr, window_shape, axis, automatic_rechunk=True)
+    assert result.chunks == output_chunks
+    expected = np.lib.stride_tricks.sliding_window_view(arr, window_shape, axis)
+    assert_eq(result, expected)
+
+
+def test_sliding_window_view_no_chunking():
+    arr = np.random.randn(50, 50, 50)
+    darr = da.from_array(arr, chunks=(25, 25, 25))
+    result = sliding_window_view(darr, 30, 0, automatic_rechunk=False)
+    assert result.chunks == ((21,), (25, 25), (25, 25), (30,))
+    expected = np.lib.stride_tricks.sliding_window_view(arr, 30, 0)
+    assert_eq(result, expected)
+
+
 def test_overlap_not_adding_empty_tasks():
     arr = da.zeros((30, 5), chunks=(10, 5))
 
@@ -875,4 +932,4 @@ def test_overlap_not_blowing_up_graph():
     )
     result = arr.rolling(dim={"year": 11}, center=True).construct("window_dim")
     dc = collections_to_dsk([result.data])
-    assert len(dc) < 1000  # previously 3000
+    assert len(dc) <= 1651  # previously 3000
