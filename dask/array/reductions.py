@@ -1927,7 +1927,7 @@ def _span_indexers(a):
     # we have to calculate reduce(mul, list(a.shape)[:-1]) number of quantiles
     # We create an indexer combination for each of these quantiles
 
-    shapes = reduce(mul, list(a.shape)[1:-1])
+    shapes = 1 if len(a.shape) <= 2 else reduce(mul, list(a.shape)[1:-1])
     original_shapes = shapes * a.shape[0]
     indexers = [tuple(np.repeat(np.arange(a.shape[0]), shapes))]
 
