@@ -2469,39 +2469,39 @@ def test_einsum(einsum_signature):
 
 
 def test_einsum_chunksizes():
-    arr1 = da.random.random((1024, 16, 16, 16, 16), chunks=(256, 8, 8, 8, 8))
-    arr2 = da.random.random((1024, 16, 16, 16, 16), chunks=(256, 8, 8, 8, 8))
+    arr1 = da.random.random((1024, 8, 8, 8, 8), chunks=(256, 8, 8, 8, 8))
+    arr2 = da.random.random((1024, 8, 8, 8, 8), chunks=(256, 8, 8, 8, 8))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=da.PerformanceWarning)
         result = da.einsum("aijkl,amnop->ijklmnop", arr1, arr2)
-    assert result.chunks == ((4,) * 4,) * 8
+    assert result.chunks == ((4,) * 2,) * 8
 
-    arr1 = da.random.random((64, 16, 16, 16, 16), chunks=(32, 8, 1, 8, 8))
-    arr2 = da.random.random((64, 16, 16, 16, 16), chunks=(32, 8, 8, 1, 8))
+    arr1 = da.random.random((64, 8, 8, 8, 8), chunks=(32, 8, 1, 8, 8))
+    arr2 = da.random.random((64, 8, 8, 8, 8), chunks=(32, 8, 8, 1, 8))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=da.PerformanceWarning)
         result = da.einsum("aijkl,amnop->ijklmnop", arr1, arr2)
     assert result.chunks == (
-        (4,) * 4,
-        (1,) * 16,
-        (4,) * 4,
-        (4,) * 4,
-        (4,) * 4,
-        (4,) * 4,
-        (1,) * 16,
-        (4,) * 4,
+        (4,) * 2,
+        (1,) * 8,
+        (4,) * 2,
+        (4,) * 2,
+        (4,) * 2,
+        (4,) * 2,
+        (1,) * 8,
+        (4,) * 2,
     )
 
-    np_arr1 = np.random.random((2, 4, 4, 4))
-    np_arr2 = np.random.random((2, 4, 4, 4))
+    np_arr1 = np.random.random((2, 4, 4))
+    np_arr2 = np.random.random((2, 4, 4))
 
-    arr1 = da.from_array(np_arr1, chunks=(1, 2, 2, 2))
-    arr2 = da.from_array(np_arr2, chunks=(1, 2, 2, 2))
+    arr1 = da.from_array(np_arr1, chunks=(1, 2, 2))
+    arr2 = da.from_array(np_arr2, chunks=(1, 2, 2))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=da.PerformanceWarning)
-        result = da.einsum("aijk,amno->ijkmno", arr1, arr2)
-    assert result.chunks == ((1,) * 4,) * 6
-    assert_eq(np.einsum("aijk,amno->ijkmno", np_arr1, np_arr2), result)
+        result = da.einsum("aij,amn->ijmn", arr1, arr2)
+    assert result.chunks == ((1,) * 4,) * 4
+    assert_eq(np.einsum("aij,amn->ijmn", np_arr1, np_arr2), result)
 
 
 @pytest.mark.parametrize(
