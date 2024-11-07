@@ -84,12 +84,6 @@ jobs:
         if: ${{ matrix.extra == 'pandas-nightly' }}
         run: python -m pip install --pre --extra-index https://pypi.anaconda.org/scientific-python-nightly-wheels/simple pandas -U
 
-      - name: Install PyArrow nightlies for Python 3.13
-        if: ${{ matrix.environment == '3.13' }}
-        run: | 
-          pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ --prefer-binary --pre pyarrow
-          pip install git+https://github.com/dask/dask-expr
-
       - name: Disable query planning for 3.10 builds
         if: ${{ matrix.environment == '3.10' }}
         run: |

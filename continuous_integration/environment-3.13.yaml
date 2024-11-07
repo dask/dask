@@ -38,7 +38,7 @@ dependencies:
   # - tiledb # crashes on Python 3.11
   - xarray
   - sqlalchemy
-  #- pyarrow>=14.0.1  # not available for py 13
+  - pyarrow>=14.0.1
   - coverage
   - jsonschema
   # other -- IO
@@ -68,10 +68,10 @@ dependencies:
   - python-graphviz
   - python-cityhash
   - python-xxhash
-  #- mmh3. # only on pypi for py 13
+  #- mmh3  # only on pypi for py 13
   - jinja2
   - pip
   - pip:
     - git+https://github.com/dask/distributed
     - mmh3
-    #- git+https://github.com/dask/dask-expr
+    - git+https://github.com/dask/dask-expr
