@@ -5689,10 +5689,10 @@ def _vindex_array(x, dict_indexes):
     broadcast_shape = broadcast_indexes[0].shape
 
     lookup = dict(zip(dict_indexes, broadcast_indexes))
-    flat_indexes = [
-        lookup[i].ravel().tolist() if i in lookup else None for i in range(x.ndim)
-    ]
+    flat_indexes = [lookup[i].ravel() if i in lookup else None for i in range(x.ndim)]
     flat_indexes.extend([None] * (x.ndim - len(flat_indexes)))
+
+    token = tokenize(x, flat_indexes)
 
     flat_indexes = [
         list(index) if index is not None else index for index in flat_indexes
@@ -5700,7 +5700,6 @@ def _vindex_array(x, dict_indexes):
     bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
     bounds2 = [b for i, b in zip(flat_indexes, bounds) if i is not None]
     axis = _get_axis(flat_indexes)
-    token = tokenize(x, flat_indexes)
     out_name = "vindex-merge-" + token
 
     max_chunk_point_dimensions = reduce(
