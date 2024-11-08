@@ -956,6 +956,9 @@ def test_local_objects():
     assert check_tokenize(LocalDaskTokenize()) != check_tokenize(LocalReducible())
 
 
+@pytest.mark.skipif(
+    PY_VERSION >= Version("3.13"), reason="https://github.com/dask/dask/issues/11457"
+)
 def test_tokenize_dataclass():
     a1 = ADataClass(1)
     a2 = ADataClass(2)
@@ -978,11 +981,7 @@ def test_tokenize_dataclass():
     ADataClassRedefinedDifferently = dataclasses.make_dataclass(
         "ADataClass", [("a", Union[int, str])]
     )
-    if PY_VERSION >= Version("3.13"):
-        with pytest.raises(AssertionError):
-            check_tokenize(ADataClassRedefinedDifferently(1))
-    else:
-        assert check_tokenize(a1) != check_tokenize(ADataClassRedefinedDifferently(1))
+    assert check_tokenize(a1) != check_tokenize(ADataClassRedefinedDifferently(1))
 
     # Dataclass with unpopulated value
     nv = NoValueDataClass()
