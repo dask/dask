@@ -120,6 +120,75 @@ on workers:
           :align: center
           :alt: Individual chunks are now roughly the same size
 
+.. dropdown:: Additional changes
+
+  - Add changelog for Dask release (:pr:`11502`) `Patrick Hoefler`_
+  - Minor updates to optional dependencies table (:pr:`11503`) `James Bourbeau`_
+  - Add ``push`` for ``ffill`` like operations (:pr:`11501`) `Patrick Hoefler`_
+  - Remove ``func`` packing for ``TaskSpec`` (:pr:`11496`) `Florian Jetter`_
+  - Make tokenization for ``vindex`` more efficient (:pr:`11493`) `Patrick Hoefler`_
+  - Cut down runtime of einstein summation test (:pr:`11499`) `Patrick Hoefler`_
+  - Improve test runtime for ``test_rot90`` (:pr:`11498`) `Florian Jetter`_
+  - Disable low level optimization for ``TaskSpec`` in Bags (:pr:`11495`) `Florian Jetter`_
+  - Add automatic rechunking to sliding-window-view (:pr:`11479`) `Patrick Hoefler`_
+  - Add ``load_stored`` kwarg to ``dask.array.store`` (:pr:`11465`) `Deepak Cherian`_
+  - Fix ``quantile`` error in two dimensions (:pr:`11489`) `Patrick Hoefler`_
+  - Bump ``conda-incubator/setup-miniconda`` from 3.0.4 to 3.1.0 (:pr:`11490`)
+  - Update ``map_blocks`` docstring (:pr:`11491`) `Patrick Hoefler`_
+  - Fix ``einsum`` with empty arrays (:pr:`11488`) `Patrick Hoefler`_
+  - Implement non gil-blocking ``quantile`` method (:pr:`11473`) `Patrick Hoefler`_
+  - Use internal keyword for trimming in ``map_overlap`` to reduce graph size (:pr:`11486`) `Patrick Hoefler`_
+  - Minor dask ``order`` refactor (:pr:`11467`) `Florian Jetter`_
+  - Remove empty tasks from ``map_overlap`` (:pr:`11483`) `Patrick Hoefler`_
+  - Fixup auto chunks calculation if single chunk goes below 1 (:pr:`11485`) `Patrick Hoefler`_
+  - Fix CI after pandas upstream changes (:pr:`11482`) `Patrick Hoefler`_
+  - Make sure that ``block_id`` and ``block_info`` don't create extra tasks (:pr:`11484`) `Patrick Hoefler`_
+  - Use repeat to build nearest boundary (:pr:`9666`) `Jean-Baptiste Bayle`_
+  - Remove dead code from ``make_blockwise`` (:pr:`11478`) `Florian Jetter`_
+  - Patch auto-chunks calculation for ``rioxarray`` (:pr:`11480`) `Patrick Hoefler`_
+  - Skip legacy test because of flaky warning (:pr:`11475`) `Patrick Hoefler`_
+  - Unskip a few ``dask-expr`` tests (:pr:`11474`) `Patrick Hoefler`_
+  - Keep chunk sizes consistent in ``einsum`` (:pr:`11464`) `Patrick Hoefler`_
+  - Improve how ``normalize_chunks`` squashes together chunks when "auto" is set (:pr:`11468`) `Patrick Hoefler`_
+  - Fix ``resolve_aliases`` when multiple aliases are in graph (:pr:`11469`) `Patrick Hoefler`_
+  - Avoid cyclic import in ``dask.array`` (:pr:`11472`) `Hendrik Makait`_
+  - Unskip dataframe test (:pr:`11471`) `Patrick Hoefler`_
+  - Improve ``dask.order`` performance for large graphs (:pr:`11466`) `Florian Jetter`_
+  - Ensure that ``slice(None)`` just maps the keys (:pr:`11450`) `Patrick Hoefler`_
+  - Fix ``Task.__repr__()`` of unpickled object (:pr:`11463`) `Peter Andreas Entschev`_
+  - Use ``TaskSpec`` in local dask execution (:pr:`11378`) `Florian Jetter`_
+  - Adjust accuracy in ``test_solve_triangular_vector`` (:pr:`11461`) `Florian Jetter`_
+  - Update Aggregation docstring (:pr:`11459`) `Guillaume Eynard-Bontemps`_
+  - Implement fuse option for ``delayed`` objects (:pr:`11441`) `Patrick Hoefler`_
+  - Deprecate legacy dask dataframe implementation (:pr:`11437`) `Patrick Hoefler`_
+  - Fix ``na`` casting behavior for ``groupby.agg`` with arrow dtypes (:pr:`11118`) `Patrick Hoefler`_
+  - Fix behavior of ``keys_in_tasks`` for ``TaskSpec`` nodes (:pr:`11445`) `Florian Jetter`_
+  - Convert dtype to int instead of np.uint8 for visualizing large task graphs (:pr:`11440`) `Patrick Hoefler`_
+  - Ensure dependencies are not mutated (:pr:`11438`) `Florian Jetter`_
+  - Full support for task spec in ``dask.order`` (:pr:`11347`) `Florian Jetter`_
+
+  - Remove redundant methods in ``P2PBarrierTask`` (:pr-distributed:`8924`) `Florian Jetter`_
+  - Fix ``skipif`` condition for ``test_tell_workers_when_peers_have_left`` (:pr-distributed:`8929`) `Florian Jetter`_
+  - Ensure ``ConnectionPool`` is closed even if network stack swallows ``CancelledErrors`` (:pr-distributed:`8928`) `Florian Jetter`_
+  - Fix flaky ``test_server_comms_mark_active_handlers`` (:pr-distributed:`8927`) `Florian Jetter`_
+  - Make assumption in P2P's barrier mechanism explicit (:pr-distributed:`8926`) `Hendrik Makait`_
+  - Adjust timeouts in Jupyter cli test (:pr-distributed:`8925`) `Florian Jetter`_
+  - Add ``stimulus_id`` to ``update_graph`` plugin hook (:pr-distributed:`8923`) `Hendrik Makait`_
+  - Reduce P2P transfer task overhead (:pr-distributed:`8912`) `Hendrik Makait`_
+  - Disable profiler on Python 3.11 (:pr-distributed:`8916`) `Florian Jetter`_
+  - Fix ``test_restarting_does_not_deadlock`` (:pr-distributed:`8849`) `Florian Jetter`_
+  - Adjust ``popen`` timeouts for testing (:pr-distributed:`8848`) `Florian Jetter`_
+  - Add retry to shuffle broadcast (:pr-distributed:`8900`) `Florian Jetter`_
+  - Fix ``test_shuffle_with_array_conversion`` (:pr-distributed:`8909`) `Florian Jetter`_
+  - Refactor some tests (:pr-distributed:`8908`) `Florian Jetter`_
+  - Graduate ``dask-expr`` from contrib to core project (:pr-distributed:`8911`) `Hendrik Makait`_
+  - Skip ``test_tell_workers_when_peers_have_left`` on py10 (:pr-distributed:`8910`) `Florian Jetter`_
+  - Internal cleanup of P2P code (:pr-distributed:`8907`) `Hendrik Makait`_
+  - Use ``Task`` class instead of tuple (:pr-distributed:`8797`) `Florian Jetter`_
+  - Increase connect timeout for ``test_tell_workers_when_peers_have_left`` (:pr-distributed:`8906`) `Florian Jetter`_
+  - Remove dispatching in ``TaskCollection`` (:pr-distributed:`8903`) `Florian Jetter`_
+  - Deduplicate requests to scheduler in P2P (:pr-distributed:`8899`) `Hendrik Makait`_
+  - Add configurations for rootish taskgroup threshold (:pr-distributed:`8898`) `Patrick Hoefler`_
 
 .. _v2024.10.0:
 
@@ -8996,3 +9065,4 @@ Other
 .. _`Dmitry Balabka`: https://github.com/dbalabka
 .. _`Martin Yeo`: https://github.com/trexfeathers
 .. _`Ilan Gold`: https://github.com/ilan-gold
+.. _`Jean-Baptiste Bayle`: https://github.com/j2bbayle
