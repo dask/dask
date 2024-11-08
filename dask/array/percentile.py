@@ -8,10 +8,10 @@ from numbers import Number
 import numpy as np
 from tlz import merge
 
-from build.lib.dask.utils import derived_from
 from dask.array.core import Array
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from
 
 
 @wraps(np.percentile)
