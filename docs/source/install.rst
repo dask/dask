@@ -126,7 +126,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `graphviz`_      | ``>=0.8.4``     | Graph visualization using the graphviz engine                                                           |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `h5py`_          | ``>=3.4.0``    | Storing array data in hdf5 files                                                                         |
+| `h5py`_          | ``>=3.4.0``     | Storing array data in hdf5 files                                                                        |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `ipycytoscape`_  | ``>=1.0.1``     | Graph visualization using the cytoscape engine                                                          |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
@@ -195,7 +195,7 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _Anaconda distribution: https://www.anaconda.com/download/
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _bokeh: https://bokeh.org/
-.. _bottleneck:: https://bottleneck.readthedocs.io/en/latest/index.html
+.. _bottleneck: https://bottleneck.readthedocs.io/en/latest/index.html
 .. _cachey: https://github.com/dask/cachey
 .. _cityhash: https://github.com/escherba/python-cityhash
 .. _crick: https://github.com/dask/crick
