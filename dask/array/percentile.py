@@ -8,6 +8,7 @@ from numbers import Number
 import numpy as np
 from tlz import merge
 
+from build.lib.dask.utils import derived_from
 from dask.array.core import Array
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -317,6 +318,7 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
     return rv
 
 
+@derived_from(np)
 def nanpercentile(a, q, **kwargs):
     from dask.array.reductions import nanquantile
 
