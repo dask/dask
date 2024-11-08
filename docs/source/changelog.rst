@@ -5,6 +5,122 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2024.11.0:
+
+2024.11.0
+---------
+
+Highlights
+^^^^^^^^^^
+
+Legacy Dask DataFrame Deprecated
+""""""""""""""""""""""""""""""""
+
+This release deprecates the legacy Dask DataFrame implementation. The old implementation will
+be removed completely in a future release. Users are encourage to switch to the new implementation
+now and to report any issues they are facing.
+
+Users are also encourage to check that they are only importing functions from ``dask.dataframe``
+and not any of the submodules.
+
+New quantile methods for Dask Array API
+"""""""""""""""""""""""""""""""""""""""
+
+Dask Array added new ``quantile`` and ``nanquantile`` methods.
+Previously, Dask dispatched to the NumPy implementation, which blocked the GIL
+a lot. This caused large slowdowns on workers with more than one tread and could lead
+to runtimes over 200s per chunk.
+
+The new ``quantile`` implementation avoids many of these problems and reduces runtime
+to around 1s per chunk independently of the number of threads.
+
+Consistent chunksize in Xarray rolling-construct
+""""""""""""""""""""""""""""""""""""""""""""""""
+
+Using Xarrays ``rolling(...).construct(...)`` with Dask Arrays led to very large
+chunksizes that rarely fit into memory on a single worker.
+
+The underlying operations is a view on the smaller NumPy array, but triggering
+a copy of the data will lead to very large memory usage.
+
+.. code-block::
+
+    import xarray as xr
+    import dask.array as da
+
+    arr = xr.DataArray(
+        da.ones((93504, 721, 1440), chunks=("auto", -1, -1)),
+        dims=["time", "lat", "longitude"],
+    )   # Initial chunks are ~128 MiB
+    arr.rolling(time=30).construct("window_dim")
+
+.. grid:: 2
+
+    .. grid-item:: **Previously**
+
+        Individual chunks are exploding to 10 GiB, likely causing out of memory errors.
+
+        .. image:: images/changelog/rolling-construct-exploding-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are exploding to 10 GiB, likely causing out of memory errors.
+
+    .. grid-item:: **Now**
+
+        Dask will now automatically split individual chunks into chunks that will have the
+        same chunksize minus a small tolerance.
+
+        .. image:: images/changelog/rolling-construct-constant-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are now roughly the same size
+
+
+
+Improved efficiency of map overlap
+""""""""""""""""""""""""""""""""""
+
+``map_overlap`` now creates smaller and more efficient graphs to keep task graphs
+generally a lot smaller.
+
+The previous version injected a lot of tasks that weren't necessary, increasing the
+number of tasks by a factor of 2-10x of what actually necessary. This caused a lot of
+stress on the scheduler.
+
+Consistent chunksizes for Einstein summation
+""""""""""""""""""""""""""""""""""""""""""""
+
+Einstein summation historically led to very large chunksizes if applied to more than
+one Dask Array. This behavior is inherited from NumPy but led to out of memory errors
+on workers:
+
+.. code-block::
+
+    import dask.array as da
+    arr = da.random.random((1024, 64, 64, 64, 64), chunks=(256, 16, 16, 16, 16)) # Initial chunks are 128 MiB
+    result = da.einsum("aijkl,amnop->ijklmnop", arr, arr)
+
+.. grid:: 2
+
+    .. grid-item:: **Previously**
+
+        Individual chunks are exploding to 32 GiB, very likely causing out of memory errors.
+
+        .. image:: images/changelog/einstein-exploding-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are exploding to 32 GiB, very likely causing out of memory errors
+
+    .. grid-item:: **Now**
+
+        The operation keeps individual chunksizes the same.
+
+        .. image:: images/changelog/einstein-constant-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are now roughly the same size
+
+
 .. _v2024.10.0:
 
 2024.10.0
