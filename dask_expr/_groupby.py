@@ -6,6 +6,7 @@ from collections.abc import Callable
 import numpy as np
 import pandas as pd
 from dask import is_dask_collection
+from dask._task_spec import Task
 from dask.core import flatten
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
@@ -49,7 +50,8 @@ from dask.dataframe.groupby import (
     _var_chunk,
 )
 from dask.dataframe.utils import insert_meta_param_description
-from dask.utils import M, apply, derived_from, is_index_like
+from dask.typing import Key
+from dask.utils import M, derived_from, is_index_like
 from pandas.core.apply import reconstruct_func, validate_func_kwargs
 
 from dask_expr._collection import FrameBase, Index, Series, new_collection
@@ -1161,7 +1163,7 @@ class GroupByUDFBlockwise(Blockwise, GroupByBase):
             return make_meta(self.operand("meta"), parent_meta=self.frame._meta)
         return _meta_apply_transform(self, self.dask_func)
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         args = [self._blockwise_arg(op, index) for op in self._args]
         kwargs = self._kwargs.copy()
         kwargs.update(
@@ -1170,7 +1172,7 @@ class GroupByUDFBlockwise(Blockwise, GroupByBase):
                 "_meta": self._meta,
             }
         )
-        return (apply, apply_and_enforce, args, kwargs)
+        return Task(name, apply_and_enforce, *args, **kwargs)
 
     @staticmethod
     def operation(

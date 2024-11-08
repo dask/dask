@@ -4,9 +4,11 @@ import functools
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+from dask._task_spec import Alias, Task, TaskRef
 from dask.dataframe.dispatch import make_meta
 from dask.dataframe.utils import check_meta
 from dask.delayed import Delayed, delayed
+from dask.typing import Key
 
 from dask_expr._expr import DelayedsExpr, PartitionsFiltered
 from dask_expr._util import _tokenize_deterministic
@@ -52,14 +54,15 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
         else:
             return self.delayed_container.divisions
 
-    def _filtered_task(self, index: int):
+    def _filtered_task(self, name: Key, index: int) -> Task:
         if self.verify_meta:
-            return (
+            return Task(
+                name,
                 functools.partial(check_meta, meta=self._meta, funcname="from_delayed"),
-                (self.delayed_container._name, index),
+                TaskRef((self.delayed_container._name, index)),
             )
         else:
-            return identity, (self.delayed_container._name, index)
+            return Alias((self.delayed_container._name, index))
 
 
 def identity(x):
