@@ -21,6 +21,7 @@ import pyarrow.dataset as pa_ds
 import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 import tlz as toolz
+from dask._task_spec import Task, TaskRef
 from dask.core import flatten
 from dask.dataframe.io.parquet.core import (
     ParquetFunctionWrapper,
@@ -35,6 +36,7 @@ from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.dataframe.io.utils import _is_local_fs
 from dask.delayed import delayed
 from dask.tokenize import normalize_token, tokenize
+from dask.typing import Key
 from dask.utils import apply, funcname, natural_sort_key, parse_bytes, typename
 from fsspec.utils import stringify_path
 from toolz import identity
@@ -297,8 +299,8 @@ class ToParquetData(Blockwise):
     def _divisions(self):
         return (None,) * (self.frame.npartitions + 1)
 
-    def _task(self, index: int):
-        return (self.io_func, (self.frame._name, index), (index,))
+    def _task(self, name: Key, index: int) -> Task:
+        return Task(name, self.io_func, TaskRef((self.frame._name, index)), (index,))
 
 
 class ToParquetBarrier(Expr):
@@ -1150,7 +1152,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         total_uncompressed = max(total_uncompressed, min_size)
         return max(after_projection / total_uncompressed, 0.001)
 
-    def _filtered_task(self, index: int):
+    def _filtered_task(self, name: Key, index: int) -> Task:
         columns = self.columns.copy()
         index_name = self.index.name
         if self.index is not None:
@@ -1160,19 +1162,25 @@ class ReadParquetPyarrowFS(ReadParquet):
             if columns is None:
                 columns = list(schema.names)
             columns.append(index_name)
-        return (
+        # Note: We use kwargs here to have an easier time to take this apart in
+        # FusedParquetIO
+        return Task(
+            name,
             ReadParquetPyarrowFS._table_to_pandas,
-            (
+            Task(
+                None,
                 ReadParquetPyarrowFS._fragment_to_table,
-                FragmentWrapper(self.fragments[index], filesystem=self.fs),
-                self.filters,
-                columns,
-                schema,
+                fragment_wrapper=FragmentWrapper(
+                    self.fragments[index], filesystem=self.fs
+                ),
+                filters=self.filters,
+                columns=columns,
+                schema=schema,
             ),
-            index_name,
-            self.arrow_to_pandas,
-            self.kwargs.get("dtype_backend"),
-            self.pyarrow_strings_enabled,
+            index_name=index_name,
+            arrow_to_pandas=self.arrow_to_pandas,
+            dtype_backend=self.kwargs.get("dtype_backend"),
+            pyarrow_strings_enabled=self.pyarrow_strings_enabled,
         )
 
     @staticmethod
@@ -1392,10 +1400,10 @@ class ReadParquetFSSpec(ReadParquet):
         ] = dataset_info
         return dataset_info
 
-    def _filtered_task(self, index: int):
-        tsk = (self._io_func, self._plan["parts"][index])
+    def _filtered_task(self, name: Key, index: int) -> Task:
+        tsk = Task(name, self._io_func, self._plan["parts"][index])
         if self._series:
-            return (operator.getitem, tsk, self.columns[0])
+            return Task(name, operator.getitem, tsk, self.columns[0])
         return tsk
 
     @property

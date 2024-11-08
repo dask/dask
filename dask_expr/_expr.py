@@ -8,9 +8,9 @@ import warnings
 from collections import defaultdict
 from collections.abc import Callable, Mapping
 
-import dask
 import numpy as np
 import pandas as pd
+from dask._task_spec import Alias, DataNode, Task, TaskRef
 from dask.array import Array
 from dask.core import flatten
 from dask.dataframe import methods
@@ -39,10 +39,9 @@ from dask.dataframe.utils import (
     valid_divisions,
 )
 from dask.tokenize import normalize_token
-from dask.typing import no_default
+from dask.typing import Key, no_default
 from dask.utils import (
     M,
-    apply,
     funcname,
     get_meta_library,
     has_keyword,
@@ -469,9 +468,9 @@ class Literal(Expr):
     def _meta(self):
         return make_meta(self.value)
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         assert index == 0
-        return self.value
+        return DataNode(name, self.value)
 
 
 class Blockwise(Expr):
@@ -543,14 +542,14 @@ class Blockwise(Expr):
         if isinstance(arg, Expr):
             # Make key for Expr-based argument
             if self._broadcast_dep(arg):
-                return (arg._name, 0)
+                return TaskRef((arg._name, 0))
             else:
-                return (arg._name, i)
+                return TaskRef((arg._name, i))
 
         else:
             return arg
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         """Produce the task for a specific partition
 
         Parameters
@@ -564,9 +563,9 @@ class Blockwise(Expr):
         """
         args = [self._blockwise_arg(op, index) for op in self._args]
         if self._kwargs:
-            return apply, self.operation, args, self._kwargs
+            return Task(name, self.operation, *args, **self._kwargs)
         else:
-            return (self.operation,) + tuple(args)
+            return Task(name, self.operation, *args)
 
     def _simplify_up(self, parent, dependents):
         if self._projection_passthrough and isinstance(parent, Projection):
@@ -658,7 +657,7 @@ class MapPartitions(Blockwise):
     def _has_partition_info(self):
         return has_keyword(self.func, "partition_info")
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         args = [self._blockwise_arg(op, index) for op in self.args]
         kwargs = (self.kwargs if self.kwargs is not None else {}).copy()
         if self._has_partition_info:
@@ -674,13 +673,13 @@ class MapPartitions(Blockwise):
                     "_meta": self._meta,
                 }
             )
-            return (apply, apply_and_enforce, args, kwargs)
+            return Task(name, apply_and_enforce, *args, **kwargs)
         else:
-            return (
-                apply,
+            return Task(
+                name,
                 self.func,
-                args,
-                kwargs,
+                *args,
+                **kwargs,
             )
 
 
@@ -1176,13 +1175,13 @@ class Sample(Blockwise):
         args = [self.operands[0]._meta] + [self.operands[1][0]] + self.operands[2:]
         return self.operation(*args)
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         args = [self._blockwise_arg(self.frame, index)] + [
             self.state_data[index],
             self.frac,
             self.operand("replace"),
         ]
-        return (self.operation,) + tuple(args)
+        return Task(name, self.operation, *args)
 
 
 class Query(Blockwise):
@@ -1269,9 +1268,11 @@ class RenameFrame(Elemwise):
             columns = _convert_to_list(columns)
             frame_columns = set(self.frame.columns)
             columns = [
-                reverse_mapping[col]
-                if col in reverse_mapping and reverse_mapping[col] in frame_columns
-                else col
+                (
+                    reverse_mapping[col]
+                    if col in reverse_mapping and reverse_mapping[col] in frame_columns
+                    else col
+                )
                 for col in columns
             ]
             columns = [col for col in self.frame.columns if col in columns]
@@ -1584,7 +1585,7 @@ class EnforceRuntimeDivisions(Blockwise):
     def _meta(self):
         return self.frame._meta
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         args = [self._blockwise_arg(op, index) for op in self._args]
         args = args + [
             index,
@@ -1699,11 +1700,11 @@ class Split(Elemwise):
     def random_state_data(self):
         return random_state_data(self.frame.npartitions, self.random_state)
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         args = [self._blockwise_arg(op, index) for op in self._args]
         kwargs = self._kwargs.copy()
         kwargs["random_state"] = self.random_state_data[index]
-        return apply, self.operation, args, kwargs
+        return Task(name, self.operation, *args, **kwargs)
 
 
 def _random_split_take(df, i, ndim):
@@ -1729,16 +1730,14 @@ class Apply(Elemwise):
     def _meta(self):
         return make_meta(self.operand("meta"), parent_meta=self.frame._meta)
 
-    def _task(self, index: int):
-        return (
-            apply,
+    def _task(self, name: Key, index: int) -> Task:
+        return Task(
+            name,
             M.apply,
-            [
-                (self.frame._name, index),
-                self.function,
-            ]
-            + list(self.args),
-            self.kwargs,
+            TaskRef((self.frame._name, index)),
+            self.function,
+            *self.args,
+            **self.kwargs,
         )
 
 
@@ -2122,10 +2121,11 @@ class Index(Elemwise):
     def _projection_columns(self):
         return []
 
-    def _task(self, index: int):
-        return (
+    def _task(self, name: Key, index: int) -> Task:
+        return Task(
+            name,
             getattr,
-            (self.frame._name, index),
+            TaskRef((self.frame._name, index)),
             "index",
         )
 
@@ -2346,9 +2346,11 @@ class AddPrefix(Elemwise):
     @functools.cached_property
     def unique_partition_mapping_columns_from_shuffle(self):
         return {
-            f"{self.prefix}{c}"
-            if not isinstance(c, tuple)
-            else tuple(self.prefix + t for t in c)
+            (
+                f"{self.prefix}{c}"
+                if not isinstance(c, tuple)
+                else tuple(self.prefix + t for t in c)
+            )
             for c in self.frame.unique_partition_mapping_columns_from_shuffle
         }
 
@@ -2377,9 +2379,11 @@ class AddSuffix(AddPrefix):
     @functools.cached_property
     def unique_partition_mapping_columns_from_shuffle(self):
         return {
-            f"{c}{self.suffix}"
-            if not isinstance(c, tuple)
-            else tuple(t + self.suffix for t in c)
+            (
+                f"{c}{self.suffix}"
+                if not isinstance(c, tuple)
+                else tuple(t + self.suffix for t in c)
+            )
             for c in self.frame.unique_partition_mapping_columns_from_shuffle
         }
 
@@ -2419,15 +2423,17 @@ class Head(Expr):
             self.frame.divisions[self.operand("npartitions")],
         )
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         raise NotImplementedError()
 
     def _simplify_down(self):
         if isinstance(self.frame, Elemwise):
             operands = [
-                Head(op, self.n, self.operand("npartitions"))
-                if isinstance(op, Expr) and not isinstance(op, _DelayedExpr)
-                else op
+                (
+                    Head(op, self.n, self.operand("npartitions"))
+                    if isinstance(op, Expr) and not isinstance(op, _DelayedExpr)
+                    else op
+                )
                 for op in self.frame.operands
             ]
             return type(self.frame)(*operands)
@@ -2503,17 +2509,19 @@ class BlockwiseHead(Head, Blockwise):
     def _divisions(self):
         return self.frame.divisions[: len(self._partitions) + 1]
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         if self.safe:
             op = safe_head
         else:
             op = M.head
-        return (op, (self.frame._name, index), self.n)
+        return Task(name, op, TaskRef((self.frame._name, index)), self.n)
 
 
 class BlockwiseHeadIndex(BlockwiseHead):
-    def _task(self, index: int):
-        return (operator.getitem, (self.frame._name, index), slice(0, self.n))
+    def _task(self, name: Key, index: int) -> Task:
+        return Task(
+            name, operator.getitem, TaskRef((self.frame._name, index)), slice(0, self.n)
+        )
 
 
 class Tail(Expr):
@@ -2529,7 +2537,7 @@ class Tail(Expr):
     def _divisions(self):
         return self.frame.divisions[-2:]
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         raise NotImplementedError()
 
     def _simplify_down(self):
@@ -2572,13 +2580,18 @@ class BlockwiseTail(Tail, Blockwise):
     def _divisions(self):
         return self.frame.divisions
 
-    def _task(self, index: int):
-        return (M.tail, (self.frame._name, index), self.n)
+    def _task(self, name: Key, index: int) -> Task:
+        return Task(name, M.tail, TaskRef((self.frame._name, index)), self.n)
 
 
 class BlockwiseTailIndex(BlockwiseTail):
-    def _task(self, index: int):
-        return (operator.getitem, (self.frame._name, index), slice(-self.n, None))
+    def _task(self, name: Key, index: int) -> Task:
+        return Task(
+            name,
+            operator.getitem,
+            TaskRef((self.frame._name, index)),
+            slice(-self.n, None),
+        )
 
 
 class Binop(Elemwise):
@@ -2877,8 +2890,8 @@ class Partitions(Expr):
         divisions.append(self.frame.divisions[part + 1])
         return tuple(divisions)
 
-    def _task(self, index: int):
-        return (self.frame._name, self.partitions[index])
+    def _task(self, name: Key, index: int) -> Task:
+        return Alias(name, (self.frame._name, self.partitions[index]))
 
     def _simplify_down(self):
         from dask_expr import SetIndexBlockwise
@@ -2956,10 +2969,10 @@ class PartitionsFiltered(Expr):
             return len(self._partitions)
         return super().npartitions
 
-    def _task(self, index: int):
-        return self._filtered_task(self._partitions[index])
+    def _task(self, name: Key, index: int) -> Task:
+        return self._filtered_task(name, self._partitions[index])
 
-    def _filtered_task(self, index: int):
+    def _filtered_task(self, name: Key, index: int) -> Task:
         raise NotImplementedError()
 
 
@@ -3302,10 +3315,10 @@ class FillnaCheck(Blockwise):
     def _meta(self):
         return self.frame._meta
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         args = [self._blockwise_arg(op, index) for op in self._args]
         args[-1] = index != self.skip_check(self.frame)
-        return (self.operation,) + tuple(args)
+        return Task(name, self.operation, *args)
 
 
 class FFill(MapOverlap):
@@ -3752,34 +3765,20 @@ class Fused(Blockwise):
         # Always broadcast single-partition dependencies in Fused
         return dep.npartitions == 1
 
-    def _task(self, index):
-        graph = {self._name: (self.exprs[0]._name, index)}
+    def _task(self, name: Key, index: int) -> Task:
+        subgraphs = {}
         for _expr in self.exprs:
-            if isinstance(_expr, Fused):
-                subgraph, name = _expr._task(index)[1:3]
-                graph.update(subgraph)
-                graph[(name, index)] = name
-            elif self._broadcast_dep(_expr):
-                # When _expr is being broadcasted, we only
-                # want to define a fused task for index 0
-                graph[(_expr._name, 0)] = _expr._task(0)
+            if self._broadcast_dep(_expr):
+                subname = (_expr._name, 0)
             else:
-                graph[(_expr._name, index)] = _expr._task(index)
+                subname = (_expr._name, index)
+            subgraphs[subname] = _expr._task(subname, subname[1])
 
         for i, dep in enumerate(self.dependencies()):
-            graph[self._blockwise_arg(dep, index)] = "_" + str(i)
+            subgraphs[self._blockwise_arg(dep, index)] = "_" + str(i)
 
-        return (
-            Fused._execute_task,
-            graph,
-            self._name,
-        ) + tuple(self._blockwise_arg(dep, index) for dep in self.dependencies())
-
-    @staticmethod
-    def _execute_task(graph, name, *deps):
-        for i, dep in enumerate(deps):
-            graph["_" + str(i)] = dep
-        return dask.core.get(graph, name)
+        result = subgraphs.pop((self.exprs[0]._name, index))
+        return result.inline(subgraphs)
 
 
 # Used for sorting with None

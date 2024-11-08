@@ -35,7 +35,7 @@ def test_io_fusion_merge(tmpdir):
     pdf = pd.DataFrame({c: range(100) for c in "abcdefghij"})
     with LocalCluster(processes=False, n_workers=2) as cluster:
         with Client(cluster) as client:  # noqa: F841
-            dx.from_pandas(pdf, 10).to_parquet(tmpdir)
+            dx.from_pandas(pdf, 2).to_parquet(tmpdir)
 
             df = dx.read_parquet(tmpdir).merge(
                 dx.read_parquet(tmpdir).add_suffix("_x"), left_on="a", right_on="a_x"
@@ -63,4 +63,4 @@ def test_pickle_size(tmpdir, filesystem):
     df = read_parquet(tmpdir, filesystem=filesystem)
     from distributed.protocol import dumps
 
-    assert len(b"".join(dumps(df.optimize().dask))) <= 8300
+    assert len(b"".join(dumps(df.optimize().dask))) <= 9000

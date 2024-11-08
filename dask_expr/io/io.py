@@ -6,11 +6,13 @@ import operator
 
 import numpy as np
 import pyarrow as pa
+from dask._task_spec import Task
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import apply_and_enforce, is_dataframe_like, make_meta
 from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
-from dask.utils import apply, funcname, is_series_like
+from dask.typing import Key
+from dask.utils import funcname, is_series_like
 
 from dask_expr._expr import (
     Blockwise,
@@ -128,10 +130,13 @@ class FusedIO(BlockwiseIO):
             new_divisions.append(divisions[-1])
         return tuple(new_divisions)
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         expr = self.operand("_expr")
         bucket = self._fusion_buckets[index]
-        return (methods.concat, [expr._filtered_task(i) for i in bucket])
+        # FIXME: This will likely require a wrapper
+        return Task(
+            name, methods.concat, [expr._filtered_task(name, i) for i in bucket]
+        )
 
     @functools.cached_property
     def _fusion_buckets(self):
@@ -164,7 +169,7 @@ class FusedParquetIO(FusedIO):
         frag_filters,
         columns,
         schema,
-        *to_pandas_args,
+        **to_pandas_kwargs,
     ):
         from dask_expr.io.parquet import ReadParquetPyarrowFS
 
@@ -178,25 +183,34 @@ class FusedParquetIO(FusedIO):
             for frag, filter in frag_filters
         )
         table = pa.concat_tables(tables, promote_options="permissive")
-        return ReadParquetPyarrowFS._table_to_pandas(table, *to_pandas_args)
+        return ReadParquetPyarrowFS._table_to_pandas(table, **to_pandas_kwargs)
 
-    def _task(self, index: int):
+    def _task(self, name: str, index: int) -> Task:
         expr = self.operand("_expr")
         bucket = self._fusion_buckets[index]
         fragments_filters = []
         assert bucket
-        to_pandas_args = ()
         for i in bucket:
-            _, frag_to_table, *to_pandas_args = expr._filtered_task(i)
-            fragments_filters.append((frag_to_table[1], frag_to_table[2]))
-            columns = frag_to_table[3]
-            schema = frag_to_table[4]
-        return (
+            subtask = expr._filtered_task(name, i)
+            # This is unique / same for all tasks
+            to_pandas_kwargs = subtask.kwargs
+            assert len(subtask.args) == 1
+            frag_to_table_task = subtask.args[0]
+            fragments_filters.append(
+                (
+                    frag_to_table_task.kwargs["fragment_wrapper"],
+                    frag_to_table_task.kwargs["filters"],
+                )
+            )
+            columns = frag_to_table_task.kwargs["columns"]
+            schema = frag_to_table_task.kwargs["schema"]
+        return Task(
+            name,
             self._load_multiple_files,
             fragments_filters,
             columns,
             schema,
-            *to_pandas_args,
+            **to_pandas_kwargs,
         )
 
 
@@ -267,12 +281,17 @@ class FromMap(PartitionsFiltered, BlockwiseIO):
             )
         return kwargs
 
-    def _filtered_task(self, index: int):
+    def _filtered_task(self, name: Key, index: int) -> Task:
         vals = [v[index] for v in self.iterables]
-        if self.apply_kwargs:
-            return (apply, self.apply_func, vals + self.args, self.apply_kwargs)
-        else:
-            return (self.func, *vals, *self.args)
+        if self.enforce_metadata:
+            return Task(
+                name,
+                apply_and_enforce,
+                *vals,
+                *self.args,
+                **self.apply_kwargs,
+            )
+        return Task(name, self.func, *vals, *self.args, **self.apply_kwargs)
 
 
 class FromMapProjectable(FromMap):
@@ -357,10 +376,10 @@ class FromMapProjectable(FromMap):
             return meta[self.columns_operand[0]]
         return meta
 
-    def _filtered_task(self, index: int):
-        tsk = super()._filtered_task(index)
+    def _filtered_task(self, name: Key, index: int) -> Task:
+        tsk = super()._filtered_task(name, index)
         if self._series:
-            return (operator.getitem, tsk, self.columns[0])
+            return Task(name, operator.getitem, tsk, self.columns[0])
         return tsk
 
 
@@ -484,7 +503,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
     def _locations(self):
         return self._divisions_and_locations[1]
 
-    def _filtered_task(self, index: int):
+    def _filtered_task(self, name: Key, index: int) -> Task:
         start, stop = self._locations()[index : index + 2]
         part = self.frame.iloc[start:stop]
         if self.pyarrow_strings_enabled:
@@ -628,7 +647,7 @@ class FromArray(PartitionsFiltered, BlockwiseIO):
         divisions = divisions + (len(self.frame) - 1,)
         return divisions
 
-    def _filtered_task(self, index: int):
+    def _filtered_task(self, name: Key, index: int) -> Task:
         data = self.frame[slice(index * self.chunksize, (index + 1) * self.chunksize)]
         if index == len(self.divisions) - 2:
             idx = range(self.divisions[index], self.divisions[index + 1] + 1)
@@ -636,8 +655,10 @@ class FromArray(PartitionsFiltered, BlockwiseIO):
             idx = range(self.divisions[index], self.divisions[index + 1])
 
         if is_series_like(self._meta):
-            return (type(self._meta), data, idx, self._meta.dtype, self._meta.name)
+            return Task(
+                name, type(self._meta), data, idx, self._meta.dtype, self._meta.name
+            )
         else:
             if data.ndim == 2:
                 data = data[:, self._column_indices]
-            return (type(self._meta), data, idx, self._meta.columns)
+            return Task(name, type(self._meta), data, idx, self._meta.columns)

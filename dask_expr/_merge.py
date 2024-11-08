@@ -12,6 +12,7 @@ from dask.dataframe.multi import (
     merge_chunk,
 )
 from dask.dataframe.shuffle import partitioning_index
+from dask.typing import Key
 from dask.utils import apply, get_default_shuffle_method
 from toolz import merge_sorted, unique
 
@@ -923,17 +924,15 @@ class BlockwiseMerge(Merge, Blockwise):
     def _broadcast_dep(self, dep: Expr):
         return dep.npartitions == 1
 
-    def _task(self, index: int):
+    def _task(self, name: Key, index: int) -> Task:
         kwargs = self.kwargs.copy()
         kwargs["result_meta"] = self._meta
-        return (
-            apply,
+        return Task(
+            name,
             merge_chunk,
-            [
-                self._blockwise_arg(self.left, index),
-                self._blockwise_arg(self.right, index),
-            ],
-            kwargs,
+            self._blockwise_arg(self.left, index),
+            self._blockwise_arg(self.right, index),
+            **kwargs,
         )
 
 

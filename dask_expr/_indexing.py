@@ -3,6 +3,7 @@ from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
+from dask._task_spec import Alias, DataNode, Task, TaskRef, convert_legacy_graph
 from dask.array import Array
 from dask.dataframe import methods
 from dask.dataframe.dispatch import meta_nonempty
@@ -12,6 +13,7 @@ from dask.dataframe.indexing import (
     _partition_of_index_value,
     _partitions_of_index_values,
 )
+from dask.typing import Key
 from dask.utils import is_arraylike, is_series_like
 from pandas.api.types import is_bool_dtype
 from pandas.errors import IndexingError
@@ -168,9 +170,9 @@ class LocBase(Blockwise):
 
     @functools.cached_property
     def _layer_cache(self):
-        return self._layer()
+        return convert_legacy_graph(self._layer())
 
-    def _task(self, index):
+    def _task(self, name: Key, index: int) -> Task:
         return self._layer_cache[(self._name, index)]
 
 
@@ -193,9 +195,10 @@ class LocElement(LocBase):
     def _layer(self) -> dict:
         part = _get_partitions(self.frame, self.iindexer)
         return {
-            (self._name, 0): (
+            (self._name, 0): Task(
+                (self._name, 0),
                 methods.loc,
-                (self.frame._name, part),
+                TaskRef((self.frame._name, part)),
                 slice(self.iindexer, self.iindexer),
                 self.cindexer,
             )
@@ -220,9 +223,10 @@ class LocList(LocBase):
             divisions = []
             items = sorted(parts.items())
             for i, (div, indexer) in enumerate(items):
-                dsk[self._name, i] = (
+                dsk[self._name, i] = Task(
+                    (self._name, i),
                     methods.loc,
-                    (self.frame._name, div),
+                    TaskRef((self.frame._name, div)),
                     indexer,
                     self.cindexer,
                 )
@@ -231,7 +235,7 @@ class LocList(LocBase):
             return dsk, divisions
         else:
             divisions = [None, None]
-            dsk = {(self._name, 0): self._meta}
+            dsk = {(self._name, 0): DataNode((self._name, 0), self._meta)}
             return dsk, divisions
 
     def _divisions(self):
@@ -311,36 +315,40 @@ class LocSlice(LocBase):
     def _layer(self) -> dict:
         if self.stop == self.start:
             return {
-                (self._name, 0): (
+                (self._name, 0): Task(
+                    (self._name, 0),
                     methods.loc,
-                    (self.frame._name, self.start),
+                    TaskRef((self.frame._name, self.start)),
                     slice(self.iindexer.start, self.iindexer.stop),
                     self.cindexer,
                 )
             }
 
         dsk = {
-            (self._name, 0): (
+            (self._name, 0): Task(
+                (self._name, 0),
                 methods.loc,
-                (self.frame._name, self.start),
+                TaskRef((self.frame._name, self.start)),
                 slice(self.iindexer.start, None),
                 self.cindexer,
             )
         }
         for i in range(1, self.stop - self.start):
             if self.cindexer is None:
-                dsk[self._name, i] = (self.frame._name, self.start + i)
+                dsk[self._name, i] = Alias((self.frame._name, self.start + i))
             else:
-                dsk[self._name, i] = (
+                dsk[self._name, i] = Task(
+                    (self._name, i),
                     methods.loc,
-                    (self.frame._name, self.start + i),
+                    TaskRef((self.frame._name, self.start + i)),
                     slice(None, None),
                     self.cindexer,
                 )
 
-        dsk[self._name, self.stop - self.start] = (
+        dsk[self._name, self.stop - self.start] = Task(
+            (self._name, self.stop - self.start),
             methods.loc,
-            (self.frame._name, self.stop),
+            TaskRef((self.frame._name, self.stop)),
             slice(None, self.iindexer.stop),
             self.cindexer,
         )

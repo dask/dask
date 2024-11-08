@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING, Literal
 import dask
 import pandas as pd
 import toolz
+from dask._task_spec import Task
 from dask.dataframe.core import is_dataframe_like, is_index_like, is_series_like
+from dask.typing import Key
 from dask.utils import funcname, import_required, is_arraylike
 
 from dask_expr._util import _BackendData, _tokenize_deterministic
@@ -179,7 +181,7 @@ class Expr:
         # Dependencies are `Expr` operands only
         return [operand for operand in self.operands if isinstance(operand, Expr)]
 
-    def _task(self, index: int):
+    def _task(self, key: Key, index: int) -> Task:
         """The task for the i'th partition
 
         Parameters
@@ -191,7 +193,12 @@ class Expr:
         --------
         >>> class Add(Expr):
         ...     def _task(self, i):
-        ...         return (operator.add, (self.left._name, i), (self.right._name, i))
+        ...         return Task(
+        ...            name,
+        ...            operator.add,
+        ...            TaskRef((self.left._name, i)),
+        ...            TaskRef((self.right._name, i))
+        ...        )
 
         Returns
         -------
@@ -230,7 +237,10 @@ class Expr:
         Expr.__dask_graph__
         """
 
-        return {(self._name, i): self._task(i) for i in range(self.npartitions)}
+        return {
+            (self._name, i): self._task((self._name, i), i)
+            for i in range(self.npartitions)
+        }
 
     def rewrite(self, kind: str):
         """Rewrite an expression

@@ -1,6 +1,9 @@
 import functools
 import operator
 
+from dask._task_spec import Task
+from dask.typing import Key
+
 from dask_expr._expr import Projection
 from dask_expr._util import _convert_to_list
 from dask_expr.io.io import BlockwiseIO, PartitionsFiltered
@@ -117,11 +120,13 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
 
     @functools.cached_property
     def _tasks(self):
-        return list(self._ddf.dask.to_dict().values())
+        from dask._task_spec import convert_legacy_graph
 
-    def _filtered_task(self, index: int):
+        return list(convert_legacy_graph(self._ddf.dask.to_dict()).values())
+
+    def _filtered_task(self, name: Key, index: int) -> Task:
         if self._series:
-            return (operator.getitem, self._tasks[index], self.columns[0])
+            return Task(name, operator.getitem, self._tasks[index], self.columns[0])
         return self._tasks[index]
 
 

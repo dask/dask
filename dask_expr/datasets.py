@@ -3,7 +3,9 @@ import operator
 
 import numpy as np
 import pandas as pd
+from dask._task_spec import Task
 from dask.dataframe.utils import pyarrow_strings_enabled
+from dask.typing import Key
 
 from dask_expr._collection import new_collection
 from dask_expr._expr import ArrowStringConversion
@@ -74,17 +76,18 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
             self.kwargs,
         )
 
-    def _filtered_task(self, index):
+    def _filtered_task(self, name: Key, index: int) -> Task:
         full_divisions = self._divisions()
         ndtypes = max(len(self.operand("dtypes")), 1)
-        task = (
+        task = Task(
+            name,
             self._make_timeseries_part,
             full_divisions[index],
             full_divisions[index + 1],
             self.random_state[index * ndtypes],
         )
         if self._series:
-            return (operator.getitem, task, self.operand("columns")[0])
+            return Task(name, operator.getitem, task, self.operand("columns")[0])
         return task
 
 
