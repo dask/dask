@@ -17,21 +17,12 @@ from dask._task_spec import (
     convert_legacy_graph,
     convert_legacy_task,
     execute_graph,
-    no_function_cache,
     resolve_aliases,
 )
 from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
 from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
-
-
-@pytest.fixture(autouse=True)
-def clear_func_cache():
-    from dask._task_spec import _func_cache, _func_cache_reverse
-
-    _func_cache.clear()
-    _func_cache_reverse.clear()
 
 
 def identity(x):
@@ -84,6 +75,14 @@ def test_repr():
     assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
 
 
+def long_function_name_longer_even_longer(a, b):
+    return a + b
+
+
+def use_kwargs(a, kwarg=None):
+    return a + kwarg
+
+
 def test_unpickled_repr():
     t = pickle.loads(pickle.dumps(Task("key", func, "a", "b")))
     assert repr(t) == "<Task 'key' func('a', 'b')>"
@@ -93,16 +92,10 @@ def test_unpickled_repr():
         repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
     )
 
-    def long_function_name_longer_even_longer(a, b):
-        return a + b
-
     t = pickle.loads(
         pickle.dumps(Task("long", long_function_name_longer_even_longer, t, t.ref()))
     )
     assert repr(t) == "<Task 'long' long_function_name_longer_even_longer(...)>"
-
-    def use_kwargs(a, kwarg=None):
-        return a + kwarg
 
     t = pickle.loads(
         pickle.dumps(Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value"))
@@ -240,19 +233,12 @@ class SerializeOnlyOnce:
 
 
 def test_pickle():
-    f = SerializeOnlyOnce()
 
-    t1 = Task("key-1", f, "a", "b")
-    t2 = Task("key-2", f, "c", "d")
+    t1 = Task("key-1", func, "a", "b")
+    t2 = Task("key-2", func, "c", "d")
 
     rtt1 = pickle.loads(pickle.dumps(t1))
     rtt2 = pickle.loads(pickle.dumps(t2))
-    # packing is inplace. Not strictly necessary, but this way we avoid creating
-    # another py object
-    assert t1.is_packed()
-    assert t2.is_packed()
-    assert rtt1.is_packed()
-    assert rtt2.is_packed()
     assert t1 == rtt1
     assert t1.func == rtt1.func
     assert t1.func is rtt1.func
@@ -266,11 +252,7 @@ def test_tokenize():
     t2 = Task("key-1", func, "a", "b")
     assert tokenize(t) == tokenize(t2)
 
-    token_before = tokenize(t)
-    t.pack()
-    assert t.is_packed()
-    assert not t2.is_packed()
-    assert token_before == tokenize(t) == tokenize(t2)
+    tokenize(t)
 
     # Literals are often generated with random/anom names but that should not
     # impact hashing. Otherwise identical submits would end up with different
@@ -280,28 +262,22 @@ def test_tokenize():
     assert tokenize(l) == tokenize(l2)
 
 
+async def afunc(a, b):
+    return a + b
+
+
 def test_async_func():
     pytest.importorskip("distributed")
+
     from distributed.utils_test import gen_test
 
     @gen_test()
     async def _():
-        async def func(a, b):
-            return a + b
 
-        t = Task("key-1", func, "a", "b")
+        t = Task("key-1", afunc, "a", "b")
         assert t.is_coro
-        t.pack()
-        assert t.is_coro
-        t.unpack()
         assert await t() == "ab"
         assert await pickle.loads(pickle.dumps(t))() == "ab"
-
-        # Ensure that if the property is only accessed after packing, it is
-        # still correct
-        t = Task("key-1", func, "a", "b")
-        t.pack()
-        assert t.is_coro
 
     _()
 
@@ -732,41 +708,6 @@ class CountSerialization:
         return 1
 
 
-def test_no_function_cache():
-    func = CountSerialization()
-    t = Task("k", func)
-    assert t() == 1
-    assert CountSerialization.serialization == 0
-    assert CountSerialization.deserialization == 0
-    t.pack()
-    assert CountSerialization.serialization == 1
-    assert CountSerialization.deserialization == 0
-    # use cache already
-    t.unpack()
-    assert CountSerialization.serialization == 1
-    assert CountSerialization.deserialization == 0
-    t.pack().unpack().pack().unpack()
-    assert CountSerialization.serialization == 1
-    assert CountSerialization.deserialization == 0
-
-    with no_function_cache():
-        t.pack()
-        assert CountSerialization.serialization == 2
-        assert CountSerialization.deserialization == 0
-        t.unpack()
-        assert CountSerialization.serialization == 2
-        assert CountSerialization.deserialization == 1
-
-    # We'll use a new task object since the above no-cache rountrip replaced the
-    # func instance such that the pack will cache miss on the first attempt. If
-    # we use the same instance, we'll be fine
-    t = Task("k", func)
-    # The old cache is restored
-    t.pack().unpack().pack().unpack()
-    assert CountSerialization.serialization == 2
-    assert CountSerialization.deserialization == 1
-
-
 class RaiseOnSerialization:
     def __getstate__(self):
         raise ValueError("Nope")
@@ -784,20 +725,6 @@ class RaiseOnDeSerialization:
 
     def __call__(self):
         return 1
-
-
-def test_raise_runtimeerror_deserialization():
-    with no_function_cache():
-        t = Task("key", RaiseOnSerialization())
-        assert t() == 1
-        with pytest.raises(RuntimeError, match="key"):
-            t.pack()
-
-        t = Task("key", RaiseOnDeSerialization())
-        assert t() == 1
-        t.pack()
-        with pytest.raises(RuntimeError, match="key"):
-            t.unpack()
 
 
 # This is duplicated from distributed/utils_test.py
@@ -832,7 +759,7 @@ class SizeOf:
 
 def test_sizeof():
     t = Task("key", func, "a", "b")
-    assert sizeof(t) > sizeof(Task) + sizeof(list) + 2 * sizeof("a")
+    assert sizeof(t) >= sizeof(Task) + sizeof(func) + 2 * sizeof("a")
 
     t = Task("key", func, SizeOf(100_000))
     assert sizeof(t) > 100_000
