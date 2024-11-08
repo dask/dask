@@ -1,5 +1,18 @@
 ## Dask-expr
 
+# v1.1.17
+
+- Add support for Python 3.13 (:pr:`1160`) `James Bourbeau`_
+- Migrate Blockwise to use taskspec (:pr:`1159`) `Florian Jetter`_
+- Migrate shuffle and merge to `P2PBarrierTask` (:pr:`1157`) `Hendrik Makait`_
+- Improve Aggregation docstring explicitly mentionning SeriesGroupBy (:pr:`1156`) `Guillaume Eynard-Bontemps`_
+- Migrate P2P shuffle and merge to TaskSpec (:pr:`1155`) `Hendrik Makait`_
+- Internal cleanup of P2P code (:pr:`1154`) `Hendrik Makait`_
+- Fix meta calculation for to_datetime (:pr:`1153`) `Patrick Hoefler`_
+- Fix ``Merge`` divisions after filtering partitions (:pr:`1152`) `Richard (Rick) Zamora`_
+
+# v1.1.16
+
 # v1.1.15
 
 - Add concatenate flag to .compute() (:pr:`1138`) `Hendrik Makait`_
