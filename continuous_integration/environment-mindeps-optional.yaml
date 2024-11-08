@@ -47,6 +47,7 @@ dependencies:
   - tblib=1.6.0
   - tiledb-py=0.12
   - zarr=2.12.0
+  - bottleneck=1.3.7
   - pip
   - pip:
       # optional dependencies pulled in by pip install dask[distributed]

@@ -180,6 +180,7 @@ Top level functions
    outer
    pad
    percentile
+   push
    ~core.PerformanceWarning
    piecewise
    positive

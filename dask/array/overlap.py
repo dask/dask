@@ -9,11 +9,14 @@ import numpy as np
 from tlz import concat, get, partial
 from tlz.curried import map
 
+from dask._compatibility import import_optional_dependency
 from dask.array import chunk
 from dask.array._shuffle import _calculate_new_chunksizes
-from dask.array.core import Array, concatenate, map_blocks, unify_chunks
-from dask.array.creation import empty_like, full_like, repeat
+from dask.array.core import Array, broadcast_to, concatenate, map_blocks, unify_chunks
+from dask.array.creation import arange, empty_like, full_like, repeat
 from dask.array.numpy_compat import normalize_axis_tuple
+from dask.array.reductions import cumreduction
+from dask.array.routines import notnull, where
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayOverlapLayer
@@ -880,3 +883,53 @@ def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
         window_shape=window_shape,
         axis=axis,
     )
+
+
+def push(array, n, axis):
+    """
+    Dask-version of bottleneck.push
+
+    .. note::
+
+        Requires bottleneck to be installed.
+    """
+    import_optional_dependency("bottleneck", min_version="1.3.7")
+
+    def _fill_with_last_one(a, b):
+        # cumreduction apply the push func over all the blocks first so, the only missing part is filling
+        # the missing values using the last data of the previous chunk
+        return np.where(~np.isnan(b), b, a)
+
+    if n is not None and 0 < n < array.shape[axis] - 1:
+        arr = broadcast_to(
+            arange(
+                array.shape[axis], chunks=array.chunks[axis], dtype=array.dtype
+            ).reshape(
+                tuple(size if i == axis else 1 for i, size in enumerate(array.shape))
+            ),
+            array.shape,
+            array.chunks,
+        )
+        valid_arange = where(notnull(array), arr, np.nan)
+        valid_limits = (arr - push(valid_arange, None, axis)) <= n
+        # omit the forward fill that violate the limit
+        return where(valid_limits, push(array, None, axis), np.nan)
+
+    # The method parameter makes that the tests for python 3.7 fails.
+    return cumreduction(
+        func=_push,
+        binop=_fill_with_last_one,
+        ident=np.nan,
+        x=array,
+        axis=axis,
+        dtype=array.dtype,
+    )
+
+
+def _push(array, n: int | None = None, axis: int = -1):
+    # work around for bottleneck 178
+    limit = n if n is not None else array.shape[axis]
+
+    import bottleneck as bn
+
+    return bn.push(array, limit, axis)

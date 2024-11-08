@@ -106,6 +106,8 @@ These optional dependencies and their minimum supported versions are listed belo
 +==================+=================+=========================================================================================================+
 | `bokeh`_         | ``>=3.1.0``     | Generate profiles of Dask execution (required for ``dask.diagnostics``)                                 |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
+| `bottleneck`_    | ``>=1.3.7``     | Used for dask arrays ``push`` implementation                                                            |
++------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `cachey`_        | ``>=0.1.1``     | Use caching for computation                                                                             |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `cityhash`_      | ``>=0.2.4``     | Use CityHash and FarmHash hash functions for array hashing (~2x faster than MurmurHash)                 |
@@ -193,6 +195,7 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _Anaconda distribution: https://www.anaconda.com/download/
 .. _s3fs: https://s3fs.readthedocs.io/en/latest/
 .. _bokeh: https://bokeh.org/
+.. _bottleneck:: https://bottleneck.readthedocs.io/en/latest/index.html
 .. _cachey: https://github.com/dask/cachey
 .. _cityhash: https://github.com/escherba/python-cityhash
 .. _crick: https://github.com/dask/crick

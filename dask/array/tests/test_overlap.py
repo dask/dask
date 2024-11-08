@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from dask.array import from_array
 from dask.base import collections_to_dsk
 
 pytest.importorskip("numpy")
@@ -19,6 +20,7 @@ from dask.array.overlap import (
     overlap,
     overlap_internal,
     periodic,
+    push,
     reflect,
     trim_internal,
 )
@@ -723,6 +725,22 @@ def test_overlap_few_dimensions():
     assert len(a.dask) < len(c.dask)
 
     assert len(c.dask) < 10 * len(a.dask)
+
+
+def test_push():
+    bottleneck = pytest.importorskip("bottleneck")
+
+    array = np.array([np.nan, 1, 2, 3, np.nan, np.nan, np.nan, np.nan, 4, 5, np.nan, 6])
+
+    for n in [None, 1, 2, 3, 4, 5, 11]:
+        expected = bottleneck.push(array, axis=0, n=n)
+        for c in range(1, 11):
+            actual = push(from_array(array, chunks=c), axis=0, n=n)
+            np.testing.assert_equal(actual, expected)
+
+        # some chunks of size-1 with NaN
+        actual = push(from_array(array, chunks=(1, 2, 3, 2, 2, 1, 1)), axis=0, n=n)
+        np.testing.assert_equal(actual, expected)
 
 
 @pytest.mark.parametrize("boundary", ["reflect", "periodic", "nearest", "none"])

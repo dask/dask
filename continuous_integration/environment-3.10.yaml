@@ -48,6 +48,7 @@ dependencies:
   - boto3
   - botocore
   - bokeh
+  - bottleneck
   - httpretty
   - aiohttp
   - s3fs>=2021.9.0
