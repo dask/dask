@@ -13,19 +13,29 @@ Changelog
 Highlights
 ^^^^^^^^^^
 
-Add custom ``nanquantile`` to Dask Array API
-""""""""""""""""""""""""""""""""""""""""""""
+Legacy Dask DataFrame Deprecated
+""""""""""""""""""""""""""""""""
 
-Dask added a new function ``quantile`` and ``nanquantile`` to the Dask Array API.
+This release deprecates the legacy Dask DataFrame implementation. The old implementation will
+be removed completely in a future release. Users are encourage to switch to the new implementation
+now and to report any issues they are facing.
+
+Users are also encourage to check that they are only importing functions from ``dask.dataframe``
+and not any of the submodules.
+
+New quantile methods for Dask Array API
+"""""""""""""""""""""""""""""""""""""""
+
+Dask Array added new ``quantile`` and ``nanquantile`` methods.
 Previously, Dask dispatched to the NumPy implementation, which blocked the GIL
 a lot. This caused large slowdowns on workers with more than one tread and could lead
 to runtimes over 200s per chunk.
 
-The custom ``quantile`` implementation avoids many of these problems and reduces runtime
+The new ``quantile`` implementation avoids many of these problems and reduces runtime
 to around 1s per chunk independently of the number of threads.
 
-Xarray ``rolling(...).construct(...)`` will now keep chunksizes consistent
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+Consistent chunksize in Xarray rolling-construct
+""""""""""""""""""""""""""""""""""""""""""""""""
 
 Using Xarrays ``rolling(...).construct(...)`` with Dask Arrays led to very large
 chunksizes that rarely fit into memory on a single worker.
@@ -41,33 +51,34 @@ a copy of the data will lead to very large memory usage.
     arr = xr.DataArray(
         da.ones((93504, 721, 1440), chunks=("auto", -1, -1)),
         dims=["time", "lat", "longitude"],
-    )
+    )   # Initial chunks are ~128 MiB
+    arr.rolling(time=30).construct("window_dim")
 
-.. image:: images/changelog/rolling-construct-initially.png
-  :width: 75%
-  :align: center
-  :alt: Initial chunks are 128MiB
+.. grid:: 2
 
-**Previously:**
+    .. grid-item:: **Previously**
 
-.. image:: images/changelog/rolling-construct-exploding-chunks.png
-  :width: 75%
-  :align: center
-  :alt: Individual chunks are exploding to 32GiB, very likely causing out of memory errors
+        Individual chunks are exploding to 10 GiB, likely causing out of memory errors.
 
-**Now:**
+        .. image:: images/changelog/rolling-construct-exploding-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are exploding to 10 GiB, likely causing out of memory errors.
 
-Dask will now automatically split up the indiviual chunks into chunks that will have the
-same chunksize minus a small tolerance.
+    .. grid-item:: **Now**
 
-.. image:: images/changelog/rolling-construct-constant-chunks.png
-  :width: 75%
-  :align: center
-  :alt: Individual chunks are now roughly the same size
+        Dask will now automatically split individual chunks into chunks that will have the
+        same chunksize minus a small tolerance.
+
+        .. image:: images/changelog/rolling-construct-constant-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are now roughly the same size
 
 
-Improve efficiency of ``map_overlap``
-"""""""""""""""""""""""""""""""""""""
+
+Improved efficiency of map overlap
+""""""""""""""""""""""""""""""""""
 
 ``map_overlap`` now creates smaller and more efficient graphs to keep task graphs
 generally a lot smaller.
@@ -76,50 +87,39 @@ The previous version injected a lot of tasks that weren't necessary, increasing 
 number of tasks by a factor of 2-10x of what actually necessary. This caused a lot of
 stress on the scheduler.
 
-Einstein summation will now keep chunksizes consistent
-""""""""""""""""""""""""""""""""""""""""""""""""""""""
+Consistent chunksizes for Einstein summation
+""""""""""""""""""""""""""""""""""""""""""""
 
-Einstein summation led historically to very large chunksizes if applied to more than
+Einstein summation historically led to very large chunksizes if applied to more than
 one Dask Array. This behavior is inherited from NumPy but led to out of memory errors
 on workers:
 
 .. code-block::
 
     import dask.array as da
-    arr = da.random.random((1024, 64, 64, 64, 64), chunks=(256, 16, 16, 16, 16))
-
-.. image:: images/changelog/einstein-initial-array.png
-  :width: 75%
-  :align: center
-  :alt: Initial chunks are 128MiB
-
-.. code-block::
-
+    arr = da.random.random((1024, 64, 64, 64, 64), chunks=(256, 16, 16, 16, 16)) # Initial chunks are 128 MiB
     result = da.einsum("aijkl,amnop->ijklmnop", arr, arr)
 
-**Previously:**
+.. grid:: 2
 
-.. image:: images/changelog/einstein-exploding-chunks.png
-  :width: 75%
-  :align: center
-  :alt: Individual chunks are exploding to 32GiB, very likely causing out of memory errors
+    .. grid-item:: **Previously**
 
-**Now:**
+        Individual chunks are exploding to 32 GiB, very likely causing out of memory errors.
 
-.. image:: images/changelog/einstein-constant-chunks.png
-  :width: 75%
-  :align: center
-  :alt: The operation keeps individual chunksizes the same
+        .. image:: images/changelog/einstein-exploding-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are exploding to 32 GiB, very likely causing out of memory errors
 
-Deprecated legacy Dask DataFrame implementation
-"""""""""""""""""""""""""""""""""""""""""""""""
+    .. grid-item:: **Now**
 
-This release deprecates the legacy Dask DataFrame implementation. The old implementation will
-be removed completely in a future release. Users are encourage to switch to the new implementation
-now and to report any issues they are facing.
+        The operation keeps individual chunksizes the same.
 
-Users are also encourage to check that they are only importing functions from ``dask.dataframe``
-and not any of the submodules.
+        .. image:: images/changelog/einstein-constant-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are now roughly the same size
+
 
 .. _v2024.10.0:
 
