@@ -44,6 +44,11 @@ def meta_from_array(x, ndim=None, dtype=None):
     # implement a _meta attribute that are incompatible with Dask Array._meta
     if hasattr(x, "_meta") and is_dask_collection(x) and is_arraylike(x):
         x = x._meta
+        if ndim is None and dtype is None:
+            # no modifications!
+            return x
+        if ndim is None and dtype is not None:
+            return x.astype(dtype, copy=False)
 
     if dtype is None and x is None:
         raise ValueError("You must specify the meta or dtype of the array")
