@@ -244,7 +244,7 @@ is available via the `Array API Comparison repository <https://github.com/data-a
    :obj:`numpy.nanmin`, :obj:`dask.array.nanmin` [#1]_ [#2]_, dask equivalent
    :obj:`numpy.nanpercentile`, \-
    :obj:`numpy.nanprod`, :obj:`dask.array.nanprod` [#1]_ [#2]_, dask equivalent
-   :obj:`numpy.nanquantile`, \-
+   :obj:`numpy.nanquantile`, :obj:`dask.array.nanquantile`
    :obj:`numpy.nanstd`, :obj:`dask.array.nanstd` [#1]_, dask equivalent
    :obj:`numpy.nansum`, :obj:`dask.array.nansum` [#1]_ [#2]_, dask equivalent
    :obj:`numpy.nanvar`, :obj:`dask.array.nanvar` [#1]_, dask equivalent
@@ -283,7 +283,7 @@ is available via the `Array API Comparison repository <https://github.com/data-a
    :obj:`numpy.put`, \-
    :obj:`numpy.put_along_axis`, \-
    :obj:`numpy.putmask`, \-
-   :obj:`numpy.quantile`, \-
+   :obj:`numpy.quantile`, :obj:`dask.array.quantile`
    :obj:`numpy.r_`, \-
    :obj:`numpy.rad2deg`, :obj:`dask.array.rad2deg`, direct (ufunc)
    :obj:`numpy.radians`, :obj:`dask.array.radians`, direct (ufunc)
