@@ -1378,7 +1378,7 @@ class Array(DaskMethodsMixin):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
         self._name = str(name)
-        meta = meta_from_array(meta, dtype=dtype)
+        _meta = meta_from_array(meta, dtype=dtype)
 
         if (
             isinstance(chunks, str)
@@ -1386,7 +1386,7 @@ class Array(DaskMethodsMixin):
             and chunks
             and any(isinstance(c, str) for c in chunks)
         ):
-            dt = meta.dtype
+            dt = _meta.dtype
         else:
             dt = None
         self._chunks = normalize_chunks(chunks, shape, dtype=dt)
