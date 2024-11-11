@@ -207,7 +207,6 @@ def convert_legacy_task(
     k: KeyType | None,
     task: _T,
     all_keys: Container,
-    only_refs: bool,
 ) -> GraphNode | _T:
     global SubgraphType
     if SubgraphType is None:
@@ -229,7 +228,7 @@ def convert_legacy_task(
                 subgraph.dsk, set(subgraph.inkeys), all_keys
             )
             sub_dsk = subgraph.dsk
-            converted_graph = convert_legacy_graph(sub_dsk, all_keys_inner, only_refs)
+            converted_graph = convert_legacy_graph(sub_dsk, all_keys_inner)
             external_deps = (
                 _get_dependencies(converted_graph)
                 - set(converted_graph)
@@ -244,20 +243,13 @@ def convert_legacy_task(
                 converted_sub_dsk,
                 func.outkey,
                 {
-                    k: convert_legacy_task(None, target, all_keys, only_refs)
+                    k: convert_legacy_task(None, target, all_keys)
                     for k, target in zip(subgraph.inkeys, args)
                 },
                 {ext_dep: Alias(ext_dep) for ext_dep in external_deps},
             )
         else:
-            new_args = tuple(
-                convert_legacy_task(None, a, all_keys, only_refs) for a in args
-            )
-            if only_refs:
-                if any(isinstance(a, GraphNode) for a in new_args):
-                    return Task(k, identity, func, *new_args)
-                else:
-                    return DataNode(k, (func, *new_args))
+            new_args = tuple(convert_legacy_task(None, a, all_keys) for a in args)
             return Task(k, func, *new_args)
     try:
         if isinstance(task, (bytes, int, float, str, tuple)):
@@ -275,14 +267,10 @@ def convert_legacy_task(
             return _wrap_namedtuple_task(
                 k,
                 task,
-                partial(
-                    convert_legacy_task, None, all_keys=all_keys, only_refs=only_refs
-                ),
+                partial(convert_legacy_task, None, all_keys=all_keys),
             )
         else:
-            parsed_args = tuple(
-                convert_legacy_task(None, t, all_keys, only_refs) for t in task
-            )
+            parsed_args = tuple(convert_legacy_task(None, t, all_keys) for t in task)
             if any(isinstance(a, GraphNode) for a in parsed_args):
                 return Task(
                     k, _identity_cast, *parsed_args, typ=DataNode(None, type(task))
@@ -291,10 +279,7 @@ def convert_legacy_task(
                 return cast(_T, type(task)(parsed_args))
     elif isinstance(task, dict):
         return _wrap_dict_in_task(
-            {
-                k: convert_legacy_task(k, v, all_keys, only_refs=True)
-                for k, v in task.items()
-            }
+            {k: convert_legacy_task(k, v, all_keys) for k, v in task.items()}
         )
 
     elif isinstance(task, TaskRef):
@@ -306,22 +291,13 @@ def convert_legacy_task(
         return task
 
 
-def convert_legacy_graph(
-    dsk: Mapping,
-    all_keys: Container | None = None,
-    only_refs: bool = False,
-):
+def convert_legacy_graph(dsk: Mapping, all_keys: Container | None = None):
     if not all_keys:
         all_keys = set(dsk)
     new_dsk = {}
     for k, arg in dsk.items():
-        t = convert_legacy_task(k, arg, all_keys, only_refs)
-        if (
-            not only_refs
-            and isinstance(t, Alias)
-            and isinstance(arg, TaskRef)
-            and t.key == arg.key
-        ):
+        t = convert_legacy_task(k, arg, all_keys)
+        if isinstance(t, Alias) and isinstance(arg, TaskRef) and t.key == arg.key:
             # This detects cycles?
             continue
         new_dsk[k] = t
