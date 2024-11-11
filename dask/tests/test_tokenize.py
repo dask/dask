@@ -1420,7 +1420,7 @@ def test_numba_local():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_np_dtype():
-    arr = np.array([1, 2, 3])
+    arr = np.array([1, 2, 3], dtype=np.int64)
     arr2 = np.array([1, 2, 3], dtype=np.int32)
     assert check_tokenize(arr.dtype) != check_tokenize(arr2.dtype)
 
