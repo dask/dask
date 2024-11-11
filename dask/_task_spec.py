@@ -692,6 +692,32 @@ class Task(GraphNode):
                 self._is_coro = False
         return self._is_coro
 
+    @staticmethod
+    def fuse(*tasks: Task, key: KeyType | None = None) -> Task:
+        leafs = set()
+        all_keys = set()
+        all_deps: set[KeyType] = set()
+        for t in tasks:
+            if t.key not in all_deps:
+                leafs.add(t.key)
+            all_deps.update(t.dependencies)
+            all_keys.add(t.key)
+            leafs -= t.dependencies
+        external_deps = all_deps - set(all_keys)
+        if len(leafs) > 1:
+            raise ValueError("Cannot fuse tasks with multiple outputs")
+
+        outkey = leafs.pop()
+
+        return Task(
+            key or outkey,
+            _execute_subgraph,
+            DataNode(None, {t.key: t for t in tasks}),
+            outkey,
+            {k: Alias(k) for k in external_deps},
+            {},
+        )
+
 
 class DependenciesMapping(MutableMapping):
     def __init__(self, dsk):
