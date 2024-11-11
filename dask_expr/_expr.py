@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping
 
 import numpy as np
 import pandas as pd
-from dask._task_spec import Alias, DataNode, Task, TaskRef
+from dask._task_spec import Alias, DataNode, Task, TaskRef, execute_graph
 from dask.array import Array
 from dask.core import flatten
 from dask.dataframe import methods
@@ -3766,19 +3766,38 @@ class Fused(Blockwise):
         return dep.npartitions == 1
 
     def _task(self, name: Key, index: int) -> Task:
-        subgraphs = {}
+        internal_tasks = []
+        seen_keys = set()
+        external_deps = set()
         for _expr in self.exprs:
             if self._broadcast_dep(_expr):
                 subname = (_expr._name, 0)
             else:
                 subname = (_expr._name, index)
-            subgraphs[subname] = _expr._task(subname, subname[1])
+            t = _expr._task(subname, subname[1])
+            assert t.key == subname
+            internal_tasks.append(t)
+            seen_keys.add(subname)
+            external_deps.update(t.dependencies)
+        external_deps -= seen_keys
+        dependencies = {dep: TaskRef(dep) for dep in external_deps}
+        t = Task(
+            name,
+            Fused._execute_internal_graph,
+            # Wrap the actual subgraph as a data node such that the tasks are
+            # not erroneously parsed. The external task would otherwise carry
+            # the internal keys as dependencies which is not satisfiable
+            DataNode(None, internal_tasks),
+            dependencies,
+            (self.exprs[0]._name, index),
+        )
+        return t
 
-        for i, dep in enumerate(self.dependencies()):
-            subgraphs[self._blockwise_arg(dep, index)] = "_" + str(i)
-
-        result = subgraphs.pop((self.exprs[0]._name, index))
-        return result.inline(subgraphs)
+    @staticmethod
+    def _execute_internal_graph(internal_tasks, dependencies, outkey):
+        cache = dict(dependencies)
+        res = execute_graph(internal_tasks, cache=cache, keys=[outkey])
+        return res[outkey]
 
 
 # Used for sorting with None

@@ -1,3 +1,4 @@
+import dask.dataframe as dd
 import pytest
 
 from dask_expr import from_pandas, optimize
@@ -128,3 +129,17 @@ def test_name(df):
     assert "getitem" in str(fused.expr)
     assert "sub" in str(fused.expr)
     assert str(fused.expr) == str(fused.expr).lower()
+
+
+def test_fusion_executes_only_once():
+    times_called = []
+    import pandas as pd
+
+    def test(i):
+        times_called.append(i)
+        return pd.DataFrame({"a": [1, 2, 3], "b": 1})
+
+    df = dd.from_map(test, [1], meta=[("a", "i8"), ("b", "i8")])
+    df = df[df.a > 1]
+    df.sum().compute()
+    assert len(times_called) == 1

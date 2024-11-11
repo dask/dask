@@ -173,7 +173,12 @@ class LocBase(Blockwise):
         return convert_legacy_graph(self._layer())
 
     def _task(self, name: Key, index: int) -> Task:
-        return self._layer_cache[(self._name, index)]
+        t = self._layer_cache[(self._name, index)]
+        if isinstance(t, Alias):
+            return Alias(name, t.target)
+        elif t.key != name:
+            return Task(name, lambda x: x, t)
+        return t
 
 
 class LocUnknown(Blockwise):
