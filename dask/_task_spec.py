@@ -199,7 +199,7 @@ def _execute_subgraph(inner_dsk, outkey, inkeys, external_deps):
         final[k] = DataNode(None, v)
     for k, v in external_deps.items():
         final[k] = DataNode(None, v)
-    res = execute_graph(final)
+    res = execute_graph(final, keys=[outkey])
     return res[outkey]
 
 

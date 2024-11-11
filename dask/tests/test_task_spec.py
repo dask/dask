@@ -815,3 +815,41 @@ def test_dependencies_mapping_doesnt_mutate_task():
     # The getitem is doing weird stuff and could mutate the task state
     deps[t2.key]
     assert t2.dependencies == {"key"}
+
+
+def test_subgraph_dont_hold_in_memory_too_long():
+    prev = None
+
+    # If we execute a fused task we want to release objects as quickly as
+    # possible. If every task generates this object, we must at most hold two of
+    # them in memory
+    class OnlyTwice:
+        counter = 0
+        total = 0
+
+        def __init__(self):
+            OnlyTwice.counter += 1
+            OnlyTwice.total += 1
+            if OnlyTwice.counter > 2:
+                raise ValueError("Didn't release as expected")
+
+        def __del__(self):
+            OnlyTwice.counter -= 1
+
+    def generate_object(arg):
+        return OnlyTwice()
+
+    prev = None
+    subgraph = {}
+    for ix in range(10):
+        subgraph[f"key-{ix}"] = (generate_object, prev if prev else "foo")
+        prev = f"key-{ix}"
+    subgraph_callable = SubgraphCallable(
+        subgraph,
+        "key-9",
+        (),
+    )
+    dsk = {"bar": (subgraph_callable,)}
+    converted = convert_legacy_graph(dsk)
+    assert converted["bar"]()
+    assert OnlyTwice.total == 10
