@@ -127,7 +127,10 @@ class ReadCSV(PartitionsFiltered, BlockwiseIO):
     def _filtered_task(self, name: Key, index: int) -> Task:
         if self._series:
             return Task(name, operator.getitem, self._tasks[index], self.columns[0])
-        return self._tasks[index]
+        t = self._tasks[index]
+        if t.key != name:
+            return Task(name, lambda x: x, t)
+        return t
 
 
 class ReadTable(ReadCSV):
