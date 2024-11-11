@@ -438,3 +438,7 @@ def register_numpy():
                 "https://docs.dask.org/en/latest/array-numpy-compatibility.html"
             )
             return uuid.uuid4().hex
+
+    @normalize_token.register(np.dtype)
+    def normalize_dtype(dtype):
+        return dtype.str
