@@ -832,18 +832,16 @@ def test_fuse_tasks_key():
 def test_fuse_tasks():
     a = Task("key-1", func, "a", "b")
     b = Task("key-2", func2, a.ref(), "d")
-    for t1, t2 in itertools.permutations((a, b)):
-        fused = Task.fuse(t2, t1)
-
-        assert fused() == func2(func("a", "b"), "d")
-
+    c = Task("key-3", func3, b.ref(), "e")
+    for t1, t2, t3 in itertools.permutations((a, b, c)):
+        fused = Task.fuse(t3, t2, t1)
+        assert fused() == func3(func2(func("a", "b"), "d"), "e")
         t1 = Task("key-1", func, TaskRef("dependency"), "b")
         t2 = Task("key-2", func2, t1.ref(), "d")
-
-        fused = Task.fuse(t2, t1)
+        t3 = Task("key-3", func3, t2.ref(), "e")
+        fused = Task.fuse(t3, t2, t1)
         assert fused.dependencies == {"dependency"}
-
-        assert fused({"dependency": "dep"}) == func2(func("dep", "b"), "d")
+        assert fused({"dependency": "dep"}) == func3(func2(func("dep", "b"), "d"), "e")
 
 
 def test_fuse_reject_multiple_outputs():

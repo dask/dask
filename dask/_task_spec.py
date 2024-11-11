@@ -698,12 +698,10 @@ class Task(GraphNode):
         all_keys = set()
         all_deps: set[KeyType] = set()
         for t in tasks:
-            if t.key not in all_deps:
-                leafs.add(t.key)
             all_deps.update(t.dependencies)
             all_keys.add(t.key)
-            leafs -= t.dependencies
-        external_deps = all_deps - set(all_keys)
+        external_deps = all_deps - all_keys
+        leafs = all_keys - all_deps
         if len(leafs) > 1:
             raise ValueError("Cannot fuse tasks with multiple outputs")
 
