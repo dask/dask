@@ -242,7 +242,7 @@ is available via the `Array API Comparison repository <https://github.com/data-a
    :obj:`numpy.nanmean`, :obj:`dask.array.nanmean` [#1]_, dask equivalent
    :obj:`numpy.nanmedian`, :obj:`dask.array.nanmedian` [#16]_, dask equivalent
    :obj:`numpy.nanmin`, :obj:`dask.array.nanmin` [#1]_ [#2]_, dask equivalent
-   :obj:`numpy.nanpercentile`, \-
+   :obj:`numpy.nanpercentile`, :obj:`dask.array.nanpercentile`
    :obj:`numpy.nanprod`, :obj:`dask.array.nanprod` [#1]_ [#2]_, dask equivalent
    :obj:`numpy.nanquantile`, :obj:`dask.array.nanquantile`
    :obj:`numpy.nanstd`, :obj:`dask.array.nanstd` [#1]_, dask equivalent

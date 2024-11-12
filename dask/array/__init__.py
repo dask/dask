@@ -100,7 +100,7 @@ try:
     from dask.array.numpy_compat import moveaxis, rollaxis
     from dask.array.optimization import optimize
     from dask.array.overlap import map_overlap, push
-    from dask.array.percentile import percentile
+    from dask.array.percentile import nanpercentile, percentile
     from dask.array.rechunk import rechunk
     from dask.array.reductions import (
         all,
