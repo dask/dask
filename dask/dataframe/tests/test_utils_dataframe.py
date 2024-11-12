@@ -450,7 +450,7 @@ def test_check_meta():
     assert str(err.value) == (
         "Metadata mismatch found.\n"
         "\n"
-        "Partition type: `pandas.core.series.Series`\n"
+        f"Partition type: `{series}`\n"
         "+----------+--------+\n"
         "|          | dtype  |\n"
         "+----------+--------+\n"
