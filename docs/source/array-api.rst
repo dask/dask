@@ -166,6 +166,7 @@ Top level functions
    nanmin
    nanprod
    nanquantile
+   nanpercentile
    nanstd
    nansum
    nanvar
