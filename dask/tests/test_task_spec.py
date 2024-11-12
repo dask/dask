@@ -7,7 +7,6 @@ from collections import namedtuple
 
 import pytest
 
-import dask
 from dask._task_spec import (
     Alias,
     DataNode,
@@ -16,7 +15,6 @@ from dask._task_spec import (
     TaskRef,
     _get_dependencies,
     convert_legacy_graph,
-    convert_legacy_task,
     execute_graph,
     resolve_aliases,
 )
@@ -314,43 +312,6 @@ def test_avoid_cycles():
     }
     new_dsk = convert_legacy_graph(dsk)
     assert not new_dsk
-
-
-def test_convert_tasks_only_ref_lowlevel():
-    t = convert_legacy_task(None, (func, "a", "b"), set(), only_refs=True)
-    assert t() == (func, "a", "b")
-
-    t = convert_legacy_task(None, (func, "a", "b"), {"a"}, only_refs=True)
-    assert t({"a": "c"}) == (func, "c", "b")
-
-
-def test_convert_task_only_ref():
-    # This is for support of legacy subgraphs
-    # We'll only want to insert pack/unpack dependencies but don't want to touch
-    # the task itself
-
-    def subgraph_func(dsk, key):
-        return dask.get(dsk, [key])[0]
-
-    dsk = {
-        "dep": "foo",
-        ("baz", 1): "baz",
-        "subgraph": (
-            subgraph_func,
-            {
-                "a": "dep",
-                "b": (func, "a", "bar"),
-                "c": (func, "a", ("baz", 1)),
-                "d": (func, "b", "c"),
-            },
-            "d",
-        ),
-    }
-    new_dsk = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(new_dsk)
-    assert new_dsk["subgraph"].dependencies == {"dep", ("baz", 1)}
-
-    assert new_dsk["subgraph"]({"dep": "foo", ("baz", 1): "baz"}) == "foo-bar-foo-baz"
 
 
 def test_runnable_as_kwarg():
