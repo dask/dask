@@ -5,14 +5,14 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
-.. _v2024.11.1:
+.. _v2024.11.2:
 
 2024.11.01
 ----------
 
 .. note::
-  Version 2024.11.0 included a critical performance regression and should be
-  skipped by every user.
+  Versions 2024.11.0 and 2024.11.1 included a critical performance regression
+  and should be skipped by every user.
 
 Highlights
 ^^^^^^^^^^
