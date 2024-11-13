@@ -3193,15 +3193,14 @@ def optimize_blockwise_fusion(expr):
                     dependents[next._name] = set()
                     expr_mapping[next._name] = next
 
-            for operand in next.operands:
-                if isinstance(operand, Expr):
-                    stack.append(operand)
-                    if is_valid_blockwise_op(operand):
-                        if next._name in dependencies:
-                            dependencies[next._name].add(operand._name)
-                        dependents[operand._name].add(next._name)
-                        expr_mapping[operand._name] = operand
-                        expr_mapping[next._name] = next
+            for operand in next.dependencies():
+                stack.append(operand)
+                if is_valid_blockwise_op(operand):
+                    if next._name in dependencies:
+                        dependencies[next._name].add(operand._name)
+                    dependents[operand._name].add(next._name)
+                    expr_mapping[operand._name] = operand
+                    expr_mapping[next._name] = next
 
         # Traverse each "root" until we find a fusable sub-group.
         # Here we use root to refer to a Blockwise Expr node that
