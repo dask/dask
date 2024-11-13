@@ -388,7 +388,7 @@ def test_zarr_distributed_with_explicit_directory_store(c, zarr):
         if Version(zarr.__version__) < Version("3.0.0.a0"):
             s = zarr.storage.DirectoryStore(d)
         else:
-            s = zarr.storage.LocalStore(d, mode="a")
+            s = zarr.storage.LocalStore(d, read_only=False)
         z = zarr.open_array(
             shape=a.shape,
             chunks=chunks,
@@ -411,7 +411,7 @@ def test_zarr_distributed_with_explicit_memory_store(c, zarr):
     if Version(zarr.__version__) < Version("3.0.0.a0"):
         s = zarr.storage.MemoryStore()
     else:
-        s = zarr.storage.MemoryStore(mode="a")
+        s = zarr.storage.MemoryStore(read_only=False)
     z = zarr.open_array(
         shape=a.shape,
         chunks=chunks,

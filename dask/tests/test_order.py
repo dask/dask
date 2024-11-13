@@ -1085,7 +1085,7 @@ def test_array_store_final_order(tmpdir):
     if Version(zarr.__version__) < Version("3.0.0.a0"):
         store = zarr.storage.DirectoryStore(tmpdir)
     else:
-        store = zarr.storage.LocalStore(str(tmpdir), mode="w")
+        store = zarr.storage.LocalStore(str(tmpdir), read_only=False)
 
     root = zarr.group(store, overwrite=True)
     dest = root.empty_like(name="dest", data=x, chunks=x.chunksize, overwrite=True)
