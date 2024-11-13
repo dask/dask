@@ -4637,7 +4637,7 @@ def test_zarr_pass_store():
         if Version(zarr.__version__) < Version("3.0.0.a0"):
             store = zarr.storage.DirectoryStore(d)
         else:
-            store = zarr.storage.LocalStore(d, mode="w")
+            store = zarr.storage.LocalStore(d, read_only=False)
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(store)
         a2 = da.from_zarr(store)
