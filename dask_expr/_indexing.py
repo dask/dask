@@ -98,6 +98,8 @@ class LocIndexer(Indexer):
             elif is_series_like(iindexer) and not is_bool_dtype(iindexer.dtype):
                 return new_collection(LocList(self.obj, iindexer.values, cindexer))
             elif isinstance(iindexer, list) or is_arraylike(iindexer):
+                if len(iindexer) == 0:
+                    return new_collection(LocEmpty(self.obj._meta, cindexer))
                 return new_collection(LocList(self.obj, iindexer, cindexer))
             else:
                 # element should raise KeyError
@@ -248,6 +250,26 @@ class LocList(LocBase):
 
     def _layer(self) -> dict:
         return self._layer_information[0]
+
+
+class LocEmpty(LocList):
+    _parameters = ["meta", "cindexer"]
+
+    def _lower(self):
+        return None
+
+    @functools.cached_property
+    def _meta(self):
+        if self.cindexer is None:
+            return self.operand("meta")
+        else:
+            return self.operand("meta").loc[:, self.cindexer]
+
+    @functools.cached_property
+    def _layer_information(self):
+        divisions = [None, None]
+        dsk = {(self._name, 0): DataNode((self._name, 0), self._meta)}
+        return dsk, divisions
 
 
 class LocSlice(LocBase):

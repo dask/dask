@@ -35,15 +35,6 @@ def test_iloc_errors(df):
         df.iloc[(1, 2, 3)]
 
 
-def test_loc(df, pdf):
-    assert_eq(df.loc[:, "x"], pdf.loc[:, "x"])
-    assert_eq(df.loc[:, ["x"]], pdf.loc[:, ["x"]])
-    assert_eq(df.loc[:, []], pdf.loc[:, []])
-
-    assert_eq(df.loc[df.y == 20, "x"], pdf.loc[pdf.y == 20, "x"])
-    assert_eq(df.loc[df.y == 20, ["x"]], pdf.loc[pdf.y == 20, ["x"]])
-
-
 def test_loc_slice(pdf, df):
     pdf.columns = [10, 20]
     df.columns = [10, 20]
@@ -86,6 +77,12 @@ def test_columns_dtype_on_empty_slice(df, pdf, loc, update):
 
 
 def test_loc(df, pdf):
+    assert_eq(df.loc[:, "x"], pdf.loc[:, "x"])
+    assert_eq(df.loc[:, ["x"]], pdf.loc[:, ["x"]])
+    assert_eq(df.loc[:, []], pdf.loc[:, []])
+
+    assert_eq(df.loc[df.y == 20, "x"], pdf.loc[pdf.y == 20, "x"])
+    assert_eq(df.loc[df.y == 20, ["x"]], pdf.loc[pdf.y == 20, ["x"]])
     assert df.loc[3:8].divisions[0] == 3
     assert df.loc[3:8].divisions[-1] == 8
 
