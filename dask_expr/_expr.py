@@ -3766,31 +3766,16 @@ class Fused(Blockwise):
 
     def _task(self, name: Key, index: int) -> Task:
         internal_tasks = []
-        seen_keys = set()
-        external_deps = set()
         for _expr in self.exprs:
             if self._broadcast_dep(_expr):
                 subname = (_expr._name, 0)
             else:
                 subname = (_expr._name, index)
             t = _expr._task(subname, subname[1])
+
             assert t.key == subname
             internal_tasks.append(t)
-            seen_keys.add(subname)
-            external_deps.update(t.dependencies)
-        external_deps -= seen_keys
-        dependencies = {dep: TaskRef(dep) for dep in external_deps}
-        t = Task(
-            name,
-            Fused._execute_internal_graph,
-            # Wrap the actual subgraph as a data node such that the tasks are
-            # not erroneously parsed. The external task would otherwise carry
-            # the internal keys as dependencies which is not satisfiable
-            DataNode(None, internal_tasks),
-            dependencies,
-            (self.exprs[0]._name, index),
-        )
-        return t
+        return Task.fuse(*internal_tasks, key=name)
 
     @staticmethod
     def _execute_internal_graph(internal_tasks, dependencies, outkey):
