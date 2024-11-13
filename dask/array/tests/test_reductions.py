@@ -918,6 +918,8 @@ def test_nanquantile(rechunk, q, axis):
     arr = np.random.randn(*shape)
     indexer = np.random.randint(0, 10, size=shape)
     arr[indexer >= 8] = np.nan
+    arr[:, :, :, 1] = 1
+    arr[1, :, :, :] = 1
 
     darr = da.from_array(arr, chunks=(2, 3, 4, (5 if rechunk else -1)))
     assert_eq(da.nanquantile(darr, q, axis=axis), np.nanquantile(arr, q, axis=axis))
