@@ -12,15 +12,16 @@ import uuid
 import warnings
 from bisect import bisect
 from collections import defaultdict
-from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from functools import lru_cache, partial, reduce, wraps
-from itertools import product, zip_longest
+from itertools import chain, product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
 from typing import Any, Literal, TypeVar, Union, cast
 
 import numpy as np
+import toolz as tlz
 from numpy.typing import ArrayLike
 from packaging.version import Version
 from tlz import accumulate, concat, first, groupby, partition
@@ -238,6 +239,198 @@ def slices_from_chunks(chunks):
         for starts, shapes in zip(cumdims, chunks)
     ]
     return list(product(*slices))
+
+
+def subset_to_blocks(
+    data,
+    *,
+    coords: tuple[tuple[int]],
+    new_chunks: tuple[int] = (1, 1),
+    token="",
+):
+    token = f"{token + '-' if token else token}-subset-blocks-{tokenize(data, *coords)}"
+    keys = data._key_array[..., *coords, :]
+    graph = {}
+    for flatidx, idx in enumerate(np.ndindex(keys.shape[:-1])):
+        graph[(token, *idx[:-1], flatidx)] = tuple(keys[*idx, :])
+
+    ndim = len(coords)
+    return Array(
+        HighLevelGraph.from_collections(token, graph, dependencies=[data]),
+        token,
+        chunks=(*data._chunks[:-ndim], new_chunks),
+        meta=data,
+    )
+
+
+# Copied from Xarray
+def inverse_permutation(indices: np.ndarray, N: int | None = None) -> np.ndarray:
+    """Return indices for an inverse permutation.
+
+    Parameters
+    ----------
+    indices : 1D np.ndarray with dtype=int
+        Integer positions to assign elements to.
+    N : int, optional
+        Size of the array
+
+    Returns
+    -------
+    inverse_permutation : 1D np.ndarray with dtype=int
+        Integer indices to take from the original array to create the
+        permutation.
+    """
+    if N is None:
+        N = len(indices)
+    # use intp instead of int64 because of windows :(
+    inverse_permutation = np.full(N, -1, dtype=np.intp)
+    inverse_permutation[indices] = np.arange(len(indices), dtype=np.intp)
+    return inverse_permutation
+
+
+def interp_helper(
+    func: Callable[np.ndarray, ...],
+    data,
+    *,
+    x: tuple[np.ndarray, ...],
+    new_x: tuple[np.ndarray, ...],
+    axis: tuple[int, ...],
+    depth: int,
+    blockwise_kwargs: Mapping[Any, Any],
+):
+    """
+    Helper function to apply an interpolator ``func`` to blocks of the data.
+
+    ``func`` will only be applied to blocks that are necessary to construct the output.
+    The blocks of interest are determined by comparing ``new_x`` to ``x``, both of which
+    must be in-memory arrays.
+
+    Parameters
+    ----------
+    func: Callable
+        interpolation function that will be called on each block as
+        ``func(data, *interleaved_x_new_x, **blockwise_kwargs)``
+    data: dask.array.Array
+        array to interpolate
+    x : tuple[np.ndarray, ...]
+        input array coordinates
+    new_x : tuple[np.ndarray, ...]
+        output array coordinates to interpolate to
+    axis : tuple[int, ...]
+        axes of `data` along which to interpolate
+    depth: int TODO: make dict[int, int]
+        The number of elements that each block should share with its neighbors
+        If a tuple or dict then this can be different per axis.
+    blockwise_kwargs:
+        Arbitrary kwargs unpacked and passed to func
+
+    Returns
+    ------
+    dask.array.Array
+    """
+    from dask.array.overlap import overlap
+    from dask.array.routines import take
+
+    assert all(new_coord.ndim == 1 for new_coord in new_x)
+
+    chunksizes = tuple(data.chunks[ax] for ax in axis)
+
+    if all(len(_) == 1 for _ in chunksizes):
+        # no overlap needed if this is a blockwise op
+        overlapper = lambda x, *a: x
+        # TODO: more short-circuiting
+    else:
+        overlapper = partial(overlap, boundary=None)
+    overlapped = overlapper(data, depth=dict.fromkeys(axis, depth))
+
+    # chunk and overlap the coordinate arrays appropriately
+    chunked_grid_coords = tuple(
+        overlapper(from_array(coord, chunks=chunks), depth={0: depth})
+        for ax, (coord, chunks) in enumerate(zip(x, chunksizes, strict=True))
+    )
+    needed_chunks = tuple(
+        zip(
+            *(
+                tuple(np.digitize(desired, coord[list(np.cumsum(chunks))[:-1]]))
+                for ax, desired, coord, chunks in zip(
+                    axis, new_x, x, chunksizes, strict=True
+                )
+            ),
+            strict=True,
+        )
+    )
+
+    # maps a block index to indices of the desired points in that block
+    grouped = tlz.groupby(
+        key=lambda x: tuple(map(int, x[1])), seq=enumerate(needed_chunks)
+    )
+    blocks_to_idx = {
+        block_id: tuple(_[0] for _ in vals) for block_id, vals in grouped.items()
+    }
+    desired_chunks = tuple(len(a) for a in blocks_to_idx.values())
+
+    # subset to needed blocks only
+    subset = subset_to_blocks(
+        overlapped,
+        coords=tuple(zip(*blocks_to_idx.keys(), strict=True)),
+        new_chunks=desired_chunks,
+        token="var",
+    )
+
+    grid_block_coords = []
+    for ax, coord in enumerate(chunked_grid_coords):
+        chunkids = [key[ax] for key in blocks_to_idx]
+        grid_block_coords.append(
+            subset_to_blocks(
+                coord,
+                coords=(chunkids,),
+                new_chunks=tuple(chunksizes[ax][i] for i in chunkids),
+                # TODO: more tokenize
+                token=f"interp-ax-{ax}",
+            )
+        )
+    # sort the output points by block-id
+    # so that every point in a single block occurs near each other
+    argsorter = np.concatenate(list(blocks_to_idx.values()))
+    invert_argsorter = inverse_permutation(argsorter)
+
+    # The axis indices here are meaningless. I'm faking them to build a purely blockwise graph.
+    # each block is sent to _interp with the appropriate grid coordinates, and the output points to
+    # interpolate to.
+    out_points = new_x
+    ndim = len(x)
+    new_axis = (data.ndim - ndim,)
+    out_axis = tuple(range(data.ndim - ndim)) + new_axis
+    result = blockwise(
+        func,
+        out_axis,
+        subset,
+        out_axis,
+        *chain(
+            # input grid coords
+            *zip_longest(grid_block_coords, (new_axis,), fillvalue=new_axis),
+            # output point coords
+            *zip_longest(
+                (
+                    from_array(points_single_axis[argsorter], desired_chunks)
+                    for points_single_axis in out_points
+                ),
+                (new_axis,),
+                fillvalue=new_axis,
+            ),
+        ),
+        concatenate=False,
+        # TODO: FIX THIS
+        adjust_chunks={1: desired_chunks},
+        # This is important, it stops all broadcasting.
+        align_arrays=False,
+        dtype=np.float64,
+        **blockwise_kwargs,
+    )
+
+    # argsort back to the original order of points
+    result = take(result, indices=invert_argsorter, axis=-1)
+    return result
 
 
 def graph_from_arraylike(

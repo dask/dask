@@ -5406,3 +5406,13 @@ def test_load_store_chunk():
     )
     expected = np.array([])
     assert all(actual == expected)
+
+
+def test_interp():
+    xp = np.arange(100)
+    fp = np.arange(100) * 2 + 20
+    x = np.random.randint(100, size=4)
+
+    expected = np.interp(x, xp, fp)
+    actual = dask.array.interp(x, xp, from_array(fp, chunks=5))
+    assert_eq(actual, expected)
