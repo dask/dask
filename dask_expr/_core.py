@@ -160,17 +160,26 @@ class Expr:
             raise RuntimeError(f"Serializing a {type(self)} object")
         return type(self), tuple(self.operands)
 
-    def _depth(self):
+    def _depth(self, cache=None):
         """Depth of the expression tree
 
         Returns
         -------
         depth: int
         """
+        if cache is None:
+            cache = {}
         if not self.dependencies():
             return 1
         else:
-            return max(expr._depth() for expr in self.dependencies()) + 1
+            result = []
+            for expr in self.dependencies():
+                if expr._name in cache:
+                    result.append(cache[expr._name])
+                else:
+                    result.append(expr._depth(cache) + 1)
+                    cache[expr._name] = result[-1]
+            return max(result)
 
     def operand(self, key):
         # Access an operand unambiguously
@@ -242,7 +251,7 @@ class Expr:
             for i in range(self.npartitions)
         }
 
-    def rewrite(self, kind: str):
+    def rewrite(self, kind: str, rewritten):
         """Rewrite an expression
 
         This leverages the ``._{kind}_down`` and ``._{kind}_up``
@@ -255,6 +264,9 @@ class Expr:
         changed:
             whether or not any change occured
         """
+        if self._name in rewritten:
+            return rewritten[self._name]
+
         expr = self
         down_name = f"_{kind}_down"
         up_name = f"_{kind}_up"
@@ -291,7 +303,8 @@ class Expr:
             changed = False
             for operand in expr.operands:
                 if isinstance(operand, Expr):
-                    new = operand.rewrite(kind=kind)
+                    new = operand.rewrite(kind=kind, rewritten=rewritten)
+                    rewritten[operand._name] = new
                     if new._name != operand._name:
                         changed = True
                 else:
