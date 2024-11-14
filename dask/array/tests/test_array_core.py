@@ -5383,6 +5383,15 @@ def test_to_backend():
             x.to_backend("missing")
 
 
+def test_from_array_copies():
+    x = np.arange(60).reshape((6, 10))
+    original_array = x.copy()
+    chunks = (2, 3)
+    dx = da.from_array(x, chunks=chunks)
+    x[2:4, x[0] > 3] = -5
+    assert_eq(original_array, dx)
+
+
 def test_load_store_chunk():
     actual = np.array([0, 0, 0, 0, 0, 0])
     load_store_chunk(
