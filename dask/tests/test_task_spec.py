@@ -16,12 +16,14 @@ from dask._task_spec import (
     _get_dependencies,
     convert_legacy_graph,
     execute_graph,
+    fuse_linear_task_spec,
     resolve_aliases,
 )
 from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
 from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
+from dask.utils import funcname
 
 
 def identity(x):
@@ -901,3 +903,37 @@ def test_subgraph_dont_hold_in_memory_too_long_legacy():
     converted = convert_legacy_graph(dsk)
     assert converted["bar"]()
     assert OnlyTwice.total == 10
+
+
+def test_linear_fusion():
+    tasks = [
+        io := Task("foo", func, 1),
+        second := Task("second", func, io.ref()),
+        Task("third", func, second.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"third"})
+    assert len(result) == 2
+    assert isinstance(result["third"], Alias)
+    assert (
+        isinstance(result["foo-second-third"], Task)
+        and funcname(result["foo-second-third"].func) == "_execute_subgraph"
+    )
+
+    # Data Nodes don't get fused
+
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref()),
+        third := Task("third", func, second.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert len(result) == 3
+    assert isinstance(result["fourth"], Alias)
+    assert (
+        isinstance(result["second-third-fourth"], Task)
+        and funcname(result["second-third-fourth"].func) == "_execute_subgraph"
+    )
+    assert isinstance(result["foo"], DataNode)
