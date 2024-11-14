@@ -3181,9 +3181,6 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     if any(c == "auto" for c in chunks):
         chunks = auto_chunks(chunks, shape, limit, dtype, previous_chunks)
 
-    if shape is not None:
-        chunks = tuple(c if c not in {None, -1} else s for c, s in zip(chunks, shape))
-
     allints = None
     if chunks and shape is not None:
         # allints: did we start with chunks as a simple tuple of ints?
@@ -3196,12 +3193,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "zero length dimensions with 0(s) in chunks"
             )
 
-    if shape is not None:
-        if len(chunks) != len(shape):
-            raise ValueError(
-                "Input array has %d dimensions but the supplied "
-                "chunks has only %d dimensions" % (len(shape), len(chunks))
-            )
+    if not allints and shape is not None:
         if not all(
             c == s or (math.isnan(c) or math.isnan(s))
             for c, s in zip(map(sum, chunks), shape)
