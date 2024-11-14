@@ -2579,7 +2579,8 @@ def test_from_array_ndarray_onechunk(x):
     dx = da.from_array(x, chunks=-1)
     assert_eq(x, dx)
     assert len(dx.dask) == 1
-    assert dx.dask[(dx.name,) + (0,) * dx.ndim] is x
+    assert not dx.dask[(dx.name,) + (0,) * dx.ndim] is x
+    assert_eq(dx.dask[(dx.name,) + (0,) * dx.ndim], x)
 
 
 def test_from_array_ndarray_getitem():
@@ -4379,7 +4380,7 @@ def test_blockwise_with_numpy_arrays():
     assert_eq(x + y, x + x)
 
     s = da.sum(x)
-    assert any(x is v for v in s.dask.values())
+    assert any(isinstance(v, np.ndarray) for v in s.dask.values())
 
 
 @pytest.mark.parametrize("chunks", (100, 6))
