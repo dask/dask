@@ -2651,6 +2651,44 @@ def test_melt(kwargs):
     assert_eq(ddf.melt(**kwargs), pdf.melt(**kwargs), check_index=False)
 
 
+def test_assign_projection_mix():
+    data = {
+        "date": [
+            "2024-03-22 18:13:36.801000",
+            "2024-03-22 18:14:11.457000",
+            "2024-04-02 06:05:01.658000",
+            "2024-04-02 06:05:04.870000",
+            "2024-04-03 06:11:30.202000",
+        ],
+        "code": [1.0, 3.0, 6.0, 6.0, 8.0],
+        "first": pd.NaT,
+        "first_2": pd.NaT,
+        "second": pd.NaT,
+        "second_2": pd.NaT,
+        "third": pd.NaT,
+    }
+    df = pd.DataFrame(data)
+    df["date"] = pd.to_datetime(df["date"])
+
+    df = from_pandas(df)
+
+    def apply_func(x):
+        return x
+
+    event_columns = {1: ["first", "first_2"], 2: ["second", "second_2"], 3: ["third"]}
+
+    for event_code, columns in event_columns.items():
+        mask = df["code"] == event_code
+        df[columns[0]] = df[columns[0]].mask(cond=(mask), other=df["date"])
+        if len(columns) == 2:
+            df[columns[1]] = df[columns[1]].mask(cond=(mask), other=df["date"])
+            df[columns[1]] = df[columns[1]].apply(apply_func)
+
+    df = df.drop(columns=["code", "date"])
+    result = df.optimize(fuse=False)
+    assert result.expr._depth() == 13.0  # this grew exponentially previously
+
+
 def test_dropna_merge(df, pdf):
     dropped_na = df.dropna(subset=["x"])
     result = dropped_na.merge(dropped_na, on="x")
