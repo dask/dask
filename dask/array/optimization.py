@@ -58,6 +58,7 @@ def optimize(
 
     # dependencies = dsk.get_all_dependencies()
     dsk = ensure_dict(dsk)
+    dsk = optimize_slices(dsk)
 
     dsk = convert_legacy_graph(dsk)
     dsk = fuse_linear_task_spec(dsk, keys=keys)
@@ -81,7 +82,7 @@ def optimize(
     #         fast_functions=inline_functions_fast_functions,
     #     )
 
-    return optimize_slices(dsk)
+    return dsk
 
 
 def hold_keys(dsk, dependencies):
