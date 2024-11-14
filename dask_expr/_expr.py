@@ -1899,6 +1899,16 @@ class Assign(Elemwise):
                 # don't squash if we are using a column that was previously created
                 return
             return Assign(*self.frame.operands, *self.operands[1:])
+        elif isinstance(self.frame, Projection) and isinstance(
+            self.frame.frame, Assign
+        ):
+            if self._check_for_previously_created_column(self.frame.frame):
+                return
+            new_columns = self.frame.operands[1].copy()
+            new_columns.extend(self.keys)
+            return Projection(
+                Assign(*self.frame.frame.operands, *self.operands[1:]), new_columns
+            )
 
     def _check_for_previously_created_column(self, child):
         input_columns = []
