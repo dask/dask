@@ -15,6 +15,7 @@ from dask.base import tokenize
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from dask.core import flatten
 from dask.highlevelgraph import Layer
+from dask.tokenize import normalize_token
 from dask.utils import apply, cached_cumsum, concrete, insert
 
 #
@@ -85,6 +86,11 @@ class ArraySliceDep(ArrayBlockwiseDep):
     def __getitem__(self, idx: tuple):
         loc = tuple((start[i], start[i + 1]) for i, start in zip(idx, self.starts))
         return tuple(slice(*s, None) for s in loc)
+
+
+@normalize_token.register(ArraySliceDep)
+def normalize_array_slice_dep(dep):
+    return "ArraySliceDep", dep.chunks, dep.starts
 
 
 class ArrayOverlapLayer(Layer):
