@@ -791,10 +791,11 @@ def execute_graph(
     return cache
 
 
-def fuse_linear_task_spec(dsk):
+def fuse_linear_task_spec(dsk, keys):
     from dask.core import reverse_dict
     from dask.optimization import default_fused_keys_renamer
 
+    keys = set(keys)
     dependencies = DependenciesMapping(dsk)
     dependents = reverse_dict(dependencies)
 
@@ -829,7 +830,11 @@ def fuse_linear_task_spec(dsk):
         while len(deps) == 1:
             (new_key,) = deps
             seen.add(new_key)
-            if len(dependents[new_key]) != 1 or _check_data_node(dsk[new_key]):
+            if (
+                len(dependents[new_key]) != 1
+                or _check_data_node(dsk[new_key])
+                or new_key in keys
+            ):
                 result[new_key] = dsk[new_key]
                 break
             linear_chain.insert(0, dsk[new_key])
@@ -838,7 +843,7 @@ def fuse_linear_task_spec(dsk):
         # Walk the tree towards the root as long as the nodes have a single dependent
         # and a single dependency, we can't fuse two nodes if node has multiple
         # dependencies
-        while len(dependents_key) == 1:
+        while len(dependents_key) == 1 and top_key not in keys:
             new_key = dependents_key.pop()
             seen.add(new_key)
             if len(dependencies[new_key]) != 1 or _check_data_node(dsk[new_key]):

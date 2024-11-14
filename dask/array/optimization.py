@@ -60,7 +60,7 @@ def optimize(
     dsk = ensure_dict(dsk)
 
     dsk = convert_legacy_graph(dsk)
-    dsk = fuse_linear_task_spec(dsk)
+    dsk = fuse_linear_task_spec(dsk, keys=keys)
     # # Low level task optimizations
     # if fast_functions is not None:
     #     inline_functions_fast_functions = fast_functions
