@@ -2707,7 +2707,8 @@ def test_from_array_inline():
 
     a = np.array([1, 2, 3]).view(MyArray)
     dsk = dict(da.from_array(a, name="my-array", inline_array=False).dask)
-    assert dsk["original-my-array"] is a
+    assert not dsk["original-my-array"] is a
+    assert_eq(dsk["original-my-array"], a)
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
     assert "original-my-array" not in dsk
