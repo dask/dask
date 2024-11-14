@@ -937,3 +937,32 @@ def test_linear_fusion():
         and funcname(result["second-third-fourth"].func) == "_execute_subgraph"
     )
     assert isinstance(result["foo"], DataNode)
+
+    # Branch, so no fusion
+    tasks.append(Task("branch", func, third.ref()))
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert len(result) == 5
+    assert "second-third" in result
+    assert isinstance(result["third"], Alias)
+
+    # Branch, so no fusion at all
+    tasks.append(Task("branch2", func, second.ref()))
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert len(result) == 6
+    assert not any("-" in k for k in dsk)
+
+
+def test_linear_fusion_intermediate_branch():
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref()),
+        third := Task("third", func, second.ref()),
+        other := Task("other", func, 1),
+        Task("fourth", func, third.ref(), other.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "second-third" in result
+    assert isinstance(result["fourth"], Task)

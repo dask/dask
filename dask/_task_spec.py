@@ -829,6 +829,8 @@ def fuse_linear_task_spec(dsk, keys):
         # is the source for 2 dependents
         while len(deps) == 1:
             (new_key,) = deps
+            if new_key in seen:
+                break
             seen.add(new_key)
             if (
                 len(dependents[new_key]) != 1
@@ -845,6 +847,8 @@ def fuse_linear_task_spec(dsk, keys):
         # dependencies
         while len(dependents_key) == 1 and top_key not in keys:
             new_key = dependents_key.pop()
+            if new_key in seen:
+                break
             seen.add(new_key)
             if len(dependencies[new_key]) != 1 or _check_data_node(dsk[new_key]):
                 result[new_key] = dsk[new_key]
