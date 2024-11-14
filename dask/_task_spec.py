@@ -670,7 +670,6 @@ class Task(GraphNode):
 
     @staticmethod
     def fuse(*tasks: Task, key: KeyType | None = None) -> Task:
-        leafs = set()
         all_keys = set()
         all_deps: set[KeyType] = set()
         for t in tasks:
@@ -790,3 +789,72 @@ def execute_graph(
                 del cache[dep]
 
     return cache
+
+
+def fuse_linear_task_spec(dsk):
+    from dask.core import reverse_dict
+    from dask.optimization import default_fused_keys_renamer
+
+    dependencies = DependenciesMapping(dsk)
+    dependents = reverse_dict(dependencies)
+
+    seen = set()
+    result = {}
+
+    def _check_data_node(tsk):
+        return isinstance(tsk, DataNode) and not isinstance(tsk.value, str)
+
+    for key in dsk:
+        if key in seen:
+            continue
+
+        seen.add(key)
+
+        deps = dependencies[key]
+        dependents_key = dependents[key]
+
+        if len(deps) != 1 and len(dependents_key) != 1 or _check_data_node(dsk[key]):
+            result[key] = dsk[key]
+            continue
+
+        linear_chain = [dsk[key]]
+        top_key = key
+
+        # TODO: The old implementation doesn't fuse data nodes and getitem chains
+        # It claims that a data node is easier to serialize as a raw value
+
+        # Walk towards the leafs as long as the nodes have a single dependency
+        # and a single dependent, we can't fuse two nodes of an intermediate node
+        # is the source for 2 dependents
+        while len(deps) == 1:
+            (new_key,) = deps
+            seen.add(new_key)
+            if len(dependents[new_key]) != 1 or _check_data_node(dsk[new_key]):
+                result[new_key] = dsk[new_key]
+                break
+            linear_chain.insert(0, dsk[new_key])
+            deps = dependencies[new_key]
+
+        # Walk the tree towards the root as long as the nodes have a single dependent
+        # and a single dependency, we can't fuse two nodes if node has multiple
+        # dependencies
+        while len(dependents_key) == 1:
+            new_key = dependents_key.pop()
+            seen.add(new_key)
+            if len(dependencies[new_key]) != 1 or _check_data_node(dsk[new_key]):
+                result[new_key] = dsk[new_key]
+                break
+            linear_chain.append(dsk[new_key])
+            top_key = new_key
+            dependents_key = dependents[new_key]
+
+        if len(linear_chain) == 1:
+            result[top_key] = linear_chain[0]
+        else:
+            # Renaming the keys is necessary to preserve the rootish detection for now
+            renamed_key = default_fused_keys_renamer([tsk.key for tsk in linear_chain])
+            result[renamed_key] = Task.fuse(*linear_chain, key=renamed_key)
+            if renamed_key != top_key:
+                # Having the same prefixes can result in the same key, i.e. getitem-hash -> getitem-hash
+                result[top_key] = Alias(top_key, target=renamed_key)
+    return result

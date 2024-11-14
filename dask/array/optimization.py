@@ -8,12 +8,13 @@ from typing import Any
 import numpy as np
 
 from dask import config
+from dask._task_spec import convert_legacy_graph, fuse_linear_task_spec
 from dask.array.chunk import getitem
 from dask.array.core import getter, getter_inline, getter_nofancy
 from dask.blockwise import fuse_roots, optimize_blockwise
 from dask.core import flatten, reverse_dict
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import SubgraphCallable, fuse, inline_functions
+from dask.optimization import SubgraphCallable
 from dask.utils import ensure_dict
 
 # All get* functions the optimizations know about
@@ -55,28 +56,30 @@ def optimize(
     if config.get("optimization.fuse.active") is False:
         return dsk
 
-    dependencies = dsk.get_all_dependencies()
+    # dependencies = dsk.get_all_dependencies()
     dsk = ensure_dict(dsk)
 
-    # Low level task optimizations
-    if fast_functions is not None:
-        inline_functions_fast_functions = fast_functions
-
-    hold = hold_keys(dsk, dependencies)
-
-    dsk, dependencies = fuse(
-        dsk,
-        hold + keys + (fuse_keys or []),
-        dependencies,
-        rename_keys=rename_fused_keys,
-    )
-    if inline_functions_fast_functions:
-        dsk = inline_functions(
-            dsk,
-            keys,
-            dependencies=dependencies,
-            fast_functions=inline_functions_fast_functions,
-        )
+    dsk = convert_legacy_graph(dsk)
+    dsk = fuse_linear_task_spec(dsk)
+    # # Low level task optimizations
+    # if fast_functions is not None:
+    #     inline_functions_fast_functions = fast_functions
+    #
+    # hold = hold_keys(dsk, dependencies)
+    #
+    # dsk, dependencies = fuse(
+    #     dsk,
+    #     hold + keys + (fuse_keys or []),
+    #     dependencies,
+    #     rename_keys=rename_fused_keys,
+    # )
+    # if inline_functions_fast_functions:
+    #     dsk = inline_functions(
+    #         dsk,
+    #         keys,
+    #         dependencies=dependencies,
+    #         fast_functions=inline_functions_fast_functions,
+    #     )
 
     return optimize_slices(dsk)
 
