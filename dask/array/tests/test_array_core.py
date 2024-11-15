@@ -4076,7 +4076,7 @@ def test_setitem_extended_API_2d_rhs_func_of_lhs():
     dx = da.from_array(x, chunks=chunks)
     dx[3:5, 5:1:-2] = -dx[:2, 4:1:-2]
     x[3:5, 5:1:-2] = -x[:2, 4:1:-2]
-    assert_eq(x, dx.compute())  #
+    assert_eq(x, dx.compute())
 
     dx = da.from_array(x, chunks=chunks)
     dx[0, 1:3] = -dx[0, 4:2:-1]
