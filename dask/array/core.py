@@ -3622,6 +3622,9 @@ def from_array(
     if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
+    if is_arraylike(x) and hasattr(x, "copy"):
+        x = x.copy()
+
     if asarray is None:
         asarray = not hasattr(x, "__array_function__")
 
