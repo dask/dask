@@ -492,6 +492,22 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     )
 
     graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
+
+    import dask.dataframe as dd
+
+    if dd._dask_expr_enabled():
+        from dask_expr._collection import from_graph
+
+        from dask.utils import key_split
+
+        return from_graph(
+            graph,
+            meta,
+            divisions,
+            [(name, i) for i in range(len(divisions) - 1)],
+            key_split(name),
+        )
+
     return new_dd_object(graph, name, meta, divisions)
 
 
