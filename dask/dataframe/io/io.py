@@ -17,7 +17,6 @@ from dask.dataframe._compat import is_any_real_numeric_dtype
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import (
     DataFrame,
-    Index,
     Series,
     _concat,
     _emulate,
@@ -56,6 +55,8 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
         )
 
     if index is not None:
+        from dask.dataframe import Index
+
         if not isinstance(index, Index):
             raise ValueError("'index' must be an instance of dask.dataframe.Index")
         index = index._meta
