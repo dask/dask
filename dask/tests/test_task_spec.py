@@ -901,3 +901,11 @@ def test_subgraph_dont_hold_in_memory_too_long_legacy():
     converted = convert_legacy_graph(dsk)
     assert converted["bar"]()
     assert OnlyTwice.total == 10
+
+
+def test_taskref_equality():
+    first_ref = TaskRef("foo")
+    second_ref = TaskRef("foo")
+    assert first_ref == second_ref
+    third_ref = TaskRef("bar")
+    assert first_ref != third_ref
