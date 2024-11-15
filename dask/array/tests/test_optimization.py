@@ -400,7 +400,6 @@ def test_fuse_getter_with_asarray(chunks):
         isinstance(v, DataNode) and isinstance(v.value, np.ndarray)
         for v in dsk.values()
     )
-
     assert_eq(z, x + 1)
 
 
