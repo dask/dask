@@ -2579,7 +2579,8 @@ def test_from_array_ndarray_onechunk(x):
     dx = da.from_array(x, chunks=-1)
     assert_eq(x, dx)
     assert len(dx.dask) == 1
-    assert dx.dask[(dx.name,) + (0,) * dx.ndim] is x
+    assert not dx.dask[(dx.name,) + (0,) * dx.ndim] is x
+    assert_eq(dx.dask[(dx.name,) + (0,) * dx.ndim], x)
 
 
 def test_from_array_ndarray_getitem():
@@ -2706,7 +2707,8 @@ def test_from_array_inline():
 
     a = np.array([1, 2, 3]).view(MyArray)
     dsk = dict(da.from_array(a, name="my-array", inline_array=False).dask)
-    assert dsk["original-my-array"] is a
+    assert not dsk["original-my-array"] is a
+    assert_eq(dsk["original-my-array"], a)
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
     assert "original-my-array" not in dsk
@@ -4379,7 +4381,7 @@ def test_blockwise_with_numpy_arrays():
     assert_eq(x + y, x + x)
 
     s = da.sum(x)
-    assert any(x is v for v in s.dask.values())
+    assert any(isinstance(v, np.ndarray) for v in s.dask.values())
 
 
 @pytest.mark.parametrize("chunks", (100, 6))
@@ -5381,6 +5383,15 @@ def test_to_backend():
         # Moving to a "missing" backend should raise an error
         with pytest.raises(ValueError, match="No backend dispatch registered"):
             x.to_backend("missing")
+
+
+def test_from_array_copies():
+    x = np.arange(60).reshape((6, 10))
+    original_array = x.copy()
+    chunks = (2, 3)
+    dx = da.from_array(x, chunks=chunks)
+    x[2:4, x[0] > 3] = -5
+    assert_eq(original_array, dx)
 
 
 def test_load_store_chunk():
