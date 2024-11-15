@@ -14,7 +14,6 @@ from dask_expr import (
     DataFrame,
     from_array,
     from_dask_array,
-    from_dask_dataframe,
     from_dict,
     from_legacy_dataframe,
     from_map,
@@ -234,11 +233,6 @@ def test_from_legacy_dataframe(optimize):
     df = from_legacy_dataframe(ddf, optimize=optimize)
     assert isinstance(df.expr, Expr)
     assert_eq(df, ddf)
-
-    # Check deprecated API
-    with pytest.warns(FutureWarning, match="deprecated"):
-        df2 = from_dask_dataframe(ddf, optimize=optimize)
-        assert_eq(df, df2)
 
 
 @pytest.mark.parametrize("optimize", [True, False])
