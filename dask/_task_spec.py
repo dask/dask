@@ -368,11 +368,6 @@ class TaskRef:
     val: KeyType
     __slots__ = ("key",)
 
-    def __eq__(self, other):
-        if not isinstance(other, TaskRef):
-            return False
-        return self.key == other.key
-
     def __init__(self, key: KeyType):
         self.key = key
 
