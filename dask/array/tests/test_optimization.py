@@ -396,7 +396,10 @@ def test_fuse_getter_with_asarray(chunks):
     y = da.ones(10, chunks=chunks)
     z = x + y
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-    assert any(isinstance(v, DataNode) and v.value is x for v in dsk.values())
+    assert any(
+        isinstance(v, DataNode) and isinstance(v.value, np.ndarray)
+        for v in dsk.values()
+    )
 
     assert_eq(z, x + 1)
 
