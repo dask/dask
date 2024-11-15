@@ -792,6 +792,10 @@ def execute_graph(
 
 
 def fuse_linear_task_spec(dsk, keys):
+    """
+    keys are the keys from the graph that are requested by a computation. We
+    can't fuse those together.
+    """
     from dask.core import reverse_dict
     from dask.optimization import default_fused_keys_renamer
 
@@ -821,7 +825,7 @@ def fuse_linear_task_spec(dsk, keys):
         linear_chain = [dsk[key]]
         top_key = key
 
-        # TODO: The old implementation doesn't fuse data nodes and getitem chains
+        # TODO: The old implementation doesn't fuse data nodes
         # It claims that a data node is easier to serialize as a raw value
 
         # Walk towards the leafs as long as the nodes have a single dependency
@@ -839,6 +843,7 @@ def fuse_linear_task_spec(dsk, keys):
             ):
                 result[new_key] = dsk[new_key]
                 break
+            # backwards comp for new names, temporary until is_rootish is removed
             linear_chain.insert(0, dsk[new_key])
             deps = dependencies[new_key]
 
@@ -850,7 +855,8 @@ def fuse_linear_task_spec(dsk, keys):
             if new_key in seen:
                 break
             seen.add(new_key)
-            if len(dependencies[new_key]) != 1 or _check_data_node(dsk[new_key]):
+            if len(dependencies[new_key]) != 1:
+                # Exit if the dependent has multiple dependencies, triangle
                 result[new_key] = dsk[new_key]
                 break
             linear_chain.append(dsk[new_key])

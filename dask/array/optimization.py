@@ -48,7 +48,6 @@ def optimize(dsk, keys, **kwargs):
     if config.get("optimization.fuse.active") is False:
         return dsk
 
-    # dependencies = dsk.get_all_dependencies()
     dsk = ensure_dict(dsk)
 
     dsk = convert_legacy_graph(dsk)
