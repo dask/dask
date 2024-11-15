@@ -5020,23 +5020,6 @@ def from_dict(
     )
 
 
-def from_dask_dataframe(*args, **kwargs) -> FrameBase:
-    """Create a dask-expr collection from a legacy dask-dataframe collection
-
-    WARNING: This API is deprecated. Please use `from_legacy_dataframe`.
-
-    Parameters
-    ----------
-    optimize
-        Whether to optimize the graph before conversion.
-    """
-    warnings.warn(
-        "`from_dask_dataframe` is deprecated, please use `from_legacy_dataframe`.",
-        FutureWarning,
-    )
-    return from_legacy_dataframe(*args, **kwargs)
-
-
 def from_legacy_dataframe(ddf: _Frame, optimize: bool = True) -> FrameBase:
     """Create a dask-expr collection from a legacy dask-dataframe collection
 
