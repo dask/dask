@@ -836,6 +836,11 @@ def fuse_linear_task_spec(dsk, keys):
             if new_key in seen:
                 break
             seen.add(new_key)
+            if new_key not in dsk:
+                # This can happen if a future is in the graph, the dependency mapping
+                # adds the key that is referenced by the future as a dependency
+                # see test_futures_to_delayed_array
+                break
             if (
                 len(dependents[new_key]) != 1
                 or _check_data_node(dsk[new_key])
