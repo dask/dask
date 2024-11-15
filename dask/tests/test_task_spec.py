@@ -966,3 +966,23 @@ def test_linear_fusion_intermediate_branch():
     result = fuse_linear_task_spec(dsk, {"fourth"})
     assert "second-third" in result
     assert isinstance(result["fourth"], Task)
+
+
+def test_linear_fusion_two_branches():
+    tasks = [
+        left_one := DataNode("left_one", "a"),
+        left_two := Task("left_two", func, left_one.ref()),
+        right_one := DataNode("right_one", "a"),
+        right_two := Task("right_two", func, right_one.ref()),
+        middle := Task("middle", func, right_two.ref(), left_two.ref()),
+        third := Task("third", func, middle.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "left_one-left_two" in result
+    assert "right_one-right_two" in result
+    assert isinstance(result["right_two"], Alias)
+    assert isinstance(result["left_two"], Alias)
+    assert isinstance(result["fourth"], Alias)
+    assert isinstance(result["third-fourth"], Task)
