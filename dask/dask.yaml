@@ -42,6 +42,7 @@ optimization:
     max-depth-new-edges: null  # ave_width * 1.5
     subgraphs: null  # true for dask.dataframe, false for everything else
     rename-keys: true
+    delayed: false
 
 admin:
   traceback:
@@ -50,6 +51,7 @@ admin:
       - dask[\\\/](base|core|local|multiprocessing|optimization|threaded|utils)\.py
       - dask[\\\/]array[\\\/]core\.py
       - dask[\\\/]dataframe[\\\/](core|methods)\.py
+      - dask[\\\/]_task_spec\.py
       - distributed[\\\/](client|scheduler|utils|worker)\.py
       - tornado[\\\/]gen\.py
       - pandas[\\\/]core[\\\/]

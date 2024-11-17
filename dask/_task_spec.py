@@ -78,22 +78,12 @@ import itertools
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
-from contextlib import contextmanager
 from functools import partial
 from typing import Any, TypeVar, cast, overload
 
 from dask.sizeof import sizeof
 from dask.typing import Key as KeyType
-from dask.utils import is_namedtuple_instance
-
-try:
-    from distributed.collections import LRU
-except ImportError:
-
-    class LRU(dict):  # type: ignore[no-redef]
-        def __init__(self, *args, maxsize=None, **kwargs):
-            super().__init__(*args, **kwargs)
-
+from dask.utils import funcname, is_namedtuple_instance
 
 _T = TypeVar("_T")
 _T_GraphNode = TypeVar("_T_GraphNode", bound="GraphNode")
@@ -209,7 +199,7 @@ def _execute_subgraph(inner_dsk, outkey, inkeys, external_deps):
         final[k] = DataNode(None, v)
     for k, v in external_deps.items():
         final[k] = DataNode(None, v)
-    res = execute_graph(final)
+    res = execute_graph(final, keys=[outkey])
     return res[outkey]
 
 
@@ -217,7 +207,6 @@ def convert_legacy_task(
     k: KeyType | None,
     task: _T,
     all_keys: Container,
-    only_refs: bool,
 ) -> GraphNode | _T:
     global SubgraphType
     if SubgraphType is None:
@@ -239,7 +228,7 @@ def convert_legacy_task(
                 subgraph.dsk, set(subgraph.inkeys), all_keys
             )
             sub_dsk = subgraph.dsk
-            converted_graph = convert_legacy_graph(sub_dsk, all_keys_inner, only_refs)
+            converted_graph = convert_legacy_graph(sub_dsk, all_keys_inner)
             external_deps = (
                 _get_dependencies(converted_graph)
                 - set(converted_graph)
@@ -254,25 +243,21 @@ def convert_legacy_task(
                 converted_sub_dsk,
                 func.outkey,
                 {
-                    k: convert_legacy_task(None, target, all_keys, only_refs)
+                    k: convert_legacy_task(None, target, all_keys)
                     for k, target in zip(subgraph.inkeys, args)
                 },
                 {ext_dep: Alias(ext_dep) for ext_dep in external_deps},
             )
         else:
-            new_args = tuple(
-                convert_legacy_task(None, a, all_keys, only_refs) for a in args
-            )
-            if only_refs:
-                if any(isinstance(a, GraphNode) for a in new_args):
-                    return Task(k, identity, func, *new_args)
-                else:
-                    return DataNode(k, (func, *new_args))
+            new_args = tuple(convert_legacy_task(None, a, all_keys) for a in args)
             return Task(k, func, *new_args)
     try:
         if isinstance(task, (bytes, int, float, str, tuple)):
             if task in all_keys:
-                return Alias(task)
+                if k is None:
+                    return Alias(task)
+                else:
+                    return Alias(k, target=task)
     except TypeError:
         # Unhashable
         pass
@@ -282,14 +267,10 @@ def convert_legacy_task(
             return _wrap_namedtuple_task(
                 k,
                 task,
-                partial(
-                    convert_legacy_task, None, all_keys=all_keys, only_refs=only_refs
-                ),
+                partial(convert_legacy_task, None, all_keys=all_keys),
             )
         else:
-            parsed_args = tuple(
-                convert_legacy_task(None, t, all_keys, only_refs) for t in task
-            )
+            parsed_args = tuple(convert_legacy_task(None, t, all_keys) for t in task)
             if any(isinstance(a, GraphNode) for a in parsed_args):
                 return Task(
                     k, _identity_cast, *parsed_args, typ=DataNode(None, type(task))
@@ -298,29 +279,26 @@ def convert_legacy_task(
                 return cast(_T, type(task)(parsed_args))
     elif isinstance(task, dict):
         return _wrap_dict_in_task(
-            {
-                k: convert_legacy_task(k, v, all_keys, only_refs=True)
-                for k, v in task.items()
-            }
+            {k: convert_legacy_task(k, v, all_keys) for k, v in task.items()}
         )
 
     elif isinstance(task, TaskRef):
-        return Alias(task.key)
+        if k is None:
+            return Alias(task.key)
+        else:
+            return Alias(k, target=task.key)
     else:
         return task
 
 
-def convert_legacy_graph(
-    dsk: Mapping,
-    all_keys: Container | None = None,
-    only_refs: bool = False,
-):
+def convert_legacy_graph(dsk: Mapping, all_keys: Container | None = None):
     if not all_keys:
         all_keys = set(dsk)
     new_dsk = {}
     for k, arg in dsk.items():
-        t = convert_legacy_task(k, arg, all_keys, only_refs)
-        if not only_refs and isinstance(t, Alias) and t.key == k:
+        t = convert_legacy_task(k, arg, all_keys)
+        if isinstance(t, Alias) and isinstance(arg, TaskRef) and t.key == arg.key:
+            # This detects cycles?
             continue
         new_dsk[k] = t
     new_dsk2 = {
@@ -379,6 +357,8 @@ def resolve_aliases(dsk: dict, keys: set, dependents: dict) -> dict:
                 if isinstance(tnew, Alias):
                     work.append(k)
                     seen.discard(k)
+                else:
+                    work.extend(tnew.dependencies)
 
         work.extend(t.dependencies)
     return dsk
@@ -399,10 +379,6 @@ class TaskRef:
 
     def __hash__(self) -> int:
         return hash(self.key)
-
-
-_func_cache: MutableMapping = LRU(maxsize=1000)
-_func_cache_reverse: MutableMapping = LRU(maxsize=1000)
 
 
 class GraphNode:
@@ -433,12 +409,21 @@ class GraphNode:
     def __call__(self, values) -> Any:
         raise NotImplementedError("Not implemented")
 
+    def __eq__(self, value: object) -> bool:
+        if type(value) is not type(self):
+            return False
+        from dask.tokenize import tokenize
+
+        return tokenize(self) == tokenize(value)
+
     @property
     def is_coro(self) -> bool:
         return False
 
     def __sizeof__(self) -> int:
-        return sys.getsizeof(type(self)) + sizeof(self.key) + sizeof(self.dependencies)
+        return sum(
+            sizeof(getattr(self, sl)) for sl in type(self).__slots__
+        ) + sys.getsizeof(type(self))
 
 
 _no_deps: frozenset = frozenset()
@@ -463,9 +448,6 @@ class Alias(GraphNode):
     def copy(self):
         return Alias(self.key, self.target)
 
-    def __reduce__(self) -> str | tuple[Any, ...]:
-        return Alias, (self.key, self.target)
-
     def __call__(self, values=()):
         self._verify_values(values)
         return values[self.target.key]
@@ -483,14 +465,14 @@ class Alias(GraphNode):
             return self
 
     def __repr__(self):
-        return f"Alias(key={self.key}, target={self.target})"
+        return f"Alias({self.key}->{self.target})"
 
     def __eq__(self, value: object) -> bool:
         if not isinstance(value, Alias):
             return False
         if self.key != value.key:
             return False
-        if self.key != value.key:
+        if self.target != value.target:
             return False
         return True
 
@@ -520,23 +502,13 @@ class DataNode(GraphNode):
     def __repr__(self):
         return f"DataNode({self.key}, type={self.typ}, {self.value})"
 
+    def __reduce__(self):
+        return (DataNode, (self.key, self.value))
+
     def __dask_tokenize__(self):
         from dask.base import tokenize
 
         return (type(self).__name__, tokenize(self.value))
-
-    def __reduce__(self) -> str | tuple[Any, ...]:
-        return DataNode, (self.key, self.value)
-
-    def __eq__(self, value: object) -> bool:
-        if not isinstance(value, DataNode):
-            return False
-        if self.value != value.value:
-            return False
-        return True
-
-    def __sizeof__(self) -> int:
-        return super().__sizeof__() + sizeof(self.value) + sizeof(self.typ)
 
     def __iter__(self):
         return iter(self.value)
@@ -581,12 +553,12 @@ def _get_dependencies(obj: object) -> set | frozenset:
 
 
 class Task(GraphNode):
-    func: Callable | None
+    func: Callable
     args: tuple
     kwargs: dict
-    packed_func: None | bytes
     _token: str | None
     _is_coro: bool | None
+    _repr: str | None
 
     __slots__ = tuple(__annotations__)
 
@@ -600,7 +572,6 @@ class Task(GraphNode):
     ):
         self.key = key
         self.func = func
-        self.packed_func = None
         self.args = parse_input(args)
         self.kwargs = parse_input(kwargs)
         dependencies: set = set()
@@ -612,21 +583,17 @@ class Task(GraphNode):
             self._dependencies = _no_deps
         self._is_coro = None
         self._token = None
+        self._repr = None
 
     def copy(self):
-        self.unpack()
         return Task(self.key, self.func, *self.args, **self.kwargs)
 
     def __hash__(self):
         return hash(self._get_token())
 
-    def is_packed(self):
-        return self.packed_func is not None
-
     def _get_token(self) -> str:
         if self._token:
             return self._token
-        self.unpack()
         from dask.base import tokenize
 
         self._token = tokenize(
@@ -642,160 +609,56 @@ class Task(GraphNode):
     def __dask_tokenize__(self):
         return self._get_token()
 
-    def __sizeof__(self) -> int:
-        return (
-            super().__sizeof__()
-            + sizeof(self.func or self.packed_func)
-            + sizeof(self.args)
-            + sizeof(self.kwargs)
-        )
-
     def __repr__(self) -> str:
-        return f"Task({self.key!r})"
+        # When `Task` is deserialized the constructor will not run and
+        # `self._repr` is thus undefined.
+        if not hasattr(self, "_repr") or not self._repr:
+            head = funcname(self.func)
+            tail = ")"
+            label_size = 40
+            args = self.args
+            kwargs = self.kwargs
+            if args or kwargs:
+                label_size2 = int(
+                    (label_size - len(head) - len(tail) - len(str(self.key)))
+                    // (len(args) + len(kwargs))
+                )
+            if args:
+                if label_size2 > 5:
+                    args_repr = ", ".join(repr(t) for t in args)
+                else:
+                    args_repr = "..."
+            else:
+                args_repr = ""
+            if kwargs:
+                if label_size2 > 5:
+                    kwargs_repr = ", " + ", ".join(
+                        f"{k}={repr(v)}" for k, v in sorted(kwargs.items())
+                    )
+                else:
+                    kwargs_repr = ", ..."
+            else:
+                kwargs_repr = ""
+            self._repr = f"<Task {self.key!r} {head}({args_repr}{kwargs_repr}{tail}>"
+        return self._repr
 
     def __call__(self, values=()):
         self._verify_values(values)
-        try:
-            self.unpack()
-        except Exception as exc:
-            raise RuntimeError(
-                f"Exception occured during deserialization of function for task {self.key}"
-            ) from exc
-        assert self.func is not None
         new_argspec = _call_recursively(self.args, values)
         if self.kwargs:
             kwargs = _call_recursively(self.kwargs, values)
             return self.func(*new_argspec, **kwargs)
         return self.func(*new_argspec)
 
-    def pack(self):
-        # TODO: pack args and kwargs as well. Probably with a sizeof threshold
-        if self.is_packed():
-            return self
-        try:
-            from distributed.protocol.pickle import dumps
-        except ImportError:
-            from cloudpickle import dumps
-
-        try:
-            self.packed_func = _func_cache[self.func]
-            self.func = None
-            return self
-        except (KeyError, TypeError):
-            # We're not handling the below in this except to simplify traceback
-            # and cause
-            pass
-        try:
-            self.packed_func = dumps(self.func)
-        except Exception as exc:
-            raise RuntimeError(
-                f"Error during serialization of function of task {self.key}"
-            ) from exc
-        try:
-            _func_cache_reverse[self.packed_func], _func_cache[self.func] = (
-                self.func,
-                self.packed_func,
-            )
-        except TypeError:
-            pass
-        self.func = None
-        return self
-
-    def lazy_pack(self):
-        # TODO: This could dispatch to a TPE and de/serialize the arguments
-        # lazily such that pack only waits for the result. This way we can use
-        # spare CPU cycles and parallelize on multiple CPUs.
-        # Thread safety should not be an issue if we guarantee idempotency and
-        # that the non-lazy sync also uses this
-        # This may block the GIL pretty aggressively
-        raise NotImplementedError("Not implemented")
-
-    def lazy_unpack(self):
-        raise NotImplementedError("Not implemented")
-
     def inline(self, dsk) -> Task:
-        self.unpack()
         new_args = _inline_recursively(self.args, dsk)
         new_kwargs = _inline_recursively(self.kwargs, dsk)
         assert self.func is not None
         return Task(self.key, self.func, *new_args, **new_kwargs)
 
-    def unpack(self):
-        if not self.is_packed():
-            return
-        assert self.packed_func is not None
-
-        try:
-            from distributed.protocol.pickle import loads
-        except ImportError:
-            from cloudpickle import loads
-        try:
-            self.func = _func_cache_reverse[self.packed_func]
-            self.packed_func = None
-            return self
-        except KeyError:
-            # We're not handling the below in this except to simplify traceback
-            # and cause
-            pass
-        try:
-            self.func = loads(self.packed_func)
-        except Exception as exc:
-            raise RuntimeError(
-                f"Error during deserialization of function of task {self.key}"
-            ) from exc
-        try:
-            _func_cache_reverse[self.packed_func], _func_cache[self.func] = (
-                self.func,
-                self.packed_func,
-            )
-        except TypeError:
-            pass
-        self.packed_func = None
-        return self
-
-    def __getstate__(self):
-        self.pack()
-        return {
-            "key": self.key,
-            "packed_func": self.packed_func,
-            "dependencies": self.dependencies,
-            "kwargs": self.kwargs,
-            "args": self.args,
-            "_is_coro": self._is_coro,
-            "_token": self._token,
-        }
-
-    def __setstate__(self, state):
-        self.key = state["key"]
-        self.packed_func = state["packed_func"]
-        self._dependencies = state["dependencies"]
-        self.kwargs = state["kwargs"]
-        self.args = state["args"]
-        self._is_coro = state["_is_coro"]
-        self._token = state["_token"]
-        self.func = None
-
-    def __eq__(self, value: object) -> bool:
-        if not isinstance(value, Task):
-            return False
-        if self.key != value.key:
-            return False
-        if self.packed_func != value.packed_func:
-            return False
-        if self.func != value.func:
-            return False
-        if self.dependencies != value.dependencies:
-            return False
-        if self.kwargs != value.kwargs:
-            return False
-        if self.args != value.args:
-            return False
-        return True
-
     @property
     def is_coro(self):
         if self._is_coro is None:
-            self.unpack()
             # Note: Can't use cached_property on objects without __dict__
             try:
                 from distributed.utils import iscoroutinefunction
@@ -805,30 +668,63 @@ class Task(GraphNode):
                 self._is_coro = False
         return self._is_coro
 
+    @staticmethod
+    def fuse(*tasks: Task, key: KeyType | None = None) -> Task:
+        leafs = set()
+        all_keys = set()
+        all_deps: set[KeyType] = set()
+        for t in tasks:
+            all_deps.update(t.dependencies)
+            all_keys.add(t.key)
+        external_deps = all_deps - all_keys
+        leafs = all_keys - all_deps
+        if len(leafs) > 1:
+            raise ValueError("Cannot fuse tasks with multiple outputs")
+
+        outkey = leafs.pop()
+
+        return Task(
+            key or outkey,
+            _execute_subgraph,
+            DataNode(None, {t.key: t for t in tasks}),
+            outkey,
+            {k: Alias(k) for k in external_deps},
+            {},
+        )
+
 
 class DependenciesMapping(MutableMapping):
     def __init__(self, dsk):
         self.dsk = dsk
         self._removed = set()
+        # Set a copy of dsk to avoid dct resizing
+        self._cache = dsk.copy()
+        self._cache.clear()
 
     def __getitem__(self, key):
-        v = self.dsk[key]
-        if not isinstance(v, GraphNode):
-            from dask.core import get_dependencies
-
-            deps = get_dependencies(self.dsk, task=self.dsk[key])
+        if (val := self._cache.get(key)) is not None:
+            return val
         else:
-            deps = self.dsk[key].dependencies
-        if self._removed:
-            # deps is a frozenset but for good measure, let's not use -= since
-            # that _may_ perform an inplace mutation
-            deps = deps - self._removed
-        return deps
+            v = self.dsk[key]
+            try:
+                deps = v.dependencies
+            except AttributeError:
+                from dask.core import get_dependencies
+
+                deps = get_dependencies(self.dsk, task=v)
+
+            if self._removed:
+                # deps is a frozenset but for good measure, let's not use -= since
+                # that _may_ perform an inplace mutation
+                deps = deps - self._removed
+            self._cache[key] = deps
+            return deps
 
     def __iter__(self):
         return iter(self.dsk)
 
     def __delitem__(self, key: Any) -> None:
+        self._cache.clear()
         self._removed.add(key)
 
     def __setitem__(self, key: Any, value: Any) -> None:
@@ -855,35 +751,33 @@ class _DevNullMapping(MutableMapping):
         return iter(())
 
 
-@contextmanager
-def no_function_cache():
-    """Everything in this context will ignore the function cache on both
-    serialization and deserialization.
+def execute_graph(
+    dsk: Iterable[GraphNode] | Mapping[KeyType, GraphNode],
+    cache: MutableMapping[KeyType, object] | None = None,
+    keys: Container[KeyType] | None = None,
+) -> MutableMapping[KeyType, object]:
+    """Execute a given graph.
 
-    This is not threadsafe!
+    The graph is exceuted in topological order as defined by dask.order until
+    all leaf nodes, i.e. nodes without any dependents, are reached. The returned
+    dictionary contains the results of the leaf nodes.
+
+    If keys are required that are not part of the graph, they can be provided in the `cache` argument.
+
+    If `keys` is provided, the result will contain only values that are part of the `keys` set.
+
     """
-    global _func_cache, _func_cache_reverse
-    cache_before = _func_cache, _func_cache_reverse
-    _func_cache, _func_cache_reverse = _DevNullMapping(), _DevNullMapping()
-    try:
-        yield
-    finally:
-        _func_cache, _func_cache_reverse = cache_before
-
-
-def execute_graph(dsk: list[GraphNode] | dict[KeyType, GraphNode]) -> dict:
     if isinstance(dsk, (list, tuple, set, frozenset)):
         dsk = {t.key: t for t in dsk}
     else:
         assert isinstance(dsk, dict)
-    dependencies = dict(DependenciesMapping(dsk))
 
     refcount: defaultdict[KeyType, int] = defaultdict(int)
-    for vals in dependencies.values():
+    for vals in DependenciesMapping(dsk).values():
         for val in vals:
             refcount[val] += 1
 
-    cache: dict[KeyType, object] = {}
+    cache = cache or {}
     from dask.order import order
 
     priorities = order(dsk)
@@ -892,7 +786,7 @@ def execute_graph(dsk: list[GraphNode] | dict[KeyType, GraphNode]) -> dict:
         cache[key] = node(cache)
         for dep in node.dependencies:
             refcount[dep] -= 1
-            if refcount[dep] == 0:
+            if refcount[dep] == 0 and keys and dep not in keys:
                 del cache[dep]
 
     return cache

@@ -915,3 +915,96 @@ def test_cumreduction_no_rechunk_on_1d_array():
     y = da.cumsum(x)
     no_rechunk = "rechunk" not in str(dict(y.__dask_graph__()))
     assert no_rechunk
+
+
+@pytest.mark.parametrize("axis", [3, 0, [1, 3]])
+@pytest.mark.parametrize("q", [0.75, [0.75], [0.75, 0.4]])
+@pytest.mark.parametrize("rechunk", [True, False])
+def test_nanquantile(rechunk, q, axis):
+    shape = 7, 10, 7, 10
+    arr = np.random.randn(*shape)
+    indexer = np.random.randint(0, 10, size=shape)
+    arr[indexer >= 8] = np.nan
+    arr[:, :, :, 1] = 1
+    arr[1, :, :, :] = 1
+
+    darr = da.from_array(arr, chunks=(2, 3, 4, (5 if rechunk else -1)))
+    assert_eq(da.nanquantile(darr, q, axis=axis), np.nanquantile(arr, q, axis=axis))
+    assert_eq(
+        da.nanquantile(darr, q, axis=axis, keepdims=True),
+        np.nanquantile(arr, q, axis=axis, keepdims=True),
+    )
+    assert_eq(
+        da.nanpercentile(darr, q * 100, axis=axis),
+        np.nanpercentile(arr, q * 100, axis=axis),
+    )
+    assert_eq(
+        da.nanpercentile(darr, q * 100, axis=axis, keepdims=True),
+        np.nanpercentile(arr, q * 100, axis=axis, keepdims=True),
+    )
+
+
+@pytest.mark.parametrize("axis", [3, [1, 3]])
+@pytest.mark.parametrize("q", [0.75, [0.75]])
+@pytest.mark.parametrize("rechunk", [True, False])
+def test_quantile(rechunk, q, axis):
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    indexer = np.random.randint(0, 10, size=shape)
+    arr[indexer >= 8] = np.nan
+
+    darr = da.from_array(arr, chunks=(2, 3, 4, (5 if rechunk else -1)))
+    assert_eq(da.quantile(darr, q, axis=axis), np.quantile(arr, q, axis=axis))
+    assert_eq(
+        da.quantile(darr, q, axis=axis, keepdims=True),
+        np.quantile(arr, q, axis=axis, keepdims=True),
+    )
+    assert_eq(da.percentile(darr, q, axis=axis), np.percentile(arr, q, axis=axis))
+    assert_eq(
+        da.percentile(darr, q, axis=axis, keepdims=True),
+        np.percentile(arr, q, axis=axis, keepdims=True),
+    )
+
+
+def test_nanquantile_all_nan():
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    arr[:] = np.nan
+    darr = da.from_array(arr, chunks=(2, 3, 4, -1))
+    da.nanquantile(darr, 0.75, axis=-1).compute()
+    with pytest.raises(RuntimeWarning):
+        assert_eq(
+            da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1)
+        )
+        assert_eq(da.percentile(darr, 0.75, axis=-1), np.percentile(arr, 0.75, axis=-1))
+
+
+def test_nanquantile_method():
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    indexer = np.random.randint(0, 10, size=shape)
+    arr[indexer >= 8] = np.nan
+    darr = da.from_array(arr, chunks=(2, 3, 4, -1))
+    assert_eq(
+        da.nanquantile(darr, 0.75, axis=-1, method="weibull"),
+        np.nanquantile(arr, 0.75, axis=-1, method="weibull"),
+    )
+    assert_eq(
+        da.nanpercentile(darr, 0.75, axis=-1, method="weibull"),
+        np.nanpercentile(arr, 0.75, axis=-1, method="weibull"),
+    )
+
+
+def test_nanquantile_one_dim():
+    arr = np.random.randn(10)
+    darr = da.from_array(arr, chunks=(2,))
+    assert_eq(da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1))
+
+
+def test_nanquantile_two_dims():
+    arr = np.random.randn(10, 10)
+    darr = da.from_array(arr, chunks=(2, -1))
+    assert_eq(da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1))
+    assert_eq(
+        da.nanpercentile(darr, 0.75, axis=-1), np.nanpercentile(arr, 0.75, axis=-1)
+    )

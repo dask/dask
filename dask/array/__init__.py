@@ -99,8 +99,8 @@ try:
     from dask.array.gufunc import apply_gufunc, as_gufunc, gufunc
     from dask.array.numpy_compat import moveaxis, rollaxis
     from dask.array.optimization import optimize
-    from dask.array.overlap import map_overlap
-    from dask.array.percentile import percentile
+    from dask.array.overlap import map_overlap, push
+    from dask.array.percentile import nanpercentile, percentile
     from dask.array.rechunk import rechunk
     from dask.array.reductions import (
         all,
@@ -124,10 +124,12 @@ try:
         nanmedian,
         nanmin,
         nanprod,
+        nanquantile,
         nanstd,
         nansum,
         nanvar,
         prod,
+        quantile,
         reduction,
         std,
         sum,

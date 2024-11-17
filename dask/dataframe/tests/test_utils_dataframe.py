@@ -410,10 +410,11 @@ def test_check_meta():
     # Series metadata error
     with pytest.raises(ValueError) as err:
         check_meta(d, meta.d.astype("f8"), numeric_equal=False)
+    series = "pandas.core.series.Series" if not PANDAS_GE_300 else "pandas.Series"
     assert str(err.value) == (
         "Metadata mismatch found.\n"
         "\n"
-        "Partition type: `pandas.core.series.Series`\n"
+        f"Partition type: `{series}`\n"
         "+----------+---------+\n"
         "|          | dtype   |\n"
         "+----------+---------+\n"
@@ -449,7 +450,7 @@ def test_check_meta():
     assert str(err.value) == (
         "Metadata mismatch found.\n"
         "\n"
-        "Partition type: `pandas.core.series.Series`\n"
+        f"Partition type: `{series}`\n"
         "+----------+--------+\n"
         "|          | dtype  |\n"
         "+----------+--------+\n"
