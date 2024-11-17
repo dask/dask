@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 import warnings
+from functools import reduce
 from numbers import Integral, Number
+from operator import mul
 
 import numpy as np
 from tlz import concat, get, partial
 from tlz.curried import map
 
+from dask._compatibility import import_optional_dependency
 from dask.array import chunk
-from dask.array.core import Array, concatenate, map_blocks, unify_chunks
-from dask.array.creation import empty_like, full_like
+from dask.array._shuffle import _calculate_new_chunksizes
+from dask.array.core import Array, broadcast_to, concatenate, map_blocks, unify_chunks
+from dask.array.creation import arange, empty_like, full_like, repeat
 from dask.array.numpy_compat import normalize_axis_tuple
+from dask.array.reductions import cumreduction
+from dask.array.routines import notnull, where
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayOverlapLayer
@@ -134,13 +140,15 @@ def trim_internal(x, axes, boundary=None):
     )
 
 
-def _trim(x, axes, boundary, block_info):
+def _trim(x, axes, boundary, _overlap_trim_info):
     """Similar to dask.array.chunk.trim but requires one to specify the
     boundary condition.
 
     ``axes``, and ``boundary`` are assumed to have been coerced.
 
     """
+    chunk_location = _overlap_trim_info[0]
+    num_chunks = _overlap_trim_info[1]
     axes = [axes.get(i, 0) for i in range(x.ndim)]
     axes_front = (ax[0] if isinstance(ax, tuple) else ax for ax in axes)
     axes_back = (
@@ -154,9 +162,7 @@ def _trim(x, axes, boundary, block_info):
 
     trim_front = (
         0 if (chunk_location == 0 and boundary.get(i, "none") == "none") else ax
-        for i, (chunk_location, ax) in enumerate(
-            zip(block_info[0]["chunk-location"], axes_front)
-        )
+        for i, (chunk_location, ax) in enumerate(zip(chunk_location, axes_front))
     )
     trim_back = (
         (
@@ -165,7 +171,7 @@ def _trim(x, axes, boundary, block_info):
             else ax
         )
         for i, (chunks, chunk_location, ax) in enumerate(
-            zip(block_info[0]["num-chunks"], block_info[0]["chunk-location"], axes_back)
+            zip(num_chunks, chunk_location, axes_back)
         )
     )
     ind = tuple(slice(front, back) for front, back in zip(trim_front, trim_back))
@@ -243,8 +249,8 @@ def nearest(x, axis, depth):
         + (slice(None, None, None),) * (x.ndim - axis - 1)
     )
 
-    l = concatenate([x[left]] * depth, axis=axis)
-    r = concatenate([x[right]] * depth, axis=axis)
+    l = repeat(x[left], depth, axis=axis)
+    r = repeat(x[right], depth, axis=axis)
 
     l, r = _remove_overlap_boundaries(l, r, axis, depth)
 
@@ -805,7 +811,7 @@ def coerce_boundary(ndim, boundary):
 
 
 @derived_from(np.lib.stride_tricks)
-def sliding_window_view(x, window_shape, axis=None):
+def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
     window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
 
     window_shape_array = np.array(window_shape)
@@ -836,10 +842,25 @@ def sliding_window_view(x, window_shape, axis=None):
 
     # Ensure that each chunk is big enough to leave at least a size-1 chunk
     # after windowing (this is only really necessary for the last chunk).
-    safe_chunks = tuple(
+    safe_chunks = list(
         ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, x.chunks)
     )
-    x = x.rechunk(safe_chunks)
+    if automatic_rechunk:
+        safe_chunks = [
+            s if d != 0 else c for d, c, s in zip(depths, x.chunks, safe_chunks)
+        ]
+        # safe chunks is our output chunks, so add the new dimensions
+        safe_chunks.extend([(w,) for w in window_shape])
+        max_chunk = reduce(mul, map(max, x.chunks))
+        new_chunks = _calculate_new_chunksizes(
+            x.chunks,
+            safe_chunks.copy(),
+            {i for i, d in enumerate(depths) if d == 0},
+            max_chunk,
+        )
+        x = x.rechunk(tuple(new_chunks))
+    else:
+        x = x.rechunk(tuple(safe_chunks))
 
     # result.shape = x_shape_trimmed + window_shape,
     # where x_shape_trimmed is x.shape with every entry
@@ -862,3 +883,53 @@ def sliding_window_view(x, window_shape, axis=None):
         window_shape=window_shape,
         axis=axis,
     )
+
+
+def push(array, n, axis):
+    """
+    Dask-version of bottleneck.push
+
+    .. note::
+
+        Requires bottleneck to be installed.
+    """
+    import_optional_dependency("bottleneck", min_version="1.3.7")
+
+    def _fill_with_last_one(a, b):
+        # cumreduction apply the push func over all the blocks first so, the only missing part is filling
+        # the missing values using the last data of the previous chunk
+        return np.where(~np.isnan(b), b, a)
+
+    if n is not None and 0 < n < array.shape[axis] - 1:
+        arr = broadcast_to(
+            arange(
+                array.shape[axis], chunks=array.chunks[axis], dtype=array.dtype
+            ).reshape(
+                tuple(size if i == axis else 1 for i, size in enumerate(array.shape))
+            ),
+            array.shape,
+            array.chunks,
+        )
+        valid_arange = where(notnull(array), arr, np.nan)
+        valid_limits = (arr - push(valid_arange, None, axis)) <= n
+        # omit the forward fill that violate the limit
+        return where(valid_limits, push(array, None, axis), np.nan)
+
+    # The method parameter makes that the tests for python 3.7 fails.
+    return cumreduction(
+        func=_push,
+        binop=_fill_with_last_one,
+        ident=np.nan,
+        x=array,
+        axis=axis,
+        dtype=array.dtype,
+    )
+
+
+def _push(array, n: int | None = None, axis: int = -1):
+    # work around for bottleneck 178
+    limit = n if n is not None else array.shape[axis]
+
+    import bottleneck as bn
+
+    return bn.push(array, limit, axis)

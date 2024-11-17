@@ -165,6 +165,8 @@ Top level functions
    nanmedian
    nanmin
    nanprod
+   nanquantile
+   nanpercentile
    nanstd
    nansum
    nanvar
@@ -179,12 +181,14 @@ Top level functions
    outer
    pad
    percentile
+   push
    ~core.PerformanceWarning
    piecewise
    positive
    power
    prod
    ptp
+   quantile
    rad2deg
    radians
    ravel

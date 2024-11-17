@@ -5,6 +5,195 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2024.11.2:
+
+2024.11.01
+----------
+
+.. note::
+  Versions 2024.11.0 and 2024.11.1 included a critical performance regression
+  and should be skipped by every user.
+
+Highlights
+^^^^^^^^^^
+
+Legacy Dask DataFrame Deprecated
+""""""""""""""""""""""""""""""""
+
+This release deprecates the legacy Dask DataFrame implementation. The old implementation will
+be removed completely in a future release. Users are encourage to switch to the new implementation
+now and to report any issues they are facing.
+
+Users are also encourage to check that they are only importing functions from ``dask.dataframe``
+and not any of the submodules.
+
+New quantile methods for Dask Array API
+"""""""""""""""""""""""""""""""""""""""
+
+Dask Array added new ``quantile`` and ``nanquantile`` methods.
+Previously, Dask dispatched to the NumPy implementation, which blocked the GIL
+a lot. This caused large slowdowns on workers with more than one tread and could lead
+to runtimes over 200s per chunk.
+
+The new ``quantile`` implementation avoids many of these problems and reduces runtime
+to around 1s per chunk independently of the number of threads.
+
+Consistent chunksize in Xarray rolling-construct
+""""""""""""""""""""""""""""""""""""""""""""""""
+
+Using Xarrays ``rolling(...).construct(...)`` with Dask Arrays led to very large
+chunksizes that rarely fit into memory on a single worker.
+
+The underlying operations is a view on the smaller NumPy array, but triggering
+a copy of the data will lead to very large memory usage.
+
+.. code-block::
+
+    import xarray as xr
+    import dask.array as da
+
+    arr = xr.DataArray(
+        da.ones((93504, 721, 1440), chunks=("auto", -1, -1)),
+        dims=["time", "lat", "longitude"],
+    )   # Initial chunks are ~128 MiB
+    arr.rolling(time=30).construct("window_dim")
+
+.. grid:: 2
+
+    .. grid-item:: **Previously**
+
+        Individual chunks are exploding to 10 GiB, likely causing out of memory errors.
+
+        .. image:: images/changelog/rolling-construct-exploding-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are exploding to 10 GiB, likely causing out of memory errors.
+
+    .. grid-item:: **Now**
+
+        Dask will now automatically split individual chunks into chunks that will have the
+        same chunksize minus a small tolerance.
+
+        .. image:: images/changelog/rolling-construct-constant-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are now roughly the same size
+
+
+
+Improved efficiency of map overlap
+""""""""""""""""""""""""""""""""""
+
+``map_overlap`` now creates smaller and more efficient graphs to keep task graphs
+generally a lot smaller.
+
+The previous version injected a lot of tasks that weren't necessary, increasing the
+number of tasks by a factor of 2-10x of what actually necessary. This caused a lot of
+stress on the scheduler.
+
+Consistent chunksizes for Einstein summation
+""""""""""""""""""""""""""""""""""""""""""""
+
+Einstein summation historically led to very large chunksizes if applied to more than
+one Dask Array. This behavior is inherited from NumPy but led to out of memory errors
+on workers:
+
+.. code-block::
+
+    import dask.array as da
+    arr = da.random.random((1024, 64, 64, 64, 64), chunks=(256, 16, 16, 16, 16)) # Initial chunks are 128 MiB
+    result = da.einsum("aijkl,amnop->ijklmnop", arr, arr)
+
+.. grid:: 2
+
+    .. grid-item:: **Previously**
+
+        Individual chunks are exploding to 32 GiB, very likely causing out of memory errors.
+
+        .. image:: images/changelog/einstein-exploding-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are exploding to 32 GiB, very likely causing out of memory errors
+
+    .. grid-item:: **Now**
+
+        The operation keeps individual chunksizes the same.
+
+        .. image:: images/changelog/einstein-constant-chunks.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are now roughly the same size
+
+.. dropdown:: Additional changes
+
+  - Add changelog for Dask release (:pr:`11502`) `Patrick Hoefler`_
+  - Minor updates to optional dependencies table (:pr:`11503`) `James Bourbeau`_
+  - Add ``push`` for ``ffill`` like operations (:pr:`11501`) `Patrick Hoefler`_
+  - Remove ``func`` packing for ``TaskSpec`` (:pr:`11496`) `Florian Jetter`_
+  - Make tokenization for ``vindex`` more efficient (:pr:`11493`) `Patrick Hoefler`_
+  - Cut down runtime of einstein summation test (:pr:`11499`) `Patrick Hoefler`_
+  - Improve test runtime for ``test_rot90`` (:pr:`11498`) `Florian Jetter`_
+  - Disable low level optimization for ``TaskSpec`` in Bags (:pr:`11495`) `Florian Jetter`_
+  - Add automatic rechunking to sliding-window-view (:pr:`11479`) `Patrick Hoefler`_
+  - Add ``load_stored`` kwarg to ``dask.array.store`` (:pr:`11465`) `Deepak Cherian`_
+  - Fix ``quantile`` error in two dimensions (:pr:`11489`) `Patrick Hoefler`_
+  - Bump ``conda-incubator/setup-miniconda`` from 3.0.4 to 3.1.0 (:pr:`11490`)
+  - Update ``map_blocks`` docstring (:pr:`11491`) `Patrick Hoefler`_
+  - Fix ``einsum`` with empty arrays (:pr:`11488`) `Patrick Hoefler`_
+  - Implement non gil-blocking ``quantile`` method (:pr:`11473`) `Patrick Hoefler`_
+  - Use internal keyword for trimming in ``map_overlap`` to reduce graph size (:pr:`11486`) `Patrick Hoefler`_
+  - Minor dask ``order`` refactor (:pr:`11467`) `Florian Jetter`_
+  - Remove empty tasks from ``map_overlap`` (:pr:`11483`) `Patrick Hoefler`_
+  - Fixup auto chunks calculation if single chunk goes below 1 (:pr:`11485`) `Patrick Hoefler`_
+  - Fix CI after pandas upstream changes (:pr:`11482`) `Patrick Hoefler`_
+  - Make sure that ``block_id`` and ``block_info`` don't create extra tasks (:pr:`11484`) `Patrick Hoefler`_
+  - Use repeat to build nearest boundary (:pr:`9666`) `Jean-Baptiste Bayle`_
+  - Remove dead code from ``make_blockwise`` (:pr:`11478`) `Florian Jetter`_
+  - Patch auto-chunks calculation for ``rioxarray`` (:pr:`11480`) `Patrick Hoefler`_
+  - Skip legacy test because of flaky warning (:pr:`11475`) `Patrick Hoefler`_
+  - Unskip a few ``dask-expr`` tests (:pr:`11474`) `Patrick Hoefler`_
+  - Keep chunk sizes consistent in ``einsum`` (:pr:`11464`) `Patrick Hoefler`_
+  - Improve how ``normalize_chunks`` squashes together chunks when "auto" is set (:pr:`11468`) `Patrick Hoefler`_
+  - Fix ``resolve_aliases`` when multiple aliases are in graph (:pr:`11469`) `Patrick Hoefler`_
+  - Avoid cyclic import in ``dask.array`` (:pr:`11472`) `Hendrik Makait`_
+  - Unskip dataframe test (:pr:`11471`) `Patrick Hoefler`_
+  - Improve ``dask.order`` performance for large graphs (:pr:`11466`) `Florian Jetter`_
+  - Ensure that ``slice(None)`` just maps the keys (:pr:`11450`) `Patrick Hoefler`_
+  - Fix ``Task.__repr__()`` of unpickled object (:pr:`11463`) `Peter Andreas Entschev`_
+  - Use ``TaskSpec`` in local dask execution (:pr:`11378`) `Florian Jetter`_
+  - Adjust accuracy in ``test_solve_triangular_vector`` (:pr:`11461`) `Florian Jetter`_
+  - Update Aggregation docstring (:pr:`11459`) `Guillaume Eynard-Bontemps`_
+  - Implement fuse option for ``delayed`` objects (:pr:`11441`) `Patrick Hoefler`_
+  - Deprecate legacy dask dataframe implementation (:pr:`11437`) `Patrick Hoefler`_
+  - Fix ``na`` casting behavior for ``groupby.agg`` with arrow dtypes (:pr:`11118`) `Patrick Hoefler`_
+  - Fix behavior of ``keys_in_tasks`` for ``TaskSpec`` nodes (:pr:`11445`) `Florian Jetter`_
+  - Convert dtype to int instead of np.uint8 for visualizing large task graphs (:pr:`11440`) `Patrick Hoefler`_
+  - Ensure dependencies are not mutated (:pr:`11438`) `Florian Jetter`_
+  - Full support for task spec in ``dask.order`` (:pr:`11347`) `Florian Jetter`_
+
+  - Remove redundant methods in ``P2PBarrierTask`` (:pr-distributed:`8924`) `Florian Jetter`_
+  - Fix ``skipif`` condition for ``test_tell_workers_when_peers_have_left`` (:pr-distributed:`8929`) `Florian Jetter`_
+  - Ensure ``ConnectionPool`` is closed even if network stack swallows ``CancelledErrors`` (:pr-distributed:`8928`) `Florian Jetter`_
+  - Fix flaky ``test_server_comms_mark_active_handlers`` (:pr-distributed:`8927`) `Florian Jetter`_
+  - Make assumption in P2P's barrier mechanism explicit (:pr-distributed:`8926`) `Hendrik Makait`_
+  - Adjust timeouts in Jupyter cli test (:pr-distributed:`8925`) `Florian Jetter`_
+  - Add ``stimulus_id`` to ``update_graph`` plugin hook (:pr-distributed:`8923`) `Hendrik Makait`_
+  - Reduce P2P transfer task overhead (:pr-distributed:`8912`) `Hendrik Makait`_
+  - Disable profiler on Python 3.11 (:pr-distributed:`8916`) `Florian Jetter`_
+  - Fix ``test_restarting_does_not_deadlock`` (:pr-distributed:`8849`) `Florian Jetter`_
+  - Adjust ``popen`` timeouts for testing (:pr-distributed:`8848`) `Florian Jetter`_
+  - Add retry to shuffle broadcast (:pr-distributed:`8900`) `Florian Jetter`_
+  - Fix ``test_shuffle_with_array_conversion`` (:pr-distributed:`8909`) `Florian Jetter`_
+  - Refactor some tests (:pr-distributed:`8908`) `Florian Jetter`_
+  - Graduate ``dask-expr`` from contrib to core project (:pr-distributed:`8911`) `Hendrik Makait`_
+  - Skip ``test_tell_workers_when_peers_have_left`` on py10 (:pr-distributed:`8910`) `Florian Jetter`_
+  - Internal cleanup of P2P code (:pr-distributed:`8907`) `Hendrik Makait`_
+  - Use ``Task`` class instead of tuple (:pr-distributed:`8797`) `Florian Jetter`_
+  - Increase connect timeout for ``test_tell_workers_when_peers_have_left`` (:pr-distributed:`8906`) `Florian Jetter`_
+  - Remove dispatching in ``TaskCollection`` (:pr-distributed:`8903`) `Florian Jetter`_
+  - Deduplicate requests to scheduler in P2P (:pr-distributed:`8899`) `Hendrik Makait`_
+  - Add configurations for rootish taskgroup threshold (:pr-distributed:`8898`) `Patrick Hoefler`_
+
 .. _v2024.10.0:
 
 2024.10.0
@@ -8880,3 +9069,4 @@ Other
 .. _`Dmitry Balabka`: https://github.com/dbalabka
 .. _`Martin Yeo`: https://github.com/trexfeathers
 .. _`Ilan Gold`: https://github.com/ilan-gold
+.. _`Jean-Baptiste Bayle`: https://github.com/j2bbayle

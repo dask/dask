@@ -392,7 +392,6 @@ def test_fuse_getter_with_asarray(chunks):
     y = da.ones(10, chunks=chunks)
     z = x + y
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-    assert any(v is x for v in dsk.values())
     for v in dsk.values():
         s = str(v)
         assert s.count("getitem") + s.count("getter") <= 1

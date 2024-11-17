@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import itertools
 import pickle
 import sys
 from collections import namedtuple
 
 import pytest
 
-import dask
 from dask._task_spec import (
     Alias,
     DataNode,
@@ -15,23 +15,13 @@ from dask._task_spec import (
     TaskRef,
     _get_dependencies,
     convert_legacy_graph,
-    convert_legacy_task,
     execute_graph,
-    no_function_cache,
     resolve_aliases,
 )
 from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
 from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
-
-
-@pytest.fixture(autouse=True)
-def clear_func_cache():
-    from dask._task_spec import _func_cache, _func_cache_reverse
-
-    _func_cache.clear()
-    _func_cache_reverse.clear()
 
 
 def identity(x):
@@ -60,6 +50,56 @@ def test_convert_legacy_dsk_skip_new():
     converted = convert_legacy_graph(dsk)
     assert converted["key-1"] is dsk["key-1"]
     assert converted == dsk
+
+
+def test_repr():
+    t = Task("key", func, "a", "b")
+    assert repr(t) == "<Task 'key' func('a', 'b')>"
+
+    t = Task("nested", func2, t, t.ref())
+    assert (
+        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
+    )
+
+    def long_function_name_longer_even_longer(a, b):
+        return a + b
+
+    t = Task("long", long_function_name_longer_even_longer, t, t.ref())
+    assert repr(t) == "<Task 'long' long_function_name_longer_even_longer(...)>"
+
+    def use_kwargs(a, kwarg=None):
+        return a + kwarg
+
+    t = Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value")
+    assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
+
+
+def long_function_name_longer_even_longer(a, b):
+    return a + b
+
+
+def use_kwargs(a, kwarg=None):
+    return a + kwarg
+
+
+def test_unpickled_repr():
+    t = pickle.loads(pickle.dumps(Task("key", func, "a", "b")))
+    assert repr(t) == "<Task 'key' func('a', 'b')>"
+
+    t = pickle.loads(pickle.dumps(Task("nested", func2, t, t.ref())))
+    assert (
+        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
+    )
+
+    t = pickle.loads(
+        pickle.dumps(Task("long", long_function_name_longer_even_longer, t, t.ref()))
+    )
+    assert repr(t) == "<Task 'long' long_function_name_longer_even_longer(...)>"
+
+    t = pickle.loads(
+        pickle.dumps(Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value"))
+    )
+    assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
 
 
 def _assert_dsk_conversion(new_dsk):
@@ -192,19 +232,12 @@ class SerializeOnlyOnce:
 
 
 def test_pickle():
-    f = SerializeOnlyOnce()
 
-    t1 = Task("key-1", f, "a", "b")
-    t2 = Task("key-2", f, "c", "d")
+    t1 = Task("key-1", func, "a", "b")
+    t2 = Task("key-2", func, "c", "d")
 
     rtt1 = pickle.loads(pickle.dumps(t1))
     rtt2 = pickle.loads(pickle.dumps(t2))
-    # packing is inplace. Not strictly necessary, but this way we avoid creating
-    # another py object
-    assert t1.is_packed()
-    assert t2.is_packed()
-    assert rtt1.is_packed()
-    assert rtt2.is_packed()
     assert t1 == rtt1
     assert t1.func == rtt1.func
     assert t1.func is rtt1.func
@@ -218,11 +251,7 @@ def test_tokenize():
     t2 = Task("key-1", func, "a", "b")
     assert tokenize(t) == tokenize(t2)
 
-    token_before = tokenize(t)
-    t.pack()
-    assert t.is_packed()
-    assert not t2.is_packed()
-    assert token_before == tokenize(t) == tokenize(t2)
+    tokenize(t)
 
     # Literals are often generated with random/anom names but that should not
     # impact hashing. Otherwise identical submits would end up with different
@@ -232,28 +261,22 @@ def test_tokenize():
     assert tokenize(l) == tokenize(l2)
 
 
+async def afunc(a, b):
+    return a + b
+
+
 def test_async_func():
     pytest.importorskip("distributed")
+
     from distributed.utils_test import gen_test
 
     @gen_test()
     async def _():
-        async def func(a, b):
-            return a + b
 
-        t = Task("key-1", func, "a", "b")
+        t = Task("key-1", afunc, "a", "b")
         assert t.is_coro
-        t.pack()
-        assert t.is_coro
-        t.unpack()
         assert await t() == "ab"
         assert await pickle.loads(pickle.dumps(t))() == "ab"
-
-        # Ensure that if the property is only accessed after packing, it is
-        # still correct
-        t = Task("key-1", func, "a", "b")
-        t.pack()
-        assert t.is_coro
 
     _()
 
@@ -289,43 +312,6 @@ def test_avoid_cycles():
     }
     new_dsk = convert_legacy_graph(dsk)
     assert not new_dsk
-
-
-def test_convert_tasks_only_ref_lowlevel():
-    t = convert_legacy_task(None, (func, "a", "b"), set(), only_refs=True)
-    assert t() == (func, "a", "b")
-
-    t = convert_legacy_task(None, (func, "a", "b"), {"a"}, only_refs=True)
-    assert t({"a": "c"}) == (func, "c", "b")
-
-
-def test_convert_task_only_ref():
-    # This is for support of legacy subgraphs
-    # We'll only want to insert pack/unpack dependencies but don't want to touch
-    # the task itself
-
-    def subgraph_func(dsk, key):
-        return dask.get(dsk, [key])[0]
-
-    dsk = {
-        "dep": "foo",
-        ("baz", 1): "baz",
-        "subgraph": (
-            subgraph_func,
-            {
-                "a": "dep",
-                "b": (func, "a", "bar"),
-                "c": (func, "a", ("baz", 1)),
-                "d": (func, "b", "c"),
-            },
-            "d",
-        ),
-    }
-    new_dsk = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(new_dsk)
-    assert new_dsk["subgraph"].dependencies == {"dep", ("baz", 1)}
-
-    assert new_dsk["subgraph"]({"dep": "foo", ("baz", 1): "baz"}) == "foo-bar-foo-baz"
 
 
 def test_runnable_as_kwarg():
@@ -613,6 +599,51 @@ def test_resolve_aliases():
     assert optimized == dsk
 
 
+def test_resolve_multiple_aliases():
+
+    tasks = [
+        Task("first", func, 10),
+        Alias("second", "first"),
+        Task("third", func, TaskRef("second")),
+        Alias("fourth", "third"),
+        Task("fifth", func, TaskRef("fourth")),
+    ]
+    dsk = {t.key: t for t in tasks}
+    assert len(dsk) == 5
+
+    optimized = resolve_aliases(dsk, {"fifth"}, reverse_dict(DependenciesMapping(dsk)))
+    assert len(optimized) == 3
+    expected = dsk["third"].copy()
+    expected.key = "fourth"
+    assert optimized["fourth"] == expected
+
+    expected = dsk["first"].copy()
+    expected.key = "second"
+    assert optimized["second"] == expected
+
+
+def test_convert_resolve():
+    dsk = {
+        "first": (func, 10),
+        "second": "first",
+        "third": (func, "second"),
+        "fourth": "third",
+        "fifth": (func, "fourth"),
+    }
+    dsk = convert_legacy_graph(dsk)
+    assert len(dsk) == 5
+
+    optimized = resolve_aliases(dsk, {"fifth"}, reverse_dict(DependenciesMapping(dsk)))
+    assert len(optimized) == 3
+    expected = dsk["third"].copy()
+    expected.key = "fourth"
+    assert optimized["fourth"] == expected
+
+    expected = dsk["first"].copy()
+    expected.key = "second"
+    assert optimized["second"] == expected
+
+
 def test_parse_nested():
     t = Task(
         "key",
@@ -639,41 +670,6 @@ class CountSerialization:
         return 1
 
 
-def test_no_function_cache():
-    func = CountSerialization()
-    t = Task("k", func)
-    assert t() == 1
-    assert CountSerialization.serialization == 0
-    assert CountSerialization.deserialization == 0
-    t.pack()
-    assert CountSerialization.serialization == 1
-    assert CountSerialization.deserialization == 0
-    # use cache already
-    t.unpack()
-    assert CountSerialization.serialization == 1
-    assert CountSerialization.deserialization == 0
-    t.pack().unpack().pack().unpack()
-    assert CountSerialization.serialization == 1
-    assert CountSerialization.deserialization == 0
-
-    with no_function_cache():
-        t.pack()
-        assert CountSerialization.serialization == 2
-        assert CountSerialization.deserialization == 0
-        t.unpack()
-        assert CountSerialization.serialization == 2
-        assert CountSerialization.deserialization == 1
-
-    # We'll use a new task object since the above no-cache rountrip replaced the
-    # func instance such that the pack will cache miss on the first attempt. If
-    # we use the same instance, we'll be fine
-    t = Task("k", func)
-    # The old cache is restored
-    t.pack().unpack().pack().unpack()
-    assert CountSerialization.serialization == 2
-    assert CountSerialization.deserialization == 1
-
-
 class RaiseOnSerialization:
     def __getstate__(self):
         raise ValueError("Nope")
@@ -691,20 +687,6 @@ class RaiseOnDeSerialization:
 
     def __call__(self):
         return 1
-
-
-def test_raise_runtimeerror_deserialization():
-    with no_function_cache():
-        t = Task("key", RaiseOnSerialization())
-        assert t() == 1
-        with pytest.raises(RuntimeError, match="key"):
-            t.pack()
-
-        t = Task("key", RaiseOnDeSerialization())
-        assert t() == 1
-        t.pack()
-        with pytest.raises(RuntimeError, match="key"):
-            t.unpack()
 
 
 # This is duplicated from distributed/utils_test.py
@@ -739,7 +721,7 @@ class SizeOf:
 
 def test_sizeof():
     t = Task("key", func, "a", "b")
-    assert sizeof(t) > sizeof(Task) + sizeof(list) + 2 * sizeof("a")
+    assert sizeof(t) >= sizeof(Task) + sizeof(func) + 2 * sizeof("a")
 
     t = Task("key", func, SizeOf(100_000))
     assert sizeof(t) > 100_000
@@ -754,7 +736,7 @@ def test_execute_tasks_in_graph():
         t3 := Task("key-3", func, "foo", "bar"),
         Task("key-4", func, t3.ref(), t2.ref()),
     ]
-    res = execute_graph(dsk)
+    res = execute_graph(dsk, keys=["key-4"])
     assert len(res) == 1
     assert res["key-4"] == "foo-bar-a-b=c"
 
@@ -795,3 +777,127 @@ def test_dependencies_mapping_doesnt_mutate_task():
     # The getitem is doing weird stuff and could mutate the task state
     deps[t2.key]
     assert t2.dependencies == {"key"}
+
+
+def test_fuse_tasks_key():
+    a = Task("key-1", func, "a", "b")
+    b = Task("key-2", func2, a.ref(), "d")
+    for t1, t2 in itertools.permutations((a, b)):
+        fused = Task.fuse(t2, t1)
+        assert fused.key == b.key
+
+        fused = Task.fuse(t2, t1, key="new-key")
+        assert fused.key == "new-key"
+
+
+def test_fuse_tasks():
+    a = Task("key-1", func, "a", "b")
+    b = Task("key-2", func2, a.ref(), "d")
+    c = Task("key-3", func3, b.ref(), "e")
+    for t1, t2, t3 in itertools.permutations((a, b, c)):
+        fused = Task.fuse(t3, t2, t1)
+        assert fused() == func3(func2(func("a", "b"), "d"), "e")
+        t1 = Task("key-1", func, TaskRef("dependency"), "b")
+        t2 = Task("key-2", func2, t1.ref(), "d")
+        t3 = Task("key-3", func3, t2.ref(), "e")
+        fused = Task.fuse(t3, t2, t1)
+        assert fused.dependencies == {"dependency"}
+        assert fused({"dependency": "dep"}) == func3(func2(func("dep", "b"), "d"), "e")
+
+
+def test_fuse_reject_multiple_outputs():
+    a = Task("key-1", func, "a", "b")
+    b = Task("key-2", func2, "a", "d")
+    for t1, t2 in itertools.permutations((a, b)):
+        with pytest.raises(ValueError, match="multiple outputs"):
+            Task.fuse(t1, t2)
+
+
+def test_fused_ensure_only_executed_once():
+    counter = []
+
+    def counter_func(a, b):
+        counter.append(None)
+        return func(a, b)
+
+    a = Task("key-1", counter_func, "a", "a")
+    b = Task("key-2", func2, a.ref(), "b")
+    c = Task("key-3", func2, a.ref(), "c")
+    d = Task("key-4", func, b.ref(), c.ref())
+    for perm in itertools.permutations([a, b, c, d]):
+        fused = Task.fuse(*perm)
+        counter.clear()
+        assert fused() == func(func2(func("a", "a"), "b"), func2(func("a", "a"), "c"))
+        assert len(counter) == 1
+
+
+def test_fused_dont_hold_in_memory_too_long():
+    tasks = []
+    prev = None
+
+    # If we execute a fused task we want to release objects as quickly as
+    # possible. If every task generates this object, we must at most hold two of
+    # them in memory
+    class OnlyTwice:
+        counter = 0
+        total = 0
+
+        def __init__(self):
+            OnlyTwice.counter += 1
+            OnlyTwice.total += 1
+            if OnlyTwice.counter > 2:
+                raise ValueError("Didn't release as expected")
+
+        def __del__(self):
+            OnlyTwice.counter -= 1
+
+    def generate_object(arg):
+        return OnlyTwice()
+
+    prev = None
+    for ix in range(10):
+        prev = t = Task(
+            f"key-{ix}", generate_object, prev.ref() if prev is not None else ix
+        )
+        tasks.append(t)
+    fuse = Task.fuse(*tasks)
+    assert fuse()
+    assert OnlyTwice.total == 10
+
+
+def test_subgraph_dont_hold_in_memory_too_long_legacy():
+    prev = None
+
+    # If we execute a fused task we want to release objects as quickly as
+    # possible. If every task generates this object, we must at most hold two of
+    # them in memory
+    class OnlyTwice:
+        counter = 0
+        total = 0
+
+        def __init__(self):
+            OnlyTwice.counter += 1
+            OnlyTwice.total += 1
+            if OnlyTwice.counter > 2:
+                raise ValueError("Didn't release as expected")
+
+        def __del__(self):
+            OnlyTwice.counter -= 1
+
+    def generate_object(arg):
+        return OnlyTwice()
+
+    prev = None
+    subgraph = {}
+    for ix in range(10):
+        subgraph[f"key-{ix}"] = (generate_object, prev if prev else "foo")
+        prev = f"key-{ix}"
+    subgraph_callable = SubgraphCallable(
+        subgraph,
+        "key-9",
+        (),
+    )
+    dsk = {"bar": (subgraph_callable,)}
+    converted = convert_legacy_graph(dsk)
+    assert converted["bar"]()
+    assert OnlyTwice.total == 10

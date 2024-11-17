@@ -11,6 +11,7 @@ from tlz import merge
 from dask.array.core import Array
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from
 
 
 @wraps(np.percentile)
@@ -107,7 +108,13 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
     numpy.percentile : Numpy's equivalent Percentile function
     """
     from dask.array.dispatch import percentile_lookup as _percentile
+    from dask.array.reductions import quantile
     from dask.array.utils import array_safe, meta_from_array
+
+    if a.ndim > 1:
+        q = np.true_divide(q, a.dtype.type(100) if a.dtype.kind == "f" else 100)
+
+        return quantile(a, q, method=method, **kwargs)
 
     allowed_internal_methods = ["default", "dask", "tdigest"]
 
@@ -309,3 +316,12 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
                 "'higher', 'midpoint', or 'nearest'"
             )
     return rv
+
+
+@derived_from(np)
+def nanpercentile(a, q, **kwargs):
+    from dask.array.reductions import nanquantile
+
+    q = np.true_divide(q, a.dtype.type(100) if a.dtype.kind == "f" else 100)
+
+    return nanquantile(a, q, **kwargs)

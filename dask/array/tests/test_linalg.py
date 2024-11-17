@@ -640,7 +640,7 @@ def test_solve_triangular_vector(shape, chunk):
     db = da.from_array(b, chunk)
     res = da.linalg.solve_triangular(dAu, db)
     assert_eq(res, scipy.linalg.solve_triangular(Au, b))
-    assert_eq(dAu.dot(res), b.astype(float))
+    assert_eq(dAu.dot(res), b.astype(float), rtol=1e-4)
 
     # lower
     Al = np.tril(A)

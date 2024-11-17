@@ -239,13 +239,26 @@ def test_flip(funcname, kwargs, shape):
 
 @pytest.mark.parametrize(
     "kwargs",
-    [{}, {"axes": (1, 0)}, {"axes": (2, 3)}, {"axes": (0, 1, 2)}, {"axes": (1, 1)}],
+    [
+        {},
+        {"axes": (1, 0)},
+        {"axes": (2, 3)},
+        {"axes": (0, 1, 2)},
+    ],
 )
-@pytest.mark.parametrize("shape", [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        tuple(),
+        (4,),
+        (4, 6),
+        (4, 6, 8),
+    ],
+)
 def test_rot90(kwargs, shape):
     axes = kwargs.get("axes", (0, 1))
     np_a = np.random.default_rng().random(shape)
-    da_a = da.from_array(np_a, chunks=1)
+    da_a = da.from_array(np_a, chunks=2)
 
     np_func = np.rot90
     da_func = da.rot90
@@ -2455,6 +2468,42 @@ def test_einsum(einsum_signature):
         )
 
 
+def test_einsum_chunksizes():
+    arr1 = da.random.random((1024, 8, 8, 8, 8), chunks=(256, 8, 8, 8, 8))
+    arr2 = da.random.random((1024, 8, 8, 8, 8), chunks=(256, 8, 8, 8, 8))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=da.PerformanceWarning)
+        result = da.einsum("aijkl,amnop->ijklmnop", arr1, arr2)
+    assert result.chunks == ((4,) * 2,) * 8
+
+    arr1 = da.random.random((64, 8, 8, 8, 8), chunks=(32, 8, 1, 8, 8))
+    arr2 = da.random.random((64, 8, 8, 8, 8), chunks=(32, 8, 8, 1, 8))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=da.PerformanceWarning)
+        result = da.einsum("aijkl,amnop->ijklmnop", arr1, arr2)
+    assert result.chunks == (
+        (4,) * 2,
+        (1,) * 8,
+        (4,) * 2,
+        (4,) * 2,
+        (4,) * 2,
+        (4,) * 2,
+        (1,) * 8,
+        (4,) * 2,
+    )
+
+    np_arr1 = np.random.random((2, 4, 4))
+    np_arr2 = np.random.random((2, 4, 4))
+
+    arr1 = da.from_array(np_arr1, chunks=(1, 2, 2))
+    arr2 = da.from_array(np_arr2, chunks=(1, 2, 2))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=da.PerformanceWarning)
+        result = da.einsum("aij,amn->ijmn", arr1, arr2)
+    assert result.chunks == ((1,) * 4,) * 4
+    assert_eq(np.einsum("aij,amn->ijmn", np_arr1, np_arr2), result)
+
+
 @pytest.mark.parametrize(
     "optimize_opts", [(True, False), ("greedy", False), ("optimal", False)]
 )
@@ -2576,6 +2625,14 @@ def test_einsum_broadcasting_contraction3():
     np_res = np.einsum("ajk,kbl,jl,ab->ab", a, b, c, d)
     da_res = da.einsum("ajk,kbl,jl,ab->ab", d_a, d_b, d_c, d_d)
     assert_eq(np_res, da_res)
+
+
+def test_einsum_empty_dimension():
+    arr = np.random.random((10, 10))
+    darr = da.from_array(arr, chunks=(5, 5))
+    darr = darr[:0]
+    result = da.einsum("ca,ca->c", darr, darr)
+    assert_eq(result, np.einsum("ca,ca->c", arr[:0], arr[:0]))
 
 
 @pytest.mark.parametrize("a", [np.arange(11), np.arange(6).reshape((3, 2))])

@@ -195,7 +195,9 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
             where_none[i] -= n
 
     # Pass down and do work
-    dsk, blockdims2 = slice_wrap_lists(out_name, in_name, blockdims, index2)
+    dsk, blockdims2 = slice_wrap_lists(
+        out_name, in_name, blockdims, index2, not where_none
+    )
 
     if where_none:
         expand = expander(where_none)
@@ -220,7 +222,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
         return dsk, blockdims2
 
 
-def slice_wrap_lists(out_name, in_name, blockdims, index):
+def slice_wrap_lists(out_name, in_name, blockdims, index, allow_getitem_optimization):
     """
     Fancy indexing along blocked array dasks
 
@@ -251,7 +253,9 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
 
     # No lists, hooray! just use slice_slices_and_integers
     if not where_list:
-        return slice_slices_and_integers(out_name, in_name, blockdims, index)
+        return slice_slices_and_integers(
+            out_name, in_name, blockdims, index, allow_getitem_optimization
+        )
 
     # Replace all lists with full slices  [3, 1, 0] -> slice(None, None, None)
     index_without_list = tuple(
@@ -269,7 +273,11 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
         # Do first pass without lists
         tmp = "slice-" + tokenize((out_name, in_name, blockdims, index))
         dsk, blockdims2 = slice_slices_and_integers(
-            tmp, in_name, blockdims, index_without_list
+            tmp,
+            in_name,
+            blockdims,
+            index_without_list,
+            allow_getitem_optimization=False,
         )
 
         # After collapsing some axes due to int indices, adjust axis parameter
@@ -285,7 +293,9 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     return dsk3, blockdims2
 
 
-def slice_slices_and_integers(out_name, in_name, blockdims, index):
+def slice_slices_and_integers(
+    out_name, in_name, blockdims, index, allow_getitem_optimization=False
+):
     """
     Dask array indexing with slices and integers
 
@@ -329,7 +339,12 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     all_slices = list(product(*[pluck(1, s) for s in sorted_block_slices]))
 
     dsk_out = {
-        out_name: (getitem, in_name, slices)
+        out_name: (
+            (getitem, in_name, slices)
+            if not allow_getitem_optimization
+            or not all(sl == slice(None, None, None) for sl in slices)
+            else in_name
+        )
         for out_name, in_name, slices in zip(out_names, in_names, all_slices)
     }
 

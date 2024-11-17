@@ -388,7 +388,7 @@ def test_zarr_distributed_with_explicit_directory_store(c, zarr):
         if Version(zarr.__version__) < Version("3.0.0.a0"):
             s = zarr.storage.DirectoryStore(d)
         else:
-            s = zarr.storage.LocalStore(d, mode="a")
+            s = zarr.storage.LocalStore(d, read_only=False)
         z = zarr.open_array(
             shape=a.shape,
             chunks=chunks,
@@ -411,7 +411,7 @@ def test_zarr_distributed_with_explicit_memory_store(c, zarr):
     if Version(zarr.__version__) < Version("3.0.0.a0"):
         s = zarr.storage.MemoryStore()
     else:
-        s = zarr.storage.MemoryStore(mode="a")
+        s = zarr.storage.MemoryStore(read_only=False)
     z = zarr.open_array(
         shape=a.shape,
         chunks=chunks,
@@ -546,8 +546,6 @@ def test_blockwise_array_creation(c, io, fuse):
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.xfail("doesn't work yet")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 
@@ -908,8 +906,6 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     # See https://github.com/dask/dask/issues/8773
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("we don't offer a public reduction")
 
     class SomeObject:
         def __init__(self, val):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import decimal
+import importlib
 import sys
 import warnings
 import weakref
@@ -539,7 +540,6 @@ def test_describe(include, exclude, percentiles, subset):
             assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="no longer supported")
 def test_describe_without_datetime_is_numeric():
     data = {
         "a": ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
@@ -1469,11 +1469,7 @@ def test_len():
     assert len(dd.from_pandas(pd.DataFrame(), npartitions=1)) == 0
     assert len(dd.from_pandas(pd.DataFrame(columns=[1, 2]), npartitions=1)) == 0
     # Regression test for https://github.com/dask/dask/issues/6110
-    if not DASK_EXPR_ENABLED:
-        assert (
-            len(dd.from_pandas(pd.DataFrame(columns=["foo", "foo"]), npartitions=1))
-            == 0
-        )
+    assert len(dd.from_pandas(pd.DataFrame(columns=["foo", "foo"]), npartitions=1)) == 0
 
 
 def test_size():
@@ -2189,7 +2185,6 @@ def test_series_round():
     assert_eq(s.round(), ps.round())
 
 
-# @pytest.mark.slow
 def test_repartition():
     def _check_split_data(orig, d):
         """Check data is split properly"""
@@ -3077,7 +3072,6 @@ def test_aca_split_every():
         )
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Not public")
 def test_reduction_method():
     df = pd.DataFrame({"x": range(50), "y": range(50, 100)})
     ddf = dd.from_pandas(df, npartitions=4)
@@ -3112,7 +3106,6 @@ def test_reduction_method():
     assert_eq(res, pd.DataFrame({"sum": df.sum(), "count": df.count()}))
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Not public")
 def test_reduction_method_split_every():
     df = pd.Series([1] * 60)
     ddf = dd.from_pandas(df, npartitions=15)
@@ -3145,7 +3138,8 @@ def test_reduction_method_split_every():
     r4 = f(4)
     assert r3._name != r4._name
     # Only intersect on reading operations
-    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
+    if not DASK_EXPR_ENABLED:
+        assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
 
     # Keywords are different for each step
     assert f(3).compute() == 60 + 15 + 7 * (2 + 1) + (3 + 2)
@@ -5286,7 +5280,6 @@ def test_bool():
             bool(cond)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="FIXME hanging - this is a bug")
 def test_cumulative_multiple_columns():
     # GH 3037
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
@@ -6358,3 +6351,22 @@ def test_dataframe_into_delayed():
     result = delayed(delayed_func)(df)
     assert sum(map(len, result.dask.layers.values())) == 6
     result.compute()
+
+
+@pytest.mark.filterwarnings(
+    "error:The legacy Dask DataFrame implementation is deprecated.*:FutureWarning"
+)
+def test_import_raises_warning():
+    import dask
+
+    try:
+        with dask.config.set({"dataframe.query-planning": False}):
+            with pytest.raises(FutureWarning, match="The legacy"):
+                importlib.reload(dask.dataframe)
+    finally:
+        if dask.config.get("dataframe.query-planning") is False:
+            # Build without dask-expr and config is False
+            with pytest.raises(FutureWarning, match="The legacy"):
+                importlib.reload(dask.dataframe)
+        else:
+            importlib.reload(dask.dataframe)
