@@ -145,7 +145,10 @@ def test_orc_aggregate_files_offset(orc_files):
 @pytest.mark.network
 def test_orc_names(orc_files, tmp_path):
     df = dd.read_orc(orc_files)
-    assert df._name.startswith("read-orc")
+    if dd._dask_expr_enabled():
+        assert df.expr.frame._name.startswith("_read_orc")
+    else:
+        assert df._name.startswith("read-orc")
     out = df.to_orc(tmp_path, compute=False)
     assert out._name.startswith("to-orc")
 

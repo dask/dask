@@ -17,7 +17,6 @@ from dask.dataframe._compat import is_any_real_numeric_dtype
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import (
     DataFrame,
-    Index,
     Series,
     _concat,
     _emulate,
@@ -56,6 +55,8 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
         )
 
     if index is not None:
+        from dask.dataframe import Index
+
         if not isinstance(index, Index):
             raise ValueError("'index' must be an instance of dask.dataframe.Index")
         index = index._meta
@@ -492,6 +493,22 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     )
 
     graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
+
+    import dask.dataframe as dd
+
+    if dd._dask_expr_enabled():
+        from dask_expr._collection import from_graph
+
+        from dask.utils import key_split
+
+        return from_graph(
+            graph,
+            meta,
+            divisions,
+            [(name, i) for i in range(len(divisions) - 1)],
+            key_split(name),
+        )
+
     return new_dd_object(graph, name, meta, divisions)
 
 
