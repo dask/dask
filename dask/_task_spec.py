@@ -40,26 +40,6 @@ Referencing other tasks is possible by using either one of `Alias` or a
     # If a task is still in scope, the method `ref` can be used for convenience
     t2 = Task("key2", func2, t.ref())
 
-Nested tasks and inlining
--------------------------
-
-Tasks can be nested in a dict or list. This is useful for expressing more complex tasks.
-
-.. code-block:: python
-
-    func(func2("a", "b"), "c") ~ Task("key", func, [Task("key-1", func2, "a", "b"), "c"])
-
-    {"a": func("b")} ~ {"a": Task("a", func, "b")}
-
-This kind of nesting is often a byproduct of an optimizer step that inlines the
-tasks explicitly. This is done by calling the `inline` method on a task.
-
-.. code-block:: python
-
-    t1 = Task("key-1", func, "a")
-    t2 = Task("key-2", func, TaskRef("key-1"))
-
-    t2.inline({"key-1": t1}) ~ Task("key-2", func, Task("key-1", func, "a"))
 
 Executing a task
 ----------------
@@ -79,7 +59,7 @@ import sys
 from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
 from functools import partial
-from typing import Any, TypeVar, cast, overload
+from typing import Any, TypeVar, cast
 
 from dask.sizeof import sizeof
 from dask.typing import Key as KeyType
@@ -99,18 +79,6 @@ def _identity_cast(*args, typ):
 
 
 _anom_count = itertools.count()
-
-
-@overload
-def parse_input(obj: _T_Iterable) -> _T_Iterable: ...
-
-
-@overload
-def parse_input(obj: TaskRef) -> Alias: ...
-
-
-@overload
-def parse_input(obj: _T_GraphNode) -> _T_GraphNode: ...
 
 
 def parse_input(obj: Any) -> object:
@@ -133,12 +101,16 @@ def parse_input(obj: Any) -> object:
     """
     if isinstance(obj, GraphNode):
         return obj
-    elif isinstance(obj, dict):
-        return {k: parse_input(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple, set, frozenset)):
+    if isinstance(obj, list):
+        return List(*(parse_input(o) for o in obj))
+    if isinstance(obj, set):
+        return Set(*(parse_input(o) for o in obj))
+    if isinstance(obj, tuple):
         if is_namedtuple_instance(obj):
             return _wrap_namedtuple_task(None, obj, parse_input)
-        return type(obj)(map(parse_input, obj))
+        return Tuple(*(parse_input(o) for o in obj))
+    if isinstance(obj, dict):
+        return Dict(**{k: parse_input(v) for k, v in obj.items()})  # type: ignore
 
     if isinstance(obj, TaskRef):
         return Alias(obj.key)
@@ -154,14 +126,14 @@ def _wrap_namedtuple_task(k, obj, parser):
         new_args = obj.__getnewargs__()
         kwargs = {}
 
-    args_converted = type(new_args)(map(parser, new_args))
+    args_converted = parse_input(type(new_args)(map(parser, new_args)))
 
     return Task(
-        k, partial(_instantiate_named_tuple, type(obj)), *args_converted, **kwargs
+        k, partial(_instantiate_named_tuple, type(obj)), args_converted, Dict(kwargs)
     )
 
 
-def _instantiate_named_tuple(typ, *args, **kwargs):
+def _instantiate_named_tuple(typ, args, kwargs):
     return typ(*args, **kwargs)
 
 
@@ -186,6 +158,8 @@ def _to_dict(*args: Any) -> dict:
 
 
 def _wrap_dict_in_task(d: dict) -> Task:
+    """Wrap a dictionary in a task such that all values will be properly
+    recognized as runnable tasks"""
     return Task(None, _to_dict, *d.values(), d.keys())
 
 
@@ -204,11 +178,12 @@ def _execute_subgraph(inner_dsk, outkey, inkeys, external_deps):
 
 
 def convert_legacy_task(
-    k: KeyType | None,
+    key: KeyType | None,
     task: _T,
     all_keys: Container,
 ) -> GraphNode | _T:
     global SubgraphType
+
     if SubgraphType is None:
         from dask.optimization import SubgraphCallable
 
@@ -218,9 +193,6 @@ def convert_legacy_task(
         return task
 
     if type(task) is tuple and task and callable(task[0]):
-        if k is None:
-            k = ("anom", next(_anom_count))
-
         func, args = task[0], task[1:]
         if isinstance(func, SubgraphType):
             subgraph = func
@@ -228,36 +200,64 @@ def convert_legacy_task(
                 subgraph.dsk, set(subgraph.inkeys), all_keys
             )
             sub_dsk = subgraph.dsk
-            converted_graph = convert_legacy_graph(sub_dsk, all_keys_inner)
-            external_deps = (
-                _get_dependencies(converted_graph)
-                - set(converted_graph)
-                - set(subgraph.inkeys)
-            )
+            deps: set[KeyType] = set()
+            converted_subgraph = convert_legacy_graph(sub_dsk, all_keys_inner)
+            for v in converted_subgraph.values():
+                if isinstance(v, GraphNode):
+                    deps.update(v.dependencies)
 
-            converted_sub_dsk = DataNode(None, converted_graph)
+            # There is an explicit and implicit way to provide dependencies /
+            # data to a SubgraphCallable. Since we're not recursing into any
+            # containers any more we'll have to provide those arguments in a
+            # more explicit way as a separate argument.
 
+            # The explicit way are arguments to the subgraph callable. Those can
+            # again be tasks.
+
+            explicit_inkeys = dict()
+            for k, target in zip(subgraph.inkeys, args):
+                explicit_inkeys[k] = t = convert_legacy_task(None, target, all_keys)
+                if isinstance(t, GraphNode):
+                    deps.update(t.dependencies)
+            explicit_inkeys_wrapped = Dict(explicit_inkeys)
+            deps.update(explicit_inkeys_wrapped.dependencies)
+
+            # The implicit way is when the tasks inside of the subgraph are
+            # referencing keys that are not part of the subgraph but are part of
+            # the outer graph.
+
+            deps -= set(subgraph.dsk)
+            deps -= set(subgraph.inkeys)
+
+            implicit_inkeys = dict()
+            for k in deps - explicit_inkeys_wrapped.dependencies:
+                assert k is not None
+                implicit_inkeys[k] = Alias(k)
             return Task(
-                k,
+                key,
                 _execute_subgraph,
-                converted_sub_dsk,
+                converted_subgraph,
                 func.outkey,
-                {
-                    k: convert_legacy_task(None, target, all_keys)
-                    for k, target in zip(subgraph.inkeys, args)
-                },
-                {ext_dep: Alias(ext_dep) for ext_dep in external_deps},
+                explicit_inkeys_wrapped,
+                Dict(implicit_inkeys),
             )
         else:
-            new_args = tuple(convert_legacy_task(None, a, all_keys) for a in args)
-            return Task(k, func, *new_args)
+            new_args = []
+            new: object
+            for a in args:
+                if isinstance(a, dict):
+                    new = Dict(a)
+                else:
+                    new = convert_legacy_task(None, a, all_keys)
+                new_args.append(new)
+            return Task(key, func, *new_args)
     try:
         if isinstance(task, (bytes, int, float, str, tuple)):
             if task in all_keys:
-                if k is None:
+                if key is None:
                     return Alias(task)
                 else:
-                    return Alias(k, target=task)
+                    return Alias(key, target=task)
     except TypeError:
         # Unhashable
         pass
@@ -265,40 +265,41 @@ def convert_legacy_task(
     if isinstance(task, (list, tuple, set, frozenset)):
         if is_namedtuple_instance(task):
             return _wrap_namedtuple_task(
-                k,
+                key,
                 task,
-                partial(convert_legacy_task, None, all_keys=all_keys),
+                partial(
+                    convert_legacy_task,
+                    None,
+                    all_keys=all_keys,
+                ),
             )
         else:
             parsed_args = tuple(convert_legacy_task(None, t, all_keys) for t in task)
             if any(isinstance(a, GraphNode) for a in parsed_args):
                 return Task(
-                    k, _identity_cast, *parsed_args, typ=DataNode(None, type(task))
+                    key, _identity_cast, *parsed_args, typ=DataNode(None, type(task))
                 )
             else:
                 return cast(_T, type(task)(parsed_args))
-    elif isinstance(task, dict):
-        return _wrap_dict_in_task(
-            {k: convert_legacy_task(k, v, all_keys) for k, v in task.items()}
-        )
-
     elif isinstance(task, TaskRef):
-        if k is None:
+        if key is None:
             return Alias(task.key)
         else:
-            return Alias(k, target=task.key)
+            return Alias(key, target=task.key)
     else:
         return task
 
 
-def convert_legacy_graph(dsk: Mapping, all_keys: Container | None = None):
-    if not all_keys:
+def convert_legacy_graph(
+    dsk: Mapping,
+    all_keys: Container | None = None,
+):
+    if all_keys is None:
         all_keys = set(dsk)
     new_dsk = {}
     for k, arg in dsk.items():
         t = convert_legacy_task(k, arg, all_keys)
-        if isinstance(t, Alias) and isinstance(arg, TaskRef) and t.key == arg.key:
-            # This detects cycles?
+        if isinstance(t, Alias) and t.target.key == k:
             continue
         new_dsk[k] = t
     new_dsk2 = {
@@ -380,6 +381,11 @@ class TaskRef:
     def __hash__(self) -> int:
         return hash(self.key)
 
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, TaskRef):
+            return False
+        return self.key == value.key
+
 
 class GraphNode:
     key: KeyType
@@ -402,9 +408,6 @@ class GraphNode:
             return
         if missing := set(self.dependencies) - set(values):
             raise RuntimeError(f"Not enough arguments provided: missing keys {missing}")
-
-    def inline(self, dsk) -> GraphNode:
-        raise NotImplementedError("Not implemented")
 
     def __call__(self, values) -> Any:
         raise NotImplementedError("Not implemented")
@@ -443,7 +446,7 @@ class Alias(GraphNode):
         if not isinstance(target, TaskRef):
             target = TaskRef(target)
         self.target = target
-        self._dependencies = frozenset([target.key])
+        self._dependencies = frozenset((target.key,))
 
     def copy(self):
         return Alias(self.key, self.target)
@@ -451,18 +454,6 @@ class Alias(GraphNode):
     def __call__(self, values=()):
         self._verify_values(values)
         return values[self.target.key]
-
-    def inline(self, dsk) -> GraphNode:
-        if self.key in dsk:
-            # This can otherwise cause recursion errors
-            new_dsk = dsk.copy()
-            new_dsk.pop(self.key)
-            if isinstance(dsk[self.key], GraphNode):
-                return dsk[self.key].inline(new_dsk)
-            else:
-                return dsk[self.key]
-        else:
-            return self
 
     def __repr__(self):
         return f"Alias({self.key}->{self.target})"
@@ -490,9 +481,6 @@ class DataNode(GraphNode):
         self.typ = type(value)
         self._dependencies = _no_deps
 
-    def inline(self, dsk) -> DataNode:
-        return self
-
     def copy(self):
         return DataNode(self.key, self.value)
 
@@ -512,20 +500,6 @@ class DataNode(GraphNode):
 
     def __iter__(self):
         return iter(self.value)
-
-
-def _inline_recursively(obj, values, seen=None):
-    seen = seen or set()
-    if id(obj) in seen:
-        return obj
-    seen.add(id(obj))
-    if isinstance(obj, GraphNode):
-        return obj.inline(values)
-    elif isinstance(obj, dict):
-        return {k: _inline_recursively(v, values, seen=seen) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple, frozenset, set)):
-        return type(obj)(_inline_recursively(v, values, seen=seen) for v in obj)
-    return obj
 
 
 def _call_recursively(obj, values):
@@ -568,17 +542,24 @@ class Task(GraphNode):
         func: Callable,
         /,
         *args: Any,
+        _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
         self.key = key
         self.func = func
-        self.args = parse_input(args)
-        self.kwargs = parse_input(kwargs)
-        dependencies: set = set()
-        dependencies.update(_get_dependencies(self.args))
-        dependencies.update(_get_dependencies(tuple(self.kwargs.values())))
-        if dependencies:
-            self._dependencies = frozenset(dependencies)
+        self.args = tuple(
+            Alias(obj.key) if isinstance(obj, TaskRef) else obj for obj in args
+        )
+        self.kwargs = {
+            k: Alias(v.key) if isinstance(v, TaskRef) else v for k, v in kwargs.items()
+        }
+        if _dependencies is None:
+            _dependencies = set()
+            for a in itertools.chain(self.args, self.kwargs.values()):
+                if isinstance(a, GraphNode):
+                    _dependencies.update(a.dependencies)
+        if _dependencies:
+            self._dependencies = frozenset(_dependencies)
         else:
             self._dependencies = _no_deps
         self._is_coro = None
@@ -586,7 +567,13 @@ class Task(GraphNode):
         self._repr = None
 
     def copy(self):
-        return Task(self.key, self.func, *self.args, **self.kwargs)
+        return type(self)(
+            self.key,
+            self.func,
+            *self.args,
+            _dependencies=self._dependencies,
+            **self.kwargs,
+        )
 
     def __hash__(self):
         return hash(self._get_token())
@@ -644,17 +631,16 @@ class Task(GraphNode):
 
     def __call__(self, values=()):
         self._verify_values(values)
-        new_argspec = _call_recursively(self.args, values)
+        new_argspec = tuple(
+            a(values) if isinstance(a, GraphNode) else a for a in self.args
+        )
         if self.kwargs:
-            kwargs = _call_recursively(self.kwargs, values)
+            kwargs = {
+                k: kw(values) if isinstance(kw, GraphNode) else kw
+                for k, kw in self.kwargs.items()
+            }
             return self.func(*new_argspec, **kwargs)
         return self.func(*new_argspec)
-
-    def inline(self, dsk) -> Task:
-        new_args = _inline_recursively(self.args, dsk)
-        new_kwargs = _inline_recursively(self.kwargs, dsk)
-        assert self.func is not None
-        return Task(self.key, self.func, *new_args, **new_kwargs)
 
     @property
     def is_coro(self):
@@ -686,10 +672,63 @@ class Task(GraphNode):
         return Task(
             key or outkey,
             _execute_subgraph,
-            DataNode(None, {t.key: t for t in tasks}),
+            {t.key: t for t in tasks},
             outkey,
-            {k: Alias(k) for k in external_deps},
+            Dict({k: Alias(k) for k in external_deps}),
             {},
+        )
+
+
+class NestedContainer(Task):
+    klass: type
+    __slots__ = tuple(__annotations__)
+
+    def __init__(
+        self,
+        /,
+        *args: Any,
+        _dependencies: set | frozenset | None = None,
+        **kwargs: Any,
+    ):
+        super().__init__(
+            None,
+            self.to_container,
+            *args,
+            _dependencies=_dependencies,
+            **kwargs,
+        )
+
+    @classmethod
+    def to_container(cls, *args, **kwargs):
+        return cls.klass(args)
+
+
+class List(NestedContainer):
+    klass = list
+
+
+class Tuple(NestedContainer):
+    klass = tuple
+
+
+class Set(NestedContainer):
+    klass = set
+
+
+class Dict(NestedContainer):
+    klass = dict
+
+    def __init__(
+        self, /, *args: Any, _dependencies: set | frozenset | None = None, **kwargs: Any
+    ):
+        if args:
+            if len(args) > 1:
+                raise ValueError("Dict can only take one positional argument")
+            kwargs = args[0]
+        elif not kwargs:
+            raise ValueError("Dict needs at least one argument")
+        super().__init__(
+            *(Tuple(*it) for it in kwargs.items()), _dependencies=_dependencies
         )
 
 
