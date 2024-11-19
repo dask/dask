@@ -109,7 +109,7 @@ jobs:
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
 
       # The environment file is created in continuous_integration/scripts/install.sh
       # and can be useful when debugging locally
