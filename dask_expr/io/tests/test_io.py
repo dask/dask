@@ -230,7 +230,8 @@ def test_parquet_complex_filters(tmpdir):
 @pytest.mark.parametrize("optimize", [True, False])
 def test_from_legacy_dataframe(optimize):
     ddf = dd.from_dict({"a": range(100)}, npartitions=10)
-    df = from_legacy_dataframe(ddf, optimize=optimize)
+    with pytest.warns(FutureWarning, match="is deprecated"):
+        df = from_legacy_dataframe(ddf, optimize=optimize)
     assert isinstance(df.expr, Expr)
     assert_eq(df, ddf)
 
@@ -239,14 +240,10 @@ def test_from_legacy_dataframe(optimize):
 def test_to_legacy_dataframe(optimize):
     pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
     df = from_pandas(pdf, npartitions=2)
-    ddf = df.to_legacy_dataframe(optimize=optimize)
+    with pytest.warns(FutureWarning, match="is deprecated"):
+        ddf = df.to_legacy_dataframe(optimize=optimize)
     assert isinstance(ddf, dd.core.DataFrame)
     assert_eq(df, ddf)
-
-    # Check deprecated API
-    with pytest.warns(FutureWarning, match="deprecated"):
-        ddf2 = df.to_dask_dataframe(optimize=optimize)
-        assert_eq(ddf, ddf2)
 
 
 @pytest.mark.parametrize("optimize", [True, False])
@@ -464,3 +461,41 @@ def test_normalize_token_parquet_filemetadata_and_schema(tmpdir, normalizer):
         obj = meta.schema
 
     assert normalizer(obj) == normalizer(obj)
+
+
+@pytest.mark.parametrize("lengths", [[2, 2], True])
+def test_to_records_with_lengths(lengths):
+    pytest.importorskip("dask.array")
+    from dask.array.utils import assert_eq
+
+    df = pd.DataFrame(
+        {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
+        index=pd.Index([1.0, 2.0, 3.0, 4.0], name="ind"),
+    )
+    ddf = dd.from_pandas(df, 2)
+
+    result = ddf.to_records(lengths=lengths)
+    assert_eq(df.to_records(), result, check_type=False)  # TODO: make check_type pass
+
+    assert isinstance(result, da.Array)
+
+    expected_chunks = ((2, 2),)
+
+    assert result.chunks == expected_chunks
+
+
+def test_to_bag():
+    a = pd.DataFrame(
+        {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
+        index=pd.Index([1.0, 2.0, 3.0, 4.0], name="ind"),
+    )
+    ddf = dd.from_pandas(a, 2)
+
+    assert ddf.to_bag().compute() == list(a.itertuples(False))
+    assert ddf.to_bag(True).compute() == list(a.itertuples(True))
+    assert ddf.to_bag(format="dict").compute() == [
+        {"x": "a", "y": 2},
+        {"x": "b", "y": 3},
+        {"x": "c", "y": 4},
+        {"x": "d", "y": 5},
+    ]

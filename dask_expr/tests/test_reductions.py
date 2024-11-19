@@ -146,10 +146,10 @@ def test_dataframe_split_every(pdf, df, split_every, expect_tasks, reduction):
 
 
 @pytest.mark.parametrize(
-    "split_every,expect_tasks", [(False, 53), (None, 57), (5, 57), (2, 73)]
+    "split_every, expect_tasks", [(False, 53), (None, 57), (5, 57), (2, 73)]
 )
 def test_dataframe_mode_split_every(pdf, df, split_every, expect_tasks):
-    assert_eq(df.to_legacy_dataframe().mode(split_every=split_every), pdf.mode())
+    assert_eq(df.mode(split_every=split_every), pdf.mode())
     q = df.mode(split_every=split_every).optimize(fuse=False)
     assert len(q.__dask_graph__()) == expect_tasks
 

@@ -1,6 +1,3 @@
-from dask_expr import from_legacy_dataframe
-
-
 def read_hdf(
     pattern,
     key,
@@ -14,7 +11,7 @@ def read_hdf(
 ):
     from dask.dataframe.io import read_hdf as _read_hdf
 
-    df = _read_hdf(
+    return _read_hdf(
         pattern,
         key,
         start=start,
@@ -25,7 +22,6 @@ def read_hdf(
         lock=lock,
         mode=mode,
     )
-    return from_legacy_dataframe(df)
 
 
 def to_hdf(
@@ -130,7 +126,7 @@ def to_hdf(
     from dask.dataframe.io import to_hdf as _to_hdf
 
     return _to_hdf(
-        df.to_legacy_dataframe(),
+        df.optimize(),
         path,
         key,
         mode=mode,

@@ -18,7 +18,8 @@ from dask.utils import is_arraylike, is_series_like
 from pandas.api.types import is_bool_dtype
 from pandas.errors import IndexingError
 
-from dask_expr._collection import Series, from_legacy_dataframe, new_collection
+from dask_expr import from_dask_array
+from dask_expr._collection import Series, new_collection
 from dask_expr._expr import (
     Blockwise,
     MaybeAlignPartitions,
@@ -134,9 +135,7 @@ class LocIndexer(Indexer):
         return new_collection(Loc(frame, iindexer))
 
     def _loc_array(self, iindexer, cindexer):
-        iindexer_series = from_legacy_dataframe(
-            iindexer.to_dask_dataframe("_", self.obj.index.to_legacy_dataframe())
-        )
+        iindexer_series = from_dask_array(iindexer, columns="_", index=self.obj.index)
         return self._loc_series(iindexer_series, cindexer, check_alignment=False)
 
     def _maybe_partial_time_string(self, iindexer, unit):

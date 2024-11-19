@@ -45,7 +45,7 @@ from dask.dataframe.utils import (
     meta_series_constructor,
     pyarrow_strings_enabled,
 )
-from dask.delayed import delayed
+from dask.delayed import Delayed, delayed
 from dask.utils import (
     IndexCallable,
     M,
@@ -66,6 +66,7 @@ from pandas import CategoricalDtype
 from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
 from pandas.api.types import is_scalar as pd_is_scalar
 from pandas.api.types import is_timedelta64_dtype
+from pandas.core.dtypes.common import is_extension_array_dtype
 from pyarrow import fs as pa_fs
 from tlz import first
 
@@ -159,9 +160,7 @@ def _wrap_expr_op(self, other, op=None):
     if isinstance(other, FrameBase):
         other = other.expr
     elif isinstance(other, da.Array):
-        other = from_dask_array(
-            other, index=self.index.to_legacy_dataframe(), columns=self.columns
-        )
+        other = from_dask_array(other, index=self.index, columns=self.columns)
         if self.ndim == 1 and len(self.columns):
             other = other[self.columns[0]]
 
@@ -1371,24 +1370,6 @@ Expr={expr}"""
                 Repartition(self, npartitions, divisions, force, partition_size, freq)
             )
 
-    def to_dask_dataframe(self, *args, **kwargs) -> _Frame:
-        """Convert to a legacy dask-dataframe collection
-
-        WARNING: This API is deprecated. Please use `to_legacy_dataframe`.
-
-        Parameters
-        ----------
-        optimize
-            Whether to optimize the underlying `Expr` object before conversion.
-        **optimize_kwargs
-            Key-word arguments to pass through to `optimize`.
-        """
-        warnings.warn(
-            "`to_dask_dataframe` is deprecated, please use `to_legacy_dataframe`.",
-            FutureWarning,
-        )
-        return self.to_legacy_dataframe(*args, **kwargs)
-
     def to_legacy_dataframe(self, optimize: bool = True, **optimize_kwargs) -> _Frame:
         """Convert to a legacy dask-dataframe collection
 
@@ -1399,6 +1380,12 @@ Expr={expr}"""
         **optimize_kwargs
             Key-word arguments to pass through to `optimize`.
         """
+        warnings.warn(
+            "to_legacy_dataframe is deprecated and will be removed in a future release. "
+            "The legacy implementation as a whole is deprecated and will be removed, making "
+            "this method unnecessary.",
+            FutureWarning,
+        )
         df = self.optimize(**optimize_kwargs) if optimize else self
         return new_dd_object(df.dask, df._name, df._meta, df.divisions)
 
@@ -1430,9 +1417,18 @@ Expr={expr}"""
         -------
         A Dask Array
         """
-        return self.to_legacy_dataframe(optimize, **optimize_kwargs).to_dask_array(
-            lengths=lengths, meta=meta
-        )
+        if lengths is True:
+            lengths = tuple(self.map_partitions(len, enforce_metadata=False).compute())
+
+        arr = self.values
+
+        chunks = self._validate_chunks(arr, lengths)
+        arr._chunks = chunks
+
+        if meta is not None:
+            arr._meta = meta
+
+        return arr
 
     @property
     def values(self):
@@ -1442,7 +1438,13 @@ Expr={expr}"""
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
-        return self.to_dask_array()
+        if is_extension_array_dtype(self._meta.values):
+            warnings.warn(
+                "Dask currently has limited support for converting pandas extension dtypes "
+                f"to arrays. Converting {self._meta.values.dtype} to object dtype.",
+                UserWarning,
+            )
+        return self.map_partitions(methods.values)
 
     def __divmod__(self, other):
         result = self.expr.__divmod__(other)
@@ -2460,14 +2462,37 @@ Expr={expr}"""
 
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
+        records = to_records(self)
 
-        frame = self.to_legacy_dataframe()
-        records = to_records(frame)
-
-        chunks = frame._validate_chunks(records, lengths)
+        chunks = self._validate_chunks(records, lengths)
         records._chunks = (chunks[0],)
 
         return records
+
+    def _validate_chunks(self, arr, lengths):
+        from collections.abc import Sequence
+
+        from dask.array.core import normalize_chunks
+
+        if isinstance(lengths, Sequence):
+            lengths = tuple(lengths)
+
+            if len(lengths) != self.npartitions:
+                raise ValueError(
+                    "The number of items in 'lengths' does not match the number of "
+                    f"partitions. {len(lengths)} != {self.npartitions}"
+                )
+
+            if self.ndim == 1:
+                chunks = normalize_chunks((lengths,))
+            else:
+                chunks = normalize_chunks((lengths, (len(self.columns),)))
+
+            return chunks
+        elif lengths is not None:
+            raise ValueError(f"Unexpected value for 'lengths': '{lengths}'")
+
+        return arr._chunks
 
     def to_bag(self, index=False, format="tuple"):
         """Create a Dask Bag from a Series"""
@@ -2498,7 +2523,13 @@ Expr={expr}"""
         --------
         dask_expr.from_delayed
         """
-        return self.to_legacy_dataframe().to_delayed(optimize_graph=optimize_graph)
+        if optimize_graph:
+            frame = self.optimize()
+        else:
+            frame = self
+        keys = frame.__dask_keys__()
+        graph = frame.__dask_graph__()
+        return [Delayed(k, graph) for k in keys]
 
     def to_backend(self, backend: str | None = None, **kwargs):
         """Move to a new DataFrame backend
@@ -2812,9 +2843,7 @@ class DataFrame(FrameBase):
                         "Number of partitions do not match "
                         f"({v.npartitions} != {result.npartitions})"
                     )
-                v = from_dask_array(
-                    v, index=result.index.to_legacy_dataframe(), meta=result._meta
-                )
+                v = from_dask_array(v, index=result.index, meta=result._meta)
             else:
                 raise TypeError(f"Column assignment doesn't support type {type(v)}")
             args.extend([k, v])
@@ -4797,6 +4826,9 @@ class Scalar(FrameBase):
     def dtype(self):
         return pd.Series(self._meta).dtype
 
+    def to_delayed(self, optimize_graph=True):
+        return super().to_delayed(optimize_graph=optimize_graph)[0]
+
 
 def new_collection(expr):
     """Create new collection from an expr"""
@@ -5028,6 +5060,12 @@ def from_legacy_dataframe(ddf: _Frame, optimize: bool = True) -> FrameBase:
     optimize
         Whether to optimize the graph before conversion.
     """
+    warnings.warn(
+        "from_legacy_dataframe is deprecated and will be removed in a future release. "
+        "The legacy implementation as a whole is deprecated and will be removed, making "
+        "this method unnecessary.",
+        FutureWarning,
+    )
     graph = ddf.dask
     if optimize:
         graph = ddf.__dask_optimize__(graph, ddf.__dask_keys__())
@@ -5083,12 +5121,9 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     """
     from dask.dataframe.io import from_dask_array
 
-    if isinstance(index, FrameBase):
-        index = index.to_legacy_dataframe()
     if columns is not None and isinstance(columns, list) and not len(columns):
         columns = None
-    df = from_dask_array(x, columns=columns, index=index, meta=meta)
-    return from_legacy_dataframe(df, optimize=True)
+    return from_dask_array(x, columns=columns, index=index, meta=meta)
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
