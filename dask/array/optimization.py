@@ -8,12 +8,13 @@ from typing import Any
 import numpy as np
 
 from dask import config
+from dask._task_spec import convert_legacy_graph, fuse_linear_task_spec
 from dask.array.chunk import getitem
 from dask.array.core import getter, getter_inline, getter_nofancy
 from dask.blockwise import fuse_roots, optimize_blockwise
-from dask.core import flatten, reverse_dict
+from dask.core import flatten
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import SubgraphCallable, fuse, inline_functions
+from dask.optimization import SubgraphCallable
 from dask.utils import ensure_dict
 
 # All get* functions the optimizations know about
@@ -24,15 +25,7 @@ GETTERS = (getter, getter_nofancy, getter_inline, getitem)
 GETNOREMOVE = (getter, getter_nofancy)
 
 
-def optimize(
-    dsk,
-    keys,
-    fuse_keys=None,
-    fast_functions=None,
-    inline_functions_fast_functions=(getter_inline,),
-    rename_fused_keys=True,
-    **kwargs,
-):
+def optimize(dsk, keys, **kwargs):
     """Optimize dask for array computation
 
     1.  Cull tasks not necessary to evaluate keys
@@ -55,68 +48,12 @@ def optimize(
     if config.get("optimization.fuse.active") is False:
         return dsk
 
-    dependencies = dsk.get_all_dependencies()
     dsk = ensure_dict(dsk)
 
-    # Low level task optimizations
-    if fast_functions is not None:
-        inline_functions_fast_functions = fast_functions
+    dsk = convert_legacy_graph(dsk)
+    dsk = fuse_linear_task_spec(dsk, keys=keys)
 
-    hold = hold_keys(dsk, dependencies)
-
-    dsk, dependencies = fuse(
-        dsk,
-        hold + keys + (fuse_keys or []),
-        dependencies,
-        rename_keys=rename_fused_keys,
-    )
-    if inline_functions_fast_functions:
-        dsk = inline_functions(
-            dsk,
-            keys,
-            dependencies=dependencies,
-            fast_functions=inline_functions_fast_functions,
-        )
-
-    return optimize_slices(dsk)
-
-
-def hold_keys(dsk, dependencies):
-    """Find keys to avoid fusion
-
-    We don't want to fuse data present in the graph because it is easier to
-    serialize as a raw value.
-
-    We don't want to fuse chains after getitem/GETTERS because we want to
-    move around only small pieces of data, rather than the underlying arrays.
-    """
-    dependents = reverse_dict(dependencies)
-    data = {k for k, v in dsk.items() if type(v) not in (tuple, str)}
-
-    hold_keys = list(data)
-    for dat in data:
-        deps = dependents[dat]
-        for dep in deps:
-            task = dsk[dep]
-            # If the task is a get* function, we walk up the chain, and stop
-            # when there's either more than one dependent, or the dependent is
-            # no longer a get* function or an alias. We then add the final
-            # key to the list of keys not to fuse.
-            if _is_getter_task(task):
-                try:
-                    while len(dependents[dep]) == 1:
-                        new_dep = next(iter(dependents[dep]))
-                        new_task = dsk[new_dep]
-                        # If the task is a get* or an alias, continue up the
-                        # linear chain
-                        if _is_getter_task(new_task) or new_task in dsk:
-                            dep = new_dep
-                        else:
-                            break
-                except (IndexError, TypeError):
-                    pass
-                hold_keys.append(dep)
-    return hold_keys
+    return dsk
 
 
 def _is_getter_task(

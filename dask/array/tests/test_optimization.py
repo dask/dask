@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from dask._task_spec import Alias, DataNode
+
 pytest.importorskip("numpy")
 
 import numpy as np
@@ -12,7 +14,6 @@ from dask.array.chunk import getitem as da_getitem
 from dask.array.core import getter as da_getter
 from dask.array.core import getter_nofancy as da_getter_nofancy
 from dask.array.optimization import (
-    _is_getter_task,
     fuse_slice,
     optimize,
     optimize_blockwise,
@@ -257,8 +258,7 @@ def test_optimize_with_getitem_fusion(getter):
     }
 
     result = optimize(dsk, ["c"])
-    expected_task = (getter, "some-array", (15, slice(150, 160)))
-    assert any(_check_get_task_eq(v, expected_task) for v in result.values())
+    assert isinstance(result["c"], Alias)
     assert len(result) < len(dsk)
 
 
@@ -355,7 +355,13 @@ def test_dont_fuse_numpy_arrays():
         y = da.from_array(x, chunks=(10,))
 
         dsk = y.__dask_optimize__(y.dask, y.__dask_keys__())
-        assert sum(isinstance(v, np.ndarray) for v in dsk.values()) == 1
+        assert (
+            sum(
+                isinstance(v, DataNode) and isinstance(v.value, np.ndarray)
+                for v in dsk.values()
+            )
+            == 1
+        )
 
 
 def test_fuse_slices_with_alias(getter, getitem):
@@ -368,8 +374,6 @@ def test_fuse_slices_with_alias(getter, getitem):
     keys = [("dx2", 0)]
     dsk2 = optimize(dsk, keys)
     assert len(dsk2) == 3
-    fused_key = (dsk2.keys() - {"x", ("dx2", 0)}).pop()
-    assert _check_get_task_eq(dsk2[fused_key], (getter, "x", (slice(0, 4), 0)))
 
 
 def test_dont_fuse_fancy_indexing_in_getter_nofancy(getitem, getter_nofancy):
@@ -392,17 +396,10 @@ def test_fuse_getter_with_asarray(chunks):
     y = da.ones(10, chunks=chunks)
     z = x + y
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-    for v in dsk.values():
-        s = str(v)
-        assert s.count("getitem") + s.count("getter") <= 1
-        if v is not x:
-            assert "1234567890" not in s
-    n_getters = len([v for v in dsk.values() if _is_getter_task(v)])
-    if y.npartitions > 1:
-        assert n_getters == y.npartitions
-    else:
-        assert n_getters == 0
-
+    assert any(
+        isinstance(v, DataNode) and isinstance(v.value, np.ndarray)
+        for v in dsk.values()
+    )
     assert_eq(z, x + 1)
 
 
