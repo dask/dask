@@ -280,7 +280,7 @@ def to_csv(
     from dask.dataframe.io.csv import to_csv as _to_csv
 
     return _to_csv(
-        df.to_legacy_dataframe(),
+        df.optimize(),
         filename,
         single_file=single_file,
         encoding=encoding,

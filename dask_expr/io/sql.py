@@ -1,6 +1,3 @@
-from dask_expr import from_legacy_dataframe
-
-
 def read_sql(sql, con, index_col, **kwargs):
     """
     Read SQL query or database table into a DataFrame.
@@ -36,8 +33,7 @@ def read_sql(sql, con, index_col, **kwargs):
     """
     from dask.dataframe.io.sql import read_sql
 
-    df = read_sql(sql, con, index_col, **kwargs)
-    return from_legacy_dataframe(df)
+    return read_sql(sql, con, index_col, **kwargs)
 
 
 def read_sql_table(
@@ -122,7 +118,7 @@ def read_sql_table(
     """
     from dask.dataframe.io.sql import read_sql_table as _read_sql_table
 
-    df = _read_sql_table(
+    return _read_sql_table(
         table_name,
         con,
         index_col,
@@ -137,7 +133,6 @@ def read_sql_table(
         engine_kwargs=engine_kwargs,
         **kwargs,
     )
-    return from_legacy_dataframe(df)
 
 
 def read_sql_query(
@@ -210,7 +205,7 @@ def read_sql_query(
     """
     from dask.dataframe.io.sql import read_sql_query as _read_sql_query
 
-    df = _read_sql_query(
+    return _read_sql_query(
         sql,
         con,
         index_col,
@@ -223,7 +218,6 @@ def read_sql_query(
         engine_kwargs=engine_kwargs,
         **kwargs,
     )
-    return from_legacy_dataframe(df)
 
 
 def to_sql(
@@ -354,7 +348,7 @@ def to_sql(
     from dask.dataframe.io.sql import to_sql as _to_sql
 
     return _to_sql(
-        df.to_legacy_dataframe(),
+        df,
         name=name,
         uri=uri,
         schema=schema,

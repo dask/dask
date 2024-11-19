@@ -4,13 +4,14 @@ import functools
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+import pandas as pd
 from dask._task_spec import Alias, Task, TaskRef
 from dask.dataframe.dispatch import make_meta
-from dask.dataframe.utils import check_meta
+from dask.dataframe.utils import check_meta, pyarrow_strings_enabled
 from dask.delayed import Delayed, delayed
 from dask.typing import Key
 
-from dask_expr._expr import DelayedsExpr, PartitionsFiltered
+from dask_expr._expr import ArrowStringConversion, DelayedsExpr, PartitionsFiltered
 from dask_expr._util import _tokenize_deterministic
 from dask_expr.io import BlockwiseIO
 
@@ -141,8 +142,12 @@ def from_delayed(
 
     from dask_expr._collection import new_collection
 
-    return new_collection(
-        FromDelayed(
-            DelayedsExpr(*dfs), make_meta(meta), divisions, verify_meta, None, prefix
-        )
+    result = FromDelayed(
+        DelayedsExpr(*dfs), make_meta(meta), divisions, verify_meta, None, prefix
     )
+    if pyarrow_strings_enabled() and any(
+        pd.api.types.is_object_dtype(dtype)
+        for dtype in (result.dtypes.values if result.ndim == 2 else [result.dtypes])
+    ):
+        return new_collection(ArrowStringConversion(result))
+    return new_collection(result)
