@@ -6,7 +6,7 @@ import operator
 
 import numpy as np
 import pyarrow as pa
-from dask._task_spec import Task
+from dask._task_spec import List, Task
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import apply_and_enforce, is_dataframe_like, make_meta
@@ -135,7 +135,7 @@ class FusedIO(BlockwiseIO):
         bucket = self._fusion_buckets[index]
         # FIXME: This will likely require a wrapper
         return Task(
-            name, methods.concat, [expr._filtered_task(name, i) for i in bucket]
+            name, methods.concat, List(*(expr._filtered_task(name, i) for i in bucket))
         )
 
     @functools.cached_property
