@@ -244,7 +244,8 @@ class ShuffleReduce(Expr):
 
         # Reset the index if we we used it for shuffling
         if split_by_index:
-            shuffled = SetIndexBlockwise(shuffled, split_by, True, None)
+            idx = list(self._meta.index.names) if split_by != ["index"] else split_by
+            shuffled = SetIndexBlockwise(shuffled, idx, True, None)
 
         # Convert back to Series if necessary
         if self.shuffle_by_index is not False:
