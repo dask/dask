@@ -10,6 +10,7 @@ import pandas as pd
 from fsspec.utils import build_name_function, stringify_path
 from tlz import merge
 
+import dask.dataframe as dd
 from dask import config
 from dask.base import (
     compute_as_if_collection,
@@ -466,6 +467,17 @@ def read_hdf(
         paths, key, start, stop, chunksize, sorted_index, mode
     )
 
+    if dd._dask_expr_enabled():
+        return dd.from_map(
+            _read_hdf,
+            parts,
+            meta=meta,
+            divisions=divisions,
+            lock=lock,
+            common_kwargs=common_kwargs,
+            columns=columns,
+        )
+
     # Construct the output collection with from_map
     return from_map(
         HDFFunctionWrapper(columns, meta.ndim, lock, common_kwargs),
@@ -476,6 +488,22 @@ def read_hdf(
         token=tokenize(paths, key, start, stop, sorted_index, chunksize, mode),
         enforce_metadata=False,
     )
+
+
+def _read_hdf(part, *, common_kwargs, lock, columns=None):
+    """Read from hdf5 file with a lock"""
+
+    path, key, kwargs = part
+    if lock:
+        lock.acquire()
+    try:
+        result = pd.read_hdf(path, key, **merge(common_kwargs, kwargs))
+    finally:
+        if lock:
+            lock.release()
+    if columns is not None:
+        result = result[columns]
+    return result
 
 
 def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):

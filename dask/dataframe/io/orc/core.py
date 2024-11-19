@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Literal
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 
+import dask.dataframe as dd
 from dask.base import compute_as_if_collection, tokenize
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame, Scalar
@@ -137,6 +138,20 @@ def read_orc(
         aggregate_files,
     )
 
+    if dd._dask_expr_enabled():
+        if columns is not None and index in columns:
+            columns = [col for col in columns if col != index]
+        return dd.from_map(
+            _read_orc,
+            parts,
+            engine=engine,
+            fs=fs,
+            schema=schema,
+            index=index,
+            meta=meta,
+            columns=columns,
+        )
+
     # Construct the output collection with from_map
     return from_map(
         ORCFunctionWrapper(fs, columns, schema, engine, index),
@@ -147,6 +162,21 @@ def read_orc(
         token=tokenize(fs_token, path, columns),
         enforce_metadata=False,
     )
+
+
+def _read_orc(parts, *, engine, fs, schema, index, columns=None):
+    if index is not None and columns is not None:
+        columns.append(index)
+    _df = engine.read_partition(
+        fs,
+        parts,
+        schema,
+        columns,
+    )
+    if index:
+        _df = _df.set_index(index)
+
+    return _df
 
 
 def to_orc(

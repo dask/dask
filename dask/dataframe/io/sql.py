@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
+import dask.dataframe as dd
 from dask.base import compute as dask_compute
 from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GE_300
@@ -189,6 +190,9 @@ def read_sql_query(
         )
 
     engine.dispose()
+
+    if dd._dask_expr_enabled():
+        return dd.from_delayed(parts, meta, divisions)
 
     return from_delayed(parts, meta, divisions=divisions)
 
