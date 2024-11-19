@@ -8290,7 +8290,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                     task = layer.pop((name, i))
                     new_key = (name, i) + suffix
                     if isinstance(task, Task):
-                        task.key = new_key
+                        task = Task(new_key, task)
                     layer[new_key] = task
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
