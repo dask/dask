@@ -13,16 +13,10 @@ import dask.array as da
 from dask.array.chunk import getitem as da_getitem
 from dask.array.core import getter as da_getter
 from dask.array.core import getter_nofancy as da_getter_nofancy
-from dask.array.optimization import (
-    fuse_slice,
-    optimize,
-    optimize_blockwise,
-    optimize_slices,
-)
+from dask.array.optimization import fuse_slice, optimize, optimize_blockwise
 from dask.array.utils import assert_eq
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import SubgraphCallable, fuse
-from dask.utils import SerializableLock
+from dask.optimization import SubgraphCallable
 
 
 def _wrap_getter(func, wrap):
@@ -108,148 +102,6 @@ def _assert_getter_dsk_eq(a, b):
             assert av == bv
 
 
-def test_fuse_getitem(getter, getter_nofancy, getitem):
-    pairs = [
-        (
-            (getter, (getter, "x", slice(1000, 2000)), slice(15, 20)),
-            (getter, "x", slice(1015, 1020)),
-        ),
-        (
-            (
-                getitem,
-                (getter, "x", (slice(1000, 2000), slice(100, 200))),
-                (slice(15, 20), slice(50, 60)),
-            ),
-            (getter, "x", (slice(1015, 1020), slice(150, 160))),
-        ),
-        (
-            (
-                getitem,
-                (getter_nofancy, "x", (slice(1000, 2000), slice(100, 200))),
-                (slice(15, 20), slice(50, 60)),
-            ),
-            (getter_nofancy, "x", (slice(1015, 1020), slice(150, 160))),
-        ),
-        ((getter, (getter, "x", slice(1000, 2000)), 10), (getter, "x", 1010)),
-        (
-            (getitem, (getter, "x", (slice(1000, 2000), 10)), (slice(15, 20),)),
-            (getter, "x", (slice(1015, 1020), 10)),
-        ),
-        (
-            (getitem, (getter_nofancy, "x", (slice(1000, 2000), 10)), (slice(15, 20),)),
-            (getter_nofancy, "x", (slice(1015, 1020), 10)),
-        ),
-        (
-            (getter, (getter, "x", (10, slice(1000, 2000))), (slice(15, 20),)),
-            (getter, "x", (10, slice(1015, 1020))),
-        ),
-        (
-            (
-                getter,
-                (getter, "x", (slice(1000, 2000), slice(100, 200))),
-                (slice(None, None), slice(50, 60)),
-            ),
-            (getter, "x", (slice(1000, 2000), slice(150, 160))),
-        ),
-        (
-            (getter, (getter, "x", (None, slice(None, None))), (slice(None, None), 5)),
-            (getter, "x", (None, 5)),
-        ),
-        (
-            (
-                getter,
-                (getter, "x", (slice(1000, 2000), slice(10, 20))),
-                (slice(5, 10),),
-            ),
-            (getter, "x", (slice(1005, 1010), slice(10, 20))),
-        ),
-        (
-            (
-                getitem,
-                (getitem, "x", (slice(1000, 2000),)),
-                (slice(5, 10), slice(10, 20)),
-            ),
-            (getitem, "x", (slice(1005, 1010), slice(10, 20))),
-        ),
-        (
-            (getter, (getter, "x", slice(1000, 2000), False, False), slice(15, 20)),
-            (getter, "x", slice(1015, 1020)),
-        ),
-        (
-            (getter, (getter, "x", slice(1000, 2000)), slice(15, 20), False, False),
-            (getter, "x", slice(1015, 1020)),
-        ),
-        (
-            (
-                getter,
-                (getter_nofancy, "x", slice(1000, 2000), False, False),
-                slice(15, 20),
-                False,
-                False,
-            ),
-            (getter_nofancy, "x", slice(1015, 1020), False, False),
-        ),
-    ]
-
-    for inp, expected in pairs:
-        result = optimize_slices({"y": inp})
-        _assert_getter_dsk_eq(result, {"y": expected})
-
-
-def test_fuse_getitem_lock(getter, getter_nofancy, getitem):
-    lock1 = SerializableLock()
-    lock2 = SerializableLock()
-
-    pairs = [
-        (
-            (getter, (getter, "x", slice(1000, 2000), True, lock1), slice(15, 20)),
-            (getter, "x", slice(1015, 1020), True, lock1),
-        ),
-        (
-            (
-                getitem,
-                (getter, "x", (slice(1000, 2000), slice(100, 200)), True, lock1),
-                (slice(15, 20), slice(50, 60)),
-            ),
-            (getter, "x", (slice(1015, 1020), slice(150, 160)), True, lock1),
-        ),
-        (
-            (
-                getitem,
-                (
-                    getter_nofancy,
-                    "x",
-                    (slice(1000, 2000), slice(100, 200)),
-                    True,
-                    lock1,
-                ),
-                (slice(15, 20), slice(50, 60)),
-            ),
-            (getter_nofancy, "x", (slice(1015, 1020), slice(150, 160)), True, lock1),
-        ),
-        (
-            (
-                getter,
-                (getter, "x", slice(1000, 2000), True, lock1),
-                slice(15, 20),
-                True,
-                lock2,
-            ),
-            (
-                getter,
-                (getter, "x", slice(1000, 2000), True, lock1),
-                slice(15, 20),
-                True,
-                lock2,
-            ),
-        ),
-    ]
-
-    for inp, expected in pairs:
-        result = optimize_slices({"y": inp})
-        _assert_getter_dsk_eq(result, {"y": expected})
-
-
 def test_optimize_with_getitem_fusion(getter):
     dsk = {
         "a": "some-array",
@@ -260,30 +112,6 @@ def test_optimize_with_getitem_fusion(getter):
     result = optimize(dsk, ["c"])
     assert isinstance(result["c"], Alias)
     assert len(result) < len(dsk)
-
-
-def test_optimize_slicing(getter):
-    dsk = {
-        "a": (range, 10),
-        "b": (getter, "a", (slice(None, None, None),)),
-        "c": (getter, "b", (slice(None, None, None),)),
-        "d": (getter, "c", (slice(0, 5, None),)),
-        "e": (getter, "d", (slice(None, None, None),)),
-    }
-
-    expected = {"e": (getter, (range, 10), (slice(0, 5, None),))}
-    result = optimize_slices(fuse(dsk, [], rename_keys=False)[0])
-    _assert_getter_dsk_eq(result, expected)
-
-    # protect output keys
-    expected = {
-        "c": (getter, (range, 10), (slice(0, None, None),)),
-        "d": (getter, "c", (slice(0, 5, None),)),
-        "e": (getter, "d", (slice(None, None, None),)),
-    }
-    result = optimize_slices(fuse(dsk, ["c", "d", "e"], rename_keys=False)[0])
-
-    _assert_getter_dsk_eq(result, expected)
 
 
 def test_fuse_slice():
@@ -342,13 +170,6 @@ def test_nonfusible_fancy_indexing():
             fuse_slice(a, b)
 
 
-def test_hard_fuse_slice_cases(getter):
-    dsk = {
-        "x": (getter, (getter, "x", (None, slice(None, None))), (slice(None, None), 5))
-    }
-    _assert_getter_dsk_eq(optimize_slices(dsk), {"x": (getter, "x", (None, 5))})
-
-
 def test_dont_fuse_numpy_arrays():
     x = np.ones(10)
     for _ in [(5,), (10,)]:
@@ -376,20 +197,6 @@ def test_fuse_slices_with_alias(getter, getitem):
     assert len(dsk2) == 3
 
 
-def test_dont_fuse_fancy_indexing_in_getter_nofancy(getitem, getter_nofancy):
-    dsk = {
-        "a": (
-            getitem,
-            (getter_nofancy, "x", (slice(10, 20, None), slice(100, 200, None))),
-            ([1, 3], slice(50, 60, None)),
-        )
-    }
-    _assert_getter_dsk_eq(optimize_slices(dsk), dsk)
-
-    dsk = {"a": (getitem, (getter_nofancy, "x", [1, 2, 3]), 0)}
-    _assert_getter_dsk_eq(optimize_slices(dsk), dsk)
-
-
 @pytest.mark.parametrize("chunks", [10, 5, 3])
 def test_fuse_getter_with_asarray(chunks):
     x = np.ones(10) * 1234567890
@@ -401,50 +208,6 @@ def test_fuse_getter_with_asarray(chunks):
         for v in dsk.values()
     )
     assert_eq(z, x + 1)
-
-
-def test_remove_no_op_slices_for_getitem(getitem):
-    null = slice(0, None)
-    opts = [
-        ((getitem, "x", null, False, False), "x"),
-        ((getitem, (getitem, "x", null, False, False), null), "x"),
-        ((getitem, (getitem, "x", (null, null), False, False), ()), "x"),
-    ]
-    for orig, final in opts:
-        _assert_getter_dsk_eq(optimize_slices({"a": orig}), {"a": final})
-
-
-@pytest.mark.parametrize("which", ["getter", "getter_nofancy"])
-def test_dont_remove_no_op_slices_for_getter_or_getter_nofancy(
-    which, getitem, getter, getter_nofancy
-):
-    # Test that no-op slices are *not* removed when using getter or
-    # getter_nofancy. This ensures that `get` calls are always made in all
-    # tasks created by `from_array`, even after optimization
-
-    # Pytest doesn't make it easy to parameterize over parameterized fixtures
-    if which == "getter":
-        get = getter
-    else:
-        get = getter_nofancy
-
-    null = slice(0, None)
-    opts = [
-        (
-            (get, "x", null, False, False),
-            (get, "x", null, False, False),
-        ),
-        (
-            (getitem, (get, "x", null, False, False), null),
-            (get, "x", null, False, False),
-        ),
-        (
-            (getitem, (get, "x", (null, null), False, False), ()),
-            (get, "x", (null, null), False, False),
-        ),
-    ]
-    for orig, final in opts:
-        _assert_getter_dsk_eq(optimize_slices({"a": orig}), {"a": final})
 
 
 @pytest.mark.xfail(reason="blockwise fusion does not respect this, which is ok")
