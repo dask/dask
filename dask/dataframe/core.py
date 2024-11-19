@@ -8283,9 +8283,15 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                 layer.new_axes["j"] = chunks[1][0]
                 layer.output_indices = layer.output_indices + ("j",)
             else:
+                from dask._task_spec import Alias, Task
+
                 suffix = (0,) * (len(chunks) - 1)
                 for i in range(len(chunks[0])):
-                    layer[(name, i) + suffix] = layer.pop((name, i))
+                    task = layer.get((name, i))
+                    new_key = (name, i) + suffix
+                    if isinstance(task, Task):
+                        task = Alias(new_key, task.key)
+                    layer[new_key] = task
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
         return get_parallel_type(meta)(dsk, name, meta, divisions)

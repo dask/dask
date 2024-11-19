@@ -20,6 +20,7 @@ from dask._task_spec import (
     _get_dependencies,
     convert_legacy_graph,
     execute_graph,
+    fuse_linear_task_spec,
     parse_input,
     resolve_aliases,
 )
@@ -27,6 +28,7 @@ from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
 from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
+from dask.utils import funcname
 
 
 def convert_and_verify_keys(dsk):
@@ -871,9 +873,108 @@ def test_subgraph_dont_hold_in_memory_too_long_legacy():
     assert OnlyTwice.total == 10
 
 
+def test_linear_fusion():
+    tasks = [
+        io := Task("foo", func, 1),
+        second := Task("second", func, io.ref()),
+        Task("third", func, second.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"third"})
+    assert len(result) == 2
+    assert isinstance(result["third"], Alias)
+    assert (
+        isinstance(result["foo-second-third"], Task)
+        and funcname(result["foo-second-third"].func) == "_execute_subgraph"
+    )
+
+    # Data Nodes don't get fused
+
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref()),
+        third := Task("third", func, second.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert len(result) == 3
+    assert isinstance(result["fourth"], Alias)
+    assert (
+        isinstance(result["second-third-fourth"], Task)
+        and funcname(result["second-third-fourth"].func) == "_execute_subgraph"
+    )
+    assert isinstance(result["foo"], DataNode)
+
+    # Branch, so no fusion
+    tasks.append(Task("branch", func, third.ref()))
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert len(result) == 5
+    assert "second-third" in result
+    assert isinstance(result["third"], Alias)
+
+    # Branch, so no fusion at all
+    tasks.append(Task("branch2", func, second.ref()))
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert len(result) == 6
+    assert not any("-" in k for k in dsk)
+
+
+def test_linear_fusion_intermediate_branch():
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref()),
+        third := Task("third", func, second.ref()),
+        other := Task("other", func, 1),
+        Task("fourth", func, third.ref(), other.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "second-third" in result
+    assert isinstance(result["fourth"], Task)
+
+
+def test_linear_fusion_two_branches():
+    tasks = [
+        left_one := DataNode("left_one", "a"),
+        left_two := Task("left_two", func, left_one.ref()),
+        right_one := DataNode("right_one", "a"),
+        right_two := Task("right_two", func, right_one.ref()),
+        middle := Task("middle", func, right_two.ref(), left_two.ref()),
+        third := Task("third", func, middle.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "left_one-left_two" in result
+    assert "right_one-right_two" in result
+    assert isinstance(result["right_two"], Alias)
+    assert isinstance(result["left_two"], Alias)
+    assert isinstance(result["fourth"], Alias)
+    assert isinstance(result["third-fourth"], Task)
+
+
+def test_linear_fusion_multiple_outputs():
+    tasks = [
+        first := DataNode("first", "a"),
+        second := Task("second", func, first.ref()),
+        third := Task("third", func, second.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth", "second"})
+    assert "first-second" in result
+    assert "second" in result
+    assert isinstance(result["second"], Alias)
+    assert isinstance(result["fourth"], Alias)
+    assert isinstance(result["first-second"], Task)
+    assert isinstance(result["third-fourth"], Task)
+
+
 def test_nested_containers():
     t = List(Task("key-1", func, "a", "b"), Task("key-2", func, "c", "d"))
-    assert not t.dependencies
     assert t() == ["a-b", "c-d"]
 
     t = List(Task("key-1", func, "a", TaskRef("b")), Task("key-2", func, "c", "d"))

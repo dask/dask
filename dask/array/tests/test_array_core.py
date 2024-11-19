@@ -8,6 +8,8 @@ import xml.etree.ElementTree
 
 import pytest
 
+from dask._task_spec import Task
+
 np = pytest.importorskip("numpy")
 
 import itertools
@@ -2040,7 +2042,12 @@ def test_store_locks():
     v = store([a, b], [at, bt], compute=False, lock=lock)
     assert isinstance(v, Delayed)
     dsk = v.dask
-    locks = {vv for v in dsk.values() for vv in v if isinstance(vv, _Lock)}
+    locks = {
+        vv
+        for v in dsk.values()
+        for vv in (v.args if isinstance(v, Task) else v)
+        if isinstance(vv, _Lock)
+    }
     assert locks == {lock}
 
     # Ensure same lock applies over multiple stores
