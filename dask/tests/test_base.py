@@ -1007,9 +1007,7 @@ def test_optimizations_ctd():
     dsk1 = collections_to_dsk([x])
     with dask.config.set({"optimizations": [lambda dsk, keys: dsk]}):
         dsk2 = collections_to_dsk([x])
-
-    # TODO: 2 task ref classes aren't equal at the moment
-    assert dsk1 != dsk2
+    assert dsk1 == dsk2
 
 
 def test_clone_key():
