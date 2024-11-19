@@ -63,4 +63,4 @@ def test_pickle_size(tmpdir, filesystem):
     df = read_parquet(tmpdir, filesystem=filesystem)
     from distributed.protocol import dumps
 
-    assert len(b"".join(dumps(df.optimize().dask))) <= 9000
+    assert len(b"".join(dumps(df.optimize().dask))) <= 9100

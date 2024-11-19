@@ -680,7 +680,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
             _barrier_key_left,
             p2p_barrier,
             token_left,
-            transfer_keys_left,
+            *transfer_keys_left,
             spec=DataFrameShuffleSpec(
                 id=token_left,
                 npartitions=self.npartitions,
@@ -698,7 +698,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
             _barrier_key_right,
             p2p_barrier,
             token_right,
-            transfer_keys_right,
+            *transfer_keys_right,
             spec=DataFrameShuffleSpec(
                 id=token_right,
                 npartitions=self.npartitions,
