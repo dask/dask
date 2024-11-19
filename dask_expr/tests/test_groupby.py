@@ -157,6 +157,13 @@ def test_groupby_no_numeric_only(pdf, func):
     assert_eq(agg, expect)
 
 
+def test_value_counts_split_out(pdf):
+    df = from_pandas(pdf, npartitions=10)
+    result = df.groupby("x").y.value_counts(split_out=True)
+    expected = pdf.groupby("x").y.value_counts()
+    assert_eq(result, expected)
+
+
 def test_unique(df, pdf):
     result = df.groupby("x")["y"].unique()
     expected = pdf.groupby("x")["y"].unique()
