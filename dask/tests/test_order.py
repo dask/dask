@@ -1390,7 +1390,7 @@ def test_xarray_like_reduction():
 )
 def test_array_vs_dataframe(optimize):
     xr = pytest.importorskip("xarray")
-    dd = pytest.importorskip("dask.dataframe")
+    pytest.importorskip("dask.dataframe")
 
     import dask.array as da
 
@@ -1415,7 +1415,7 @@ def test_array_vs_dataframe(optimize):
     diag_df = diagnostics(
         collections_to_dsk([mean.to_dask_dataframe()], optimize_graph=optimize)
     )
-    assert max(diag_df[1]) == (15 if dd._dask_expr_enabled() else 38)
+    assert max(diag_df[1]) == 38
     assert max(diag_array[1]) == 38
     assert max(diag_array[1]) < 50
 
