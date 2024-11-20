@@ -403,6 +403,10 @@ class GraphNode:
     def dependencies(self) -> frozenset:
         return self._dependencies
 
+    @property
+    def block_fusion(self) -> bool:
+        return False
+
     def _verify_values(self, values: tuple | dict) -> None:
         if not self.dependencies:
             return
@@ -845,8 +849,12 @@ def fuse_linear_task_spec(dsk, keys):
     seen = set()
     result = {}
 
-    def _check_data_node(tsk):
-        return isinstance(tsk, DataNode) and not isinstance(tsk.value, str)
+    def _check_non_fusable_node(tsk):
+        return (
+            tsk.block_fusion
+            or isinstance(tsk, DataNode)
+            and not isinstance(tsk.value, str)
+        )
 
     for key in dsk:
         if key in seen:
@@ -857,7 +865,11 @@ def fuse_linear_task_spec(dsk, keys):
         deps = dependencies[key]
         dependents_key = dependents[key]
 
-        if len(deps) != 1 and len(dependents_key) != 1 or _check_data_node(dsk[key]):
+        if (
+            len(deps) != 1
+            and len(dependents_key) != 1
+            or _check_non_fusable_node(dsk[key])
+        ):
             result[key] = dsk[key]
             continue
 
@@ -882,7 +894,7 @@ def fuse_linear_task_spec(dsk, keys):
                 break
             if (
                 len(dependents[new_key]) != 1
-                or _check_data_node(dsk[new_key])
+                or _check_non_fusable_node(dsk[new_key])
                 or new_key in keys
             ):
                 result[new_key] = dsk[new_key]
@@ -899,7 +911,7 @@ def fuse_linear_task_spec(dsk, keys):
             if new_key in seen:
                 break
             seen.add(new_key)
-            if len(dependencies[new_key]) != 1:
+            if len(dependencies[new_key]) != 1 or _check_non_fusable_node(dsk[new_key]):
                 # Exit if the dependent has multiple dependencies, triangle
                 result[new_key] = dsk[new_key]
                 break
