@@ -403,6 +403,10 @@ class GraphNode:
     def dependencies(self) -> frozenset:
         return self._dependencies
 
+    @property
+    def block_fusion(self) -> bool:
+        return False
+
     def _verify_values(self, values: tuple | dict) -> None:
         if not self.dependencies:
             return
@@ -435,7 +439,6 @@ _no_deps: frozenset = frozenset()
 class Alias(GraphNode):
     __weakref__: Any = None
     target: TaskRef
-    block_fusion: bool
     __slots__ = tuple(__annotations__)
 
     def __init__(self, key: KeyType, target: Alias | TaskRef | KeyType | None = None):
@@ -448,7 +451,6 @@ class Alias(GraphNode):
             target = TaskRef(target)
         self.target = target
         self._dependencies = frozenset((target.key,))
-        self.block_fusion = False
 
     def copy(self):
         return Alias(self.key, self.target)
@@ -473,7 +475,6 @@ class Alias(GraphNode):
 class DataNode(GraphNode):
     value: Any
     typ: type
-    block_fusion: bool
     __slots__ = tuple(__annotations__)
 
     def __init__(self, key: Any, value: Any):
@@ -483,7 +484,6 @@ class DataNode(GraphNode):
         self.value = value
         self.typ = type(value)
         self._dependencies = _no_deps
-        self.block_fusion = False
 
     def copy(self):
         return DataNode(self.key, self.value)
@@ -534,7 +534,6 @@ class Task(GraphNode):
     func: Callable
     args: tuple
     kwargs: dict
-    block_fusion: bool
     _token: str | None
     _is_coro: bool | None
     _repr: str | None
@@ -570,7 +569,6 @@ class Task(GraphNode):
         self._is_coro = None
         self._token = None
         self._repr = None
-        self.block_fusion = False
 
     def copy(self):
         return type(self)(
