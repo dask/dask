@@ -1132,3 +1132,16 @@ async def test_release_persisted_futures_without_gc(c, s, a, b):
             await asyncio.sleep(0.01)
     finally:
         gc.enable()
+
+
+@gen_cluster(client=True)
+async def test_fusion_barrier_task(c, s, a, b):
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+
+    a = np.random.default_rng().uniform(0, 1, 100).reshape((10, 10))
+    x = da.from_array(a, chunks=(10, 1))
+    new = ((1,) * 10, (10,))
+    x2 = da.rechunk(x, chunks=new, method="p2p")
+    result = await c.compute(x2)
+    da.assert_eq(result, a)
