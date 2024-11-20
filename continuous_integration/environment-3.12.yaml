@@ -75,5 +75,5 @@ dependencies:
   - matplotlib  # visualize test
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+    - git+https://github.com/phofl/distributed@barrier-task
     - git+https://github.com/dask/dask-expr
