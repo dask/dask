@@ -237,7 +237,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         sorter = np.argsort(new_chunk_taker).astype(dtype)
         sorter_key = sorter_name + tokenize(sorter)
         # low level fusion can't deal with arrays on first position
-        merges[sorter_key] = (1, sorter)
+        merges[sorter_key] = DataNode(sorter_key, (1, sorter))
 
         sorted_array = new_chunk_taker[sorter]
         source_chunk_nr, taker_boundary = np.unique(
