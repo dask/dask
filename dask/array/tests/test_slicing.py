@@ -5,6 +5,8 @@ import warnings
 
 import pytest
 
+from dask._task_spec import Alias, Task, TaskRef
+
 np = pytest.importorskip("numpy")
 
 import dask
@@ -177,10 +179,10 @@ def test_slice_singleton_value_on_boundary():
 def test_slice_array_1d():
     # x[24::2]
     expected = {
-        ("y", 0): (getitem, ("x", 0), (slice(24, 25, 2),)),
-        ("y", 1): (getitem, ("x", 1), (slice(1, 25, 2),)),
-        ("y", 2): (getitem, ("x", 2), (slice(0, 25, 2),)),
-        ("y", 3): (getitem, ("x", 3), (slice(1, 25, 2),)),
+        ("y", 0): Task(("y", 0), getitem, TaskRef(("x", 0)), (slice(24, 25, 2),)),
+        ("y", 1): Task(("y", 1), getitem, TaskRef(("x", 1)), (slice(1, 25, 2),)),
+        ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 2)), (slice(0, 25, 2),)),
+        ("y", 3): Task(("y", 3), getitem, TaskRef(("x", 3)), (slice(1, 25, 2),)),
     }
     result, chunks = slice_array("y", "x", [[25] * 4], [slice(24, None, 2)], 8)
 
@@ -188,9 +190,9 @@ def test_slice_array_1d():
 
     # x[26::2]
     expected = {
-        ("y", 0): (getitem, ("x", 1), (slice(1, 25, 2),)),
-        ("y", 1): (getitem, ("x", 2), (slice(0, 25, 2),)),
-        ("y", 2): (getitem, ("x", 3), (slice(1, 25, 2),)),
+        ("y", 0): Task(("y", 0), getitem, TaskRef(("x", 1)), (slice(1, 25, 2),)),
+        ("y", 1): Task(("y", 1), getitem, TaskRef(("x", 2)), (slice(0, 25, 2),)),
+        ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 3)), (slice(1, 25, 2),)),
     }
 
     result, chunks = slice_array("y", "x", [[25] * 4], [slice(26, None, 2)], 8)
@@ -198,10 +200,10 @@ def test_slice_array_1d():
 
     # x[24::2]
     expected = {
-        ("y", 0): (getitem, ("x", 0), (slice(24, 25, 2),)),
-        ("y", 1): (getitem, ("x", 1), (slice(1, 25, 2),)),
-        ("y", 2): (getitem, ("x", 2), (slice(0, 25, 2),)),
-        ("y", 3): (getitem, ("x", 3), (slice(1, 25, 2),)),
+        ("y", 0): Task(("y", 0), getitem, TaskRef(("x", 0)), (slice(24, 25, 2),)),
+        ("y", 1): Task(("y", 1), getitem, TaskRef(("x", 1)), (slice(1, 25, 2),)),
+        ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 2)), (slice(0, 25, 2),)),
+        ("y", 3): Task(("y", 3), getitem, TaskRef(("x", 3)), (slice(1, 25, 2),)),
     }
     result, chunks = slice_array("y", "x", [(25,) * 4], (slice(24, None, 2),), 8)
 
@@ -209,9 +211,9 @@ def test_slice_array_1d():
 
     # x[26::2]
     expected = {
-        ("y", 0): (getitem, ("x", 1), (slice(1, 25, 2),)),
-        ("y", 1): (getitem, ("x", 2), (slice(0, 25, 2),)),
-        ("y", 2): (getitem, ("x", 3), (slice(1, 25, 2),)),
+        ("y", 0): Task(("y", 0), getitem, TaskRef(("x", 1)), (slice(1, 25, 2),)),
+        ("y", 1): Task(("y", 1), getitem, TaskRef(("x", 2)), (slice(0, 25, 2),)),
+        ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 3)), (slice(1, 25, 2),)),
     }
 
     result, chunks = slice_array("y", "x", [(25,) * 4], (slice(26, None, 2),), 8)
@@ -221,16 +223,17 @@ def test_slice_array_1d():
 def test_slice_array_2d():
     # 2d slices: x[13::2,10::1]
     expected = {
-        ("y", 0, 0): (getitem, ("x", 0, 0), (slice(13, 20, 2), slice(10, 20, 1))),
-        ("y", 0, 1): (
+        ("y", 0, 0): Task(
+            ("y", 0, 0),
             getitem,
-            ("x", 0, 1),
-            (slice(13, 20, 2), slice(None, None, None)),
+            TaskRef(("x", 0, 0)),
+            (slice(13, 20, 2), slice(10, 20, 1)),
         ),
-        ("y", 0, 2): (
-            getitem,
-            ("x", 0, 2),
-            (slice(13, 20, 2), slice(None, None, None)),
+        ("y", 0, 1): Task(
+            ("y", 0, 1), getitem, TaskRef(("x", 0, 1)), (slice(13, 20, 2), slice(None))
+        ),
+        ("y", 0, 2): Task(
+            ("y", 0, 2), getitem, TaskRef(("x", 0, 2)), (slice(13, 20, 2), slice(None))
         ),
     }
 
@@ -246,9 +249,9 @@ def test_slice_array_2d():
 
     # 2d slices with one dimension: x[5,10::1]
     expected = {
-        ("y", 0): (getitem, ("x", 0, 0), (5, slice(10, 20, 1))),
-        ("y", 1): (getitem, ("x", 0, 1), (5, slice(None, None, None))),
-        ("y", 2): (getitem, ("x", 0, 2), (5, slice(None, None, None))),
+        ("y", 0): Task(("y", 0), getitem, TaskRef(("x", 0, 0)), (5, slice(10, 20, 1))),
+        ("y", 1): Task(("y", 1), getitem, TaskRef(("x", 0, 1)), (5, slice(None))),
+        ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 0, 2)), (5, slice(None))),
     }
 
     result, chunks = slice_array(
@@ -260,12 +263,16 @@ def test_slice_array_2d():
 
 def test_slice_optimizations():
     # bar[:]
-    expected = {("foo", 0): ("bar", 0)}
+    expected = {("foo", 0): Alias(("foo", 0), ("bar", 0))}
     result, chunks = slice_array("foo", "bar", [[100]], (slice(None, None, None),), 8)
     assert expected == result
 
     # bar[:,:,:]
-    expected = {("foo", 0): ("bar", 0), ("foo", 1): ("bar", 1), ("foo", 2): ("bar", 2)}
+    expected = {
+        ("foo", 0): Alias(("foo", 0), ("bar", 0)),
+        ("foo", 1): Alias(("foo", 1), ("bar", 1)),
+        ("foo", 2): Alias(("foo", 2), ("bar", 2)),
+    }
     result, chunks = slice_array(
         "foo",
         "bar",
@@ -281,7 +288,11 @@ def test_slicing_with_singleton_indices():
         "y", "x", ([5, 5], [5, 5]), (slice(0, 5), 8), itemsize=8
     )
 
-    expected = {("y", 0): (getitem, ("x", 0, 1), (slice(None, None, None), 3))}
+    expected = {
+        ("y", 0): Task(
+            ("y", 0), getitem, TaskRef(("x", 0, 1)), (slice(None, None, None), 3)
+        )
+    }
 
     assert expected == result
 
@@ -296,14 +307,16 @@ def test_slicing_with_newaxis():
     )
 
     expected = {
-        ("y", 0, 0, 0): (
+        ("y", 0, 0, 0): Task(
+            ("y", 0, 0, 0),
             getitem,
-            ("x", 0, 0),
+            TaskRef(("x", 0, 0)),
             (slice(0, 3, 1), None, slice(None, None, None)),
         ),
-        ("y", 0, 0, 1): (
+        ("y", 0, 0, 1): Task(
+            ("y", 0, 0, 1),
             getitem,
-            ("x", 0, 1),
+            TaskRef(("x", 0, 1)),
             (slice(0, 3, 1), None, slice(None, None, None)),
         ),
     }
@@ -450,15 +463,19 @@ def test_slicing_exhaustively():
 def test_slicing_with_negative_step_flops_keys():
     x = da.arange(10, chunks=5)
     y = x[:1:-1]
-    assert (x.name, 1) in y.dask[(y.name, 0)]
-    assert (x.name, 0) in y.dask[(y.name, 1)]
+    assert (x.name, 1) in y.dask[(y.name, 0)].dependencies
+    assert (x.name, 0) in y.dask[(y.name, 1)].dependencies
 
     assert_eq(y, np.arange(10)[:1:-1])
 
     assert y.chunks == ((5, 3),)
 
-    assert y.dask[(y.name, 0)] == (getitem, (x.name, 1), (slice(-1, -6, -1),))
-    assert y.dask[(y.name, 1)] == (getitem, (x.name, 0), (slice(-1, -4, -1),))
+    assert y.dask[(y.name, 0)] == Task(
+        (y.name, 0), getitem, TaskRef((x.name, 1)), (slice(-1, -6, -1),)
+    )
+    assert y.dask[(y.name, 1)] == Task(
+        (y.name, 1), getitem, TaskRef((x.name, 0)), (slice(-1, -4, -1),)
+    )
 
 
 def test_empty_slice():
@@ -559,8 +576,18 @@ def test_uneven_blockdims():
     index = (slice(240, 270), slice(None))
     dsk_out, bd_out = slice_array("in", "out", blockdims, index, itemsize=8)
     sol = {
-        ("in", 0, 0): (getitem, ("out", 7, 0), (slice(28, 31, 1), slice(None))),
-        ("in", 1, 0): (getitem, ("out", 8, 0), (slice(0, 27, 1), slice(None))),
+        ("in", 0, 0): Task(
+            ("in", 0, 0),
+            getitem,
+            TaskRef(("out", 7, 0)),
+            (slice(28, 31, 1), slice(None)),
+        ),
+        ("in", 1, 0): Task(
+            ("in", 1, 0),
+            getitem,
+            TaskRef(("out", 8, 0)),
+            (slice(0, 27, 1), slice(None)),
+        ),
     }
     assert dsk_out == sol
     assert bd_out == ((3, 27), (100,))
@@ -569,12 +596,42 @@ def test_uneven_blockdims():
     index = (slice(240, 270), slice(180, 230))
     dsk_out, bd_out = slice_array("in", "out", blockdims, index, itemsize=8)
     sol = {
-        ("in", 0, 0): (getitem, ("out", 7, 5), (slice(28, 31, 1), slice(29, 30, 1))),
-        ("in", 0, 1): (getitem, ("out", 7, 6), (slice(28, 31, 1), slice(None))),
-        ("in", 0, 2): (getitem, ("out", 7, 7), (slice(28, 31, 1), slice(0, 18, 1))),
-        ("in", 1, 0): (getitem, ("out", 8, 5), (slice(0, 27, 1), slice(29, 30, 1))),
-        ("in", 1, 1): (getitem, ("out", 8, 6), (slice(0, 27, 1), slice(None))),
-        ("in", 1, 2): (getitem, ("out", 8, 7), (slice(0, 27, 1), slice(0, 18, 1))),
+        ("in", 0, 0): Task(
+            ("in", 0, 0),
+            getitem,
+            TaskRef(("out", 7, 5)),
+            (slice(28, 31, 1), slice(29, 30, 1)),
+        ),
+        ("in", 0, 1): Task(
+            ("in", 0, 0),
+            getitem,
+            TaskRef(("out", 7, 6)),
+            (slice(28, 31, 1), slice(None)),
+        ),
+        ("in", 0, 2): Task(
+            ("in", 0, 0),
+            getitem,
+            TaskRef(("out", 7, 7)),
+            (slice(28, 31, 1), slice(0, 18, 1)),
+        ),
+        ("in", 1, 0): Task(
+            ("in", 0, 0),
+            getitem,
+            TaskRef(("out", 8, 5)),
+            (slice(0, 27, 1), slice(29, 30, 1)),
+        ),
+        ("in", 1, 1): Task(
+            ("in", 0, 0),
+            getitem,
+            TaskRef(("out", 8, 6)),
+            (slice(0, 27, 1), slice(None)),
+        ),
+        ("in", 1, 2): Task(
+            ("in", 0, 0),
+            getitem,
+            TaskRef(("out", 8, 7)),
+            (slice(0, 27, 1), slice(0, 18, 1)),
+        ),
     }
     assert dsk_out == sol
     assert bd_out == ((3, 27), (1, 31, 18))
@@ -1029,7 +1086,7 @@ def test_take_sorted_indexer():
     assert {
         **dict(arr.dask),
         **{
-            k: k2
+            k: Alias(k, k2)
             for k, k2 in zip(
                 [k for k in dict(result.dask) if "getitem" in k[0]],
                 dict(arr.dask).keys(),
@@ -1044,5 +1101,5 @@ def test_all_none_slices_just_mappings():
     dsk = dict(result.dask)
     assert len([k for k in dsk if "getitem" in k[0]]) == 12
     # check that we are just mapping the keys
-    assert all(v in dsk for k, v in dsk.items() if "getitem" in k[0])
+    assert all(isinstance(v, Alias) for k, v in dsk.items() if "getitem" in k[0])
     assert_eq(result, np.ones((6, 10)))
