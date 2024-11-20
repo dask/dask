@@ -400,6 +400,10 @@ class GraphNode:
         raise NotImplementedError
 
     @property
+    def io_task(self) -> bool:
+        return False
+
+    @property
     def dependencies(self) -> frozenset:
         return self._dependencies
 
@@ -481,6 +485,10 @@ class DataNode(GraphNode):
         self.typ = type(value)
         self._dependencies = _no_deps
 
+    @property
+    def io_task(self) -> bool:
+        return True
+
     def copy(self):
         return DataNode(self.key, self.value)
 
@@ -530,6 +538,7 @@ class Task(GraphNode):
     func: Callable
     args: tuple
     kwargs: dict
+    _io_task: bool
     _token: str | None
     _is_coro: bool | None
     _repr: str | None
@@ -542,6 +551,7 @@ class Task(GraphNode):
         func: Callable,
         /,
         *args: Any,
+        io_task: bool = False,
         _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
@@ -565,6 +575,11 @@ class Task(GraphNode):
         self._is_coro = None
         self._token = None
         self._repr = None
+        self._io_task = io_task
+
+    @property
+    def io_task(self) -> bool:
+        return self._io_task
 
     def copy(self):
         return type(self)(
@@ -658,6 +673,7 @@ class Task(GraphNode):
     def fuse(*tasks: Task, key: KeyType | None = None) -> Task:
         all_keys = set()
         all_deps: set[KeyType] = set()
+        io_task = any(t.io_task for t in tasks)
         for t in tasks:
             all_deps.update(t.dependencies)
             all_keys.add(t.key)
@@ -675,6 +691,7 @@ class Task(GraphNode):
             outkey,
             Dict({k: Alias(k) for k in external_deps}),
             {},
+            io_task=io_task,
         )
 
 
