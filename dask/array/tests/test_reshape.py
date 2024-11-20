@@ -411,18 +411,21 @@ def test_reshape_blockwise_raises_for_expansion():
         reshape_blockwise(arr, (3, 2, 9))
 
 
-@pytest.mark.parametrize("shape", [(18, 3), (6, 3, 3)])
-def test_reshape_blockwise_dimension_reduction_and_chunks(shape):
+def test_reshape_blockwise_dimension_reduction_and_chunks():
     x = np.arange(0, 54).reshape(6, 3, 3)
     arr = from_array(x, chunks=(3, 2, (2, 1)))
     with pytest.raises(ValueError, match="Setting chunks is not allowed when"):
-        reshape_blockwise(arr, shape, arr.chunks)
+        reshape_blockwise(arr, (18, 3), arr.chunks)
 
 
 def test_reshape_blockwise_identity():
     x = np.arange(0, 54).reshape(6, 3, 3)
     arr = from_array(x, chunks=(3, 2, (2, 1)))
     result = reshape_blockwise(arr, (6, 3, 3))
+    assert len(arr.dask) == len(result.dask)
+    assert_eq(result, x)
+
+    result = reshape_blockwise(arr, (6, 3, 3), chunks=arr.chunks)
     assert len(arr.dask) == len(result.dask)
     assert_eq(result, x)
 
