@@ -473,6 +473,9 @@ def reshape_blockwise(
 
     _sanity_checks(x, shape)
 
+    if len(shape) == x.ndim and shape == x.shape:
+        return Array(x.dask, x.name, x.chunks, meta=x)
+
     outname = "reshape-blockwise-" + tokenize(x, shape)
     chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(x.chunks))))
 
@@ -514,9 +517,6 @@ def reshape_blockwise(
     _, _, mapper_in, one_dimensions = reshape_rechunk(
         x.shape, shape, x.chunks, disallow_dimension_expansion=True
     )
-
-    if len(shape) == x.ndim:
-        return Array(x.dask, x.name, x.chunks, meta=x)
 
     # Convert input chunks to output chunks
     out_shapes = [
