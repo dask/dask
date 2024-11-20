@@ -9,6 +9,7 @@ from dask import base, utils
 from dask.blockwise import blockwise as core_blockwise
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ArrayBlockwiseDep
 
 
 def blockwise(
@@ -224,9 +225,10 @@ def blockwise(
                     "Index string %s does not match array dimension %d"
                     % (ind, arg.ndim)
                 )
-            numblocks[arg.name] = arg.numblocks
-            arrays.append(arg)
-            arg = arg.name
+            if not isinstance(arg, ArrayBlockwiseDep):
+                numblocks[arg.name] = arg.numblocks
+                arrays.append(arg)
+                arg = arg.name
         argindsstr.extend((arg, ind))
 
     # Normalize keyword arguments

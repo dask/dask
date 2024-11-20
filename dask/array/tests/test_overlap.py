@@ -125,8 +125,7 @@ def test_overlap_internal_asymmetric_small():
 def test_trim_internal():
     d = da.ones((40, 60), chunks=(10, 10))
     e = trim_internal(d, axes={0: 1, 1: 2}, boundary="reflect")
-    assert any("_overlap_trim_info" in k[0] for k in dict(e.dask))
-
+    assert len(collections_to_dsk([e])) == 24
     assert e.chunks == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
 
 

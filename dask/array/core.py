@@ -56,7 +56,7 @@ from dask.context import globalmethod
 from dask.core import quote
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
-from dask.layers import ArraySliceDep, reshapelist
+from dask.layers import ArrayBlockIdDep, ArraySliceDep, ArrayValuesDep, reshapelist
 from dask.sizeof import sizeof
 from dask.typing import Graph, Key, NestedKeys
 from dask.utils import (
@@ -887,57 +887,25 @@ def map_blocks(
 
     extra_argpairs = []
     extra_names = []
-    # If func has block_id as an argument, construct an array of block IDs and
-    # prepare to inject it.
 
-    def _getter_item(a, b, **kwargs):
-        if len(a.shape) == 0:
-            # meta
-            return a.item()
-        return getter(a, b, **kwargs).item()
-
-    def _add_blockwise_layer_for_keyword(keyword_arr, prefix):
-        name = prefix + out.name
-        cs = tuple((1,) * len(c) for c in out.chunks)
-
-        dsk = graph_from_arraylike(
-            keyword_arr,
-            cs,
-            keyword_arr.shape,
-            name,
-            getitem=_getter_item,
-            dtype=keyword_arr.dtype,
-            inline_array=False,
-        )
-        return Array(dsk, name, chunks=cs, dtype=keyword_arr.dtype)
-
+    # If func has block_id as an argument, construct an object to inject it.
     if has_keyword(func, "block_id"):
-        # put block_id into a Blockwise layer so that we can fuse it
-        # with the other blockwise layers
-        block_id_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
-        for block_id in product(*(range(len(c)) for c in out.chunks)):
-            block_id_arr[block_id] = block_id
-        block_id_array = _add_blockwise_layer_for_keyword(block_id_arr, "block-id-")
-        extra_argpairs.append((block_id_array, out_ind))
+        extra_argpairs.append((ArrayBlockIdDep(out.chunks), out_ind))
         extra_names.append("block_id")
 
     if has_keyword(func, "_overlap_trim_info"):
         # Internal for map overlap to reduce size of graph
         num_chunks = out.numblocks
-        block_id_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
-        for block_id in product(*(range(len(c)) for c in out.chunks)):
-            block_id_arr[block_id] = (block_id, num_chunks)
-        block_id_array = _add_blockwise_layer_for_keyword(
-            block_id_arr, "_overlap_trim_info-id-"
-        )
-        extra_argpairs.append((block_id_array, out_ind))
+        block_id_dict = {
+            block_id: (block_id, num_chunks)
+            for block_id in product(*(range(len(c)) for c in out.chunks))
+        }
+        extra_argpairs.append((ArrayValuesDep(out.chunks, block_id_dict), out_ind))
         extra_names.append("_overlap_trim_info")
 
-    # If func has block_info as an argument, construct an array of block info
+    # If func has block_info as an argument, construct a dict of block info
     # objects and prepare to inject it.
     if has_keyword(func, "block_info"):
-        # put block_info into a Blockwise layer so that we can fuse it
-        # with the other blockwise layers
         starts = {}
         num_chunks = {}
         shapes = {}
@@ -964,8 +932,7 @@ def map_blocks(
                     num_chunks[i] = arg.numblocks
         out_starts = [cached_cumsum(c, initial_zero=True) for c in out.chunks]
 
-        block_info_name = "block-info-" + out.name
-        block_info_arr = np.empty(tuple([len(c) for c in out.chunks]), dtype=np.object_)
+        block_info_dict = {}
         for block_id in product(*(range(len(c)) for c in out.chunks)):
             # Get position of chunk, indexed by axis labels
             location = {out_ind[i]: loc for i, loc in enumerate(block_id)}
@@ -1002,20 +969,9 @@ def map_blocks(
                 ),
                 "dtype": dtype,
             }
-            block_info_arr[block_id] = info
+            block_info_dict[block_id] = info
 
-        cs = tuple((1,) * len(c) for c in out.chunks)
-        dsk = graph_from_arraylike(
-            block_info_arr,
-            cs,
-            block_info_arr.shape,
-            block_info_name,
-            getitem=_getter_item,
-            dtype=block_info_arr.dtype,
-            inline_array=False,
-        )
-        block_info = Array(dsk, block_info_name, chunks=cs, dtype=np.object_)
-        extra_argpairs.append((block_info, out_ind))
+        extra_argpairs.append((ArrayValuesDep(out.chunks, block_info_dict), out_ind))
         extra_names.append("block_info")
 
     if extra_argpairs:

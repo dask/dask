@@ -12,4 +12,4 @@ def test_map_blocks_block_id_fusion():
 
     result = arr.map_blocks(dummy).astype("f8")
     dsk = collections_to_dsk([result])
-    assert len(dsk) == 22
+    assert len(dsk) == 20
