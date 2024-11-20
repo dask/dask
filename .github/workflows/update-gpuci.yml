@@ -1,8 +1,10 @@
 name: Check for gpuCI updates
 
 on:
-  schedule:
-    - cron: "0 0 * * *" # Daily “At 00:00” UTC
+  # Disabling scheduled runs until gpuCI is back online.
+  # See https://github.com/dask/community/issues/404
+  # schedule:
+  #   - cron: "0 0 * * *" # Daily “At 00:00” UTC
   workflow_dispatch:
 
 jobs:
