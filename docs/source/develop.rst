@@ -344,38 +344,4 @@ with additional scripts and metadata located in `continuous_integration
 <https://github.com/dask/dask/tree/main/continuous_integration>`_
 
 
-GPU CI
-~~~~~~
-
-Pull requests are also tested with a GPU enabled CI environment provided by
-NVIDIA: `gpuCI <https://gpuci.gpuopenanalytics.com/>`_.
-Unlike Github Actions, the CI environment for gpuCI is controlled with the
-`rapidsai/dask-build-environment <https://github.com/rapidsai/dask-build-environment/>`_
-docker image.  When making commits to the
-`dask-build-environment repo <https://github.com/rapidsai/dask-build-environment/>`_ , a new image is built.
-The docker image building process can be monitored
-`here <https://gpuci.gpuopenanalytics.com/job/dask/job/dask-build-environment/job/branch/job/dask-build-env-main/>`_.
-Note, the ``dask-build-environment`` has two separate Dockerfiles for Dask
-and Distributed similarly, gpuCI will run for both `Dask
-<https://gpuci.gpuopenanalytics.com/job/dask/job/dask/job/prb/job/dask-prb/>`_
-and `Distributed
-<https://gpuci.gpuopenanalytics.com/job/dask/job/distributed/job/prb/job/distributed-prb/>`_
-
-For each PR, gpuCI will run all tests decorated with the pytest marker
-``@pytest.mark.gpu``.  This is configured in the `gpuci folder
-<https://github.com/dask/dask/tree/main/continuous_integration/gpuci>`_ .
-Like Github Actions, gpuCI will not run when first time contributors to Dask or
-Distributed submit PRs.  In this case, the gpuCI bot will comment on the PR:
-
-.. note:: Can one of the admins verify this patch?
-
-.. image:: images/gputester-msg.png
-   :alt: "Screenshot of a GitHub comment left by the GPUtester bot, where the comment says 'Can one of the admins verify this patch?'."
-
-Dask Maintainers can then approve gpuCI builds for these PRs with following choices:
-
-- To only approve the PR contributor for the current PR, leave a comment which states ``ok to test``
-- To approve the current PR and all future PRs from the contributor, leave a comment which states ``add to allowlist``
-
-
 .. _Sphinx: https://www.sphinx-doc.org/
