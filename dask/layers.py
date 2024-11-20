@@ -6,9 +6,8 @@ import operator
 from collections import defaultdict
 from collections.abc import Callable
 from itertools import product
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import numpy as np
 import tlz as toolz
 from tlz.curried import map
 
@@ -18,6 +17,9 @@ from dask.core import flatten
 from dask.highlevelgraph import Layer
 from dask.tokenize import normalize_token
 from dask.utils import apply, cached_cumsum, concrete, insert
+
+if TYPE_CHECKING:
+    import numpy as np
 
 #
 ##
