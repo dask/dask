@@ -404,9 +404,9 @@ class Blockwise(Layer):
         # TODO: Remove `io_deps` and handle indexable objects
         # in `self.indices` throughout `Blockwise`.
         _tmp_indices = []
+        numblocks = dict(numblocks)
+        io_deps = dict(io_deps or {})
         if indices:
-            numblocks = ensure_dict(numblocks, copy=True)
-            io_deps = ensure_dict(io_deps or {}, copy=True)
             for dep, ind in indices:
                 if isinstance(dep, BlockwiseDep):
                     name = tokenize(dep)
@@ -513,7 +513,6 @@ class Blockwise(Layer):
         # Generate coordinate map
         (coord_maps, concat_axes, dummies) = _get_coord_mapping(
             self.dims,
-            self.output,
             self.output_indices,
             self.numblocks,
             self.indices,
@@ -660,7 +659,6 @@ class Blockwise(Layer):
 
 def _get_coord_mapping(
     dims,
-    output,
     out_indices,
     numblocks,
     argpairs,
@@ -781,7 +779,6 @@ def make_blockwise_graph(
     # the actual graph
     (coord_maps, concat_axes, dummies) = _get_coord_mapping(
         dims,
-        output,
         out_indices,
         numblocks,
         argpairs,
@@ -805,17 +802,19 @@ def make_blockwise_graph(
         for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
             if ind is None:
                 args.append(arg)
+                continue
+
+            arg_coords = tuple(coords[c] for c in cmap)
+            if arg in io_deps:
+                tups = io_deps[arg].get(arg_coords, arg_coords)
             else:
-                arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
                     tups = lol_product((arg,), arg_coords)
+                    if concatenate:
+                        tups = (concatenate, tups, axes)
                 else:
                     tups = (arg,) + arg_coords
-                if concatenate and axes:
-                    tups = (concatenate, tups, axes)
-                if arg in io_deps:
-                    tups = io_deps[arg].get(tups[1:], tups[1:])
-                args.append(tups)
+            args.append(tups)
         dsk[(output,) + out_coords] = (func, *args)
     return dsk
 
