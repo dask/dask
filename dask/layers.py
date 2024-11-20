@@ -6,7 +6,7 @@ import operator
 from collections import defaultdict
 from collections.abc import Callable
 from itertools import product
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import tlz as toolz
 from tlz.curried import map
@@ -17,6 +17,9 @@ from dask.core import flatten
 from dask.highlevelgraph import Layer
 from dask.tokenize import normalize_token
 from dask.utils import apply, cached_cumsum, concrete, insert
+
+if TYPE_CHECKING:
+    import numpy as np
 
 #
 ##
@@ -88,9 +91,36 @@ class ArraySliceDep(ArrayBlockwiseDep):
         return tuple(slice(*s, None) for s in loc)
 
 
+class ArrayBlockIdDep(ArrayBlockwiseDep):
+    def __getitem__(self, idx: tuple):
+        if not isinstance(idx, tuple):
+            # This happens if something else except graph generation calls us
+            raise NotImplementedError("ArrayBlockIdDep requires a tuple index")
+        return idx
+
+
+class ArrayValuesDep(ArrayBlockwiseDep):
+    def __init__(self, chunks: tuple[tuple[int, ...], ...], values: np.ndarray | dict):
+        super().__init__(chunks)
+        self.values = values
+
+    def __getitem__(self, idx: tuple):
+        return self.values[idx]
+
+
 @normalize_token.register(ArraySliceDep)
 def normalize_array_slice_dep(dep):
     return "ArraySliceDep", dep.chunks, dep.starts
+
+
+@normalize_token.register(ArrayBlockIdDep)
+def normalize_array_block_id_dep(dep):
+    return "ArrayBlockIdDep", dep.chunks
+
+
+@normalize_token.register(ArrayValuesDep)
+def normalize_array_values_dep(dep):
+    return "ArrayValuesDep", dep.chunks, dep.values
 
 
 class ArrayOverlapLayer(Layer):
