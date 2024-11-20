@@ -1136,8 +1136,8 @@ async def test_release_persisted_futures_without_gc(c, s, a, b):
 
 @gen_cluster(client=True)
 async def test_fusion_barrier_task(c, s, a, b):
+    np = pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
-    import numpy as np
 
     a = np.random.default_rng().uniform(0, 1, 100).reshape((10, 10))
     x = da.from_array(a, chunks=(10, 1))
