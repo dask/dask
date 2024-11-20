@@ -799,9 +799,7 @@ def make_blockwise_graph(
     )
 
     dsk = {}
-    # Create argument lists
     for out_coords in output_blocks:
-        deps = set()
         coords = out_coords + dummies
         args = []
         for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
@@ -811,28 +809,14 @@ def make_blockwise_graph(
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
                     tups = lol_product((arg,), arg_coords)
-                    if arg not in io_deps:
-                        deps.update(flatten(tups))
-
-                    if concatenate:
-                        tups = (concatenate, tups, axes)
                 else:
                     tups = (arg,) + arg_coords
-                    if arg not in io_deps:
-                        deps.add(tups)
-                # Replace "place-holder" IO keys with "real" args
+                if concatenate and axes:
+                    tups = (concatenate, tups, axes)
                 if arg in io_deps:
-                    # We don't want to stringify keys for args
-                    # we are replacing here
-                    idx = tups[1:]
-                    args.append(io_deps[arg].get(idx, idx))
-                else:
-                    args.append(tups)
-        out_key = (output,) + out_coords
-
-        args.insert(0, func)
-        dsk[out_key] = tuple(args)
-
+                    tups = io_deps[arg].get(tups[1:], tups[1:])
+                args.append(tups)
+        dsk[(output,) + out_coords] = (func, *args)
     return dsk
 
 
