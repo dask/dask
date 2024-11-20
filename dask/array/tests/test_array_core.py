@@ -57,8 +57,8 @@ from dask.array.reshape import _not_implemented_message
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import (
+    _make_blockwise_graph,
     broadcast_dimensions,
-    make_blockwise_graph,
     optimize_blockwise,
 )
 from dask.delayed import Delayed, delayed
@@ -94,14 +94,16 @@ def test_graph_from_arraylike(inline_array):
 
 
 def test_top():
-    assert make_blockwise_graph(inc, "z", "ij", "x", "ij", numblocks={"x": (2, 2)}) == {
+    assert _make_blockwise_graph(
+        inc, "z", "ij", "x", "ij", numblocks={"x": (2, 2)}
+    ) == {
         ("z", 0, 0): (inc, ("x", 0, 0)),
         ("z", 0, 1): (inc, ("x", 0, 1)),
         ("z", 1, 0): (inc, ("x", 1, 0)),
         ("z", 1, 1): (inc, ("x", 1, 1)),
     }
 
-    assert make_blockwise_graph(
+    assert _make_blockwise_graph(
         add, "z", "ij", "x", "ij", "y", "ij", numblocks={"x": (2, 2), "y": (2, 2)}
     ) == {
         ("z", 0, 0): (add, ("x", 0, 0), ("y", 0, 0)),
@@ -110,7 +112,7 @@ def test_top():
         ("z", 1, 1): (add, ("x", 1, 1), ("y", 1, 1)),
     }
 
-    assert make_blockwise_graph(
+    assert _make_blockwise_graph(
         dotmany, "z", "ik", "x", "ij", "y", "jk", numblocks={"x": (2, 2), "y": (2, 2)}
     ) == {
         ("z", 0, 0): (dotmany, [("x", 0, 0), ("x", 0, 1)], [("y", 0, 0), ("y", 1, 0)]),
@@ -119,13 +121,13 @@ def test_top():
         ("z", 1, 1): (dotmany, [("x", 1, 0), ("x", 1, 1)], [("y", 0, 1), ("y", 1, 1)]),
     }
 
-    assert make_blockwise_graph(
+    assert _make_blockwise_graph(
         identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}
     ) == {("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])}
 
 
 def test_top_supports_broadcasting_rules():
-    assert make_blockwise_graph(
+    assert _make_blockwise_graph(
         add, "z", "ij", "x", "ij", "y", "ij", numblocks={"x": (1, 2), "y": (2, 1)}
     ) == {
         ("z", 0, 0): (add, ("x", 0, 0), ("y", 0, 0)),
@@ -136,7 +138,7 @@ def test_top_supports_broadcasting_rules():
 
 
 def test_top_literals():
-    assert make_blockwise_graph(
+    assert _make_blockwise_graph(
         add, "z", "ij", "x", "ij", 123, None, numblocks={"x": (2, 2)}
     ) == {
         ("z", 0, 0): (add, ("x", 0, 0), 123),
@@ -222,7 +224,7 @@ def test_chunked_dot_product():
     getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), name="x")
     geto = graph_from_arraylike(o, (5, 5), shape=(20, 20), name="o")
 
-    result = make_blockwise_graph(
+    result = _make_blockwise_graph(
         dotmany, "out", "ik", "x", "ij", "o", "jk", numblocks={"x": (4, 4), "o": (4, 4)}
     )
 
@@ -238,7 +240,7 @@ def test_chunked_transpose_plus_one():
     getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), name="x")
 
     f = lambda x: x.T + 1
-    comp = make_blockwise_graph(f, "out", "ij", "x", "ji", numblocks={"x": (4, 4)})
+    comp = _make_blockwise_graph(f, "out", "ij", "x", "ji", numblocks={"x": (4, 4)})
 
     dsk = merge(getx, comp)
     out = dask.get(dsk, [[("out", i, j) for j in range(4)] for i in range(4)])

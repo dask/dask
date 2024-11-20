@@ -453,7 +453,7 @@ class Blockwise(Layer):
             dsk, _ = fuse(self.dsk, [self.output])
             func = SubgraphCallable(dsk, self.output, keys)
 
-            dsk = make_blockwise_graph(
+            dsk = _make_blockwise_graph(
                 func,
                 self.output,
                 self.output_indices,
@@ -750,7 +750,7 @@ def _get_coord_mapping(
     return coord_maps, concat_axes, dummies
 
 
-def make_blockwise_graph(
+def _make_blockwise_graph(
     func,
     output,
     out_indices,
