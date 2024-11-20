@@ -3754,9 +3754,9 @@ def from_zarr(
                 store = zarr.storage.FSStore(url, **storage_options)
         else:
             store = url
-        z = zarr.open_array(store=store, read_only=True, path=component, **kwargs)
+        z = zarr.open_array(store=store, path=component, **kwargs)
     else:
-        z = zarr.open_array(store=url, read_only=True, path=component, **kwargs)
+        z = zarr.open_array(store=url, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
