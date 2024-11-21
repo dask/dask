@@ -1385,6 +1385,14 @@ class Array(DaskMethodsMixin):
                     }
                 )
 
+        if (
+            reduce(mul, map(max, self._chunks))
+            < parse_bytes(config.get("array.chunk-size"))
+            / 2
+            / self._meta.dtype.itemsize
+        ):
+            self = self.rechunk("auto")
+
         return self
 
     def __reduce__(self):
