@@ -82,6 +82,11 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
+try:
+    import zarr
+except ImportError:
+    zarr = None
+
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
@@ -3818,6 +3823,9 @@ def to_zarr(
         return arr.store(
             z, lock=False, regions=regions, compute=compute, return_stored=return_stored
         )
+    else:
+        if any(len(set(c)) > 1 for c in arr.chunks):
+            arr = arr.rechunk(tuple(map(max, arr.chunks)))
 
     if region is not None:
         raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")

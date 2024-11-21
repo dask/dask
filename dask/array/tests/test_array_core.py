@@ -4676,6 +4676,12 @@ def test_zarr_group():
         assert a2.chunks == a.chunks
 
 
+def test_zarr_irregular_chunks():
+    with tmpdir() as d:
+        a = da.zeros((10, 10), chunks=((2, 1, 2, 2, 1, 2), 1))
+        a.to_zarr(d, component="test")
+
+
 @pytest.mark.parametrize(
     "data",
     [
