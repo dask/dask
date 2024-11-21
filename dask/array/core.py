@@ -1384,9 +1384,10 @@ class Array(DaskMethodsMixin):
                         "chunk_type": typename(type(self._meta)),
                     }
                 )
-
         if (
-            reduce(mul, map(max, self._chunks))
+            config.get("array.automatic-rechunk")
+            and any(len(c) > 1 for c in self._chunks)
+            and reduce(mul, map(max, self._chunks))
             < parse_bytes(config.get("array.chunk-size"))
             / 2
             / self._meta.dtype.itemsize
