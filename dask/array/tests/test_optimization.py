@@ -194,7 +194,7 @@ def test_fuse_slices_with_alias(getter, getitem):
     }
     keys = [("dx2", 0)]
     dsk2 = optimize(dsk, keys)
-    assert len(dsk2) == 3
+    assert len(dsk2) == 2
 
 
 @pytest.mark.parametrize("chunks", [10, 5, 3])
@@ -203,10 +203,13 @@ def test_fuse_getter_with_asarray(chunks):
     y = da.ones(10, chunks=chunks)
     z = x + y
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-    assert any(
-        isinstance(v, DataNode) and isinstance(v.value, np.ndarray)
-        for v in dsk.values()
-    )
+    if chunks == 10:
+        assert len(dsk) == 2 and any(isinstance(t, Alias) for t in dsk.values())
+    else:
+        assert any(
+            isinstance(v, DataNode) and isinstance(v.value, np.ndarray)
+            for v in dsk.values()
+        )
     assert_eq(z, x + 1)
 
 
