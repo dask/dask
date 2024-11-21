@@ -12,6 +12,7 @@ import numpy as np
 from tlz import concat, memoize, merge, pluck
 
 from dask import core
+from dask._task_spec import Alias, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -141,10 +142,8 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
     ...                              (slice(10, 35),), 8)
     >>> pprint(dsk)  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    {('y', 0): (<function getitem at ...>,
-                ('x', 0),
-                (slice(10, 20, 1),)),
-     ('y', 1): (<function getitem at ...>, ('x', 1), (slice(0, 15, 1),))}
+    {('y', 0): <Task ('y', 0) getitem(Alias(('x', 0)->('x', 0)), (slice(10, 20, 1),))>,
+     ('y', 1): <Task ('y', 1) getitem(Alias(('x', 1)->('x', 1)), (slice(0, 15, 1),))>}
     >>> blockdims
     ((10, 15),)
 
@@ -164,7 +163,9 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
         isinstance(index, slice) and index == slice(None, None, None) for index in index
     ):
         suffixes = product(*[range(len(bd)) for bd in blockdims])
-        dsk = {(out_name,) + s: (in_name,) + s for s in suffixes}
+        dsk = {
+            (out_name,) + s: Alias((out_name,) + s, (in_name,) + s) for s in suffixes
+        }
         return dsk, blockdims
 
     # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
@@ -204,19 +205,17 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
         expand_orig = expander(where_none_orig)
 
         # Insert ",0" into the key:  ('x', 2, 3) -> ('x', 0, 2, 0, 3)
-        dsk2 = {
-            (out_name,) + expand(k[1:], 0): (v[:2] + (expand_orig(v[2], None),))
-            for k, v in dsk.items()
-            if k[0] == out_name
-        }
-
-        # Add back intermediate parts of the dask that weren't the output
-        dsk3 = merge(dsk2, {k: v for k, v in dsk.items() if k[0] != out_name})
+        dsk2 = {}
+        for k, v in dsk.items():
+            if k[0] == out_name:
+                k2 = (out_name,) + expand(k[1:], 0)
+                dsk2[k2] = Task(k2, v.func, v.args[0], expand_orig(v.args[1], None))
+            else:
+                dsk2[k] = v
 
         # Insert (1,) into blockdims:  ((2, 2), (3, 3)) -> ((2, 2), (1,), (3, 3))
         blockdims3 = expand(blockdims2, (1,))
-
-        return dsk3, blockdims3
+        return dsk2, blockdims3
 
     else:
         return dsk, blockdims2
@@ -340,10 +339,10 @@ def slice_slices_and_integers(
 
     dsk_out = {
         out_name: (
-            (getitem, in_name, slices)
+            Task(out_name, getitem, TaskRef(in_name), slices)
             if not allow_getitem_optimization
             or not all(sl == slice(None, None, None) for sl in slices)
-            else in_name
+            else Alias(out_name, in_name)
         )
         for out_name, in_name, slices in zip(out_names, in_names, all_slices)
     }
@@ -587,7 +586,10 @@ def take(outname, inname, chunks, index, axis=0):
             # TODO: This should be a real no-op, but the call stack is
             # too deep to do this efficiently for now
             chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
-            graph = {(outname,) + c: (inname,) + c for c in chunk_tuples}
+            graph = {
+                (outname,) + c: Alias((outname,) + c, (inname,) + c)
+                for c in chunk_tuples
+            }
             return tuple(chunks), graph
 
         average_chunk_size = int(sum(chunks[axis]) / len(chunks[axis]))
@@ -610,7 +612,9 @@ def take(outname, inname, chunks, index, axis=0):
         slices = tuple(slices)
         chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
         dsk = {
-            (outname,) + ct: (getitem, (inname,) + ct, slices) for ct in chunk_tuples
+            (outname,)
+            + ct: Task((outname,) + ct, getitem, TaskRef((inname,) + ct), slices)
+            for ct in chunk_tuples
         }
         return chunks, dsk
     else:

@@ -10,6 +10,7 @@ from typing import Literal
 import numpy as np
 
 from dask import config
+from dask._task_spec import DataNode, List, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.array.core import Array, unknown_chunk_message
 from dask.array.dispatch import concatenate_lookup, take_lookup
@@ -226,16 +227,17 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
     sorter_name = "shuffle-sorter-"
     taker_name = "shuffle-taker-"
 
-    old_blocks = np.empty([len(c) for c in chunks], dtype="O")
-    for old_index in np.ndindex(old_blocks.shape):
-        old_blocks[old_index] = (in_name,) + old_index
+    old_blocks = {
+        old_index: (in_name,) + old_index
+        for old_index in np.ndindex(tuple([len(c) for c in chunks]))
+    }
 
     for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
         new_chunk_taker = np.array(new_chunk_taker)
         sorter = np.argsort(new_chunk_taker).astype(dtype)
         sorter_key = sorter_name + tokenize(sorter)
         # low level fusion can't deal with arrays on first position
-        merges[sorter_key] = (1, sorter)
+        merges[sorter_key] = DataNode(sorter_key, (1, sorter))
 
         sorted_array = new_chunk_taker[sorter]
         source_chunk_nr, taker_boundary = np.unique(
@@ -271,22 +273,30 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
                     taker_key = taker_name + tokenize(this_slice)
                     # low level fusion can't deal with arrays on first position
-                    intermediates[taker_key] = (1, tuple(this_slice))
+                    intermediates[taker_key] = DataNode(
+                        taker_key, (1, tuple(this_slice))
+                    )
                     taker_cache[c] = taker_key
 
-                intermediates[name] = _getitem, old_blocks[chunk_key], taker_key
+                intermediates[name] = Task(
+                    name, _getitem, TaskRef(old_blocks[chunk_key]), TaskRef(taker_key)
+                )
                 merge_keys.append(name)
 
             merge_suffix = convert_key(chunk_tuple, new_chunk_idx, axis)
+            out_name_merge = (out_name,) + merge_suffix
             if len(merge_keys) > 1:
-                merges[(out_name,) + merge_suffix] = (
+                merges[out_name_merge] = Task(
+                    out_name_merge,
                     concatenate_arrays,
-                    merge_keys,
-                    sorter_key,
+                    List(*(TaskRef(m) for m in merge_keys)),
+                    TaskRef(sorter_key),
                     axis,
                 )
             elif len(merge_keys) == 1:
-                merges[(out_name,) + merge_suffix] = intermediates.pop(merge_keys[0])
+                t = intermediates.pop(merge_keys[0])
+                t.key = out_name_merge
+                merges[out_name_merge] = t
             else:
                 raise NotImplementedError
 
