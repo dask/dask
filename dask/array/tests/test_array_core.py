@@ -4677,6 +4677,7 @@ def test_zarr_group():
 
 
 def test_zarr_irregular_chunks():
+    pytest.importorskip("zarr")
     with tmpdir() as d:
         a = da.zeros((10, 10), chunks=((2, 1, 2, 2, 1, 2), 1))
         a.to_zarr(d, component="test")
