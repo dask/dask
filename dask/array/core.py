@@ -3825,6 +3825,9 @@ def to_zarr(
         )
     else:
         if any(len(set(c)) > 1 for c in arr.chunks):
+            # We almost certainly get here because auto chunking has been used
+            # on irregular chunks. The max will then be smaller than auto, so using
+            # max is a safe choice
             arr = arr.rechunk(tuple(map(max, arr.chunks)))
 
     if region is not None:
