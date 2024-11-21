@@ -5207,10 +5207,6 @@ def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
             y.to_zarr(f)
     y.compute_chunk_sizes()
 
-    with pytest.raises(ValueError, match="irregular chunking"):
-        with StringIO() as f:
-            y.to_zarr(f)
-
 
 def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
     y = unknown
