@@ -82,11 +82,6 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-try:
-    import zarr
-except ImportError:
-    zarr = None
-
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
