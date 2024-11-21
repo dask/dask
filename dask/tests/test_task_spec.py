@@ -898,20 +898,20 @@ def test_linear_fusion():
     ]
     dsk = {t.key: t for t in tasks}
     result = fuse_linear_task_spec(dsk, {"fourth"})
-    assert len(result) == 3
+    assert len(result) == 2
     assert isinstance(result["fourth"], Alias)
     assert (
-        isinstance(result["second-third-fourth"], Task)
-        and funcname(result["second-third-fourth"].func) == "_execute_subgraph"
+        isinstance(result["foo-second-third-fourth"], Task)
+        and funcname(result["foo-second-third-fourth"].func) == "_execute_subgraph"
     )
-    assert isinstance(result["foo"], DataNode)
+    assert "foo" not in result
 
     # Branch, so no fusion
     tasks.append(Task("branch", func, third.ref()))
     dsk = {t.key: t for t in tasks}
     result = fuse_linear_task_spec(dsk, {"fourth"})
-    assert len(result) == 5
-    assert "second-third" in result
+    assert len(result) == 4
+    assert "foo-second-third" in result
     assert isinstance(result["third"], Alias)
 
     # Branch, so no fusion at all
@@ -932,7 +932,7 @@ def test_linear_fusion_intermediate_branch():
     ]
     dsk = {t.key: t for t in tasks}
     result = fuse_linear_task_spec(dsk, {"fourth"})
-    assert "second-third" in result
+    assert "foo-second-third" in result
     assert isinstance(result["fourth"], Task)
 
 
@@ -998,6 +998,27 @@ def test_nested_containers():
     )
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == {"k": "a-b", ("v", 1): "c-d"}
+
+
+def test_block_io_fusion():
+
+    class SubTask(Task):
+
+        @property
+        def block_fusion(self) -> bool:
+            return True
+
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref()),
+        third := SubTask("third", func, second.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "foo-second" in result
+    assert isinstance(result["fourth"], Task)
+    assert isinstance(result["third"], SubTask)
 
 
 @pytest.mark.parametrize(
