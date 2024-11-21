@@ -63,7 +63,7 @@ class ArrayBlockwiseDep(BlockwiseDep):
 
     def __init__(self, chunks: tuple[tuple[int, ...], ...]):
         self.chunks = chunks
-        self.numblocks = tuple(len(chunk) for chunk in chunks)
+        self.numblocks = tuple(len(chunk) - 2 for chunk in chunks)
         self.produces_tasks = False
 
     def __getitem__(self, idx: tuple[int, ...]):
@@ -110,7 +110,7 @@ class ArrayValuesDep(ArrayBlockwiseDep):
 
 @normalize_token.register(ArraySliceDep)
 def normalize_array_slice_dep(dep):
-    return "ArraySliceDep", dep.chunks, dep.starts
+    return "ArraySliceDep", dep.chunks
 
 
 @normalize_token.register(ArrayBlockIdDep)
