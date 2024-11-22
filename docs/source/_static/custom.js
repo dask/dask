@@ -13,11 +13,10 @@ document.addEventListener("DOMContentLoaded", function () {
   script.setAttribute("runllm-position-y", "50%");
   script.setAttribute("runllm-assistant-id", "273");
   script.setAttribute("runllm-theme-color", "#FFC11E");
-  script.setAttribute("runllm-slack-community-url", "TODO");
+  script.setAttribute("runllm-slack-community-url", "https://dask.slack.com/");
   script.setAttribute("runllm-per-user-usage-limit", 2);
   script.setAttribute("runllm-usage-limit-effective-days", 30);
-  script.setAttribute("runllm-usage-limit-message", `#Hello!
-You are out of queries.`);
+  script.setAttribute("runllm-usage-limit-message", `Hi! You've hit the limit for anonymous questions, but you can join us on Slack in #DaskBot and ask as many questions as you'd like.`);
   script.setAttribute("runllm-brand-logo", "_images/dask_icon.svg");
 
   script.async = true;
