@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import math
 import re
+from functools import lru_cache
 
 import numpy as np
 
 
+@lru_cache(maxsize=512)
 def svg(chunks, size=200, **kwargs):
     """Convert chunks from Dask Array into an SVG Image
 
