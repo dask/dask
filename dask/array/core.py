@@ -83,7 +83,10 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-ARRAY_TEMPLATE = get_template("array.html.j2")
+try:
+    ARRAY_TEMPLATE = get_template("array.html.j2")
+except ImportError:
+    ARRAY_TEMPLATE = None
 
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
