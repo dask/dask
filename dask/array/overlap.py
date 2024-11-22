@@ -9,14 +9,12 @@ import numpy as np
 from tlz import concat, get, partial
 from tlz.curried import map
 
-from dask._compatibility import import_optional_dependency
 from dask.array import chunk
 from dask.array._shuffle import _calculate_new_chunksizes
-from dask.array.core import Array, broadcast_to, concatenate, map_blocks, unify_chunks
-from dask.array.creation import arange, empty_like, full_like, repeat
+from dask.array.core import Array, concatenate, map_blocks, unify_chunks
+from dask.array.creation import empty_like, full_like, repeat
 from dask.array.numpy_compat import normalize_axis_tuple
 from dask.array.reductions import cumreduction
-from dask.array.routines import notnull, where
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayOverlapLayer
@@ -885,45 +883,67 @@ def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
     )
 
 
-def push(array, n, axis):
+def push(array, n, axis, method="sequential"):
     """
-    Dask-version of bottleneck.push
-
-    .. note::
-
-        Requires bottleneck to be installed.
+    Dask-aware bottleneck.push
     """
-    import_optional_dependency("bottleneck", min_version="1.3.7")
+
+    # TODO: Add a nanlast to allow the use of the blelloch method
+
+    if n is not None and all(n <= size for size in array.chunks[axis]):
+        return array.map_overlap(_push, depth={axis: (n, 0)}, n=n, axis=axis)
 
     def _fill_with_last_one(a, b):
-        # cumreduction apply the push func over all the blocks first so, the only missing part is filling
-        # the missing values using the last data of the previous chunk
-        return np.where(~np.isnan(b), b, a)
+        # cumreduction apply the push func over all the blocks first so,
+        # the only missing part is filling the missing values using the
+        # last data of the previous chunk
+        return np.where(np.isnan(b), a, b)
 
-    if n is not None and 0 < n < array.shape[axis] - 1:
-        arr = broadcast_to(
-            arange(
-                array.shape[axis], chunks=array.chunks[axis], dtype=array.dtype
-            ).reshape(
-                tuple(size if i == axis else 1 for i, size in enumerate(array.shape))
-            ),
-            array.shape,
-            array.chunks,
-        )
-        valid_arange = where(notnull(array), arr, np.nan)
-        valid_limits = (arr - push(valid_arange, None, axis)) <= n
-        # omit the forward fill that violate the limit
-        return where(valid_limits, push(array, None, axis), np.nan)
+    def _dtype_push(a, axis, dtype=None):
+        # Not sure why the blelloch algorithm force to receive a dtype
+        return _push(a, axis=axis)
 
-    # The method parameter makes that the tests for python 3.7 fails.
-    return cumreduction(
-        func=_push,
+    pushed_array = cumreduction(
+        func=_dtype_push,
         binop=_fill_with_last_one,
         ident=np.nan,
         x=array,
         axis=axis,
         dtype=array.dtype,
+        method=method,
+        # preop=nanlast,
     )
+
+    if n is not None and 0 < n < array.shape[axis] - 1:
+        def _reset_cumsum(a, axis, dtype=None):
+            cumsum = np.cumsum(a, axis=axis)
+            reset_points = np.maximum.accumulate(np.where(a == 0, cumsum, 0), axis=axis)
+            return cumsum - reset_points
+
+        def _last_reset_cumsum(a, axis, keepdims=None):
+            # Take the last cumulative sum taking into account the reset
+            # This is useful for blelloch method
+            return np.take(_reset_cumsum(a, axis=axis), axis=axis, indices=[-1])
+
+        def _combine_reset_cumsum(a, b):
+            # It is going to sum the previous result until the first
+            # non nan value
+            bitmask = np.cumprod(b != 0, axis=axis)
+            return np.where(bitmask, b + a, b)
+
+        valid_positions = cumreduction(
+            func=_reset_cumsum,
+            binop=_combine_reset_cumsum,
+            ident=0,
+            x=np.isnan(array, dtype=int),
+            axis=axis,
+            dtype=int,
+            method=method,
+            preop=_last_reset_cumsum,
+        )
+        pushed_array = np.where(valid_positions <= n, pushed_array, np.nan)
+
+    return pushed_array
 
 
 def _push(array, n: int | None = None, axis: int = -1):
