@@ -15,9 +15,11 @@ from typing import Union
 
 import cloudpickle
 import pytest
+from packaging.version import Version
 from tlz import compose, curry, partial
 
 import dask
+from dask._compatibility import PY_VERSION
 from dask.core import flatten, literal
 from dask.tokenize import TokenizationError, normalize_token, tokenize
 from dask.utils import tmpfile
@@ -954,6 +956,9 @@ def test_local_objects():
     assert check_tokenize(LocalDaskTokenize()) != check_tokenize(LocalReducible())
 
 
+@pytest.mark.skipif(
+    PY_VERSION >= Version("3.13"), reason="https://github.com/dask/dask/issues/11457"
+)
 def test_tokenize_dataclass():
     a1 = ADataClass(1)
     a2 = ADataClass(2)
