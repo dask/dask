@@ -6,6 +6,8 @@ from functools import lru_cache
 
 import numpy as np
 
+from dask.utils import cached_cumsum
+
 
 @lru_cache(maxsize=512)
 def svg(chunks, size=200, **kwargs):
@@ -255,7 +257,7 @@ def svg_1d(chunks, sizes=None, **kwargs):
 
 
 def grid_points(chunks, sizes):
-    cumchunks = [np.cumsum((0,) + c) for c in chunks]
+    cumchunks = [np.array(cached_cumsum(c, initial_zero=True)) for c in chunks]
     points = [x * size / x[-1] for x, size in zip(cumchunks, sizes)]
     return points
 
