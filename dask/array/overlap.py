@@ -9,6 +9,7 @@ import numpy as np
 from tlz import concat, get, partial
 from tlz.curried import map
 
+from dask._compatibility import import_optional_dependency
 from dask.array import chunk
 from dask.array._shuffle import _calculate_new_chunksizes
 from dask.array.core import Array, concatenate, map_blocks, unify_chunks
@@ -885,8 +886,14 @@ def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
 
 def push(array, n, axis, method="sequential"):
     """
-    Dask-aware bottleneck.push
+    Dask-version of bottleneck.push
+
+    .. note::
+
+        Requires bottleneck to be installed.
     """
+
+    import_optional_dependency("bottleneck", min_version="1.3.7")
 
     # TODO: Add a nanlast to allow the use of the blelloch method
 
