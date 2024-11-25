@@ -658,8 +658,24 @@ class Task(GraphNode):
                 self._is_coro = False
         return self._is_coro
 
+    def substitute(self, subs, key: KeyType | None = None) -> Task:
+        # FIXME: We should substitute eagerly since in applications like
+        # blockwise we may want to only recurse and substitute once and not for
+        # every instance of this
+        # I suspect an easy way to do substutition is to use the fused task
+        # below and run a version of resolve_aliases on the subgraph
+
+        subs_filtered = {
+            k: v for k, v in subs.items() if k in self.dependencies and k != v
+        }
+        if not subs_filtered:
+            return self
+        return Task.fuse(
+            self, *(Alias(k, v) for k, v in subs_filtered.items()), key=key
+        )
+
     @staticmethod
-    def fuse(*tasks: Task, key: KeyType | None = None) -> Task:
+    def fuse(*tasks: GraphNode, key: KeyType | None = None) -> Task:
         all_keys = set()
         all_deps: set[KeyType] = set()
         for t in tasks:

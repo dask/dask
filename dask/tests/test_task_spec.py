@@ -1033,3 +1033,13 @@ def test_nested_containers_different_types(task_type, python_type):
     t = task_type(Task("key-1", func, "a", TaskRef("b")), Task("key-2", func, "c", "d"))
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == python_type(("a-b", "c-d"))
+
+
+def test_substitute():
+    t1 = Task("key-1", func, TaskRef("a"), "b")
+    assert t1.substitute({"a": "a"}) is t1
+    t2 = t1.substitute({"a": "c"})
+    assert t2 is not t1
+    assert t2.dependencies == {"c"}
+
+    assert t1({"a": "a"}) == t2({"c": "a"})
