@@ -1,5 +1,8 @@
-import dask.array as da
+# import dask.array as da
+from __future__ import annotations
+
 import numpy as np
+
 
 def moving_average(data, window_size):
     if window_size < 1:

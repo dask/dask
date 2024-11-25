@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import pytest
+
 import dask.array as da
-from dask.array.scaling import min_max_scale, l2_normalize
+from dask.array.scaling import l2_normalize, min_max_scale
+
 
 def test_min_max_scale():
     data = da.from_array([1, 2, 3, 4, 5], chunks=2)
@@ -8,10 +12,12 @@ def test_min_max_scale():
     expected = [0.0, 0.25, 0.5, 0.75, 1.0]
     assert all(abs(r - e) < 1e-6 for r, e in zip(result, expected))
 
+
 def test_min_max_scale_constant_values():
     data = da.from_array([5, 5, 5], chunks=2)
     with pytest.raises(ValueError, match="Cannot scale data with constant values."):
         min_max_scale(data).compute()
+
 
 def test_l2_normalize():
     data = da.from_array([[1, 2], [3, 4]], chunks=2)
