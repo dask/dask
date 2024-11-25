@@ -10,5 +10,5 @@ def log_transform(data):
     return da.log(data)
 
 
-def binarize(data, threshold=0):
+def binarize(data, threshold=0.0):
     return (data > threshold).astype(int)
