@@ -24,4 +24,3 @@ document.addEventListener("DOMContentLoaded", function () {
   script.async = true;
   document.head.appendChild(script);
 });
-
