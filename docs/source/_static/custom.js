@@ -18,7 +18,10 @@ document.addEventListener("DOMContentLoaded", function () {
   script.setAttribute("runllm-usage-limit-effective-days", 30);
   script.setAttribute("runllm-usage-limit-message", `Hi! You've hit the limit for anonymous questions, but you can join us on Slack in #DaskBot and ask as many questions as you'd like.`);
   script.setAttribute("runllm-brand-logo", "_images/dask_icon.svg");
+  script.setAttribute("runllm-floating-button-text", "Ask DaskBot");
+  script.setAttribute("runllm-join-community-text", "Chat with DaskBot in Slack");
 
   script.async = true;
   document.head.appendChild(script);
 });
+
