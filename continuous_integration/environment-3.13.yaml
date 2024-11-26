@@ -1,0 +1,77 @@
+# This job includes coverage
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.13
+  - packaging
+  - pyyaml
+  - click
+  - cloudpickle
+  - partd
+  - fsspec
+  - toolz
+  # test dependencies
+  - pre-commit
+  - pytest
+  - pytest-cov
+  - pytest-rerunfailures
+  - pytest-timeout
+  - pytest-xdist
+  - moto<5
+  # Optional dependencies
+  - mimesis
+  - numpy >=2  # only tested here
+  - pandas
+  #- numba  # not available for py 13
+  - flask
+  - fastparquet
+  - h5py
+  # Temporarily removing to allow `numpy >=2` to be installed
+  # - pytables
+  - zarr
+  # `tiledb-py=0.17.5` lead to strange seg faults in CI, However 0.18 is needed for 3.11
+  # https://github.com/dask/dask/pull/9569
+  # - tiledb-py # crashes on Python 3.11
+  # - pyspark
+  # - tiledb # crashes on Python 3.11
+  - xarray
+  - sqlalchemy
+  - pyarrow>=14.0.1
+  - coverage
+  - jsonschema
+  # other -- IO
+  - boto3
+  - botocore
+  - bokeh
+  - httpretty
+  - aiohttp
+  - s3fs>=2021.9.0
+  - crick
+  - cytoolz
+  - distributed
+  - ipython
+  - ipycytoscape
+  # until https://github.com/jupyter-widgets/ipywidgets/issues/3731 is fixed
+  - ipywidgets<8.0.5
+  - ipykernel<6.22.0
+  - lz4
+  - psutil
+  - requests
+  #- scikit-image  # not available for py 13
+  - scikit-learn
+  - scipy
+  - python-snappy
+  #- sparse  # not available for py 13
+  - cachey
+  - python-graphviz
+  - python-cityhash
+  - python-xxhash
+  #- mmh3  # only on pypi for py 13
+  - jinja2
+  - pip
+  - pip:
+    - git+https://github.com/dask/distributed
+    - mmh3
+    - git+https://github.com/dask/dask-expr
