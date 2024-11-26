@@ -10,12 +10,13 @@ from typing import Any
 import tlz as toolz
 
 import dask
+from dask._task_spec import GraphNode, List, Task, TaskRef
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, ishashable, keys_in_tasks, reverse_dict
 from dask.highlevelgraph import HighLevelGraph, Layer
-from dask.optimization import SubgraphCallable, fuse
-from dask.typing import Graph, Key
-from dask.utils import _deprecated, apply, ensure_dict, homogeneous_deepmap
+from dask.optimization import fuse
+from dask.typing import Key
+from dask.utils import _deprecated, ensure_dict, homogeneous_deepmap
 
 
 class BlockwiseDep:
@@ -294,20 +295,12 @@ def blockwise(
     keys = map(blockwise_token, range(len(inputs)))
 
     # Construct local graph
-    if not kwargs:
-        subgraph = {output: (func,) + tuple(keys)}
-    else:
-        _keys = list(keys)
-        if new_keys:
-            _keys = _keys[: -len(new_keys)]
-        kwargs2 = (dict, list(map(list, kwargs.items())))
-        subgraph = {output: (apply, func, _keys, kwargs2)}
-
+    task = Task(output, func, *(TaskRef(k) for k in keys), **kwargs)
     # Construct final output
     subgraph = Blockwise(
         output,
         output_indices,
-        subgraph,
+        task,
         indices,
         numblocks=numblocks,
         concatenate=concatenate,
@@ -372,7 +365,7 @@ class Blockwise(Layer):
 
     output: str
     output_indices: tuple[str, ...]
-    dsk: Graph
+    task: Task
     indices: tuple[tuple[str, tuple[str, ...] | None], ...]
     numblocks: Mapping[str, Sequence[int]]
     concatenate: bool | None
@@ -384,7 +377,7 @@ class Blockwise(Layer):
         self,
         output: str,
         output_indices: Iterable[str],
-        dsk: Graph,
+        task: Task,
         indices: Iterable[tuple[str | BlockwiseDep, Iterable[str] | None]],
         numblocks: Mapping[str, Sequence[int]],
         concatenate: bool | None = None,
@@ -397,7 +390,8 @@ class Blockwise(Layer):
         self.output = output
         self.output_indices = tuple(output_indices)
         self.output_blocks = output_blocks
-        self.dsk = dsk
+        self.task = task
+        assert isinstance(task, Task)
 
         # Remove `BlockwiseDep` arguments from input indices
         # and add them to `self.io_deps`.
@@ -450,11 +444,9 @@ class Blockwise(Layer):
             return self._cached_dict["dsk"]
         else:
             keys = tuple(map(blockwise_token, range(len(self.indices))))
-            dsk, _ = fuse(self.dsk, [self.output])
-            func = SubgraphCallable(dsk, self.output, keys)
 
             dsk = _make_blockwise_graph(
-                func,
+                self.task,
                 self.output,
                 self.output_indices,
                 *list(toolz.concat(self.indices)),
@@ -464,6 +456,7 @@ class Blockwise(Layer):
                 output_blocks=self.output_blocks,
                 dims=self.dims,
                 io_deps=self.io_deps,
+                keys=keys,
             )
 
             self._cached_dict = {"dsk": dsk}
@@ -628,8 +621,8 @@ class Blockwise(Layer):
                 is_leaf = False
                 k = clone_key(k, seed)
             numblocks[k] = nbv
-
-        dsk = {clone_key(k, seed): v for k, v in self.dsk.items()}
+        raise NotImplementedError
+        dsk = {clone_key(k, seed): v for k, v in self.dsk.items()}  # type: ignore[unreachable]
 
         if bind_to is not None and is_leaf:
             from dask.graph_manipulation import chunks
@@ -751,7 +744,7 @@ def _get_coord_mapping(
 
 
 def _make_blockwise_graph(
-    func,
+    task,
     output,
     out_indices,
     *arrind_pairs,
@@ -761,6 +754,7 @@ def _make_blockwise_graph(
     output_blocks=None,
     dims=None,
     io_deps=None,
+    keys=None,
 ):
 
     if numblocks is None:
@@ -794,32 +788,49 @@ def _make_blockwise_graph(
     output_blocks = output_blocks or list(
         itertools.product(*[range(dims[i]) for i in out_indices])
     )
+    from dask._task_spec import DataNode
 
     dsk = {}
     for out_coords in output_blocks:
+        this_task = task
         coords = out_coords + dummies
         args = []
-        for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
-            if ind is None:
-                args.append(arg)
+        for cmap, axes, (arg, ind), key in zip(
+            coord_maps, concat_axes, argpairs, keys, strict=True
+        ):
+            if key not in task.dependencies:
+                # FIXME: This feels like a bug
                 continue
-
+            if ind is None:
+                if not isinstance(arg, GraphNode):
+                    this_task = this_task.substitute({key: DataNode(None, arg)})
+                else:
+                    this_task.substitute({key: arg})
+                continue
             arg_coords = tuple(coords[c] for c in cmap)
             if arg in io_deps:
-                tups = io_deps[arg].get(arg_coords, arg_coords)
+                # FIXME: This is sometimes a task, sometimes not
+
+                this_task = this_task.substitute(
+                    {key: DataNode(None, io_deps[arg].get(arg_coords, arg_coords))}
+                )
             else:
+                subs = {}
                 if axes:
-                    tups = lol_product((arg,), arg_coords)
+                    tups = lol_product((arg,), arg_coords, as_taskref=True)
                     if concatenate:
-                        tups = (concatenate, tups, axes)
+                        tups = Task(key, concatenate, tups, axes)
+                    subs[key] = tups
                 else:
-                    tups = (arg,) + arg_coords
-            args.append(tups)
-        dsk[(output,) + out_coords] = (func, *args)
+                    subs[key] = (arg, *arg_coords)
+                this_task = this_task.substitute(subs)
+        new_key = (output,) + out_coords
+        assert isinstance(this_task, Task)
+        dsk[new_key] = Task.fuse(this_task, *args, key=new_key)
     return dsk
 
 
-def lol_product(head, values):
+def lol_product(head, values, as_taskref=False):
     """List of list of tuple keys, similar to `itertools.product`.
 
     Parameters
@@ -839,11 +850,25 @@ def lol_product(head, values):
      [('x', 1, 3, 4, 5), ('x', 1, 3, 4, 6)]]
     """
     if not values:
+        if as_taskref:
+            return TaskRef(head)
         return head
     elif isinstance(values[0], list):
-        return [lol_product(head + (x,), values[1:]) for x in values[0]]
+        # FIXME: Constructor of List is odd
+        if as_taskref:
+            return List(
+                *(
+                    lol_product(head + (x,), values[1:], as_taskref=as_taskref)
+                    for x in values[0]
+                )
+            )
+        else:
+            return list(
+                lol_product(head + (x,), values[1:], as_taskref=as_taskref)
+                for x in values[0]
+            )
     else:
-        return lol_product(head + (values[0],), values[1:])
+        return lol_product(head + (values[0],), values[1:], as_taskref=as_taskref)
 
 
 def lol_tuples(head, ind, values, dummies):
@@ -1116,13 +1141,14 @@ def rewrite_blockwise(inputs):
     indices = list(inputs[root].indices)
     new_axes = inputs[root].new_axes
     concatenate = inputs[root].concatenate
-    dsk = dict(inputs[root].dsk)
+    task = inputs[root].task
+    dsk = {task.key: task}
 
     changed = True
     while changed:
         changed = False
-        for i, (dep, ind) in enumerate(indices):
-            if ind is None:
+        for i, (dep, current_dep_indices) in enumerate(indices):
+            if current_dep_indices is None:
                 continue
             if dep not in inputs:
                 continue
@@ -1133,20 +1159,23 @@ def rewrite_blockwise(inputs):
             # (in different iteration orders) into a single
             # subgraph key/dependency
             # (see: https://github.com/dask/dask/issues/8535)
-            local_dep = dep if dep == root else _unique_dep(dep, ind)
+            local_dep = dep if dep == root else _unique_dep(dep, current_dep_indices)
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
-            dsk = {k: subs(v, {blockwise_token(i): local_dep}) for k, v in dsk.items()}
+            dsk = {
+                k: v.substitute({blockwise_token(i): local_dep}) for k, v in dsk.items()
+            }
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
-            _, current_dep_indices = indices.pop(i)
+            indices.pop(i)
+
             sub = {
                 blockwise_token(i): blockwise_token(i - 1)
                 for i in range(i + 1, len(indices) + 1)
             }
-            dsk = subs(dsk, sub)
+            dsk = {k: v.substitute(sub) for k, v in dsk.items()}
 
             # Change new input_indices to match give index from current computation
             # [('c', j')] -> [('c', 'i')]
@@ -1179,11 +1208,11 @@ def rewrite_blockwise(inputs):
                     index_map[id_key] = len(indices)
                     sub[blockwise_token(ii)] = blockwise_token(len(indices))
                     indices.append(index)
-            new_dsk = subs(inputs[dep].dsk, sub)
-
-            # Change new_dsk key to match local_dep
-            if dep != local_dep and dep in new_dsk:
-                new_dsk[local_dep] = new_dsk.pop(dep)
+            if dep != local_dep:
+                key = local_dep
+            else:
+                key = dep
+            new_dsk = {key: inputs[dep].task.substitute(sub, key=key)}
 
             # indices.extend(new_indices)
             dsk.update(new_dsk)
@@ -1203,8 +1232,8 @@ def rewrite_blockwise(inputs):
             new_indices.append(x)
 
     sub = {blockwise_token(k): blockwise_token(v) for k, v in sub.items()}
-    dsk = {k: subs(v, sub) for k, v in dsk.items() if k not in sub.keys()}
-
+    dsk = {k: v.substitute(sub) for k, v in dsk.items() if k not in sub.keys()}
+    task = Task.fuse(*dsk.values(), key=root)
     indices_check = {k for k, v in indices if v is not None}
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
     numblocks = {k: v for k, v in numblocks.items() if v is None or k in indices_check}
@@ -1217,7 +1246,7 @@ def rewrite_blockwise(inputs):
     return Blockwise(
         root,
         inputs[root].output_indices,
-        dsk,
+        task,
         new_indices,
         numblocks=numblocks,
         new_axes=new_axes,

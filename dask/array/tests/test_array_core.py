@@ -8,7 +8,7 @@ import xml.etree.ElementTree
 
 import pytest
 
-from dask._task_spec import Task
+from dask._task_spec import DataNode, List, Task, TaskRef
 
 np = pytest.importorskip("numpy")
 
@@ -94,57 +94,126 @@ def test_graph_from_arraylike(inline_array):
 
 
 def test_top():
+    t = Task("inc", inc, TaskRef("A"))
     assert _make_blockwise_graph(
-        inc, "z", "ij", "x", "ij", numblocks={"x": (2, 2)}
+        t, "z", "ij", "x", "ij", numblocks={"x": (2, 2)}, keys=("A",)
     ) == {
-        ("z", 0, 0): (inc, ("x", 0, 0)),
-        ("z", 0, 1): (inc, ("x", 0, 1)),
-        ("z", 1, 0): (inc, ("x", 1, 0)),
-        ("z", 1, 1): (inc, ("x", 1, 1)),
+        ("z", 0, 0): Task(("z", 0, 0), inc, TaskRef(("x", 0, 0))),
+        ("z", 0, 1): Task(("z", 0, 1), inc, TaskRef(("x", 0, 1))),
+        ("z", 1, 0): Task(("z", 1, 0), inc, TaskRef(("x", 1, 0))),
+        ("z", 1, 1): Task(("z", 1, 1), inc, TaskRef(("x", 1, 1))),
     }
 
+    keys = list(map(str, range(2)))
+    t = Task("add", add, *(TaskRef(k) for k in keys))
     assert _make_blockwise_graph(
-        add, "z", "ij", "x", "ij", "y", "ij", numblocks={"x": (2, 2), "y": (2, 2)}
+        t,
+        "z",
+        "ij",
+        "x",
+        "ij",
+        "y",
+        "ij",
+        numblocks={"x": (2, 2), "y": (2, 2)},
+        keys=keys,
     ) == {
-        ("z", 0, 0): (add, ("x", 0, 0), ("y", 0, 0)),
-        ("z", 0, 1): (add, ("x", 0, 1), ("y", 0, 1)),
-        ("z", 1, 0): (add, ("x", 1, 0), ("y", 1, 0)),
-        ("z", 1, 1): (add, ("x", 1, 1), ("y", 1, 1)),
+        ("z", 0, 0): Task(("z", 0, 0), add, TaskRef(("x", 0, 0)), TaskRef(("y", 0, 0))),
+        ("z", 0, 1): Task(("z", 0, 1), add, TaskRef(("x", 0, 1)), TaskRef(("y", 0, 1))),
+        ("z", 1, 0): Task(("z", 1, 0), add, TaskRef(("x", 1, 0)), TaskRef(("y", 1, 0))),
+        ("z", 1, 1): Task(("z", 1, 1), add, TaskRef(("x", 1, 1)), TaskRef(("y", 1, 1))),
     }
+    keys = list(map(str, range(2)))
+    t = Task(
+        "dotmany",
+        dotmany,
+        TaskRef(keys[0]),
+        TaskRef(keys[1]),
+    )
+    out = _make_blockwise_graph(
+        t,
+        "z",
+        "ik",
+        "x",
+        "ij",
+        "y",
+        "jk",
+        numblocks={"x": (2, 2), "y": (2, 2)},
+        keys=keys,
+    )
+    expected = {
+        ("z", 0, 0): Task(
+            ("z", 0, 0),
+            dotmany,
+            List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+            List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+        ),
+        ("z", 0, 1): Task(
+            ("z", 0, 1),
+            dotmany,
+            List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+            List(TaskRef(("y", 0, 1)), TaskRef(("y", 1, 1))),
+        ),
+        ("z", 1, 0): Task(
+            ("z", 1, 0),
+            dotmany,
+            List(TaskRef(("x", 1, 0)), TaskRef(("x", 1, 1))),
+            List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+        ),
+        ("z", 1, 1): Task(
+            ("z", 1, 1),
+            dotmany,
+            List(TaskRef(("x", 1, 0)), TaskRef(("x", 1, 1))),
+            List(TaskRef(("y", 0, 1)), TaskRef(("y", 1, 1))),
+        ),
+    }
+    assert out[("z", 0, 0)] == expected[("z", 0, 0)]
+    assert out == expected
 
+    t = Task("identity", identity, TaskRef("0"))
     assert _make_blockwise_graph(
-        dotmany, "z", "ik", "x", "ij", "y", "jk", numblocks={"x": (2, 2), "y": (2, 2)}
+        t, "z", "", "x", "ij", numblocks={"x": (2, 2)}, keys=("0",)
     ) == {
-        ("z", 0, 0): (dotmany, [("x", 0, 0), ("x", 0, 1)], [("y", 0, 0), ("y", 1, 0)]),
-        ("z", 0, 1): (dotmany, [("x", 0, 0), ("x", 0, 1)], [("y", 0, 1), ("y", 1, 1)]),
-        ("z", 1, 0): (dotmany, [("x", 1, 0), ("x", 1, 1)], [("y", 0, 0), ("y", 1, 0)]),
-        ("z", 1, 1): (dotmany, [("x", 1, 0), ("x", 1, 1)], [("y", 0, 1), ("y", 1, 1)]),
+        ("z",): Task(
+            ("z",),
+            identity,
+            List(
+                List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+                List(TaskRef(("x", 1, 0)), TaskRef(("x", 1, 1))),
+            ),
+        )
     }
-
-    assert _make_blockwise_graph(
-        identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}
-    ) == {("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])}
 
 
 def test_top_supports_broadcasting_rules():
+
+    t = Task("add", add, TaskRef("A"), TaskRef("B"))
     assert _make_blockwise_graph(
-        add, "z", "ij", "x", "ij", "y", "ij", numblocks={"x": (1, 2), "y": (2, 1)}
+        t,
+        "z",
+        "ij",
+        "x",
+        "ij",
+        "y",
+        "ij",
+        numblocks={"x": (1, 2), "y": (2, 1)},
+        keys=("A", "B"),
     ) == {
-        ("z", 0, 0): (add, ("x", 0, 0), ("y", 0, 0)),
-        ("z", 0, 1): (add, ("x", 0, 1), ("y", 0, 0)),
-        ("z", 1, 0): (add, ("x", 0, 0), ("y", 1, 0)),
-        ("z", 1, 1): (add, ("x", 0, 1), ("y", 1, 0)),
+        ("z", 0, 0): Task(("z", 0, 0), add, TaskRef(("x", 0, 0)), TaskRef(("y", 0, 0))),
+        ("z", 0, 1): Task(("z", 0, 1), add, TaskRef(("x", 0, 1)), TaskRef(("y", 0, 0))),
+        ("z", 1, 0): Task(("z", 1, 0), add, TaskRef(("x", 0, 0)), TaskRef(("y", 1, 0))),
+        ("z", 1, 1): Task(("z", 1, 1), add, TaskRef(("x", 0, 1)), TaskRef(("y", 1, 0))),
     }
 
 
 def test_top_literals():
+    t = Task("add", add, TaskRef("A"), TaskRef("B"))
     assert _make_blockwise_graph(
-        add, "z", "ij", "x", "ij", 123, None, numblocks={"x": (2, 2)}
+        t, "z", "ij", "x", "ij", 123, None, numblocks={"x": (2, 2)}, keys=("A", "B")
     ) == {
-        ("z", 0, 0): (add, ("x", 0, 0), 123),
-        ("z", 0, 1): (add, ("x", 0, 1), 123),
-        ("z", 1, 0): (add, ("x", 1, 0), 123),
-        ("z", 1, 1): (add, ("x", 1, 1), 123),
+        ("z", 0, 0): Task(("z", 0, 0), add, TaskRef(("x", 0, 0)), DataNode(None, 123)),
+        ("z", 0, 1): Task(("z", 0, 1), add, TaskRef(("x", 0, 1)), DataNode(None, 123)),
+        ("z", 1, 0): Task(("z", 1, 0), add, TaskRef(("x", 1, 0)), DataNode(None, 123)),
+        ("z", 1, 1): Task(("z", 1, 1), add, TaskRef(("x", 1, 1)), DataNode(None, 123)),
     }
 
 
@@ -167,7 +236,8 @@ def test_blockwise_1_in_shape_I():
         assert 1 in b.shape
 
     p, k, N = 7, 2, 5
-    da.blockwise(
+    # Why the hell isn't this fused?
+    arr = da.blockwise(
         test_f,
         "x",
         da.zeros((2 * p, 9, k * N), chunks=(p, 3, k)),
@@ -176,7 +246,8 @@ def test_blockwise_1_in_shape_I():
         "xzt",
         concatenate=True,
         dtype=float,
-    ).compute()
+    )
+    arr.compute()
 
 
 def test_blockwise_1_in_shape_II():
@@ -224,8 +295,23 @@ def test_chunked_dot_product():
     getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), name="x")
     geto = graph_from_arraylike(o, (5, 5), shape=(20, 20), name="o")
 
+    keys = list(map(str, range(2)))
+    t = Task(
+        "dotmany",
+        dotmany,
+        TaskRef(keys[0]),
+        TaskRef(keys[1]),
+    )
     result = _make_blockwise_graph(
-        dotmany, "out", "ik", "x", "ij", "o", "jk", numblocks={"x": (4, 4), "o": (4, 4)}
+        t,
+        "out",
+        "ik",
+        "x",
+        "ij",
+        "o",
+        "jk",
+        numblocks={"x": (4, 4), "o": (4, 4)},
+        keys=keys,
     )
 
     dsk = merge(getx, geto, result)

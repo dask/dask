@@ -6,7 +6,9 @@ import warnings
 import tlz as toolz
 
 from dask import base, utils
+from dask._task_spec import Task
 from dask.blockwise import blockwise as core_blockwise
+from dask.core import istask
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayBlockwiseDep
@@ -208,12 +210,19 @@ def blockwise(
     arrays = []
 
     # Normalize arguments
+    # FIXME: This is using the delayed.unpack_collections that is breaking apart
+    # objects into a tuple of a runnable task or key and the set of collections
+    # contained in the input.
+    # This has to be converted to the TaskSpec
     argindsstr = []
 
     for arg, ind in arginds:
         if ind is None:
             arg = normalize_arg(arg)
             arg, collections = unpack_collections(arg)
+            if istask(arg) and not isinstance(arg, Task):
+                arg = Task(None, *arg)
+
             dependencies.extend(collections)
         else:
             if (

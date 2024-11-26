@@ -88,6 +88,33 @@ def test_repr():
     assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
 
 
+def test_task_eq():
+    assert Alias(("x", 0, 0)) == Alias(("x", 0, 0))
+    assert Alias(("x", 0, 0)) != Alias(("x", 0, 1))
+
+    assert List(Alias(("x", 0, 0))) == List(Alias(("x", 0, 0)))
+    assert List(Alias(("x", 0, 0))) == List(Alias("a", "a")).substitute(
+        {"a": ("x", 0, 0)}
+    )
+    assert List(Alias(("x", 0, 0)), Alias(("x", 0, 1))) != List(
+        Alias(("x", 0, 0)), Alias(("x", 0, 2))
+    )
+
+    obj = Task(
+        ("z", 0, 0),
+        func,
+        List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+        List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+    )
+    assert obj == obj
+    assert obj == Task(
+        ("z", 0, 0),
+        func,
+        List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+        List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+    )
+
+
 def long_function_name_longer_even_longer(a, b):
     return a + b
 
@@ -1038,8 +1065,31 @@ def test_nested_containers_different_types(task_type, python_type):
 def test_substitute():
     t1 = Task("key-1", func, TaskRef("a"), "b")
     assert t1.substitute({"a": "a"}) is t1
+    assert t1.substitute({"a": "a"}, key="foo") is not t1
     t2 = t1.substitute({"a": "c"})
     assert t2 is not t1
     assert t2.dependencies == {"c"}
 
     assert t1({"a": "a"}) == t2({"c": "a"})
+
+
+def test_substitute_nested():
+    def func(alist):
+        return alist[0] + alist[1]["foo"]
+
+    t1 = Task(
+        "key-1",
+        func,
+        List(
+            TaskRef("a"),
+            Dict(
+                {
+                    "foo": TaskRef("b"),
+                }
+            ),
+        ),
+    )
+    assert t1.dependencies == {"a", "b"}
+    t2 = t1.substitute({"a": "c", "b": "d"})
+    assert t2.dependencies == {"c", "d"}
+    assert t1({"a": "a", "b": "b"}) == t2({"c": "a", "d": "b"})
