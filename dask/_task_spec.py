@@ -915,3 +915,22 @@ def fuse_linear_task_spec(dsk, keys):
                 # Having the same prefixes can result in the same key, i.e. getitem-hash -> getitem-hash
                 result[top_key] = Alias(top_key, target=renamed_key)
     return result
+
+
+def cull(
+    dsk: dict[KeyType, GraphNode], keys: Iterable[KeyType]
+) -> dict[KeyType, GraphNode]:
+    work = set(keys)
+    seen: set[KeyType] = set()
+    dsk2 = {}
+    wpop = work.pop
+    wupdate = work.update
+    sadd = seen.add
+    while work:
+        k = wpop()
+        if k in seen or k not in dsk:
+            continue
+        sadd(k)
+        dsk2[k] = v = dsk[k]
+        wupdate(v.dependencies)
+    return dsk2
