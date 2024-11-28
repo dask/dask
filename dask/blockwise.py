@@ -1036,7 +1036,7 @@ def _optimize_blockwise(full_graph, keys=()):
             dependencies[layer] = full_graph.dependencies.get(layer, set())
             stack.extend(full_graph.dependencies.get(layer, ()))
 
-    return HighLevelGraph(out, dependencies).validate()
+    return HighLevelGraph(out, dependencies)
 
 
 def _unique_dep(dep, ind):
@@ -1405,4 +1405,4 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
             layers[name] = new
             dependencies[name] = set()
 
-    return HighLevelGraph(layers, dependencies).validate()
+    return HighLevelGraph(layers, dependencies)
