@@ -19,6 +19,7 @@ from tlz import groupby, identity, join, merge, pluck, unique, valmap
 
 import dask
 import dask.bag as db
+from dask._task_spec import Task
 from dask.bag.core import (
     Bag,
     collect,
@@ -574,6 +575,22 @@ def test_random_sample_random_state():
 
 
 def test_lazify_task():
+    task = Task(None, sum, Task(None, reify, Task(None, map, inc, [1, 2, 3])))
+    assert lazify_task(task) == Task(None, sum, Task(None, map, inc, [1, 2, 3]))
+
+    task = Task(None, reify, Task(None, map, inc, [1, 2, 3]))
+    assert lazify_task(task) == task
+
+    task = Task(
+        None,
+        reify,
+        Task(None, map, inc, Task(None, reify, Task(None, filter, iseven, "y"))),
+    )
+    expected = Task(None, reify, Task(None, map, inc, Task(None, filter, iseven, "y")))
+    assert lazify_task(task) == expected
+
+
+def test_lazify_task_legacy():
     task = (sum, (reify, (map, inc, [1, 2, 3])))
     assert lazify_task(task) == (sum, (map, inc, [1, 2, 3]))
 
@@ -599,6 +616,26 @@ def test_lazify():
 
 
 def test_inline_singleton_lists():
+    inp = {"b": (list, "a"), "c": (f, "b", 1)}
+    out = {"c": (f, (list, "a"), 1)}
+    assert inline_singleton_lists(inp, ["c"]) == out
+
+    out = {"c": (f, "a", 1)}
+    assert optimize(inp, ["c"], rename_fused_keys=False) == out
+
+    # If list is an output key, don't fuse it
+    assert inline_singleton_lists(inp, ["b", "c"]) == inp
+    assert optimize(inp, ["b", "c"], rename_fused_keys=False) == inp
+
+    inp = {"b": (list, "a"), "c": (f, "b", 1), "d": (f, "b", 2)}
+    assert inline_singleton_lists(inp, ["c", "d"]) == inp
+
+    # Doesn't inline constants
+    inp = {"b": (4, 5), "c": (f, "b")}
+    assert inline_singleton_lists(inp, ["c"]) == inp
+
+
+def test_inline_singleton_lists_legacy():
     inp = {"b": (list, "a"), "c": (f, "b", 1)}
     out = {"c": (f, (list, "a"), 1)}
     assert inline_singleton_lists(inp, ["c"]) == out

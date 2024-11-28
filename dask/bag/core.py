@@ -38,7 +38,7 @@ from tlz import (
 )
 
 from dask import config
-from dask._task_spec import GraphNode
+from dask._task_spec import GraphNode, List, Task
 from dask.bag import chunk
 from dask.bag.avro import to_avro
 from dask.base import (
@@ -96,17 +96,30 @@ def lazify_task(task, start=True):
     (<built-in function sum>, (<class 'map'>, <function inc at ...>, [1, 2, 3]))
     """
     if isinstance(task, GraphNode):
-        return task
-    if type(task) is list and len(task) < 50:
-        return [lazify_task(arg, False) for arg in task]
-    if not istask(task):
-        return task
-    head, tail = task[0], task[1:]
-    if not start and head in (list, reify):
-        task = task[1]
-        return lazify_task(*tail, start=False)
+        if isinstance(task, List) and len(task.args) < 50:
+            return List(*[lazify_task(arg, False) for arg in task.args])
+        if not isinstance(task, Task):
+            return task
+        if not start and task.func in (list, reify) and isinstance(task.args[0], Task):
+            assert len(task.args) == 1
+            task = task.args[0]
+        return Task(
+            task.key,
+            task.func,
+            *[lazify_task(arg, False) for arg in task.args],
+            **task.kwargs,
+        )
     else:
-        return (head,) + tuple(lazify_task(arg, False) for arg in tail)
+        if type(task) is list and len(task) < 50:
+            return [lazify_task(arg, False) for arg in task]
+        if not istask(task):
+            return task
+        head, tail = task[0], task[1:]
+        if not start and head in (list, reify):
+            task = task[1]
+            return lazify_task(*tail, start=False)
+        else:
+            return (head,) + tuple(lazify_task(arg, False) for arg in tail)
 
 
 def lazify(dsk):
