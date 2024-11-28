@@ -279,23 +279,33 @@ def blockwise(
         inputs.append(name)
         inputs_indices.append(index)
 
+    task_args = list(map(TaskRef, map(blockwise_token, range(len(inputs)))))
     # Unpack delayed objects in kwargs
     new_keys = {n for c in dependencies for n in c.__dask_layers__()}
+    task_kwargs = {}
     if kwargs:
         # replace keys in kwargs with _0 tokens
         new_tokens = tuple(
             blockwise_token(i) for i in range(len(inputs), len(inputs) + len(new_keys))
         )
         sub = dict(zip(new_keys, new_tokens))
-        inputs.extend(new_keys)
+        inputs.extend(map(TaskRef, new_keys))
         inputs_indices.extend((None,) * len(new_keys))
-        kwargs = subs(kwargs, sub)
 
+        for k, v in kwargs.items():
+            if isinstance(v, GraphNode):
+                # FIXME: I believe this is dead
+                v = v.substitute(sub)
+            elif isinstance(v, TaskRef):
+                # FIXME: It's a little unclear if this substitution is
+                # necessary. We're replacing a proper reference with a token and
+                # remember that token maps to that reference by adding it to the
+                # inputs. This is likely unnecessary
+                v = TaskRef(sub[v.key])
+            task_kwargs[k] = v
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
-    keys = map(blockwise_token, range(len(inputs)))
-
     # Construct local graph
-    task = Task(output, func, *(TaskRef(k) for k in keys), **kwargs)
+    task = Task(output, func, *task_args, **task_kwargs)
     # Construct final output
     subgraph = Blockwise(
         output,

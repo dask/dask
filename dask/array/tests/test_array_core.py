@@ -5119,16 +5119,21 @@ def test_map_blocks_large_inputs_delayed():
 
 
 def test_blockwise_large_inputs_delayed():
+    def func(a, b):
+        return a
+
     a = da.ones(10, chunks=(5,))
     b = np.ones(1000000)
 
-    c = da.blockwise(add, "i", a, "i", b, None, dtype=a.dtype)
+    c = da.blockwise(func, "i", a, "i", b, None, dtype=a.dtype)
     assert any(b is v for v in c.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+    assert_eq(c, c)
 
-    d = da.blockwise(lambda x, y: x + y, "i", a, "i", y=b, dtype=a.dtype)
+    d = da.blockwise(lambda x, y: x, "i", a, "i", y=b, dtype=a.dtype)
     assert any(b is v for v in d.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+    assert_eq(d, d)
 
 
 def test_slice_reversed():

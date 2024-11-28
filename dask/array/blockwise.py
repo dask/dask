@@ -298,10 +298,6 @@ def blockwise(
     arrays = []
 
     # Normalize arguments
-    # FIXME: This is using the delayed.unpack_collections that is breaking apart
-    # objects into a tuple of a runnable task or key and the set of collections
-    # contained in the input.
-    # This has to be converted to the TaskSpec
     argindsstr = []
 
     for arg, ind in arginds:
