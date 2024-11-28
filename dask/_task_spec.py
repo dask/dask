@@ -182,15 +182,15 @@ def convert_legacy_task(
     task: _T,
     all_keys: Container,
 ) -> GraphNode | _T:
+    if isinstance(task, GraphNode):
+        return task
+
     global SubgraphType
 
     if SubgraphType is None:
         from dask.optimization import SubgraphCallable
 
         SubgraphType = SubgraphCallable
-
-    if isinstance(task, GraphNode):
-        return task
 
     if type(task) is tuple and task and callable(task[0]):
         func, args = task[0], task[1:]

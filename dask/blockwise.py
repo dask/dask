@@ -515,6 +515,8 @@ class Blockwise(Layer):
         # Gather constant dependencies (for all output keys)
         const_deps = set()
         for arg, ind in self.indices:
+            if isinstance(arg, TaskRef):
+                arg = arg.key
             if ind is None:
                 try:
                     if arg in all_hlg_keys:
@@ -554,7 +556,7 @@ class Blockwise(Layer):
         return Blockwise(
             self.output,
             self.output_indices,
-            self.dsk,
+            self.task,
             self.indices,
             self.numblocks,
             concatenate=self.concatenate,
@@ -802,10 +804,10 @@ def _make_blockwise_graph(
                 # FIXME: This feels like a bug
                 continue
             if ind is None:
-                if not isinstance(arg, GraphNode):
+                if not isinstance(arg, (GraphNode, TaskRef)):
                     this_task = this_task.substitute({key: DataNode(None, arg)})
                 else:
-                    this_task.substitute({key: arg})
+                    this_task = this_task.substitute({key: arg})
                 continue
             arg_coords = tuple(coords[c] for c in cmap)
             if arg in io_deps:
@@ -1034,7 +1036,7 @@ def _optimize_blockwise(full_graph, keys=()):
             dependencies[layer] = full_graph.dependencies.get(layer, set())
             stack.extend(full_graph.dependencies.get(layer, ()))
 
-    return HighLevelGraph(out, dependencies)
+    return HighLevelGraph(out, dependencies).validate()
 
 
 def _unique_dep(dep, ind):
@@ -1403,4 +1405,4 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
             layers[name] = new
             dependencies[name] = set()
 
-    return HighLevelGraph(layers, dependencies)
+    return HighLevelGraph(layers, dependencies).validate()

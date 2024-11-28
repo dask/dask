@@ -827,8 +827,8 @@ class HighLevelGraph(Graph):
         for k in dep_key1:
             if self.dependencies[k] != dependencies[k]:
                 raise ValueError(
-                    f"incorrect dependencies[{repr(k)}]: {repr(self.dependencies[k])} "
-                    f"expected {repr(dependencies[k])}"
+                    f"incorrect HLG dependencies[{repr(k)}]: {repr(self.dependencies[k])} "
+                    f"expected {repr(dependencies[k])} from task dependencies"
                 )
 
     def __repr__(self) -> str:
