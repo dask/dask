@@ -94,9 +94,9 @@ def _unpack_collections(expr):
         return Task(None, typ, **dict(args)), collections
 
     if utils.is_namedtuple_instance(expr):
-        if not collections:
-            return expr
         args, collections = _unpack_collections([v for v in expr])
+        if not collections:
+            return expr, ()
         return Task(None, typ, *args), collections
 
     return expr, ()

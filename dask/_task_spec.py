@@ -727,7 +727,7 @@ class Task(GraphNode):
         external_deps = all_deps - all_keys
         leafs = all_keys - all_deps
         if len(leafs) > 1:
-            raise ValueError("Cannot fuse tasks with multiple outputs")
+            raise ValueError(f"Cannot fuse tasks with multiple outputs {leafs}")
 
         outkey = leafs.pop()
 
@@ -800,6 +800,10 @@ class Dict(NestedContainer):
         super().__init__(
             *(Tuple(*it) for it in kwargs.items()), _dependencies=_dependencies
         )
+
+    def __repr__(self):
+        values = ", ".join(f"{tup.args[0]}: {tup.args[1]}" for tup in self.args)
+        return f"Dict({values})"
 
     def substitute(self, subs, key: KeyType | None = None) -> Task:
         new = []

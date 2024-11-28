@@ -545,7 +545,7 @@ def test_dont_concatenate_single_chunks(shape, chunks):
     y = x.rechunk(chunks)
     dsk = dict(y.dask)
     assert not any(
-        funcname(task[0]).startswith("concat")
+        funcname(task[0] if isinstance(task, tuple) else task.func).startswith("concat")
         for task in dsk.values()
         if dask.istask(task)
     )
