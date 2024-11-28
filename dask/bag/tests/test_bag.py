@@ -19,7 +19,7 @@ from tlz import groupby, identity, join, merge, pluck, unique, valmap
 
 import dask
 import dask.bag as db
-from dask._task_spec import Task
+from dask._task_spec import List, Task
 from dask.bag.core import (
     Bag,
     collect,
@@ -588,6 +588,31 @@ def test_lazify_task():
     )
     expected = Task(None, reify, Task(None, map, inc, Task(None, filter, iseven, "y")))
     assert lazify_task(task) == expected
+
+    task = Task(
+        None,
+        sum,
+        List(
+            Task(
+                None,
+                reify,
+                Task(None, map, inc, Task(None, reify, Task(None, filter, iseven, 1))),
+            ),
+            Task(
+                None,
+                reify,
+                Task(None, map, inc, Task(None, reify, Task(None, filter, iseven, 2))),
+            ),
+        ),
+    )
+    assert lazify_task(task) == Task(
+        None,
+        sum,
+        List(
+            Task(None, map, inc, Task(None, filter, iseven, 1)),
+            Task(None, map, inc, Task(None, filter, iseven, 2)),
+        ),
+    )
 
 
 def test_lazify_task_legacy():
