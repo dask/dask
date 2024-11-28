@@ -101,6 +101,7 @@ def lazify_task(task, start=True):
     >>> lazify_task(task)  # doctest: +ELLIPSIS
     (<built-in function sum>, (<class 'map'>, <function inc at ...>, [1, 2, 3]))
     """
+
     if isinstance(task, GraphNode):
         if isinstance(task, List) and len(task.args) < 50:
             return List(*[lazify_task(arg, False) for arg in task.args])
@@ -2310,6 +2311,8 @@ def map_partitions(func, *args, **kwargs):
             (zip, list(bag_kwargs), [(b.name, n) for b in bag_kwargs.values()]),
         )
 
+    from dask._task_spec import TaskRef
+
     if bag_kwargs:
         # Avoid using `blockwise` when a key-word
         # argument is being used to refer to a collection.
@@ -2329,7 +2332,7 @@ def map_partitions(func, *args, **kwargs):
             # TODO: Allow interaction with Frame/Array
             # collections with proper partitioning
             if isinstance(arg, Bag):
-                pairs.extend([arg.name, "i"])
+                pairs.extend([TaskRef(arg.name), "i"])
                 numblocks[arg.name] = (arg.npartitions,)
             else:
                 pairs.extend([arg, None])
