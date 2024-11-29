@@ -25,7 +25,7 @@ def optimize(dsk, keys, **kwargs):
         dsk = optimize_dataframe_getitem(dsk, keys=keys)
         dsk = optimize_blockwise(dsk, keys=keys)
         dsk = fuse_roots(dsk, keys=keys)
-    # dsk = dsk.cull(set(keys))
+    dsk = dsk.cull(set(keys))
 
     # Do not perform low-level fusion unless the user has
     # specified True explicitly. The configuration will
