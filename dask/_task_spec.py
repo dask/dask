@@ -459,15 +459,15 @@ class Alias(GraphNode):
     def copy(self):
         return Alias(self.key, self.target)
 
-    def substitute(self, subs):
+    def substitute(self, subs, key=None):
         if self.key in subs or self.target.key in subs:
             sub_key = subs.get(self.key, self.key)
             val = subs.get(self.target.key, self.target.key)
             if sub_key == self.key and val == self.target.key:
                 return self
             if isinstance(val, GraphNode):
-                return val.substitute({}, key=sub_key)
-            return Alias(sub_key, val)
+                return val.substitute({}, key=key or sub_key)
+            return Alias(key or sub_key, val)
         return self
 
     def __dask_tokenize__(self):
