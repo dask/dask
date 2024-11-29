@@ -28,6 +28,7 @@ from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
 from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
+from dask.tokenize import tokenize
 from dask.utils import funcname
 
 
@@ -1025,6 +1026,17 @@ def test_nested_containers():
     )
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == {"k": "a-b", ("v", 1): "c-d"}
+
+    t = Dict(
+        k=Task("key-1", func, "a", "b"),
+        v=Task("key-2", func, "c", "d"),
+    )
+    t2 = Dict(
+        v=Task("key-2", func, "c", "d"),
+        k=Task("key-1", func, "a", "b"),
+    )
+    assert t == t2
+    assert tokenize(t) == tokenize(t2)
 
 
 def test_block_io_fusion():

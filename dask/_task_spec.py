@@ -768,6 +768,17 @@ class NestedContainer(Task):
             *(a.substitute(subs) if isinstance(a, GraphNode) else a for a in self.args)
         )
 
+    def __dask_tokenize__(self):
+        from dask.tokenize import tokenize
+
+        return (
+            type(self).__name__,
+            self.klass,
+            sorted(tokenize(a) for a in self.args),
+        )
+
+        return super().__dask_tokenize__()
+
     @classmethod
     def to_container(cls, *args, **kwargs):
         return cls.klass(args)
