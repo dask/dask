@@ -14,7 +14,7 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayBlockwiseDep
 
 
-def _unpack_collections(expr):
+def _blockwise_unpack_collections_task_spec(expr):
     # FIXME This is a copy of the delayed.unpack_collections function with the
     # addition of the TaskSpec class. Eventually this should all be consolidated
     # but to reduce the number of changes we'll vendor this here
@@ -29,7 +29,7 @@ def _unpack_collections(expr):
             expr = expr.optimize()
 
         finalized = finalize(expr)
-        return finalized._key, (finalized,)
+        return TaskRef(finalized._key), (finalized,)
 
     if type(expr) is type(iter(list())):
         expr = list(expr)
@@ -41,7 +41,9 @@ def _unpack_collections(expr):
     typ = type(expr)
 
     if typ in (list, tuple, set):
-        args, collections = utils.unzip((_unpack_collections(e) for e in expr), 2)
+        args, collections = utils.unzip(
+            (_blockwise_unpack_collections_task_spec(e) for e in expr), 2
+        )
         collections = tuple(toolz.unique(toolz.concat(collections), key=id))
         if not collections:
             return expr, ()
@@ -52,19 +54,23 @@ def _unpack_collections(expr):
         return args, collections
 
     if typ is dict:
-        args, collections = _unpack_collections([[k, v] for k, v in expr.items()])
+        args, collections = _blockwise_unpack_collections_task_spec(
+            [[k, v] for k, v in expr.items()]
+        )
         if not collections:
             return expr, ()
         return Dict(args), collections
 
     if typ is slice:
-        args, collections = _unpack_collections([expr.start, expr.stop, expr.step])
+        args, collections = _blockwise_unpack_collections_task_spec(
+            [expr.start, expr.stop, expr.step]
+        )
         if not collections:
             return expr, ()
         return Task(None, slice, *args), collections
 
     if is_dataclass(expr):
-        args, collections = _unpack_collections(
+        args, collections = _blockwise_unpack_collections_task_spec(
             [
                 [f.name, getattr(expr, f.name)]
                 for f in fields(expr)
@@ -94,7 +100,7 @@ def _unpack_collections(expr):
         return Task(None, typ, **dict(args)), collections
 
     if utils.is_namedtuple_instance(expr):
-        args, collections = _unpack_collections([v for v in expr])
+        args, collections = _blockwise_unpack_collections_task_spec([v for v in expr])
         if not collections:
             return expr, ()
         return Task(None, typ, *args), collections
@@ -252,6 +258,8 @@ def blockwise(
     array([[1235, 1236],
            [1237, 1238]])
     """
+    # The array case passes shit like
+    # [array, (1,0), Delayed, None]
     out = name
     new_axes = new_axes or {}
 
@@ -274,6 +282,7 @@ def blockwise(
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
     else:
+        # This is filtering out everything that applies to all layers. What happens to constants, i.e. ind is None??
         arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
         chunkss = {}
         # For each dimension, use the input chunking that has the most blocks;
@@ -291,7 +300,15 @@ def blockwise(
             v = (v,)
         chunkss[k] = v
 
-    arginds = zip(arrays, args[1::2])
+    # This is the same as args but everything is aranged as
+    # [(array, index), (array, index), ...]
+    # instead of [array, index, array, index, ...]
+    # This is only used in the for loop below so we might want to get rid of it
+
+    # This is problaby not true for `align_arrays=True`
+    # At this point, we have the full collection objects, not keys or anything
+    # like that
+    arginds = list(zip(arrays, args[1::2]))
     numblocks = {}
 
     dependencies = []
@@ -303,7 +320,7 @@ def blockwise(
     for arg, ind in arginds:
         if ind is None:
             arg = normalize_arg(arg)
-            arg, collections = _unpack_collections(arg)
+            arg, collections = _blockwise_unpack_collections_task_spec(arg)
 
             dependencies.extend(collections)
         else:
@@ -321,12 +338,14 @@ def blockwise(
                 arrays.append(arg)
                 arg = arg.name
         argindsstr.extend((arg, ind))
+    # argindsstr only has TaskRef objects in here if they are not Arrays and not
+    # io_deps
 
     # Normalize keyword arguments
     kwargs2 = {}
     for k, v in kwargs.items():
         v = normalize_arg(v)
-        v, collections = _unpack_collections(v)
+        v, collections = _blockwise_unpack_collections_task_spec(v)
         dependencies.extend(collections)
         kwargs2[k] = v
 

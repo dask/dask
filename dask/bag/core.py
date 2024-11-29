@@ -47,6 +47,7 @@ from dask._task_spec import (
     cull,
     fuse_linear_task_spec,
 )
+from dask.array.blockwise import _blockwise_unpack_collections_task_spec
 from dask.bag import chunk
 from dask.bag.avro import to_avro
 from dask.base import (
@@ -59,7 +60,7 @@ from dask.base import (
 from dask.blockwise import blockwise
 from dask.context import globalmethod
 from dask.core import flatten, istask, quote
-from dask.delayed import Delayed, unpack_collections
+from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.sizeof import sizeof
 from dask.typing import Graph, NestedKeys, no_default
@@ -2100,14 +2101,12 @@ def unpack_scalar_dask_kwargs(kwargs):
     kwargs2 = {}
     dependencies = []
     for k, v in kwargs.items():
-        vv, collections = unpack_collections(v)
+        vv, collections = _blockwise_unpack_collections_task_spec(v)
         if not collections:
             kwargs2[k] = v
         else:
             kwargs2[k] = vv
             dependencies.extend(collections)
-    if dependencies:
-        kwargs2 = (dict, (zip, list(kwargs2), list(kwargs2.values())))
     return kwargs2, dependencies
 
 
@@ -2274,11 +2273,10 @@ def map_partitions(func, *args, **kwargs):
         if isinstance(a, Bag):
             bags.append(a)
             args2.append(a)
-        elif isinstance(a, (Item, Delayed)):
-            args2.append(a.key)
-            dependencies.append(a)
         else:
+            a, collections = _blockwise_unpack_collections_task_spec(a)
             args2.append(a)
+            dependencies.extend(collections)
 
     bag_kwargs = {}
     other_kwargs = {}
@@ -2300,28 +2298,30 @@ def map_partitions(func, *args, **kwargs):
         raise ValueError("All bags must have the same number of partitions.")
     npartitions = npartitions.pop()
 
-    def build_args(n):
-        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
-
-    def build_bag_kwargs(n):
-        if not bag_kwargs:
-            return {}
-        return (
-            dict,
-            (zip, list(bag_kwargs), [(b.name, n) for b in bag_kwargs.values()]),
-        )
-
-    from dask._task_spec import TaskRef
-
     if bag_kwargs:
+
+        def build_args(n):
+            return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+
+        def build_bag_kwargs(n) -> dict:
+            if not bag_kwargs:
+                return other_kwargs
+            rv = {
+                k: (b.name, n) if isinstance(b, Bag) else b
+                for k, b in bag_kwargs.items()
+            }
+            rv.update(other_kwargs)
+            return rv
+
         # Avoid using `blockwise` when a key-word
         # argument is being used to refer to a collection.
+        # FIXME: This has to be migrated since other_kwargs is already in new format
         dsk = {
-            (name, n): (
-                apply,
+            (name, n): Task(
+                (name, n),
                 func,
                 build_args(n),
-                (merge, build_bag_kwargs(n), other_kwargs),
+                **build_bag_kwargs(n),
             )
             for n in range(npartitions)
         }
@@ -2332,16 +2332,10 @@ def map_partitions(func, *args, **kwargs):
             # TODO: Allow interaction with Frame/Array
             # collections with proper partitioning
             if isinstance(arg, Bag):
-                pairs.extend([TaskRef(arg.name), "i"])
+                pairs.extend([arg.name, "i"])
                 numblocks[arg.name] = (arg.npartitions,)
             else:
                 pairs.extend([arg, None])
-        if other_kwargs and isinstance(other_kwargs, tuple):
-            # `other_kwargs` is a nested subgraph,
-            # designed to generate the kwargs lazily.
-            # We need to convert this to a dictionary
-            # before passing to `blockwise`
-            other_kwargs = other_kwargs[0](other_kwargs[1][0](*other_kwargs[1][1:]))
         dsk = blockwise(
             func,
             name,
