@@ -5,6 +5,8 @@ from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
 
+from dask._task_spec import convert_legacy_task
+
 try:
     import psutil
 except ImportError:
@@ -368,7 +370,7 @@ def text_blocks_to_pandas(
 
     if path:
         colname, path_converter = path
-        paths = [b[1].path for b in blocks]
+        paths = [b.args[0].path for b in blocks]
         if path_converter:
             paths = [path_converter(p) for p in paths]
         head = head.assign(
@@ -663,7 +665,13 @@ def read_pandas(
             if is_integer_dtype(head[c].dtype) and c not in specified_dtypes:
                 head[c] = head[c].astype(float)
 
-    values = [[list(dsk.dask.values()) for dsk in block] for block in values]
+    values = [
+        [
+            [convert_legacy_task(k, ts, {}) for k, ts in dsk.dask.items()]
+            for dsk in block
+        ]
+        for block in values
+    ]
 
     return text_blocks_to_pandas(
         reader,

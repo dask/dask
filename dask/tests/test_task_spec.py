@@ -1012,6 +1012,9 @@ def test_nested_containers():
     t = Dict(k=Task("key-1", func, "a", "b"), v=Task("key-2", func, "c", "d"))
     assert not t.dependencies
     assert t() == {"k": "a-b", "v": "c-d"}
+    t2 = Dict({"k": Task("key-1", func, "a", "b"), "v": Task("key-2", func, "c", "d")})
+    assert t == t2
+    assert t() == t2()
     t = Dict(k=Task("key-1", func, "a", TaskRef("b")), v=Task("key-2", func, "c", "d"))
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == {"k": "a-b", "v": "c-d"}

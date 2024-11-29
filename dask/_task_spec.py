@@ -110,7 +110,7 @@ def parse_input(obj: Any) -> object:
             return _wrap_namedtuple_task(None, obj, parse_input)
         return Tuple(*(parse_input(o) for o in obj))
     if isinstance(obj, dict):
-        return Dict(**{k: parse_input(v) for k, v in obj.items()})  # type: ignore
+        return Dict({k: parse_input(v) for k, v in obj.items()})
 
     if isinstance(obj, TaskRef):
         return Alias(obj.key)
@@ -821,7 +821,7 @@ class Dict(NestedContainer):
         for tup in self.args:
             newtup = tup.substitute(subs)
             new.append(tuple(newtup.args))
-        return type(self)(**dict(new))
+        return type(self)(dict(new))
 
 
 class DependenciesMapping(MutableMapping):

@@ -12,7 +12,7 @@ import tlz as toolz
 
 import dask
 from dask import base, utils
-from dask._task_spec import Dict, GraphNode, List, Task, TaskRef
+from dask._task_spec import Dict, GraphNode, List, Task, TaskRef, parse_input
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, ishashable, keys_in_tasks, reverse_dict
 from dask.delayed import Delayed, finalize
@@ -836,11 +836,10 @@ def _make_blockwise_graph(
                 continue
             arg_coords = tuple(coords[c] for c in cmap)
             if arg in io_deps:
-                # FIXME: This is sometimes a task, sometimes not
-
-                this_task = this_task.substitute(
-                    {key: DataNode(None, io_deps[arg].get(arg_coords, arg_coords))}
-                )
+                val = parse_input(io_deps[arg].get(arg_coords, arg_coords))
+                if not isinstance(val, GraphNode):
+                    val = DataNode(None, val)
+                this_task = this_task.substitute({key: val})
             else:
                 subs = {}
                 if axes:
