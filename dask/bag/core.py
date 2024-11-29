@@ -48,7 +48,6 @@ from dask._task_spec import (
     cull,
     fuse_linear_task_spec,
 )
-from dask.array.blockwise import _blockwise_unpack_collections_task_spec
 from dask.bag import chunk
 from dask.bag.avro import to_avro
 from dask.base import (
@@ -58,7 +57,7 @@ from dask.base import (
     replace_name_in_key,
     tokenize,
 )
-from dask.blockwise import blockwise
+from dask.blockwise import _blockwise_unpack_collections_task_spec, blockwise
 from dask.context import globalmethod
 from dask.core import flatten, istask, quote
 from dask.delayed import Delayed
