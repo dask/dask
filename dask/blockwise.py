@@ -621,7 +621,7 @@ class Blockwise(Layer):
             if ishashable(k) and k in names:
                 is_leaf = False
                 k = clone_key(k, seed)  # type: ignore
-            if isinstance(k, TaskRef) and k.key in names:
+            elif isinstance(k, TaskRef) and k.key in names:
                 is_leaf = False
                 k = TaskRef(clone_key(k.key, seed))
 
@@ -634,8 +634,6 @@ class Blockwise(Layer):
                 k = clone_key(k, seed)
             numblocks[k] = nbv
 
-        newtask = self.task.substitute({}, key=clone_key(self.task.key, seed))
-
         if bind_to is not None and is_leaf:
             from dask.graph_manipulation import chunks
 
@@ -643,10 +641,14 @@ class Blockwise(Layer):
             # the layer name always matches the key
             assert isinstance(bind_to, str)
             newtask = Task(
-                newtask.key, chunks.bind, newtask, TaskRef(f"_{len(indices)}")
+                clone_key(self.task.key, seed),
+                chunks.bind,
+                self.task,
+                TaskRef(blockwise_token(len(indices))),
             )
-
-            indices.append((bind_to, None))
+            indices.append((TaskRef(bind_to), None))
+        else:
+            newtask = self.task.substitute({}, key=clone_key(self.task.key, seed))
 
         return (
             Blockwise(
