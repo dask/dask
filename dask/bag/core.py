@@ -42,6 +42,7 @@ from dask._task_spec import (
     GraphNode,
     List,
     Task,
+    TaskRef,
     _execute_subgraph,
     convert_legacy_graph,
     cull,
@@ -2301,13 +2302,13 @@ def map_partitions(func, *args, **kwargs):
     if bag_kwargs:
 
         def build_args(n):
-            return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+            return [TaskRef((a.name, n)) if isinstance(a, Bag) else a for a in args2]
 
         def build_bag_kwargs(n) -> dict:
             if not bag_kwargs:
                 return other_kwargs
             rv = {
-                k: (b.name, n) if isinstance(b, Bag) else b
+                k: TaskRef((b.name, n)) if isinstance(b, Bag) else b
                 for k, b in bag_kwargs.items()
             }
             rv.update(other_kwargs)
@@ -2315,12 +2316,11 @@ def map_partitions(func, *args, **kwargs):
 
         # Avoid using `blockwise` when a key-word
         # argument is being used to refer to a collection.
-        # FIXME: This has to be migrated since other_kwargs is already in new format
         dsk = {
             (name, n): Task(
                 (name, n),
                 func,
-                build_args(n),
+                *build_args(n),
                 **build_bag_kwargs(n),
             )
             for n in range(npartitions)
