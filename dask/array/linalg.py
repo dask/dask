@@ -873,7 +873,7 @@ def qr(a):
         )
 
 
-def svd(a, coerce_signs=True):
+def svd(a, coerce_signs=True, full_matrices=False):
     """
     Compute the singular value decomposition of a matrix.
 
@@ -883,6 +883,10 @@ def svd(a, coerce_signs=True):
     coerce_signs : bool
         Whether or not to apply sign coercion to singular vectors in
         order to maintain deterministic results, by default True.
+    full_matrices : bool
+        If True, u and vh have the shapes (..., M, M) and (..., N, N), respectively.
+        Otherwise, the shapes are (..., M, K) and (..., K, N), respectively, where K = min(M, N).
+        By default False.
 
     Examples
     --------
@@ -933,6 +937,9 @@ def svd(a, coerce_signs=True):
             "Input numblocks: {}\n".format(a.shape, nb)
         )
 
+    if full_matrices:
+        raise NotImplementedError("`full_matrices=True` not supported")
+
     # Single-chunk case
     if nb[0] == nb[1] == 1:
         m, n = a.shape
@@ -940,7 +947,7 @@ def svd(a, coerce_signs=True):
         mu, ms, mv = np.linalg.svd(
             np.ones_like(a._meta, shape=(1, 1), dtype=a._meta.dtype)
         )
-        u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=False)
+        u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=full_matrices)
         u = from_delayed(u, shape=(m, k), meta=mu)
         s = from_delayed(s, shape=(k,), meta=ms)
         v = from_delayed(v, shape=(k, n), meta=mv)
