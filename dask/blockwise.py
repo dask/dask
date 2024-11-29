@@ -552,6 +552,8 @@ class Blockwise(Layer):
                 for out_coords in output_blocks:
                     key = (self.output,) + out_coords
                     valid_key_dep = io_dep[out_coords]
+                    if isinstance(valid_key_dep, TaskRef):
+                        valid_key_dep = valid_key_dep.key
                     key_deps[key] |= {valid_key_dep}
 
         return key_deps
