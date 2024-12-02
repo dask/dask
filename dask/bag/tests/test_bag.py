@@ -316,7 +316,6 @@ def test_distinct_with_key():
 
 
 def test_frequencies():
-    b = Bag(dsk, "x", 3)
     c = b.frequencies()
     assert dict(c) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
     c2 = b.frequencies(split_every=2)
@@ -1189,8 +1188,13 @@ def test_to_delayed_optimize_graph(tmpdir, monkeypatch):
     [d2] = b2.to_delayed(optimize_graph=False)
     assert dict(d2.dask) == dict(b2.dask)
     assert d2.__dask_layers__() == b2.__dask_layers__()
-    assert d.compute() == d2.compute()
-    assert calls == 1 + 3
+    calls = 0
+    result = d.compute()
+    assert calls == 1
+    calls = 0
+    result2 = d2.compute()
+    assert calls == 3
+    assert result == result2
 
     x = b2.sum()
     d = x.to_delayed()
