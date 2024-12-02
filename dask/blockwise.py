@@ -537,7 +537,7 @@ class Blockwise(Layer):
                 if ind is not None and arg not in self.io_deps:
                     arg_coords = tuple(coords[c] for c in cmap)
                     if axes:
-                        tups = lol_product((arg,), arg_coords)
+                        tups = _lol_product((arg,), arg_coords)
                         deps.update(flatten(tups))
                         if concatenate:
                             tups = (concatenate, tups, axes)
@@ -690,8 +690,6 @@ def _get_coord_mapping(
         Mapping between each index specified in `argpairs` and
         the number of output blocks for that index. Corresponds
         to the Blockwise `dims` attribute.
-    output : str
-        Corresponds to the Blockwise `output` attribute.
     out_indices : tuple
         Corresponds to the Blockwise `output_indices` attribute.
     numblocks : dict
@@ -833,7 +831,7 @@ def _make_blockwise_graph(
             else:
                 subs = {}
                 if axes:
-                    tups = lol_product((arg,), arg_coords, as_taskref=True)
+                    tups = _lol_product((arg,), arg_coords, as_taskref=True)
                     if concatenate:
                         tups = Task(key, concatenate, tups, axes)
                     subs[key] = tups
@@ -846,7 +844,7 @@ def _make_blockwise_graph(
     return dsk
 
 
-def lol_product(head, values, as_taskref=False):
+def _lol_product(head, values, as_taskref=False):
     """List of list of tuple keys, similar to `itertools.product`.
 
     Parameters
@@ -874,17 +872,17 @@ def lol_product(head, values, as_taskref=False):
         if as_taskref:
             return List(
                 *(
-                    lol_product(head + (x,), values[1:], as_taskref=as_taskref)
+                    _lol_product(head + (x,), values[1:], as_taskref=as_taskref)
                     for x in values[0]
                 )
             )
         else:
             return list(
-                lol_product(head + (x,), values[1:], as_taskref=as_taskref)
+                _lol_product(head + (x,), values[1:], as_taskref=as_taskref)
                 for x in values[0]
             )
     else:
-        return lol_product(head + (values[0],), values[1:], as_taskref=as_taskref)
+        return _lol_product(head + (values[0],), values[1:], as_taskref=as_taskref)
 
 
 def lol_tuples(head, ind, values, dummies):

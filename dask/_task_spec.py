@@ -703,7 +703,7 @@ class Task(GraphNode):
         else:
             # Rename
             return type(self)(
-                key or self.key,
+                key,
                 self.func,
                 *self.args,
                 **self.kwargs,
