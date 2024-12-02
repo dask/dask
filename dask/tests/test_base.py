@@ -371,7 +371,7 @@ def test_compute_no_opt():
     # Otherwise, the lengths below would be 4 and 0.
     assert len([k for k in keys if "mul" in k[0]]) == 8
     assert len([k for k in keys if "add" in k[0]]) == 4
-    assert len([k for k in keys if "add-mul" in k[0]]) == 4  # See? Renamed
+    assert len([k for k in keys if "add-from_sequence-mul" in k[0]]) == 4
 
 
 @pytest.mark.skipif("not da")
