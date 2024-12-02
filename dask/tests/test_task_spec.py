@@ -1033,3 +1033,8 @@ def test_nested_containers_different_types(task_type, python_type):
     t = task_type(Task("key-1", func, "a", TaskRef("b")), Task("key-2", func, "c", "d"))
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == python_type(("a-b", "c-d"))
+
+
+@pytest.mark.parametrize("Container", [Dict, List, Set, Tuple])
+def test_nested_containers_empty(Container):
+    assert Container(Container.klass())() == Container.klass()
