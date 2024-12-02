@@ -112,7 +112,7 @@ def lazify_task(task, start=True):
         if task.func is _execute_subgraph:
             subgraph = task.args[0]
             outkey = task.args[1]
-            # If there is a reify at the start of this we don't want to act
+            # If there is a reify at the output of the subgraph we don't want to act
             final_task = lazify_task(subgraph[outkey], True)
             subgraph = {
                 k: lazify_task(v, False) for k, v in subgraph.items() if k != outkey
