@@ -162,8 +162,6 @@ def blockwise(
     array([[1235, 1236],
            [1237, 1238]])
     """
-    # The array case passes shit like
-    # [array, (1,0), Delayed, None]
     out = name
     new_axes = new_axes or {}
 
@@ -186,7 +184,6 @@ def blockwise(
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
     else:
-        # This is filtering out everything that applies to all layers. What happens to constants, i.e. ind is None??
         arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
         chunkss = {}
         # For each dimension, use the input chunking that has the most blocks;
@@ -204,14 +201,6 @@ def blockwise(
             v = (v,)
         chunkss[k] = v
 
-    # This is the same as args but everything is aranged as
-    # [(array, index), (array, index), ...]
-    # instead of [array, index, array, index, ...]
-    # This is only used in the for loop below so we might want to get rid of it
-
-    # This is problaby not true for `align_arrays=True`
-    # At this point, we have the full collection objects, not keys or anything
-    # like that
     arginds = list(zip(arrays, args[1::2]))
     numblocks = {}
 
@@ -242,8 +231,6 @@ def blockwise(
                 arrays.append(arg)
                 arg = arg.name
         argindsstr.extend((arg, ind))
-    # argindsstr only has TaskRef objects in here if they are not Arrays and not
-    # io_deps
 
     # Normalize keyword arguments
     kwargs2 = {}

@@ -236,7 +236,6 @@ def test_blockwise_1_in_shape_I():
         assert 1 in b.shape
 
     p, k, N = 7, 2, 5
-    # Why the hell isn't this fused?
     arr = da.blockwise(
         test_f,
         "x",
@@ -2740,8 +2739,8 @@ def test_from_array_no_asarray(asarray, cls, inline_array):
     assert_chunks_are_of_type(dx[0:5][:, 0])
 
 
-@pytest.mark.parametrize("wrap", [True])
-@pytest.mark.parametrize("inline_array", [False])
+@pytest.mark.parametrize("wrap", [True, False])
+@pytest.mark.parametrize("inline_array", [True, False])
 def test_from_array_getitem(wrap, inline_array):
     x = np.arange(10)
     called = False
@@ -2752,8 +2751,6 @@ def test_from_array_getitem(wrap, inline_array):
         return a[ind]
 
     xx = MyArray(x) if wrap else x
-    # FIXME: One of the indices is a taskref but the makeblockwise is treating
-    # it as a datanode and substitution goes wrong
     y = da.from_array(xx, chunks=(5,), getitem=my_getitem, inline_array=inline_array)
 
     assert_eq(x, y)
