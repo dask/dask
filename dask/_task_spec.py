@@ -536,7 +536,10 @@ class Alias(GraphNode):
         return values[self.target.key]
 
     def __repr__(self):
-        return f"Alias({self.key}->{self.target})"
+        if self.key != self.target.key:
+            return f"Alias({self.key!r}->{self.target.key!r})"
+        else:
+            return f"Alias({self.key!r})"
 
     def __eq__(self, value: object) -> bool:
         if not isinstance(value, Alias):
@@ -568,7 +571,7 @@ class DataNode(GraphNode):
         return self.value
 
     def __repr__(self):
-        return f"DataNode({self.key}, type={self.typ}, {self.value})"
+        return f"DataNode({self.value!r})"
 
     def __reduce__(self):
         return (DataNode, (self.key, self.value))
@@ -801,7 +804,7 @@ class NestedContainer(Task):
         )
 
     def __repr__(self):
-        return f"Nested[{self.klass.__name__}]({self.args})"
+        return f"{type(self).__name__}({self.args})"
 
     def substitute(
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None

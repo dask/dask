@@ -72,9 +72,7 @@ def test_repr():
     assert repr(t) == "<Task 'key' func('a', 'b')>"
 
     t = Task("nested", func2, t, t.ref())
-    assert (
-        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
-    )
+    assert repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias('key'))>"
 
     def long_function_name_longer_even_longer(a, b):
         return a + b
@@ -129,9 +127,7 @@ def test_unpickled_repr():
     assert repr(t) == "<Task 'key' func('a', 'b')>"
 
     t = pickle.loads(pickle.dumps(Task("nested", func2, t, t.ref())))
-    assert (
-        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
-    )
+    assert repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias('key'))>"
 
     t = pickle.loads(
         pickle.dumps(Task("long", long_function_name_longer_even_longer, t, t.ref()))

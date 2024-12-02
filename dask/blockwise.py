@@ -240,17 +240,177 @@ def blockwise(
 ):
     """Create a Blockwise symbolic mutable mapping
 
-    This is like the ``make_blockwise_graph`` function, but rather than construct a
-    dict, it returns a symbolic Blockwise object.
+    Applies a task, ``func``, across blocks from many different input
+    collections.  We arrange the pattern with which those blocks interact with
+    sets of matching indices.  E.g.::
+
+        make_blockwise_graph(task, 'z', 'i', 'x', 'i', 'y', 'i')
+
+    yield an embarrassingly parallel communication pattern and is read as
+
+        $$ z_i = func(x_i, y_i) $$
+
+    More complex patterns may emerge, including multiple indices::
+
+        make_blockwise_graph(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')
+
+        $$ z_{ij} = func(x_{ij}, y_{ji}) $$
+
+    Indices missing in the output but present in the inputs results in many
+    inputs being sent to one function (see examples).
 
     ``*arrind_pairs`` is similar to those in `make_blockwise_graph`, but in addition to
     allowing for collections it can accept BlockwiseDep instances, which allows for lazy
     evaluation of arguments to ``func`` which might be different for different
     chunks/partitions.
 
+    Examples
+    --------
+    Simple embarrassing map operation
+
+    >>> def inc(x):
+    ...    return x + 1
+    >>> dict(
+    ...     blockwise(
+    ...         inc,
+    ...         'z', 'ij',
+    ...         'x', 'ij',
+    ...         numblocks={'x': (2, 2)}
+    ...     )
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    {('z', 0, 0): <Task ('z', 0, 0) inc(Alias(('x', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) inc(Alias(('x', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) inc(Alias(('x', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) inc(Alias(('x', 1, 1)))>}
+
+    Simple operation on two datasets x and y
+
+    >>> def add(x, y):
+    ...     return x + y
+    >>> dict(
+    ...     blockwise(
+    ...         add,
+    ...         'z', 'ij',
+    ...         'x', 'ij',
+    ...         'y', 'ij',
+    ...         numblocks={'x': (2, 2), 'y': (2, 2)}
+    ...     )
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    {('z', 0, 0): <Task ('z', 0, 0) add(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) add(Alias(('x', 0, 1)), Alias(('y', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) add(Alias(('x', 1, 0)), Alias(('y', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) add(Alias(('x', 1, 1)), Alias(('y', 1, 1)))>}
+
+    Operation that flips one of the datasets
+
+    >>> def addT(x, y):
+    ...     return x + y.T
+    >>> dict(
+    ...     blockwise(
+    ...         addT,
+    ...         'z', 'ij',
+    ...         'x', 'ij',
+    ...         'y', 'ji',
+    ...         numblocks={'x': (2, 2), 'y': (2, 2)}
+    ...     )
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    {('z', 0, 0): <Task ('z', 0, 0) addT(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) addT(Alias(('x', 0, 1)), Alias(('y', 1, 0)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) addT(Alias(('x', 1, 0)), Alias(('y', 0, 1)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) addT(Alias(('x', 1, 1)), Alias(('y', 1, 1)))>}
+
+    Dot product with contraction over ``j`` index.  Yields list arguments
+
+    >>> from dask.array.core import dotmany
+    >>> dict(
+    ...     blockwise(
+    ...         dotmany,
+    ...         'z', 'ik',
+    ...         'x', 'ij',
+    ...         'y', 'jk',
+    ...         numblocks={'x': (2, 2), 'y': (2, 2)}
+    ...     )
+    ... )  # doctest: +SKIP
+    {('z', 0,  0):
+        <Task ('z', 0, 0) dotmany(
+        List((Alias(('x', 0, 0)), Alias(('x', 0, 1)))),
+        List((Alias(('y', 0, 0)), Alias(('y', 1, 0)))))
+        >,
+    ('z', 0,  1):
+        <Task ('z', 0, 1) dotmany(
+        List((Alias(('x', 0, 0)), Alias(('x', 0, 1)))),
+        List((Alias(('y', 0, 1)), Alias(('y', 1, 1)))))
+        >,
+    ('z', 1,  0):
+        <Task ('z', 1, 0) dotmany(
+        List((Alias(('x', 1, 0)), Alias(('x', 1, 1)))),
+        List((Alias(('y', 0, 0)), Alias(('y', 1, 0)))))
+        >,
+    ('z', 1,  1):
+        <Task ('z', 1, 1) dotmany(
+        List((Alias(('x', 1, 0)), Alias(('x', 1, 1)))),
+        List((Alias(('y', 0, 1)), Alias(('y', 1, 1)))))
+        >
+    }
+
+    Pass ``concatenate=True`` to concatenate arrays ahead of time.
+    ``concatenate_axes`` is then called on the lists before the arguments are
+    passed to the function.
+
+    Supports Broadcasting rules
+
+    >>> dict(
+    ...     blockwise(
+    ...         add,
+    ...         'z', 'ij',
+    ...         'x', 'ij',
+    ...         'y', 'ij',
+    ...         concatenate=True,
+    ...         numblocks={'x': (1, 2), 'y': (2, 2)}
+    ...     )
+    ... )  # doctest: +SKIP
+    {
+    ('z', 0, 0): <Task ('z', 0, 0) add(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) add(Alias(('x', 0, 1)), Alias(('y', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) add(Alias(('x', 0, 0)), Alias(('y', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) add(Alias(('x', 0, 1)), Alias(('y', 1, 1)))>
+    }
+
+    Include literals by indexing with ``None``
+
+    >>> dict(
+    ...     blockwise(
+    ...         add,
+    ...         'z', 'i',
+    ...         'x', 'i',
+    ...         100, None,
+    ...         numblocks={'x': (2, )}
+    ...     )
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    {('z', 0): <Task ('z', 0) add(Alias(('x', 0)), DataNode(100))>,
+    ('z', 1): <Task ('z', 1) add(Alias(('x', 1)), DataNode(100))>}
+
+    If the broadcasted value is a delayed object or other dask collection, the
+    key has to be wrapped appropriately as an Alias object.
+
+    >>> from dask import delayed
+    >>> from dask._task_spec import Alias
+    >>> delayed_inc = delayed(inc)(5, dask_key_name='dinc')
+    >>> dict(
+    ...     blockwise(
+    ...         add,
+    ...         'z', 'i',
+    ...         'x', 'i',
+    ...         Alias(delayed_inc.key), None,
+    ...         numblocks={'x': (2, )}
+    ...     )
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    {('z', 0): <Task ('z', 0) add(Alias(('x', 0)), Alias('dinc'))>,
+    ('z', 1): <Task ('z', 1) add(Alias(('x', 1)), Alias('dinc'))>}
+
     See Also
     --------
-    make_blockwise_graph
+    dask.array.blockwise
     Blockwise
     """
     new_axes = new_axes or {}
@@ -771,7 +931,6 @@ def _make_blockwise_graph(
     io_deps=None,
     keys=None,
 ):
-
     if numblocks is None:
         raise ValueError("Missing required numblocks argument.")
     new_axes = new_axes or {}
