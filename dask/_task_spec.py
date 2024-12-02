@@ -151,18 +151,6 @@ class _MultiContainer(Container):
         return False
 
 
-def _to_dict(*args: Any) -> dict:
-    vals = args[:-1]
-    keys = args[-1]
-    return {key: v for key, v in zip(keys, vals)}
-
-
-def _wrap_dict_in_task(d: dict) -> Task:
-    """Wrap a dictionary in a task such that all values will be properly
-    recognized as runnable tasks"""
-    return Task(None, _to_dict, *d.values(), d.keys())
-
-
 SubgraphType = None
 
 
@@ -696,22 +684,31 @@ class Task(GraphNode):
         subs_filtered = {
             k: v for k, v in subs.items() if k in self.dependencies and k != v
         }
-        if not subs_filtered and (key is None or key == self.key):
+        if subs_filtered:
+            new_args = tuple(
+                a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
+                for a in self.args
+            )
+            new_kwargs = {
+                k: v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
+                for k, v in self.kwargs.items()
+            }
+            return type(self)(
+                key or self.key,
+                self.func,
+                *new_args,
+                **new_kwargs,
+            )
+        elif key is None or key == self.key:
             return self
-        new_args = tuple(
-            a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
-            for a in self.args
-        )
-        new_kwargs = {
-            k: v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
-            for k, v in self.kwargs.items()
-        }
-        return type(self)(
-            key or self.key,
-            self.func,
-            *new_args,
-            **new_kwargs,
-        )
+        else:
+            # Rename
+            return type(self)(
+                key or self.key,
+                self.func,
+                *self.args,
+                **self.kwargs,
+            )
 
     @staticmethod
     def fuse(*tasks: GraphNode, key: KeyType | None = None) -> Task:
@@ -764,8 +761,16 @@ class NestedContainer(Task):
         return f"Nested[{self.klass.__name__}]({self.args})"
 
     def substitute(self, subs, key: KeyType | None = None) -> Task:
+        subs_filtered = {
+            k: v for k, v in subs.items() if k in self.dependencies and k != v
+        }
+        if not subs_filtered:
+            return self
         return type(self)(
-            *(a.substitute(subs) if isinstance(a, GraphNode) else a for a in self.args)
+            *(
+                a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
+                for a in self.args
+            )
         )
 
     def __dask_tokenize__(self):
@@ -817,11 +822,17 @@ class Dict(NestedContainer):
         return f"Dict({values})"
 
     def substitute(self, subs, key: KeyType | None = None) -> Task:
-        new = []
+        subs_filtered = {
+            k: v for k, v in subs.items() if k in self.dependencies and k != v
+        }
+        if not subs_filtered:
+            return self
+
+        new = {}
         for tup in self.args:
-            newtup = tup.substitute(subs)
-            new.append(tuple(newtup.args))
-        return type(self)(dict(new))
+            k, v = tup.substitute(subs_filtered).args
+            new[k] = v
+        return type(self)(new)
 
 
 class DependenciesMapping(MutableMapping):
