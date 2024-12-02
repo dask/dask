@@ -19,14 +19,13 @@ from tlz import groupby, identity, join, merge, pluck, unique, valmap
 
 import dask
 import dask.bag as db
+from dask._task_spec import List, Task
 from dask.bag.core import (
     Bag,
     collect,
     from_delayed,
-    inline_singleton_lists,
     lazify,
     lazify_task,
-    optimize,
     partition,
     reduceby,
     reify,
@@ -574,6 +573,47 @@ def test_random_sample_random_state():
 
 
 def test_lazify_task():
+    task = Task(None, sum, Task(None, reify, Task(None, map, inc, [1, 2, 3])))
+    assert lazify_task(task) == Task(None, sum, Task(None, map, inc, [1, 2, 3]))
+
+    task = Task(None, reify, Task(None, map, inc, [1, 2, 3]))
+    assert lazify_task(task) == task
+
+    task = Task(
+        None,
+        reify,
+        Task(None, map, inc, Task(None, reify, Task(None, filter, iseven, "y"))),
+    )
+    expected = Task(None, reify, Task(None, map, inc, Task(None, filter, iseven, "y")))
+    assert lazify_task(task) == expected
+
+    task = Task(
+        None,
+        sum,
+        List(
+            Task(
+                None,
+                reify,
+                Task(None, map, inc, Task(None, reify, Task(None, filter, iseven, 1))),
+            ),
+            Task(
+                None,
+                reify,
+                Task(None, map, inc, Task(None, reify, Task(None, filter, iseven, 2))),
+            ),
+        ),
+    )
+    assert lazify_task(task) == Task(
+        None,
+        sum,
+        List(
+            Task(None, map, inc, Task(None, filter, iseven, 1)),
+            Task(None, map, inc, Task(None, filter, iseven, 2)),
+        ),
+    )
+
+
+def test_lazify_task_legacy():
     task = (sum, (reify, (map, inc, [1, 2, 3])))
     assert lazify_task(task) == (sum, (map, inc, [1, 2, 3]))
 
@@ -596,40 +636,6 @@ def test_lazify():
     }
     b = {"x": (reify, (map, inc, (filter, iseven, "y"))), "a": (f, "x"), "b": (f, "x")}
     assert lazify(a) == b
-
-
-def test_inline_singleton_lists():
-    inp = {"b": (list, "a"), "c": (f, "b", 1)}
-    out = {"c": (f, (list, "a"), 1)}
-    assert inline_singleton_lists(inp, ["c"]) == out
-
-    out = {"c": (f, "a", 1)}
-    assert optimize(inp, ["c"], rename_fused_keys=False) == out
-
-    # If list is an output key, don't fuse it
-    assert inline_singleton_lists(inp, ["b", "c"]) == inp
-    assert optimize(inp, ["b", "c"], rename_fused_keys=False) == inp
-
-    inp = {"b": (list, "a"), "c": (f, "b", 1), "d": (f, "b", 2)}
-    assert inline_singleton_lists(inp, ["c", "d"]) == inp
-
-    # Doesn't inline constants
-    inp = {"b": (4, 5), "c": (f, "b")}
-    assert inline_singleton_lists(inp, ["c"]) == inp
-
-
-def test_rename_fused_keys_bag():
-    inp = {"b": (list, "a"), "c": (f, "b", 1)}
-
-    outp = optimize(inp, ["c"], rename_fused_keys=False)
-    assert outp.keys() == {"c"}
-    assert outp["c"][1:] == ("a", 1)
-
-    with dask.config.set({"optimization.fuse.rename-keys": False}):
-        assert optimize(inp, ["c"]) == outp
-
-    # By default, fused keys are renamed
-    assert optimize(inp, ["c"]) != outp
 
 
 def test_take():
@@ -1156,32 +1162,55 @@ def test_to_delayed():
     assert t.compute() == 21
 
 
-def test_to_delayed_optimize_graph(tmpdir):
+def test_to_delayed_optimize_graph(tmpdir, monkeypatch):
+    calls = 0
+    from dask.bag.core import reify
+
+    def count_reify(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return reify(*args, **kwargs)
+
+    monkeypatch.setattr(dask.bag.core, "reify", count_reify)
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=1)
     b2 = b.map(inc).map(inc).map(inc)
 
     [d] = b2.to_delayed()
-    text = str(dict(d.dask))
-    assert text.count("reify") == 1
+
+    calls = 0
+    d.compute()
+    assert calls == 1
+
+    calls = 0
+    b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=1)
+    b2 = b.map(inc).map(inc).map(inc)
+    [d] = b2.to_delayed()
     assert d.__dask_layers__() != b2.__dask_layers__()
     [d2] = b2.to_delayed(optimize_graph=False)
     assert dict(d2.dask) == dict(b2.dask)
     assert d2.__dask_layers__() == b2.__dask_layers__()
-    assert d.compute() == d2.compute()
+    calls = 0
+    result = d.compute()
+    assert calls == 1
+    calls = 0
+    result2 = d2.compute()
+    assert calls == 3
+    assert result == result2
 
     x = b2.sum()
     d = x.to_delayed()
-    text = str(dict(d.dask))
     assert d.__dask_layers__() == x.__dask_layers__()
-    assert text.count("reify") == 0
     d2 = x.to_delayed(optimize_graph=False)
     assert dict(d2.dask) == dict(x.dask)
     assert d2.__dask_layers__() == x.__dask_layers__()
-    assert d.compute() == d2.compute()
 
+    calls = 0
+    assert d.compute() == d2.compute()
+    assert calls == 3
+
+    calls = 0
     [d] = b2.to_textfiles(str(tmpdir), compute=False)
-    text = str(dict(d.dask))
-    assert text.count("reify") <= 0
+    assert calls == 0
 
 
 def test_from_delayed():

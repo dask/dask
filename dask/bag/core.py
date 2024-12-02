@@ -38,7 +38,15 @@ from tlz import (
 )
 
 from dask import config
-from dask._task_spec import GraphNode
+from dask._task_spec import (
+    GraphNode,
+    List,
+    Task,
+    _execute_subgraph,
+    convert_legacy_graph,
+    cull,
+    fuse_linear_task_spec,
+)
 from dask.bag import chunk
 from dask.bag.avro import to_avro
 from dask.base import (
@@ -50,17 +58,15 @@ from dask.base import (
 )
 from dask.blockwise import blockwise
 from dask.context import globalmethod
-from dask.core import flatten, get_dependencies, istask, quote, reverse_dict
+from dask.core import flatten, istask, quote
 from dask.delayed import Delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import cull, fuse, inline
 from dask.sizeof import sizeof
 from dask.typing import Graph, NestedKeys, no_default
 from dask.utils import (
     apply,
     digit,
     ensure_bytes,
-    ensure_dict,
     ensure_unicode,
     funcname,
     get_default_shuffle_method,
@@ -96,17 +102,47 @@ def lazify_task(task, start=True):
     (<built-in function sum>, (<class 'map'>, <function inc at ...>, [1, 2, 3]))
     """
     if isinstance(task, GraphNode):
-        return task
-    if type(task) is list and len(task) < 50:
-        return [lazify_task(arg, False) for arg in task]
-    if not istask(task):
-        return task
-    head, tail = task[0], task[1:]
-    if not start and head in (list, reify):
-        task = task[1]
-        return lazify_task(*tail, start=False)
+        if isinstance(task, List) and len(task.args) < 50:
+            return List(*[lazify_task(arg, False) for arg in task.args])
+        if not isinstance(task, Task):
+            return task
+        if not start and task.func in (list, reify) and isinstance(task.args[0], Task):
+            assert len(task.args) == 1
+            task = task.args[0]
+        if task.func is _execute_subgraph:
+            subgraph = task.args[0]
+            outkey = task.args[1]
+            # If there is a reify at the output of the subgraph we don't want to act
+            final_task = lazify_task(subgraph[outkey], True)
+            subgraph = {
+                k: lazify_task(v, False) for k, v in subgraph.items() if k != outkey
+            }
+            subgraph[outkey] = final_task
+            return Task(
+                task.key,
+                _execute_subgraph,
+                subgraph,
+                outkey,
+                *task.args[2:],
+                **task.kwargs,
+            )
+        return Task(
+            task.key,
+            task.func,
+            *[lazify_task(arg, False) for arg in task.args],
+            **task.kwargs,
+        )
     else:
-        return (head,) + tuple(lazify_task(arg, False) for arg in tail)
+        if type(task) is list and len(task) < 50:
+            return [lazify_task(arg, False) for arg in task]
+        if not istask(task):
+            return task
+        head, tail = task[0], task[1:]
+        if not start and head in (list, reify):
+            task = task[1]
+            return lazify_task(*tail, start=False)
+        else:
+            return (head,) + tuple(lazify_task(arg, False) for arg in tail)
 
 
 def lazify(dsk):
@@ -120,47 +156,14 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-def inline_singleton_lists(dsk, keys, dependencies=None):
-    """Inline lists that are only used once.
-
-    >>> d = {'b': (list, 'a'),
-    ...      'c': (sum, 'b', 1)}
-    >>> inline_singleton_lists(d, 'c')
-    {'c': (<built-in function sum>, (<class 'list'>, 'a'), 1)}
-
-    Pairs nicely with lazify afterwards.
-    """
-    if dependencies is None:
-        dependencies = {k: get_dependencies(dsk, task=v) for k, v in dsk.items()}
-    dependents = reverse_dict(dependencies)
-
-    inline_keys = {
-        k
-        for k, v in dsk.items()
-        if istask(v)
-        and not isinstance(v, GraphNode)
-        and v
-        and v[0] is list
-        and len(dependents[k]) == 1
-    }
-    inline_keys.difference_update(flatten(keys))
-    dsk = inline(dsk, inline_keys, inline_constants=False)
-    for k in inline_keys:
-        del dsk[k]
-    return dsk
-
-
-def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=None, **kwargs):
+def optimize(dsk, keys, fuse_keys=None, **kwargs):
     """Optimize a dask from a dask Bag."""
-    dsk = ensure_dict(dsk)
-    dsk2, dependencies = cull(dsk, keys)
-    kwargs = {}
-    if rename_fused_keys is not None:
-        kwargs["rename_keys"] = rename_fused_keys
-    dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies, **kwargs)
-    dsk4 = inline_singleton_lists(dsk3, keys, dependencies)
-    dsk5 = lazify(dsk4)
-    return dsk5
+    dsk = convert_legacy_graph(dsk)
+    keys = list(flatten(keys))
+    dsk2 = cull(dsk, keys)
+    dsk3 = fuse_linear_task_spec(dsk2, keys + (fuse_keys or []))
+    dsk4 = lazify(dsk3)
+    return dsk4
 
 
 def _to_textfiles_chunk(data, lazy_file, last_endline):
