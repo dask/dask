@@ -289,11 +289,10 @@ def convert_legacy_graph(
         t = convert_legacy_task(k, arg, all_keys)
         if isinstance(t, Alias) and t.target.key == k:
             continue
+        elif not isinstance(t, GraphNode):
+            t = DataNode(k, t)
         new_dsk[k] = t
-    new_dsk2 = {
-        k: v if isinstance(v, GraphNode) else DataNode(k, v) for k, v in new_dsk.items()
-    }
-    return new_dsk2
+    return new_dsk
 
 
 def resolve_aliases(dsk: dict, keys: set, dependents: dict) -> dict:
