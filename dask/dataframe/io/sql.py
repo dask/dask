@@ -191,9 +191,10 @@ def read_sql_query(
     for i, (lower, upper) in enumerate(zip(lowers, uppers)):
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         q = sql.where(sa.sql.and_(index >= lower, cond))
+        serialized_query = str(q.compile(compile_kwargs={"literal_binds": True}))
         parts.append(
             delayed(_read_sql_chunk)(
-                q, con, meta, engine_kwargs=engine_kwargs, **kwargs
+                serialized_query, con, meta, engine_kwargs=engine_kwargs, **kwargs
             )
         )
 
