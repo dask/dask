@@ -635,7 +635,7 @@ class Task(GraphNode):
         self.key = key
         self.func = func
         if isinstance(func, Task):
-            raise ValueError("Cannot nest tasks")
+            raise TypeError("Cannot nest tasks")
         self.args = tuple(
             Alias(obj.key) if isinstance(obj, TaskRef) else obj for obj in args
         )
