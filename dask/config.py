@@ -702,7 +702,6 @@ deprecations: dict[str, str | None] = {
     "fuse-ave-width": "optimization.fuse.ave-width",
     "fuse-max-height": "optimization.fuse.max-height",
     "fuse-max-width": "optimization.fuse.max-width",
-    "fuse-subgraphs": "optimization.fuse.subgraphs",
     "fuse-rename-keys": "optimization.fuse.rename-keys",
     "fuse-max-depth-new-edges": "optimization.fuse.max-depth-new-edges",
     # See https://github.com/dask/distributed/pull/4916
