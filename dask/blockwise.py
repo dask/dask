@@ -126,7 +126,7 @@ class BlockwiseDepDict(BlockwiseDep):
     >>> layer = Blockwise(
     ...     output="collection-name",
     ...     output_indices="i",
-    ...     dsk={"collection-name": (func, '_0')},
+    ...     task=Task("collection-name", func, TaskRef("_0")),
     ...     indices=[(dep, "i")],
     ...     numblocks={},
     ... )
