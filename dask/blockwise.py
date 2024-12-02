@@ -240,11 +240,11 @@ def blockwise(
 ):
     """Create a Blockwise symbolic mutable mapping
 
-    Applies a task, ``func``, across blocks from many different input
+    Applies a function, ``func``, across blocks from many different input
     collections.  We arrange the pattern with which those blocks interact with
     sets of matching indices.  E.g.::
 
-        make_blockwise_graph(task, 'z', 'i', 'x', 'i', 'y', 'i')
+        blockwise(func, 'z', 'i', 'x', 'i', 'y', 'i')
 
     yield an embarrassingly parallel communication pattern and is read as
 
@@ -252,17 +252,12 @@ def blockwise(
 
     More complex patterns may emerge, including multiple indices::
 
-        make_blockwise_graph(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')
+        blockwise(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')
 
         $$ z_{ij} = func(x_{ij}, y_{ji}) $$
 
     Indices missing in the output but present in the inputs results in many
     inputs being sent to one function (see examples).
-
-    ``*arrind_pairs`` is similar to those in `make_blockwise_graph`, but in addition to
-    allowing for collections it can accept BlockwiseDep instances, which allows for lazy
-    evaluation of arguments to ``func`` which might be different for different
-    chunks/partitions.
 
     Examples
     --------
