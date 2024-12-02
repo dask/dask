@@ -494,7 +494,6 @@ _no_deps: frozenset = frozenset()
 
 
 class Alias(GraphNode):
-    __weakref__: Any = None
     target: TaskRef
     __slots__ = tuple(__annotations__)
 
@@ -517,14 +516,16 @@ class Alias(GraphNode):
     ) -> GraphNode:
         if self.key in subs or self.target.key in subs:
             sub_key = subs.get(self.key, self.key)
-            if isinstance(sub_key, GraphNode):
-                raise RuntimeError("Invalid substitution encountered")
             val = subs.get(self.target.key, self.target.key)
             if sub_key == self.key and val == self.target.key:
                 return self
             if isinstance(val, GraphNode):
-                return val.substitute({}, key=key or sub_key)
-            return Alias(key or sub_key, val)
+                return val.substitute({}, key=key)
+            if key is None and isinstance(sub_key, GraphNode):
+                raise RuntimeError(
+                    f"Invalid substitution encountered {self.key!r} -> {sub_key}"
+                )
+            return Alias(key or sub_key, val)  # type: ignore
         return self
 
     def __dask_tokenize__(self):
