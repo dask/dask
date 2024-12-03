@@ -693,6 +693,8 @@ class NestedContainer(Task):
         _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
+        if len(args) == 1 and isinstance(args[0], self.klass):
+            args = args[0]  # type: ignore
         super().__init__(
             None,
             self.to_container,
@@ -728,8 +730,6 @@ class Dict(NestedContainer):
             if len(args) > 1:
                 raise ValueError("Dict can only take one positional argument")
             kwargs = args[0]
-        elif not kwargs:
-            raise ValueError("Dict needs at least one argument")
         super().__init__(
             *(Tuple(*it) for it in kwargs.items()), _dependencies=_dependencies
         )
@@ -915,3 +915,22 @@ def fuse_linear_task_spec(dsk, keys):
                 # Having the same prefixes can result in the same key, i.e. getitem-hash -> getitem-hash
                 result[top_key] = Alias(top_key, target=renamed_key)
     return result
+
+
+def cull(
+    dsk: dict[KeyType, GraphNode], keys: Iterable[KeyType]
+) -> dict[KeyType, GraphNode]:
+    work = set(keys)
+    seen: set[KeyType] = set()
+    dsk2 = {}
+    wpop = work.pop
+    wupdate = work.update
+    sadd = seen.add
+    while work:
+        k = wpop()
+        if k in seen or k not in dsk:
+            continue
+        sadd(k)
+        dsk2[k] = v = dsk[k]
+        wupdate(v.dependencies)
+    return dsk2

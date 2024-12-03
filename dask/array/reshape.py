@@ -7,6 +7,7 @@ from operator import mul
 
 import numpy as np
 
+from dask._task_spec import Task, TaskRef
 from dask.array.core import Array
 from dask.array.utils import meta_from_array
 from dask.base import tokenize
@@ -346,7 +347,8 @@ def reshape(x, shape, merge_chunks=True, limit=None):
 
     if x.npartitions == 1:
         key = next(flatten(x.__dask_keys__()))
-        dsk = {(name,) + (0,) * len(shape): (M.reshape, key, shape)}
+        new_key = (name,) + (0,) * len(shape)
+        dsk = {new_key: Task(new_key, M.reshape, TaskRef(key), shape)}
         chunks = tuple((d,) for d in shape)
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
         return Array(graph, name, chunks, meta=meta)
@@ -364,7 +366,10 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     in_keys = list(product([x2.name], *[range(len(c)) for c in inchunks]))
     out_keys = list(product([name], *[range(len(c)) for c in outchunks]))
     shapes = list(product(*outchunks))
-    dsk = {a: (M.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
+    dsk = {
+        a: Task(a, M.reshape, TaskRef(b), shape)
+        for a, b, shape in zip(out_keys, in_keys, shapes)
+    }
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x2])
     return Array(graph, name, outchunks, meta=meta)
@@ -500,7 +505,12 @@ def reshape_blockwise(
 
         dsk = {
             (outname,)
-            + tuple(chunk_out): (_reshape_blockwise, (x.name,) + tuple(chunk_in), shape)
+            + tuple(chunk_out): Task(
+                (outname,) + tuple(chunk_out),
+                _reshape_blockwise,
+                TaskRef((x.name,) + tuple(chunk_in)),
+                shape,
+            )
             for chunk_in, chunk_out, shape in zip(
                 chunk_tuples, out_chunk_tuples, out_shapes
             )
@@ -532,7 +542,12 @@ def reshape_blockwise(
 
     dsk = {
         (outname,)
-        + tuple(chunk_out): (_reshape_blockwise, (x.name,) + tuple(chunk_in), shape)
+        + tuple(chunk_out): Task(
+            (outname,) + tuple(chunk_out),
+            _reshape_blockwise,
+            TaskRef((x.name,) + tuple(chunk_in)),
+            shape,
+        )
         for chunk_in, chunk_out, shape in zip(
             chunk_tuples, out_chunk_tuples, out_shapes
         )
