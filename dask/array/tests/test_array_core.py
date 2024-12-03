@@ -4676,11 +4676,26 @@ def test_zarr_group():
         assert a2.chunks == a.chunks
 
 
-def test_zarr_irregular_chunks():
+@pytest.mark.parametrize(
+    "shape, chunks, expect_rechunk",
+    [
+        ((6, 2), ((2, 1, 1, 2), 1), True),
+        ((6, 2), ((2, 1, 2, 1), 1), True),
+        ((7, 2), ((2, 2, 2, 1), 1), False),
+        ((2, 7), (1, (2, 2, 2, 1)), False),
+        ((2, 6), (1, (2, 1, 2, 1)), True),
+    ],
+)
+def test_zarr_irregular_chunks(shape, chunks, expect_rechunk):
     pytest.importorskip("zarr")
     with tmpdir() as d:
-        a = da.zeros((10, 10), chunks=((2, 1, 2, 2, 1, 2), 1))
-        a.to_zarr(d, component="test")
+        a = da.zeros(shape, chunks=chunks)  # ((2, 1, 1, 2), 1))
+        store_delayed = a.to_zarr(d, component="test", compute=False)
+        assert (
+            any("rechunk" in key_split(k) for k in dict(store_delayed.dask))
+            is expect_rechunk
+        )
+        store_delayed.compute()
 
 
 @pytest.mark.parametrize(

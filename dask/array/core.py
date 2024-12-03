@@ -3819,7 +3819,7 @@ def to_zarr(
             z, lock=False, regions=regions, compute=compute, return_stored=return_stored
         )
     else:
-        if any(len(set(c)) > 1 for c in arr.chunks):
+        if not _check_regular_chunks(arr.chunks):
             # We almost certainly get here because auto chunking has been used
             # on irregular chunks. The max will then be smaller than auto, so using
             # max is a safe choice
