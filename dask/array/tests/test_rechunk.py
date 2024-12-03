@@ -5,6 +5,8 @@ from itertools import product
 
 import pytest
 
+from dask._task_spec import Task
+
 np = pytest.importorskip("numpy")
 import math
 
@@ -545,9 +547,9 @@ def test_dont_concatenate_single_chunks(shape, chunks):
     y = x.rechunk(chunks)
     dsk = dict(y.dask)
     assert not any(
-        funcname(task[0]).startswith("concat")
+        funcname(task.func).startswith("concat")
         for task in dsk.values()
-        if dask.istask(task)
+        if isinstance(task, Task)
     )
 
 
