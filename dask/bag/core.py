@@ -42,6 +42,7 @@ from dask._task_spec import (
     GraphNode,
     List,
     Task,
+    TaskRef,
     _execute_subgraph,
     convert_legacy_graph,
     cull,
@@ -56,10 +57,10 @@ from dask.base import (
     replace_name_in_key,
     tokenize,
 )
-from dask.blockwise import blockwise
+from dask.blockwise import _blockwise_unpack_collections_task_spec, blockwise
 from dask.context import globalmethod
 from dask.core import flatten, istask, quote
-from dask.delayed import Delayed, unpack_collections
+from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.sizeof import sizeof
 from dask.typing import Graph, NestedKeys, no_default
@@ -101,6 +102,7 @@ def lazify_task(task, start=True):
     >>> lazify_task(task)  # doctest: +ELLIPSIS
     (<built-in function sum>, (<class 'map'>, <function inc at ...>, [1, 2, 3]))
     """
+
     if isinstance(task, GraphNode):
         if isinstance(task, List) and len(task.args) < 50:
             return List(*[lazify_task(arg, False) for arg in task.args])
@@ -2099,14 +2101,12 @@ def unpack_scalar_dask_kwargs(kwargs):
     kwargs2 = {}
     dependencies = []
     for k, v in kwargs.items():
-        vv, collections = unpack_collections(v)
+        vv, collections = _blockwise_unpack_collections_task_spec(v)
         if not collections:
             kwargs2[k] = v
         else:
             kwargs2[k] = vv
             dependencies.extend(collections)
-    if dependencies:
-        kwargs2 = (dict, (zip, list(kwargs2), list(kwargs2.values())))
     return kwargs2, dependencies
 
 
@@ -2273,11 +2273,10 @@ def map_partitions(func, *args, **kwargs):
         if isinstance(a, Bag):
             bags.append(a)
             args2.append(a)
-        elif isinstance(a, (Item, Delayed)):
-            args2.append(a.key)
-            dependencies.append(a)
         else:
+            a, collections = _blockwise_unpack_collections_task_spec(a)
             args2.append(a)
+            dependencies.extend(collections)
 
     bag_kwargs = {}
     other_kwargs = {}
@@ -2299,26 +2298,29 @@ def map_partitions(func, *args, **kwargs):
         raise ValueError("All bags must have the same number of partitions.")
     npartitions = npartitions.pop()
 
-    def build_args(n):
-        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
-
-    def build_bag_kwargs(n):
-        if not bag_kwargs:
-            return {}
-        return (
-            dict,
-            (zip, list(bag_kwargs), [(b.name, n) for b in bag_kwargs.values()]),
-        )
-
     if bag_kwargs:
+
+        def build_args(n):
+            return [TaskRef((a.name, n)) if isinstance(a, Bag) else a for a in args2]
+
+        def build_bag_kwargs(n) -> dict:
+            if not bag_kwargs:
+                return other_kwargs
+            rv = {
+                k: TaskRef((b.name, n)) if isinstance(b, Bag) else b
+                for k, b in bag_kwargs.items()
+            }
+            rv.update(other_kwargs)
+            return rv
+
         # Avoid using `blockwise` when a key-word
         # argument is being used to refer to a collection.
         dsk = {
-            (name, n): (
-                apply,
+            (name, n): Task(
+                (name, n),
                 func,
-                build_args(n),
-                (merge, build_bag_kwargs(n), other_kwargs),
+                *build_args(n),
+                **build_bag_kwargs(n),
             )
             for n in range(npartitions)
         }
@@ -2333,12 +2335,6 @@ def map_partitions(func, *args, **kwargs):
                 numblocks[arg.name] = (arg.npartitions,)
             else:
                 pairs.extend([arg, None])
-        if other_kwargs and isinstance(other_kwargs, tuple):
-            # `other_kwargs` is a nested subgraph,
-            # designed to generate the kwargs lazily.
-            # We need to convert this to a dictionary
-            # before passing to `blockwise`
-            other_kwargs = other_kwargs[0](other_kwargs[1][0](*other_kwargs[1][1:]))
         dsk = blockwise(
             func,
             name,

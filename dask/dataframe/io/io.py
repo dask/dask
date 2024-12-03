@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 import dask.array as da
+from dask._task_spec import TaskRef
 from dask.base import is_dask_collection, tokenize
 from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe._compat import is_any_real_numeric_dtype
@@ -675,7 +676,7 @@ def from_delayed(
         name=name,
         columns=None,
         inputs=BlockwiseDepDict(
-            {(i,): inp.key for i, inp in enumerate(dfs)},
+            {(i,): TaskRef(inp.key) for i, inp in enumerate(dfs)},
             produces_keys=True,
         ),
         io_func=(

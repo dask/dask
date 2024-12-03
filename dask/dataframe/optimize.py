@@ -68,7 +68,7 @@ def optimize_dataframe_getitem(dsk, keys):
             return False
 
         # Callable must be `getitem`
-        if layer.dsk[layer.output][0] != operator.getitem:
+        if layer.task.func != operator.getitem:
             return False
 
         return True
@@ -216,7 +216,7 @@ def optimize_dataframe_getitem(dsk, keys):
                 new_block = Blockwise(
                     block.output,
                     block.output_indices,
-                    block.dsk,
+                    block.task,
                     new_indices,
                     numblocks,
                     block.concatenate,

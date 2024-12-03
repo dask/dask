@@ -31,20 +31,13 @@ from dask.utils import (
     funcname,
     is_namedtuple_instance,
     methodcaller,
+    unzip,
 )
 
 __all__ = ["Delayed", "delayed"]
 
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
-
-
-def unzip(ls, nout):
-    """Unzip a list of lists into ``nout`` outputs."""
-    out = list(zip(*ls))
-    if not out:
-        out = [()] * nout
-    return out
 
 
 def finalize(collection):
@@ -93,6 +86,7 @@ def unpack_collections(expr):
     >>> collections
     (Delayed('a'), Delayed('b'))
     """
+    # FIXME: See blockwise._unpack_collections for a TaskSpec version
     if isinstance(expr, Delayed):
         return expr._key, (expr,)
 

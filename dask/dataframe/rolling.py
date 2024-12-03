@@ -10,7 +10,7 @@ from pandas.core.window import Rolling as pd_Rolling
 
 from dask.array.core import normalize_arg
 from dask.base import tokenize
-from dask.blockwise import BlockwiseDepDict
+from dask.blockwise import BlockwiseDepDict, _blockwise_unpack_collections_task_spec
 from dask.dataframe import methods
 from dask.dataframe._compat import check_axis_keyword_deprecation
 from dask.dataframe.core import (
@@ -31,7 +31,6 @@ from dask.dataframe.utils import (
     is_dataframe_like,
     is_series_like,
 )
-from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.typing import no_default
 from dask.utils import M, apply, derived_from, funcname, has_keyword
@@ -255,7 +254,7 @@ def map_overlap(
             dependencies.append(arg)
             continue
         arg = normalize_arg(arg)
-        arg2, collections = unpack_collections(arg)
+        arg2, collections = _blockwise_unpack_collections_task_spec(arg)
         if collections:
             args2.append(arg2)
             dependencies.extend(collections)
@@ -266,7 +265,7 @@ def map_overlap(
     simple = True
     for k, v in kwargs.items():
         v = normalize_arg(v)
-        v, collections = unpack_collections(v)
+        v, collections = _blockwise_unpack_collections_task_spec(v)
         dependencies.extend(collections)
         kwargs3[k] = v
         if collections:

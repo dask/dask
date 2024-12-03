@@ -41,7 +41,6 @@ from dask.utils_test import add, hlg_layer, hlg_layer_topological, inc
 dsk: Graph = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
 L = list(range(5)) * 3
-
 b = Bag(dsk, "x", 3)
 
 

@@ -31,7 +31,13 @@ from dask.base import (
     named_schedulers,
     tokenize,
 )
-from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
+from dask.blockwise import (
+    Blockwise,
+    BlockwiseDep,
+    BlockwiseDepDict,
+    _blockwise_unpack_collections_task_spec,
+    blockwise,
+)
 from dask.context import globalmethod
 from dask.dataframe import methods
 from dask.dataframe._compat import (
@@ -71,7 +77,7 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
     valid_divisions,
 )
-from dask.delayed import Delayed, delayed, unpack_collections
+from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameTreeReduction
 from dask.typing import Graph, NestedKeys, no_default
@@ -7050,7 +7056,7 @@ def map_partitions(
             dependencies.append(arg)
             continue
         arg = normalize_arg(arg)
-        arg2, collections = unpack_collections(arg)
+        arg2, collections = _blockwise_unpack_collections_task_spec(arg)
         if collections:
             args2.append(arg2)
             dependencies.extend(collections)
@@ -7061,7 +7067,7 @@ def map_partitions(
     simple = True
     for k, v in kwargs.items():
         v = normalize_arg(v)
-        v, collections = unpack_collections(v)
+        v, collections = _blockwise_unpack_collections_task_spec(v)
         dependencies.extend(collections)
         kwargs3[k] = v
         if collections:

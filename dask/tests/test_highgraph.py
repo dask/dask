@@ -10,7 +10,7 @@ import pytest
 
 import dask
 from dask.base import tokenize
-from dask.blockwise import Blockwise, blockwise_token
+from dask.blockwise import Blockwise
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
 from dask.utils_test import inc
 
@@ -264,11 +264,13 @@ def test_blockwise_cull(flat):
 
 
 def test_len_does_not_materialize():
+    from dask._task_spec import Task
+
     a = {"x": 1}
     b = Blockwise(
         output="b",
         output_indices=tuple("ij"),
-        dsk={"b": [[blockwise_token(0)]]},
+        task=Task("b", lambda: "1"),
         indices=(),
         numblocks={},
         new_axes={"i": (1, 1, 1), "j": (1, 1)},
