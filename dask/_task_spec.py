@@ -795,6 +795,8 @@ class NestedContainer(Task):
         _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
+        if len(args) == 1 and isinstance(args[0], self.klass):
+            args = args[0]  # type: ignore
         super().__init__(
             None,
             self.to_container,
@@ -859,8 +861,6 @@ class Dict(NestedContainer):
             if len(args) > 1:
                 raise ValueError("Dict can only take one positional argument")
             kwargs = args[0]
-        elif not kwargs:
-            raise ValueError("Dict needs at least one argument")
         super().__init__(
             *(Tuple(*it) for it in kwargs.items()), _dependencies=_dependencies
         )

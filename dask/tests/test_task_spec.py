@@ -1104,3 +1104,8 @@ def test_substitute_nested():
     t2 = t1.substitute({"a": "c", "b": "d"})
     assert t2.dependencies == {"c", "d"}
     assert t1({"a": "a", "b": "b"}) == t2({"c": "a", "d": "b"})
+
+
+@pytest.mark.parametrize("Container", [Dict, List, Set, Tuple])
+def test_nested_containers_empty(Container):
+    assert Container(Container.klass())() == Container.klass()
