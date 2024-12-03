@@ -28,6 +28,7 @@ from tlz.curried import pluck
 from toolz import frequencies
 
 from dask import compute, config, core
+from dask._task_spec import TaskRef
 from dask.array import chunk
 from dask.array.chunk import getitem
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -317,7 +318,7 @@ def graph_from_arraylike(
             getitem,
             name,
             out_ind,
-            original_name,
+            TaskRef(original_name),
             None,
             ArraySliceDep(chunks),
             out_ind,
