@@ -18,7 +18,6 @@ import operator
 import os
 import time
 import warnings
-from io import StringIO
 from operator import add, sub
 from threading import Lock
 
@@ -4770,6 +4769,28 @@ def test_zarr_group():
 
 
 @pytest.mark.parametrize(
+    "shape, chunks, expect_rechunk",
+    [
+        ((6, 2), ((2, 1, 1, 2), 1), True),
+        ((6, 2), ((2, 1, 2, 1), 1), True),
+        ((7, 2), ((2, 2, 2, 1), 1), False),
+        ((2, 7), (1, (2, 2, 2, 1)), False),
+        ((2, 6), (1, (2, 1, 2, 1)), True),
+    ],
+)
+def test_zarr_irregular_chunks(shape, chunks, expect_rechunk):
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.zeros(shape, chunks=chunks)  # ((2, 1, 1, 2), 1))
+        store_delayed = a.to_zarr(d, component="test", compute=False)
+        assert (
+            any("rechunk" in key_split(k) for k in dict(store_delayed.dask))
+            is expect_rechunk
+        )
+        store_delayed.compute()
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [(), True],
@@ -5294,14 +5315,11 @@ def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
 def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
     pytest.importorskip("zarr")
     y = unknown
-    with pytest.raises(ValueError, match="compute_chunk_sizes"):
-        with StringIO() as f:
-            y.to_zarr(f)
-    y.compute_chunk_sizes()
-
-    with pytest.raises(ValueError, match="irregular chunking"):
-        with StringIO() as f:
-            y.to_zarr(f)
+    with tmpdir() as d:
+        with pytest.raises(ValueError, match="compute_chunk_sizes"):
+            y.to_zarr(d)
+        y.compute_chunk_sizes()
+        y.to_zarr(d)
 
 
 def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
