@@ -1,5 +1,20 @@
 ## Dask-expr
 
+# v1.1.20
+
+- Fix value_counts with split_out != 1 (:pr:`1170`) `Patrick Hoefler`_
+- Remove recursion in task spec (:pr:`1158`) `Florian Jetter`_
+- Deprecated and remove from_legacy_dataframe usage (:pr:`1168`) `Patrick Hoefler`_
+- Remove ``from_dask_dataframe`` (:pr:`1167`) `Patrick Hoefler`_
+- Avoid exponentially growing graph for Assign-Projection combinations (:pr:`1164`) `Patrick Hoefler`_
+- Introduce more caching when walking the expression (:pr:`1165`) `Patrick Hoefler`_
+- Use Taskspec fuse implementation (:pr:`1162`) `Florian Jetter`_
+- Fix orphaned dependencies in Fused expression (:pr:`1163`) `Patrick Hoefler`_
+
+# v1.1.19
+
+# v1.1.18
+
 # v1.1.17
 
 - Add support for Python 3.13 (:pr:`1160`) `James Bourbeau`_
