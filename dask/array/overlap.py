@@ -895,11 +895,6 @@ def push(array, n, axis):
     """
     import_optional_dependency("bottleneck", min_version="1.3.7")
 
-    def _fill_with_last_one(a, b):
-        # cumreduction apply the push func over all the blocks first so, the only missing part is filling
-        # the missing values using the last data of the previous chunk
-        return np.where(~np.isnan(b), b, a)
-
     if n is not None and 0 < n < array.shape[axis] - 1:
         arr = broadcast_to(
             arange(
@@ -924,6 +919,12 @@ def push(array, n, axis):
         axis=axis,
         dtype=array.dtype,
     )
+
+
+def _fill_with_last_one(a, b):
+    # cumreduction apply the push func over all the blocks first so, the only missing part is filling
+    # the missing values using the last data of the previous chunk
+    return np.where(~np.isnan(b), b, a)
 
 
 def _push(array, n: int | None = None, axis: int = -1):
