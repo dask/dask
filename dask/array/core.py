@@ -63,6 +63,7 @@ from dask.utils import (
     IndexCallable,
     SerializableLock,
     cached_cumsum,
+    cached_max,
     cached_property,
     concrete,
     derived_from,
@@ -81,6 +82,11 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
+
+try:
+    ARRAY_TEMPLATE = get_template("array.html.j2")
+except ImportError:
+    ARRAY_TEMPLATE = None
 
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
@@ -1516,7 +1522,7 @@ class Array(DaskMethodsMixin):
 
     @property
     def chunksize(self) -> tuple[T_IntOrNaN, ...]:
-        return tuple(max(c) for c in self.chunks)
+        return tuple(cached_max(c) for c in self.chunks)
 
     @property
     def dtype(self):
@@ -1641,7 +1647,7 @@ class Array(DaskMethodsMixin):
             nbytes = "unknown"
             cbytes = "unknown"
 
-        return get_template("array.html.j2").render(
+        return ARRAY_TEMPLATE.render(
             array=self,
             grid=grid,
             nbytes=nbytes,
