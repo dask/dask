@@ -17,8 +17,8 @@ from dask.array.core import (
 )
 from dask.array.utils import compute_meta
 from dask.base import is_dask_collection
+from dask.blockwise import _blockwise_unpack_collections_task_spec
 from dask.blockwise import blockwise as core_blockwise
-from dask.delayed import unpack_collections
 from dask.tokenize import tokenize
 from dask.utils import cached_property, funcname
 
@@ -142,7 +142,7 @@ class Blockwise(Array):
         for arg, ind in arginds:
             if ind is None:
                 arg = normalize_arg(arg)
-                arg, collections = unpack_collections(arg)
+                arg, collections = _blockwise_unpack_collections_task_spec(arg)
                 dependencies.extend(collections)
             else:
                 if (
@@ -163,7 +163,7 @@ class Blockwise(Array):
         kwargs2 = {}
         for k, v in self.kwargs.items():
             v = normalize_arg(v)
-            v, collections = unpack_collections(v)
+            v, collections = _blockwise_unpack_collections_task_spec(v)
             dependencies.extend(collections)
             kwargs2[k] = v
 
