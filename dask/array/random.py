@@ -154,7 +154,7 @@ class Generator:
         )
         keys = product([name], *(range(len(bd)) for bd in chunks))
         dsk = {
-            k: (_choice_rng, bitgen, a, size, replace, p, axis, shuffle)
+            k: Task(k, _choice_rng, bitgen, a, size, replace, p, axis, shuffle)
             for k, bitgen, size in zip(keys, bitgens, sizes)
         }
 
@@ -571,7 +571,7 @@ class RandomState:
             )
             keys = product([name], *(range(len(bd)) for bd in chunks))
             dsk = {
-                k: (_choice_rs, state, a, size, replace, p)
+                k: Task(k, _choice_rs, state, a, size, replace, p)
                 for k, state, size in zip(keys, state_data, sizes)
             }
 
@@ -860,7 +860,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
             raise ValueError("a must be one dimensional")
         len_a = len(a)
         dependencies.append(a)
-        a = a.__dask_keys__()[0]
+        a = TaskRef(a.__dask_keys__()[0])
 
     # Normalize and validate `p`
     if p is not None:
@@ -880,7 +880,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
             raise ValueError("a and p must have the same size")
 
         dependencies.append(p)
-        p = p.__dask_keys__()[0]
+        p = TaskRef(p.__dask_keys__()[0])
 
     if size is None:
         size = ()
