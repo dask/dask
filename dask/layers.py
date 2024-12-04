@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 import tlz as toolz
 from tlz.curried import map
 
+from dask._task_spec import Task, TaskRef
 from dask.base import tokenize
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from dask.core import flatten
@@ -1089,11 +1090,11 @@ class DataFrameIOLayer(Blockwise):
             io_arg_map = inputs
 
         # Use Blockwise initializer
-        dsk = {self.name: (io_func, blockwise_token(0))}
+        task = Task(self.name, io_func, TaskRef(blockwise_token(0)))
         super().__init__(
             output=self.name,
             output_indices="i",
-            dsk=dsk,
+            task=task,
             indices=[(io_arg_map, "i")],
             numblocks={},
             annotations=annotations,

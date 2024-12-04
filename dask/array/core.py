@@ -28,6 +28,7 @@ from tlz.curried import pluck
 from toolz import frequencies
 
 from dask import compute, config, core
+from dask._task_spec import TaskRef
 from dask.array import chunk
 from dask.array.chunk import getitem
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -63,6 +64,7 @@ from dask.utils import (
     IndexCallable,
     SerializableLock,
     cached_cumsum,
+    cached_max,
     cached_property,
     concrete,
     derived_from,
@@ -81,6 +83,11 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
+
+try:
+    ARRAY_TEMPLATE = get_template("array.html.j2")
+except ImportError:
+    ARRAY_TEMPLATE = None
 
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
@@ -311,7 +318,7 @@ def graph_from_arraylike(
             getitem,
             name,
             out_ind,
-            original_name,
+            TaskRef(original_name),
             None,
             ArraySliceDep(chunks),
             out_ind,
@@ -1516,7 +1523,7 @@ class Array(DaskMethodsMixin):
 
     @property
     def chunksize(self) -> tuple[T_IntOrNaN, ...]:
-        return tuple(max(c) for c in self.chunks)
+        return tuple(cached_max(c) for c in self.chunks)
 
     @property
     def dtype(self):
@@ -1641,7 +1648,7 @@ class Array(DaskMethodsMixin):
             nbytes = "unknown"
             cbytes = "unknown"
 
-        return get_template("array.html.j2").render(
+        return ARRAY_TEMPLATE.render(
             array=self,
             grid=grid,
             nbytes=nbytes,
@@ -3818,6 +3825,12 @@ def to_zarr(
         return arr.store(
             z, lock=False, regions=regions, compute=compute, return_stored=return_stored
         )
+    else:
+        if not _check_regular_chunks(arr.chunks):
+            # We almost certainly get here because auto chunking has been used
+            # on irregular chunks. The max will then be smaller than auto, so using
+            # max is a safe choice
+            arr = arr.rechunk(tuple(map(max, arr.chunks)))
 
     if region is not None:
         raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")

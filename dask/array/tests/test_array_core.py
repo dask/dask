@@ -8,7 +8,7 @@ import xml.etree.ElementTree
 
 import pytest
 
-from dask._task_spec import Task
+from dask._task_spec import DataNode, List, Task, TaskRef
 
 np = pytest.importorskip("numpy")
 
@@ -18,7 +18,6 @@ import operator
 import os
 import time
 import warnings
-from io import StringIO
 from operator import add, sub
 from threading import Lock
 
@@ -57,8 +56,8 @@ from dask.array.reshape import _not_implemented_message
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import (
+    _make_blockwise_graph,
     broadcast_dimensions,
-    make_blockwise_graph,
     optimize_blockwise,
 )
 from dask.delayed import Delayed, delayed
@@ -94,55 +93,126 @@ def test_graph_from_arraylike(inline_array):
 
 
 def test_top():
-    assert make_blockwise_graph(inc, "z", "ij", "x", "ij", numblocks={"x": (2, 2)}) == {
-        ("z", 0, 0): (inc, ("x", 0, 0)),
-        ("z", 0, 1): (inc, ("x", 0, 1)),
-        ("z", 1, 0): (inc, ("x", 1, 0)),
-        ("z", 1, 1): (inc, ("x", 1, 1)),
-    }
-
-    assert make_blockwise_graph(
-        add, "z", "ij", "x", "ij", "y", "ij", numblocks={"x": (2, 2), "y": (2, 2)}
+    t = Task("inc", inc, TaskRef("A"))
+    assert _make_blockwise_graph(
+        t, "z", "ij", "x", "ij", numblocks={"x": (2, 2)}, keys=("A",)
     ) == {
-        ("z", 0, 0): (add, ("x", 0, 0), ("y", 0, 0)),
-        ("z", 0, 1): (add, ("x", 0, 1), ("y", 0, 1)),
-        ("z", 1, 0): (add, ("x", 1, 0), ("y", 1, 0)),
-        ("z", 1, 1): (add, ("x", 1, 1), ("y", 1, 1)),
+        ("z", 0, 0): Task(("z", 0, 0), inc, TaskRef(("x", 0, 0))),
+        ("z", 0, 1): Task(("z", 0, 1), inc, TaskRef(("x", 0, 1))),
+        ("z", 1, 0): Task(("z", 1, 0), inc, TaskRef(("x", 1, 0))),
+        ("z", 1, 1): Task(("z", 1, 1), inc, TaskRef(("x", 1, 1))),
     }
 
-    assert make_blockwise_graph(
-        dotmany, "z", "ik", "x", "ij", "y", "jk", numblocks={"x": (2, 2), "y": (2, 2)}
+    keys = list(map(str, range(2)))
+    t = Task("add", add, *(TaskRef(k) for k in keys))
+    assert _make_blockwise_graph(
+        t,
+        "z",
+        "ij",
+        "x",
+        "ij",
+        "y",
+        "ij",
+        numblocks={"x": (2, 2), "y": (2, 2)},
+        keys=keys,
     ) == {
-        ("z", 0, 0): (dotmany, [("x", 0, 0), ("x", 0, 1)], [("y", 0, 0), ("y", 1, 0)]),
-        ("z", 0, 1): (dotmany, [("x", 0, 0), ("x", 0, 1)], [("y", 0, 1), ("y", 1, 1)]),
-        ("z", 1, 0): (dotmany, [("x", 1, 0), ("x", 1, 1)], [("y", 0, 0), ("y", 1, 0)]),
-        ("z", 1, 1): (dotmany, [("x", 1, 0), ("x", 1, 1)], [("y", 0, 1), ("y", 1, 1)]),
+        ("z", 0, 0): Task(("z", 0, 0), add, TaskRef(("x", 0, 0)), TaskRef(("y", 0, 0))),
+        ("z", 0, 1): Task(("z", 0, 1), add, TaskRef(("x", 0, 1)), TaskRef(("y", 0, 1))),
+        ("z", 1, 0): Task(("z", 1, 0), add, TaskRef(("x", 1, 0)), TaskRef(("y", 1, 0))),
+        ("z", 1, 1): Task(("z", 1, 1), add, TaskRef(("x", 1, 1)), TaskRef(("y", 1, 1))),
     }
+    keys = list(map(str, range(2)))
+    t = Task(
+        "dotmany",
+        dotmany,
+        TaskRef(keys[0]),
+        TaskRef(keys[1]),
+    )
+    out = _make_blockwise_graph(
+        t,
+        "z",
+        "ik",
+        "x",
+        "ij",
+        "y",
+        "jk",
+        numblocks={"x": (2, 2), "y": (2, 2)},
+        keys=keys,
+    )
+    expected = {
+        ("z", 0, 0): Task(
+            ("z", 0, 0),
+            dotmany,
+            List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+            List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+        ),
+        ("z", 0, 1): Task(
+            ("z", 0, 1),
+            dotmany,
+            List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+            List(TaskRef(("y", 0, 1)), TaskRef(("y", 1, 1))),
+        ),
+        ("z", 1, 0): Task(
+            ("z", 1, 0),
+            dotmany,
+            List(TaskRef(("x", 1, 0)), TaskRef(("x", 1, 1))),
+            List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+        ),
+        ("z", 1, 1): Task(
+            ("z", 1, 1),
+            dotmany,
+            List(TaskRef(("x", 1, 0)), TaskRef(("x", 1, 1))),
+            List(TaskRef(("y", 0, 1)), TaskRef(("y", 1, 1))),
+        ),
+    }
+    assert out[("z", 0, 0)] == expected[("z", 0, 0)]
+    assert out == expected
 
-    assert make_blockwise_graph(
-        identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}
-    ) == {("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])}
+    t = Task("identity", identity, TaskRef("0"))
+    assert _make_blockwise_graph(
+        t, "z", "", "x", "ij", numblocks={"x": (2, 2)}, keys=("0",)
+    ) == {
+        ("z",): Task(
+            ("z",),
+            identity,
+            List(
+                List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+                List(TaskRef(("x", 1, 0)), TaskRef(("x", 1, 1))),
+            ),
+        )
+    }
 
 
 def test_top_supports_broadcasting_rules():
-    assert make_blockwise_graph(
-        add, "z", "ij", "x", "ij", "y", "ij", numblocks={"x": (1, 2), "y": (2, 1)}
+
+    t = Task("add", add, TaskRef("A"), TaskRef("B"))
+    assert _make_blockwise_graph(
+        t,
+        "z",
+        "ij",
+        "x",
+        "ij",
+        "y",
+        "ij",
+        numblocks={"x": (1, 2), "y": (2, 1)},
+        keys=("A", "B"),
     ) == {
-        ("z", 0, 0): (add, ("x", 0, 0), ("y", 0, 0)),
-        ("z", 0, 1): (add, ("x", 0, 1), ("y", 0, 0)),
-        ("z", 1, 0): (add, ("x", 0, 0), ("y", 1, 0)),
-        ("z", 1, 1): (add, ("x", 0, 1), ("y", 1, 0)),
+        ("z", 0, 0): Task(("z", 0, 0), add, TaskRef(("x", 0, 0)), TaskRef(("y", 0, 0))),
+        ("z", 0, 1): Task(("z", 0, 1), add, TaskRef(("x", 0, 1)), TaskRef(("y", 0, 0))),
+        ("z", 1, 0): Task(("z", 1, 0), add, TaskRef(("x", 0, 0)), TaskRef(("y", 1, 0))),
+        ("z", 1, 1): Task(("z", 1, 1), add, TaskRef(("x", 0, 1)), TaskRef(("y", 1, 0))),
     }
 
 
 def test_top_literals():
-    assert make_blockwise_graph(
-        add, "z", "ij", "x", "ij", 123, None, numblocks={"x": (2, 2)}
+    t = Task("add", add, TaskRef("A"), TaskRef("B"))
+    assert _make_blockwise_graph(
+        t, "z", "ij", "x", "ij", 123, None, numblocks={"x": (2, 2)}, keys=("A", "B")
     ) == {
-        ("z", 0, 0): (add, ("x", 0, 0), 123),
-        ("z", 0, 1): (add, ("x", 0, 1), 123),
-        ("z", 1, 0): (add, ("x", 1, 0), 123),
-        ("z", 1, 1): (add, ("x", 1, 1), 123),
+        ("z", 0, 0): Task(("z", 0, 0), add, TaskRef(("x", 0, 0)), DataNode(None, 123)),
+        ("z", 0, 1): Task(("z", 0, 1), add, TaskRef(("x", 0, 1)), DataNode(None, 123)),
+        ("z", 1, 0): Task(("z", 1, 0), add, TaskRef(("x", 1, 0)), DataNode(None, 123)),
+        ("z", 1, 1): Task(("z", 1, 1), add, TaskRef(("x", 1, 1)), DataNode(None, 123)),
     }
 
 
@@ -165,7 +235,7 @@ def test_blockwise_1_in_shape_I():
         assert 1 in b.shape
 
     p, k, N = 7, 2, 5
-    da.blockwise(
+    arr = da.blockwise(
         test_f,
         "x",
         da.zeros((2 * p, 9, k * N), chunks=(p, 3, k)),
@@ -174,7 +244,8 @@ def test_blockwise_1_in_shape_I():
         "xzt",
         concatenate=True,
         dtype=float,
-    ).compute()
+    )
+    arr.compute()
 
 
 def test_blockwise_1_in_shape_II():
@@ -222,8 +293,23 @@ def test_chunked_dot_product():
     getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), name="x")
     geto = graph_from_arraylike(o, (5, 5), shape=(20, 20), name="o")
 
-    result = make_blockwise_graph(
-        dotmany, "out", "ik", "x", "ij", "o", "jk", numblocks={"x": (4, 4), "o": (4, 4)}
+    keys = list(map(str, range(2)))
+    t = Task(
+        "dotmany",
+        dotmany,
+        TaskRef(keys[0]),
+        TaskRef(keys[1]),
+    )
+    result = _make_blockwise_graph(
+        t,
+        "out",
+        "ik",
+        "x",
+        "ij",
+        "o",
+        "jk",
+        numblocks={"x": (4, 4), "o": (4, 4)},
+        keys=keys,
     )
 
     dsk = merge(getx, geto, result)
@@ -237,8 +323,10 @@ def test_chunked_transpose_plus_one():
 
     getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), name="x")
 
-    f = lambda x: x.T + 1
-    comp = make_blockwise_graph(f, "out", "ij", "x", "ji", numblocks={"x": (4, 4)})
+    f = Task("f", lambda x: x.T + 1, TaskRef("x"))
+    comp = _make_blockwise_graph(
+        f, "out", "ij", "x", "ji", numblocks={"x": (4, 4)}, keys=("x",)
+    )
 
     dsk = merge(getx, comp)
     out = dask.get(dsk, [[("out", i, j) for j in range(4)] for i in range(4)])
@@ -3757,9 +3845,13 @@ def test_map_blocks_delayed():
     y = np.ones((5, 5))
 
     z = x.map_blocks(add, y, dtype=x.dtype)
+    z.dask.validate()
+    dask.optimize(z)[0].dask.validate()
 
     yy = delayed(y)
     zz = x.map_blocks(add, yy, dtype=x.dtype)
+    zz.dask.validate()
+    dask.optimize(zz)[0].dask.validate()
 
     assert_eq(z, zz)
 
@@ -4677,6 +4769,28 @@ def test_zarr_group():
 
 
 @pytest.mark.parametrize(
+    "shape, chunks, expect_rechunk",
+    [
+        ((6, 2), ((2, 1, 1, 2), 1), True),
+        ((6, 2), ((2, 1, 2, 1), 1), True),
+        ((7, 2), ((2, 2, 2, 1), 1), False),
+        ((2, 7), (1, (2, 2, 2, 1)), False),
+        ((2, 6), (1, (2, 1, 2, 1)), True),
+    ],
+)
+def test_zarr_irregular_chunks(shape, chunks, expect_rechunk):
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.zeros(shape, chunks=chunks)  # ((2, 1, 1, 2), 1))
+        store_delayed = a.to_zarr(d, component="test", compute=False)
+        assert (
+            any("rechunk" in key_split(k) for k in dict(store_delayed.dask))
+            is expect_rechunk
+        )
+        store_delayed.compute()
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [(), True],
@@ -5023,16 +5137,21 @@ def test_map_blocks_large_inputs_delayed():
 
 
 def test_blockwise_large_inputs_delayed():
+    def func(a, b):
+        return a
+
     a = da.ones(10, chunks=(5,))
     b = np.ones(1000000)
 
-    c = da.blockwise(add, "i", a, "i", b, None, dtype=a.dtype)
+    c = da.blockwise(func, "i", a, "i", b, None, dtype=a.dtype)
     assert any(b is v for v in c.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+    assert_eq(c, c)
 
-    d = da.blockwise(lambda x, y: x + y, "i", a, "i", y=b, dtype=a.dtype)
+    d = da.blockwise(lambda x, y: x, "i", a, "i", y=b, dtype=a.dtype)
     assert any(b is v for v in d.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+    assert_eq(d, d)
 
 
 def test_slice_reversed():
@@ -5196,14 +5315,11 @@ def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
 def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
     pytest.importorskip("zarr")
     y = unknown
-    with pytest.raises(ValueError, match="compute_chunk_sizes"):
-        with StringIO() as f:
-            y.to_zarr(f)
-    y.compute_chunk_sizes()
-
-    with pytest.raises(ValueError, match="irregular chunking"):
-        with StringIO() as f:
-            y.to_zarr(f)
+    with tmpdir() as d:
+        with pytest.raises(ValueError, match="compute_chunk_sizes"):
+            y.to_zarr(d)
+        y.compute_chunk_sizes()
+        y.to_zarr(d)
 
 
 def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):

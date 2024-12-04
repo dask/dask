@@ -2518,7 +2518,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     subgraph_rd = hlg_layer(dsk, "read-parquet")
     assert isinstance(subgraph_rd, DataFrameIOLayer)
     assert subgraph_rd.columns == ["B"]
-    assert next(iter(subgraph_rd.dsk.values()))[0].columns == ["B"]
+    assert subgraph_rd.task.func.columns == ["B"]
 
     subgraph_wt = hlg_layer(dsk, "to-parquet")
     assert isinstance(subgraph_wt, Blockwise)

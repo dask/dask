@@ -110,7 +110,7 @@ def parse_input(obj: Any) -> object:
             return _wrap_namedtuple_task(None, obj, parse_input)
         return Tuple(*(parse_input(o) for o in obj))
     if isinstance(obj, dict):
-        return Dict(**{k: parse_input(v) for k, v in obj.items()})  # type: ignore
+        return Dict({k: parse_input(v) for k, v in obj.items()})
 
     if isinstance(obj, TaskRef):
         return Alias(obj.key)
@@ -151,18 +151,6 @@ class _MultiContainer(Container):
         return False
 
 
-def _to_dict(*args: Any) -> dict:
-    vals = args[:-1]
-    keys = args[-1]
-    return {key: v for key, v in zip(keys, vals)}
-
-
-def _wrap_dict_in_task(d: dict) -> Task:
-    """Wrap a dictionary in a task such that all values will be properly
-    recognized as runnable tasks"""
-    return Task(None, _to_dict, *d.values(), d.keys())
-
-
 SubgraphType = None
 
 
@@ -182,15 +170,15 @@ def convert_legacy_task(
     task: _T,
     all_keys: Container,
 ) -> GraphNode | _T:
+    if isinstance(task, GraphNode):
+        return task
+
     global SubgraphType
 
     if SubgraphType is None:
         from dask.optimization import SubgraphCallable
 
         SubgraphType = SubgraphCallable
-
-    if isinstance(task, GraphNode):
-        return task
 
     if type(task) is tuple and task and callable(task[0]):
         func, args = task[0], task[1:]
@@ -301,11 +289,10 @@ def convert_legacy_graph(
         t = convert_legacy_task(k, arg, all_keys)
         if isinstance(t, Alias) and t.target.key == k:
             continue
+        elif not isinstance(t, GraphNode):
+            t = DataNode(k, t)
         new_dsk[k] = t
-    new_dsk2 = {
-        k: v if isinstance(v, GraphNode) else DataNode(k, v) for k, v in new_dsk.items()
-    }
-    return new_dsk2
+    return new_dsk
 
 
 def resolve_aliases(dsk: dict, keys: set, dependents: dict) -> dict:
@@ -423,6 +410,7 @@ class GraphNode:
     def __eq__(self, value: object) -> bool:
         if type(value) is not type(self):
             return False
+
         from dask.tokenize import tokenize
 
         return tokenize(self) == tokenize(value)
@@ -436,12 +424,81 @@ class GraphNode:
             sizeof(getattr(self, sl)) for sl in type(self).__slots__
         ) + sys.getsizeof(type(self))
 
+    def substitute(
+        self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
+    ) -> GraphNode:
+        """Substitute a dependency with a new value. The new value either has to
+        be a new valid key or a GraphNode to replace the dependency entirely.
+
+        The GraphNode will not be mutated but instead a shallow copy will be
+        returned. The substitution will be performed eagerly.
+
+        Parameters
+        ----------
+        subs : dict[KeyType, KeyType  |  GraphNode]
+            The mapping describing the substitutions to be made.
+        key : KeyType | None, optional
+            The key of the new GraphNode object. If None provided, the key of
+            the old one will be reused.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def fuse(*tasks: GraphNode, key: KeyType | None = None) -> GraphNode:
+        """Fuse a set of tasks into a single task.
+
+        The tasks are fused into a single task that will execute the tasks in a
+        subgraph. The internal tasks are no longer accessible from the outside.
+
+        All provided tasks must form a valid subgraph that will reduce to a
+        single key. If multiple outputs are possible with the provided tasks, an
+        exception will be raised.
+
+        The tasks will not be rewritten but instead a new Task will be created
+        that will merely reference the old task objects. This way, Task objects
+        may be reused in multiple fused tasks.
+
+        Parameters
+        ----------
+        key : KeyType | None, optional
+            The key of the new Task object. If None provided, the key of the
+            final task will be used.
+
+        See also
+        --------
+        GraphNode.substitute : Easer substitution of dependencies
+        """
+        if any(t.key is None for t in tasks):
+            raise ValueError("Cannot fuse tasks with missing keys")
+        if len(tasks) == 1:
+            return tasks[0].substitute({}, key=key)
+        all_keys = set()
+        all_deps: set[KeyType] = set()
+        for t in tasks:
+            all_deps.update(t.dependencies)
+            all_keys.add(t.key)
+        external_deps = all_deps - all_keys
+        leafs = all_keys - all_deps
+        if len(leafs) > 1:
+            raise ValueError(f"Cannot fuse tasks with multiple outputs {leafs}")
+
+        outkey = leafs.pop()
+
+        return Task(
+            key or outkey,
+            _execute_subgraph,
+            {t.key: t for t in tasks},
+            outkey,
+            (Dict({k: Alias(k) for k in external_deps}) if external_deps else {}),
+            {},
+            io_task=any(t.io_task for t in tasks),
+        )
+
 
 _no_deps: frozenset = frozenset()
 
 
 class Alias(GraphNode):
-    __weakref__: Any = None
     target: TaskRef
     __slots__ = tuple(__annotations__)
 
@@ -459,12 +516,35 @@ class Alias(GraphNode):
     def copy(self):
         return Alias(self.key, self.target)
 
+    def substitute(
+        self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
+    ) -> GraphNode:
+        if self.key in subs or self.target.key in subs:
+            sub_key = subs.get(self.key, self.key)
+            val = subs.get(self.target.key, self.target.key)
+            if sub_key == self.key and val == self.target.key:
+                return self
+            if isinstance(val, GraphNode):
+                return val.substitute({}, key=key)
+            if key is None and isinstance(sub_key, GraphNode):
+                raise RuntimeError(
+                    f"Invalid substitution encountered {self.key!r} -> {sub_key}"
+                )
+            return Alias(key or sub_key, val)  # type: ignore
+        return self
+
+    def __dask_tokenize__(self):
+        return (type(self).__name__, self.key, self.target.key)
+
     def __call__(self, values=()):
         self._verify_values(values)
         return values[self.target.key]
 
     def __repr__(self):
-        return f"Alias({self.key}->{self.target})"
+        if self.key != self.target.key:
+            return f"Alias({self.key!r}->{self.target.key!r})"
+        else:
+            return f"Alias({self.key!r})"
 
     def __eq__(self, value: object) -> bool:
         if not isinstance(value, Alias):
@@ -500,7 +580,7 @@ class DataNode(GraphNode):
         return self.value
 
     def __repr__(self):
-        return f"DataNode({self.key}, type={self.typ}, {self.value})"
+        return f"DataNode({self.value!r})"
 
     def __reduce__(self):
         return (DataNode, (self.key, self.value))
@@ -509,6 +589,13 @@ class DataNode(GraphNode):
         from dask.base import tokenize
 
         return (type(self).__name__, tokenize(self.value))
+
+    def substitute(
+        self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
+    ) -> DataNode:
+        if key is not None and key != self.key:
+            return DataNode(key, self.value)
+        return self
 
     def __iter__(self):
         return iter(self.value)
@@ -561,6 +648,8 @@ class Task(GraphNode):
     ):
         self.key = key
         self.func = func
+        if isinstance(func, Task):
+            raise TypeError("Cannot nest tasks")
         self.args = tuple(
             Alias(obj.key) if isinstance(obj, TaskRef) else obj for obj in args
         )
@@ -651,11 +740,16 @@ class Task(GraphNode):
     def __call__(self, values=()):
         self._verify_values(values)
         new_argspec = tuple(
-            a(values) if isinstance(a, GraphNode) else a for a in self.args
+            a({k: values[k] for k in a.dependencies}) if isinstance(a, GraphNode) else a
+            for a in self.args
         )
         if self.kwargs:
             kwargs = {
-                k: kw(values) if isinstance(kw, GraphNode) else kw
+                k: (
+                    kw({k: values[k] for k in kw.dependencies})
+                    if isinstance(kw, GraphNode)
+                    else kw
+                )
                 for k, kw in self.kwargs.items()
             }
             return self.func(*new_argspec, **kwargs)
@@ -673,30 +767,37 @@ class Task(GraphNode):
                 self._is_coro = False
         return self._is_coro
 
-    @staticmethod
-    def fuse(*tasks: Task, key: KeyType | None = None) -> Task:
-        all_keys = set()
-        all_deps: set[KeyType] = set()
-        io_task = any(t.io_task for t in tasks)
-        for t in tasks:
-            all_deps.update(t.dependencies)
-            all_keys.add(t.key)
-        external_deps = all_deps - all_keys
-        leafs = all_keys - all_deps
-        if len(leafs) > 1:
-            raise ValueError("Cannot fuse tasks with multiple outputs")
-
-        outkey = leafs.pop()
-
-        return Task(
-            key or outkey,
-            _execute_subgraph,
-            {t.key: t for t in tasks},
-            outkey,
-            Dict({k: Alias(k) for k in external_deps}),
-            {},
-            io_task=io_task,
-        )
+    def substitute(
+        self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
+    ) -> Task:
+        subs_filtered = {
+            k: v for k, v in subs.items() if k in self.dependencies and k != v
+        }
+        if subs_filtered:
+            new_args = tuple(
+                a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
+                for a in self.args
+            )
+            new_kwargs = {
+                k: v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
+                for k, v in self.kwargs.items()
+            }
+            return type(self)(
+                key or self.key,
+                self.func,
+                *new_args,
+                **new_kwargs,
+            )
+        elif key is None or key == self.key:
+            return self
+        else:
+            # Rename
+            return type(self)(
+                key,
+                self.func,
+                *self.args,
+                **self.kwargs,
+            )
 
 
 class NestedContainer(Task):
@@ -710,6 +811,8 @@ class NestedContainer(Task):
         _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
+        if len(args) == 1 and isinstance(args[0], self.klass):
+            args = args[0]  # type: ignore
         super().__init__(
             None,
             self.to_container,
@@ -717,6 +820,35 @@ class NestedContainer(Task):
             _dependencies=_dependencies,
             **kwargs,
         )
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self.args})"
+
+    def substitute(
+        self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
+    ) -> NestedContainer:
+        subs_filtered = {
+            k: v for k, v in subs.items() if k in self.dependencies and k != v
+        }
+        if not subs_filtered:
+            return self
+        return type(self)(
+            *(
+                a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
+                for a in self.args
+            )
+        )
+
+    def __dask_tokenize__(self):
+        from dask.tokenize import tokenize
+
+        return (
+            type(self).__name__,
+            self.klass,
+            sorted(tokenize(a) for a in self.args),
+        )
+
+        return super().__dask_tokenize__()
 
     @classmethod
     def to_container(cls, *args, **kwargs):
@@ -745,11 +877,28 @@ class Dict(NestedContainer):
             if len(args) > 1:
                 raise ValueError("Dict can only take one positional argument")
             kwargs = args[0]
-        elif not kwargs:
-            raise ValueError("Dict needs at least one argument")
         super().__init__(
             *(Tuple(*it) for it in kwargs.items()), _dependencies=_dependencies
         )
+
+    def __repr__(self):
+        values = ", ".join(f"{tup.args[0]}: {tup.args[1]}" for tup in self.args)
+        return f"Dict({values})"
+
+    def substitute(
+        self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
+    ) -> Dict:
+        subs_filtered = {
+            k: v for k, v in subs.items() if k in self.dependencies and k != v
+        }
+        if not subs_filtered:
+            return self
+
+        new = {}
+        for tup in self.args:
+            k, v = tup.substitute(subs_filtered).args
+            new[k] = v
+        return type(self)(new)
 
 
 class DependenciesMapping(MutableMapping):
@@ -932,3 +1081,22 @@ def fuse_linear_task_spec(dsk, keys):
                 # Having the same prefixes can result in the same key, i.e. getitem-hash -> getitem-hash
                 result[top_key] = Alias(top_key, target=renamed_key)
     return result
+
+
+def cull(
+    dsk: dict[KeyType, GraphNode], keys: Iterable[KeyType]
+) -> dict[KeyType, GraphNode]:
+    work = set(keys)
+    seen: set[KeyType] = set()
+    dsk2 = {}
+    wpop = work.pop
+    wupdate = work.update
+    sadd = seen.add
+    while work:
+        k = wpop()
+        if k in seen or k not in dsk:
+            continue
+        sadd(k)
+        dsk2[k] = v = dsk[k]
+        wupdate(v.dependencies)
+    return dsk2

@@ -5,10 +5,68 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2024.12.0:
+
+2024.12.0
+---------
+
+Highlights
+^^^^^^^^^^
+
+Python 3.13 Support
+"""""""""""""""""""
+This release adds support for Python 3.13. Dask now supports Python 3.10-3.13.
+
+See :pr:`11456` and :pr-distributed:`8904` from `Patrick Hoefler`_ and `James Bourbeau`_ for more details.
+
+
+.. dropdown:: Additional changes
+
+  - Revert "Add LLM chatbot to Dask docs (:pr:`11556`)" (:pr:`11577`) `dchudz`_
+  - Automatically rechunk if array in ``to_zarr`` has irregular chunks (:pr:`11553`) `Patrick Hoefler`_
+  - Blockwise uses ``Task`` class (:pr:`11568`) `Florian Jetter`_
+  - Migrate ``rechunk`` and ``reshape`` to task spec (:pr:`11555`) `Patrick Hoefler`_
+  - Cache svg-representation for arrays (:pr:`11560`) `Deepak Cherian`_
+  - Fix empty input for containers (:pr:`11571`) `Florian Jetter`_
+  - Convert ``Bag`` graphs to ``TaskSpec`` graphs during optimization (:pr:`11569`) `Florian Jetter`_
+  - Add LLM chatbot to Dask docs (:pr:`11556`) `dchudz`_
+  - Fuse data nodes in linear fusion too (:pr:`11549`) `Patrick Hoefler`_
+  - Migrate slicing code to task spec (:pr:`11548`) `Patrick Hoefler`_
+  - Speed up ``ArraySliceDep`` tokenization (:pr:`11551`) `Patrick Hoefler`_
+  - Fix fusing of ``p2p`` barrier tasks (:pr:`11543`) `Patrick Hoefler`_
+  - Remove infra/mentions of GPU CI (:pr:`11546`) `Charles Blackmon-Luca`_
+  - Temporarily disable gpuCI update CI job (:pr:`11545`) `James Bourbeau`_
+  - Use ``BlockwiseDep`` to implement ``map_blocks`` keywords (:pr:`11542`) `Patrick Hoefler`_
+  - Remove ``optimize_slices`` (:pr:`11538`) `Patrick Hoefler`_
+  - Make ``reshape_blockwise`` a noop if shape is the same (:pr:`11541`) `Patrick Hoefler`_
+  - Remove read-only flag from ``open_arry`` in ``open_zarr`` (:pr:`11539`) `Patrick Hoefler`_
+  - Implement ``linear_fusion`` for task spec class (:pr:`11525`) `Patrick Hoefler`_
+  - Remove recursion from ``TaskSpec`` (:pr:`11477`) `Florian Jetter`_
+  - Fixup test after dask-expr change (:pr:`11536`) `Patrick Hoefler`_
+  - Bump ``codecov/codecov-action`` from 3 to 5 (:pr:`11532`)
+  - Create dask-expr frame directly without roundtripping (:pr:`11529`) `Patrick Hoefler`_
+  - Add ``scikit-image`` nightly back to upstream CI (:pr:`11530`) `James Bourbeau`_
+  - Remove ``from_dask_dataframe`` import (:pr:`11528`) `Patrick Hoefler`_
+  - Ensure that ``from_array`` creates a copy (:pr:`11524`) `Patrick Hoefler`_
+  - Simplify and improve performance of normalize chunks (:pr:`11521`) `Patrick Hoefler`_
+  - Fix flaky ``nanquantile`` test (:pr:`11518`) `Patrick Hoefler`_
+  - Fix tests for new ``read_only`` kwarg in ``zarr=3`` (:pr:`11516`) `Patrick Hoefler`_
+
+  - Fix ``test_jupyter.py::test_shutsdown_cleanly`` (:pr-distributed:`8954`) `Hendrik Makait`_
+  - Install ``tornado`` from ``conda-forge`` in Python 3.13 CI (:pr-distributed:`8951`) `James Bourbeau`_
+  - Restore retire workers API (:pr-distributed:`8939`) `Florian Jetter`_
+  - Properly convert finalize dependencies to references (:pr-distributed:`8949`) `Hendrik Makait`_
+  - Block fusion for barrier tasks (:pr-distributed:`8944`) `Patrick Hoefler`_
+  - Remove infra/mentions of GPUCI (:pr-distributed:`8946`) `Charles Blackmon-Luca`_
+  - Temporarily disable gpuCI update CI job (:pr-distributed:`8945`) `James Bourbeau`_
+  - Remove recursion in task spec (:pr-distributed:`8920`) `Florian Jetter`_
+  - Less verbose log messages for remove and register worker (:pr-distributed:`8938`) `Florian Jetter`_
+  - Do not log full worker info in ``retire_workers`` (:pr-distributed:`8935`) `Florian Jetter`_
+
 .. _v2024.11.2:
 
-2024.11.01
-----------
+2024.11.2
+---------
 
 .. note::
   Versions 2024.11.0 and 2024.11.1 included a critical performance regression
@@ -9070,3 +9128,4 @@ Other
 .. _`Martin Yeo`: https://github.com/trexfeathers
 .. _`Ilan Gold`: https://github.com/ilan-gold
 .. _`Jean-Baptiste Bayle`: https://github.com/j2bbayle
+.. _`dchudz`: https://github.com/dchudz

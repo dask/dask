@@ -28,6 +28,7 @@ from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
 from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
+from dask.tokenize import tokenize
 from dask.utils import funcname
 
 
@@ -71,9 +72,7 @@ def test_repr():
     assert repr(t) == "<Task 'key' func('a', 'b')>"
 
     t = Task("nested", func2, t, t.ref())
-    assert (
-        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
-    )
+    assert repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias('key'))>"
 
     def long_function_name_longer_even_longer(a, b):
         return a + b
@@ -86,6 +85,33 @@ def test_repr():
 
     t = Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value")
     assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
+
+
+def test_task_eq():
+    assert Alias(("x", 0, 0)) == Alias(("x", 0, 0))
+    assert Alias(("x", 0, 0)) != Alias(("x", 0, 1))
+
+    assert List(Alias(("x", 0, 0))) == List(Alias(("x", 0, 0)))
+    assert List(Alias(("x", 0, 0))) == List(Alias("a", "a")).substitute(
+        {"a": ("x", 0, 0)}
+    )
+    assert List(Alias(("x", 0, 0)), Alias(("x", 0, 1))) != List(
+        Alias(("x", 0, 0)), Alias(("x", 0, 2))
+    )
+
+    obj = Task(
+        ("z", 0, 0),
+        func,
+        List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+        List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+    )
+    assert obj == obj
+    assert obj == Task(
+        ("z", 0, 0),
+        func,
+        List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+        List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+    )
 
 
 def long_function_name_longer_even_longer(a, b):
@@ -101,9 +127,7 @@ def test_unpickled_repr():
     assert repr(t) == "<Task 'key' func('a', 'b')>"
 
     t = pickle.loads(pickle.dumps(Task("nested", func2, t, t.ref())))
-    assert (
-        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
-    )
+    assert repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias('key'))>"
 
     t = pickle.loads(
         pickle.dumps(Task("long", long_function_name_longer_even_longer, t, t.ref()))
@@ -984,6 +1008,9 @@ def test_nested_containers():
     t = Dict(k=Task("key-1", func, "a", "b"), v=Task("key-2", func, "c", "d"))
     assert not t.dependencies
     assert t() == {"k": "a-b", "v": "c-d"}
+    t2 = Dict({"k": Task("key-1", func, "a", "b"), "v": Task("key-2", func, "c", "d")})
+    assert t == t2
+    assert t() == t2()
     t = Dict(k=Task("key-1", func, "a", TaskRef("b")), v=Task("key-2", func, "c", "d"))
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == {"k": "a-b", "v": "c-d"}
@@ -998,6 +1025,17 @@ def test_nested_containers():
     )
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == {"k": "a-b", ("v", 1): "c-d"}
+
+    t = Dict(
+        k=Task("key-1", func, "a", "b"),
+        v=Task("key-2", func, "c", "d"),
+    )
+    t2 = Dict(
+        v=Task("key-2", func, "c", "d"),
+        k=Task("key-1", func, "a", "b"),
+    )
+    assert t == t2
+    assert tokenize(t) == tokenize(t2)
 
 
 def test_block_io_fusion():
@@ -1033,3 +1071,41 @@ def test_nested_containers_different_types(task_type, python_type):
     t = task_type(Task("key-1", func, "a", TaskRef("b")), Task("key-2", func, "c", "d"))
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == python_type(("a-b", "c-d"))
+
+
+def test_substitute():
+    t1 = Task("key-1", func, TaskRef("a"), "b")
+    assert t1.substitute({"a": "a"}) is t1
+    assert t1.substitute({"a": "a"}, key="foo") is not t1
+    t2 = t1.substitute({"a": "c"})
+    assert t2 is not t1
+    assert t2.dependencies == {"c"}
+
+    assert t1({"a": "a"}) == t2({"c": "a"})
+
+
+def test_substitute_nested():
+    def func(alist):
+        return alist[0] + alist[1]["foo"]
+
+    t1 = Task(
+        "key-1",
+        func,
+        List(
+            TaskRef("a"),
+            Dict(
+                {
+                    "foo": TaskRef("b"),
+                }
+            ),
+        ),
+    )
+    assert t1.dependencies == {"a", "b"}
+    t2 = t1.substitute({"a": "c", "b": "d"})
+    assert t2.dependencies == {"c", "d"}
+    assert t1({"a": "a", "b": "b"}) == t2({"c": "a", "d": "b"})
+
+
+@pytest.mark.parametrize("Container", [Dict, List, Set, Tuple])
+def test_nested_containers_empty(Container):
+    assert Container(Container.klass())() == Container.klass()
