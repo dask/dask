@@ -10,6 +10,7 @@ from threading import Lock
 
 import numpy as np
 
+from dask._task_spec import Task, TaskRef, parse_input
 from dask.array.backends import array_creation_dispatch
 from dask.array.core import (
     Array,
@@ -153,7 +154,7 @@ class Generator:
         )
         keys = product([name], *(range(len(bd)) for bd in chunks))
         dsk = {
-            k: (_choice_rng, bitgen, a, size, replace, p, axis, shuffle)
+            k: Task(k, _choice_rng, bitgen, a, size, replace, p, axis, shuffle)
             for k, bitgen, size in zip(keys, bitgens, sizes)
         }
 
@@ -570,7 +571,7 @@ class RandomState:
             )
             keys = product([name], *(range(len(bd)) for bd in chunks))
             dsk = {
-                k: (_choice_rs, state, a, size, replace, p)
+                k: Task(k, _choice_rs, state, a, size, replace, p)
                 for k, state, size in zip(keys, state_data, sizes)
             }
 
@@ -859,7 +860,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
             raise ValueError("a must be one dimensional")
         len_a = len(a)
         dependencies.append(a)
-        a = a.__dask_keys__()[0]
+        a = TaskRef(a.__dask_keys__()[0])
 
     # Normalize and validate `p`
     if p is not None:
@@ -879,7 +880,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
             raise ValueError("a and p must have the same size")
 
         dependencies.append(p)
-        p = p.__dask_keys__()[0]
+        p = TaskRef(p.__dask_keys__()[0])
 
     if size is None:
         size = ()
@@ -993,17 +994,22 @@ def _wrap_func(
     )
     blocks = product(*[range(len(bd)) for bd in chunks])
 
-    vals = []
-    for bitgen, size, slc, block in zip(bitgens, sizes, slices, blocks):
+    for key, bitgen, size, slc, block in zip(keys, bitgens, sizes, slices, blocks):
         arg = []
         for i, ar in enumerate(args):
             if i not in lookup:
                 arg.append(ar)
             else:
                 if isinstance(ar, Array):
-                    arg.append((lookup[i],) + block)
+                    arg.append(TaskRef((lookup[i],) + block))
                 elif isinstance(ar, np.ndarray):
-                    arg.append((getitem, lookup[i], slc))
+                    t_ = Task(
+                        f"getitem-{tokenize(lookup[i], slc)}",
+                        getitem,
+                        TaskRef(lookup[i]),
+                        slc,
+                    )
+                    arg.append(t_)
                 else:
                     raise TypeError("Unknown object type in args")
         kwrg = {}
@@ -1017,7 +1023,16 @@ def _wrap_func(
                     kwrg[k] = (getitem, lookup[k], slc)
                 else:
                     raise TypeError("Unknown object type in kwargs")
-        vals.append((func_applier, gen, funcname, bitgen, size, arg, kwrg))
+        dsk[key] = Task(
+            key,
+            func_applier,
+            gen,
+            funcname,
+            bitgen,
+            size,
+            parse_input(arg),
+            parse_input(kwrg),
+        )
 
     meta = func_applier(
         gen,
@@ -1027,8 +1042,6 @@ def _wrap_func(
         small_args,
         small_kwargs,
     )
-
-    dsk.update(dict(zip(keys, vals)))
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return Array(graph, name, chunks + extra_chunks, meta=meta)
