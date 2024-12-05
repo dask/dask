@@ -387,6 +387,10 @@ class GraphNode:
         raise NotImplementedError
 
     @property
+    def io_task(self) -> bool:
+        return False
+
+    @property
     def dependencies(self) -> frozenset:
         return self._dependencies
 
@@ -487,6 +491,7 @@ class GraphNode:
             outkey,
             (Dict({k: Alias(k) for k in external_deps}) if external_deps else {}),
             {},
+            io_task=any(t.io_task for t in tasks),
         )
 
 
@@ -564,6 +569,10 @@ class DataNode(GraphNode):
         self.typ = type(value)
         self._dependencies = _no_deps
 
+    @property
+    def io_task(self) -> bool:
+        return True
+
     def copy(self):
         return DataNode(self.key, self.value)
 
@@ -620,6 +629,7 @@ class Task(GraphNode):
     func: Callable
     args: tuple
     kwargs: dict
+    _io_task: bool
     _token: str | None
     _is_coro: bool | None
     _repr: str | None
@@ -632,6 +642,7 @@ class Task(GraphNode):
         func: Callable,
         /,
         *args: Any,
+        io_task: bool = False,
         _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
@@ -657,6 +668,11 @@ class Task(GraphNode):
         self._is_coro = None
         self._token = None
         self._repr = None
+        self._io_task = io_task
+
+    @property
+    def io_task(self) -> bool:
+        return self._io_task
 
     def copy(self):
         return type(self)(
