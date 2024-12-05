@@ -680,8 +680,7 @@ def diag(v, k=0):
                 if i == j:
                     dsk[key] = Task(key, np.diag, TaskRef(blocks[i]))
                 else:
-                    # dsk[key] = Task(key, np.zeros, (m, n))
-                    dsk[key] = Task(key, partial(np.zeros_like, shape=(m, n)), meta)
+                    dsk[key] = Task(key, np.zeros_like, meta, shape=(m, n))
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
         return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
