@@ -2033,23 +2033,6 @@ def stringify(obj, exclusive: Iterable | None = None):
     elif exclusive is None:
         return str(obj)
 
-    if typ is tuple and obj:
-        from dask.optimization import SubgraphCallable
-
-        obj0 = obj[0]
-        if type(obj0) is SubgraphCallable:
-            obj0 = obj0
-            return (
-                SubgraphCallable(
-                    stringify(obj0.dsk, exclusive),
-                    obj0.outkey,
-                    stringify(obj0.inkeys, exclusive),
-                    obj0.name,
-                ),
-            ) + tuple(stringify(x, exclusive) for x in obj[1:])
-        elif callable(obj0):
-            return (obj0,) + tuple(stringify(x, exclusive) for x in obj[1:])
-
     if typ is list:
         return [stringify(v, exclusive) for v in obj]
     if typ is dict:

@@ -16,45 +16,35 @@ from dask.array.core import getter_nofancy as da_getter_nofancy
 from dask.array.optimization import fuse_slice, optimize, optimize_blockwise
 from dask.array.utils import assert_eq
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import SubgraphCallable
+
+# FIXME: These fixtures are no longer required
 
 
-def _wrap_getter(func, wrap):
-    """
-    Getters generated from a Blockwise layer might be wrapped in a SubgraphCallable.
-    Make sure that the optimization functions can still work if that is the case.
-    """
-    if wrap:
-        return SubgraphCallable({"key": (func, "index")}, outkey="key", inkeys="index")
-    else:
-        return func
-
-
-@pytest.fixture(params=[True, False])
-def getter(request):
+@pytest.fixture()
+def getter():
     """
     Parameterized fixture for dask.array.core.getter both alone (False)
     and wrapped in a SubgraphCallable (True).
     """
-    yield _wrap_getter(da_getter, request.param)
+    yield da_getter
 
 
-@pytest.fixture(params=[True, False])
-def getitem(request):
+@pytest.fixture()
+def getitem():
     """
     Parameterized fixture for dask.array.chunk.getitem both alone (False)
     and wrapped in a SubgraphCallable (True).
     """
-    yield _wrap_getter(da_getitem, request.param)
+    yield da_getitem
 
 
-@pytest.fixture(params=[True, False])
-def getter_nofancy(request):
+@pytest.fixture()
+def getter_nofancy():
     """
     Parameterized fixture for dask.array.chunk.getter_nofancy both alone (False)
     and wrapped in a SubgraphCallable (True).
     """
-    yield _wrap_getter(da_getter_nofancy, request.param)
+    yield da_getter_nofancy
 
 
 def _check_get_task_eq(a, b) -> bool:
@@ -66,12 +56,8 @@ def _check_get_task_eq(a, b) -> bool:
     if len(a) < 1 or len(a) != len(b):
         return False
 
-    a_callable = (
-        list(a[0].dsk.values())[0][0] if isinstance(a[0], SubgraphCallable) else a[0]
-    )
-    b_callable = (
-        list(b[0].dsk.values())[0][0] if isinstance(b[0], SubgraphCallable) else b[0]
-    )
+    a_callable = a[0]
+    b_callable = b[0]
     if a_callable != b_callable:
         return False
 
@@ -82,24 +68,6 @@ def _check_get_task_eq(a, b) -> bool:
         elif ae != be:
             return False
     return True
-
-
-def _assert_getter_dsk_eq(a, b):
-    """
-    Compare two getter dsks.
-
-    TODO: this is here to support the fact that low-level array slice fusion needs to be
-    able to introspect slicing tasks. But some slicing tasks (e.g. `from_array`) could
-    be hidden within SubgraphCallables. This and _check_get_task_eq should be removed
-    when high-level slicing lands, and replaced with basic equality checks.
-    """
-    assert a.keys() == b.keys()
-    for k, av in a.items():
-        bv = b[k]
-        if dask.core.istask(av):
-            assert _check_get_task_eq(av, bv)
-        else:
-            assert av == bv
 
 
 def test_optimize_with_getitem_fusion(getter):
