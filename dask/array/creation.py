@@ -9,6 +9,7 @@ from numbers import Integral, Number
 import numpy as np
 from tlz import sliding_window
 
+from dask._task_spec import Task, TaskRef
 from dask.array import chunk
 from dask.array.backends import array_creation_dispatch
 from dask.array.core import (
@@ -364,14 +365,15 @@ def linspace(
     for i, bs in enumerate(chunks[0]):
         bs_space = bs - 1 if endpoint else bs
         blockstop = blockstart + (bs_space * step)
-        task = (
+        task = Task(
+            (name, i),
             partial(chunk.linspace, endpoint=endpoint, dtype=dtype),
             blockstart,
             blockstop,
             bs,
         )
         blockstart = blockstart + (step * bs)
-        dsk[(name, i)] = task
+        dsk[task.key] = task
 
     if retstep:
         return Array(dsk, name, chunks, dtype=dtype), step
@@ -454,7 +456,8 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
     for i, bs in enumerate(chunks[0]):
         blockstart = start + (elem_count * step)
         blockstop = start + ((elem_count + bs) * step)
-        task = (
+        task = Task(
+            (name, i),
             partial(chunk.arange, like=like),
             blockstart,
             blockstop,
@@ -462,7 +465,7 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
             bs,
             dtype,
         )
-        dsk[(name, i)] = task
+        dsk[task.key] = task
         elem_count += bs
 
     return Array(dsk, name, chunks, dtype=dtype, meta=meta)
@@ -592,7 +595,6 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
       An array where all elements are equal to zero, except for the `k`-th
       diagonal, whose values are equal to one.
     """
-    eye = {}
     if M is None:
         M = N
     if dtype is None:
@@ -607,10 +609,13 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
     token = tokenize(N, chunks, M, k, dtype)
     name_eye = "eye-" + token
 
+    dsk = {}
     for i, vchunk in enumerate(vchunks):
         for j, hchunk in enumerate(hchunks):
+            key = (name_eye, i, j)
             if (j - i - 1) * chunks <= k <= (j - i + 1) * chunks:
-                eye[name_eye, i, j] = (
+                t = Task(
+                    key,
                     np.eye,
                     vchunk,
                     hchunk,
@@ -618,8 +623,9 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
                     dtype,
                 )
             else:
-                eye[name_eye, i, j] = (np.zeros, (vchunk, hchunk), dtype)
-    return Array(eye, name_eye, shape=(N, M), chunks=(chunks, chunks), dtype=dtype)
+                t = Task(key, np.zeros, (vchunk, hchunk), dtype)
+            dsk[t.key] = t
+    return Array(dsk, name_eye, shape=(N, M), chunks=(chunks, chunks), dtype=dtype)
 
 
 @derived_from(np)
@@ -637,13 +643,15 @@ def diag(v, k=0):
         if v.ndim == 1:
             m = abs(k)
             chunks = ((v.shape[0] + m,), (v.shape[0] + m,))
-            dsk = {(name, 0, 0): (np.diag, v, k)}
+            key = (name, 0, 0)
+            dsk = {key: Task(key, np.diag, v, k)}
         elif v.ndim == 2:
             kdiag_row_start = max(0, -k)
             kdiag_row_stop = min(v.shape[0], v.shape[1] - k)
             len_kdiag = kdiag_row_stop - kdiag_row_start
             chunks = ((0,),) if len_kdiag <= 0 else ((len_kdiag,),)
-            dsk = {(name, 0): (np.diag, v, k)}
+            key = (name, 0)
+            dsk = {key: Task(key, np.diag, v, k)}
         else:
             raise ValueError("Array must be 1d or 2d only")
         return Array(dsk, name, chunks, meta=meta)
@@ -652,9 +660,11 @@ def diag(v, k=0):
         if v.ndim != 2:
             raise ValueError("Array must be 1d or 2d only")
         if k == 0 and v.chunks[0] == v.chunks[1]:
-            dsk = {
-                (name, i): (np.diag, row[i]) for i, row in enumerate(v.__dask_keys__())
-            }
+            tasks = [
+                Task((name, i), np.diag, TaskRef(row[i]))
+                for i, row in enumerate(v.__dask_keys__())
+            ]
+            dsk = {t.key: t for t in tasks}
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
             return Array(graph, name, (v.chunks[0],), meta=meta)
         else:
@@ -668,10 +678,9 @@ def diag(v, k=0):
             for j, n in enumerate(chunks_1d):
                 key = (name, i, j)
                 if i == j:
-                    dsk[key] = (np.diag, blocks[i])
+                    dsk[key] = Task(key, np.diag, TaskRef(blocks[i]))
                 else:
-                    dsk[key] = (np.zeros, (m, n))
-                    dsk[key] = (partial(np.zeros_like, shape=(m, n)), meta)
+                    dsk[key] = Task(key, np.zeros_like, meta, shape=(m, n))
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
         return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
@@ -736,15 +745,17 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             xp = cupy
 
         out_chunks = pop_axes(a.chunks, axis1, axis2) + ((0,),)
-        dsk = dict()
+        dsk = {}
         for free_idx in free_indices:
             shape = tuple(
                 out_chunks[axis][free_idx[axis]] for axis in range(ndims_free)
             )
-            dsk[(name,) + free_idx + (0,)] = (
+            t = Task(
+                (name,) + free_idx + (0,),
                 partial(xp.empty, dtype=a.dtype),
                 shape + (0,),
             )
+            dsk[t.key] = t
 
         meta = meta_from_array(a, ndims_free + 1)
         return Array(dsk, name, out_chunks, meta=meta)
@@ -769,7 +780,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     (J,) = col_blockid[col_filter]
 
     # follow k-diagonal through chunks while constructing dask graph:
-    dsk = dict()
+    dsk = {}
     i = 0
     kdiag_chunks = ()
     while kdiag_row_start < a.shape[axis1] and kdiag_col_start < a.shape[axis2]:
@@ -791,13 +802,15 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
                 + free_idx[axis2 - 1 :]
             )
             output_idx = free_idx + (i,)
-            dsk[(name,) + output_idx] = (
+            t = Task(
+                (name,) + output_idx,
                 np.diagonal,
-                (a.name,) + input_idx,
+                TaskRef((a.name,) + input_idx),
                 k,
                 axis1,
                 axis2,
             )
+            dsk[t.key] = t
 
         kdiag_chunks += (kdiag_len,)
         # prepare for next iteration:
