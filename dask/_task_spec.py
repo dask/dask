@@ -287,7 +287,7 @@ def convert_legacy_graph(
     new_dsk = {}
     for k, arg in dsk.items():
         t = convert_legacy_task(k, arg, all_keys)
-        if isinstance(t, Alias) and t.target.key == k:
+        if isinstance(t, Alias) and t.target == k:
             continue
         elif not isinstance(t, GraphNode):
             t = DataNode(k, t)
@@ -317,7 +317,7 @@ def resolve_aliases(dsk: dict, keys: set, dependents: dict) -> dict:
         seen.add(k)
         t = dsk[k]
         if isinstance(t, Alias):
-            target_key = t.target.key
+            target_key = t.target
             # Rules for when we allow to collapse an alias
             # 1. The target key is not in the keys set. The keys set is what the
             #    user is requesting and by collapsing we'd no longer be able to
@@ -494,7 +494,7 @@ _no_deps: frozenset = frozenset()
 
 
 class Alias(GraphNode):
-    target: TaskRef
+    target: KeyType
     __slots__ = tuple(__annotations__)
 
     def __init__(self, key: KeyType, target: Alias | TaskRef | KeyType | None = None):
@@ -503,10 +503,10 @@ class Alias(GraphNode):
             target = key
         if isinstance(target, Alias):
             target = target.target
-        if not isinstance(target, TaskRef):
-            target = TaskRef(target)
+        if isinstance(target, TaskRef):
+            target = target.key
         self.target = target
-        self._dependencies = frozenset((target.key,))
+        self._dependencies = frozenset((self.target,))
 
     def copy(self):
         return Alias(self.key, self.target)
@@ -514,10 +514,10 @@ class Alias(GraphNode):
     def substitute(
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
     ) -> GraphNode:
-        if self.key in subs or self.target.key in subs:
+        if self.key in subs or self.target in subs:
             sub_key = subs.get(self.key, self.key)
-            val = subs.get(self.target.key, self.target.key)
-            if sub_key == self.key and val == self.target.key:
+            val = subs.get(self.target, self.target)
+            if sub_key == self.key and val == self.target:
                 return self
             if isinstance(val, GraphNode):
                 return val.substitute({}, key=key)
@@ -529,15 +529,15 @@ class Alias(GraphNode):
         return self
 
     def __dask_tokenize__(self):
-        return (type(self).__name__, self.key, self.target.key)
+        return (type(self).__name__, self.key, self.target)
 
     def __call__(self, values=()):
         self._verify_values(values)
-        return values[self.target.key]
+        return values[self.target]
 
     def __repr__(self):
-        if self.key != self.target.key:
-            return f"Alias({self.key!r}->{self.target.key!r})"
+        if self.key != self.target:
+            return f"Alias({self.key!r}->{self.target!r})"
         else:
             return f"Alias({self.key!r})"
 
