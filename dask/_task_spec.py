@@ -264,9 +264,7 @@ def convert_legacy_task(
         else:
             parsed_args = tuple(convert_legacy_task(None, t, all_keys) for t in task)
             if any(isinstance(a, GraphNode) for a in parsed_args):
-                return Task(
-                    key, _identity_cast, *parsed_args, typ=DataNode(None, type(task))
-                )
+                return Task(key, _identity_cast, *parsed_args, typ=type(task))
             else:
                 return cast(_T, type(task)(parsed_args))
     elif isinstance(task, TaskRef):
