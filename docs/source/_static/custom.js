@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", function () {
   script.setAttribute("runllm-assistant-id", "273");
   script.setAttribute("runllm-theme-color", "#FFC11E");
   script.setAttribute("runllm-slack-community-url", "https://dask.slack.com/");
-  script.setAttribute("runllm-per-user-usage-limit", 2);
+  script.setAttribute("runllm-per-user-usage-limit", 5);
   script.setAttribute("runllm-usage-limit-effective-days", 30);
   script.setAttribute("runllm-usage-limit-message", `Hi! You've hit the limit for questions here in the docs, but you can join us on the Dask community Slack and ask as many questions as you'd like in #DaskBot channel. Hope to see you there.`);
   script.setAttribute("runllm-brand-logo", "_images/dask_icon.svg");
