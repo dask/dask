@@ -1621,6 +1621,7 @@ class GroupBy:
             return SeriesGroupBy(
                 self.obj,
                 by=self.by,
+                group_keys=self.group_keys,
                 slice=key,
                 sort=self.sort,
                 dropna=self.dropna,
@@ -2194,6 +2195,7 @@ class SeriesGroupBy(GroupBy):
         self,
         obj,
         by,
+        group_keys=True,
         sort=None,
         observed=None,
         dropna=None,
@@ -2218,7 +2220,13 @@ class SeriesGroupBy(GroupBy):
                 obj._meta.groupby(by, **_as_dict("observed", observed))
 
         super().__init__(
-            obj, by=by, slice=slice, observed=observed, dropna=dropna, sort=sort
+            obj,
+            by=by,
+            group_keys=group_keys,
+            slice=slice,
+            observed=observed,
+            dropna=dropna,
+            sort=sort,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)

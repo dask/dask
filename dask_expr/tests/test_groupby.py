@@ -1048,3 +1048,16 @@ def test_groupby_index_modified_divisions():
         df.groupby(df.index.dt.date).count(),
         pdf.groupby(pdf.index.date).count(),
     )
+
+
+def test_groupby_getitem_apply_group_keys():
+    pdf = pd.DataFrame(
+        {
+            "A": [0, 1] * 4,
+            "B": [1] * 8,
+        }
+    )
+    df = from_pandas(pdf, npartitions=4)
+    result = df.groupby("A", group_keys=False).B.apply(lambda x: x, meta=("B", int))
+    expected = pdf.groupby("A", group_keys=False).B.apply(lambda x: x)
+    assert_eq(result, expected)
