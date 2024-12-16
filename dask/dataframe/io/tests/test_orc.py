@@ -11,7 +11,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.dataframe.optimize import optimize_dataframe_getitem
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 pytest.importorskip("pyarrow.orc")
 pa = pytest.importorskip("pyarrow")
@@ -145,10 +145,10 @@ def test_orc_aggregate_files_offset(orc_files):
 @pytest.mark.network
 def test_orc_names(orc_files, tmp_path):
     df = dd.read_orc(orc_files)
-    if dd._dask_expr_enabled():
+    if dd._dask_expr_enabled() and pyarrow_strings_enabled():
         assert df.expr.frame._name.startswith("_read_orc")
     else:
-        assert df._name.startswith("read-orc")
+        assert df.expr._name.startswith("_read_orc")
     out = df.to_orc(tmp_path, compute=False)
     assert out._name.startswith("to-orc")
 

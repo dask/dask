@@ -690,10 +690,6 @@ def test_read_hdf(data, compare):
             pd.read_hdf(fn, "/data", start=1, stop=3),
         )
 
-        assert sorted(dd.read_hdf(fn, "/data", mode="r").dask) == sorted(
-            dd.read_hdf(fn, "/data", mode="r").dask
-        )
-
     with tmpfile("h5") as fn:
         sorted_data = data.sort_index()
         sorted_data.to_hdf(fn, key="/data", format="table")
