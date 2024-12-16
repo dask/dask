@@ -2826,10 +2826,24 @@ def test_asarray_array_dtype(asarray):
     x = asarray([1, 2])
     assert_eq(asarray(x, dtype=da.float32), np.asarray(x, dtype=np.float32))
 
+    # dask->dask
     x = asarray(x, dtype=da.float64)
     assert x.dtype == da.float64
     x = asarray(x, dtype=da.int32)
     assert x.dtype == da.int32
+    x = asarray(x)
+    assert x.dtype == da.int32
+    # Test explicit null dtype. astype(None) converts to float!
+    x = asarray(x, dtype=None)
+    assert x.dtype == da.int32
+
+    # non-dask->dask
+    x = asarray(np.asarray([1, 2], dtype=np.int8))
+    assert x.dtype == da.int8
+    x = asarray(np.asarray([1, 2], dtype=np.int8), dtype=None)
+    assert x.dtype == da.int8
+    x = asarray(np.asarray([1, 2], dtype=np.int8), dtype=da.float64)
+    assert x.dtype == da.float64
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
