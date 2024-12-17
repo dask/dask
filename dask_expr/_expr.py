@@ -1893,21 +1893,29 @@ class Assign(Elemwise):
     def _node_label_args(self):
         return self.operands
 
+    def _remove_common_columns(self, other):
+        if set(self.keys) & set(other.keys):
+            keys = set(self.keys)
+            operands = [[k, v] for k, v in zip(other.keys, other.vals) if k not in keys]
+            return [other.frame] + list(flatten(operands)) + self.operands[1:]
+        else:
+            return other.operands + self.operands[1:]
+
     def _simplify_down(self):
         if isinstance(self.frame, Assign):
             if self._check_for_previously_created_column(self.frame):
                 # don't squash if we are using a column that was previously created
                 return
-            return Assign(*self.frame.operands, *self.operands[1:])
+            return Assign(*self._remove_common_columns(self.frame))
         elif isinstance(self.frame, Projection) and isinstance(
             self.frame.frame, Assign
         ):
             if self._check_for_previously_created_column(self.frame.frame):
                 return
             new_columns = self.frame.operands[1].copy()
-            new_columns.extend(self.keys)
+            new_columns.extend([k for k in self.keys if k not in new_columns])
             return Projection(
-                Assign(*self.frame.frame.operands, *self.operands[1:]), new_columns
+                Assign(*self._remove_common_columns(self.frame.frame)), new_columns
             )
 
     def _check_for_previously_created_column(self, child):

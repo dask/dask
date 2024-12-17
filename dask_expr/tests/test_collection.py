@@ -2689,6 +2689,33 @@ def test_assign_projection_mix():
     assert result.expr._depth() == 13.0  # this grew exponentially previously
 
 
+def test_assign_overwriting_column(df, pdf):
+    pdf = pd.DataFrame(
+        {"partner": ["A", np.nan, "C", "A", np.nan, "C", "A", np.nan, "C"]},
+        dtype="string[pyarrow]",
+    )
+
+    df = from_pandas(pdf, npartitions=2)
+
+    df["partner1"] = ""
+    df["partner1"] = "google"
+
+    df["partner2"] = ""
+    df["partner2"] = np.nan
+    df["partner2"] = df["partner2"].mask(cond=(df["partner"] == "A"), other="Blackhawk")
+
+    pdf["partner1"] = ""
+    pdf["partner1"] = "google"
+
+    pdf["partner2"] = ""
+    pdf["partner2"] = np.nan
+    pdf["partner2"] = pdf["partner2"].mask(
+        cond=(pdf["partner"] == "A"), other="Blackhawk"
+    )
+    df.compute()
+    assert_eq(df, pdf, check_dtype=False)
+
+
 def test_dropna_merge(df, pdf):
     dropped_na = df.dropna(subset=["x"])
     result = dropped_na.merge(dropped_na, on="x")
