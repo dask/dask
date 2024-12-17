@@ -141,7 +141,6 @@ if _dask_expr_enabled():
             from_delayed,
             from_dict,
             from_graph,
-            from_legacy_dataframe,
             from_map,
             from_pandas,
             get_collection_type,
