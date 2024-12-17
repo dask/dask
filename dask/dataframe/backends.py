@@ -497,28 +497,28 @@ def union_categoricals_pandas(to_union, sort_categories=False, ignore_order=Fals
 
 @get_parallel_type.register(pd.Series)
 def get_parallel_type_series(_):
-    from dask.dataframe import Series
+    from dask_expr._collection import Series
 
     return Series
 
 
 @get_parallel_type.register(pd.DataFrame)
 def get_parallel_type_dataframe(_):
-    from dask.dataframe import DataFrame
+    from dask_expr._collection import DataFrame
 
     return DataFrame
 
 
 @get_parallel_type.register(pd.Index)
 def get_parallel_type_index(_):
-    from dask.dataframe import Index
+    from dask_expr._collection import Index
 
     return Index
 
 
 @get_parallel_type.register(object)
 def get_parallel_type_object(_):
-    from dask.dataframe import Scalar
+    from dask_expr._collection import Scalar
 
     return Scalar
 

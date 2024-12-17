@@ -438,7 +438,7 @@ def _repr_data_series(s, index):
 
 def has_parallel_type(x):
     """Does this object have a dask dataframe equivalent?"""
-    from dask.dataframe import Scalar
+    from dask_expr._collection import Scalar
 
     return get_parallel_type(x) is not Scalar
 
