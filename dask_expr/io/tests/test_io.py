@@ -23,7 +23,7 @@ from dask_expr import (
     read_parquet,
 )
 from dask_expr._expr import Expr, Replace
-from dask_expr.io import FromArray, FromMap, ReadCSV, ReadParquet, parquet
+from dask_expr.io import FromArray, FromMap, ReadParquet, parquet
 from dask_expr.tests._util import _backend_library
 
 # Set DataFrame backend for this module
@@ -257,7 +257,7 @@ def test_to_dask_array(optimize):
 
 @pytest.mark.parametrize(
     "fmt,read_func,read_cls",
-    [("parquet", read_parquet, ReadParquet), ("csv", read_csv, ReadCSV)],
+    [("parquet", read_parquet, ReadParquet), ("csv", read_csv, FromMap)],
 )
 def test_combine_similar(tmpdir, fmt, read_func, read_cls):
     pdf = pd.DataFrame(

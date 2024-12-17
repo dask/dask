@@ -5131,23 +5131,17 @@ def read_csv(
     path,
     *args,
     header="infer",
-    dtype_backend=None,
     storage_options=None,
     **kwargs,
 ):
-    from dask_expr.io.csv import ReadCSV
+    from dask.dataframe.io.csv import read_csv as _read_csv
 
-    if not isinstance(path, str):
-        path = stringify_path(path)
-    return new_collection(
-        ReadCSV(
-            path,
-            dtype_backend=dtype_backend,
-            storage_options=storage_options,
-            kwargs=kwargs,
-            header=header,
-            dataframe_backend="pandas",
-        )
+    return _read_csv(
+        path,
+        *args,
+        header=header,
+        storage_options=storage_options,
+        **kwargs,
     )
 
 
@@ -5156,23 +5150,18 @@ def read_table(
     *args,
     header="infer",
     usecols=None,
-    dtype_backend=None,
     storage_options=None,
     **kwargs,
 ):
-    from dask_expr.io.csv import ReadTable
+    from dask.dataframe.io.csv import read_table as _read_table
 
-    if not isinstance(path, str):
-        path = stringify_path(path)
-    return new_collection(
-        ReadTable(
-            path,
-            columns=usecols,
-            dtype_backend=dtype_backend,
-            storage_options=storage_options,
-            kwargs=kwargs,
-            header=header,
-        )
+    return _read_table(
+        path,
+        *args,
+        header=header,
+        storage_options=storage_options,
+        usecols=usecols,
+        **kwargs,
     )
 
 
@@ -5181,23 +5170,18 @@ def read_fwf(
     *args,
     header="infer",
     usecols=None,
-    dtype_backend=None,
     storage_options=None,
     **kwargs,
 ):
-    from dask_expr.io.csv import ReadFwf
+    from dask.dataframe.io.csv import read_fwf as _read_fwf
 
-    if not isinstance(path, str):
-        path = stringify_path(path)
-    return new_collection(
-        ReadFwf(
-            path,
-            columns=usecols,
-            dtype_backend=dtype_backend,
-            storage_options=storage_options,
-            kwargs=kwargs,
-            header=header,
-        )
+    return _read_fwf(
+        path,
+        *args,
+        header=header,
+        storage_options=storage_options,
+        usecols=usecols,
+        **kwargs,
     )
 
 
