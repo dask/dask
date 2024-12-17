@@ -6348,6 +6348,22 @@ def test_from_xarray():
     assert len(collections_to_dsk([result])) == 21
 
 
+def test_from_xarray_string_conversion():
+    xr = pytest.importorskip("xarray")
+
+    x = np.random.randn(10)
+    y = np.arange(10, dtype="uint8")
+    t = list("abcdefghij")
+    ds = xr.Dataset(
+        {"a": ("t", da.from_array(x, chunks=4)), "b": ("t", y), "t": ("t", t)}
+    )
+    expected_pd = pd.DataFrame({"a": x, "b": y}, index=pd.Index(t, name="t"))
+    expected = dd.from_pandas(expected_pd, chunksize=4)
+    actual = ds.to_dask_dataframe(set_index=True)
+    assert isinstance(actual, dd.DataFrame)
+    pd.testing.assert_frame_equal(actual.compute(), expected.compute())
+
+
 def test_dataframe_into_delayed():
     if not DASK_EXPR_ENABLED:
         pytest.skip("Only relevant for dask.expr")
