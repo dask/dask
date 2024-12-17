@@ -176,6 +176,7 @@ try:
         histogramdd,
         hstack,
         insert,
+        interp,
         isclose,
         isin,
         isnull,
