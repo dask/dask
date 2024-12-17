@@ -738,7 +738,7 @@ async def test_futures_in_subgraphs(c, s, a, b):
 
     ddf = ddf[ddf.uid.isin(range(29))].persist()
     ddf["day"] = ddf.enter_time.dt.day_name()
-    ddf = await c.submit(dd.categorize, ddf, columns=["day"], index=False)
+    ddf = await c.submit(ddf.categorize, columns=["day"], index=False)
 
 
 @gen_cluster(client=True)
