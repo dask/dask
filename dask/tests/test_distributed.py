@@ -531,10 +531,7 @@ def test_blockwise_array_creation(c, io, fuse):
 @pytest.mark.parametrize(
     "io",
     [
-        "parquet-pyarrow",
-        pytest.param(
-            "parquet-fastparquet", marks=pytest.mark.skip_with_pyarrow_strings
-        ),
+        "parquet",
         "csv",
         # See https://github.com/dask/dask/issues/9793
         pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
@@ -555,15 +552,10 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
-    if io == "parquet-pyarrow":
+    if io == "parquet":
         pytest.importorskip("pyarrow")
         ddf0.to_parquet(str(tmpdir))
         ddf = dd.read_parquet(str(tmpdir))
-    elif io == "parquet-fastparquet":
-        pytest.importorskip("fastparquet")
-        with pytest.warns(FutureWarning):
-            ddf0.to_parquet(str(tmpdir), engine="fastparquet")
-            ddf = dd.read_parquet(str(tmpdir), engine="fastparquet")
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
@@ -577,14 +569,6 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
-    if not dd._dask_expr_enabled():
-        with dask.config.set({"optimization.fuse.active": fuse}):
-            ddf.compute()
-            dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
-            # dsk should not be a dict unless fuse is explicitly True
-            assert isinstance(dsk, dict) == bool(fuse)
-
-            dd.assert_eq(ddf, df, check_index=False)
 
 
 def test_blockwise_fusion_after_compute(c):
