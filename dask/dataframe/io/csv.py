@@ -31,7 +31,6 @@ from dask.base import tokenize
 from dask.bytes import read_bytes
 from dask.core import flatten
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import delayed
@@ -338,6 +337,8 @@ def text_blocks_to_pandas(
     -------
     A dask.dataframe
     """
+    from dask.dataframe import from_map
+
     dtypes = head.dtypes.to_dict()
     # dtypes contains only instances of CategoricalDtype, which causes issues
     # in coerce_dtypes for non-uniform categories across partitions.
@@ -1013,8 +1014,3 @@ def to_csv(
         return list(dask.compute(*values, **compute_kwargs))
     else:
         return values
-
-
-from dask.dataframe.core import _Frame
-
-_Frame.to_csv.__doc__ = to_csv.__doc__

@@ -13,7 +13,7 @@ from operator import add
 
 from packaging.version import Version
 
-from distributed import Client, SchedulerPlugin, WorkerPlugin, futures_of, wait
+from distributed import Client, SchedulerPlugin, futures_of, wait
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import (  # noqa F401
@@ -32,7 +32,6 @@ from dask import compute, delayed, persist
 from dask.base import compute_as_if_collection, get_scheduler
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
-from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
 
@@ -758,54 +757,6 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = ddf[ddf.uid.isin(range(29))].persist()
     ddf["day"] = ddf.enter_time.dt.day_name()
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
-
-
-@pytest.mark.parametrize(
-    "max_branch, expected_layer_type",
-    [
-        (32, SimpleShuffleLayer),
-        (2, ShuffleLayer),
-    ],
-)
-@gen_cluster(client=True, nthreads=[("", 1)] * 2)
-async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
-    pd = pytest.importorskip("pandas")
-    dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("Checking layers doesn't make sense")
-
-    class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
-        failure = False
-
-        def setup(self, worker):
-            self.worker = worker
-
-        def transition(self, key, start, finish, **kwargs):
-            if finish == "executing" and not all(
-                "split" in ts.key for ts in self.worker.state.executing
-            ):
-                if any("split" in ts.key for ts in list(self.worker.state.ready)):
-                    EnsureSplitsRunImmediatelyPlugin.failure = True
-                    raise RuntimeError("Split tasks are not prioritized")
-
-    await c.register_plugin(EnsureSplitsRunImmediatelyPlugin())
-
-    # Test marked as "flaky" since the scheduling behavior
-    # is not deterministic. Note that the test is still
-    # very likely to fail every time if the "split" tasks
-    # are not prioritized correctly
-
-    df = pd.DataFrame({"a": range(1000)})
-    ddf = dd.from_pandas(df, npartitions=10)
-
-    ddf2 = ddf.shuffle("a", shuffle_method="tasks", max_branch=max_branch)
-
-    shuffle_layers = set(ddf2.dask.layers) - set(ddf.dask.layers)
-    for layer_name in shuffle_layers:
-        if "shuffle" in layer_name:
-            assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
-    await c.compute(ddf2)
-    assert not EnsureSplitsRunImmediatelyPlugin.failure
 
 
 @gen_cluster(client=True)

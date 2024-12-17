@@ -5,7 +5,7 @@ import re
 import sys
 import textwrap
 import traceback
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from numbers import Number
 from typing import TypeVar, overload
@@ -17,10 +17,6 @@ from pandas.api.types import is_dtype_equal
 import dask
 from dask.base import get_scheduler, is_dask_collection
 from dask.core import get_deps
-from dask.dataframe import (  # noqa: F401 register pandas extension types
-    _dtypes,
-    methods,
-)
 from dask.dataframe._compat import tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
     is_categorical_dtype_dispatch,
@@ -69,62 +65,6 @@ def is_float_na_dtype(t):
         pd.Float64Dtype,
     )
     return isinstance(dtype, types)
-
-
-def shard_df_on_index(df, divisions):
-    """Shard a DataFrame by ranges on its index
-
-    Examples
-    --------
-
-    >>> df = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]})
-    >>> df
-        a  b
-    0   0  5
-    1  10  4
-    2  20  3
-    3  30  2
-    4  40  1
-
-    >>> shards = list(shard_df_on_index(df, [2, 4]))
-    >>> shards[0]
-        a  b
-    0   0  5
-    1  10  4
-
-    >>> shards[1]
-        a  b
-    2  20  3
-    3  30  2
-
-    >>> shards[2]
-        a  b
-    4  40  1
-
-    >>> list(shard_df_on_index(df, []))[0]  # empty case
-        a  b
-    0   0  5
-    1  10  4
-    2  20  3
-    3  30  2
-    4  40  1
-    """
-
-    if isinstance(divisions, Iterator):
-        divisions = list(divisions)
-    if not len(divisions):
-        yield df
-    else:
-        divisions = np.array(divisions)
-        df = df.sort_index()
-        index = df.index
-        if isinstance(index.dtype, pd.CategoricalDtype):
-            index = index.as_ordered()
-        indices = index.searchsorted(divisions)
-        yield df.iloc[: indices[0]]
-        for i in range(len(indices) - 1):
-            yield df.iloc[indices[i] : indices[i + 1]]
-        yield df.iloc[indices[-1] :]
 
 
 _META_TYPES = "meta : pd.DataFrame, pd.Series, dict, iterable, tuple, optional"
@@ -427,6 +367,8 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
 
 
 def check_matching_columns(meta, actual):
+    import dask.dataframe.methods as methods
+
     # Need nan_to_num otherwise nan comparison gives False
     if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
         extra = methods.tolist(actual.columns.difference(meta.columns))
@@ -529,6 +471,8 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
 
 
 def _maybe_sort(a, check_index: bool):
+    import dask.dataframe.methods as methods
+
     # sort by value, then index
     try:
         if is_dataframe_like(a):
