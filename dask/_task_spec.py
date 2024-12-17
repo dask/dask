@@ -799,6 +799,7 @@ class NestedContainer(Task):
             None,
             self.to_container,
             *args,
+            klass=self.klass,
             _dependencies=_dependencies,
             **kwargs,
         )
@@ -832,9 +833,9 @@ class NestedContainer(Task):
 
         return super().__dask_tokenize__()
 
-    @classmethod
-    def to_container(cls, *args, **kwargs):
-        return cls.klass(args)
+    @staticmethod
+    def to_container(*args, klass):
+        return klass(args)
 
 
 class List(NestedContainer):
