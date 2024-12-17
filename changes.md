@@ -1,5 +1,13 @@
 ## Dask-expr
 
+# v1.1.21
+
+- Fixup install paths (:pr:`1179`) `Patrick Hoefler`_
+- Remove custom read-csv stuff (:pr:`1178`) `Patrick Hoefler`_
+- Fix assign optimization when overwriting columns (:pr:`1176`) `Patrick Hoefler`_
+- Propagate group_keys in DataFrameGroupBy (:pr:`1174`) `Tom Augspurger`_
+- Use new blockwise unpack collection in array (:pr:`1173`) `James Bourbeau`_
+
 # v1.1.20
 
 - Fix value_counts with split_out != 1 (:pr:`1170`) `Patrick Hoefler`_
