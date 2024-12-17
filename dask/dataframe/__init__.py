@@ -14,6 +14,25 @@ def _dask_expr_enabled() -> bool:
 
 
 try:
+    _dask_expr_enabled()
+
+    import dask_expr as dd
+
+    # trigger loading of dask-expr which will in-turn import dask.dataframe and run remainder
+    # of this module's init updating attributes to be dask-expr
+    # note: needs reload, in case dask-expr imported before dask.dataframe; works fine otherwise
+    dd = importlib.reload(dd)
+except ImportError as e:
+    msg = (
+        "Dask dataframe requirements are not installed.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install dask                     # either conda install\n"
+        '  python -m pip install "dask[dataframe]" --upgrade  # or python -m pip install'
+    )
+    raise ImportError(msg) from e
+
+
+try:
 
     # Ensure that dtypes are registered
     from dask_expr import (
