@@ -220,4 +220,4 @@ def to_orc(
     from dask.dataframe import from_graph
 
     dsk.update(df.optimize().__dask_graph__())
-    return from_graph(dsk, None, (None, None), [(final_name, 0)], "to_orc_persister")
+    return from_graph(dsk, None, (None, None), [(final_name, 0)], "to-orc-persister")

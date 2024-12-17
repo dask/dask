@@ -132,8 +132,7 @@ def test_from_delayed_dataframe(c):
     dd.utils.assert_eq(ddf, df, scheduler=c)
 
 
-@pytest.mark.parametrize("fuse", [True, False])
-def test_fused_blockwise_dataframe_merge(c, fuse):
+def test_fused_blockwise_dataframe_merge(c):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
@@ -148,12 +147,11 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     df1 += 10
     df2 += 10
 
-    with dask.config.set({"optimization.fuse.active": fuse}):
-        ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle_method="tasks")
-        ddfm.head()  # https://github.com/dask/dask/issues/7178
-        dfm = ddfm.compute().sort_values("x")
-        # We call compute above since `sort_values` is not
-        # supported in `dask.dataframe`
+    ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle_method="tasks")
+    ddfm.head()  # https://github.com/dask/dask/issues/7178
+    dfm = ddfm.compute().sort_values("x")
+    # We call compute above since `sort_values` is not
+    # supported in `dask.dataframe`
     dd.utils.assert_eq(
         dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
     )
@@ -740,7 +738,7 @@ async def test_futures_in_subgraphs(c, s, a, b):
 
     ddf = ddf[ddf.uid.isin(range(29))].persist()
     ddf["day"] = ddf.enter_time.dt.day_name()
-    ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
+    ddf = await c.submit(dd.categorize, ddf, columns=["day"], index=False)
 
 
 @gen_cluster(client=True)
