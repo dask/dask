@@ -538,6 +538,11 @@ def test_pickle_literals():
     assert roundtripped == obj
 
 
+@pytest.mark.parametrize("obj", [set, {0}, [], [1], {}, {2: 3}, (), (4,)])
+def test_parse_non_task_inputs(obj):
+    assert parse_input(obj) == obj
+
+
 def test_resolve_aliases():
     tasks = [
         Alias("bar", "foo"),
