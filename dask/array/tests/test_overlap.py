@@ -567,6 +567,18 @@ def test_map_overlap_deprecated_signature():
         assert y.shape == (3,)
 
 
+def test_map_overlap_trim_false_chunking():
+    a = np.arange(100)
+    c = da.from_array(a, chunks=15)
+
+    def f(x):
+        return x[20:-20]
+
+    d = da.map_overlap(f, c, depth={0: 20}, boundary=0, trim=False)
+    print(d.shape)
+    print(d.compute().shape)
+
+
 def test_nearest_overlap():
     a = np.arange(144).reshape(12, 12).astype(float)
 
