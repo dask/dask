@@ -635,9 +635,7 @@ def test_consistent_dtypes_2():
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         df = dd.read_csv("foo.*.csv", blocksize=25)
         assert df.name.dtype == string_dtype
-        assert df.name.compute().dtype == (
-            string_dtype if not dd._dask_expr_enabled() else "object"
-        )
+        assert df.name.compute().dtype == string_dtype
 
 
 def test_categorical_dtypes():
