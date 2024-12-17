@@ -33,11 +33,12 @@ from dask.dataframe.utils import (
     insert_meta_param_description,
     is_series_like,
     make_meta,
+    pyarrow_strings_enabled,
 )
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import M, funcname, is_arraylike
+from dask.utils import M, ensure_dict, funcname, is_arraylike
 
 if TYPE_CHECKING:
     import distributed
@@ -498,17 +499,23 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     import dask.dataframe as dd
 
     if dd._dask_expr_enabled():
-        from dask_expr._collection import from_graph
+        from dask_expr._collection import from_graph, new_collection
+        from dask_expr._expr import ArrowStringConversion
 
+        from dask.array import optimize
         from dask.utils import key_split
 
-        return from_graph(
-            graph,
+        keys = [(name, i) for i in range(len(divisions) - 1)]
+        result = from_graph(
+            optimize(ensure_dict(graph), keys),
             meta,
             divisions,
-            [(name, i) for i in range(len(divisions) - 1)],
+            keys,
             key_split(name),
         )
+        if pyarrow_strings_enabled():
+            return new_collection(ArrowStringConversion(result.expr))
+        return result
 
     return new_dd_object(graph, name, meta, divisions)
 

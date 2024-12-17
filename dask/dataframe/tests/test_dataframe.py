@@ -24,7 +24,7 @@ import dask.dataframe as dd
 import dask.dataframe.groupby
 from dask import delayed
 from dask._compatibility import WINDOWS
-from dask.base import compute_as_if_collection
+from dask.base import collections_to_dsk, compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300, tm
@@ -6330,6 +6330,38 @@ def test_query_planning_config_warns():
         expect = "enabled" if dd.DASK_EXPR_ENABLED else "disabled"
         with pytest.warns(match=f"query planning is already {expect}"):
             dd._dask_expr_enabled()
+
+
+def test_from_xarray():
+    xr = pytest.importorskip("xarray")
+
+    a = da.zeros(shape=(6000, 45000), chunks=(30, 6000))
+    a = xr.DataArray(
+        a, coords={"c1": list(range(6000)), "c2": list(range(45000))}, dims=["c1", "c2"]
+    )
+    sel_coords = {
+        "c1": pd.date_range("2024-11-01", "2024-11-10").to_numpy(),
+        "c2": [29094],
+    }
+
+    result = a.reindex(**sel_coords).to_dask_dataframe()
+    assert len(collections_to_dsk([result])) < 30  # previously 3000
+
+
+def test_from_xarray_string_conversion():
+    xr = pytest.importorskip("xarray")
+
+    x = np.random.randn(10)
+    y = np.arange(10, dtype="uint8")
+    t = list("abcdefghij")
+    ds = xr.Dataset(
+        {"a": ("t", da.from_array(x, chunks=4)), "b": ("t", y), "t": ("t", t)}
+    )
+    expected_pd = pd.DataFrame({"a": x, "b": y}, index=pd.Index(t, name="t"))
+    expected = dd.from_pandas(expected_pd, chunksize=4)
+    actual = ds.to_dask_dataframe(set_index=True)
+    assert isinstance(actual, dd.DataFrame)
+    pd.testing.assert_frame_equal(actual.compute(), expected.compute())
 
 
 def test_dataframe_into_delayed():
