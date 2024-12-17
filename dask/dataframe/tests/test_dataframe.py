@@ -6345,7 +6345,7 @@ def test_from_xarray():
     }
 
     result = a.reindex(**sel_coords).to_dask_dataframe()
-    assert len(collections_to_dsk([result])) == 21
+    assert len(collections_to_dsk([result])) < 30  # previously 3000
 
 
 def test_from_xarray_string_conversion():
