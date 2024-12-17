@@ -106,21 +106,21 @@ def parse_input(obj: Any) -> object:
         return Alias(obj.key)
 
     if isinstance(obj, dict):
-        parsed_inputs = {k: parse_input(v) for k, v in obj.items()}
-        if any(isinstance(v, GraphNode) for v in parsed_inputs.values()):
-            return Dict(parsed_inputs)
+        parsed_dict = {k: parse_input(v) for k, v in obj.items()}
+        if any(isinstance(v, GraphNode) for v in parsed_dict.values()):
+            return Dict(parsed_dict)
 
     if isinstance(obj, (list, set, tuple)):
-        parsed_inputs = tuple(parse_input(o) for o in obj)
-        if any(isinstance(o, GraphNode) for o in parsed_inputs):
+        parsed_collection = tuple(parse_input(o) for o in obj)
+        if any(isinstance(o, GraphNode) for o in parsed_collection):
             if isinstance(obj, list):
-                return List(*parsed_inputs)
+                return List(*parsed_collection)
             if isinstance(obj, set):
-                return Set(*parsed_inputs)
+                return Set(*parsed_collection)
             if isinstance(obj, tuple):
                 if is_namedtuple_instance(obj):
                     return _wrap_namedtuple_task(None, obj, parse_input)
-                return Tuple(*(parse_input(o) for o in obj))
+                return Tuple(*parsed_collection)
 
     return obj
 
