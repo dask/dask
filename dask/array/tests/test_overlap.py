@@ -564,6 +564,7 @@ def test_map_overlap_deprecated_signature():
     with pytest.warns(FutureWarning):
         y = da.map_overlap(x, func, 1, "reflect", False)
         assert y.compute() == 5
+        assert y.shape == (3,)
 
 
 def test_map_overlap_trim_false_chunking():
