@@ -37,7 +37,7 @@ from dask.dataframe.utils import (
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import M, funcname, is_arraylike
+from dask.utils import M, ensure_dict, funcname, is_arraylike
 
 if TYPE_CHECKING:
     import distributed
@@ -500,13 +500,15 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     if dd._dask_expr_enabled():
         from dask_expr._collection import from_graph
 
+        from dask.array import optimize
         from dask.utils import key_split
 
+        keys = [(name, i) for i in range(len(divisions) - 1)]
         return from_graph(
-            graph,
+            optimize(ensure_dict(graph), keys),
             meta,
             divisions,
-            [(name, i) for i in range(len(divisions) - 1)],
+            keys,
             key_split(name),
         )
 
