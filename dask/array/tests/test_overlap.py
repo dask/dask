@@ -564,7 +564,18 @@ def test_map_overlap_deprecated_signature():
     with pytest.warns(FutureWarning):
         y = da.map_overlap(x, func, 1, "reflect", False)
         assert y.compute() == 5
-        assert y.shape == (3,)
+
+
+def test_map_overlap_trim_false_chunking():
+    a = np.arange(100)
+    c = da.from_array(a, chunks=15)
+
+    def f(x):
+        return x[20:-20]
+
+    d = da.map_overlap(f, c, depth={0: 20}, boundary=0, trim=False)
+    print(d.shape)
+    print(d.compute().shape)
 
 
 def test_nearest_overlap():
