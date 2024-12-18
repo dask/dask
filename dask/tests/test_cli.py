@@ -32,7 +32,7 @@ def test_config_get_value():
     runner = CliRunner()
     result = runner.invoke(dask.cli.config_get, ["array"])
     assert result.exit_code == 0
-    assert result.output.startswith("backend:")
+    assert result.output.startswith("automatic-rechunk:")
     assert len(result.output.splitlines()) > 2
 
 
