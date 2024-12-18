@@ -5,6 +5,42 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2024.12.1:
+
+2024.12.1
+---------
+
+Highlights
+^^^^^^^^^^
+
+Improved scheduler responsiveness for large task graphs
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""
+This release reduces the number of Python object references
+related to tracking tasks by the Dask scheduler. This increases
+scheduler responsiveness by reducing the time needed to run
+garbage collection on the scheduler. 
+
+See :issue:`8958`, :pr:`11608`, :pr:`11600`, :pr:`11598`,
+:pr:`11597`, and :pr-distributed:`8963` from `Hendrik Makait`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Fix ``map_overlap`` bug where rechunking and ``trim=False`` caused inconsistent chunkings (:pr:`11605`) `Patrick Hoefler`_
+  - Avoid legacy implementation in read-csv (:pr:`11603`) `Patrick Hoefler`_
+  - Remove legacy DataFrame import (:pr:`11604`) `Patrick Hoefler`_
+  - ``asarray`` ignores ``dtype`` for array inputs (:pr:`11586`) `crusaderky`_
+  - Add back LLM chatbot to Dask docs (:pr:`11594`) `dchudz`_
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.6.9 to 4.7.2 (:pr:`11593`)
+  - Migrate dask array creation routines to task spec (:pr:`11582`) `James Bourbeau`_
+  - Migrate most of dask array random to task spec (:pr:`11581`) `James Bourbeau`_
+  - Do not use local function in ``array.push`` (:pr:`11576`) `Florian Jetter`_
+
+  - Bump ``conda-incubator/setup-miniconda`` from 3.0.3 to 3.1.0 (:pr-distributed:`8922`)
+  - Pick random dashboard port in tests (:pr-distributed:`8965`) `Hendrik Makait`_
+  - Fix formatting for ``NoValidWorkerException`` message (:pr-distributed:`8967`) `Hendrik Makait`_
+  - Support ``pynvml>=11.5`` in WSL (:pr-distributed:`8962`) `Richard (Rick) Zamora`_
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.6.9 to 4.7.2 (:pr-distributed:`8960`)
+
 .. _v2024.12.0:
 
 2024.12.0

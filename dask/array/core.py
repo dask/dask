@@ -4728,7 +4728,9 @@ def asarray(
             return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
         else:
             a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
-    return from_array(a, getitem=getter_inline, **kwargs)
+
+    a = from_array(a, getitem=getter_inline, **kwargs)
+    return _as_dtype(a, dtype)
 
 
 def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
@@ -4800,13 +4802,15 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
         else:
             a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
-    return from_array(
+
+    a = from_array(
         a,
         chunks=a.shape,
         getitem=getter_inline,
         asarray=False,
         inline_array=inline_array,
     )
+    return _as_dtype(a, dtype)
 
 
 def is_scalar_for_elemwise(arg):
