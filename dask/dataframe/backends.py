@@ -12,7 +12,6 @@ from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
 from dask.dataframe._compat import PANDAS_GE_220, is_any_real_numeric_dtype
-from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
@@ -498,26 +497,29 @@ def union_categoricals_pandas(to_union, sort_categories=False, ignore_order=Fals
 
 @get_parallel_type.register(pd.Series)
 def get_parallel_type_series(_):
+    from dask_expr._collection import Series
+
     return Series
 
 
 @get_parallel_type.register(pd.DataFrame)
 def get_parallel_type_dataframe(_):
+    from dask_expr._collection import DataFrame
+
     return DataFrame
 
 
 @get_parallel_type.register(pd.Index)
 def get_parallel_type_index(_):
+    from dask_expr._collection import Index
+
     return Index
-
-
-@get_parallel_type.register(_Frame)
-def get_parallel_type_frame(o):
-    return get_parallel_type(o._meta)
 
 
 @get_parallel_type.register(object)
 def get_parallel_type_object(_):
+    from dask_expr._collection import Scalar
+
     return Scalar
 
 
@@ -764,7 +766,7 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
         return to_pandas_dispatch
 
     @classmethod
-    def to_backend(cls, data: _Frame, **kwargs):
+    def to_backend(cls, data, **kwargs):
         if isinstance(data._meta, (pd.DataFrame, pd.Series, pd.Index)):
             # Already a pandas-backed collection
             return data

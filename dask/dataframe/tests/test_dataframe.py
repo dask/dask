@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import decimal
-import importlib
 import sys
 import warnings
 import weakref
@@ -30,13 +29,9 @@ from dask.dataframe import _compat, methods
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300, tm
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
-    Scalar,
     _concat,
     _map_freq_to_period_start,
-    aca,
     has_parallel_type,
-    is_broadcastable,
-    repartition_divisions,
     total_mem_usage,
 )
 from dask.dataframe.dispatch import meta_nonempty
@@ -244,30 +239,6 @@ def test_series_axes():
     ds = dd.from_pandas(ps, npartitions=2)
     assert len(ds.axes) == len(ps.axes)
     assert all(assert_eq(d, p) for d, p in zip(ds.axes, ps.axes))
-
-
-def test_Scalar():
-    val = np.int64(1)
-    s = Scalar({("a", 0): val}, "a", "i8")
-    assert hasattr(s, "dtype")
-    assert "dtype" in dir(s)
-    assert_eq(s, val)
-    assert repr(s) == "dd.Scalar<a, dtype=int64>"
-
-    val = pd.Timestamp("2001-01-01")
-    s = Scalar({("a", 0): val}, "a", val)
-    assert not hasattr(s, "dtype")
-    assert "dtype" not in dir(s)
-    assert_eq(s, val)
-    assert repr(s) == "dd.Scalar<a, type=Timestamp>"
-
-
-def test_scalar_raises():
-    val = np.int64(1)
-    s = Scalar({("a", 0): val}, "a", "i8")
-    msg = "cannot be converted to a boolean value"
-    with pytest.raises(TypeError, match=msg):
-        bool(s)
 
 
 def test_attributes():
@@ -1027,13 +998,6 @@ def test_map_partitions():
         pd.Series([1, 1, 1], dtype=np.int64),
         check_divisions=False,
     )
-    if not DASK_EXPR_ENABLED:
-        # We don't support instantiating a Scalar like this
-        x = Scalar({("x", 0): 1}, "x", int)
-        result = dd.map_partitions(lambda x: 2, x)
-        assert result.dtype in (np.int32, np.int64) and result.compute() == 2
-        result = dd.map_partitions(lambda x: 4.0, x)
-        assert result.dtype == np.float64 and result.compute() == 4.0
 
 
 def test_map_partitions_type():
@@ -1526,10 +1490,7 @@ def test_quantile(method, quantile):
 
     # series / single
     result = df.x.quantile(quantile, method=method)
-    if DASK_EXPR_ENABLED:
-        assert result.ndim == 0
-    else:
-        assert isinstance(result, dd.core.Scalar)
+    assert result.ndim == 0
     result = result.compute()
     assert result == pytest.approx(exp, rel=0.15)
 
@@ -2309,27 +2270,6 @@ def test_repartition():
             assert_eq(pdf.x, rds)
 
 
-def test_repartition_divisions():
-    result = repartition_divisions([0, 6], [0, 6, 6], "a", "b", "c")
-    assert result == {
-        ("b", 0): (methods.boundary_slice, ("a", 0), 0, 6, False),
-        ("b", 1): (methods.boundary_slice, ("a", 0), 6, 6, True),
-        ("c", 0): ("b", 0),
-        ("c", 1): ("b", 1),
-    }
-
-    result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], "a", "b", "c")
-    assert result == {
-        ("b", 0): (methods.boundary_slice, ("a", 0), 1, 3, False),
-        ("b", 1): (methods.boundary_slice, ("a", 1), 3, 4, False),
-        ("b", 2): (methods.boundary_slice, ("a", 1), 4, 6, False),
-        ("b", 3): (methods.boundary_slice, ("a", 1), 6, 7, True),
-        ("c", 0): (methods.concat, [("b", 0), ("b", 1)]),
-        ("c", 1): ("b", 2),
-        ("c", 2): ("b", 3),
-    }
-
-
 def test_repartition_on_pandas_dataframe():
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
@@ -2926,151 +2866,6 @@ def test_deterministic_apply_concat_apply_names():
     assert sorted(a.x.drop_duplicates().dask) == sorted(a.x.drop_duplicates().dask)
     assert sorted(a.groupby("x").y.mean().dask) == sorted(a.groupby("x").y.mean().dask)
 
-    # Test aca without passing in token string
-    f = lambda a: a.nlargest(5)
-    f2 = lambda a: a.nlargest(3)
-    if not DASK_EXPR_ENABLED:
-        assert sorted(aca(a.x, f, f, a.x._meta).dask) != sorted(
-            aca(a.x, f2, f2, a.x._meta).dask
-        )
-        assert sorted(aca(a.x, f, f, a.x._meta).dask) == sorted(
-            aca(a.x, f, f, a.x._meta).dask
-        )
-
-        # Test aca with keywords
-        def chunk(x, c_key=0, both_key=0):
-            return x.sum() + c_key + both_key
-
-        def agg(x, a_key=0, both_key=0):
-            return pd.Series(x).sum() + a_key + both_key
-
-        c_key = 2
-        a_key = 3
-        both_key = 4
-
-        res = aca(
-            a.x,
-            chunk=chunk,
-            aggregate=agg,
-            chunk_kwargs={"c_key": c_key},
-            aggregate_kwargs={"a_key": a_key},
-            both_key=both_key,
-        )
-        assert sorted(res.dask) == sorted(
-            aca(
-                a.x,
-                chunk=chunk,
-                aggregate=agg,
-                chunk_kwargs={"c_key": c_key},
-                aggregate_kwargs={"a_key": a_key},
-                both_key=both_key,
-            ).dask
-        )
-        assert sorted(res.dask) != sorted(
-            aca(
-                a.x,
-                chunk=chunk,
-                aggregate=agg,
-                chunk_kwargs={"c_key": c_key},
-                aggregate_kwargs={"a_key": a_key},
-                both_key=0,
-            ).dask
-        )
-
-        assert_eq(res, df.x.sum() + 2 * (c_key + both_key) + a_key + both_key)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Not public")
-def test_aca_meta_infer():
-    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
-    ddf = dd.from_pandas(df, npartitions=2)
-
-    def chunk(x, y, constant=1.0):
-        return (x + y + constant).head()
-
-    def agg(x):
-        return x.head()
-
-    res = aca([ddf, 2.0], chunk=chunk, aggregate=agg, chunk_kwargs=dict(constant=2.0))
-    sol = (df + 2.0 + 2.0).head()
-    assert_eq(res, sol)
-
-    # Should infer as a scalar
-    res = aca(
-        [ddf.x], chunk=lambda x: pd.Series([x.sum()]), aggregate=lambda x: x.sum()
-    )
-    assert isinstance(res, Scalar)
-    assert res.compute() == df.x.sum()
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="Not public")
-def test_aca_split_every():
-    df = pd.DataFrame({"x": [1] * 60})
-    ddf = dd.from_pandas(df, npartitions=15)
-
-    def chunk(x, y, constant=0):
-        return x.sum() + y + constant
-
-    def combine(x, constant=0):
-        return x.sum() + constant + 1
-
-    def agg(x, constant=0):
-        return x.sum() + constant + 2
-
-    f = lambda n: aca(
-        [ddf, 2.0],
-        chunk=chunk,
-        aggregate=agg,
-        combine=combine,
-        chunk_kwargs=dict(constant=1.0),
-        combine_kwargs=dict(constant=2.0),
-        aggregate_kwargs=dict(constant=3.0),
-        split_every=n,
-    )
-
-    assert_max_deps(f(3), 3)
-    assert_max_deps(f(4), 4, False)
-    assert_max_deps(f(5), 5)
-    assert f(15).dask.keys() == f(ddf.npartitions).dask.keys()
-
-    r3 = f(3)
-    r4 = f(4)
-    assert r3._name != r4._name
-    # Only intersect on reading operations
-    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
-
-    # Keywords are different for each step
-    assert f(3).compute() == 60 + 15 * (2 + 1) + 7 * (2 + 1) + (3 + 2)
-    # Keywords are same for each step
-    res = aca(
-        [ddf, 2.0],
-        chunk=chunk,
-        aggregate=agg,
-        combine=combine,
-        constant=3.0,
-        split_every=3,
-    )
-    assert res.compute() == 60 + 15 * (2 + 3) + 7 * (3 + 1) + (3 + 2)
-    # No combine provided, combine is agg
-    res = aca([ddf, 2.0], chunk=chunk, aggregate=agg, constant=3, split_every=3)
-    assert res.compute() == 60 + 15 * (2 + 3) + 8 * (3 + 2)
-
-    # split_every must be >= 2
-    with pytest.raises(ValueError):
-        f(1)
-
-    # combine_kwargs with no combine provided
-    with pytest.raises(ValueError):
-        aca(
-            [ddf, 2.0],
-            chunk=chunk,
-            aggregate=agg,
-            split_every=3,
-            chunk_kwargs=dict(constant=1.0),
-            combine_kwargs=dict(constant=2.0),
-            aggregate_kwargs=dict(constant=3.0),
-        )
-
 
 def test_reduction_method():
     df = pd.DataFrame({"x": range(50), "y": range(50, 100)})
@@ -3242,15 +3037,6 @@ def test_gh580():
     ddf = dd.from_pandas(df, 2)
     assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))
     assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))
-
-
-def test_gh6305():
-    df = pd.DataFrame({"x": np.arange(3, dtype=float)})
-    ddf = dd.from_pandas(df, 1)
-    ddf_index_only = ddf.set_index("x")
-    ds = ddf["x"]
-
-    is_broadcastable([ddf_index_only], ds)
 
 
 def test_rename_dict():
@@ -6322,20 +6108,7 @@ def test_preserve_ts_unit_in_meta_creation():
     assert_eq(df, pdf)
 
 
-def test_query_planning_config_warns():
-    # Make sure dd._dask_expr_enabled() warns if the current
-    # "dataframe.query-planning" config conflicts with the
-    # global dd.DASK_EXPR_ENABLED setting.
-    with dask.config.set({"dataframe.query-planning": not DASK_EXPR_ENABLED}):
-        expect = "enabled" if dd.DASK_EXPR_ENABLED else "disabled"
-        with pytest.warns(match=f"query planning is already {expect}"):
-            dd._dask_expr_enabled()
-
-
 def test_dataframe_into_delayed():
-    if not DASK_EXPR_ENABLED:
-        pytest.skip("Only relevant for dask.expr")
-
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": 1})
     df = dd.from_pandas(pdf, npartitions=2)
 
@@ -6350,22 +6123,3 @@ def test_dataframe_into_delayed():
     result = delayed(delayed_func)(df)
     assert sum(map(len, result.dask.layers.values())) == 6
     result.compute()
-
-
-@pytest.mark.filterwarnings(
-    "error:The legacy Dask DataFrame implementation is deprecated.*:FutureWarning"
-)
-def test_import_raises_warning():
-    import dask
-
-    try:
-        with dask.config.set({"dataframe.query-planning": False}):
-            with pytest.raises(FutureWarning, match="The legacy"):
-                importlib.reload(dask.dataframe)
-    finally:
-        if dask.config.get("dataframe.query-planning") is False:
-            # Build without dask-expr and config is False
-            with pytest.raises(FutureWarning, match="The legacy"):
-                importlib.reload(dask.dataframe)
-        else:
-            importlib.reload(dask.dataframe)

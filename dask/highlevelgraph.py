@@ -897,8 +897,6 @@ def to_graphviz(
     if color == "layer_type":
         layer_colors = {
             "DataFrameIOLayer": ["#CCC7F9", False],  # purple
-            "ShuffleLayer": ["#F9CCC7", False],  # rose
-            "SimpleShuffleLayer": ["#F9CCC7", False],  # rose
             "ArrayOverlayLayer": ["#FFD9F2", False],  # pink
             "BroadcastJoinLayer": ["#D9F2FF", False],  # blue
             "Blockwise": ["#D9FFE6", False],  # green
