@@ -40,7 +40,6 @@ optimization:
     max-width: null  # 1.5 + ave_width * log(ave_width + 1)
     max-height: .inf
     max-depth-new-edges: null  # ave_width * 1.5
-    subgraphs: null  # true for dask.dataframe, false for everything else
     rename-keys: true
     delayed: false
 
