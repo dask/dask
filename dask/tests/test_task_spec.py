@@ -1064,6 +1064,26 @@ def test_block_io_fusion():
     assert isinstance(result["third"], SubTask)
 
 
+def test_data_producer_task():
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref(), data_producer_task=True),
+        third := Task("third", func, io.ref(), data_producer_task=True),
+        fourth := Task("fourth", func, second.ref()),
+        fifth := Task("fifth", func, third.ref()),
+        Task("sixth", func, fourth.ref(), fifth.ref()),
+    ]
+
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "second-fourth" in result
+    assert "third-fifth" in result
+    assert result["second-fourth"].data_producer_task
+    assert result["third-fifth"].data_producer_task
+    assert not result["sixth"].data_producer_task
+    assert result["foo"].data_producer_task
+
+
 @pytest.mark.parametrize(
     "task_type, python_type",
     [
