@@ -724,7 +724,23 @@ class HighLevelGraph(Graph):
 
         keys_set = set(flatten(keys))
 
-        all_ext_keys = self.get_all_external_keys()
+        class InGraph:
+            """Thin wrapper allowing backward compatibility with Layer.cull"""
+
+            def __contains__(_, key):
+                # Verify key is in some layer of the graph
+                # Note that if a Layer's `__getitem__` function materializes
+                #   the layer, `key in layer` will as well. This can be
+                #   avoided by explicitly creating `Layer.__contains__`
+                return any(key in layer for layer in self.layers.values())
+
+            def __len__(_):
+                return sum(map(len, self.layers.values()))
+
+            def __iter__(_):
+                raise NotImplementedError("Should not iterate over this class")
+
+        all_ext_keys = InGraph()
         ret_layers: dict = {}
         ret_key_deps: dict = {}
         for layer_name in reversed(self._toposort_layers()):
@@ -734,7 +750,7 @@ class HighLevelGraph(Graph):
             # a collections.abc.Set rather than a real set, and using &
             # would take time proportional to the size of the LHS, which
             # if there is no culling can be much bigger than the RHS.
-            output_keys = keys_set.intersection(layer.get_output_keys())
+            output_keys = {k for k in keys_set if k in layer}
             if output_keys:
                 culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
                 # Update `keys` with all layer's external key dependencies, which
