@@ -3,17 +3,13 @@ from __future__ import annotations
 import contextlib
 import itertools
 import multiprocessing as mp
-import os
 import pickle
 import random
 import string
-import tempfile
 from concurrent.futures import ProcessPoolExecutor
-from copy import copy
 from datetime import date, time
 from decimal import Decimal
 from functools import partial
-from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -23,17 +19,8 @@ import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GE_220, assert_categorical_equal, tm
-from dask.dataframe.shuffle import (
-    _calculate_divisions,
-    _noop,
-    maybe_buffered_partd,
-    partitioning_index,
-    rearrange_by_column,
-    rearrange_by_divisions,
-    shuffle,
-)
+from dask.dataframe.shuffle import maybe_buffered_partd, partitioning_index
 from dask.dataframe.utils import assert_eq, make_meta
-from dask.optimization import cull
 
 try:
     import pyarrow as pa
@@ -50,13 +37,9 @@ dsk = {
 meta = make_meta(
     {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
 )
-if DASK_EXPR_ENABLED:
-    d = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
-    shuffle_func = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs)
-    shuffle = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs)
-else:
-    d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
-    shuffle_func = shuffle  # conflicts with keyword argument
+d = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
+shuffle_func = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs)
+shuffle = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs)
 full = d.compute()
 
 
@@ -366,81 +349,6 @@ def test_shuffle_sort(shuffle_method):
     ddf2 = ddf.set_index("x", shuffle_method=shuffle_method)
 
     assert_eq(ddf2, df2, sort_results=False)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
-@pytest.mark.parametrize("scheduler", ["threads", "processes"])
-def test_rearrange(shuffle_method, scheduler):
-    df = pd.DataFrame({"x": np.random.random(10)})
-    ddf = dd.from_pandas(df, npartitions=4)
-    ddf2 = ddf.assign(_partitions=ddf.x % 4)
-
-    result = rearrange_by_column(
-        ddf2, "_partitions", max_branch=32, shuffle_method=shuffle_method
-    )
-    assert result.npartitions == ddf.npartitions
-    assert set(ddf.dask).issubset(result.dask)
-
-    # Every value in exactly one partition
-    a = result.compute(scheduler=scheduler)
-    get = dask.base.get_scheduler(scheduler=scheduler)
-    parts = get(result.dask, result.__dask_keys__())
-
-    for i in a._partitions.drop_duplicates():
-        assert sum(i in set(part._partitions) for part in parts) == 1
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
-def test_rearrange_cleanup():
-    df = pd.DataFrame({"x": np.random.random(10)})
-    ddf = dd.from_pandas(df, npartitions=4)
-    ddf2 = ddf.assign(_partitions=ddf.x % 4)
-
-    tmpdir = tempfile.mkdtemp()
-
-    with dask.config.set(temporay_directory=str(tmpdir)):
-        result = rearrange_by_column(
-            ddf2, "_partitions", max_branch=32, shuffle_method="disk"
-        )
-        result.compute(scheduler="processes")
-
-    assert len(os.listdir(tmpdir)) == 0
-
-
-def mock_shuffle_group_3(df, col, npartitions, p):
-    raise ValueError("Mock exception!")
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
-def test_rearrange_disk_cleanup_with_exception():
-    # ensure temporary files are cleaned up when there's an internal exception.
-
-    with mock.patch("dask.dataframe.shuffle.shuffle_group_3", new=mock_shuffle_group_3):
-        df = pd.DataFrame({"x": np.random.random(10)})
-        ddf = dd.from_pandas(df, npartitions=4)
-        ddf2 = ddf.assign(_partitions=ddf.x % 4)
-
-        tmpdir = tempfile.mkdtemp()
-
-        with dask.config.set(temporay_directory=str(tmpdir)):
-            with pytest.raises(ValueError, match="Mock exception!"):
-                result = rearrange_by_column(
-                    ddf2, "_partitions", max_branch=32, shuffle_method="disk"
-                )
-                result.compute(scheduler="processes")
-
-    assert len(os.listdir(tmpdir)) == 0
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
-def test_rearrange_by_column_with_narrow_divisions():
-    from dask.dataframe.tests.test_multi import list_eq
-
-    A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
-    a = dd.repartition(A, [0, 4, 5])
-
-    df = rearrange_by_divisions(a, "x", (0, 2, 5))
-    list_eq(df, a)
 
 
 def test_maybe_buffered_partd(tmp_path):
@@ -1076,8 +984,6 @@ def test_set_index_with_empty_and_overlap():
 
 
 def test_compute_divisions():
-    from dask.dataframe.shuffle import compute_and_set_divisions
-
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4], "y": [10, 20, 20, 40], "z": [4, 3, 2, 1]},
         index=[1, 3, 10, 20],
@@ -1085,11 +991,7 @@ def test_compute_divisions():
     a = dd.from_pandas(df, 2, sort=False).clear_divisions()
     assert not a.known_divisions
 
-    if DASK_EXPR_ENABLED:
-        b = a.compute_current_divisions(set_divisions=True)
-    else:
-        b = compute_and_set_divisions(copy(a))
-
+    b = a.compute_current_divisions(set_divisions=True)
     assert_eq(a, b, check_divisions=False)
     assert b.known_divisions
 
@@ -1357,91 +1259,6 @@ def test_compute_current_divisions_overlap_2():
         ddf2.compute_current_divisions()
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not valid for dask-expr")
-def test_shuffle_hlg_layer():
-    # This test checks that the `ShuffleLayer` HLG Layer
-    # is used (as expected) for a multi-stage shuffle.
-    ddf = dd.from_pandas(
-        pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=10
-    )
-    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle_method="tasks")
-    keys = [(ddf_shuffled._name, i) for i in range(ddf_shuffled.npartitions)]
-
-    # Cull the HLG
-    dsk = ddf_shuffled.__dask_graph__()
-    dsk_culled = dsk.cull(set(keys))
-    assert isinstance(dsk_culled, dask.highlevelgraph.HighLevelGraph)
-
-    # Ensure we have ShuffleLayers
-    assert any(
-        isinstance(layer, dd.shuffle.ShuffleLayer) for layer in dsk.layers.values()
-    )
-
-    # Check that the ShuffleLayers are non-materialized
-    for layer in dsk.layers.values():
-        if isinstance(layer, dd.shuffle.ShuffleLayer):
-            assert not hasattr(layer, "_cached_dict")
-
-    # Make sure HLG culling reduces the graph size
-    assert len(dsk_culled) < len(dsk)
-
-    # Check ShuffleLayer names
-    for name, layer in dsk.layers.items():
-        if isinstance(layer, dd.shuffle.ShuffleLayer):
-            assert name.startswith("shuffle-")
-
-    # Since we already culled the HLG,
-    # culling the dictionary should not change the graph
-    dsk_dict = dict(dsk_culled)
-    dsk_dict_culled, _ = cull(dsk_dict, keys)
-    assert dsk_dict_culled == dsk_dict
-
-
-def test_shuffle_partitions_meta_dtype():
-    ddf = dd.from_pandas(
-        pd.DataFrame({"a": np.random.randint(0, 10, 100)}, index=np.random.random(100)),
-        npartitions=10,
-    )
-    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-    ddf_shuffled = ddf.shuffle(ddf["a"] % 10, max_branch=3, shuffle_method="tasks")
-    # Cull the HLG
-    if not DASK_EXPR_ENABLED:
-        dsk = ddf_shuffled.__dask_graph__()
-
-        for layer in dsk.layers.values():
-            if isinstance(layer, dd.shuffle.ShuffleLayer):
-                assert layer.meta_input["_partitions"].dtype == np.int64
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not valid for dask-expr")
-@pytest.mark.parametrize(
-    "npartitions",
-    [
-        10,  # ShuffleLayer
-        1,  # SimpleShuffleLayer
-    ],
-)
-def test_shuffle_hlg_layer_serialize(npartitions):
-    ddf = dd.from_pandas(
-        pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=npartitions
-    )
-    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle_method="tasks")
-
-    # Ensure shuffle layers can be serialized and don't result in
-    # the underlying low-level graph being materialized
-    dsk = ddf_shuffled.__dask_graph__()
-    for layer in dsk.layers.values():
-        if not isinstance(layer, dd.shuffle.SimpleShuffleLayer):
-            continue
-        assert not hasattr(layer, "_cached_dict")
-        layer_roundtrip = pickle.loads(pickle.dumps(layer))
-        assert type(layer_roundtrip) == type(layer)
-        assert not hasattr(layer_roundtrip, "_cached_dict")
-        assert layer_roundtrip.keys() == layer.keys()
-
-
 def test_set_index_nan_partition():
     d[d.a > 3].set_index("a")  # Set index with 1 null partition
     d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
@@ -1506,45 +1323,6 @@ def test_set_index_with_series_uses_fastpath():
     assert_eq(res, expected)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not valid for dask-expr")
-def test_set_index_partitions_meta_dtype():
-    ddf = dd.from_pandas(
-        pd.DataFrame({"a": np.random.randint(0, 10, 100)}, index=np.random.random(100)),
-        npartitions=10,
-    )
-    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-    ddf = ddf.set_index("a", shuffle_method="tasks")
-    # Cull the HLG
-    dsk = ddf.__dask_graph__()
-
-    for layer in dsk.layers.values():
-        if isinstance(layer, dd.shuffle.SimpleShuffleLayer):
-            assert layer.meta_input["_partitions"].dtype == np.int64
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not valid for dask-expr")
-def test_sort_values_partitions_meta_dtype_with_divisions():
-    with dask.config.set({"dataframe.shuffle.method": "tasks"}):
-        ddf = dd.from_pandas(
-            pd.DataFrame(
-                {
-                    "a": np.random.randint(0, 10, 100),
-                    "b": np.random.randint(0, 10, 100),
-                },
-                index=np.random.random(100),
-            ),
-            npartitions=10,
-        )
-        # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
-        ddf = ddf.set_index("a", shuffle_method="tasks").sort_values("b")
-        # Cull the HLG
-        dsk = ddf.__dask_graph__()
-
-        for layer in dsk.layers.values():
-            if isinstance(layer, dd.shuffle.SimpleShuffleLayer):
-                assert layer.meta_input["_partitions"].dtype == np.int64
-
-
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nelem", [10, 500])
@@ -1559,20 +1337,6 @@ def test_sort_values(nelem, by, ascending):
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
-    dd.assert_eq(got, expect, check_index=False, sort_results=False)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not deprecated")
-def test_sort_values_deprecated_shuffle_keyword(shuffle_method):
-    np.random.seed(0)
-    df = pd.DataFrame()
-    df["a"] = np.ascontiguousarray(np.arange(10)[::-1])
-    df["b"] = np.arange(100, 10 + 100)
-    ddf = dd.from_pandas(df, npartitions=10)
-
-    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
-        got = ddf.sort_values(by=["a"], shuffle=shuffle_method)
-    expect = df.sort_values(by=["a"])
     dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
@@ -1671,11 +1435,6 @@ def test_shuffle_by_as_list():
     dd.assert_eq(got, expect, check_index=False)
 
 
-def test_noop():
-    assert _noop(1, None) == 1
-    assert _noop("test", None) == "test"
-
-
 @pytest.mark.parametrize("by", [["a", "b"], ["b", "a"]])
 @pytest.mark.parametrize("nparts", [1, 10])
 def test_sort_values_custom_function(by, nparts):
@@ -1738,42 +1497,6 @@ def test_sort_values_timestamp(npartitions):
     result = ddf.sort_values("time")
     expected = df.sort_values("time")
     assert_eq(result, expected)
-
-
-@pytest.mark.parametrize(
-    "pdf,expected",
-    [
-        (
-            pd.DataFrame({"x": list("aabbcc"), "y": list("xyyyzz")}),
-            (["a", "b", "c", "c"], ["a", "b", "c", "c"], ["a", "b", "c", "c"], False),
-        ),
-        (
-            pd.DataFrame(
-                {
-                    "x": [1, 0, 1, 3, 4, 5, 7, 8, 1, 2, 3],
-                    "y": [21, 9, 7, 8, 3, 5, 4, 5, 6, 3, 10],
-                }
-            ),
-            ([0, 1, 2, 4, 8], [0, 3, 1, 2], [1, 5, 8, 3], False),
-        ),
-        (
-            pd.DataFrame({"x": [5, 6, 7, 10, None, 10, 2, None, 8, 4, None]}),
-            (
-                [2.0, 4.0, 5.666666666666667, 8.0, 10.0],
-                [5.0, 10.0, 2.0, 4.0],
-                [7.0, 10.0, 8.0, 4.0],
-                False,
-            ),
-        ),
-    ],
-)
-def test_calculate_divisions(pdf, expected):
-    ddf = dd.from_pandas(pdf, npartitions=4)
-    divisions, mins, maxes, presorted = _calculate_divisions(ddf, ddf["x"], False, 4)
-    assert divisions == expected[0]
-    assert mins == expected[1]
-    assert maxes == expected[2]
-    assert presorted == expected[3]
 
 
 @pytest.mark.skipif(pa is None, reason="Need pyarrow")

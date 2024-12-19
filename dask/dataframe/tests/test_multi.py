@@ -12,15 +12,7 @@ import dask.dataframe as dd
 from dask._compatibility import PY_VERSION
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, tm
-from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
-from dask.dataframe.multi import (
-    _maybe_align_partitions,
-    align_partitions,
-    concat_indexed_dataframes,
-    hash_join,
-    merge_indexed_dataframes,
-)
 from dask.dataframe.utils import (
     assert_divisions,
     assert_eq,
@@ -40,150 +32,6 @@ except ImportError:
 DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="align_partitions not available")
-def test_align_partitions():
-    A = pd.DataFrame(
-        {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
-    )
-    a = dd.repartition(A, [10, 40, 60])
-
-    B = pd.DataFrame({"x": [1, 2, 3, 4], "y": list("abda")}, index=[30, 70, 80, 100])
-    b = dd.repartition(B, [30, 80, 100])
-
-    s = dd.core.Scalar({("s", 0): 10}, "s", "i8")
-
-    (aa, bb), divisions, L = align_partitions(a, b)
-
-    def _check(a, b, aa, bb):
-        assert isinstance(a, dd.DataFrame)
-        assert isinstance(b, dd.DataFrame)
-        assert isinstance(aa, dd.DataFrame)
-        assert isinstance(bb, dd.DataFrame)
-        assert_eq(a, aa)
-        assert_eq(b, bb)
-        assert divisions == (10, 30, 40, 60, 80, 100)
-        assert isinstance(L, list)
-        assert len(divisions) == 1 + len(L)
-
-    _check(a, b, aa, bb)
-    assert L == [
-        [(aa._name, 0), (bb._name, 0)],
-        [(aa._name, 1), (bb._name, 1)],
-        [(aa._name, 2), (bb._name, 2)],
-        [(aa._name, 3), (bb._name, 3)],
-        [(aa._name, 4), (bb._name, 4)],
-    ]
-
-    (aa, ss, bb), divisions, L = align_partitions(a, s, b)
-    _check(a, b, aa, bb)
-    assert L == [
-        [(aa._name, 0), None, (bb._name, 0)],
-        [(aa._name, 1), None, (bb._name, 1)],
-        [(aa._name, 2), None, (bb._name, 2)],
-        [(aa._name, 3), None, (bb._name, 3)],
-        [(aa._name, 4), None, (bb._name, 4)],
-    ]
-    assert_eq(ss, 10)
-
-    ldf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
-    rdf = pd.DataFrame({"c": [1, 2, 3, 4, 5, 6, 7], "d": [7, 6, 5, 4, 3, 2, 1]})
-
-    for lhs, rhs in [
-        (dd.from_pandas(ldf, 1), dd.from_pandas(rdf, 1)),
-        (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 2)),
-        (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 3)),
-        (dd.from_pandas(ldf, 3), dd.from_pandas(rdf, 2)),
-    ]:
-        (lresult, rresult), div, parts = align_partitions(lhs, rhs)
-        assert_eq(lresult, ldf)
-        assert_eq(rresult, rdf)
-
-    # different index
-    ldf = pd.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]}, index=list("abcdefg")
-    )
-    rdf = pd.DataFrame(
-        {"c": [1, 2, 3, 4, 5, 6, 7], "d": [7, 6, 5, 4, 3, 2, 1]}, index=list("fghijkl")
-    )
-
-    for lhs, rhs in [
-        (dd.from_pandas(ldf, 1), dd.from_pandas(rdf, 1)),
-        (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 2)),
-        (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 3)),
-        (dd.from_pandas(ldf, 3), dd.from_pandas(rdf, 2)),
-    ]:
-        (lresult, rresult), div, parts = align_partitions(lhs, rhs)
-        assert_eq(lresult, ldf)
-        assert_eq(rresult, rdf)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
-def test_align_partitions_unknown_divisions():
-    df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
-    # One known, one unknown
-    ddf = dd.from_pandas(df, npartitions=2)
-    ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
-    assert not ddf2.known_divisions
-
-    with pytest.raises(ValueError):
-        align_partitions(ddf, ddf2)
-
-    # Both unknown
-    ddf = dd.from_pandas(df + 1, npartitions=2, sort=False)
-    ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
-    assert not ddf.known_divisions
-    assert not ddf2.known_divisions
-
-    with pytest.raises(ValueError):
-        align_partitions(ddf, ddf2)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
-def test__maybe_align_partitions():
-    df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
-    # Both known, same divisions
-    ddf = dd.from_pandas(df + 1, npartitions=2)
-    ddf2 = dd.from_pandas(df, npartitions=2)
-
-    a, b = _maybe_align_partitions([ddf, ddf2])
-    assert a is ddf
-    assert b is ddf2
-
-    # Both unknown, same divisions
-    ddf = dd.from_pandas(df + 1, npartitions=2, sort=False)
-    ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
-    assert not ddf.known_divisions
-    assert not ddf2.known_divisions
-
-    a, b = _maybe_align_partitions([ddf, ddf2])
-    assert a is ddf
-    assert b is ddf2
-
-    # Both known, different divisions
-    ddf = dd.from_pandas(df + 1, npartitions=2)
-    ddf2 = dd.from_pandas(df, npartitions=3)
-
-    a, b = _maybe_align_partitions([ddf, ddf2])
-    assert a.divisions == b.divisions
-
-    # Both unknown, different divisions
-    ddf = dd.from_pandas(df + 1, npartitions=2, sort=False)
-    ddf2 = dd.from_pandas(df, npartitions=3, sort=False)
-    assert not ddf.known_divisions
-    assert not ddf2.known_divisions
-
-    with pytest.raises(ValueError):
-        _maybe_align_partitions([ddf, ddf2])
-
-    # One known, one unknown
-    ddf = dd.from_pandas(df, npartitions=2)
-    ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
-    assert not ddf2.known_divisions
-
-    with pytest.raises(ValueError):
-        _maybe_align_partitions([ddf, ddf2])
-
-
 def test_merge_indexed_dataframe_to_indexed_dataframe():
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 6, 7])
     a = dd.repartition(A, [1, 4, 7])
@@ -191,45 +39,25 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
     B = pd.DataFrame({"y": list("abcdef")}, index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
 
-    if DASK_EXPR_ENABLED:
-        c = a.merge(b, how="left")
-    else:
-        c = merge_indexed_dataframes(a, b, how="left")
+    c = a.merge(b, how="left")
     assert c.divisions[0] == a.divisions[0]
     assert c.divisions[-1] == max(a.divisions + b.divisions)
     assert_eq(c, A.join(B))
 
-    if DASK_EXPR_ENABLED:
-        c = a.merge(b, how="right")
-    else:
-        c = merge_indexed_dataframes(a, b, how="right")
+    c = a.merge(b, how="right")
     assert c.divisions[0] == b.divisions[0]
     assert c.divisions[-1] == b.divisions[-1]
     assert_eq(c, A.join(B, how="right"))
 
-    if DASK_EXPR_ENABLED:
-        c = a.merge(b, how="inner")
-    else:
-        c = merge_indexed_dataframes(a, b, how="inner")
+    c = a.merge(b, how="inner")
     assert c.divisions[0] == 1
     assert c.divisions[-1] == max(a.divisions + b.divisions)
     assert_eq(c.compute(), A.join(B, how="inner"))
 
-    if DASK_EXPR_ENABLED:
-        c = a.merge(b, how="outer")
-    else:
-        c = merge_indexed_dataframes(a, b, how="outer")
+    c = a.merge(b, how="outer")
     assert c.divisions[0] == 1
     assert c.divisions[-1] == 8
     assert_eq(c.compute(), A.join(B, how="outer"))
-
-    if not DASK_EXPR_ENABLED:
-        assert sorted(merge_indexed_dataframes(a, b, how="inner").dask) == sorted(
-            merge_indexed_dataframes(a, b, how="inner").dask
-        )
-        assert sorted(merge_indexed_dataframes(a, b, how="inner").dask) != sorted(
-            merge_indexed_dataframes(a, b, how="outer").dask
-        )
 
 
 def list_eq(aa, bb):
@@ -251,42 +79,6 @@ def list_eq(aa, bb):
         bv = b.sort_values().values
 
     dd._compat.assert_numpy_array_equal(av, bv)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available")
-@pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])
-def test_hash_join(how, shuffle_method):
-    A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
-    a = dd.repartition(A, [0, 4, 5])
-
-    B = pd.DataFrame({"y": [1, 3, 4, 4, 5, 6], "z": [6, 5, 4, 3, 2, 1]})
-    b = dd.repartition(B, [0, 2, 5])
-
-    c = hash_join(a, "y", b, "y", how)
-
-    assert not hlg_layer_topological(c.dask, -1).is_materialized()
-    result = c.compute()
-    expected = pd.merge(A, B, how, "y")
-    list_eq(result, expected)
-
-    # Different columns and npartitions
-    c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle_method=shuffle_method)
-    assert not hlg_layer_topological(c.dask, -1).is_materialized()
-    assert c.npartitions == 3
-
-    result = c.compute(scheduler="single-threaded")
-    expected = pd.merge(A, B, "outer", None, "x", "z")
-
-    list_eq(result, expected)
-
-    assert (
-        hash_join(a, "y", b, "y", "inner", shuffle_method=shuffle_method)._name
-        == hash_join(a, "y", b, "y", "inner", shuffle_method=shuffle_method)._name
-    )
-    assert (
-        hash_join(a, "y", b, "y", "inner", shuffle_method=shuffle_method)._name
-        != hash_join(a, "y", b, "y", "outer", shuffle_method=shuffle_method)._name
-    )
 
 
 def test_sequential_joins():
@@ -769,16 +561,7 @@ def test_indexed_concat(join):
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
-        if DASK_EXPR_ENABLED:
-            result = dd.concat([a, b], join=join)
-        else:
-            result = concat_indexed_dataframes([a, b], join=join)
-            assert sorted(concat_indexed_dataframes([a, b], join=join).dask) == sorted(
-                concat_indexed_dataframes([a, b], join=join).dask
-            )
-            assert sorted(
-                concat_indexed_dataframes([a, b], join="inner").dask
-            ) != sorted(concat_indexed_dataframes([a, b], join="outer").dask)
+        result = dd.concat([a, b], join=join)
         assert_eq(result, expected)
 
 
@@ -2256,13 +2039,9 @@ def test_concat5():
     ]
 
     for case in cases:
-        if DASK_EXPR_ENABLED:
-            from dask_expr._collection import FrameBase
+        from dask_expr._collection import FrameBase
 
-            pdcase = [c.compute() if isinstance(c, FrameBase) else c for c in case]
-
-        else:
-            pdcase = [c.compute() if isinstance(c, _Frame) else c for c in case]
+        pdcase = [c.compute() if isinstance(c, FrameBase) else c for c in case]
 
         assert_eq(dd.concat(case, interleave_partitions=True), pd.concat(pdcase))
 

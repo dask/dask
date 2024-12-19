@@ -23,4 +23,4 @@ dependencies:
   - pytest-timeout
   - pytest-xdist
   - pip:
-    - git+https://github.com/dask/dask-expr
+    - git+https://github.com/phofl/dask-expr@legacy-conversion

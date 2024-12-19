@@ -27,21 +27,9 @@ from dask.dataframe.utils import (
     meta_series_constructor,
     pyarrow_strings_enabled,
     raise_on_meta_error,
-    shard_df_on_index,
     valid_divisions,
 )
 from dask.local import get_sync
-
-
-def test_shard_df_on_index():
-    df = pd.DataFrame(
-        {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
-    )
-
-    result = list(shard_df_on_index(df, [20, 50]))
-    assert list(result[0].index) == [10]
-    assert list(result[1].index) == [20, 30, 40]
-    assert list(result[2].index) == [50, 60]
 
 
 def test_make_meta():
