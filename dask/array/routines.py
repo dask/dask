@@ -2558,3 +2558,26 @@ def triu_indices_from(arr, k=0):
     if arr.ndim != 2:
         raise ValueError("input array must be 2-d")
     return triu_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)
+
+
+def np_interp_wrapper(data: np.ndarray, x: np.ndarray, new_x: np.ndarray, **kwargs):
+    for a in (data, x, new_x):
+        assert a.ndim == 1
+    return np.interp(new_x, x, data, **kwargs)
+
+
+@derived_from(np)
+def interp(
+    x: np.ndarray, xp: np.ndarray, fp, left=None, right=None, period=None, **kwargs
+):
+    from dask.array.core import interp_helper
+
+    return interp_helper(
+        np_interp_wrapper,
+        data=fp,
+        x=(xp,),
+        new_x=(x,),
+        axis=(0,),
+        depth=1,
+        blockwise_kwargs={"left": left, "right": right, "period": period, **kwargs},
+    )
