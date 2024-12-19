@@ -129,7 +129,7 @@ properties:
       rechunk:
         type: object
         properties:
-          
+
           method:
             type:
             - string
@@ -137,7 +137,7 @@ properties:
             description: |
               The method to use for rechunking. Possible values are tasks or p2p.
               If null, pick best method depending on application.
-          
+
           threshold:
             type: integer
             description: |
@@ -228,13 +228,6 @@ properties:
               Don't fuse if new dependencies are added after this many levels.
               Set to null to dynamically adjust to ave_width * 1.5.
 
-          subgraphs:
-            type: [boolean, 'null']
-            description: |
-              Set to True to fuse multiple tasks into SubgraphCallable objects. Set to
-              None to let the default optimizer of individual dask collections decide.
-              If no collection-specific default exists, None defaults to False.
-
           rename-keys:
             type: boolean
             description:
@@ -247,7 +240,7 @@ properties:
           delayed:
             type: boolean
             description: |
-              Whether to fuse adjacent delayed calls together. This can be useful to ensure 
+              Whether to fuse adjacent delayed calls together. This can be useful to ensure
               that an independent chain of delayed calls is executed in a single task to
               reduce the memory footprint on a single worker.
 
