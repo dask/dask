@@ -34,7 +34,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
         numpy \
         pandas \
         scipy \
-        scikit-image \
         h5py
 
     # Used when automatically opening an issue when the `upstream` CI build fails
