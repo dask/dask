@@ -19,10 +19,9 @@ from dask.dataframe.core import (
     is_dataframe_like,
     is_index_like,
     is_series_like,
-    make_meta,
-    meta_nonempty,
     total_mem_usage,
 )
+from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.typing import no_default
 from dask.utils import M, apply, funcname
 

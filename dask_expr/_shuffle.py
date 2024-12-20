@@ -10,8 +10,8 @@ import pandas as pd
 import tlz as toolz
 from dask import compute
 from dask._task_spec import Task, TaskRef
-from dask.dataframe.core import _concat, make_meta
-from dask.dataframe.dispatch import is_categorical_dtype
+from dask.dataframe.core import _concat
+from dask.dataframe.dispatch import is_categorical_dtype, make_meta
 from dask.dataframe.shuffle import (
     barrier,
     collect,

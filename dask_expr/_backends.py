@@ -88,12 +88,37 @@ def create_array_collection(expr):
     # to infer that we want to create an array is the only way that is guaranteed
     # to be a general solution.
     # We can get rid of this when we have an Array expression
-    from dask.dataframe.core import new_dd_object
+    from dask.highlevelgraph import HighLevelGraph
+    from dask.layers import Blockwise
 
     result = expr.optimize()
-    return new_dd_object(
-        result.__dask_graph__(), result._name, result._meta, result.divisions
-    )
+    dsk = result.__dask_graph__()
+    name = result._name
+    meta = result._meta
+    divisions = result.divisions
+    import dask.array as da
+
+    chunks = ((np.nan,) * (len(divisions) - 1),) + tuple((d,) for d in meta.shape[1:])
+    if len(chunks) > 1:
+        if isinstance(dsk, HighLevelGraph):
+            layer = dsk.layers[name]
+        else:
+            # dask-expr provides a dict only
+            layer = dsk
+        if isinstance(layer, Blockwise):
+            layer.new_axes["j"] = chunks[1][0]
+            layer.output_indices = layer.output_indices + ("j",)
+        else:
+            from dask._task_spec import Alias, Task
+
+            suffix = (0,) * (len(chunks) - 1)
+            for i in range(len(chunks[0])):
+                task = layer.get((name, i))
+                new_key = (name, i) + suffix
+                if isinstance(task, Task):
+                    task = Alias(new_key, task.key)
+                layer[new_key] = task
+    return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
 
 
 @get_collection_type.register(np.ndarray)

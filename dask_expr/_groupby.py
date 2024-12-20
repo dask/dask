@@ -9,7 +9,6 @@ from dask import is_dask_collection
 from dask._task_spec import Task
 from dask.core import flatten
 from dask.dataframe.core import (
-    GROUP_KEYS_DEFAULT,
     _concat,
     apply_and_enforce,
     is_dataframe_like,
@@ -17,6 +16,7 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.dispatch import concat, make_meta, meta_nonempty
 from dask.dataframe.groupby import (
+    GROUP_KEYS_DEFAULT,
     _agg_finalize,
     _aggregate_docstring,
     _apply_chunk,

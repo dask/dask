@@ -15,14 +15,13 @@ from dask_expr import (
     from_array,
     from_dask_array,
     from_dict,
-    from_legacy_dataframe,
     from_map,
     from_pandas,
     optimize,
     read_csv,
     read_parquet,
 )
-from dask_expr._expr import Expr, Replace
+from dask_expr._expr import Replace
 from dask_expr.io import FromArray, FromMap, ReadParquet, parquet
 from dask_expr.tests._util import _backend_library
 
@@ -225,25 +224,6 @@ def test_parquet_complex_filters(tmpdir):
 
     assert_eq(got, expect)
     assert_eq(got.optimize(), expect)
-
-
-@pytest.mark.parametrize("optimize", [True, False])
-def test_from_legacy_dataframe(optimize):
-    ddf = dd.from_dict({"a": range(100)}, npartitions=10)
-    with pytest.warns(FutureWarning, match="is deprecated"):
-        df = from_legacy_dataframe(ddf, optimize=optimize)
-    assert isinstance(df.expr, Expr)
-    assert_eq(df, ddf)
-
-
-@pytest.mark.parametrize("optimize", [True, False])
-def test_to_legacy_dataframe(optimize):
-    pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
-    df = from_pandas(pdf, npartitions=2)
-    with pytest.warns(FutureWarning, match="is deprecated"):
-        ddf = df.to_legacy_dataframe(optimize=optimize)
-    assert isinstance(ddf, dd.core.DataFrame)
-    assert_eq(df, ddf)
 
 
 @pytest.mark.parametrize("optimize", [True, False])
