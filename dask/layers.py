@@ -14,7 +14,7 @@ from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_
 from dask.core import flatten
 from dask.highlevelgraph import Layer
 from dask.tokenize import normalize_token
-from dask.utils import cached_cumsum, concrete
+from dask.utils import cached_cumsum
 
 if TYPE_CHECKING:
     import numpy as np
@@ -238,7 +238,7 @@ class ArrayOverlapLayer(Layer):
                 interior_slices[(getitem_name,) + k] = (name,) + k
                 overlap_blocks[(overlap_name,) + k] = (
                     concatenate3,
-                    (concrete, expand_key2((None,) + k, name=getitem_name)),
+                    expand_key2((None,) + k, name=getitem_name),
                 )
 
         dsk = toolz.merge(interior_slices, overlap_blocks)
