@@ -14,13 +14,7 @@ from dask.dataframe import _compat
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_300, tm
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import _concat
-from dask.dataframe.utils import (
-    assert_eq,
-    clear_known_categories,
-    get_string_dtype,
-    make_meta,
-    pyarrow_strings_enabled,
-)
+from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
 
 # Generate a list of categorical series and indices
 cat_series = []
@@ -160,18 +154,7 @@ def test_unknown_categoricals(
 ):
     dsk = {("unknown", i): df for (i, df) in enumerate(frames)}
     meta = {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
-    if not dd._dask_expr_enabled():
-        ddf = dd.DataFrame(
-            dsk,
-            "unknown",
-            make_meta(
-                meta,
-                parent_meta=frames[0],
-            ),
-            [None] * 4,
-        )
-    else:
-        ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
+    ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
     if npartitions is not None:
         ddf = ddf.repartition(npartitions=npartitions)
     # Compute
@@ -212,33 +195,17 @@ def test_categorize():
     if pyarrow_strings_enabled():
         # we explicitly provide meta, so it has to have pyarrow strings
         pdf = to_pyarrow_string(pdf)
-    meta = clear_known_categories(pdf).rename(columns={"y": "y_"})
     dsk = {("unknown", i): df for (i, df) in enumerate(frames3)}
-    if not dd._dask_expr_enabled():
-        ddf = (
-            dd.DataFrame(
-                dsk,
-                "unknown",
-                make_meta(
-                    meta,
-                    parent_meta=frames[0],
-                ),
-                [None] * 4,
-            )
-            .repartition(npartitions=10)
-            .rename(columns={"y": "y_"})
-        )
-    else:
-        pdf = (
-            pd.concat(dsk.values())
-            .rename(columns={"y": "y_"})
-            .astype({"w": "category", "y_": "category"})
-        )
-        pdf.index = pdf.index.astype("category")
-        ddf = dd.from_pandas(pdf, npartitions=4, sort=False)
-        ddf["w"] = ddf.w.cat.as_unknown()
-        ddf["y_"] = ddf.y_.cat.as_unknown()
-        ddf.index = ddf.index.cat.as_unknown()
+    pdf = (
+        pd.concat(dsk.values())
+        .rename(columns={"y": "y_"})
+        .astype({"w": "category", "y_": "category"})
+    )
+    pdf.index = pdf.index.astype("category")
+    ddf = dd.from_pandas(pdf, npartitions=4, sort=False)
+    ddf["w"] = ddf.w.cat.as_unknown()
+    ddf["y_"] = ddf.y_.cat.as_unknown()
+    ddf.index = ddf.index.cat.as_unknown()
 
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
     assert ddf.w.cat.known

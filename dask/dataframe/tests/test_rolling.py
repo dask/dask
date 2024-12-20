@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import datetime
 
 import numpy as np
@@ -10,9 +9,6 @@ import pytest
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import assert_eq
-
-DASK_EXPR_ENABLED = dd._dask_expr_enabled()
-
 
 N = 40
 df = pd.DataFrame(
@@ -323,76 +319,10 @@ def test_rolling_cov(window, center):
     assert_eq(prolling.cov(), drolling.cov())
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="axis not at all supported")
-def test_rolling_raises():
-    df = pd.DataFrame(
-        {"a": np.random.randn(25).cumsum(), "b": np.random.randint(100, size=(25,))}
-    )
-    ddf = dd.from_pandas(df, 3)
-
-    pytest.raises(ValueError, lambda: ddf.rolling(1.5))
-    pytest.raises(ValueError, lambda: ddf.rolling(-1))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=1.2))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=-2))
-
-    axis_deprecated = pytest.warns(FutureWarning, match="'axis' keyword is deprecated")
-    with axis_deprecated:
-        pytest.raises(ValueError, lambda: ddf.rolling(3, axis=10))
-    with axis_deprecated:
-        pytest.raises(ValueError, lambda: ddf.rolling(3, axis="coulombs"))
-    pytest.raises(NotImplementedError, lambda: ddf.rolling(100).mean().compute())
-
-
 def test_rolling_names():
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     a = dd.from_pandas(df, npartitions=2)
     assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecated in pandas")
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        dict(axis=0),
-        dict(axis=1),
-        dict(min_periods=1, axis=1),
-        dict(axis="columns"),
-        dict(axis="rows"),
-        dict(axis="series"),
-    ],
-)
-def test_rolling_axis(kwargs):
-    df = pd.DataFrame(np.random.randn(20, 16))
-    ddf = dd.from_pandas(df, npartitions=3)
-
-    axis_deprecated_pandas = contextlib.nullcontext()
-    if PANDAS_GE_210:
-        axis_deprecated_pandas = pytest.warns(
-            FutureWarning, match="'axis' keyword|Support for axis"
-        )
-
-    axis_deprecated_dask = pytest.warns(
-        FutureWarning, match="'axis' keyword is deprecated"
-    )
-
-    if kwargs["axis"] == "series":
-        # Series
-        with axis_deprecated_pandas:
-            expected = df[3].rolling(5, axis=0).std()
-        with axis_deprecated_dask:
-            result = ddf[3].rolling(5, axis=0).std()
-        assert_eq(expected, result)
-    else:
-        # DataFrame
-        with axis_deprecated_pandas:
-            expected = df.rolling(3, **kwargs).mean()
-        if kwargs["axis"] in (1, "rows") and not PANDAS_GE_210:
-            ctx = pytest.warns(FutureWarning, match="Using axis=1 in Rolling")
-        elif "axis" in kwargs:
-            ctx = axis_deprecated_dask
-        with ctx:
-            result = ddf.rolling(3, **kwargs).mean()
-        assert_eq(expected, result)
 
 
 def test_rolling_partition_size():
@@ -406,27 +336,11 @@ def test_rolling_partition_size():
             dobj.rolling(12).mean().compute()
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="different in dask-expr")
-def test_rolling_repr():
-    ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
-    res = repr(ddf.rolling(4))
-    assert res == "Rolling [window=4,center=False]"
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="different in dask-expr")
-def test_time_rolling_repr():
-    res = repr(dts.rolling("4s"))
-    assert res == "Rolling [window=4s,center=False,win_type=freq]"
-
-
 def test_time_rolling_constructor():
     result = dts.rolling("4s")
     assert result.window == "4s"
     assert result.min_periods is None
     assert result.win_type is None
-
-    if not DASK_EXPR_ENABLED:
-        assert result._win_type == "freq"
 
 
 @pytest.mark.parametrize(
@@ -592,14 +506,3 @@ def test_groupby_rolling():
     actual = ddf.groupby("group1").column1.rolling("15D").mean()
 
     assert_eq(expected, actual, check_divisions=False)
-
-
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="this works in dask-expr")
-def test_groupby_rolling_with_integer_window_raises():
-    df = pd.DataFrame(
-        {"B": [0, 1, 2, np.nan, 4, 5, 6], "C": ["a", "a", "a", "b", "b", "a", "b"]}
-    )
-    ddf = dd.from_pandas(df, npartitions=2)
-
-    with pytest.raises(ValueError, match="``window`` must be a ``freq``"):
-        ddf.groupby("C").rolling(2).sum()

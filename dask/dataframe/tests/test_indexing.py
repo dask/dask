@@ -27,14 +27,8 @@ dsk = {
 meta = make_meta(
     {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
 )
-if not dd._dask_expr_enabled():
-    d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
-    full = d.compute()
-else:
-    d = dd.repartition(pd.concat(dsk.values()), divisions=[0, 5, 9, 9])
-    full = d.compute()
-
-DASK_EXPR_ENABLED = dd._dask_expr_enabled()
+d = dd.repartition(pd.concat(dsk.values()), divisions=[0, 5, 9, 9])
+full = d.compute()
 
 
 def test_loc():
@@ -84,18 +78,9 @@ def test_loc_non_informative_index():
 def test_loc_with_text_dates():
     A = dd._compat.makeTimeSeries().iloc[:5]
     B = dd._compat.makeTimeSeries().iloc[5:]
-    if DASK_EXPR_ENABLED:
-        s = dd.repartition(
-            pd.concat([A, B]), divisions=[A.index.min(), B.index.min(), B.index.max()]
-        )
-
-    else:
-        s = dd.Series(
-            {("df", 0): A, ("df", 1): B},
-            "df",
-            A,
-            [A.index.min(), B.index.min(), B.index.max()],
-        )
+    s = dd.repartition(
+        pd.concat([A, B]), divisions=[A.index.min(), B.index.min(), B.index.max()]
+    )
 
     assert s.loc["2000":"2010"].divisions == s.divisions
     assert_eq(s.loc["2000":"2010"], s)
@@ -111,17 +96,6 @@ def test_loc_with_series():
 
 def test_loc_with_array():
     assert_eq(d.loc[(d.a % 2 == 0).values], full.loc[(full.a % 2 == 0).values])
-
-    # FIXME: Left and right will have different keys due to
-    # https://github.com/dask/dask/issues/10799
-    # (But asserting on this here is odd)
-    if not dd._dask_expr_enabled():
-        assert sorted(d.loc[(d.a % 2 == 0).values].dask) == sorted(
-            d.loc[(d.a % 2 == 0).values].dask
-        )
-        assert sorted(d.loc[(d.a % 2 == 0).values].dask) != sorted(
-            d.loc[(d.a % 3 == 0).values].dask
-        )
 
 
 def test_loc_with_function():
@@ -265,34 +239,6 @@ def test_loc2d_with_unknown_divisions():
     assert_eq(ddf.loc["a", ["A"]], df.loc[["a"], ["A"]])
     assert_eq(ddf.loc["a":"o", "A"], df.loc["a":"o", "A"])
     assert_eq(ddf.loc["a":"o", ["A"]], df.loc["a":"o", ["A"]])
-
-
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns")
-def test_loc2d_duplicated_columns():
-    df = pd.DataFrame(
-        np.random.randn(20, 5),
-        index=list("abcdefghijklmnopqrst"),
-        columns=list("AABCD"),
-    )
-    ddf = dd.from_pandas(df, 3)
-
-    assert_eq(ddf.loc["a", "A"], df.loc[["a"], "A"])
-    assert_eq(ddf.loc["a", ["A"]], df.loc[["a"], ["A"]])
-    assert_eq(ddf.loc["j", "B"], df.loc[["j"], "B"])
-    assert_eq(ddf.loc["j", ["B"]], df.loc[["j"], ["B"]])
-
-    assert_eq(ddf.loc["a":"o", "A"], df.loc["a":"o", "A"])
-    assert_eq(ddf.loc["a":"o", ["A"]], df.loc["a":"o", ["A"]])
-    assert_eq(ddf.loc["j":"q", "B"], df.loc["j":"q", "B"])
-    assert_eq(ddf.loc["j":"q", ["B"]], df.loc["j":"q", ["B"]])
-
-    assert_eq(ddf.loc["a":"o", "B":"D"], df.loc["a":"o", "B":"D"])
-    assert_eq(ddf.loc["a":"o", "B":"D"], df.loc["a":"o", "B":"D"])
-    assert_eq(ddf.loc["j":"q", "B":"A"], df.loc["j":"q", "B":"A"])
-    assert_eq(ddf.loc["j":"q", "B":"A"], df.loc["j":"q", "B":"A"])
-
-    assert_eq(ddf.loc[ddf.B > 0, "B"], df.loc[df.B > 0, "B"])
-    assert_eq(ddf.loc[ddf.B > 0, ["A", "C"]], df.loc[df.B > 0, ["A", "C"]])
 
 
 def test_getitem():
@@ -478,13 +424,6 @@ def test_getitem_timestamp_str():
         index=pd.date_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
-
-    if not DASK_EXPR_ENABLED:
-        # the deprecation is enforced in dask-expr
-        with pytest.warns(
-            FutureWarning, match="Indexing a DataFrame with a datetimelike"
-        ):
-            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
     assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
 
     df = pd.DataFrame(
@@ -532,14 +471,6 @@ def test_getitem_period_str():
         index=pd.period_range("2011-01-01", freq="h", periods=100),
     )
     ddf = dd.from_pandas(df, 10)
-
-    if not DASK_EXPR_ENABLED:
-        # partial string slice
-        # the deprecation is enforced in dask-expr
-        with pytest.warns(
-            FutureWarning, match="Indexing a DataFrame with a datetimelike"
-        ):
-            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
     assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
 
@@ -548,18 +479,6 @@ def test_getitem_period_str():
         index=pd.period_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-
-    if not DASK_EXPR_ENABLED:
-        # the deprecation is enforced in dask-expr
-        with pytest.warns(
-            FutureWarning, match="Indexing a DataFrame with a datetimelike"
-        ):
-            assert_eq(df.loc["2011-01"], ddf["2011-01"])
-
-        with pytest.warns(
-            FutureWarning, match="Indexing a DataFrame with a datetimelike"
-        ):
-            assert_eq(df.loc["2011"], ddf["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
@@ -639,7 +558,7 @@ def test_iloc_raises():
         ddf.iloc[:, [5, 6]]
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns")
+@pytest.mark.xfail(reason="duplicated columns")
 def test_iloc_duplicate_columns():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     ddf = dd.from_pandas(df, 2)
@@ -666,12 +585,6 @@ def test_iloc_duplicate_columns():
 def test_iloc_dispatch_to_getitem():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     ddf = dd.from_pandas(df, 2)
-
-    selection = ddf.iloc[:, 2]
-
-    if not DASK_EXPR_ENABLED:
-        assert all([not key.startswith("iloc") for key in selection.dask.layers.keys()])
-        assert any([key.startswith("getitem") for key in selection.dask.layers.keys()])
 
     select_first = ddf.iloc[:, 1]
     assert_eq(select_first, df.iloc[:, 1])
@@ -724,42 +637,10 @@ def test_deterministic_hashing_series():
     ddf1 = dask_df.loc[0:1]
     ddf2 = dask_df.loc[0:1]
 
-    if DASK_EXPR_ENABLED:
-        assert ddf1._name == ddf2._name
-    else:
-        assert tokenize(ddf1) == tokenize(ddf2)
+    assert tokenize(ddf1) == tokenize(ddf2)
 
     ddf2 = dask_df.loc[0:2]
-    if DASK_EXPR_ENABLED:
-        assert ddf1._name != ddf2._name
-    else:
-        assert tokenize(ddf1) != tokenize(ddf2)
-
-
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="duplicated columns")
-def test_deterministic_hashing_dataframe():
-    # Add duplicate column names in order to use _iLocIndexer._iloc path
-    obj = pd.DataFrame([[0, 1, 2, 3], [4, 5, 6, 7]], columns=["a", "b", "c", "c"])
-
-    dask_df = dd.from_pandas(obj, npartitions=1)
-
-    ddf1 = dask_df.loc[0:1, ["a", "c"]]
-    ddf2 = dask_df.loc[0:1, ["a", "c"]]
-
-    assert tokenize(ddf1) == tokenize(ddf2)
-
-    ddf1 = dask_df.loc[0:1, "c"]
-    ddf2 = dask_df.loc[0:1, "c"]
-
-    assert tokenize(ddf1) == tokenize(ddf2)
-
-    ddf1 = dask_df.iloc[:, [0, 1]]
-    ddf2 = dask_df.iloc[:, [0, 1]]
-
-    assert tokenize(ddf1) == tokenize(ddf2)
-
-    ddf2 = dask_df.iloc[:, [0, 2]]
-    assert tokenize(ddf1) != tokenize(ddf2)
+    assert ddf1._name != ddf2._name
 
 
 @pytest.mark.gpu

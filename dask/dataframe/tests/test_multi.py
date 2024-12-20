@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from packaging.version import Version
-from pandas.api.types import is_object_dtype
 
 import dask.dataframe as dd
 from dask._compatibility import PY_VERSION
@@ -17,19 +16,13 @@ from dask.dataframe.utils import (
     assert_divisions,
     assert_eq,
     check_meta,
-    clear_known_categories,
-    get_string_dtype,
     has_known_categories,
-    make_meta,
 )
-from dask.utils_test import hlg_layer, hlg_layer_topological
 
 try:
     import pyarrow as pa
 except ImportError:
     pa = None
-
-DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 
 
 def test_merge_indexed_dataframe_to_indexed_dataframe():
@@ -638,10 +631,6 @@ def test_concat_with_operation_remains_hlg():
 
     expected = pd.concat([pdf1, pdf2], **kwargs)
     result = dd.concat([ddf1, ddf2], **kwargs)
-    # The third layer is the assignment to column `x`, which should remain
-    # blockwise
-    if not DASK_EXPR_ENABLED:
-        assert not hlg_layer_topological(result.dask, 2).is_materialized()
     assert_eq(result, expected)
 
 
@@ -668,44 +657,6 @@ def test_concat_dataframe_empty():
     assert_eq(df_concat_with_col, ddf_concat_with_col, check_dtype=False)
 
     assert_eq(dd.concat([ddf, ddf[[]]]), pd.concat([df, df[[]]]))
-
-
-@pytest.mark.xfail(
-    PANDAS_GE_210 or DASK_EXPR_ENABLED,
-    reason="catch_warnings seems flaky",
-    strict=False,
-)
-@pytest.mark.parametrize(
-    "value_1, value_2",
-    [
-        (1.0, 1),
-        (1.0, "one"),
-        (1.0, pd.to_datetime("1970-01-01")),
-        (1, "one"),
-        (1, pd.to_datetime("1970-01-01")),
-        ("one", pd.to_datetime("1970-01-01")),
-    ],
-)
-def test_concat_different_dtypes(value_1, value_2):
-    # check that the resulting dataframe has coherent dtypes
-    # refer to https://github.com/dask/dask/issues/4685 and
-    # https://github.com/dask/dask/issues/5968
-    df_1 = pd.DataFrame({"x": [value_1]})
-    df_2 = pd.DataFrame({"x": [value_2]})
-    df = pd.concat([df_1, df_2], axis=0)
-
-    # Dask would convert to pyarrow strings, Pandas wouldn't
-    expected_dtype = (
-        get_string_dtype() if is_object_dtype(df["x"].dtype) else df["x"].dtype
-    )
-
-    ddf_1 = dd.from_pandas(df_1, npartitions=1)
-    ddf_2 = dd.from_pandas(df_2, npartitions=1)
-    ddf = dd.concat([ddf_1, ddf_2], axis=0)
-
-    dask_dtypes = list(ddf.map_partitions(lambda x: x.dtypes).compute())
-
-    assert dask_dtypes == [expected_dtype, expected_dtype]
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
@@ -849,27 +800,6 @@ def test_merge(how, shuffle_method):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not deprecated in dask-expr")
-def test_merge_deprecated_shuffle_keyword(shuffle_method):
-    A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
-    a = dd.repartition(A, [0, 4, 5])
-
-    B = pd.DataFrame({"y": [1, 3, 4, 4, 5, 6], "z": [6, 5, 4, 3, 2, 1]})
-    b = dd.repartition(B, [0, 2, 5])
-
-    expected = pd.merge(A, B, left_index=True, right_index=True)
-
-    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
-        result = dd.merge(
-            a, b, left_index=True, right_index=True, shuffle=shuffle_method
-        )
-    assert_eq(result, expected)
-
-    with pytest.warns(FutureWarning, match="'shuffle' keyword is deprecated"):
-        result = a.merge(b, left_index=True, right_index=True, shuffle=shuffle_method)
-    assert_eq(result, expected)
-
-
 @pytest.mark.parametrize("how", ["right", "outer"])
 def test_merge_empty_left_df(shuffle_method, how):
     # We're merging on "a", but in a situation where the left
@@ -917,9 +847,7 @@ def test_merge_how_raises():
         "leftsemi",
         pytest.param(
             "leftanti",
-            marks=pytest.mark.xfail(
-                DASK_EXPR_ENABLED, reason="leftanti is not supported yet"
-            ),
+            marks=pytest.mark.xfail(reason="leftanti is not supported yet"),
         ),
     ],
 )
@@ -1610,8 +1538,6 @@ def test_cheap_inner_merge_with_pandas_object():
     b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
 
     dc = da.merge(b, on="x", how="inner")
-    if not DASK_EXPR_ENABLED:
-        assert not hlg_layer_topological(dc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in dc.dask)
 
     list_eq(da.merge(b, on="x", how="inner"), a.merge(b, on="x", how="inner"))
@@ -1631,16 +1557,7 @@ def test_cheap_single_partition_merge(flip):
     inputs = (bb, aa) if flip else (aa, bb)
 
     cc = dd.merge(*inputs, on="x", how="inner")
-    if not DASK_EXPR_ENABLED:
-        assert not hlg_layer_topological(cc.dask, -1).is_materialized()
     assert all("shuffle" not in k[0] for k in cc.dask)
-
-    # Merge is input layers + a single merge operation
-    if not DASK_EXPR_ENABLED:
-        input_layers = aa.dask.layers.keys() | bb.dask.layers.keys()
-        output_layers = cc.dask.layers.keys()
-        assert len(output_layers - input_layers) == 1
-
     list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
 
@@ -1654,8 +1571,6 @@ def test_cheap_single_partition_merge_divisions():
     bb = dd.from_pandas(b, npartitions=1, sort=False)
 
     actual = aa.merge(bb, on="x", how="inner")
-    if not DASK_EXPR_ENABLED:
-        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
 
     assert not actual.known_divisions
     assert_divisions(actual)
@@ -1680,15 +1595,11 @@ def test_cheap_single_parition_merge_left_right(how, flip):
     actual = dd.merge(*inputs, left_index=True, right_on="x", how=how)
     expected = pd.merge(*pd_inputs, left_index=True, right_on="x", how=how)
 
-    if not DASK_EXPR_ENABLED:
-        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert_eq(actual, expected)
 
     actual = dd.merge(*inputs, left_on="x", right_index=True, how=how)
     expected = pd.merge(*pd_inputs, left_on="x", right_index=True, how=how)
 
-    if not DASK_EXPR_ENABLED:
-        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert_eq(actual, expected)
 
 
@@ -1709,8 +1620,6 @@ def test_cheap_single_partition_merge_on_index():
     # for empty joins.
     expected.index = expected.index.astype("int64")
 
-    if not DASK_EXPR_ENABLED:
-        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)
 
@@ -1718,8 +1627,6 @@ def test_cheap_single_partition_merge_on_index():
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
     expected.index = expected.index.astype("int64")
 
-    if not DASK_EXPR_ENABLED:
-        assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)
 
@@ -1802,12 +1709,8 @@ def test_concat_unknown_divisions():
         assert_eq(pd.concat([a, b], axis=1), dd.concat([aa, bb], axis=1))
 
     cc = dd.from_pandas(b, npartitions=1, sort=False)
-    if DASK_EXPR_ENABLED:
-        with pytest.raises(ValueError):
-            dd.concat([aa, cc], axis=1).optimize()
-    else:
-        with pytest.raises(ValueError):
-            dd.concat([aa, cc], axis=1)
+    with pytest.raises(ValueError):
+        dd.concat([aa, cc], axis=1).optimize()
 
     with warnings.catch_warnings(record=True) as record:
         dd.concat([aa, bb], axis=1, ignore_unknown_divisions=True)
@@ -1823,63 +1726,6 @@ def test_concat_unknown_divisions_errors():
     with pytest.raises(ValueError):
         with pytest.warns(UserWarning):  # Concat with unknown divisions
             dd.concat([aa, bb], axis=1).compute()
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="constructor not supported")
-def test_concat2():
-    dsk = {
-        ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
-        ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
-        ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
-    }
-    meta = make_meta({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
-    a = dd.DataFrame(dsk, "x", meta, [None, None])
-    dsk = {
-        ("y", 0): pd.DataFrame({"a": [10, 20, 30], "b": [40, 50, 60]}),
-        ("y", 1): pd.DataFrame({"a": [40, 50, 60], "b": [30, 20, 10]}),
-        ("y", 2): pd.DataFrame({"a": [70, 80, 90], "b": [0, 0, 0]}),
-    }
-    b = dd.DataFrame(dsk, "y", meta, [None, None])
-
-    dsk = {
-        ("y", 0): pd.DataFrame({"b": [10, 20, 30], "c": [40, 50, 60]}),
-        ("y", 1): pd.DataFrame({"b": [40, 50, 60], "c": [30, 20, 10]}),
-    }
-    meta = make_meta({"b": "i8", "c": "i8"}, parent_meta=pd.DataFrame())
-    c = dd.DataFrame(dsk, "y", meta, [None, None])
-
-    dsk = {
-        ("y", 0): pd.DataFrame(
-            {"b": [10, 20, 30], "c": [40, 50, 60], "d": [70, 80, 90]}
-        ),
-        ("y", 1): pd.DataFrame(
-            {"b": [40, 50, 60], "c": [30, 20, 10], "d": [90, 80, 70]}, index=[3, 4, 5]
-        ),
-    }
-    meta = make_meta(
-        {"b": "i8", "c": "i8", "d": "i8"},
-        index=pd.Index([], "i8"),
-        parent_meta=pd.DataFrame(),
-    )
-    d = dd.DataFrame(dsk, "y", meta, [0, 3, 5])
-
-    cases = [[a, b], [a, c], [a, d]]
-    assert dd.concat([a]) is a
-    for case in cases:
-        pdcase = [_c.compute() for _c in case]
-        expected = pd.concat(pdcase, sort=False)
-        result = dd.concat(case)
-        assert result.npartitions == case[0].npartitions + case[1].npartitions
-        assert result.divisions == (None,) * (result.npartitions + 1)
-        assert_eq(expected, result)
-        assert set(result.dask) == set(dd.concat(case).dask)
-
-        expected = pd.concat(pdcase, join="inner", sort=False)
-        result = dd.concat(case, join="inner")
-        assert result.npartitions == case[0].npartitions + case[1].npartitions
-        assert result.divisions == (None,) * (result.npartitions + 1)
-        assert_eq(result, result)
-        assert set(result.dask) == set(dd.concat(case, join="inner").dask)
 
 
 def test_concat3():
@@ -2126,14 +1972,9 @@ def test_concat_categorical(known, cat_index, divisions):
     dframes = [dd.from_pandas(p, npartitions=2, sort=divisions) for p in frames]
 
     if not known:
-        if DASK_EXPR_ENABLED:
-            dframes[0]["y"] = dframes[0]["y"].cat.as_unknown()
-            if cat_index:
-                dframes[0].index = dframes[0].index.cat.as_unknown()
-        else:
-            dframes[0]._meta = clear_known_categories(
-                dframes[0]._meta, ["y"], index=True
-            )
+        dframes[0]["y"] = dframes[0]["y"].cat.as_unknown()
+        if cat_index:
+            dframes[0].index = dframes[0].index.cat.as_unknown()
 
     def check_and_return(ddfs, dfs, join):
         sol = concat(dfs, join=join)
@@ -2542,18 +2383,6 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
         pd_result.sort_values("y"),
         check_index=False,
     )
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="not available in dask-expr")
-@pytest.mark.parametrize("shuffle", [None, "tasks"])
-def test_broadcast_true(shuffle):
-    # Check that broadcast=True is satisfied
-    # See: https://github.com/dask/dask/issues/9851
-    left = dd.from_dict({"a": [1, 2] * 80, "b_left": range(160)}, npartitions=16)
-    right = dd.from_dict({"a": [2, 1] * 10, "b_right": range(20)}, npartitions=2)
-
-    result = dd.merge(left, right, broadcast=True, shuffle_method=shuffle)
-    assert hlg_layer(result.dask, "bcast-join")
 
 
 @pytest.mark.parametrize("how", ["right", "inner"])

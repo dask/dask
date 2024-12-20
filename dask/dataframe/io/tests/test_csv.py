@@ -193,7 +193,6 @@ def test_pandas_read_text_with_header(reader, files):
     assert df.id.sum() == 1 + 2 + 3
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not supported")
 @csv_and_table
 def test_text_blocks_to_pandas_simple(reader, files):
     blocks = [[files[k]] for k in sorted(files)]
