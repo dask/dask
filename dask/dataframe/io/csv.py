@@ -29,134 +29,12 @@ from pandas.api.types import (
 )
 
 import dask.dataframe as dd
-from dask.base import tokenize
 from dask.bytes import read_bytes
 from dask.core import flatten
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.io.io import from_map
-from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import delayed
 from dask.utils import asciitable, parse_bytes
-
-
-class CSVFunctionWrapper(DataFrameIOFunction):
-    """
-    CSV Function-Wrapper Class
-    Reads CSV data from disk to produce a partition (given a key).
-    """
-
-    def __init__(
-        self,
-        full_columns,
-        columns,
-        colname,
-        head,
-        header,
-        reader,
-        dtypes,
-        enforce,
-        kwargs,
-    ):
-        self.full_columns = full_columns
-        self._columns = columns
-        self.colname = colname
-        self.head = head
-        self.header = header
-        self.reader = reader
-        self.dtypes = dtypes
-        self.enforce = enforce
-        self.kwargs = kwargs
-
-    @property
-    def columns(self):
-        if self._columns is None:
-            return self.full_columns
-        if self.colname:
-            return self._columns + [self.colname]
-        return self._columns
-
-    def project_columns(self, columns):
-        """Return a new CSVFunctionWrapper object with
-        a sub-column projection.
-        """
-        # Make sure columns is ordered correctly
-        columns = [c for c in self.head.columns if c in columns]
-        if columns == self.columns:
-            return self
-        if self.colname and self.colname not in columns:
-            # when path-as-column is on, we must keep it at IO
-            # whatever the selection
-            head = self.head[columns + [self.colname]]
-        else:
-            head = self.head[columns]
-        return CSVFunctionWrapper(
-            self.full_columns,
-            columns,
-            self.colname,
-            head,
-            self.header,
-            self.reader,
-            {c: self.dtypes[c] for c in columns},
-            self.enforce,
-            self.kwargs,
-        )
-
-    def __call__(self, part):
-        # Part will be a 3-element tuple
-        block, path, is_first, is_last = part
-
-        # Construct `path_info`
-        if path is not None:
-            path_info = (
-                self.colname,
-                path,
-                sorted(list(self.head[self.colname].cat.categories)),
-            )
-        else:
-            path_info = None
-
-        # Deal with arguments that are special
-        # for the first block of each file
-        write_header = False
-        rest_kwargs = self.kwargs.copy()
-        if not is_first:
-            if rest_kwargs.get("names", None) is None:
-                write_header = True
-            rest_kwargs.pop("skiprows", None)
-            if rest_kwargs.get("header", 0) is not None:
-                rest_kwargs.pop("header", None)
-        if not is_last:
-            rest_kwargs.pop("skipfooter", None)
-
-        # Deal with column projection
-        columns = self.full_columns
-        project_after_read = False
-        if self._columns is not None:
-            if self.kwargs:
-                # To be safe, if any kwargs are defined, avoid
-                # changing `usecols` here. Instead, we can just
-                # select columns after the read
-                project_after_read = True
-            else:
-                columns = self._columns
-                rest_kwargs["usecols"] = columns
-
-        # Call `pandas_read_text`
-        df = pandas_read_text(
-            self.reader,
-            block,
-            self.header,
-            rest_kwargs,
-            self.dtypes,
-            columns,
-            write_header,
-            self.enforce,
-            path_info,
-        )
-        if project_after_read:
-            return df[self.columns]
-        return df
 
 
 def pandas_read_text(
@@ -391,52 +269,27 @@ def text_blocks_to_pandas(
     parts = []
     colname, paths = path or (None, None)
 
-    if dd._dask_expr_enabled():
-        for i in range(len(blocks)):
-            parts.append([paths[i] if paths else None, is_first[i], is_last[i]])
-
-        return dd.from_map(
-            partial(
-                _read_csv,
-                full_columns=columns,
-                colname=colname,
-                head=head,
-                header=header,
-                reader=reader,
-                dtypes=dtypes,
-                enforce=enforce,
-                kwargs=kwargs,
-                blocksize=blocksize,
-            ),
-            blocks,
-            parts,
-            meta=head,
-            label="read-csv",
-            enforce_metadata=False,
-        )
-
     for i in range(len(blocks)):
-        parts.append([blocks[i], paths[i] if paths else None, is_first[i], is_last[i]])
+        parts.append([paths[i] if paths else None, is_first[i], is_last[i]])
 
-    # Construct the output collection with from_map
-    return from_map(
-        CSVFunctionWrapper(
-            columns,
-            None,
-            colname,
-            head,
-            header,
-            reader,
-            dtypes,
-            enforce,
-            kwargs,
+    return dd.from_map(
+        partial(
+            _read_csv,
+            full_columns=columns,
+            colname=colname,
+            head=head,
+            header=header,
+            reader=reader,
+            dtypes=dtypes,
+            enforce=enforce,
+            kwargs=kwargs,
+            blocksize=blocksize,
         ),
+        blocks,
         parts,
         meta=head,
         label="read-csv",
-        token=tokenize(reader, urlpath, columns, enforce, head, blocksize),
         enforce_metadata=False,
-        produces_tasks=True,
     )
 
 
@@ -1111,8 +964,3 @@ def to_csv(
         return list(dask.compute(*values, **compute_kwargs))
     else:
         return values
-
-
-from dask.dataframe.core import _Frame
-
-_Frame.to_csv.__doc__ = to_csv.__doc__

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import warnings
 
 import numpy as np
@@ -104,73 +103,6 @@ class Engine:
                 dataset_options,
                 open_file_options,
             )
-
-    @classmethod
-    def read_metadata(
-        cls,
-        fs,
-        paths,
-        categories=None,
-        index=None,
-        use_nullable_dtypes=None,
-        dtype_backend=None,
-        gather_statistics=None,
-        filters=None,
-        **kwargs,
-    ):
-        """Gather metadata about a Parquet Dataset to prepare for a read
-
-        This function is called once in the user's Python session to gather
-        important metadata about the parquet dataset.
-
-        Parameters
-        ----------
-        fs: FileSystem
-        paths: List[str]
-            A list of paths to files (or their equivalents)
-        categories: list, dict or None
-            Column(s) containing categorical data.
-        index: str, List[str], or False
-            The column name(s) to be used as the index.
-            If set to ``None``, pandas metadata (if available) can be used
-            to reset the value in this function
-        use_nullable_dtypes: boolean
-            Whether to use pandas nullable dtypes (like "string" or "Int64")
-            where appropriate when reading parquet files.
-        gather_statistics: bool
-            Whether or not to gather statistics to calculate divisions
-            for the output DataFrame collection.
-        filters: list
-            List of filters to apply, like ``[('x', '>', 0), ...]``.
-        **kwargs: dict (of dicts)
-            User-specified arguments to pass on to backend.
-            Top level key can be used by engine to select appropriate dict.
-
-        Returns
-        -------
-        meta: pandas.DataFrame
-            An empty DataFrame object to use for metadata.
-            Should have appropriate column names and dtypes but need not have
-            any actual data
-        statistics: Optional[List[Dict]]
-            Either None, if no statistics were found, or a list of dictionaries
-            of statistics data, one dict for every partition (see the next
-            return value).  The statistics should look like the following:
-
-            [
-                {'num-rows': 1000, 'columns': [
-                    {'name': 'id', 'min': 0, 'max': 100},
-                    {'name': 'x', 'min': 0.0, 'max': 1.0},
-                    ]},
-                ...
-            ]
-        parts: List[object]
-            A list of objects to be passed to ``Engine.read_partition``.
-            Each object should represent a piece of data (usually a row-group).
-            The type of each object can be anything, as long as the
-            engine's read_partition function knows how to interpret it.
-        """
-        raise NotImplementedError()
 
     @classmethod
     def default_blocksize(cls):
@@ -358,90 +290,6 @@ class Engine:
         Otherwise, None is returned.
         """
         raise NotImplementedError()
-
-
-def _parse_pandas_metadata(pandas_metadata):
-    """Get the set of names from the pandas metadata section
-
-    Parameters
-    ----------
-    pandas_metadata : dict
-        Should conform to the pandas parquet metadata spec
-
-    Returns
-    -------
-    index_names : list
-        List of strings indicating the actual index names
-    column_names : list
-        List of strings indicating the actual column names
-    storage_name_mapping : dict
-        Pairs of storage names (e.g. the field names for
-        PyArrow) and actual names. The storage and field names will
-        differ for index names for certain writers (pyarrow > 0.8).
-    column_indexes_names : list
-        The names for ``df.columns.name`` or ``df.columns.names`` for
-        a MultiIndex in the columns
-
-    Notes
-    -----
-    This should support metadata written by at least
-
-    * fastparquet>=0.1.3
-    * pyarrow>=0.7.0
-    """
-    index_storage_names = [
-        n["name"] if isinstance(n, dict) else n
-        for n in pandas_metadata["index_columns"]
-    ]
-    index_name_xpr = re.compile(r"__index_level_\d+__")
-
-    # older metadatas will not have a 'field_name' field so we fall back
-    # to the 'name' field
-    pairs = [
-        (x.get("field_name", x["name"]), x["name"]) for x in pandas_metadata["columns"]
-    ]
-
-    # Need to reconcile storage and real names. These will differ for
-    # pyarrow, which uses __index_leveL_d__ for the storage name of indexes.
-    # The real name may be None (e.g. `df.index.name` is None).
-    pairs2 = []
-    for storage_name, real_name in pairs:
-        if real_name and index_name_xpr.match(real_name):
-            real_name = None
-        pairs2.append((storage_name, real_name))
-    index_names = [name for (storage_name, name) in pairs2 if name != storage_name]
-
-    # column_indexes represents df.columns.name
-    # It was added to the spec after pandas 0.21.0+, and implemented
-    # in PyArrow 0.8. It was added to fastparquet in 0.3.1.
-    column_index_names = pandas_metadata.get("column_indexes", [{"name": None}])
-    column_index_names = [x["name"] for x in column_index_names]
-
-    # Now we need to disambiguate between columns and index names. PyArrow
-    # 0.8.0+ allows for duplicates between df.index.names and df.columns
-    if not index_names:
-        # For PyArrow < 0.8, Any fastparquet. This relies on the facts that
-        # 1. Those versions used the real index name as the index storage name
-        # 2. Those versions did not allow for duplicate index / column names
-        # So we know that if a name is in index_storage_names, it must be an
-        # index name
-        if index_storage_names and isinstance(index_storage_names[0], dict):
-            # Cannot handle dictionary case
-            index_storage_names = []
-        index_names = list(index_storage_names)  # make a copy
-        index_storage_names2 = set(index_storage_names)
-        column_names = [
-            name for (storage_name, name) in pairs if name not in index_storage_names2
-        ]
-    else:
-        # For newer PyArrows the storage names differ from the index names
-        # iff it's an index level. Though this is a fragile assumption for
-        # other systems...
-        column_names = [name for (storage_name, name) in pairs2 if name == storage_name]
-
-    storage_name_mapping = dict(pairs2)  # TODO: handle duplicates gracefully
-
-    return index_names, column_names, storage_name_mapping, column_index_names
 
 
 def _normalize_index_columns(user_columns, data_columns, user_index, data_index):

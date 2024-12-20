@@ -11,6 +11,9 @@ test_import () {
         # dask[distributed] depends on the latest version of distributed
         python -m pip install git+https://github.com/dask/distributed
     fi
+    if [[ $1 =~ "pandas dask-expr" ]]; then
+        python -m pip install git+https://github.com/dask/dask-expr -U
+    fi
     python -m pip install -e .
     mamba list
     echo "python -c '$2'"

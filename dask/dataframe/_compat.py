@@ -117,20 +117,6 @@ def check_observed_deprecation():
 
 
 @contextlib.contextmanager
-def check_axis_keyword_deprecation():
-    if PANDAS_GE_210:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="The 'axis' keyword|Support for axis",
-                category=FutureWarning,
-            )
-            yield
-    else:
-        yield
-
-
-@contextlib.contextmanager
 def check_convert_dtype_deprecation():
     if PANDAS_GE_210:
         with warnings.catch_warnings():
@@ -145,40 +131,12 @@ def check_convert_dtype_deprecation():
 
 
 @contextlib.contextmanager
-def check_to_pydatetime_deprecation(catch_deprecation_warnings: bool):
-    if PANDAS_GE_210 and catch_deprecation_warnings:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message=".*DatetimeProperties.to_pydatetime is deprecated",
-                category=FutureWarning,
-            )
-            yield
-    else:
-        yield
-
-
-@contextlib.contextmanager
 def check_apply_dataframe_deprecation():
     if PANDAS_GE_210:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
                 message="Returning a DataFrame",
-                category=FutureWarning,
-            )
-            yield
-    else:
-        yield
-
-
-@contextlib.contextmanager
-def check_applymap_dataframe_deprecation():
-    if PANDAS_GE_210:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="DataFrame.applymap has been deprecated",
                 category=FutureWarning,
             )
             yield
