@@ -12,7 +12,6 @@ from operator import getitem
 from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
 
-from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayChunkShapeDep, ArraySliceDep, fractional_slice
 
 
@@ -221,66 +220,3 @@ def _shuffle_op(ddf):
 
 def _groupby_op(ddf):
     return ddf.groupby("name").agg({"x": "mean"})
-
-
-@pytest.mark.parametrize("op", [_shuffle_op, _groupby_op])
-def test_dataframe_cull_key_dependencies(op):
-    # Test that HighLevelGraph.cull does not populate the
-    # output graph with incorrect key_dependencies for
-    # "complex" DataFrame Layers
-    # See: https://github.com/dask/dask/pull/9267
-    pytest.importorskip("pandas")
-    dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("not supported")
-    datasets = pytest.importorskip("dask.datasets")
-
-    result = op(datasets.timeseries(end="2000-01-15")).count()
-    graph = result.dask
-    culled_graph = graph.cull(result.__dask_keys__())
-
-    assert graph.get_all_dependencies() == culled_graph.get_all_dependencies()
-
-
-def test_dataframe_cull_key_dependencies_materialized():
-    # Test that caching of MaterializedLayer
-    # dependencies during culling doesn't break
-    # the result of ``get_all_dependencies``
-    pytest.importorskip("pandas")
-    datasets = pytest.importorskip("dask.datasets")
-    dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("not supported")
-
-    ddf = datasets.timeseries(end="2000-01-15")
-
-    # Build a custom layer to ensure
-    # MaterializedLayer is used
-    name = "custom_graph_test"
-    name_0 = "custom_graph_test_0"
-    dsk = {}
-    for i in range(ddf.npartitions):
-        dsk[(name_0, i)] = (lambda x: x, (ddf._name, i))
-        dsk[(name, i)] = (lambda x: x, (name_0, i))
-    dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
-    result = dd.core.new_dd_object(dsk, name, ddf._meta, ddf.divisions)
-    graph = result.dask
-
-    # HLG cull
-    culled_keys = [k for k in result.__dask_keys__() if k != (name, 0)]
-    culled_graph = graph.cull(culled_keys)
-
-    # Check that culled_deps are cached
-    # See: https://github.com/dask/dask/issues/9389
-    cached_deps = culled_graph.key_dependencies.copy()
-    deps = culled_graph.get_all_dependencies()
-    assert cached_deps == deps
-
-    # Manual cull
-    deps0 = graph.get_all_dependencies()
-    for name, i in list(deps0.keys()):
-        if i == 0:
-            deps0.pop((name, i))
-
-    # Check that get_all_dependencies results match
-    assert deps0 == deps

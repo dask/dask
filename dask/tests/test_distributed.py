@@ -30,7 +30,6 @@ import dask
 import dask.bag as db
 from dask import compute, delayed, persist
 from dask.base import compute_as_if_collection, get_scheduler
-from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
@@ -111,10 +110,6 @@ def test_futures_to_delayed_dataframe(c):
     futures = c.scatter([df, df])
     ddf = dd.from_delayed(futures)
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
-
-    # Make sure from_delayed is Blockwise
-    if not dd._dask_expr_enabled():
-        assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
 
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
@@ -747,10 +742,9 @@ async def test_map_partitions_da_input(c, s, a, b):
     np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
     da = pytest.importorskip("dask.array")
-    dd = pytest.importorskip("dask.dataframe")
+    pytest.importorskip("dask.dataframe")
     datasets = pytest.importorskip("dask.datasets")
-    if dd._dask_expr_enabled():
-        pytest.skip("roundtripping through arrays doesn't work yet")
+    pytest.xfail("roundtripping through arrays doesn't work yet")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -769,8 +763,7 @@ def test_map_partitions_df_input():
     """
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("map partitions can't deal with delayed properly")
+    pytest.xfail("map partitions can't deal with delayed properly")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)

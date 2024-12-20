@@ -135,7 +135,7 @@ def test_orc_aggregate_files_offset(orc_files):
 @pytest.mark.network
 def test_orc_names(orc_files, tmp_path):
     df = dd.read_orc(orc_files)
-    if dd._dask_expr_enabled() and pyarrow_strings_enabled():
+    if pyarrow_strings_enabled():
         assert df.expr.frame._name.startswith("_read_orc")
     else:
         assert df.expr._name.startswith("_read_orc")
