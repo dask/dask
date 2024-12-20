@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from pandas.api.types import is_scalar
+from partd.pandas import PANDAS_GE_300
 
 import dask.dataframe as dd
 from dask.array.numpy_compat import NUMPY_GE_125, NUMPY_GE_200
@@ -706,9 +707,10 @@ def test_reduction_series_invalid_axis():
             pytest.raises(ValueError, lambda s=s, axis=axis: s.mean(axis=axis))
 
 
-@pytest.mark.xfail_with_pyarrow_strings
 def test_reductions_non_numeric_dtypes():
     # test non-numric blocks
+    if pyarrow_strings_enabled() and not PANDAS_GE_300:
+        pytest.xfail(reason="known failure with arrow strings")
 
     def check_raises(d, p, func):
         pytest.raises((TypeError, ValueError), lambda: getattr(d, func)().compute())
