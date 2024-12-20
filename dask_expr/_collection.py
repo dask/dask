@@ -23,18 +23,20 @@ from dask.dataframe.accessor import CachedAccessor
 from dask.dataframe.core import (
     _concat,
     _convert_to_numeric,
-    _Frame,
     _repr_data_series,
     _sqrt_and_convert_to_timedelta,
     check_divisions,
     has_parallel_type,
-    is_arraylike,
     is_dataframe_like,
     is_series_like,
     meta_warning,
-    new_dd_object,
 )
-from dask.dataframe.dispatch import is_categorical_dtype, make_meta, meta_nonempty
+from dask.dataframe.dispatch import (
+    get_parallel_type,
+    is_categorical_dtype,
+    make_meta,
+    meta_nonempty,
+)
 from dask.dataframe.multi import warn_dtype_mismatch
 from dask.dataframe.utils import (
     AttributeNotImplementedError,
@@ -52,6 +54,7 @@ from dask.utils import (
     derived_from,
     get_default_shuffle_method,
     get_meta_library,
+    is_arraylike,
     key_split,
     maybe_pluralize,
     memory_repr,
@@ -1369,25 +1372,6 @@ Expr={expr}"""
             return new_collection(
                 Repartition(self, npartitions, divisions, force, partition_size, freq)
             )
-
-    def to_legacy_dataframe(self, optimize: bool = True, **optimize_kwargs) -> _Frame:
-        """Convert to a legacy dask-dataframe collection
-
-        Parameters
-        ----------
-        optimize
-            Whether to optimize the underlying `Expr` object before conversion.
-        **optimize_kwargs
-            Key-word arguments to pass through to `optimize`.
-        """
-        warnings.warn(
-            "to_legacy_dataframe is deprecated and will be removed in a future release. "
-            "The legacy implementation as a whole is deprecated and will be removed, making "
-            "this method unnecessary.",
-            FutureWarning,
-        )
-        df = self.optimize(**optimize_kwargs) if optimize else self
-        return new_dd_object(df.dask, df._name, df._meta, df.divisions)
 
     def to_dask_array(
         self, lengths=None, meta=None, optimize: bool = True, **optimize_kwargs
@@ -5052,28 +5036,6 @@ def from_dict(
     )
 
 
-def from_legacy_dataframe(ddf: _Frame, optimize: bool = True) -> FrameBase:
-    """Create a dask-expr collection from a legacy dask-dataframe collection
-
-    Parameters
-    ----------
-    optimize
-        Whether to optimize the graph before conversion.
-    """
-    warnings.warn(
-        "from_legacy_dataframe is deprecated and will be removed in a future release. "
-        "The legacy implementation as a whole is deprecated and will be removed, making "
-        "this method unnecessary.",
-        FutureWarning,
-    )
-    graph = ddf.dask
-    if optimize:
-        graph = ddf.__dask_optimize__(graph, ddf.__dask_keys__())
-    return from_graph(
-        graph, ddf._meta, ddf.divisions, ddf.__dask_keys__(), key_split(ddf._name)
-    )
-
-
 def from_dask_array(x, columns=None, index=None, meta=None):
     """Create a Dask DataFrame from a Dask Array.
 
@@ -5793,7 +5755,7 @@ def merge_asof(
     del kwargs["on"]
 
     for o in [left_on, right_on]:
-        if isinstance(o, _Frame):
+        if isinstance(o, FrameBase):
             raise NotImplementedError(
                 "Dask collections not currently allowed in merge columns"
             )
@@ -6544,3 +6506,8 @@ def _compute_partition_stats(
         return (mins, maxes, lens)
     else:
         return (non_empty_mins, non_empty_maxes, lens)
+
+
+@get_parallel_type.register(FrameBase)
+def get_parallel_type_frame(o):
+    return get_parallel_type(o._meta)

@@ -24,12 +24,11 @@ from dask.dataframe.core import (
     is_dataframe_like,
     is_index_like,
     is_series_like,
-    make_meta,
     pd_split,
     safe_head,
     total_mem_usage,
 )
-from dask.dataframe.dispatch import meta_nonempty
+from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chunk
 from dask.dataframe.shuffle import drop_overlap, get_overlap
 from dask.dataframe.utils import (

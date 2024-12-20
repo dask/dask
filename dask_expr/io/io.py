@@ -9,7 +9,8 @@ import pyarrow as pa
 from dask._task_spec import List, Task
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
-from dask.dataframe.core import apply_and_enforce, is_dataframe_like, make_meta
+from dask.dataframe.core import apply_and_enforce, is_dataframe_like
+from dask.dataframe.dispatch import make_meta
 from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
 from dask.typing import Key
 from dask.utils import funcname, is_series_like
