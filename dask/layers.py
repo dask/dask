@@ -212,10 +212,12 @@ class ArrayOverlapLayer(Layer):
         if deserializing:
             # Use CallableLazyImport objects to avoid importing dataframe
             # module on the scheduler
-            concatenate3 = CallableLazyImport("dask.array.core.concatenate3")
+            concatenate_shaped = CallableLazyImport(
+                "dask.array.core.concatenate_shaped"
+            )
         else:
             # Not running on distributed scheduler - Use explicit functions
-            from dask.array.core import concatenate3
+            from dask.array.core import concatenate_shaped
 
         dims = list(map(len, chunks))
         expand_key2 = functools.partial(
@@ -224,7 +226,13 @@ class ArrayOverlapLayer(Layer):
 
         # Make keys for each of the surrounding sub-arrays
         interior_keys = toolz.pipe(
-            dask_keys, flatten, map(expand_key2), map(flatten), toolz.concat, list
+            dask_keys,
+            flatten,
+            map(expand_key2),
+            map(lambda a: a[0]),
+            map(flatten),
+            toolz.concat,
+            list,
         )
         interior_slices = {}
         overlap_blocks = {}
@@ -237,8 +245,8 @@ class ArrayOverlapLayer(Layer):
             else:
                 interior_slices[(getitem_name,) + k] = (name,) + k
                 overlap_blocks[(overlap_name,) + k] = (
-                    concatenate3,
-                    expand_key2((None,) + k, name=getitem_name),
+                    concatenate_shaped,
+                    *(expand_key2((None,) + k, name=getitem_name)),
                 )
 
         dsk = toolz.merge(interior_slices, overlap_blocks)
@@ -310,21 +318,7 @@ def _expand_keys_around_center(k, dims, name=None, axes=None):
         args = [[name]] + args
     seq = list(product(*args))
     shape2 = [d if _valid_depth(axes.get(i, 0)) else 1 for i, d in enumerate(shape)]
-    result = reshapelist(shape2, seq)
-    return result
-
-
-def reshapelist(shape, seq):
-    """Reshape iterator to nested shape
-
-    >>> reshapelist((2, 3), range(6))
-    [[0, 1, 2], [3, 4, 5]]
-    """
-    if len(shape) == 1:
-        return list(seq)
-    else:
-        n = int(len(seq) / shape[0])
-        return [reshapelist(shape[1:], part) for part in toolz.partition(n, seq)]
+    return seq, shape2
 
 
 def fractional_slice(task, axes):
