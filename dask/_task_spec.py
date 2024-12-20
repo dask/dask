@@ -84,7 +84,7 @@ _anom_count = itertools.count()
 def parse_input(obj: Any) -> object:
     """Tokenize user input into GraphNode objects
 
-    Note: This is similar to `convert_old_style_task` but does not
+    Note: This is similar to `convert_legacy_task` but does not
     - compare any values to a global set of known keys to infer references/futures
     - parse tuples and interprets them as runnable tasks
     - Deal with SubgraphCallables
@@ -101,19 +101,26 @@ def parse_input(obj: Any) -> object:
     """
     if isinstance(obj, GraphNode):
         return obj
-    if isinstance(obj, list):
-        return List(*(parse_input(o) for o in obj))
-    if isinstance(obj, set):
-        return Set(*(parse_input(o) for o in obj))
-    if isinstance(obj, tuple):
-        if is_namedtuple_instance(obj):
-            return _wrap_namedtuple_task(None, obj, parse_input)
-        return Tuple(*(parse_input(o) for o in obj))
-    if isinstance(obj, dict):
-        return Dict({k: parse_input(v) for k, v in obj.items()})
 
     if isinstance(obj, TaskRef):
         return Alias(obj.key)
+
+    if isinstance(obj, dict):
+        parsed_dict = {k: parse_input(v) for k, v in obj.items()}
+        if any(isinstance(v, GraphNode) for v in parsed_dict.values()):
+            return Dict(parsed_dict)
+
+    if isinstance(obj, (list, set, tuple)):
+        parsed_collection = tuple(parse_input(o) for o in obj)
+        if any(isinstance(o, GraphNode) for o in parsed_collection):
+            if isinstance(obj, list):
+                return List(*parsed_collection)
+            if isinstance(obj, set):
+                return Set(*parsed_collection)
+            if isinstance(obj, tuple):
+                if is_namedtuple_instance(obj):
+                    return _wrap_namedtuple_task(None, obj, parse_input)
+                return Tuple(*parsed_collection)
 
     return obj
 
@@ -799,6 +806,7 @@ class NestedContainer(Task):
             None,
             self.to_container,
             *args,
+            klass=self.klass,
             _dependencies=_dependencies,
             **kwargs,
         )
@@ -832,9 +840,9 @@ class NestedContainer(Task):
 
         return super().__dask_tokenize__()
 
-    @classmethod
-    def to_container(cls, *args, **kwargs):
-        return cls.klass(args)
+    @staticmethod
+    def to_container(*args, klass):
+        return klass(args)
 
 
 class List(NestedContainer):

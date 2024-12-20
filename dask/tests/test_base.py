@@ -68,12 +68,12 @@ def test_is_dask_collection():
 
 def test_is_dask_collection_dask_expr():
     pd = pytest.importorskip("pandas")
-    dx = pytest.importorskip("dask_expr")
+    dd = pytest.importorskip("dask.dataframe")
 
     df = pd.Series([1, 2, 3])
-    dxf = dx.from_pandas(df)
+    ddf = dd.from_pandas(df)
     assert not is_dask_collection(df)
-    assert is_dask_collection(dxf)
+    assert is_dask_collection(ddf)
 
 
 def test_is_dask_collection_dask_expr_does_not_materialize():
@@ -429,7 +429,7 @@ def test_persist_dataframe():
     assert len(ddf1.__dask_graph__()) == 4
     ddf2 = ddf1.persist()
     assert isinstance(ddf2, dd.DataFrame)
-    assert len(ddf2.__dask_graph__()) == 2 if not dd._dask_expr_enabled() else 4
+    assert len(ddf2.__dask_graph__()) == 4
     dd.utils.assert_eq(ddf2, ddf1)
 
 
@@ -440,7 +440,7 @@ def test_persist_series():
     assert len(dds1.__dask_graph__()) == 4
     dds2 = dds1.persist()
     assert isinstance(dds2, dd.Series)
-    assert len(dds2.__dask_graph__()) == 2 if not dd._dask_expr_enabled() else 4
+    assert len(dds2.__dask_graph__()) == 4
     dd.utils.assert_eq(dds2, dds1)
 
 
@@ -450,61 +450,11 @@ def test_persist_scalar():
 
     ds = pd.Series([1, 2, 3, 4])
     dds1 = dd.from_pandas(ds, npartitions=2).min()
-    assert len(dds1.__dask_graph__()) == 5 if not dd._dask_expr_enabled() else 6
+    assert len(dds1.__dask_graph__()) == 5
     dds2 = dds1.persist()
-    if not dd._dask_expr_enabled():
-        assert isinstance(dds2, dd.core.Scalar)
-    assert len(dds2.__dask_graph__()) == 1 if not dd._dask_expr_enabled() else 2
+    assert isinstance(dds2, dd.Scalar)
+    assert len(dds2.__dask_graph__()) == 2
     dd.utils.assert_eq(dds2, dds1)
-
-
-@pytest.mark.skipif("not dd")
-def test_persist_dataframe_rename():
-    import dask.dataframe as dd
-
-    if dd._dask_expr_enabled():
-        pytest.skip("doesn't make sense")
-
-    df1 = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8]})
-    df2 = pd.DataFrame({"a": [2, 3, 5, 6], "b": [6, 7, 9, 10]})
-    ddf1 = dd.from_pandas(df1, npartitions=2)
-    rebuild, args = ddf1.__dask_postpersist__()
-    dsk = {("x", 0): df2.iloc[:2], ("x", 1): df2.iloc[2:]}
-    ddf2 = rebuild(dsk, *args, rename={ddf1._name: "x"})
-    assert ddf2.__dask_keys__() == [("x", 0), ("x", 1)]
-    dd.utils.assert_eq(ddf2, df2)
-
-
-@pytest.mark.skipif("not dd")
-def test_persist_series_rename():
-    import dask.dataframe as dd
-
-    if dd._dask_expr_enabled():
-        pytest.skip("doesn't make sense")
-
-    ds1 = pd.Series([1, 2, 3, 4])
-    ds2 = pd.Series([5, 6, 7, 8])
-    dds1 = dd.from_pandas(ds1, npartitions=2)
-    rebuild, args = dds1.__dask_postpersist__()
-    dsk = {("x", 0): ds2.iloc[:2], ("x", 1): ds2.iloc[2:]}
-    dds2 = rebuild(dsk, *args, rename={dds1._name: "x"})
-    assert dds2.__dask_keys__() == [("x", 0), ("x", 1)]
-    dd.utils.assert_eq(dds2, ds2)
-
-
-@pytest.mark.skipif("not dd")
-def test_persist_scalar_rename():
-    import dask.dataframe as dd
-
-    if dd._dask_expr_enabled():
-        pytest.skip("doesn't make sense")
-
-    ds1 = pd.Series([1, 2, 3, 4])
-    dds1 = dd.from_pandas(ds1, npartitions=2).min()
-    rebuild, args = dds1.__dask_postpersist__()
-    dds2 = rebuild({("x", 0): 5}, *args, rename={dds1._name: "x"})
-    assert dds2.__dask_keys__() == [("x", 0)]
-    dd.utils.assert_eq(dds2, 5)
 
 
 @pytest.mark.skipif("not dd or not da")
@@ -1081,8 +1031,6 @@ def check_default_scheduler(module, collection, expected, emscripten):
 @pytest.mark.parametrize(
     "params",
     (
-        "'dask.dataframe', '_Frame', 'sync', True",
-        "'dask.dataframe', '_Frame', 'threads', False",
         "'dask.array', 'Array', 'sync', True",
         "'dask.array', 'Array', 'threads', False",
         "'dask.bag', 'Bag', 'sync', True",
@@ -1093,9 +1041,6 @@ def test_emscripten_default_scheduler(params):
     pytest.importorskip("numpy")
     pytest.importorskip("dask.array")
     pytest.importorskip("pandas")
-    dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled() and "dask.dataframe" in params:
-        pytest.skip("objects not available")
     proc = subprocess.run(
         [
             sys.executable,

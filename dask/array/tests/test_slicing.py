@@ -1103,3 +1103,11 @@ def test_all_none_slices_just_mappings():
     # check that we are just mapping the keys
     assert all(isinstance(v, Alias) for k, v in dsk.items() if "getitem" in k[0])
     assert_eq(result, np.ones((6, 10)))
+
+
+def test_minimal_dtype_doesnt_overflow():
+    x = np.arange(1980)
+    dx = dask.array.from_array(x, chunks=[248])
+    ib = np.zeros(1980, dtype=bool)
+    ib[1560:1860] = True
+    assert_eq(dx[ib], x[ib])
