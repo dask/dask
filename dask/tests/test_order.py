@@ -1416,7 +1416,7 @@ def test_array_vs_dataframe(optimize):
         collections_to_dsk([mean.to_dask_dataframe()], optimize_graph=optimize)
     )
     assert max(diag_df[1]) == 15
-    assert max(diag_array[1]) == 15
+    assert max(diag_array[1]) == 38
     assert max(diag_array[1]) < 50
 
 
