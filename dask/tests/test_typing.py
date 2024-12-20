@@ -169,13 +169,10 @@ def assert_isinstance(coll: DaskCollection, protocol: Any) -> None:
 def test_isinstance_core(protocol):
     arr = da.ones(10)
     bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
-    df = dds.timeseries()
     dobj = increment(2)
 
     assert_isinstance(arr, protocol)
     assert_isinstance(bag, protocol)
-    if not dd._dask_expr_enabled():
-        assert_isinstance(df, protocol)
     assert_isinstance(dobj, protocol)
 
 

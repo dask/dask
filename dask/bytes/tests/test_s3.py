@@ -438,26 +438,10 @@ def test_modification_time_read_bytes(s3, s3so):
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 
 
-@pytest.fixture(
-    params=[
-        "pyarrow",
-        pytest.param(
-            "fastparquet", marks=pytest.mark.filterwarnings("ignore::FutureWarning")
-        ),
-    ]
-)
+@pytest.fixture(params=["pyarrow"])
 def engine(request):
-    import dask.dataframe as dd
-    from dask.array.numpy_compat import NUMPY_GE_200
-
-    if NUMPY_GE_200 and request.param == "fastparquet":
-        # https://github.com/dask/fastparquet/issues/923
-        pytest.skip("fastparquet doesn't work with Numpy 2")
-
     pytest.importorskip(request.param)
 
-    if dd._dask_expr_enabled() and request.param == "fastparquet":
-        pytest.skip("not supported")
     return request.param
 
 

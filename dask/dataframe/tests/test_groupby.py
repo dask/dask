@@ -26,11 +26,9 @@ from dask.dataframe._compat import (
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
-from dask.dataframe.utils import assert_dask_graph, assert_eq, pyarrow_strings_enabled
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 from dask.utils import M
-from dask.utils_test import hlg_layer
 
-DASK_EXPR_ENABLED = dd._dask_expr_enabled()
 AGG_FUNCS = [
     "sum",
     pytest.param(
@@ -102,7 +100,7 @@ def groupby_axis_deprecated(*contexts, dask_op=True):
     with contextlib.ExitStack() as stack:
         for ctx in contexts:
             stack.enter_context(ctx)
-        if PANDAS_GE_210 and (not DASK_EXPR_ENABLED or not dask_op):
+        if PANDAS_GE_210 and not dask_op:
             stack.enter_context(pytest.warns(FutureWarning, match="axis"))
         yield
 
@@ -120,45 +118,6 @@ def test_groupby_internal_repr_xfail():
     gp = pdf.groupby(pdf.y)["x"]
     dp = ddf.groupby(ddf.y)["x"]
     assert isinstance(dp.obj, dd.Series)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="architecture different")
-def test_groupby_internal_repr():
-    pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
-    ddf = dd.from_pandas(pdf, 3)
-
-    gp = pdf.groupby("y")
-    dp = ddf.groupby("y")
-    assert isinstance(dp, dd.groupby.DataFrameGroupBy)
-    assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
-    assert isinstance(dp.obj, dd.DataFrame)
-    assert_eq(dp.obj, gp.obj)
-
-    gp = pdf.groupby("y")["x"]
-    dp = ddf.groupby("y")["x"]
-    assert isinstance(dp, dd.groupby.SeriesGroupBy)
-    assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
-
-    gp = pdf.groupby("y")[["x"]]
-    dp = ddf.groupby("y")[["x"]]
-    assert isinstance(dp, dd.groupby.DataFrameGroupBy)
-    assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
-    # slicing should not affect to internal
-    assert isinstance(dp.obj, dd.DataFrame)
-    assert_eq(dp.obj, gp.obj)
-
-    gp = pdf.groupby(pdf.y)["x"]
-    dp = ddf.groupby(ddf.y)["x"]
-    assert isinstance(dp, dd.groupby.SeriesGroupBy)
-    assert isinstance(dp._meta, pd.core.groupby.SeriesGroupBy)
-
-    gp = pdf.groupby(pdf.y)[["x"]]
-    dp = ddf.groupby(ddf.y)[["x"]]
-    assert isinstance(dp, dd.groupby.DataFrameGroupBy)
-    assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
-    # slicing should not affect to internal
-    assert isinstance(dp.obj, dd.DataFrame)
-    assert_eq(dp.obj, gp.obj)
 
 
 def test_groupby_error():
@@ -211,87 +170,7 @@ def test_full_groupby():
     expected = df.groupby("a").apply(func, **INCLUDE_GROUPS)
 
     with pytest.warns(UserWarning, match="`meta` is not specified"):
-        if not DASK_EXPR_ENABLED:
-            assert (
-                ddf.groupby("a").apply(func, **INCLUDE_GROUPS)._name.startswith("func")
-            )
-
         assert_eq(expected, ddf.groupby("a").apply(func, **INCLUDE_GROUPS))
-
-
-@pytest.mark.xfail(
-    DASK_EXPR_ENABLED, reason="can't support collections in kwargs for apply"
-)
-def test_full_groupby_apply_multiarg():
-    df = pd.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
-        index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
-    )
-    ddf = dd.from_pandas(df, npartitions=3)
-
-    def func(df, c, d=3):
-        return df.assign(b=df.b - df.b.mean() + c * d)
-
-    c = df.a.sum()
-    d = df.b.mean()
-
-    c_scalar = ddf.a.sum()
-    d_scalar = ddf.b.mean()
-    c_delayed = dask.delayed(lambda: c)()
-    d_delayed = dask.delayed(lambda: d)()
-
-    with pytest.warns(UserWarning, match="`meta` is not specified"):
-        assert_eq(
-            df.groupby("a").apply(func, c, d=d, **INCLUDE_GROUPS),
-            ddf.groupby("a").apply(func, c, d=d_scalar, **INCLUDE_GROUPS),
-        )
-
-        assert_eq(
-            df.groupby("a").apply(func, c, **INCLUDE_GROUPS),
-            ddf.groupby("a").apply(func, c, **INCLUDE_GROUPS),
-        )
-
-        assert_eq(
-            df.groupby("a").apply(func, c, d=d, **INCLUDE_GROUPS),
-            ddf.groupby("a").apply(func, c, d=d, **INCLUDE_GROUPS),
-        )
-
-        assert_eq(
-            df.groupby("a").apply(func, c, **INCLUDE_GROUPS),
-            ddf.groupby("a").apply(func, c_scalar, **INCLUDE_GROUPS),
-            check_dtype=False,
-        )
-
-    meta = df.groupby("a").apply(func, c, **INCLUDE_GROUPS)
-
-    assert_eq(
-        df.groupby("a").apply(func, c, **INCLUDE_GROUPS),
-        ddf.groupby("a").apply(func, c_scalar, meta=meta, **INCLUDE_GROUPS),
-    )
-
-    assert_eq(
-        df.groupby("a").apply(func, c, d=d, **INCLUDE_GROUPS),
-        ddf.groupby("a").apply(func, c, d=d_scalar, meta=meta, **INCLUDE_GROUPS),
-    )
-
-    # Delayed arguments work, but only if metadata is provided
-    with pytest.raises(ValueError) as exc:
-        ddf.groupby("a").apply(func, c, d=d_delayed, **INCLUDE_GROUPS)
-    assert "dask.delayed" in str(exc.value) and "meta" in str(exc.value)
-
-    with pytest.raises(ValueError) as exc:
-        ddf.groupby("a").apply(func, c_delayed, d=d, **INCLUDE_GROUPS)
-    assert "dask.delayed" in str(exc.value) and "meta" in str(exc.value)
-
-    assert_eq(
-        df.groupby("a").apply(func, c, **INCLUDE_GROUPS),
-        ddf.groupby("a").apply(func, c_delayed, meta=meta, **INCLUDE_GROUPS),
-    )
-
-    assert_eq(
-        df.groupby("a").apply(func, c, d=d, **INCLUDE_GROUPS),
-        ddf.groupby("a").apply(func, c, d=d_delayed, meta=meta, **INCLUDE_GROUPS),
-    )
 
 
 @pytest.mark.parametrize(
@@ -301,10 +180,7 @@ def test_full_groupby_apply_multiarg():
         lambda df: ["a", "b"],
         lambda df: df["a"],
         lambda df: [df["a"], df["b"]],
-        pytest.param(
-            lambda df: [df["a"] > 2, df["b"] > 1],
-            marks=pytest.mark.xfail(not DASK_EXPR_ENABLED, reason="not yet supported"),
-        ),
+        lambda df: [df["a"] > 2, df["b"] > 1],
     ],
 )
 @pytest.mark.parametrize("reverse", [True, False])
@@ -355,8 +231,6 @@ def test_groupby_on_index(scheduler):
     # Check column projection for `groupby().agg`
     agg = ddf2.groupby("a").agg({"b": "mean"})
     assert_eq(ddf.groupby("a").b.mean(), agg.b)
-    if not DASK_EXPR_ENABLED:
-        assert hlg_layer(agg.dask, "getitem")
 
     def func(df):
         return df.assign(b=df.b - df.b.mean())
@@ -430,9 +304,6 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
 
     dask_agg = getattr(dask_group, agg_func)
     pandas_agg = getattr(pandas_group, agg_func)
-
-    if not DASK_EXPR_ENABLED:
-        assert isinstance(dask_group, dd.groupby._GroupBy)
     assert isinstance(pandas_group, pd.core.groupby.GroupBy)
 
     if agg_func == "mean":
@@ -487,12 +358,7 @@ def test_groupby_get_group(categoricals, by):
         ("x", 1): pd.DataFrame({"a": [4, 2, 6], "b": [3, 3, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [4, 3, 7], "b": [1, 1, 3]}, index=[9, 9, 9]),
     }
-    if not DASK_EXPR_ENABLED:
-        meta = dsk[("x", 0)]
-
-        ddf = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
-    else:
-        ddf = dd.repartition(pd.concat(dsk.values()), divisions=[0, 4, 9, 9])
+    ddf = dd.repartition(pd.concat(dsk.values()), divisions=[0, 4, 9, 9])
 
     if categoricals:
         ddf = ddf.categorize(columns=["b"])
@@ -816,37 +682,6 @@ def test_split_apply_combine_on_series(empty):
     pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
     pytest.raises(KeyError, lambda: ddf.groupby("a")[["b", "x"]])
 
-    if not DASK_EXPR_ENABLED:
-        # test graph node labels
-        assert_dask_graph(ddf.groupby("b").a.sum(), "series-groupby-sum")
-        assert_dask_graph(ddf.groupby("b").a.min(), "series-groupby-min")
-        assert_dask_graph(ddf.groupby("b").a.max(), "series-groupby-max")
-        assert_dask_graph(ddf.groupby("b").a.count(), "series-groupby-count")
-        assert_dask_graph(ddf.groupby("b").a.var(), "series-groupby-var")
-        assert_dask_graph(ddf.groupby("b").a.cov(), "series-groupby-cov")
-        assert_dask_graph(ddf.groupby("b").a.first(), "series-groupby-first")
-        assert_dask_graph(ddf.groupby("b").a.last(), "series-groupby-last")
-        assert_dask_graph(ddf.groupby("b").a.tail(), "series-groupby-tail")
-        assert_dask_graph(ddf.groupby("b").a.head(), "series-groupby-head")
-        assert_dask_graph(ddf.groupby("b").a.prod(), "series-groupby-prod")
-        # mean consists from sum and count operations
-        assert_dask_graph(ddf.groupby("b").a.mean(), "series-groupby-sum")
-        assert_dask_graph(ddf.groupby("b").a.mean(), "series-groupby-count")
-        assert_dask_graph(ddf.groupby("b").a.nunique(), "series-groupby-nunique")
-        assert_dask_graph(ddf.groupby("b").a.size(), "series-groupby-size")
-
-        assert_dask_graph(ddf.groupby("b").sum(), "dataframe-groupby-sum")
-        assert_dask_graph(ddf.groupby("b").min(), "dataframe-groupby-min")
-        assert_dask_graph(ddf.groupby("b").max(), "dataframe-groupby-max")
-        assert_dask_graph(ddf.groupby("b").count(), "dataframe-groupby-count")
-        assert_dask_graph(ddf.groupby("b").first(), "dataframe-groupby-first")
-        assert_dask_graph(ddf.groupby("b").last(), "dataframe-groupby-last")
-        assert_dask_graph(ddf.groupby("b").prod(), "dataframe-groupby-prod")
-        # mean consists from sum and count operations
-        assert_dask_graph(ddf.groupby("b").mean(), "dataframe-groupby-sum")
-        assert_dask_graph(ddf.groupby("b").mean(), "dataframe-groupby-count")
-        assert_dask_graph(ddf.groupby("b").size(), "dataframe-groupby-size")
-
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
 def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
@@ -957,10 +792,7 @@ def test_apply_or_transform_shuffle(grouped, func):
         lambda df: df["AA"],
         lambda df: [df["AA"], df["AB"]],
         lambda df: df["AA"] + 1,
-        pytest.param(
-            lambda df: [df["AA"] + 1, df["AB"] + 1],
-            marks=pytest.mark.xfail(not DASK_EXPR_ENABLED, reason="NotImplemented"),
-        ),
+        lambda df: [df["AA"] + 1, df["AB"] + 1],
     ],
 )
 @pytest.mark.parametrize(
@@ -1056,13 +888,8 @@ def test_groupby_normalize_by():
     )
     d = dd.from_pandas(full, npartitions=3)
 
-    if DASK_EXPR_ENABLED:
-        assert d.groupby("a").by == ["a"]
-        assert d.groupby(d["a"]).by == ["a"]
-    else:
-        assert d.groupby("a").by == "a"
-        assert d.groupby(d["a"]).by == "a"
-        assert d.groupby(d["a"] > 2).by._name == (d["a"] > 2)._name
+    assert d.groupby("a").by == ["a"]
+    assert d.groupby(d["a"]).by == ["a"]
     assert d.groupby(["a", "b"]).by == ["a", "b"]
 
     assert d.groupby([d["a"], d["b"]]).by == ["a", "b"]
@@ -1193,19 +1020,9 @@ def test_shuffle_aggregate_defaults(shuffle_method):
 
     spec = {"b": "mean", "c": ["min", "max"]}
 
-    # No shuffle layer when  split_out = 1
-    dsk = ddf.groupby("a").agg(spec, split_out=1).dask
-    if not DASK_EXPR_ENABLED:
-        assert not any("shuffle" in l for l in dsk.layers)
-
     # split_every=1 is invalid for tree reduction
     with pytest.raises(ValueError):
         ddf.groupby("a").agg(spec, split_out=1, split_every=1).compute()
-
-    # If split_out > 1, default to shuffling.
-    dsk = ddf.groupby("a", sort=False).agg(spec, split_out=2, split_every=1).dask
-    if not DASK_EXPR_ENABLED:
-        assert any("shuffle" in l for l in dsk.layers)
 
 
 @pytest.mark.parametrize("spec", [{"c": "median"}, {"b": "median", "c": "max"}])
@@ -1224,61 +1041,6 @@ def test_aggregate_median(spec, keys, shuffle_method):
     actual = ddf.groupby(keys).aggregate(spec, shuffle_method=shuffle_method)
     expected = pdf.groupby(keys).aggregate(spec)
     assert_eq(actual, expected)
-
-    if not DASK_EXPR_ENABLED:
-        with pytest.raises(ValueError, match="must use shuffl"):
-            ddf.groupby(keys).aggregate(spec, shuffle_method=False).compute()
-        with pytest.raises(ValueError, match="must use shuffl"):
-            ddf.groupby(keys).median(shuffle_method=False).compute()
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="deprecated in pandas")
-@pytest.mark.parametrize("axis", [0, 1])
-@pytest.mark.parametrize("group_keys", [True, False, None])
-@pytest.mark.parametrize("limit", [None, 1, 4])
-def test_fillna(axis, group_keys, limit):
-    df = pd.DataFrame(
-        {
-            "A": [1, 1, 2, 2],
-            "B": [3, 4, 3, 4],
-            "C": [np.nan, 3, np.nan, np.nan],
-            "D": [4, np.nan, 5, np.nan],
-            "E": [6, np.nan, 7, np.nan],
-        }
-    )
-    ddf = dd.from_pandas(df, npartitions=2)
-
-    deprecated_ctx = pytest.warns(
-        FutureWarning, match="Please use `ffill`/`bfill` or `fillna` without a GroupBy"
-    )
-
-    with groupby_axis_deprecated():
-        expected = df.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
-    with groupby_axis_deprecated(
-        contextlib.nullcontext() if PANDAS_GE_210 else deprecated_ctx
-    ):
-        result = ddf.groupby("A", group_keys=group_keys).fillna(0, axis=axis)
-    assert_eq(expected, result)
-
-    with deprecated_ctx:
-        assert_eq(
-            df.groupby("A", group_keys=group_keys).B.fillna(0),
-            ddf.groupby("A", group_keys=group_keys).B.fillna(0),
-        )
-    with deprecated_ctx:
-        assert_eq(
-            df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
-            ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
-        )
-
-    with pytest.raises(NotImplementedError), deprecated_ctx:
-        ddf.groupby("A").fillna({"A": 0})
-
-    with pytest.raises(NotImplementedError), deprecated_ctx:
-        ddf.groupby("A").fillna(pd.Series(dtype=int))
-
-    with pytest.raises(NotImplementedError), deprecated_ctx:
-        ddf.groupby("A").fillna(pd.DataFrame)
 
 
 @pytest.mark.parametrize("group_keys", [True, False, None])
@@ -1466,45 +1228,6 @@ def test_series_aggregations_multilevel(grouper, split_out, agg_func):
     )
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="don't store nonempty meta in dask-expr")
-@pytest.mark.parametrize(
-    "grouper",
-    [
-        lambda df: df["a"],
-        lambda df: df["a"] > 2,
-        lambda df: [df["a"], df["b"]],
-        lambda df: [df["a"] > 2],
-        lambda df: [df["a"] > 2, df["b"] > 1],
-    ],
-)
-@pytest.mark.parametrize(
-    "group_and_slice",
-    [
-        lambda df, grouper: df.groupby(grouper(df)),
-        lambda df, grouper: df["c"].groupby(grouper(df)),
-        lambda df, grouper: df.groupby(grouper(df))["c"],
-    ],
-)
-def test_groupby_meta_content(group_and_slice, grouper):
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
-            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
-            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
-        },
-        columns=["c", "b", "a"],
-    )
-
-    ddf = dd.from_pandas(pdf, npartitions=10)
-
-    expected = group_and_slice(pdf, grouper).first().head(0)
-    meta = group_and_slice(ddf, grouper)._meta.first()
-    meta_nonempty = group_and_slice(ddf, grouper)._meta_nonempty.first().head(0)
-
-    assert_eq(expected, meta)
-    assert_eq(expected, meta_nonempty)
-
-
 def test_groupy_non_aligned_index():
     pdf = pd.DataFrame(
         {
@@ -1580,13 +1303,6 @@ def test_hash_groupby_aggregate(npartitions, split_every, split_out):
     result = ddf.groupby("x", sort=(split_out == 1)).y.var(
         split_every=split_every, split_out=split_out
     )
-
-    if not DASK_EXPR_ENABLED:
-        dsk = result.__dask_optimize__(result.dask, result.__dask_keys__())
-        from dask.core import get_deps
-
-        dependencies, dependents = get_deps(dsk)
-        assert len([k for k, v in dependencies.items() if not v]) == npartitions
 
     assert result.npartitions == split_out
 
@@ -1671,58 +1387,6 @@ def test_series_groupby_multi_character_column_name():
     assert_eq(df.groupby("aa").aa.cumsum(), ddf.groupby("aa").aa.cumsum())
 
 
-@pytest.mark.skipif(
-    WINDOWS and sys.version_info < (3, 11),
-    reason="https://github.com/dask/dask/pull/11320#issuecomment-2293798597",
-)
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="axis doesn't exist in dask-expr")
-@pytest.mark.parametrize("func", ["cumsum", "cumprod"])
-def test_cumulative_axis(func):
-    df = pd.DataFrame(
-        {
-            "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 2,
-            "b": np.random.randn(18),
-            "c": np.random.randn(18),
-        }
-    )
-    df.iloc[-6, -1] = np.nan
-    ddf = dd.from_pandas(df, npartitions=4)
-
-    # Default
-    expected = getattr(df.groupby("a"), func)()
-    result = getattr(ddf.groupby("a"), func)()
-    assert_eq(expected, result)
-
-    axis_deprecated = contextlib.nullcontext()
-    if not PANDAS_GE_210:
-        axis_deprecated = pytest.warns(
-            FutureWarning, match="'axis' keyword is deprecated"
-        )
-
-    # axis=0
-    with groupby_axis_deprecated():
-        expected = getattr(df.groupby("a"), func)(axis=0)
-    with groupby_axis_deprecated(axis_deprecated):
-        result = getattr(ddf.groupby("a"), func)(axis=0)
-    assert_eq(expected, result)
-
-    # # axis=1
-    with groupby_axis_deprecated():
-        expected = getattr(df.groupby("a"), func)(axis=1)
-    with groupby_axis_deprecated(axis_deprecated):
-        result = getattr(ddf.groupby("a"), func)(axis=1)
-    assert_eq(expected, result)
-
-    with groupby_axis_deprecated(
-        pytest.raises(ValueError, match="No axis named 1 for object type Series"),
-        axis_deprecated,
-    ):
-        getattr(ddf.groupby("a").b, func)(axis=1)
-
-    with pytest.warns(FutureWarning, match="'axis' keyword is deprecated"):
-        ddf.groupby("a").cumcount(axis=1)
-
-
 def test_groupby_unaligned_index():
     df = pd.DataFrame(
         {
@@ -1805,32 +1469,6 @@ def test_groupby_dataframe_cum_caching(op):
 
     assert res0_a.equals(res0_b)
     assert res1_a.equals(res1_b)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="MIDX columns not supported")
-def test_groupby_series_cum_caching():
-    """Test caching behavior of cumulative operations on grouped Series
-
-    Relates to #3755
-    """
-    df = pd.DataFrame(
-        dict(a=list("aabbcc")), index=pd.date_range(start="20100101", periods=6)
-    )
-    df["ones"] = 1
-    df["twos"] = 2
-
-    ops = ["cumsum", "cumprod"]
-    for op in ops:
-        ddf = dd.from_pandas(df, npartitions=3)
-        dcum = ddf.groupby(["a"])
-        res0_a, res1_a = dask.compute(
-            getattr(dcum["ones"], op)(), getattr(dcum["twos"], op)()
-        )
-        cum = df.groupby(["a"])
-        res0_b, res1_b = (getattr(cum["ones"], op)(), getattr(cum["twos"], op)())
-
-        assert res0_a.equals(res0_b)
-        assert res1_a.equals(res1_b)
 
 
 def test_groupby_slice_agg_reduces():
@@ -2309,35 +1947,6 @@ def test_df_groupby_idxmin():
     assert_eq(expected, result_dd)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="axis not supported")
-@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
-@pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
-def test_df_groupby_idx_axis(func, axis):
-    pdf = pd.DataFrame(
-        {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
-    ).set_index("idx")
-
-    ddf = dd.from_pandas(pdf, npartitions=2)
-
-    warn = None if DASK_EXPR_ENABLED else FutureWarning
-
-    if axis in (1, "columns"):
-        with (
-            pytest.raises(NotImplementedError),
-            pytest.warns(warn, match="`axis` parameter is deprecated"),
-        ):
-            getattr(ddf.groupby("group"), func)(axis=axis)
-    else:
-        with groupby_axis_deprecated(dask_op=False):
-            expected = getattr(pdf.groupby("group"), func)(axis=axis)
-        deprecate_ctx = pytest.warns(warn, match="`axis` parameter is deprecated")
-        with groupby_axis_deprecated(
-            contextlib.nullcontext() if PANDAS_GE_210 else deprecate_ctx
-        ):
-            result = getattr(ddf.groupby("group"), func)(axis=axis)
-        assert_eq(expected, result)
-
-
 @pytest.mark.parametrize("skipna", [True, False])
 def test_df_groupby_idxmin_skipna(skipna):
     pdf = pd.DataFrame(
@@ -2553,60 +2162,12 @@ def groupby_axis_and_meta(axis=0):
     # all warnings and inspect them after the fact
     with pytest.warns() as record:
         yield
-    expected_len = 2 if PANDAS_GE_210 and not DASK_EXPR_ENABLED else 1
+    expected_len = 1
     if axis == 1:
         expected_len += 1
     assert expected_len, [x.message for x in record.list]
     assert record[-1].category is UserWarning
     assert "`meta` is not specified" in str(record[-1].message)
-    if PANDAS_GE_210 and not DASK_EXPR_ENABLED:
-        assert record[0].category is FutureWarning
-        assert "axis" in str(record[0].message)
-
-
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="axis not supported")
-@pytest.mark.filterwarnings("ignore:`meta` is not specified")  # only in dask-expr
-@pytest.mark.parametrize("npartitions", [1, 2, 5])
-@pytest.mark.parametrize("period", [1, -1, 10])
-@pytest.mark.parametrize("axis", [0, 1])
-def test_groupby_shift_basic_input(npartitions, period, axis):
-    pdf = pd.DataFrame(
-        {
-            "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
-            "b": [4, 5, 6, 3, 2, 1, 0, 0, 0],
-            "c": [0, 0, 0, 0, 0, 1, 1, 1, 1],
-        },
-    )
-    ddf = dd.from_pandas(pdf, npartitions=npartitions)
-
-    with groupby_axis_deprecated(dask_op=False):
-        expected = pdf.groupby(["a", "c"]).shift(period, axis=axis)
-    with groupby_axis_and_meta(axis):
-        result = ddf.groupby(["a", "c"]).shift(period, axis=axis)
-    assert_eq(expected, result)
-
-    if DASK_EXPR_ENABLED:
-        ctx = contextlib.nullcontext()
-    else:
-        ctx = pytest.warns(FutureWarning, match="`axis` parameter is deprecated")
-
-    with ctx:
-        ddf.groupby(["a", "c"]).shift(period, axis=axis)
-
-    with groupby_axis_deprecated(dask_op=False):
-        expected = pdf.groupby(["a"]).shift(period, axis=axis)
-    with groupby_axis_and_meta(axis):
-        result = ddf.groupby(["a"]).shift(period, axis=axis)
-    assert_eq(expected, result)
-
-    with groupby_axis_deprecated(dask_op=False):
-        expected = pdf.groupby(pdf.c).shift(period, axis=axis)
-    with groupby_axis_and_meta(axis):
-        result = ddf.groupby(ddf.c).shift(period, axis=axis)
-    assert_eq(expected, result)
-
-    with ctx:
-        ddf.groupby(ddf.c).shift(period, axis=axis)
 
 
 def test_groupby_shift_series():
@@ -2624,7 +2185,7 @@ def test_groupby_shift_series():
         )
 
 
-@pytest.mark.xfail(DASK_EXPR_ENABLED, reason="delayed not currently supported in here")
+@pytest.mark.xfail(reason="delayed not currently supported in here")
 def test_groupby_shift_lazy_input():
     pdf = pd.DataFrame(
         {
@@ -2646,9 +2207,6 @@ def test_groupby_shift_lazy_input():
         )
 
 
-@pytest.mark.skipif(
-    not DASK_EXPR_ENABLED, reason="flaky with a weird deprecation warning"
-)
 @pytest.mark.filterwarnings("ignore:`meta` is not specified")
 def test_groupby_shift_within_partition_sorting():
     # Result is non-deterministic. We run the assertion a few times to keep
@@ -3238,11 +2796,6 @@ def test_groupby_sort_true_split_out():
     ddf.groupby("x").sum(split_out=2)
     ddf.groupby("x").agg("sum", split_out=2)
 
-    if not DASK_EXPR_ENABLED:
-        with pytest.raises(NotImplementedError):
-            # Cannot use sort=True with split_out>1 using non-shuffle-based approach
-            M.sum(ddf.groupby("x", sort=True), shuffle_method=False, split_out=2)
-
     # Can use sort=True with split_out>1 with agg() if shuffle=True
     ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle_method=True)
 
@@ -3258,7 +2811,7 @@ def test_groupby_aggregate_categorical_observed(
         pytest.skip("Not implemented for DataFrameGroupBy yet.")
     if agg_func == "median" and isinstance(groupby, str):
         pytest.skip("Can't calculate median over categorical")
-    if agg_func == "median" and DASK_EXPR_ENABLED:
+    if agg_func == "median":
         pytest.skip("Can't deal with unobserved cats in median at the moment")
     if agg_func in ["sum", "count", "prod"] and groupby != "cat_1":
         pytest.skip("Gives zeros rather than nans.")
@@ -3311,10 +2864,7 @@ def test_groupby_cov_non_numeric_grouping_column():
     )
 
     ddf = dd.from_pandas(pdf, npartitions=2)
-    if DASK_EXPR_ENABLED:
-        assert_eq(ddf.groupby("b").cov(numeric_only=True), pdf.groupby("b").cov())
-    else:
-        assert_eq(ddf.groupby("b").cov(), pdf.groupby("b").cov())
+    assert_eq(ddf.groupby("b").cov(numeric_only=True), pdf.groupby("b").cov())
 
 
 def test_groupby_numeric_only_None_column_name():
@@ -3475,7 +3025,6 @@ def test_groupby_multi_index_with_row_operations(operation):
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="FIXME hangs")
 def test_groupby_iter_fails():
     df = pd.DataFrame(
         data=[
@@ -3487,16 +3036,8 @@ def test_groupby_iter_fails():
         columns=["A", "B"],
     )
     ddf = dd.from_pandas(df, npartitions=1)
-    with pytest.raises(NotImplementedError, match="computing the groups"):
+    with pytest.raises(KeyError, match="Column not"):
         list(ddf.groupby("A"))
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="will raise")
-def test_groupby_None_split_out_warns():
-    df = pd.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]})
-    ddf = dd.from_pandas(df, npartitions=1)
-    with pytest.warns(FutureWarning, match="split_out=None"):
-        ddf.groupby("a").agg({"b": "max"}, split_out=None)
 
 
 @pytest.mark.parametrize("by", ["key1", ["key1", "key2"]])
@@ -3524,11 +3065,6 @@ def test_groupby_slice_getitem(by, slice_key):
     ddf = dd.from_pandas(pdf, npartitions=3)
     expect = pdf.groupby(by)[slice_key].count()
     got = ddf.groupby(by)[slice_key].count()
-
-    # We should have a getitem layer, enabling
-    # column projection after read_parquet etc
-    if not DASK_EXPR_ENABLED:
-        assert hlg_layer(got.dask, "getitem")
     assert_eq(expect, got)
 
 
@@ -3696,51 +3232,6 @@ def test_groupby_var_dropna_observed(dropna, observed, func):
     dd_result = getattr(ddf.groupby("b", observed=observed, dropna=dropna), func)()
     pdf_result = getattr(df.groupby("b", observed=observed, dropna=dropna), func)()
     assert_eq(dd_result, pdf_result)
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="no deprecation")
-@pytest.mark.parametrize(
-    "method",
-    (
-        "sum",
-        "prod",
-        "min",
-        "max",
-        "idxmin",
-        "idxmax",
-        "count",
-        "mean",
-        "median",
-        "size",
-        "first",
-        "last",
-        "aggregate",
-        "agg",
-        "value_counts",
-        "tail",
-        "head",
-    ),
-)
-def test_parameter_shuffle_renamed_to_shuffle_method_deprecation(method):
-    df = pd.DataFrame(
-        {
-            "a": np.random.randint(0, 10, size=100),
-            "b": np.random.randint(0, 20, size=100),
-        }
-    )
-    ddf = dd.from_pandas(df, npartitions=2)
-
-    args = ()
-    if method.startswith("agg"):
-        args = ("sum",)
-
-    group_obj = ddf.groupby("a")
-    if method in ("value_counts", "tail", "head"):  # SeriesGroupBy deprecated methods
-        group_obj = group_obj.b
-
-    msg = "the 'shuffle' keyword is deprecated, use 'shuffle_method' instead."
-    with pytest.warns(FutureWarning, match=msg):
-        getattr(group_obj, method)(*args, shuffle="tasks")
 
 
 def test_groupby_value_counts_all_na_partitions():

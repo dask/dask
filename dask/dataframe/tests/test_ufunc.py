@@ -455,8 +455,7 @@ def test_mixed_types(ufunc, arg1, arg2):
     assert_eq(dafunc(arg2, arg1), npfunc(arg2, arg1))
 
 
-@pytest.mark.skipif(
-    dd._dask_expr_enabled(),
+@pytest.mark.xfail(
     reason="doesn't work at the moment, all return not implemented",
 )
 @pytest.mark.parametrize("ufunc", _UFUNCS_2ARG)
@@ -543,14 +542,7 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         warnings.simplefilter("ignore", FutureWarning)
-        if dd._dask_expr_enabled():
-            import dask_expr as dx
-
-            assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dx.Scalar))
-        else:
-            assert isinstance(
-                np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar)
-            )
+        assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dd.Scalar))
         assert_eq(np_redfunc(np_ufunc(dask)), np_redfunc(np_ufunc(pandas)))
 
 

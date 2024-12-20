@@ -5406,8 +5406,7 @@ def test_map_blocks_series():
     pd = pytest.importorskip("pandas")
     import dask.dataframe as dd
 
-    if dd._dask_expr_enabled():
-        pytest.skip("array roundtrips don't work yet")
+    pytest.skip("array roundtrips don't work yet")
     from dask.dataframe.utils import assert_eq as dd_assert_eq
 
     x = da.ones(10, chunks=(5,))

@@ -36,7 +36,7 @@ from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.typing import Graph
 from dask.utils import filetexts, tmpdir, tmpfile
-from dask.utils_test import add, hlg_layer, hlg_layer_topological, inc
+from dask.utils_test import add, hlg_layer, inc
 
 dsk: Graph = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -1690,10 +1690,9 @@ def test_dask_layers_to_delayed(optimize):
 
 def test_to_dataframe_optimize_graph():
     pytest.importorskip("pandas")
-    dd = pytest.importorskip("dask.dataframe")
+    pytest.importorskip("dask.dataframe")
 
     from dask.dataframe.utils import assert_eq as assert_eq_df
-    from dask.dataframe.utils import pyarrow_strings_enabled
 
     x = db.from_sequence(
         [{"name": "test1", "v1": 1}, {"name": "test2", "v1": 2}], npartitions=2
@@ -1710,27 +1709,8 @@ def test_to_dataframe_optimize_graph():
 
     # with optimizations
     d = y.to_dataframe()
-
-    # All the `map` tasks have been fused
-    if not dd._dask_expr_enabled():
-        assert len(d.dask) < len(y.dask) + d.npartitions * int(
-            pyarrow_strings_enabled()
-        )
-
     # no optimizations
     d2 = y.to_dataframe(optimize_graph=False)
-
-    # Graph hasn't been fused. It contains all the original tasks,
-    # plus one extra layer converting to DataFrame
-    if not dd._dask_expr_enabled():
-        assert len(d2.dask.keys() - y.dask.keys()) == d.npartitions * (
-            1 + int(pyarrow_strings_enabled())
-        )
-
-    # Annotations are still there
-    if not dd._dask_expr_enabled():
-        assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
-
     assert_eq_df(d, d2)
 
 

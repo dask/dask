@@ -48,7 +48,7 @@ class MyAccessor:
     ],
 )
 def test_register(obj, registrar):
-    if dd._dask_expr_enabled() and obj is dd.Index:
+    if obj is dd.Index:
         pytest.skip("from_pandas doesn't support Index")
     with ensure_removed(obj, "mine"):
         before = set(dir(obj))
@@ -119,16 +119,9 @@ def test_dt_accessor(df_ddf):
     assert_eq(ddf_result, pd_result)
 
     assert set(ddf.dt_col.dt.date.dask) == set(ddf.dt_col.dt.date.dask)
-    if dd._dask_expr_enabled():
-        # The warnings is raised during construction of the expression, not the
-        # materialization of the graph. Therefore, the singleton approach of
-        # dask-expr avoids another warning
-        warning_ctx = contextlib.nullcontext()
-
-    with warning_ctx:
-        assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
-            ddf.dt_col.dt.to_pydatetime().dask
-        )
+    assert set(ddf.dt_col.dt.to_pydatetime().dask) == set(
+        ddf.dt_col.dt.to_pydatetime().dask
+    )
 
 
 def test_dt_accessor_not_available(df_ddf):
