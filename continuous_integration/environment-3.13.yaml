@@ -74,4 +74,4 @@ dependencies:
   - pip:
     - git+https://github.com/phofl/distributed@remove-legacy-implementation
     - mmh3
-    - git+https://github.com/phofl/dask-expr@legacy-conversion
+    - git+https://github.com/dask/dask-expr
