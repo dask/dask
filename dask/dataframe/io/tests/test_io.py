@@ -13,7 +13,6 @@ from dask import config
 from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
-from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
 from dask.delayed import Delayed, delayed
 from dask.utils_test import hlg_layer_topological
@@ -705,23 +704,6 @@ def test_from_delayed():
     assert str(e.value).startswith("Metadata mismatch found in `from_delayed`")
 
 
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="doesn't make sense")
-def test_from_delayed_optimize_fusion():
-    # Test that DataFrame optimization fuses a `from_delayed`
-    # layer with other Blockwise layers and input Delayed tasks.
-    # See: https://github.com/dask/dask/pull/8852
-    ddf = (
-        dd.from_delayed(
-            map(delayed(lambda x: pd.DataFrame({"x": [x] * 10})), range(10)),
-            meta=pd.DataFrame({"x": [0] * 10}),
-        )
-        + 1
-    )
-    # NOTE: Fusion requires `optimize_blockwise`` and `fuse_roots`
-    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
-    assert len(optimize(ddf.dask, ddf.__dask_keys__()).layers) == 1
-
-
 def test_from_delayed_to_dask_array():
     # Check that `from_delayed`` can be followed
     # by `to_dask_array` without breaking
@@ -822,8 +804,6 @@ def test_to_delayed_optimize_graph():
     d = ddf2.to_delayed()[0]
     assert len(d.dask) < 20
     d2 = ddf2.to_delayed(optimize_graph=False)[0]
-    if not dd._dask_expr_enabled():
-        assert sorted(d2.dask) == sorted(ddf2.dask)
     assert_eq(ddf2.get_partition(0), d.compute())
     assert_eq(ddf2.get_partition(0), d2.compute())
 
@@ -831,8 +811,6 @@ def test_to_delayed_optimize_graph():
     x = ddf2.x.sum()
     dx = x.to_delayed()
     dx2 = x.to_delayed(optimize_graph=False)
-    if not dd._dask_expr_enabled():
-        assert len(dx.dask) < len(dx2.dask)
     assert_eq(dx.compute(), dx2.compute())
 
 
