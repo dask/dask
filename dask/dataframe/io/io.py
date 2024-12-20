@@ -8,9 +8,10 @@ import pandas as pd
 
 from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe.dispatch import meta_lib_from_array
+from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.highlevelgraph import HighLevelGraph
 from dask.tokenize import tokenize
-from dask.utils import is_series_like
+from dask.utils import ensure_dict, is_series_like
 
 if TYPE_CHECKING:
     pass
@@ -207,17 +208,23 @@ def from_dask_array(x, columns=None, index=None, meta=None):
 
     graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
 
-    from dask_expr._collection import from_graph
+    from dask_expr._collection import from_graph, new_collection
+    from dask_expr._expr import ArrowStringConversion
 
+    from dask.array import optimize
     from dask.utils import key_split
 
-    return from_graph(
-        graph,
+    keys = [(name, i) for i in range(len(divisions) - 1)]
+    result = from_graph(
+        optimize(ensure_dict(graph), keys),
         meta,
         divisions,
-        [(name, i) for i in range(len(divisions) - 1)],
+        keys,
         key_split(name),
     )
+    if pyarrow_strings_enabled():
+        return new_collection(ArrowStringConversion(result.expr))
+    return result
 
 
 def _link(token, result):
