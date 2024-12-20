@@ -1397,7 +1397,7 @@ def test_quantile_missing(method):
 )
 def test_empty_quantile(method):
     with pytest.raises(AssertionError, match="must provide non-"):
-        d.b.quantile([], method=method)
+        d.b.quantile([], method=method).compute()
 
 
 # TODO: un-filter once https://github.com/dask/dask/issues/8960 is resolved.
