@@ -12,7 +12,7 @@ test_import () {
         python -m pip install git+https://github.com/dask/distributed
     fi
     if [[ $1 =~ "pandas dask-expr" ]]; then
-        python -m pip install git+https://github.com/phofl/dask-expr@legacy-conversion -U
+        python -m pip install git+https://github.com/dask/dask-expr -U
     fi
     python -m pip install -e .
     mamba list
