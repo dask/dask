@@ -271,17 +271,32 @@ def register_xarray():
     def xarray_sizeof_frozen(obj):
         return sys.getsizeof(obj) + sizeof(obj.mapping)
 
-    @sizeof.register(xr.DataArray)
     @sizeof.register(xr.Variable)
+    def xarray_sizeof_var(obj):
+        # important to use _data here, to avoid reading data from disk
+        return sys.getsizeof(obj) + sizeof(obj._data) + sizeof(obj._attrs)
+
+    @sizeof.register(xr.DataArray)
     def xarray_sizeof_da(obj):
-        return sys.getsizeof(obj) + sizeof(obj.data)
+        return (
+            sys.getsizeof(obj)
+            + sizeof(obj._variable)
+            + sizeof(obj._indexes)
+            + sizeof(obj._coords)
+        )
 
     @sizeof.register(xr.Dataset)
     def xarray_sizeof_ds(obj):
-        return sys.getsizeof(obj) + sizeof(obj.variables)
+        return (
+            sys.getsizeof(obj)
+            + sizeof(obj._variables)
+            + sizeof(obj._indexes)
+            + sizeof(obj._coord_names)
+            + sizeof(obj._attrs)
+        )
 
     if XARRAY_GE_2024_02:
-        xarray_sizeof_da = sizeof.register(xr.NamedArray)(xarray_sizeof_da)
+        sizeof.register(xr.NamedArray)(xarray_sizeof_var)
 
     @sizeof.register(xr.core.indexes.Indexes)
     def xarray_sizeof_indexes(obj):
