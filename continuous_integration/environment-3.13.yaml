@@ -72,6 +72,6 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/phofl/distributed@remove-legacy-implementation
+    - git+https://github.com/dask/distributed
     - mmh3
     - git+https://github.com/dask/dask-expr
