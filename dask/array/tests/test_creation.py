@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import pytest
 
+from dask._task_spec import Alias
+from dask.base import collections_to_dsk
+
 pytest.importorskip("numpy")
 
 import numpy as np
@@ -511,6 +514,34 @@ def test_diag_extraction(k):
     # heterogeneous chunks:
     d = da.from_array(y, chunks=((3, 2), (4, 1, 2, 1)))
     assert_eq(da.diag(d, k), np.diag(y, k))
+
+
+def test_creation_data_producer_tasks():
+    x = np.arange(64).reshape((8, 8))
+    d = da.from_array(x, chunks=(4, 4))
+    dsk = collections_to_dsk([d])
+    assert all(v.data_producer_task for v in dsk.values())
+
+    # blockwise fusion
+    x = d.astype("float64")
+    dsk = collections_to_dsk([x])
+    assert sum(v.data_producer_task for v in dsk.values()) == 4
+    assert sum(isinstance(v, Alias) for v in dsk.values()) == 4
+    assert len(dsk) == 8
+
+    # linear fusion
+    x = d[slice(0, 6), None].astype("float64")
+    dsk = collections_to_dsk([x])
+    assert sum(v.data_producer_task for v in dsk.values()) == 4
+    assert sum(isinstance(v, Alias) for v in dsk.values()) == 4
+    assert len(dsk) == 8
+
+    # no fusion
+    x = d[[1, 3, 5, 7, 6, 4, 2, 0]].astype("float64")
+    dsk = collections_to_dsk([x])
+    assert sum(v.data_producer_task and "array-" in k[0] for k, v in dsk.items()) == 4
+    assert sum(v.data_producer_task for v in dsk.values()) == 8  # getitem data nodes
+    assert len(dsk) == 24
 
 
 def test_diagonal():
