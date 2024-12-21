@@ -5652,6 +5652,7 @@ def _vindex_array(x, dict_indexes):
             "broadcast together with shapes " + shapes_str
         ) from e
     broadcast_shape = broadcast_indexes[0].shape
+    npoints = math.prod(broadcast_shape)
 
     lookup = dict(zip(dict_indexes, broadcast_indexes))
     flat_indexes = [lookup[i].flat if i in lookup else None for i in range(x.ndim)]
@@ -5691,19 +5692,19 @@ def _vindex_array(x, dict_indexes):
         )
 
     chunks = [c for i, c in zip(flat_indexes, x.chunks) if i is None]
-    n_chunks, remainder = divmod(len(points), max_chunk_point_dimensions)
+    n_chunks, remainder = divmod(npoints, max_chunk_point_dimensions)
     chunks.insert(
         0,
         (
             (max_chunk_point_dimensions,) * n_chunks
             + ((remainder,) if remainder > 0 else ())
-            if points
+            if npoints > 0
             else (0,)
         ),
     )
     chunks = tuple(chunks)
 
-    if points:
+    if npoints > 0:
         per_block = groupby(3, points)
         per_block = {k: v for k, v in per_block.items() if v}
 
