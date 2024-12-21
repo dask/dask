@@ -5673,18 +5673,19 @@ def _vindex_array(x, dict_indexes):
             for b, ind in zip(bounds2, dict_indexes.values())
         )
     )
+    starts = tuple(b[i] for i, b in zip(block_idxs, bounds2))
+    inblock_idxs = tuple(idx - start for idx, start in zip(broadcast_indexes, starts))
     flat_block_idxs = tuple(_.flat for _ in block_idxs)
+    flat_inblock_idxs = tuple(_.flat for _ in inblock_idxs)
     points = list()
     for i, idx in enumerate(zip(*[i for i in flat_indexes if i is not None])):
         block_idx = tuple(_[i] for _ in flat_block_idxs)
-        inblock_idx = [
-            ind - bounds2[k][j] for k, (ind, j) in enumerate(zip(idx, block_idx))
-        ]
+        inblock_idx = tuple(_[i] for _ in flat_inblock_idxs)
         points.append(
             (
                 divmod(i, max_chunk_point_dimensions)[1],
-                tuple(block_idx),
-                tuple(inblock_idx),
+                block_idx,
+                inblock_idx,
                 (i // max_chunk_point_dimensions,) + tuple(block_idx),
             )
         )
