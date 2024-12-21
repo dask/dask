@@ -5641,6 +5641,7 @@ def _vindex(x, *indexes):
 def _vindex_array(x, dict_indexes):
     """Point wise indexing with only NumPy Arrays."""
 
+    token = tokenize(x, dict_indexes)
     try:
         broadcast_indexes = np.broadcast_arrays(*dict_indexes.values())
     except ValueError as e:
@@ -5653,26 +5654,29 @@ def _vindex_array(x, dict_indexes):
     broadcast_shape = broadcast_indexes[0].shape
 
     lookup = dict(zip(dict_indexes, broadcast_indexes))
-    flat_indexes = [lookup[i].ravel() if i in lookup else None for i in range(x.ndim)]
+    flat_indexes = [lookup[i].flat if i in lookup else None for i in range(x.ndim)]
     flat_indexes.extend([None] * (x.ndim - len(flat_indexes)))
 
-    token = tokenize(x, flat_indexes)
-
-    flat_indexes = [
-        list(index) if index is not None else index for index in flat_indexes
-    ]
-    bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
-    bounds2 = [b for i, b in zip(flat_indexes, bounds) if i is not None]
+    bounds = tuple(cached_cumsum(c, initial_zero=True) for c in x.chunks)
+    bounds2 = [np.array(b) for i, b in zip(flat_indexes, bounds) if i is not None]
     axis = _get_axis(flat_indexes)
     out_name = "vindex-merge-" + token
 
     max_chunk_point_dimensions = reduce(
-        mul, map(max, [c for i, c in zip(flat_indexes, x.chunks) if i is not None])
+        mul,
+        map(cached_max, [c for i, c in zip(flat_indexes, x.chunks) if i is not None]),
     )
 
+    block_idxs = np.broadcast_arrays(
+        *(
+            np.searchsorted(b, ind, side="right") - 1
+            for b, ind in zip(bounds2, dict_indexes.values())
+        )
+    )
+    flat_block_idxs = tuple(_.flat for _ in block_idxs)
     points = list()
     for i, idx in enumerate(zip(*[i for i in flat_indexes if i is not None])):
-        block_idx = [bisect(b, ind) - 1 for b, ind in zip(bounds2, idx)]
+        block_idx = tuple(_[i] for _ in flat_block_idxs)
         inblock_idx = [
             ind - bounds2[k][j] for k, (ind, j) in enumerate(zip(idx, block_idx))
         ]
@@ -5702,13 +5706,11 @@ def _vindex_array(x, dict_indexes):
         per_block = groupby(3, points)
         per_block = {k: v for k, v in per_block.items() if v}
 
-        other_blocks = list(
-            product(
-                *[
-                    list(range(len(c))) if i is None else [None]
-                    for i, c in zip(flat_indexes, x.chunks)
-                ]
-            )
+        other_blocks = product(
+            *[
+                list(range(len(c))) if i is None else [None]
+                for i, c in zip(flat_indexes, x.chunks)
+            ]
         )
 
         full_slices = [slice(None, None) if i is None else None for i in flat_indexes]
