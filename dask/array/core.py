@@ -5676,21 +5676,23 @@ def _vindex_array(x, dict_indexes):
     )
     starts = tuple(b[i] for i, b in zip(block_idxs, bounds2))
     inblock_idxs = tuple(idx - start for idx, start in zip(broadcast_indexes, starts))
-    flat_block_idxs = tuple(_.flat for _ in block_idxs)
-    flat_inblock_idxs = tuple(_.flat for _ in inblock_idxs)
-    points = list()
-    for i, idx in enumerate(zip(*[i for i in flat_indexes if i is not None])):
-        block_idx = tuple(_[i] for _ in flat_block_idxs)
-        inblock_idx = tuple(_[i] for _ in flat_inblock_idxs)
-        points.append(
-            (
-                divmod(i, max_chunk_point_dimensions)[1],
-                block_idx,
-                inblock_idx,
-                (i // max_chunk_point_dimensions,) + tuple(block_idx),
-            )
-        )
 
+    def point_iterator():
+        N = len(block_idxs)
+        iterator = np.nditer([*block_idxs, *inblock_idxs])
+        with iterator:
+            for elems in iterator:
+                yield tuple(_.item() for _ in elems[:N]), tuple(elems[N:])
+
+    points = (
+        (
+            divmod(i, max_chunk_point_dimensions)[1],
+            block_idx,
+            inblock_idx,
+            (i // max_chunk_point_dimensions,) + block_idx,
+        )
+        for i, (block_idx, inblock_idx) in enumerate(point_iterator())
+    )
     chunks = [c for i, c in zip(flat_indexes, x.chunks) if i is None]
     n_chunks, remainder = divmod(npoints, max_chunk_point_dimensions)
     chunks.insert(
