@@ -3329,7 +3329,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                             new_chunk += c
                         else:
                             # We reach the boundary so start a new chunk
-                            dimension_result.append(new_chunk)
+                            if new_chunk > 0:
+                                dimension_result.append(new_chunk)
                             new_chunk = c
                     if new_chunk > 0:
                         dimension_result.append(new_chunk)

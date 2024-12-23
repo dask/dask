@@ -3077,6 +3077,15 @@ def test_align_chunks_to_previous_chunks():
     assert all(c % 512 == 0 for c in chunks[1][:-1])
     assert all(c % 512 == 0 for c in chunks[2][:-1])
 
+    chunks = normalize_chunks(
+        "auto",
+        shape=(48, 720, 1440),
+        previous_chunks=((36, 12), (720,), (1440,)),
+        limit=134217728,
+        dtype=np.float32,
+    )
+    assert chunks == ((36, 12), (720,), (1440,))
+
 
 def test_raise_on_no_chunks():
     x = da.ones(6, chunks=3)
