@@ -24,7 +24,7 @@ from dask.dataframe.utils import (
     valid_divisions,
 )
 from dask.typing import no_default
-from dask.utils import M, pseudorandom
+from dask.utils import M
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
@@ -262,35 +262,6 @@ def _cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=N
     )
 
 
-def pd_split(df, p, random_state=None, shuffle=False):
-    """Split DataFrame into multiple pieces pseudorandomly
-
-    >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
-    ...                    'b': [2, 3, 4, 5, 6, 7]})
-
-    >>> a, b = pd_split(
-    ...     df, [0.5, 0.5], random_state=123, shuffle=True
-    ... )  # roughly 50/50 split
-    >>> a
-       a  b
-    3  4  5
-    0  1  2
-    5  6  7
-    >>> b
-       a  b
-    1  2  3
-    4  5  6
-    2  3  4
-    """
-    p = list(p)
-    if shuffle:
-        if not isinstance(random_state, np.random.RandomState):
-            random_state = np.random.RandomState(random_state)
-        df = df.sample(frac=1.0, random_state=random_state)
-    index = pseudorandom(len(df), p, random_state)
-    return [df.iloc[index == i] for i in range(len(p))]
-
-
 def check_divisions(divisions):
     if not isinstance(divisions, (list, tuple)):
         raise ValueError("New division must be list or tuple")
@@ -438,7 +409,7 @@ def _repr_data_series(s, index):
 
 def has_parallel_type(x):
     """Does this object have a dask dataframe equivalent?"""
-    from dask_expr._collection import Scalar
+    from dask.dataframe.dask_expr._collection import Scalar
 
     return get_parallel_type(x) is not Scalar
 

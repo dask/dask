@@ -15,6 +15,7 @@ dependencies:
   # optional dependencies pulled in by pip install dask[dataframe]
   - numpy=1.24
   - pandas=2.0
+  - pyarrow=14.0.1
   # test dependencies
   - pre-commit
   - pytest
@@ -22,5 +23,3 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
-  - pip:
-    - git+https://github.com/dask/dask-expr

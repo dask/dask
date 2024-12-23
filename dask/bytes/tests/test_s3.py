@@ -445,6 +445,7 @@ def engine(request):
     return request.param
 
 
+@pytest.mark.filterwarnings("ignore:Dask annotations")
 @pytest.mark.parametrize("metadata_file", [True, False])
 def test_parquet(s3, engine, s3so, metadata_file):
     dd = pytest.importorskip("dask.dataframe")
