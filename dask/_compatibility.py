@@ -36,7 +36,7 @@ VERSIONS = {
     "pandas": "2.0.0",
     "bokeh": "3.1.0",
     "jinja2": "2.10.3",
-    "pyarrow": "7.0.0",
+    "pyarrow": "14.0.1",
     "lz4": "4.3.2",
 }
 
