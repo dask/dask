@@ -1659,14 +1659,14 @@ def test_map():
         index=pd.Index([0, 1, 3, 5, 6, 8, 9, 9, 9], name="myindex"),
     )
     ddf = dd.from_pandas(df, npartitions=3)
-
-    assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
-    lk = {v: v + 1 for v in df.a.values}
-    assert_eq(ddf.a.map(lk), df.a.map(lk))
-    assert_eq(ddf.b.map(lk), df.b.map(lk))
-    lk = pd.Series(lk)
-    assert_eq(ddf.a.map(lk), df.a.map(lk))
-    assert_eq(ddf.b.map(lk), df.b.map(lk))
+    with pytest.warns(UserWarning, match="meta"):
+        assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
+        lk = {v: v + 1 for v in df.a.values}
+        assert_eq(ddf.a.map(lk), df.a.map(lk))
+        assert_eq(ddf.b.map(lk), df.b.map(lk))
+        lk = pd.Series(lk)
+        assert_eq(ddf.a.map(lk), df.a.map(lk))
+        assert_eq(ddf.b.map(lk), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=("b", "i8")), df.b.map(lk))
 
@@ -2919,11 +2919,12 @@ def test_apply_warns():
 def test_dataframe_map(na_action):
     df = pd.DataFrame({"x": [1, 2, 3, np.nan], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(
-        ddf.map(lambda x: x + 1, na_action=na_action),
-        df.map(lambda x: x + 1, na_action=na_action),
-    )
-    assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
+    with pytest.warns(UserWarning, match="meta"):
+        assert_eq(
+            ddf.map(lambda x: x + 1, na_action=na_action),
+            df.map(lambda x: x + 1, na_action=na_action),
+        )
+        assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
 
 
 @pytest.mark.skipif(PANDAS_GE_210, reason="Available at 2.1")
@@ -3547,9 +3548,10 @@ def test_index_nulls(null_value):
     # an object column with only some nulls fails
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
-        ddf.set_index(
-            ddf["non_numeric"].map({"foo": "foo", "bar": null_value})
-        ).compute()
+        with pytest.warns(UserWarning, match="meta"):
+            ddf.set_index(
+                ddf["non_numeric"].map({"foo": "foo", "bar": null_value})
+            ).compute()
 
 
 def test_set_index_with_index():
@@ -4682,11 +4684,12 @@ def test_map_index():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
     assert ddf.known_divisions is True
-
-    cleared = ddf.index.map(lambda x: x * 10)
+    with pytest.warns(UserWarning, match="meta"):
+        cleared = ddf.index.map(lambda x: x * 10)
     assert cleared.known_divisions is False
 
-    applied = ddf.index.map(lambda x: x * 10, is_monotonic=True)
+    with pytest.warns(UserWarning, match="meta"):
+        applied = ddf.index.map(lambda x: x * 10, is_monotonic=True)
     assert applied.known_divisions is True
     assert applied.divisions == tuple(x * 10 for x in ddf.divisions)
 
@@ -4786,7 +4789,8 @@ def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
     expected = base.map(mapper)
     dask_base = dd.from_pandas(base, npartitions=base_npart, sort=False)
     dask_map = dd.from_pandas(mapper, npartitions=map_npart, sort=False)
-    result = dask_base.map(dask_map)
+    with pytest.warns(UserWarning, match="meta"):
+        result = dask_base.map(dask_map)
     assert_eq(expected, result)
 
 
