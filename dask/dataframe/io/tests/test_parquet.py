@@ -3783,6 +3783,7 @@ def test_pyarrow_filesystem_option_real_data():
     )
 
 
+@pytest.mark.filterwarnings("ignore:Dask annotations")
 @PYARROW_MARK
 def test_fsspec_to_parquet_filesystem_option(tmp_path):
     from fsspec import get_filesystem_class
@@ -4016,5 +4017,5 @@ def test_parquet_botocore_exception(tmpdir):
         raise BotoCoreError
 
     with pytest.raises(BotoCoreError, match="An unspecified error occurred"):
-        with patch("dask_expr.io.parquet.get_engine", mock_get_engine):
+        with patch("dask.dataframe.dask_expr.io.parquet.get_engine", mock_get_engine):
             dd.read_parquet(tmpdir + "string.parquet")

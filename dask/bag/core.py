@@ -1633,7 +1633,7 @@ class Bag(DaskMethodsMixin):
             dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
-        from dask_expr import from_graph
+        from dask.dataframe.dask_expr import from_graph
 
         return from_graph(dsk, meta, divisions, dfs.__dask_keys__(), "from-bag")
 
@@ -2570,7 +2570,7 @@ def random_state_data_python(
 
         random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
         arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
-        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]
+        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]  # type: ignore
 
     except ImportError:
         # Pure python (much slower)

@@ -231,12 +231,14 @@ def is_dask_collection(x) -> bool:
     ):
         return False
 
-    pkg_name = getattr(type(x), "__module__", "").split(".")[0]
-    if pkg_name in ("dask_expr", "dask_cudf"):
+    pkg_name = getattr(type(x), "__module__", "")
+    if pkg_name.split(".")[0] in ("dask_cudf",):
         # Temporary hack to avoid graph materialization. Note that this won't work with
         # dask_expr.array objects wrapped by xarray or pint. By the time dask_expr.array
         # is published, we hope to be able to rewrite this method completely.
         # Read: https://github.com/dask/dask/pull/10676
+        return True
+    elif pkg_name.startswith("dask.dataframe.dask_expr"):
         return True
 
     # xarray, pint, and possibly other wrappers always define a __dask_graph__ method,

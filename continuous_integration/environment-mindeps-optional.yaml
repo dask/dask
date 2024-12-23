@@ -52,7 +52,6 @@ dependencies:
   - pip:
       # optional dependencies pulled in by pip install dask[distributed]
       - git+https://github.com/dask/distributed
-      - git+https://github.com/dask/dask-expr
   # test dependencies
   - pre-commit
   - pytest
