@@ -314,7 +314,9 @@ def _expand_keys_around_center(k, dims, name=None, axes=None):
     if name is not None:
         args = [[name]] + args
     seq = list(product(*args))
-    shape2 = tuple(d if _valid_depth(axes.get(i, 0)) else 1 for i, d in enumerate(shape))
+    shape2 = tuple(
+        d if _valid_depth(axes.get(i, 0)) else 1 for i, d in enumerate(shape)
+    )
     return seq, shape2
 
 
