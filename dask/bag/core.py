@@ -1633,7 +1633,7 @@ class Bag(DaskMethodsMixin):
             dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
-        from dask_expr import from_graph
+        from dask.dataframe.dask_expr import from_graph
 
         return from_graph(dsk, meta, divisions, dfs.__dask_keys__(), "from-bag")
 
