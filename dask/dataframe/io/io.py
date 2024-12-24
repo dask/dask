@@ -208,10 +208,9 @@ def from_dask_array(x, columns=None, index=None, meta=None):
 
     graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
 
-    from dask_expr._collection import from_graph, new_collection
-    from dask_expr._expr import ArrowStringConversion
-
     from dask.array import optimize
+    from dask.dataframe.dask_expr._collection import from_graph, new_collection
+    from dask.dataframe.dask_expr._expr import ArrowStringConversion
     from dask.utils import key_split
 
     keys = [(name, i) for i in range(len(divisions) - 1)]

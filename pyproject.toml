@@ -53,7 +53,7 @@ bag = []
 dataframe = [
     "dask[array]",
     "pandas >= 2.0",
-    "dask-expr >= 1.1, <1.2",  # dask-expr pins the dask version
+    "pyarrow>=14.0.1",
 ]
 distributed = ["distributed == 2024.12.1"]
 diagnostics = [
@@ -170,6 +170,7 @@ show_error_codes = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unreachable = true
+exclude = "dask/dataframe/dask_expr/"
 
 [[tool.mypy.overrides]]
 

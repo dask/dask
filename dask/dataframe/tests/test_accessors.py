@@ -95,6 +95,7 @@ def df_ddf():
     return df, ddf
 
 
+@pytest.mark.filterwarnings("ignore:The behavior of DatetimeProperties")
 @pytest.mark.xfail(PANDAS_GE_300, reason="divisions are incorrect")
 def test_dt_accessor(df_ddf):
     df, ddf = df_ddf

@@ -19,7 +19,6 @@ toolz
 cloudpickle>=1.5.0
 pandas>=2.0.0
 git+https://github.com/dask/distributed
-git+https://github.com/dask/dask-expr
 fsspec
 scipy
 pytest
