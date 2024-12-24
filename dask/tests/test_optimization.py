@@ -16,7 +16,6 @@ from dask.optimization import (
     cull,
     functions_of,
     fuse,
-    fuse_linear,
     inline,
     inline_functions,
 )
@@ -61,22 +60,11 @@ def test_cull():
     pytest.raises(KeyError, lambda: cull(d, "badkey"))
 
 
-def fuse2(*args, **kwargs):
-    """Run both ``fuse`` and ``fuse_linear`` and compare results"""
-    rv1 = fuse_linear(*args, **kwargs)
-    if kwargs.get("rename_keys") is not False:
-        return rv1
-    rv2 = fuse(*args, **kwargs)
-    assert rv1 == rv2
-    return rv1
-
-
 def with_deps(dsk):
     return dsk, {k: get_dependencies(dsk, k) for k in dsk}
 
 
 def test_fuse():
-    fuse = fuse2  # tests both `fuse` and `fuse_linear`
     d = {
         "w": (inc, "x"),
         "x": (inc, "y"),
@@ -90,10 +78,10 @@ def test_fuse():
     )
     assert fuse(d, rename_keys=True) == with_deps(
         {
-            "z-y-x-w": (inc, (inc, (inc, (add, "a", "b")))),
+            "x-y-z-w": (inc, (inc, (inc, (add, "a", "b")))),
             "a": 1,
             "b": 2,
-            "w": "z-y-x-w",
+            "w": "x-y-z-w",
         }
     )
 
@@ -117,8 +105,8 @@ def test_fuse():
     )
     assert fuse(d, rename_keys=True) == with_deps(
         {
-            "NEW": (inc, "z-y"),
-            "x-w": (inc, (inc, "z-y")),
+            "NEW": (inc, "y"),
+            "x-w": (inc, (inc, "y")),
             "z-y": (inc, (add, "a", "b")),
             "a": 1,
             "b": 2,
@@ -150,14 +138,14 @@ def test_fuse():
     )
     assert fuse(d, rename_keys=True) == with_deps(
         {
-            "x-w-u": (inc, (inc, (inc, "z-y"))),
-            "v": (inc, "z-y"),
-            "z-y": (inc, (add, "c-a", "d-b")),
+            "w-x-u": (inc, (inc, (inc, "y"))),
+            "v": (inc, "y"),
+            "z-y": (inc, (add, "a", "b")),
             "c-a": (inc, 1),
             "d-b": (inc, 2),
             "a": "c-a",
             "b": "d-b",
-            "u": "x-w-u",
+            "u": "w-x-u",
             "y": "z-y",
         }
     )
@@ -175,9 +163,9 @@ def test_fuse():
     )
     assert fuse(d, rename_keys=True) == with_deps(
         {
-            "a": (inc, "y-x"),
-            "b": (inc, "y-x"),
-            "c-d": (inc, (inc, "y-x")),
+            "a": (inc, "x"),
+            "b": (inc, "x"),
+            "c-d": (inc, (inc, "x")),
             "y-x": (inc, 0),
             "d": "c-d",
             "x": "y-x",
@@ -189,19 +177,18 @@ def test_fuse():
         {"b": (inc, 1), "c": (add, "b", "b")}
     )
     assert fuse(d, rename_keys=True) == with_deps(
-        {"a-b": (inc, 1), "c": (add, "a-b", "a-b"), "b": "a-b"}
+        {"a-b": (inc, 1), "c": (add, "b", "b"), "b": "a-b"}
     )
 
 
 def test_fuse_keys():
-    fuse = fuse2  # tests both `fuse` and `fuse_linear`
     d = {"a": 1, "b": (inc, "a"), "c": (inc, "b")}
     keys = ["b"]
     assert fuse(d, keys, rename_keys=False) == with_deps(
         {"b": (inc, 1), "c": (inc, "b")}
     )
     assert fuse(d, keys, rename_keys=True) == with_deps(
-        {"a-b": (inc, 1), "c": (inc, "a-b"), "b": "a-b"}
+        {"a-b": (inc, 1), "c": (inc, "b"), "b": "a-b"}
     )
 
     d = {
@@ -218,7 +205,7 @@ def test_fuse_keys():
     )
     assert fuse(d, keys, rename_keys=True) == with_deps(
         {
-            "w": (inc, "y-x"),
+            "w": (inc, "x"),
             "y-x": (inc, (inc, "z")),
             "z": (add, "a", "b"),
             "a": 1,
