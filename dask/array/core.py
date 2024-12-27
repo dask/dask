@@ -5723,19 +5723,30 @@ def _vindex_array(x, dict_indexes):
             ),
         )
         keys = np.ravel_multi_index([outblocks, *block_idxs], ravel_shape)
-        unique_keys = np.unique(keys)
+        # by sorting the data that needs to be inserted in the graph here,
+        # we can slice in the hot loop below instead of using fancy indexing which will
+        # always copy inside the hot loop.
+        sortidx = np.argsort(keys, axis=None)
+        sorted_keys = keys.flat[sortidx]  # flattens
+        sorted_inblock_idxs = [_.flat[sortidx] for _ in inblock_idxs]
+        sorted_outblock_idx = outblock_idx.flat[sortidx]
+        # Determine the start and end of each unique key. We will loop over this
+        flag = np.concatenate([[True], sorted_keys[1:] != sorted_keys[:-1], [True]])
+        (key_bounds,) = flag.nonzero()
 
         name = "vindex-slice-" + token
         vindex_merge_name = "vindex-merge-" + token
         dsk = {}
-        mask = np.empty(broadcast_shape, dtype=bool)
         for okey in other_blocks:
             merge_inputs = defaultdict(list)
             merge_indexer = defaultdict(list)
-            for i, key in enumerate(unique_keys):
+            for i, (start, stop) in enumerate(
+                zip(key_bounds[:-1], key_bounds[1:], strict=True)
+            ):
+                slicer = slice(start, stop)
+                key = sorted_keys[start]
                 outblock, *input_blocks = np.unravel_index(key, ravel_shape)
-                np.equal(keys, key, out=mask)
-                inblock = [_[mask] for _ in inblock_idxs]
+                inblock = [_[slicer] for _ in sorted_inblock_idxs]
                 dsk[keyname(name, i, okey)] = (
                     _vindex_transpose,
                     (
@@ -5746,7 +5757,7 @@ def _vindex_array(x, dict_indexes):
                     axis,
                 )
                 merge_inputs[outblock].append(keyname(name, i, okey))
-                merge_indexer[outblock].append(outblock_idx[mask])
+                merge_indexer[outblock].append(sorted_outblock_idx[slicer])
 
             for i in merge_inputs.keys():
                 dsk[keyname(vindex_merge_name, i, okey)] = (
