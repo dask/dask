@@ -5700,7 +5700,7 @@ def _vindex_array(x, dict_indexes):
     if npoints > 0:
         other_blocks = product(
             *[
-                list(range(len(c))) if i not in axes else [None]
+                range(len(c)) if i not in axes else [None]
                 for i, c in enumerate(x.chunks)
             ]
         )
