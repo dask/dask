@@ -1417,16 +1417,17 @@ def concatenate_array_chunks(x):
         The concatenated dask array with one chunk.
 
     """
-    from dask.array.core import Array, concatenate3
+    from dask.array.core import Array, concatenate_shaped
 
     if x.npartitions == 1:
         return x
 
-    name = "concatenate3-" + tokenize(x)
-    d = {(name, 0): (concatenate3, x.__dask_keys__())}
+    name = "concatenate-shaped-" + tokenize(x)
+    d = {(name, 0): (concatenate_shaped, core.flatten(x.__dask_keys__()), x.numblocks)}
     graph = HighLevelGraph.from_collections(name, d, dependencies=[x])
     chunks = x.shape
     if not chunks:
+        raise RuntimeError()
         chunks = (1,)
 
     return Array(graph, name, chunks=(chunks,), dtype=x.dtype)
