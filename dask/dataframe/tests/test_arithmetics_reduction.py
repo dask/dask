@@ -11,12 +11,8 @@ from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
 from dask.array.numpy_compat import NUMPY_GE_125, NUMPY_GE_200
-from dask.dataframe.utils import (
-    assert_dask_graph,
-    assert_eq,
-    make_meta,
-    pyarrow_strings_enabled,
-)
+from dask.dataframe._compat import PANDAS_GE_300
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 try:
     import scipy
@@ -29,124 +25,6 @@ try:
 except ImportError:
     pa = None
     ArrowNotImplementedError = None
-
-DASK_EXPR_ENABLED = dd._dask_expr_enabled()
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="constructor not supported")
-@pytest.mark.slow
-def test_arithmetics():
-    dsk = {
-        ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
-        ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
-        ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
-    }
-    meta = make_meta(
-        {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
-    )
-    ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
-    pdf1 = ddf1.compute()
-
-    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7, 8], "b": [5, 6, 7, 8, 1, 2, 3, 4]})
-    pdf3 = pd.DataFrame({"a": [5, 6, 7, 8, 4, 3, 2, 1], "b": [2, 4, 5, 3, 4, 2, 1, 0]})
-    ddf2 = dd.from_pandas(pdf2, 3)
-    ddf3 = dd.from_pandas(pdf3, 2)
-
-    dsk4 = {
-        ("y", 0): pd.DataFrame({"a": [3, 2, 1], "b": [7, 8, 9]}, index=[0, 1, 3]),
-        ("y", 1): pd.DataFrame({"a": [5, 2, 8], "b": [4, 2, 3]}, index=[5, 6, 8]),
-        ("y", 2): pd.DataFrame({"a": [1, 4, 10], "b": [1, 0, 5]}, index=[9, 9, 9]),
-    }
-    ddf4 = dd.DataFrame(dsk4, "y", meta, [0, 4, 9, 9])
-    pdf4 = ddf4.compute()
-
-    # Arithmetics
-    cases = [
-        (ddf1, ddf1, pdf1, pdf1),
-        (ddf1, ddf1.repartition([0, 1, 3, 6, 9]), pdf1, pdf1),
-        (ddf2, ddf3, pdf2, pdf3),
-        (ddf2.repartition([0, 3, 6, 7]), ddf3.repartition([0, 7]), pdf2, pdf3),
-        (ddf2.repartition([0, 7]), ddf3.repartition([0, 2, 4, 5, 7]), pdf2, pdf3),
-        (ddf1, ddf4, pdf1, pdf4),
-        (ddf1, ddf4.repartition([0, 9]), pdf1, pdf4),
-        (ddf1.repartition([0, 3, 9]), ddf4.repartition([0, 5, 9]), pdf1, pdf4),
-        # dask + pandas
-        (ddf1, pdf4, pdf1, pdf4),
-        (ddf2, pdf3, pdf2, pdf3),
-    ]
-
-    for l, r, el, er in cases:
-        check_series_arithmetics(l.a, r.b, el.a, er.b)
-        check_frame_arithmetics(l, r, el, er)
-
-    # different index, pandas raises ValueError in comparison ops
-
-    pdf5 = pd.DataFrame(
-        {"a": [3, 2, 1, 5, 2, 8, 1, 4, 10], "b": [7, 8, 9, 4, 2, 3, 1, 0, 5]},
-        index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
-    )
-    ddf5 = dd.from_pandas(pdf5, 2)
-
-    pdf6 = pd.DataFrame(
-        {"a": [3, 2, 1, 5, 2, 8, 1, 4, 10], "b": [7, 8, 9, 5, 7, 8, 4, 2, 5]},
-        index=[0, 1, 2, 3, 4, 5, 6, 7, 9],
-    )
-    ddf6 = dd.from_pandas(pdf6, 4)
-
-    pdf7 = pd.DataFrame(
-        {"a": [1, 2, 3, 4, 5, 6, 7, 8], "b": [5, 6, 7, 8, 1, 2, 3, 4]},
-        index=list("aaabcdeh"),
-    )
-    pdf8 = pd.DataFrame(
-        {"a": [5, 6, 7, 8, 4, 3, 2, 1], "b": [2, 4, 5, 3, 4, 2, 1, 0]},
-        index=list("abcdefgh"),
-    )
-    ddf7 = dd.from_pandas(pdf7, 3)
-    ddf8 = dd.from_pandas(pdf8, 4)
-
-    pdf9 = pd.DataFrame(
-        {
-            "a": [1, 2, 3, 4, 5, 6, 7, 8],
-            "b": [5, 6, 7, 8, 1, 2, 3, 4],
-            "c": [5, 6, 7, 8, 1, 2, 3, 4],
-        },
-        index=list("aaabcdeh"),
-    )
-    pdf10 = pd.DataFrame(
-        {
-            "b": [5, 6, 7, 8, 4, 3, 2, 1],
-            "c": [2, 4, 5, 3, 4, 2, 1, 0],
-            "d": [2, 4, 5, 3, 4, 2, 1, 0],
-        },
-        index=list("abcdefgh"),
-    )
-    ddf9 = dd.from_pandas(pdf9, 3)
-    ddf10 = dd.from_pandas(pdf10, 4)
-
-    # Arithmetics with different index
-    cases = [
-        (ddf5, ddf6, pdf5, pdf6),
-        (ddf5.repartition([0, 9]), ddf6, pdf5, pdf6),
-        (ddf5.repartition([0, 5, 9]), ddf6.repartition([0, 7, 9]), pdf5, pdf6),
-        (ddf7, ddf8, pdf7, pdf8),
-        (ddf7.repartition(["a", "c", "h"]), ddf8.repartition(["a", "h"]), pdf7, pdf8),
-        (
-            ddf7.repartition(["a", "b", "e", "h"]),
-            ddf8.repartition(["a", "e", "h"]),
-            pdf7,
-            pdf8,
-        ),
-        (ddf9, ddf10, pdf9, pdf10),
-        (ddf9.repartition(["a", "c", "h"]), ddf10.repartition(["a", "h"]), pdf9, pdf10),
-        # dask + pandas
-        (ddf5, pdf6, pdf5, pdf6),
-        (ddf7, pdf8, pdf7, pdf8),
-        (ddf9, pdf10, pdf9, pdf10),
-    ]
-
-    for l, r, el, er in cases:
-        check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
-        check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
 
 
 def test_deterministic_arithmetic_names():
@@ -450,124 +328,6 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
         assert_eq(~(l == r), ~(el == er))
 
 
-def test_scalar_arithmetics():
-    el = np.int64(10)
-    er = np.int64(4)
-    l = dd.core.Scalar({("l", 0): el}, "l", "i8")
-    r = dd.core.Scalar({("r", 0): er}, "r", "i8")
-
-    assert isinstance(l, dd.core.Scalar)
-    assert isinstance(r, dd.core.Scalar)
-
-    assert_eq(l, el)
-    assert_eq(r, er)
-
-    assert_eq(l + r, el + er)
-    assert_eq(l * r, el * er)
-    assert_eq(l - r, el - er)
-    assert_eq(l / r, el / er)
-    assert_eq(l // r, el // er)
-    assert_eq(l**r, el**er)
-    assert_eq(l % r, el % er)
-
-    assert_eq(l & r, el & er)
-    assert_eq(l | r, el | er)
-    assert_eq(l ^ r, el ^ er)
-    assert_eq(l > r, el > er)
-    assert_eq(l < r, el < er)
-    assert_eq(l >= r, el >= er)
-    assert_eq(l <= r, el <= er)
-    assert_eq(l == r, el == er)
-    assert_eq(l != r, el != er)
-
-    assert_eq(l + 2, el + 2)
-    assert_eq(l * 2, el * 2)
-    assert_eq(l - 2, el - 2)
-    assert_eq(l / 2, el / 2)
-    assert_eq(l & True, el & True)
-    assert_eq(l | True, el | True)
-    assert_eq(l ^ True, el ^ True)
-    assert_eq(l // 2, el // 2)
-    assert_eq(l**2, el**2)
-    assert_eq(l % 2, el % 2)
-    assert_eq(l > 2, el > 2)
-    assert_eq(l < 2, el < 2)
-    assert_eq(l >= 2, el >= 2)
-    assert_eq(l <= 2, el <= 2)
-    assert_eq(l == 2, el == 2)
-    assert_eq(l != 2, el != 2)
-
-    assert_eq(2 + r, 2 + er)
-    assert_eq(2 * r, 2 * er)
-    assert_eq(2 - r, 2 - er)
-    assert_eq(2 / r, 2 / er)
-    assert_eq(True & r, True & er)
-    assert_eq(True | r, True | er)
-    assert_eq(True ^ r, True ^ er)
-    assert_eq(2 // r, 2 // er)
-    assert_eq(2**r, 2**er)
-    assert_eq(2 % r, 2 % er)
-    assert_eq(2 > r, 2 > er)
-    assert_eq(2 < r, 2 < er)
-    assert_eq(2 >= r, 2 >= er)
-    assert_eq(2 <= r, 2 <= er)
-    assert_eq(2 == r, 2 == er)
-    assert_eq(2 != r, 2 != er)
-
-    assert_eq(-l, -el)
-    assert_eq(abs(l), abs(el))
-
-    assert_eq(~(l == r), ~(el == er))
-
-
-@pytest.mark.skipif(DASK_EXPR_ENABLED, reason="scalar not available like this")
-def test_scalar_arithmetics_with_dask_instances():
-    s = dd.core.Scalar({("s", 0): 10}, "s", "i8")
-    e = 10
-
-    pds = pd.Series([1, 2, 3, 4, 5, 6, 7])
-    dds = dd.from_pandas(pds, 2)
-
-    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
-    ddf = dd.from_pandas(pdf, 2)
-
-    # pandas Series
-    result = pds + s  # this result pd.Series (automatically computed)
-    assert isinstance(result, pd.Series)
-    assert_eq(result, pds + e)
-
-    result = s + pds  # this result dd.Series
-    assert isinstance(result, dd.Series)
-    assert_eq(result, pds + e)
-
-    # dask Series
-    result = dds + s  # this result dd.Series
-    assert isinstance(result, dd.Series)
-    assert_eq(result, pds + e)
-
-    result = s + dds  # this result dd.Series
-    assert isinstance(result, dd.Series)
-    assert_eq(result, pds + e)
-
-    # pandas DataFrame
-    result = pdf + s  # this result pd.DataFrame (automatically computed)
-    assert isinstance(result, pd.DataFrame)
-    assert_eq(result, pdf + e)
-
-    result = s + pdf  # this result dd.DataFrame
-    assert isinstance(result, dd.DataFrame)
-    assert_eq(result, pdf + e)
-
-    # dask DataFrame
-    result = ddf + s  # this result dd.DataFrame
-    assert isinstance(result, dd.DataFrame)
-    assert_eq(result, pdf + e)
-
-    result = s + ddf  # this result dd.DataFrame
-    assert isinstance(result, dd.DataFrame)
-    assert_eq(result, pdf + e)
-
-
 def test_frame_series_arithmetic_methods():
     pdf1 = pd.DataFrame(
         {
@@ -591,10 +351,7 @@ def test_frame_series_arithmetic_methods():
     ds1 = ddf1.A
     ds2 = ddf2.A
 
-    if DASK_EXPR_ENABLED:
-        s = 4
-    else:
-        s = dd.core.Scalar({("s", 0): 4}, "s", "i8")
+    s = 4
 
     for l, r, el, er in [
         (ddf1, ddf2, pdf1, pdf2),
@@ -698,15 +455,7 @@ def test_reductions(split_every):
             index=[9, 9, 9],
         ),
     }
-    if DASK_EXPR_ENABLED:
-        ddf1 = dd.repartition(pd.concat(dsk.values()), divisions=[0, 4, 9, 9])
-    else:
-        meta = make_meta(
-            {"a": "i8", "b": "i8", "c": "bool"},
-            index=pd.Index([], "i8"),
-            parent_meta=pd.DataFrame(),
-        )
-        ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    ddf1 = dd.repartition(pd.concat(dsk.values()), divisions=[0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     nans1 = pd.Series([1] + [np.nan] * 4 + [2] + [np.nan] * 3)
@@ -813,22 +562,6 @@ def test_reductions(split_every):
             dds.mean(skipna=False, split_every=split_every), pds.mean(skipna=False)
         )
 
-    if not DASK_EXPR_ENABLED:
-        assert_dask_graph(ddf1.b.sum(split_every=split_every), "series-sum")
-        assert_dask_graph(ddf1.b.prod(split_every=split_every), "series-prod")
-        assert_dask_graph(ddf1.b.min(split_every=split_every), "series-min")
-        assert_dask_graph(ddf1.b.max(split_every=split_every), "series-max")
-        assert_dask_graph(ddf1.b.count(split_every=split_every), "series-count")
-        assert_dask_graph(ddf1.b.std(split_every=split_every), "series-std")
-        assert_dask_graph(ddf1.b.var(split_every=split_every), "series-var")
-        assert_dask_graph(ddf1.b.sem(split_every=split_every), "series-sem")
-        assert_dask_graph(ddf1.b.std(ddof=0, split_every=split_every), "series-std")
-        assert_dask_graph(ddf1.b.var(ddof=0, split_every=split_every), "series-var")
-        assert_dask_graph(ddf1.b.sem(ddof=0, split_every=split_every), "series-sem")
-        assert_dask_graph(ddf1.b.mean(split_every=split_every), "series-mean")
-        # nunique is performed using drop-duplicates
-        assert_dask_graph(ddf1.b.nunique(split_every=split_every), "drop-duplicates")
-
     # testing index
     assert_eq(ddf1.index.min(split_every=split_every), pdf1.index.min())
     assert_eq(ddf1.index.max(split_every=split_every), pdf1.index.max())
@@ -844,50 +577,6 @@ def test_reductions_timedelta(split_every):
     assert_eq(dds.min(split_every=split_every), ds.min())
     assert_eq(dds.max(split_every=split_every), ds.max())
     assert_eq(dds.count(split_every=split_every), ds.count())
-
-
-@pytest.mark.skipif(
-    DASK_EXPR_ENABLED, reason="legacy, no longer supported in dask-expr"
-)
-@pytest.mark.parametrize("axis", [0, 1])
-@pytest.mark.parametrize(
-    "redfunc",
-    ["sum", "prod", "product", "min", "max", "mean", "var", "std", "all", "any"],
-)
-def test_reductions_out(axis, redfunc):
-    frame = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3])
-    dsk_in = dd.from_pandas(frame, 3)
-
-    out = dd.from_pandas(pd.Series([], dtype="float64"), 3)
-
-    np_redfunc = getattr(np, redfunc)
-    pd_redfunc = getattr(frame.__class__, redfunc)
-    dsk_redfunc = getattr(dsk_in.__class__, redfunc)
-
-    ctx = pytest.warns(FutureWarning, match=r"the 'out' keyword is deprecated")
-
-    if redfunc in ["var", "std"]:
-        # numpy has default ddof value 0 while
-        # dask and pandas have 1, so ddof should be passed
-        # explicitly when calling np.var(dask)
-        with ctx:
-            np_redfunc(dsk_in, axis=axis, ddof=1, out=out)
-    elif NUMPY_GE_125 and redfunc == "product" and out is None:
-        with pytest.warns(DeprecationWarning, match="`product` is deprecated"):
-            np_redfunc(dsk_in, axis=axis, out=out)
-    else:
-        with ctx:
-            np_redfunc(dsk_in, axis=axis, out=out)
-
-    assert_eq(out, pd_redfunc(frame, axis=axis))
-
-    with ctx:
-        dsk_redfunc(dsk_in, axis=axis, split_every=False, out=out)
-    assert_eq(out, pd_redfunc(frame, axis=axis))
-
-    with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-        dsk_redfunc(dsk_in, axis=axis, split_every=2, out=out)
-    assert_eq(out, pd_redfunc(frame, axis=axis))
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -944,41 +633,6 @@ def test_allany(split_every):
     assert_eq(ddf.A.all(split_every=split_every), df.A.all())
     assert_eq(ddf.A.any(split_every=split_every), df.A.any())
 
-    # testing numpy functions with out param
-    ddf_out_axis_default = dd.from_pandas(
-        pd.Series([False, False, False, False, False], index=["A", "B", "C", "D", "E"]),
-        10,
-    )
-    ddf_out_axis1 = dd.from_pandas(
-        pd.Series(np.random.choice([True, False], size=(100,))), 10
-    )
-
-    if not DASK_EXPR_ENABLED:
-        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-            ddf.all(split_every=split_every, out=ddf_out_axis_default)
-        assert_eq(ddf_out_axis_default, df.all())
-
-        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-            ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
-        assert_eq(ddf_out_axis1, df.all(axis=1))
-
-        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-            ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
-        assert_eq(ddf_out_axis_default, df.all(axis=0))
-
-        # any
-        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-            ddf.any(split_every=split_every, out=ddf_out_axis_default)
-        assert_eq(ddf_out_axis_default, df.any())
-
-        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-            ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
-        assert_eq(ddf_out_axis1, df.any(axis=1))
-
-        with pytest.warns(FutureWarning, match="the 'out' keyword is deprecated"):
-            ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
-        assert_eq(ddf_out_axis_default, df.any(axis=0))
-
 
 @pytest.mark.parametrize("split_every", [False, 2])
 def test_deterministic_reduction_names(split_every):
@@ -1033,13 +687,7 @@ def test_reduction_series_invalid_axis():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
     }
-    meta = make_meta(
-        {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
-    )
-    if DASK_EXPR_ENABLED:
-        ddf1 = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
-    else:
-        ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    ddf1 = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     for axis in [1, "columns"]:
@@ -1059,12 +707,10 @@ def test_reduction_series_invalid_axis():
             pytest.raises(ValueError, lambda s=s, axis=axis: s.mean(axis=axis))
 
 
-@pytest.mark.xfail_with_pyarrow_strings
 def test_reductions_non_numeric_dtypes():
     # test non-numric blocks
-
-    if DASK_EXPR_ENABLED:
-        pytest.skip(reason="no arrow strings yet")
+    if pyarrow_strings_enabled() and not PANDAS_GE_300:
+        pytest.xfail(reason="known failure with arrow strings")
 
     def check_raises(d, p, func):
         pytest.raises((TypeError, ValueError), lambda: getattr(d, func)().compute())
@@ -1135,13 +781,7 @@ def test_reductions_frame(split_every):
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
     }
-    meta = make_meta(
-        {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
-    )
-    if DASK_EXPR_ENABLED:
-        ddf1 = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
-    else:
-        ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+    ddf1 = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
     assert_eq(ddf1.sum(split_every=split_every), pdf1.sum())
@@ -1197,46 +837,7 @@ def test_reductions_frame(split_every):
     # mean
     result = ddf1.mean(axis=None, split_every=split_every)
     expected = pdf1.mean(axis=None)
-    assert_eq(result, expected, check_dtype=not DASK_EXPR_ENABLED)
-
-    if not DASK_EXPR_ENABLED:
-        # axis=0
-        assert_dask_graph(ddf1.sum(split_every=split_every), "dataframe-sum")
-        assert_dask_graph(ddf1.prod(split_every=split_every), "dataframe-prod")
-        assert_dask_graph(ddf1.min(split_every=split_every), "dataframe-min")
-        assert_dask_graph(ddf1.max(split_every=split_every), "dataframe-max")
-        assert_dask_graph(ddf1.count(split_every=split_every), "dataframe-count")
-
-        # std, var, sem, and mean consist of moment_* operations
-        assert_dask_graph(ddf1.std(split_every=split_every), "dataframe-var")
-        assert_dask_graph(ddf1.std(split_every=split_every), "moment_chunk")
-        assert_dask_graph(ddf1.std(split_every=split_every), "moment_agg")
-        assert_dask_graph(ddf1.std(split_every=split_every), "values")
-
-        assert_dask_graph(ddf1.var(split_every=split_every), "moment_chunk")
-        assert_dask_graph(ddf1.var(split_every=split_every), "moment_agg")
-        assert_dask_graph(ddf1.var(split_every=split_every), "values")
-
-        assert_dask_graph(ddf1.sem(split_every=split_every), "dataframe-var")
-        assert_dask_graph(ddf1.sem(split_every=split_every), "moment_chunk")
-        assert_dask_graph(ddf1.sem(split_every=split_every), "moment_agg")
-        assert_dask_graph(ddf1.sem(split_every=split_every), "values")
-
-        assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-sum")
-        assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-count")
-
-        # axis=1
-        assert_dask_graph(ddf1.sum(axis=1, split_every=split_every), "dataframe-sum")
-        assert_dask_graph(ddf1.prod(axis=1, split_every=split_every), "dataframe-prod")
-        assert_dask_graph(ddf1.min(axis=1, split_every=split_every), "dataframe-min")
-        assert_dask_graph(ddf1.max(axis=1, split_every=split_every), "dataframe-max")
-        assert_dask_graph(
-            ddf1.count(axis=1, split_every=split_every), "dataframe-count"
-        )
-        assert_dask_graph(ddf1.std(axis=1, split_every=split_every), "dataframe-std")
-        assert_dask_graph(ddf1.var(axis=1, split_every=split_every), "dataframe-var")
-        assert_dask_graph(ddf1.sem(axis=1, split_every=split_every), "dataframe-sem")
-        assert_dask_graph(ddf1.mean(axis=1, split_every=split_every), "dataframe-mean")
+    assert_eq(result, expected, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1444,11 +1045,6 @@ def test_reductions_frame_dtypes_numeric_only(func):
         getattr(df, func)(**kwargs),
         getattr(ddf, func)(**kwargs),
     )
-    if not DASK_EXPR_ENABLED:
-        # This won't raise in dask-expr. There are tests for it in the dask-expr repo.
-        with pytest.raises(NotImplementedError, match="'numeric_only=False"):
-            getattr(ddf, func)(numeric_only=False)
-
     assert_eq(df.sem(ddof=0, **kwargs), ddf.sem(ddof=0, **kwargs))
     assert_eq(df.std(ddof=0, **kwargs), ddf.std(ddof=0, **kwargs))
     assert_eq(df.var(ddof=0, **kwargs), ddf.var(ddof=0, **kwargs))
@@ -1457,18 +1053,8 @@ def test_reductions_frame_dtypes_numeric_only(func):
         df.var(skipna=False, ddof=0, **kwargs), ddf.var(skipna=False, ddof=0, **kwargs)
     )
 
-    if not DASK_EXPR_ENABLED:
-        # ------ only include numerics columns ------ #
-        # dask-expr doesn't have this method
-        assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
-
     df_numerics = df[["int", "float", "bool"]]
     ddf_numerics = ddf[["int", "float", "bool"]]
-
-    if not DASK_EXPR_ENABLED:
-        # dask-expr doesn't have this method
-        assert_eq(df_numerics, ddf._get_numeric_data())
-        assert ddf_numerics._get_numeric_data().dask == ddf_numerics.dask
 
     assert_eq(
         getattr(df_numerics, func)(),

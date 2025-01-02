@@ -14,10 +14,6 @@ from __future__ import annotations
 
 import os
 
-# Build docs with option disabled until we move dask-expr over, otherwise
-# we run into a lot of circular issues that sphinx can't resolve properly
-os.environ["DASK_DATAFRAME__QUERY_PLANNING"] = "false"
-
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
@@ -153,6 +149,8 @@ html_theme_options = {"logo_only": True}
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
+
+html_js_files = ["custom.js"]
 
 # If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
 # using the given strftime format.

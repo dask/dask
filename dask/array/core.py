@@ -53,10 +53,10 @@ from dask.base import (
 from dask.blockwise import blockwise as core_blockwise
 from dask.blockwise import broadcast_dimensions
 from dask.context import globalmethod
-from dask.core import quote
+from dask.core import quote, reshapelist
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
-from dask.layers import ArrayBlockIdDep, ArraySliceDep, ArrayValuesDep, reshapelist
+from dask.layers import ArrayBlockIdDep, ArraySliceDep, ArrayValuesDep
 from dask.sizeof import sizeof
 from dask.typing import Graph, Key, NestedKeys
 from dask.utils import (
@@ -3328,7 +3328,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                             new_chunk += c
                         else:
                             # We reach the boundary so start a new chunk
-                            dimension_result.append(new_chunk)
+                            if new_chunk > 0:
+                                dimension_result.append(new_chunk)
                             new_chunk = c
                     if new_chunk > 0:
                         dimension_result.append(new_chunk)
@@ -4727,7 +4728,9 @@ def asarray(
             return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
         else:
             a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
-    return from_array(a, getitem=getter_inline, **kwargs)
+
+    a = from_array(a, getitem=getter_inline, **kwargs)
+    return _as_dtype(a, dtype)
 
 
 def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
@@ -4799,13 +4802,15 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
         else:
             a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
-    return from_array(
+
+    a = from_array(
         a,
         chunks=a.shape,
         getitem=getter_inline,
         asarray=False,
         inline_array=inline_array,
     )
+    return _as_dtype(a, dtype)
 
 
 def is_scalar_for_elemwise(arg):
@@ -5411,6 +5416,11 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     graph = HighLevelGraph.from_collections(name, layer, dependencies=seq2)
 
     return Array(graph, name, chunks, meta=meta)
+
+
+def concatenate_shaped(arrays, shape):
+    shaped = reshapelist(shape, arrays)
+    return concatenate3(shaped)
 
 
 def concatenate3(arrays):

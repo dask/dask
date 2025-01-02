@@ -11,8 +11,8 @@ import pandas as pd
 
 from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe._pyarrow import is_object_string_dtype
-from dask.dataframe.core import tokenize
 from dask.dataframe.io.utils import DataFrameIOFunction
+from dask.tokenize import tokenize
 from dask.utils import random_state_data
 
 __all__ = [
@@ -561,20 +561,9 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
 
     parts = [(divisions[i : i + 2], state_data[i]) for i in range(npartitions)]
 
-    from dask.dataframe import _dask_expr_enabled
+    from dask.dataframe import from_map
 
-    if _dask_expr_enabled():
-        from dask_expr import from_map
-
-        k = {}
-    else:
-        from dask.dataframe.io.io import from_map
-
-        k = {
-            "token": tokenize(
-                0, spec.nrecords, dtypes, step, partition_freq, state_data
-            )
-        }
+    k = {}  # type: ignore
 
     return from_map(
         MakeDataframePart(spec.index_spec.dtype, dtypes, kwargs, columns=columns),

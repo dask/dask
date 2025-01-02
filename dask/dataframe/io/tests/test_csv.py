@@ -30,16 +30,13 @@ from dask.dataframe.io.csv import (
     pandas_read_text,
     text_blocks_to_pandas,
 )
-from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import (
     assert_eq,
     get_string_dtype,
     has_known_categories,
     pyarrow_strings_enabled,
 )
-from dask.layers import DataFrameIOLayer
 from dask.utils import filetext, filetexts, tmpdir, tmpfile
-from dask.utils_test import hlg_layer
 
 # List of available compression format for test_read_csv_compression
 compression_fmts = [fmt for fmt in compr] + [None]
@@ -196,7 +193,6 @@ def test_pandas_read_text_with_header(reader, files):
     assert df.id.sum() == 1 + 2 + 3
 
 
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="not supported")
 @csv_and_table
 def test_text_blocks_to_pandas_simple(reader, files):
     blocks = [[files[k]] for k in sorted(files)]
@@ -635,9 +631,7 @@ def test_consistent_dtypes_2():
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         df = dd.read_csv("foo.*.csv", blocksize=25)
         assert df.name.dtype == string_dtype
-        assert df.name.compute().dtype == (
-            string_dtype if not dd._dask_expr_enabled() else "object"
-        )
+        assert df.name.compute().dtype == string_dtype
 
 
 def test_categorical_dtypes():
@@ -1827,22 +1821,6 @@ def test_csv_getitem_column_order(tmpdir):
     columns = list("hczzkylaape")
     df2 = dd.read_csv(path)[columns].head(1)
     assert_eq(df1[columns], df2)
-
-
-@pytest.mark.skip_with_pyarrow_strings  # checks graph layers
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="layers not supported")
-def test_getitem_optimization_after_filter():
-    with filetext(timeseries) as fn:
-        expect = pd.read_csv(fn)
-        expect = expect[expect["High"] > 205.0][["Low"]]
-        ddf = dd.read_csv(fn)
-        ddf = ddf[ddf["High"] > 205.0][["Low"]]
-
-        dsk = optimize_dataframe_getitem(ddf.dask, keys=[ddf._name])
-        subgraph_rd = hlg_layer(dsk, "read-csv")
-        assert isinstance(subgraph_rd, DataFrameIOLayer)
-        assert set(subgraph_rd.columns) == {"High", "Low"}
-        assert_eq(expect, ddf)
 
 
 def test_csv_parse_fail(tmpdir):

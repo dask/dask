@@ -2826,10 +2826,24 @@ def test_asarray_array_dtype(asarray):
     x = asarray([1, 2])
     assert_eq(asarray(x, dtype=da.float32), np.asarray(x, dtype=np.float32))
 
+    # dask->dask
     x = asarray(x, dtype=da.float64)
     assert x.dtype == da.float64
     x = asarray(x, dtype=da.int32)
     assert x.dtype == da.int32
+    x = asarray(x)
+    assert x.dtype == da.int32
+    # Test explicit null dtype. astype(None) converts to float!
+    x = asarray(x, dtype=None)
+    assert x.dtype == da.int32
+
+    # non-dask->dask
+    x = asarray(np.asarray([1, 2], dtype=np.int8))
+    assert x.dtype == da.int8
+    x = asarray(np.asarray([1, 2], dtype=np.int8), dtype=None)
+    assert x.dtype == da.int8
+    x = asarray(np.asarray([1, 2], dtype=np.int8), dtype=da.float64)
+    assert x.dtype == da.float64
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
@@ -3062,6 +3076,15 @@ def test_align_chunks_to_previous_chunks():
     assert chunks[0] == (1, 1, 1)
     assert all(c % 512 == 0 for c in chunks[1][:-1])
     assert all(c % 512 == 0 for c in chunks[2][:-1])
+
+    chunks = normalize_chunks(
+        "auto",
+        shape=(48, 720, 1440),
+        previous_chunks=((36, 12), (720,), (1440,)),
+        limit=134217728,
+        dtype=np.float32,
+    )
+    assert chunks == ((36, 12), (720,), (1440,))
 
 
 def test_raise_on_no_chunks():
@@ -5392,8 +5415,7 @@ def test_map_blocks_series():
     pd = pytest.importorskip("pandas")
     import dask.dataframe as dd
 
-    if dd._dask_expr_enabled():
-        pytest.skip("array roundtrips don't work yet")
+    pytest.skip("array roundtrips don't work yet")
     from dask.dataframe.utils import assert_eq as dd_assert_eq
 
     x = da.ones(10, chunks=(5,))

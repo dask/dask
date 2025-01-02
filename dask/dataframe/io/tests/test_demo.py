@@ -5,9 +5,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GE_220, tm
-from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, get_string_dtype
 
 ME = "ME" if PANDAS_GE_220 else "M"
@@ -27,11 +25,7 @@ def test_make_timeseries():
     tm.assert_index_equal(df.columns, pd.Index(["A", "B", "C"]))
     assert df["A"].head().dtype == float
     assert df["B"].head().dtype == int
-    assert (
-        df["C"].head().dtype == get_string_dtype()
-        if not dd._dask_expr_enabled()
-        else object
-    )
+    assert df["C"].head().dtype == get_string_dtype()
     assert df.index.name == "timestamp"
     assert df.head().index.name == df.index.name
     assert df.divisions == tuple(pd.date_range(start="2000", end="2015", freq=f"6{ME}"))
@@ -91,28 +85,6 @@ def test_make_timeseries_no_args():
     assert 1 < df.npartitions < 1000
     assert len(df.columns) > 1
     assert len(set(df.dtypes)) > 1
-
-
-@pytest.mark.skip_with_pyarrow_strings  # checks graph layers
-@pytest.mark.skipif(dd._dask_expr_enabled(), reason="layers not supported")
-def test_make_timeseries_blockwise():
-    df = dd.demo.make_timeseries()
-    df = df[["x", "y"]]
-    keys = [(df._name, i) for i in range(df.npartitions)]
-
-    # Check that `optimize_dataframe_getitem` changes the
-    # `columns` attribute of the "make-timeseries" layer
-    graph = optimize_dataframe_getitem(df.__dask_graph__(), keys)
-    key = [k for k in graph.layers.keys() if k.startswith("make-timeseries-")][0]
-    assert set(graph.layers[key].columns) == {"x", "y"}
-
-    # Check that `optimize_blockwise` fuses both
-    # `Blockwise` layers together into a single `Blockwise` layer
-    graph = optimize_blockwise(df.__dask_graph__(), keys)
-    layers = graph.layers
-    name = list(layers.keys())[0]
-    assert len(layers) == 1
-    assert isinstance(layers[name], Blockwise)
 
 
 def test_no_overlaps():
@@ -200,9 +172,7 @@ def test_with_spec(seed):
     assert ddf["i1"].dtype == "int64"
     assert ddf["f1"].dtype == float
     assert ddf["c1"].dtype.name == "category"
-    assert (
-        ddf["s1"].dtype == get_string_dtype() if not dd._dask_expr_enabled() else object
-    )
+    assert ddf["s1"].dtype == get_string_dtype()
     res = ddf.compute()
     assert len(res) == 10
 
@@ -234,9 +204,7 @@ def test_with_spec_non_default(seed):
     assert ddf["i1"].dtype == "int32"
     assert ddf["f1"].dtype == "float32"
     assert ddf["c1"].dtype.name == "category"
-    assert (
-        ddf["s1"].dtype == get_string_dtype() if not dd._dask_expr_enabled() else object
-    )
+    assert ddf["s1"].dtype == get_string_dtype()
     res = ddf.compute().sort_index()
     assert len(res) == 10
     assert set(res.c1.cat.categories) == {"apple", "banana"}

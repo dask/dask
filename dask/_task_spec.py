@@ -84,7 +84,7 @@ _anom_count = itertools.count()
 def parse_input(obj: Any) -> object:
     """Tokenize user input into GraphNode objects
 
-    Note: This is similar to `convert_old_style_task` but does not
+    Note: This is similar to `convert_legacy_task` but does not
     - compare any values to a global set of known keys to infer references/futures
     - parse tuples and interprets them as runnable tasks
     - Deal with SubgraphCallables
@@ -101,19 +101,26 @@ def parse_input(obj: Any) -> object:
     """
     if isinstance(obj, GraphNode):
         return obj
-    if isinstance(obj, list):
-        return List(*(parse_input(o) for o in obj))
-    if isinstance(obj, set):
-        return Set(*(parse_input(o) for o in obj))
-    if isinstance(obj, tuple):
-        if is_namedtuple_instance(obj):
-            return _wrap_namedtuple_task(None, obj, parse_input)
-        return Tuple(*(parse_input(o) for o in obj))
-    if isinstance(obj, dict):
-        return Dict({k: parse_input(v) for k, v in obj.items()})
 
     if isinstance(obj, TaskRef):
         return Alias(obj.key)
+
+    if isinstance(obj, dict):
+        parsed_dict = {k: parse_input(v) for k, v in obj.items()}
+        if any(isinstance(v, GraphNode) for v in parsed_dict.values()):
+            return Dict(parsed_dict)
+
+    if isinstance(obj, (list, set, tuple)):
+        parsed_collection = tuple(parse_input(o) for o in obj)
+        if any(isinstance(o, GraphNode) for o in parsed_collection):
+            if isinstance(obj, list):
+                return List(*parsed_collection)
+            if isinstance(obj, set):
+                return Set(*parsed_collection)
+            if isinstance(obj, tuple):
+                if is_namedtuple_instance(obj):
+                    return _wrap_namedtuple_task(None, obj, parse_input)
+                return Tuple(*parsed_collection)
 
     return obj
 
@@ -264,9 +271,7 @@ def convert_legacy_task(
         else:
             parsed_args = tuple(convert_legacy_task(None, t, all_keys) for t in task)
             if any(isinstance(a, GraphNode) for a in parsed_args):
-                return Task(
-                    key, _identity_cast, *parsed_args, typ=DataNode(None, type(task))
-                )
+                return Task(key, _identity_cast, *parsed_args, typ=type(task))
             else:
                 return cast(_T, type(task)(parsed_args))
     elif isinstance(task, TaskRef):
@@ -287,7 +292,7 @@ def convert_legacy_graph(
     new_dsk = {}
     for k, arg in dsk.items():
         t = convert_legacy_task(k, arg, all_keys)
-        if isinstance(t, Alias) and t.target.key == k:
+        if isinstance(t, Alias) and t.target == k:
             continue
         elif not isinstance(t, GraphNode):
             t = DataNode(k, t)
@@ -317,7 +322,7 @@ def resolve_aliases(dsk: dict, keys: set, dependents: dict) -> dict:
         seen.add(k)
         t = dsk[k]
         if isinstance(t, Alias):
-            target_key = t.target.key
+            target_key = t.target
             # Rules for when we allow to collapse an alias
             # 1. The target key is not in the keys set. The keys set is what the
             #    user is requesting and by collapsing we'd no longer be able to
@@ -494,7 +499,7 @@ _no_deps: frozenset = frozenset()
 
 
 class Alias(GraphNode):
-    target: TaskRef
+    target: KeyType
     __slots__ = tuple(__annotations__)
 
     def __init__(self, key: KeyType, target: Alias | TaskRef | KeyType | None = None):
@@ -503,10 +508,10 @@ class Alias(GraphNode):
             target = key
         if isinstance(target, Alias):
             target = target.target
-        if not isinstance(target, TaskRef):
-            target = TaskRef(target)
+        if isinstance(target, TaskRef):
+            target = target.key
         self.target = target
-        self._dependencies = frozenset((target.key,))
+        self._dependencies = frozenset((self.target,))
 
     def copy(self):
         return Alias(self.key, self.target)
@@ -514,10 +519,10 @@ class Alias(GraphNode):
     def substitute(
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
     ) -> GraphNode:
-        if self.key in subs or self.target.key in subs:
+        if self.key in subs or self.target in subs:
             sub_key = subs.get(self.key, self.key)
-            val = subs.get(self.target.key, self.target.key)
-            if sub_key == self.key and val == self.target.key:
+            val = subs.get(self.target, self.target)
+            if sub_key == self.key and val == self.target:
                 return self
             if isinstance(val, GraphNode):
                 return val.substitute({}, key=key)
@@ -529,15 +534,15 @@ class Alias(GraphNode):
         return self
 
     def __dask_tokenize__(self):
-        return (type(self).__name__, self.key, self.target.key)
+        return (type(self).__name__, self.key, self.target)
 
     def __call__(self, values=()):
         self._verify_values(values)
-        return values[self.target.key]
+        return values[self.target]
 
     def __repr__(self):
-        if self.key != self.target.key:
-            return f"Alias({self.key!r}->{self.target.key!r})"
+        if self.key != self.target:
+            return f"Alias({self.key!r}->{self.target!r})"
         else:
             return f"Alias({self.key!r})"
 
@@ -801,6 +806,7 @@ class NestedContainer(Task):
             None,
             self.to_container,
             *args,
+            klass=self.klass,
             _dependencies=_dependencies,
             **kwargs,
         )
@@ -834,9 +840,9 @@ class NestedContainer(Task):
 
         return super().__dask_tokenize__()
 
-    @classmethod
-    def to_container(cls, *args, **kwargs):
-        return cls.klass(args)
+    @staticmethod
+    def to_container(*args, klass):
+        return klass(args)
 
 
 class List(NestedContainer):
