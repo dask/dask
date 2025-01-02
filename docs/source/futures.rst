@@ -786,10 +786,12 @@ worker:
            return self.n
 
    from dask.distributed import Client
-   client = Client()
 
-   future = client.submit(Counter, actor=True)
-   counter = future.result()
+   if __name__ == '__main__':
+       client = Client()
+
+       future = client.submit(Counter, actor=True)
+       counter = future.result()
 
    >>> counter
    <Actor: Counter, key=Counter-afa1cdfb6b4761e616fa2cfab42398c8>
