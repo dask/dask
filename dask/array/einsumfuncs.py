@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from functools import reduce
 
 import numpy as np
 
