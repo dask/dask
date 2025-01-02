@@ -5693,6 +5693,10 @@ def _vindex_array(x, dict_indexes):
     inblock_idxs = np.broadcast_arrays(
         *(idx - start for idx, start in zip(dict_indexes.values(), starts))
     )
+    for i, a in enumerate(inblock_idxs):
+        if len(a) > 0:
+            dtype = np.min_scalar_type(np.max(a, axis=None))
+            inblock_idxs[i] = a.astype(dtype)
 
     chunks = [c for i, c in enumerate(x.chunks) if i not in axes]
     # determine number of points in one single output block.
@@ -5745,6 +5749,8 @@ def _vindex_array(x, dict_indexes):
         sorted_keys = keys.flat[sortidx]  # flattens
         sorted_inblock_idxs = [_.flat[sortidx] for _ in inblock_idxs]
         sorted_outblock_idx = outblock_idx.flat[sortidx]
+        dtype = np.min_scalar_type(max(sorted_outblock_idx))
+        sorted_outblock_idx = sorted_outblock_idx.astype(dtype)
         # Determine the start and end of each unique key. We will loop over this
         flag = np.concatenate([[True], sorted_keys[1:] != sorted_keys[:-1], [True]])
         (key_bounds,) = flag.nonzero()
