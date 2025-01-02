@@ -2510,7 +2510,7 @@ def test_einsum_chunksizes():
     x = da.ones(shape=(2, 10, 10), dtype=np.float64, chunksize=(2, 10, 10))
     y = da.ones(shape=(2, 10, 10), dtype=np.float64, chunksize=(2, 10, 10))
     res = da.einsum("abcde,bfc,dfe->acef", z, x, y)
-    assert res.numblocks == 1
+    assert res.numblocks == (1, 1, 1, 1)
 
 
 @pytest.mark.parametrize(
