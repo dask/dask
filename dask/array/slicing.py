@@ -1427,7 +1427,6 @@ def concatenate_array_chunks(x):
     graph = HighLevelGraph.from_collections(name, d, dependencies=[x])
     chunks = x.shape
     if not chunks:
-        raise RuntimeError()
         chunks = (1,)
 
     return Array(graph, name, chunks=(chunks,), dtype=x.dtype)
