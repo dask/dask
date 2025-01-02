@@ -2503,6 +2503,15 @@ def test_einsum_chunksizes():
     assert result.chunks == ((1,) * 4,) * 4
     assert_eq(np.einsum("aij,amn->ijmn", np_arr1, np_arr2), result)
 
+    # regression test for GH11627
+    z = da.ones(
+        shape=(40000, 2, 10, 2, 10), dtype=np.float64, chunksize=(40000, 1, 5, 2, 10)
+    )
+    x = da.ones(shape=(2, 10, 10), dtype=np.float64, chunksize=(2, 10, 10))
+    y = da.ones(shape=(2, 10, 10), dtype=np.float64, chunksize=(2, 10, 10))
+    res = da.einsum("abcde,bfc,dfe->acef", z, x, y)
+    assert res.numblocks == 1
+
 
 @pytest.mark.parametrize(
     "optimize_opts", [(True, False), ("greedy", False), ("optimal", False)]
