@@ -1423,7 +1423,13 @@ def concatenate_array_chunks(x):
         return x
 
     name = "concatenate-shaped-" + tokenize(x)
-    d = {(name, 0): (concatenate_shaped, core.flatten(x.__dask_keys__()), x.numblocks)}
+    d = {
+        (name, 0): (
+            concatenate_shaped,
+            list(core.flatten(x.__dask_keys__())),
+            x.numblocks,
+        )
+    }
     graph = HighLevelGraph.from_collections(name, d, dependencies=[x])
     chunks = x.shape
     if not chunks:
