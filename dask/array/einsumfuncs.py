@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from functools import reduce
-from operator import mul
+import math
 
 import numpy as np
 
 from dask.array._shuffle import _calculate_new_chunksizes
 from dask.array.core import asarray, blockwise, einsum_lookup
-from dask.utils import derived_from
+from dask.utils import cached_max, derived_from
 
 einsum_symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 einsum_symbols_set = set(einsum_symbols)
@@ -236,18 +235,20 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
 
     if len(inputs) > 1 and len(outputs) > 0:
         # Calculate the increase in chunk size compared to the largest input chunk
-        max_chunk_sizes, max_chunk_size_input = [], 1
+        max_chunk_sizes, max_chunk_size_input = {}, 1
         for op, input in zip(ops, inputs):
             max_chunk_size_input = max(
-                reduce(mul, map(max, op.chunks)), max_chunk_size_input
+                math.prod(map(cached_max, op.chunks)), max_chunk_size_input
             )
-            max_chunk_sizes.extend(
-                max(op.chunks[i])
-                for i, inp in enumerate(input)
-                if inp not in contract_inds
+            max_chunk_sizes.update(
+                {
+                    inp: max(cached_max(op.chunks[i]), max_chunk_sizes.get(inp, 1))
+                    for i, inp in enumerate(input)
+                    if inp not in contract_inds
+                }
             )
 
-        max_chunk_size_output = reduce(mul, max_chunk_sizes)
+        max_chunk_size_output = math.prod(max_chunk_sizes.values())
         factor = max_chunk_size_output / (
             max_chunk_size_input * config.get("array.chunk-size-tolerance")
         )
@@ -262,7 +263,7 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
                 op.chunks,
                 list(op.chunks),
                 changeable_dimensions,
-                reduce(mul, map(max, op.chunks)) / f,
+                math.prod(map(cached_max, op.chunks)) / f,
             )
             new_ops.append(op.rechunk(result))
         ops = new_ops
