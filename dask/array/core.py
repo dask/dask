@@ -5699,6 +5699,8 @@ def _vindex_array(x, dict_indexes):
         else:
             inblock_idxs.append(a)
 
+    inblock_idxs = np.broadcast_arrays(*inblock_idxs)
+
     chunks = [c for i, c in enumerate(x.chunks) if i not in axes]
     # determine number of points in one single output block.
     # Use the input chunk size to determine this.
