@@ -1065,6 +1065,51 @@ def test_operators():
     assert_eq(a, +x)
 
 
+def test_binary_operator_delegation(mocker):
+    # Binary operator delegation in Dask should follow Numpy's:
+    # https://numpy.org/neps/nep-0013-ufunc-overrides.html#behavior-in-combination-with-python-s-binary-operations
+
+    x = from_array([1, 2, 3])
+
+    # Mock various types of `other` objects
+    ufunc_none = mocker.Mock()
+    ufunc_none.__array_ufunc__ = None
+    ufunc_none.__radd__ = mocker.Mock()
+
+    ufunc_high_priority = mocker.Mock()
+    ufunc_high_priority.__array_priority__ = x.__array_priority__ + 1
+    ufunc_high_priority.__radd__ = mocker.Mock()
+
+    ufunc_low_priority = mocker.Mock()
+    ufunc_low_priority.__array_priority__ = x.__array_priority__ - 1
+    ufunc_low_priority.__radd__ = mocker.Mock()
+
+    ufunc_no_priority = mocker.Mock()
+    ufunc_no_priority.__radd__ = mocker.Mock()
+
+    # If `other.__array_ufunc__ is None`, delegates back to Python
+    # and therefore call reflected operator on `other`
+    x + ufunc_none
+    ufunc_none.__radd__.assert_called_once()
+
+    # If the `__array_ufunc__` attribute is absent on other and
+    # `other.__array_priority__ > self.__array_priority__`, also delegates back
+    # to Python and therefore call reflected operator on `other`
+    x + ufunc_high_priority
+    ufunc_high_priority.__radd__.assert_called_once()
+
+    # If `other.__array_priority__ <= self.__array_priority__`, does not
+    # delegate (here it raises an error)
+    with pytest.raises(TypeError):
+        x + ufunc_low_priority
+    ufunc_low_priority.__radd__.assert_not_called()
+
+    # If `other.__array_priority__` is absent, does not delegate (raises)
+    with pytest.raises(TypeError):
+        x + ufunc_no_priority
+    ufunc_no_priority.__radd__.assert_not_called()
+
+
 @pytest.mark.filterwarnings("ignore:overflow encountered in cast")  # numpy >=2.0
 def test_operator_dtype_promotion():
     x = np.arange(10, dtype=np.float32)
