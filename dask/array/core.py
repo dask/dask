@@ -207,6 +207,12 @@ def _should_delegate(self, other) -> bool:
         and type(self) is not type(other)
     ):
         return True
+    elif (
+        not hasattr(other, "__array_ufunc__")
+        and hasattr(other, "__array_priority__")
+        and other.__array_priority__ > self.__array_priority__
+    ):
+        return True
     return False
 
 
