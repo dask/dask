@@ -3197,7 +3197,7 @@ def test_point_slicing():
 
 
 def test_point_slicing_with_full_slice():
-    from dask.array.core import _get_axis, _vindex_transpose
+    from dask.array.core import _get_axis
 
     x = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
     d = da.from_array(x, chunks=(2, 3, 3, 4))
@@ -3221,7 +3221,10 @@ def test_point_slicing_with_full_slice():
 
         # Rotate the expected result accordingly
         axis = _get_axis(ind)
-        expected = _vindex_transpose(x[tuple(slc)], axis)
+        expected = x[tuple(slc)]
+        expected = expected.transpose(
+            [axis] + list(range(axis)) + list(range(axis + 1, expected.ndim))
+        )
 
         assert_eq(result, expected)
 
