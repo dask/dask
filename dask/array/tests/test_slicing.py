@@ -1120,3 +1120,14 @@ def test_vindex_with_dask_array():
     indexer = np.random.randint(0, 3, 8).reshape(4, 2).astype(int)
     dindexer = da.from_array(indexer, chunks=(2, 2))
     assert_eq(darr.vindex[dindexer], arr[indexer])
+
+    msg = "vindex does not support indexing"
+
+    with pytest.raises(IndexError, match=msg):
+        darr.rechunk((1, 1)).vindex[dindexer]
+
+    with pytest.raises(IndexError, match=msg):
+        darr.reshape((3, 1)).vindex[dindexer]
+
+    with pytest.raises(IndexError, match=msg):
+        darr.vindex[(dindexer, None)]
