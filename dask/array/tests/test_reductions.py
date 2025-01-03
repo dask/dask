@@ -910,6 +910,13 @@ def test_weighted_reduction():
         da.reduction(dx, w_sum, np.sum, weights=[[[2]]])
 
 
+def test_cumreduction_no_rechunk_on_1d_array():
+    x = da.ones((5,))
+    y = da.cumsum(x)
+    no_rechunk = "rechunk" not in str(dict(y.__dask_graph__()))
+    assert no_rechunk
+
+
 @pytest.mark.parametrize("axis", [3, 0, [1, 3]])
 @pytest.mark.parametrize("q", [0.75, [0.75], [0.75, 0.4]])
 @pytest.mark.parametrize("rechunk", [True, False])
