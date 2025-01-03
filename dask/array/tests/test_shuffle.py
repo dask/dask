@@ -152,3 +152,25 @@ def test_dtype_taker(arr, darr):
         for k, v in dict(result.dask).items()
         if "shuffle-taker" in k
     )
+
+
+def test_shuffle_chunks_given():
+    arr = np.random.randint(1, 1000, (50, 15, 70))
+    darr = da.from_array(arr, chunks=(10, 6, 25))
+
+    indexer = [[5, 2, 10, 7, 8, 1, 12], [14, 0, 9, 4, 6], [3, 11, 13]]
+    chunks = ((25, 25), (7, 5, 3), (30, 30, 10))
+    result = darr.shuffle(indexer, axis=1, chunks=chunks)
+    assert result.chunks == chunks
+    assert_eq(result, arr[:, list(flatten(indexer))])
+
+    with pytest.raises(AssertionError, match="chunks must be a tuple of tuples"):
+        darr.shuffle(indexer, axis=1, chunks=(1, 1, 1))
+
+    with pytest.raises(AssertionError, match="Indexer and chunks must match"):
+        darr.shuffle(indexer, axis=1, chunks=((25, 25), (7, 5, 2), (30, 30, 10)))
+
+    with pytest.raises(
+        AssertionError, match="Indexer and chunks must have the same length"
+    ):
+        darr.shuffle(indexer, axis=1, chunks=((25, 25), (7, 5), (30, 30, 10)))
