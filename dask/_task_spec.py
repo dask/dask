@@ -70,6 +70,40 @@ _T_GraphNode = TypeVar("_T_GraphNode", bound="GraphNode")
 _T_Iterable = TypeVar("_T_Iterable", bound=Iterable)
 
 
+# Ported from more-itertools
+# https://github.com/more-itertools/more-itertools/blob/c8153e2801ade2527f3a6c8b623afae93f5a1ce1/more_itertools/recipes.py#L944-L973
+def _batched(iterable, n, *, strict=False):
+    """Batch data into tuples of length *n*. If the number of items in
+    *iterable* is not divisible by *n*:
+    * The last batch will be shorter if *strict* is ``False``.
+    * :exc:`ValueError` will be raised if *strict* is ``True``.
+
+    >>> list(batched('ABCDEFG', 3))
+    [('A', 'B', 'C'), ('D', 'E', 'F'), ('G',)]
+
+    On Python 3.13 and above, this is an alias for :func:`itertools.batched`.
+    """
+    if n < 1:
+        raise ValueError("n must be at least one")
+    it = iter(iterable)
+    while batch := tuple(itertools.islice(it, n)):
+        if strict and len(batch) != n:
+            raise ValueError("batched(): incomplete batch")
+        yield batch
+
+
+if sys.hexversion >= 0x30D00A2:
+
+    def batched(iterable, n, *, strict=False):
+        return itertools.batched(iterable, n, strict=strict)
+
+else:
+    batched = _batched
+
+    batched.__doc__ = _batched.__doc__
+# End port
+
+
 def identity(*args):
     return args
 
@@ -790,6 +824,7 @@ class Task(GraphNode):
 
 
 class NestedContainer(Task):
+    constructor: Callable
     klass: type
     __slots__ = tuple(__annotations__)
 
@@ -806,7 +841,7 @@ class NestedContainer(Task):
             None,
             self.to_container,
             *args,
-            klass=self.klass,
+            constructor=self.constructor,
             _dependencies=_dependencies,
             **kwargs,
         )
@@ -841,20 +876,20 @@ class NestedContainer(Task):
         return super().__dask_tokenize__()
 
     @staticmethod
-    def to_container(*args, klass):
-        return klass(args)
+    def to_container(*args, constructor):
+        return constructor(args)
 
 
 class List(NestedContainer):
-    klass = list
+    constructor = klass = list
 
 
 class Tuple(NestedContainer):
-    klass = tuple
+    constructor = klass = tuple
 
 
 class Set(NestedContainer):
-    klass = set
+    constructor = klass = set
 
 
 class Dict(NestedContainer):
@@ -868,11 +903,11 @@ class Dict(NestedContainer):
                 raise ValueError("Dict can only take one positional argument")
             kwargs = args[0]
         super().__init__(
-            *(Tuple(*it) for it in kwargs.items()), _dependencies=_dependencies
+            *(itertools.chain(*kwargs.items())), _dependencies=_dependencies
         )
 
     def __repr__(self):
-        values = ", ".join(f"{tup.args[0]}: {tup.args[1]}" for tup in self.args)
+        values = ", ".join(f"{k}: {v}" for k, v in batched(self.args, 2, strict=True))
         return f"Dict({values})"
 
     def substitute(
@@ -885,10 +920,14 @@ class Dict(NestedContainer):
             return self
 
         new = {}
-        for tup in self.args:
-            k, v = tup.substitute(subs_filtered).args
+        for k, v in batched(self.args, 2, strict=True):
+            v = v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
             new[k] = v
         return type(self)(new)
+
+    @staticmethod
+    def constructor(args):
+        return dict(batched(args, 2, strict=True))
 
 
 class DependenciesMapping(MutableMapping):
