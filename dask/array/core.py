@@ -2787,8 +2787,8 @@ class Array(DaskMethodsMixin):
         self,
         indexer: list[list[int]],
         axis: int,
-        chunks: Literal["auto"] = "auto",
-    ):
+        chunks: Literal["auto"] | tuple[tuple[int, ...], ...] = "auto",
+    ) -> Array:
         """Reorders one dimensions of a Dask Array based on an indexer.
 
         Refer to :func:`dask.array.shuffle` for full documentation.
