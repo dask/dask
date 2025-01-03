@@ -1111,3 +1111,12 @@ def test_minimal_dtype_doesnt_overflow():
     ib = np.zeros(1980, dtype=bool)
     ib[1560:1860] = True
     assert_eq(dx[ib], x[ib])
+
+
+def test_vindex_with_dask_array():
+    arr = np.array([0.2, 0.4, 0.6])
+    darr = da.from_array(arr, chunks=-1)
+
+    indexer = np.random.randint(0, 3, 8).reshape(4, 2).astype(int)
+    dindexer = da.from_array(indexer, chunks=(2, 2))
+    assert_eq(darr.vindex[dindexer], arr[indexer])
