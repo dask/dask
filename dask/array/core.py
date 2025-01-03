@@ -27,7 +27,7 @@ from tlz import accumulate, concat, first, partition
 from toolz import frequencies
 
 from dask import compute, config, core
-from dask._task_spec import TaskRef
+from dask._task_spec import List, Task, TaskRef
 from dask.array import chunk
 from dask.array.chunk import getitem
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -5771,23 +5771,24 @@ def _vindex_array(x, dict_indexes):
                 key = sorted_keys[start]
                 outblock, *input_blocks = np.unravel_index(key, ravel_shape)
                 inblock = [_[slicer] for _ in sorted_inblock_idxs]
-                dsk[keyname(name, i, okey)] = (
-                    _vindex_transpose,
-                    (
-                        _vindex_slice,
-                        (x.name,) + interleave_none(okey, input_blocks),
-                        interleave_none(full_slices, inblock),
-                    ),
+                k = keyname(name, i, okey)
+                dsk[k] = Task(
+                    k,
+                    _vindex_slice_and_transpose,
+                    TaskRef((x.name,) + interleave_none(okey, input_blocks)),
+                    interleave_none(full_slices, inblock),
                     axis,
                 )
-                merge_inputs[outblock].append(keyname(name, i, okey))
+                merge_inputs[outblock].append(TaskRef(keyname(name, i, okey)))
                 merge_indexer[outblock].append(sorted_outblock_idx[slicer])
 
             for i in merge_inputs.keys():
-                dsk[keyname(vindex_merge_name, i, okey)] = (
+                k = keyname(vindex_merge_name, i, okey)
+                dsk[k] = Task(
+                    k,
                     _vindex_merge,
                     merge_indexer[i],
-                    merge_inputs[i],
+                    List(merge_inputs[i]),
                 )
 
         result_1d = Array(
@@ -5829,14 +5830,11 @@ def _get_axis(indexes):
     return x2.shape.index(1)
 
 
-def _vindex_slice(block, points):
-    """Pull out point-wise slices from block"""
+def _vindex_slice_and_transpose(block, points, axis):
+    """Pull out point-wise slices from block and rotate block so that
+    points are on the first dimension"""
     points = [p if isinstance(p, slice) else list(p) for p in points]
-    return block[tuple(points)]
-
-
-def _vindex_transpose(block, axis):
-    """Rotate block so that points are on the first dimension"""
+    block = block[tuple(points)]
     axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
     return block.transpose(axes)
 
