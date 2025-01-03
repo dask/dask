@@ -76,4 +76,3 @@ dependencies:
   - pip
   - pip:
     - git+https://github.com/dask/distributed
-    - git+https://github.com/dask/dask-expr

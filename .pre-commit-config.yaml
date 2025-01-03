@@ -54,6 +54,7 @@ repos:
         # Override default --ignore-missing-imports
         # Use pyproject.toml if possible instead of adding command line parameters here
         args: [--warn-unused-configs]
+        exclude: dask/dataframe/dask_expr/
         additional_dependencies:
           # Type stubs
           # - pandas-stubs  # TODO
