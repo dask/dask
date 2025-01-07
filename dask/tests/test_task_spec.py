@@ -1089,6 +1089,12 @@ def test_substitute():
     assert t1({"a": "a"}) == t2({"c": "a"})
 
 
+def test_alias_task_ref_key():
+    t = Alias(TaskRef("a"), "b")
+    assert t.key == "a"
+    assert isinstance(t.key, str)
+
+
 def test_substitute_nested():
     def func(alist):
         return alist[0] + alist[1]["foo"]
