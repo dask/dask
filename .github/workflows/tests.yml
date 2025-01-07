@@ -26,13 +26,15 @@ jobs:
       fail-fast: false
       matrix:
         os: ["windows-latest", "ubuntu-latest", "macos-14"]
-        environment: ["3.10", "3.11", "3.12"]
+        environment: ["3.10", "3.11", "3.12", "3.13"]
         extra: [null]
         exclude:
           - os: "macos-14"
             environment: "3.10"
           - os: "macos-14"
             environment: "3.11"
+          - os: "macos-14"
+            environment: "3.13"
         include:
           # Minimum dependencies
           - os: "ubuntu-latest"
@@ -82,13 +84,6 @@ jobs:
         if: ${{ matrix.extra == 'pandas-nightly' }}
         run: python -m pip install --pre --extra-index https://pypi.anaconda.org/scientific-python-nightly-wheels/simple pandas -U
 
-      - name: Disable query planning for 3.10 builds
-        if: ${{ matrix.environment == '3.10' }}
-        run: |
-          export DASK_DATAFRAME__QUERY_PLANNING="False"
-          echo "DASK_DATAFRAME__QUERY_PLANNING: $DASK_DATAFRAME__QUERY_PLANNING"
-          echo "DASK_DATAFRAME__QUERY_PLANNING=$DASK_DATAFRAME__QUERY_PLANNING" >> $GITHUB_ENV
-
       - name: Disable auto pyarrow strings for 3.10 builds
         if: ${{ matrix.environment == '3.10' }}
         run: |
@@ -109,7 +104,7 @@ jobs:
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
 
       # The environment file is created in continuous_integration/scripts/install.sh
       # and can be useful when debugging locally

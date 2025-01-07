@@ -5,10 +5,10 @@ import warnings
 import numpy as np
 import pandas as pd
 
+import dask.dataframe as dd
 from dask.base import compute as dask_compute
 from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GE_300
-from dask.dataframe.io.io import from_delayed, from_pandas
 from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.delayed import delayed, tokenize
 from dask.utils import parse_bytes
@@ -124,7 +124,7 @@ def read_sql_query(
 
         if len(head) == 0:
             # no results at all
-            return from_pandas(head, npartitions=1)
+            return dd.from_pandas(head, npartitions=1)
 
         if pyarrow_strings_enabled():
             from dask.dataframe._pyarrow import (
@@ -190,7 +190,7 @@ def read_sql_query(
 
     engine.dispose()
 
-    return from_delayed(parts, meta, divisions=divisions)
+    return dd.from_delayed(parts, meta, divisions)
 
 
 def read_sql_table(

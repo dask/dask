@@ -13,7 +13,7 @@ from operator import add
 
 from packaging.version import Version
 
-from distributed import Client, SchedulerPlugin, WorkerPlugin, futures_of, wait
+from distributed import Client, SchedulerPlugin, futures_of, wait
 from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import (  # noqa F401
@@ -30,9 +30,7 @@ import dask
 import dask.bag as db
 from dask import compute, delayed, persist
 from dask.base import compute_as_if_collection, get_scheduler
-from dask.blockwise import Blockwise
 from dask.delayed import Delayed
-from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.utils import get_named_args, get_scheduler_lock, tmpdir, tmpfile
 from dask.utils_test import inc
 
@@ -113,10 +111,6 @@ def test_futures_to_delayed_dataframe(c):
     ddf = dd.from_delayed(futures)
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
-    # Make sure from_delayed is Blockwise
-    if not dd._dask_expr_enabled():
-        assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
-
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
 
@@ -133,8 +127,7 @@ def test_from_delayed_dataframe(c):
     dd.utils.assert_eq(ddf, df, scheduler=c)
 
 
-@pytest.mark.parametrize("fuse", [True, False])
-def test_fused_blockwise_dataframe_merge(c, fuse):
+def test_fused_blockwise_dataframe_merge(c):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
@@ -149,12 +142,11 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     df1 += 10
     df2 += 10
 
-    with dask.config.set({"optimization.fuse.active": fuse}):
-        ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle_method="tasks")
-        ddfm.head()  # https://github.com/dask/dask/issues/7178
-        dfm = ddfm.compute().sort_values("x")
-        # We call compute above since `sort_values` is not
-        # supported in `dask.dataframe`
+    ddfm = ddf1.merge(ddf2, on=["x"], how="left", shuffle_method="tasks")
+    ddfm.head()  # https://github.com/dask/dask/issues/7178
+    dfm = ddfm.compute().sort_values("x")
+    # We call compute above since `sort_values` is not
+    # supported in `dask.dataframe`
     dd.utils.assert_eq(
         dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
     )
@@ -532,10 +524,7 @@ def test_blockwise_array_creation(c, io, fuse):
 @pytest.mark.parametrize(
     "io",
     [
-        "parquet-pyarrow",
-        pytest.param(
-            "parquet-fastparquet", marks=pytest.mark.skip_with_pyarrow_strings
-        ),
+        "parquet",
         "csv",
         # See https://github.com/dask/dask/issues/9793
         pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
@@ -556,15 +545,10 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     else:
         ddf0 = dd.from_pandas(df, npartitions=3)
 
-    if io == "parquet-pyarrow":
+    if io == "parquet":
         pytest.importorskip("pyarrow")
         ddf0.to_parquet(str(tmpdir))
         ddf = dd.read_parquet(str(tmpdir))
-    elif io == "parquet-fastparquet":
-        pytest.importorskip("fastparquet")
-        with pytest.warns(FutureWarning):
-            ddf0.to_parquet(str(tmpdir), engine="fastparquet")
-            ddf = dd.read_parquet(str(tmpdir), engine="fastparquet")
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
@@ -578,14 +562,6 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
-    if not dd._dask_expr_enabled():
-        with dask.config.set({"optimization.fuse.active": fuse}):
-            ddf.compute()
-            dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
-            # dsk should not be a dict unless fuse is explicitly True
-            assert isinstance(dsk, dict) == bool(fuse)
-
-            dd.assert_eq(ddf, df, check_index=False)
 
 
 def test_blockwise_fusion_after_compute(c):
@@ -757,55 +733,7 @@ async def test_futures_in_subgraphs(c, s, a, b):
 
     ddf = ddf[ddf.uid.isin(range(29))].persist()
     ddf["day"] = ddf.enter_time.dt.day_name()
-    ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
-
-
-@pytest.mark.parametrize(
-    "max_branch, expected_layer_type",
-    [
-        (32, SimpleShuffleLayer),
-        (2, ShuffleLayer),
-    ],
-)
-@gen_cluster(client=True, nthreads=[("", 1)] * 2)
-async def test_shuffle_priority(c, s, a, b, max_branch, expected_layer_type):
-    pd = pytest.importorskip("pandas")
-    dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("Checking layers doesn't make sense")
-
-    class EnsureSplitsRunImmediatelyPlugin(WorkerPlugin):
-        failure = False
-
-        def setup(self, worker):
-            self.worker = worker
-
-        def transition(self, key, start, finish, **kwargs):
-            if finish == "executing" and not all(
-                "split" in ts.key for ts in self.worker.state.executing
-            ):
-                if any("split" in ts.key for ts in list(self.worker.state.ready)):
-                    EnsureSplitsRunImmediatelyPlugin.failure = True
-                    raise RuntimeError("Split tasks are not prioritized")
-
-    await c.register_plugin(EnsureSplitsRunImmediatelyPlugin())
-
-    # Test marked as "flaky" since the scheduling behavior
-    # is not deterministic. Note that the test is still
-    # very likely to fail every time if the "split" tasks
-    # are not prioritized correctly
-
-    df = pd.DataFrame({"a": range(1000)})
-    ddf = dd.from_pandas(df, npartitions=10)
-
-    ddf2 = ddf.shuffle("a", shuffle_method="tasks", max_branch=max_branch)
-
-    shuffle_layers = set(ddf2.dask.layers) - set(ddf.dask.layers)
-    for layer_name in shuffle_layers:
-        if "shuffle" in layer_name:
-            assert isinstance(ddf2.dask.layers[layer_name], expected_layer_type)
-    await c.compute(ddf2)
-    assert not EnsureSplitsRunImmediatelyPlugin.failure
+    ddf = await c.submit(ddf.categorize, columns=["day"], index=False)
 
 
 @gen_cluster(client=True)
@@ -814,10 +742,9 @@ async def test_map_partitions_da_input(c, s, a, b):
     np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
     da = pytest.importorskip("dask.array")
-    dd = pytest.importorskip("dask.dataframe")
+    pytest.importorskip("dask.dataframe")
     datasets = pytest.importorskip("dask.datasets")
-    if dd._dask_expr_enabled():
-        pytest.skip("roundtripping through arrays doesn't work yet")
+    pytest.xfail("roundtripping through arrays doesn't work yet")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -836,8 +763,7 @@ def test_map_partitions_df_input():
     """
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("map partitions can't deal with delayed properly")
+    pytest.xfail("map partitions can't deal with delayed properly")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -1132,3 +1058,16 @@ async def test_release_persisted_futures_without_gc(c, s, a, b):
             await asyncio.sleep(0.01)
     finally:
         gc.enable()
+
+
+@gen_cluster(client=True)
+async def test_fusion_barrier_task(c, s, a, b):
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+
+    a = np.random.default_rng().uniform(0, 1, 100).reshape((10, 10))
+    x = da.from_array(a, chunks=(10, 1))
+    new = ((1,) * 10, (10,))
+    x2 = da.rechunk(x, chunks=new, method="p2p")
+    result = await c.compute(x2)
+    da.assert_eq(result, a)

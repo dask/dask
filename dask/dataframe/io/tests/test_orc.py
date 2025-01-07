@@ -10,8 +10,7 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe.optimize import optimize_dataframe_getitem
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 pytest.importorskip("pyarrow.orc")
 pa = pytest.importorskip("pyarrow")
@@ -60,15 +59,6 @@ def test_orc_single(orc_files, split_stripes):
 
     with pytest.raises(ValueError, match="nonexist"):
         dd.read_orc(fn, columns=["time", "nonexist"])
-
-    if not dd._dask_expr_enabled():
-        # Check that `optimize_dataframe_getitem` changes the
-        # `columns` attribute of the "read-orc" layer
-        d3 = d[columns]
-        keys = [(d3._name, i) for i in range(d3.npartitions)]
-        graph = optimize_dataframe_getitem(d3.__dask_graph__(), keys)
-        key = [k for k in graph.layers.keys() if k.startswith("read-orc-")][0]
-        assert set(graph.layers[key].columns) == set(columns)
 
 
 @pytest.mark.network
@@ -145,7 +135,10 @@ def test_orc_aggregate_files_offset(orc_files):
 @pytest.mark.network
 def test_orc_names(orc_files, tmp_path):
     df = dd.read_orc(orc_files)
-    assert df._name.startswith("read-orc")
+    if pyarrow_strings_enabled():
+        assert df.expr.frame._name.startswith("_read_orc")
+    else:
+        assert df.expr._name.startswith("_read_orc")
     out = df.to_orc(tmp_path, compute=False)
     assert out._name.startswith("to-orc")
 

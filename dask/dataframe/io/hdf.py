@@ -10,17 +10,12 @@ import pandas as pd
 from fsspec.utils import build_name_function, stringify_path
 from tlz import merge
 
+import dask.dataframe as dd
 from dask import config
-from dask.base import (
-    compute_as_if_collection,
-    get_scheduler,
-    named_schedulers,
-    tokenize,
-)
+from dask.base import compute_as_if_collection, get_scheduler, named_schedulers
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.core import DataFrame, Scalar
-from dask.dataframe.io.io import _link, from_map
-from dask.dataframe.io.utils import DataFrameIOFunction, SupportsLock
+from dask.dataframe.io.io import _link
+from dask.dataframe.io.utils import SupportsLock
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import get_scheduler_lock
 
@@ -281,13 +276,20 @@ def to_hdf(
     dsk[(final_name, 0)] = (lambda x: None, keys)
     graph = HighLevelGraph.from_collections((name, 0), dsk, dependencies=[df])
 
+    from dask.dataframe import DataFrame
+
     if compute:
         compute_as_if_collection(
             DataFrame, graph, keys, scheduler=scheduler, **dask_kwargs
         )
         return filenames
     else:
-        return Scalar(graph, final_name, "")
+        from dask.dataframe import from_graph
+
+        dsk.update(df.optimize().__dask_graph__())
+        return from_graph(
+            dsk, None, (None, None), [(final_name, 0)], "to_hdf_persister"
+        )
 
 
 dont_use_fixed_error_message = """
@@ -302,47 +304,6 @@ one file/dataset.
 The combination is ambiguous because it could be interpreted as the starting
 and stopping index per file, or starting and stopping index of the global
 dataset."""
-
-
-class HDFFunctionWrapper(DataFrameIOFunction):
-    """
-    HDF5 Function-Wrapper Class
-
-    Reads HDF5 data from disk to produce a partition (given a key).
-    """
-
-    def __init__(self, columns, dim, lock, common_kwargs):
-        self._columns = columns
-        self.lock = lock
-        self.common_kwargs = common_kwargs
-        self.dim = dim
-        if columns and dim > 1:
-            self.common_kwargs = merge(common_kwargs, {"columns": columns})
-
-    @property
-    def columns(self):
-        return self._columns
-
-    def project_columns(self, columns):
-        """Return a new HDFFunctionWrapper object with
-        a sub-column projection.
-        """
-        if columns == self.columns:
-            return self
-        return HDFFunctionWrapper(columns, self.dim, self.lock, self.common_kwargs)
-
-    def __call__(self, part):
-        """Read from hdf5 file with a lock"""
-
-        path, key, kwargs = part
-        if self.lock:
-            self.lock.acquire()
-        try:
-            result = pd.read_hdf(path, key, **merge(self.common_kwargs, kwargs))
-        finally:
-            if self.lock:
-                self.lock.release()
-        return result
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
@@ -466,16 +427,31 @@ def read_hdf(
         paths, key, start, stop, chunksize, sorted_index, mode
     )
 
-    # Construct the output collection with from_map
-    return from_map(
-        HDFFunctionWrapper(columns, meta.ndim, lock, common_kwargs),
+    return dd.from_map(
+        _read_hdf,
         parts,
         meta=meta,
         divisions=divisions,
-        label="read-hdf",
-        token=tokenize(paths, key, start, stop, sorted_index, chunksize, mode),
-        enforce_metadata=False,
+        lock=lock,
+        common_kwargs=common_kwargs,
+        columns=columns,
     )
+
+
+def _read_hdf(part, *, common_kwargs, lock, columns=None):
+    """Read from hdf5 file with a lock"""
+
+    path, key, kwargs = part
+    if lock:
+        lock.acquire()
+    try:
+        result = pd.read_hdf(path, key, **merge(common_kwargs, kwargs))
+    finally:
+        if lock:
+            lock.release()
+    if columns is not None:
+        result = result[columns]
+    return result
 
 
 def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
@@ -576,8 +552,3 @@ def _get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
                 divisions.append(None)
 
     return keys, stops, divisions
-
-
-from dask.dataframe.core import _Frame
-
-_Frame.to_hdf.__doc__ = to_hdf.__doc__

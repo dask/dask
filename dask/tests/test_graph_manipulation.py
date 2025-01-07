@@ -159,38 +159,6 @@ def test_wait_on_many(layers):
     assert cnt.n == 5
 
 
-@pytest.mark.skipif("not da or not dd")
-def test_wait_on_collections():
-    dd = pytest.importorskip("dask.dataframe")
-    if dd._dask_expr_enabled():
-        pytest.skip("hlg doesn't make sense")
-    colls, cnt = collections_with_node_counters()
-
-    # Create a delayed that depends on a single one among all collections
-    @delayed
-    def f(x):
-        pass
-
-    colls2 = wait_on(*colls)
-    f(colls2[0]).compute()
-    assert cnt.n == 16
-
-    # dask.delayed
-    assert colls2[0].compute() == colls[0].compute()
-    # dask.array
-    da.utils.assert_eq(colls2[1], colls[1])
-    da.utils.assert_eq(colls2[2], colls[2])
-    # dask.bag
-    db.utils.assert_eq(colls2[3], colls[3])
-    db.utils.assert_eq(colls2[4], colls[4])
-    db.utils.assert_eq(colls2[5], colls[5])
-    # dask.dataframe
-    dd.utils.assert_eq(colls2[6], colls[6])
-    dd.utils.assert_eq(colls2[7], colls[7])
-    dd.utils.assert_eq(colls2[8], colls[8])
-    dd.utils.assert_eq(colls2[9], colls[9])
-
-
 @pytest.mark.parametrize("layers", [False, True])
 def test_clone(layers):
     dsk1 = {("a", h1): 1, ("a", h2): 2}
@@ -332,92 +300,6 @@ def test_bind(layers):
     assert bound3.__dask_graph__()[cloned_e_name][0] is chunks.bind
     assert bound3.compute() == (1, 2, 3)
     assert cnt.n == 9
-
-
-@pytest.mark.skipif("not da or not dd")
-@pytest.mark.parametrize("func", [bind, clone])
-def test_bind_clone_collections(func):
-    if dd._dask_expr_enabled():
-        pytest.skip("not supported")
-
-    @delayed
-    def double(x):
-        return x * 2
-
-    # dask.delayed
-    d1 = double(2)
-    d2 = double(d1)
-    # dask.array
-    a1 = da.ones((10, 10), chunks=5)
-    a2 = a1 + 1
-    a3 = a2.T
-    # dask.bag
-    b1 = db.from_sequence([1, 2], npartitions=2)
-    # b1's tasks are not callable, so we need an extra step to properly test bind
-    b2 = b1.map(lambda x: x * 2)
-    b3 = b2.map(lambda x: x + 1)
-    b4 = b3.min()
-    # dask.dataframe
-    df = pd.DataFrame({"x": list(range(10))})
-    ddf1 = dd.from_pandas(df, npartitions=2)
-    # ddf1's tasks are not callable, so we need an extra step to properly test bind
-    ddf2 = ddf1.map_partitions(lambda x: x * 2)
-    ddf3 = ddf2.map_partitions(lambda x: x + 1)
-    ddf4 = ddf3["x"]  # dd.Series
-    ddf5 = ddf4.min()  # dd.Scalar
-
-    cnt = NodeCounter()
-    if func is bind:
-        parent = da.ones((10, 10), chunks=5).map_blocks(cnt.f)
-        cnt.n = 0
-        d2c, a3c, b3c, b4c, ddf3c, ddf4c, ddf5c = bind(
-            children=(d2, a3, b3, b4, ddf3, ddf4, ddf5),
-            parents=parent,
-            omit=(d1, a1, b2, ddf2),
-            seed=0,
-        )
-    else:
-        d2c, a3c, b3c, b4c, ddf3c, ddf4c, ddf5c = clone(
-            d2,
-            a3,
-            b3,
-            b4,
-            ddf3,
-            ddf4,
-            ddf5,
-            omit=(d1, a1, b2, ddf2),
-            seed=0,
-        )
-
-    assert_did_not_materialize(d2c, d2)
-    assert_did_not_materialize(a3c, a3)
-    assert_did_not_materialize(b3c, b3)
-    assert_did_not_materialize(b4c, b4)
-    assert_did_not_materialize(ddf3c, ddf3)
-    assert_did_not_materialize(ddf4c, ddf4)
-    assert_did_not_materialize(ddf5c, ddf5)
-
-    assert_no_common_keys(d2c, d2, omit=d1, layers=True)
-    assert_no_common_keys(a3c, a3, omit=a1, layers=True)
-    assert_no_common_keys(b3c, b3, omit=b2, layers=True)
-    assert_no_common_keys(ddf3c, ddf3, omit=ddf2, layers=True)
-    assert_no_common_keys(ddf4c, ddf4, omit=ddf2, layers=True)
-    assert_no_common_keys(ddf5c, ddf5, omit=ddf2, layers=True)
-
-    assert d2.compute() == d2c.compute()
-    assert cnt.n == 4 or func is clone
-    da.utils.assert_eq(a3c, a3)
-    assert cnt.n == 8 or func is clone
-    db.utils.assert_eq(b3c, b3)
-    assert cnt.n == 12 or func is clone
-    db.utils.assert_eq(b4c, b4)
-    assert cnt.n == 16 or func is clone
-    dd.utils.assert_eq(ddf3c, ddf3)
-    assert cnt.n == 24 or func is clone  # dd.utils.assert_eq calls compute() twice
-    dd.utils.assert_eq(ddf4c, ddf4)
-    assert cnt.n == 32 or func is clone  # dd.utils.assert_eq calls compute() twice
-    dd.utils.assert_eq(ddf5c, ddf5)
-    assert cnt.n == 36 or func is clone
 
 
 @pytest.mark.parametrize(

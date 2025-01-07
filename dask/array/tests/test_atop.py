@@ -8,6 +8,7 @@ import pytest
 
 import dask
 import dask.array as da
+from dask._task_spec import Task, TaskRef
 from dask.array.utils import assert_eq
 from dask.blockwise import (
     _BLOCKWISE_DEFAULT_PREFIX,
@@ -21,8 +22,8 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import dec, hlg_layer_topological, inc
 
 a, b, c, d, e, f, g = "a", "b", "c", "d", "e", "f", "g"
-_0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = (
-    f"{_BLOCKWISE_DEFAULT_PREFIX}{i}" for i in range(10)
+_0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = tuple(
+    map(TaskRef, (f"{_BLOCKWISE_DEFAULT_PREFIX}{i}" for i in range(10)))
 )
 i, j, k = "i", "j", "k"
 
@@ -31,258 +32,345 @@ i, j, k = "i", "j", "k"
     "inputs,expected",
     [
         # output name, output index, task, input indices
-        [[(b, "i", {b: (inc, _0)}, [(a, "i")])], (b, "i", {b: (inc, _0)}, [(a, "i")])],
+        # Case 0
+        [
+            [(b, "i", Task(b, inc, _0), [(a, "i")])],
+            (
+                b,
+                "i",
+                Task(b, inc, _0),
+                [
+                    (a, "i"),
+                ],
+            ),
+        ],
+        # Case 1
         [
             [
-                (b, "i", {b: (inc, _0)}, [(a, "i")]),
-                (c, "i", {c: (dec, _0)}, [(a, "i")]),
-                (d, "i", {d: (add, _0, _1, _2)}, [(a, "i"), (b, "i"), (c, "i")]),
+                (b, "i", Task(b, inc, _0), [(a, "i")]),
+                (c, "i", Task(c, dec, _0), [(a, "i")]),
+                (d, "i", Task(d, add, _0, _1, _2), [(a, "i"), (b, "i"), (c, "i")]),
             ],
             (
                 d,
                 "i",
-                {
-                    _unique_dep(b, "i"): (inc, _0),
-                    _unique_dep(c, "i"): (dec, _0),
-                    d: (add, _0, _unique_dep(b, "i"), _unique_dep(c, "i")),
-                },
+                Task.fuse(
+                    Task(
+                        d,
+                        add,
+                        _0,
+                        TaskRef(_unique_dep(b, "i")),
+                        TaskRef(_unique_dep(c, "i")),
+                    ),
+                    Task(_unique_dep(c, "i"), dec, _0),
+                    Task(_unique_dep(b, "i"), inc, _0),
+                ),
                 [(a, "i")],
             ),
         ],
+        # Case 2
         [
             [
-                (b, "i", {b: (inc, _0)}, [(a, "i")]),
-                (c, "j", {c: (inc, _0)}, [(b, "j")]),
+                (b, "i", Task(b, inc, _0), [(a, "i")]),
+                (c, "j", Task(c, inc, _0), [(b, "j")]),
             ],
             (
                 c,
                 "j",
-                {_unique_dep(b, "j"): (inc, _0), c: (inc, _unique_dep(b, "j"))},
+                Task.fuse(
+                    Task(c, inc, TaskRef(_unique_dep(b, "j"))),
+                    Task(_unique_dep(b, "j"), inc, _0),
+                ),
                 [(a, "j")],
             ),
         ],
+        # Case 3
         [
             [
-                (b, "i", {b: (sum, _0)}, [(a, "ij")]),
-                (c, "k", {c: (inc, _0)}, [(b, "k")]),
+                (b, "i", Task(b, sum, _0), [(a, "ij")]),
+                (c, "k", Task(c, inc, _0), [(b, "k")]),
             ],
             (
                 c,
                 "k",
-                {_unique_dep(b, "k"): (sum, _0), c: (inc, _unique_dep(b, "k"))},
+                Task.fuse(
+                    Task(c, inc, TaskRef(_unique_dep(b, "k"))),
+                    Task(_unique_dep(b, "k"), sum, _0),
+                ),
                 [(a, "kA")],
             ),
         ],
+        # Case 4
         [
             [
-                (c, "i", {c: (inc, _0)}, [(a, "i")]),
-                (d, "i", {d: (inc, _0)}, [(b, "i")]),
-                (g, "ij", {g: (add, _0, _1)}, [(c, "i"), (d, "j")]),
+                (c, "i", Task(c, inc, _0), [(a, "i")]),
+                (d, "i", Task(d, inc, _0), [(b, "i")]),
+                (g, "ij", Task(g, add, _0, _1), [(c, "i"), (d, "j")]),
             ],
             (
                 g,
                 "ij",
-                {
-                    g: (add, _unique_dep(c, "i"), _unique_dep(d, "j")),
-                    _unique_dep(c, "i"): (inc, _0),
-                    _unique_dep(d, "j"): (inc, _1),
-                },
+                Task.fuse(
+                    Task(
+                        g,
+                        add,
+                        TaskRef(_unique_dep(c, "i")),
+                        TaskRef(_unique_dep(d, "j")),
+                    ),
+                    Task(_unique_dep(c, "i"), inc, _0),
+                    Task(_unique_dep(d, "j"), inc, _1),
+                ),
                 [(a, "i"), (b, "j")],
             ),
         ],
+        # Case 5
         [
             [
-                (b, "ji", {b: (np.transpose, _0)}, [(a, "ij")]),
-                (c, "ij", {c: (add, _0, _1)}, [(a, "ij"), (b, "ij")]),
+                (b, "ji", Task(b, np.transpose, _0), [(a, "ij")]),
+                (c, "ij", Task(c, add, _0, _1), [(a, "ij"), (b, "ij")]),
             ],
             (
                 c,
                 "ij",
-                {
-                    c: (add, _0, _unique_dep(b, "ij")),
-                    _unique_dep(b, "ij"): (np.transpose, _1),
-                },
+                Task.fuse(
+                    Task(c, add, _0, TaskRef(_unique_dep(b, "ij"))),
+                    Task(_unique_dep(b, "ij"), np.transpose, _1),
+                ),
                 [(a, "ij"), (a, "ji")],
             ),
         ],
+        # Case 6
         [
             [
-                (c, "i", {c: (add, _0, _1)}, [(a, "i"), (b, "i")]),
-                (d, "i", {d: (inc, _0)}, [(c, "i")]),
+                (c, "i", Task(c, add, _0, _1), [(a, "i"), (b, "i")]),
+                (d, "i", Task(d, inc, _0), [(c, "i")]),
             ],
             (
                 d,
                 "i",
-                {d: (inc, _unique_dep(c, "i")), _unique_dep(c, "i"): (add, _0, _1)},
+                Task.fuse(
+                    Task(d, inc, TaskRef(_unique_dep(c, "i"))),
+                    Task(_unique_dep(c, "i"), add, _0, _1),
+                ),
                 [(a, "i"), (b, "i")],
             ),
         ],
+        # Case 7
         [
             [
-                (b, "ij", {b: (np.transpose, _0)}, [(a, "ji")]),
-                (d, "ij", {d: (np.dot, _0, _1)}, [(b, "ik"), (c, "kj")]),
+                (b, "ij", Task(b, np.transpose, _0), [(a, "ji")]),
+                (d, "ij", Task(d, np.dot, _0, _1), [(b, "ik"), (c, "kj")]),
             ],
             (
                 d,
                 "ij",
-                {
-                    d: (np.dot, _unique_dep(b, "ik"), _0),
-                    _unique_dep(b, "ik"): (np.transpose, _1),
-                },
+                Task.fuse(
+                    Task(
+                        d,
+                        np.dot,
+                        TaskRef(_unique_dep(b, "ik")),
+                        _0,
+                    ),
+                    Task(_unique_dep(b, "ik"), np.transpose, _1),
+                ),
                 [(c, "kj"), (a, "ki")],
             ),
         ],
+        # Case 8
         [
             [
-                (c, "i", {c: (add, _0, _1)}, [(a, "i"), (b, "i")]),
-                (f, "i", {f: (add, _0, _1)}, [(d, "i"), (e, "i")]),
-                (g, "i", {g: (add, _0, _1)}, [(c, "i"), (f, "i")]),
+                (c, "i", Task(c, add, _0, _1), [(a, "i"), (b, "i")]),
+                (f, "i", Task(f, add, _0, _1), [(d, "i"), (e, "i")]),
+                (g, "i", Task(g, add, _0, _1), [(c, "i"), (f, "i")]),
             ],
             (
                 g,
                 "i",
-                {
-                    g: (add, _unique_dep(c, "i"), _unique_dep(f, "i")),
-                    _unique_dep(f, "i"): (add, _2, _3),
-                    _unique_dep(c, "i"): (add, _0, _1),
-                },
+                Task.fuse(
+                    Task(
+                        g,
+                        add,
+                        TaskRef(_unique_dep(c, "i")),
+                        TaskRef(_unique_dep(f, "i")),
+                    ),
+                    Task(_unique_dep(f, "i"), add, _2, _3),
+                    Task(_unique_dep(c, "i"), add, _0, _1),
+                ),
                 [(a, i), (b, i), (d, i), (e, i)],
             ),
         ],
+        # Case 9
         [
             [
-                (c, "i", {c: (add, _0, _1)}, [(a, "i"), (b, "i")]),
-                (f, "i", {f: (add, _0, _1)}, [(a, "i"), (e, "i")]),
-                (g, "i", {g: (add, _0, _1)}, [(c, "i"), (f, "i")]),
+                (c, "i", Task(c, add, _0, _1), [(a, "i"), (b, "i")]),
+                (f, "i", Task(f, add, _0, _1), [(a, "i"), (e, "i")]),
+                (g, "i", Task(g, add, _0, _1), [(c, "i"), (f, "i")]),
             ],
             (
                 g,
                 "i",
-                {
-                    g: (add, _unique_dep(c, "i"), _unique_dep(f, "i")),
-                    _unique_dep(f, "i"): (add, _0, _2),
-                    _unique_dep(c, "i"): (add, _0, _1),
-                },
+                Task.fuse(
+                    Task(
+                        g,
+                        add,
+                        TaskRef(_unique_dep(c, "i")),
+                        TaskRef(_unique_dep(f, "i")),
+                    ),
+                    Task(_unique_dep(f, "i"), add, _0, _2),
+                    Task(_unique_dep(c, "i"), add, _0, _1),
+                ),
                 [(a, "i"), (b, "i"), (e, "i")],
             ),
         ],
+        # Case 10
         [
             [
-                (b, "i", {b: (sum, _0)}, [(a, "ij")]),
-                (c, "i", {c: (inc, _0)}, [(b, "i")]),
+                (b, "i", Task(b, sum, _0), [(a, "ij")]),
+                (c, "i", Task(c, inc, _0), [(b, "i")]),
             ],
             (
                 c,
                 "i",
-                {c: (inc, _unique_dep(b, "i")), _unique_dep(b, "i"): (sum, _0)},
+                Task.fuse(
+                    Task(c, inc, TaskRef(_unique_dep(b, "i"))),
+                    Task(_unique_dep(b, "i"), sum, _0),
+                ),
                 [(a, "iA")],
             ),
         ],
+        # Case 11
         [
             [
-                (c, "i", {c: (inc, _0)}, [(b, "i")]),
-                (d, "i", {d: (add, _0, _1, _2)}, [(a, "i"), (b, "i"), (c, "i")]),
+                (c, "i", Task(c, inc, _0), [(b, "i")]),
+                (d, "i", Task(d, add, _0, _1, _2), [(a, "i"), (b, "i"), (c, "i")]),
             ],
             (
                 d,
                 "i",
-                {d: (add, _0, _1, _unique_dep(c, "i")), _unique_dep(c, "i"): (inc, _1)},
+                Task.fuse(
+                    Task(
+                        d,
+                        add,
+                        _0,
+                        _1,
+                        TaskRef(_unique_dep(c, "i")),
+                    ),
+                    Task(_unique_dep(c, "i"), inc, _1),
+                ),
                 [(a, "i"), (b, "i")],
             ),
         ],
+        # Case 12
         # Include literals
         [
-            [(b, "i", {b: (add, _0, _1)}, [(a, "i"), (123, None)])],
-            (b, "i", {b: (add, _0, _1)}, [(a, "i"), (123, None)]),
+            [(b, "i", Task(b, add, _0, _1), [(a, "i"), (123, None)])],
+            (b, "i", Task(b, add, _0, _1), [(a, "i"), (123, None)]),
         ],
+        # Case 13
         [
             [
-                (b, "i", {b: (add, _0, _1)}, [(a, "i"), (123, None)]),
-                (c, "j", {c: (add, _0, _1)}, [(b, "j"), (456, None)]),
+                (b, "i", Task(b, add, _0, _1), [(a, "i"), (123, None)]),
+                (c, "j", Task(c, add, _0, _1), [(b, "j"), (456, None)]),
             ],
             (
                 c,
                 "j",
-                {_unique_dep(b, "j"): (add, _1, _2), c: (add, _unique_dep(b, "j"), _0)},
+                Task.fuse(
+                    Task(c, add, TaskRef(_unique_dep(b, "j")), _0),
+                    Task(_unique_dep(b, "j"), add, _1, _2),
+                ),
                 [(456, None), (a, "j"), (123, None)],
             ),
         ],
+        # Case 14
         # Literals that compare equal (e.g. 0 and False) aren't deduplicated
         [
             [
-                (b, "i", {b: (add, _0, _1)}, [(a, "i"), (0, None)]),
-                (c, "j", {c: (add, _0, _1)}, [(b, "j"), (False, None)]),
+                (b, "i", Task(b, add, _0, _1), [(a, "i"), (0, None)]),
+                (c, "j", Task(c, add, _0, _1), [(b, "j"), (False, None)]),
             ],
             (
                 c,
                 "j",
-                {_unique_dep(b, "j"): (add, _1, _2), c: (add, _unique_dep(b, "j"), _0)},
+                Task.fuse(
+                    Task(c, add, TaskRef(_unique_dep(b, "j")), _0),
+                    Task(_unique_dep(b, "j"), add, _1, _2),
+                ),
                 [(False, None), (a, "j"), (0, None)],
             ),
         ],
+        # Case 15
         # Literals are deduplicated
         [
             [
-                (b, "i", {b: (add, _0, _1)}, [(a, "i"), (123, None)]),
-                (c, "j", {c: (add, _0, _1)}, [(b, "j"), (123, None)]),
+                (b, "i", Task(b, add, _0, _1), [(a, "i"), (123, None)]),
+                (c, "j", Task(c, add, _0, _1), [(b, "j"), (123, None)]),
             ],
             (
                 c,
                 "j",
-                {_unique_dep(b, "j"): (add, _1, _0), c: (add, _unique_dep(b, "j"), _0)},
+                Task.fuse(
+                    Task(c, add, TaskRef(_unique_dep(b, "j")), _0),
+                    Task(_unique_dep(b, "j"), add, _1, _0),
+                ),
                 [(123, None), (a, "j")],
             ),
         ],
+        # Case 16
         # Check cases where two distinct indices are used
         # for the same dependency name, and where the same
         # dependency-index combination is repeated
         # (See: https://github.com/dask/dask/issues/8535)
         [
             [
-                (b, "jk", {b: (add, _0, _1)}, [(a, "jk"), (2, None)]),
-                (c, "ijk", {c: (add, _0, _1)}, [(b, "ij"), (b, "jk")]),
-                (d, "ijk", {d: (inc, _0, _1)}, [(c, "ijk"), (123, None)]),
+                (b, "jk", Task(b, add, _0, _1), [(a, "jk"), (2, None)]),
+                (c, "ijk", Task(c, add, _0, _1), [(b, "ij"), (b, "jk")]),
+                (d, "ijk", Task(d, inc, _0, _1), [(c, "ijk"), (123, None)]),
             ],
             (
                 "d",
                 "ijk",
-                {
-                    "d": (inc, _unique_dep(c, "ijk"), _0),
-                    _unique_dep(c, "ijk"): (
+                Task.fuse(
+                    Task(d, inc, TaskRef(_unique_dep(c, "ijk")), _0),
+                    Task(
+                        _unique_dep(c, "ijk"),
                         add,
-                        _unique_dep(b, "ij"),
-                        _unique_dep(b, "jk"),
+                        TaskRef(_unique_dep(b, "ij")),
+                        TaskRef(_unique_dep(b, "jk")),
                     ),
-                    _unique_dep(b, "ij"): (add, _1, _2),
-                    _unique_dep(b, "jk"): (add, _3, _2),
-                },
+                    Task(_unique_dep(b, "ij"), add, _1, _2),
+                    Task(_unique_dep(b, "jk"), add, _3, _2),
+                ),
                 [(123, None), (a, "ij"), (2, None), (a, "jk")],
             ),
         ],
+        # Case 17
         [
             [
-                (b, "jk", {b: (add, _0, _1)}, [(a, "jk"), (2, None)]),
-                (c, "ijk", {c: (add, _0, _1)}, [(b, "ij"), (b, "jk")]),
-                (d, "ijk", {d: (add, _0, _1, _2)}, [(b, "ij"), (c, "ij"), (b, "ij")]),
+                (b, "jk", Task(b, add, _0, _1), [(a, "jk"), (2, None)]),
+                (c, "ijk", Task(c, add, _0, _1), [(b, "ij"), (b, "jk")]),
+                (d, "ijk", Task(d, add, _0, _1, _2), [(b, "ij"), (c, "ij"), (b, "ij")]),
             ],
             (
                 "d",
                 "ijk",
-                {
-                    "d": (
+                Task.fuse(
+                    Task(
+                        d,
                         add,
-                        _unique_dep(b, "ij"),
+                        TaskRef(_unique_dep(b, "ij")),
+                        TaskRef(_unique_dep(c, "ij")),
+                        TaskRef(_unique_dep(b, "ij")),
+                    ),
+                    Task(
                         _unique_dep(c, "ij"),
-                        _unique_dep(b, "ij"),
-                    ),
-                    _unique_dep(c, "ij"): (
                         add,
-                        _unique_dep(b, "ij"),
-                        _unique_dep(b, "jk"),
+                        TaskRef(_unique_dep(b, "ij")),
+                        TaskRef(_unique_dep(b, "jk")),
                     ),
-                    _unique_dep(b, "ij"): (add, _0, _1),
-                    _unique_dep(b, "jk"): (add, _2, _1),
-                },
+                    Task(_unique_dep(b, "ij"), add, _0, _1),
+                    Task(_unique_dep(b, "jk"), add, _2, _1),
+                ),
                 [(a, "ij"), (2, None), (a, "jk")],
             ),
         ],
@@ -296,15 +384,18 @@ def test_rewrite(inputs, expected):
         for inp in inputs
     ]
     result = rewrite_blockwise(inputs)
+
     result2 = (
         result.output,
         "".join(result.output_indices),
-        result.dsk,
+        result.task,
         [
             (name, "".join(ind) if ind is not None else ind)
             for name, ind in result.indices
         ],
     )
+    # Assert on the task first to get a more informative error message
+    assert result2[2] == expected[2]
     assert result2 == expected
 
 

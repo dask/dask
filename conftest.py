@@ -61,3 +61,32 @@ def pytest_addoption(parser):
 def pytest_runtest_setup(item):
     if "slow" in item.keywords and not item.config.getoption("--runslow"):
         pytest.skip("need --runslow option to run")
+
+
+def pytest_assertrepr_compare(op, left, right):
+    import difflib
+
+    from dask._task_spec import Task
+
+    if isinstance(left, Task) and isinstance(right, Task):
+
+        def _get_attrs(node):
+            return (
+                [
+                    str(node.func),
+                ]
+                + sorted([str(a) for a in node.args])
+                + sorted([f"{k}: {v}" for k, v in node.kwargs.items()])
+            )
+
+        diff = list(
+            difflib.ndiff(
+                _get_attrs(left),
+                _get_attrs(right),
+            )
+        )
+        return [
+            "Comparing two dask graph nodes:",
+            f" left: {left.key} right: {right.key}",
+            " Diff:",
+        ] + diff

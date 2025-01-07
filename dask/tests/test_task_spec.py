@@ -11,17 +11,32 @@ from dask._task_spec import (
     Alias,
     DataNode,
     DependenciesMapping,
+    Dict,
+    List,
+    Set,
     Task,
     TaskRef,
+    Tuple,
     _get_dependencies,
     convert_legacy_graph,
     execute_graph,
+    fuse_linear_task_spec,
+    parse_input,
     resolve_aliases,
 )
 from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
 from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
+from dask.tokenize import tokenize
+from dask.utils import funcname
+
+
+def convert_and_verify_keys(dsk):
+    new_dsk = convert_legacy_graph(dsk)
+    vals = [(k, v.key) for k, v in new_dsk.items()]
+    assert all(v[0] == v[1] for v in vals), vals
+    return new_dsk
 
 
 def identity(x):
@@ -47,7 +62,7 @@ def test_convert_legacy_dsk_skip_new():
     dsk = {
         "key-1": Task("key-1", func, "a", "b"),
     }
-    converted = convert_legacy_graph(dsk)
+    converted = convert_and_verify_keys(dsk)
     assert converted["key-1"] is dsk["key-1"]
     assert converted == dsk
 
@@ -57,9 +72,7 @@ def test_repr():
     assert repr(t) == "<Task 'key' func('a', 'b')>"
 
     t = Task("nested", func2, t, t.ref())
-    assert (
-        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
-    )
+    assert repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias('key'))>"
 
     def long_function_name_longer_even_longer(a, b):
         return a + b
@@ -72,6 +85,33 @@ def test_repr():
 
     t = Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value")
     assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
+
+
+def test_task_eq():
+    assert Alias(("x", 0, 0)) == Alias(("x", 0, 0))
+    assert Alias(("x", 0, 0)) != Alias(("x", 0, 1))
+
+    assert List(Alias(("x", 0, 0))) == List(Alias(("x", 0, 0)))
+    assert List(Alias(("x", 0, 0))) == List(Alias("a", "a")).substitute(
+        {"a": ("x", 0, 0)}
+    )
+    assert List(Alias(("x", 0, 0)), Alias(("x", 0, 1))) != List(
+        Alias(("x", 0, 0)), Alias(("x", 0, 2))
+    )
+
+    obj = Task(
+        ("z", 0, 0),
+        func,
+        List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+        List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+    )
+    assert obj == obj
+    assert obj == Task(
+        ("z", 0, 0),
+        func,
+        List(TaskRef(("x", 0, 0)), TaskRef(("x", 0, 1))),
+        List(TaskRef(("y", 0, 0)), TaskRef(("y", 1, 0))),
+    )
 
 
 def long_function_name_longer_even_longer(a, b):
@@ -87,9 +127,7 @@ def test_unpickled_repr():
     assert repr(t) == "<Task 'key' func('a', 'b')>"
 
     t = pickle.loads(pickle.dumps(Task("nested", func2, t, t.ref())))
-    assert (
-        repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias(key->key))>"
-    )
+    assert repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias('key'))>"
 
     t = pickle.loads(
         pickle.dumps(Task("long", long_function_name_longer_even_longer, t, t.ref()))
@@ -100,11 +138,6 @@ def test_unpickled_repr():
         pickle.dumps(Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value"))
     )
     assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
-
-
-def _assert_dsk_conversion(new_dsk):
-    vals = [(k, v.key) for k, v in new_dsk.items()]
-    assert all(v[0] == v[1] for v in vals), vals
 
 
 def test_convert_legacy_dsk():
@@ -126,8 +159,7 @@ def test_convert_legacy_dsk():
             (func, "const", "bar"),
         ],
     }
-    new_dsk = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(new_dsk)
+    new_dsk = convert_and_verify_keys(dsk)
     t1 = new_dsk["key-1"]
     assert isinstance(t1, Task)
     assert t1.func == func
@@ -168,17 +200,19 @@ def test_task_executable():
 
 
 def test_task_nested_sequence():
+    # We do **not** recurse into structures since this kills performance
+    # we're only considering top-level task objects as arguments or kwargs
     t1 = Task("key-1", func, "a", "b")
     t2 = Task("key-2", func2, "c", "d")
 
     tseq = Task("seq", identity, [t1, t2])
-    assert tseq() == [func("a", "b"), func2("c", "d")]
+    assert tseq() == [t1, t2]
 
     tseq = Task("set", identity, {t1, t2})
-    assert tseq() == {func("a", "b"), func2("c", "d")}
+    assert tseq() == {t1, t2}
 
     tseq = Task("dict", identity, {"a": t1, "b": t2})
-    assert tseq() == {"a": func("a", "b"), "b": func2("c", "d")}
+    assert tseq() == {"a": t1, "b": t2}
 
 
 def test_reference_remote():
@@ -288,8 +322,7 @@ def test_parse_curry():
     dsk = {
         "key-1": (curry, func, "a", "b"),
     }
-    converted = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(converted)
+    converted = convert_and_verify_keys(dsk)
     t = Task("key-1", curry, func, "a", "b")
     assert converted["key-1"]() == t()
     assert t() == "a-bc"
@@ -310,7 +343,7 @@ def test_avoid_cycles():
     dsk = {
         "key": TaskRef("key"),  # e.g. a persisted key
     }
-    new_dsk = convert_legacy_graph(dsk)
+    new_dsk = convert_and_verify_keys(dsk)
     assert not new_dsk
 
 
@@ -378,8 +411,7 @@ def test_subgraph_callable():
         "b": 2,
         "c": (subgraph, "a", "b"),
     }
-    new_dsk = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(new_dsk)
+    new_dsk = convert_and_verify_keys(dsk)
     assert new_dsk["c"].dependencies == {"a", "b", "add-123"}
     assert (
         new_dsk["c"](
@@ -409,51 +441,14 @@ def test_redirect_to_subgraph_callable():
         "alias": "foo",
         "foo": (func, (subgraph, (func2, "bar", "baz")), "second_arg"),
     }
-    new_dsk = convert_legacy_graph(dsk)
-    from dask import get
+    new_dsk = convert_and_verify_keys(dsk)
 
-    expected = get(dsk, ["foo"])[0]
-    assert expected == "bar=baz//some=dict-second_arg"
     t = new_dsk["alias"]
     assert t.dependencies == {"foo"}
     t = new_dsk["foo"]
     assert not t.dependencies
 
-    assert t() == expected
-
-
-def test_inline():
-    t = Task("key-1", func, "a", TaskRef("b"))
-
-    assert t.inline({"b": DataNode(None, "b")})() == "a-b"
-
-    assert t.inline({"b": Task(None, func, "b", "c")})() == "a-b-c"
-
-    t2 = Task("key-1", func, TaskRef("a"), TaskRef("b"))
-    inline2 = t2.inline({"a": DataNode(None, "a")})
-    assert inline2.dependencies == {"b"}
-
-    assert inline2({"b": "foo"}) == "a-foo"
-
-    t = Task("foo", identity, [t, t2])
-    assert t.dependencies == {"b", "a"}
-    inlined = t.inline({"a": DataNode(None, "foo")})
-    assert inlined.dependencies == {"b"}
-    assert inlined({"b": "bar"}) == ["a-bar", "foo-bar"]
-
-    t = Task("key-2", identity, [t, t2])
-    t = Task("key-2", identity, {"foo": t, "bar": t2})
-    inlined = t.inline(
-        {
-            "a": DataNode(None, "foo"),
-            "bar": DataNode(None, "bar"),
-        }
-    )
-    assert inlined({"b": "bar"})
-
-    t = Task("key-1", identity, [TaskRef("a"), TaskRef("b")])
-    inlined = t.inline({"a": DataNode(None, "a"), "b": DataNode(None, "b")})
-    assert inlined() == ["a", "b"]
+    assert t() == "bar=baz//some=dict-second_arg"
 
 
 @pytest.mark.parametrize(
@@ -505,8 +500,7 @@ def test_parse_graph_namedtuple_legacy(typ, args, kwargs):
         return x
 
     dsk = {"foo": (func, typ(*args, **kwargs))}
-    new_dsk = convert_legacy_graph(dsk)
-    _assert_dsk_conversion(new_dsk)
+    new_dsk = convert_and_verify_keys(dsk)
 
     assert new_dsk["foo"]() == typ(*args, **kwargs)
 
@@ -524,7 +518,7 @@ def test_parse_namedtuple(typ, args, kwargs):
         return x
 
     obj = typ(*args, **kwargs)
-    t = Task("foo", func, obj)
+    t = Task("foo", func, parse_input(obj))
 
     assert t() == obj
 
@@ -532,7 +526,7 @@ def test_parse_namedtuple(typ, args, kwargs):
     if typ is PlainNamedTuple:
         args = tuple([TaskRef("b")] + list(args)[1:])
         obj = typ(*args, **kwargs)
-        t = Task("foo", func, obj)
+        t = Task("foo", func, parse_input(obj))
         assert t.dependencies == {"b"}
         assert t({"b": "foo"}) == typ(*tuple(["foo"] + list(args)[1:]), **kwargs)
 
@@ -542,6 +536,11 @@ def test_pickle_literals():
     obj = DataNode("foo", np.transpose)
     roundtripped = pickle.loads(pickle.dumps(obj))
     assert roundtripped == obj
+
+
+@pytest.mark.parametrize("obj", [set, {0}, [], [1], {}, {2: 3}, (), (4,)])
+def test_parse_non_task_inputs(obj):
+    assert parse_input(obj) == obj
 
 
 def test_resolve_aliases():
@@ -630,7 +629,7 @@ def test_convert_resolve():
         "fourth": "third",
         "fifth": (func, "fourth"),
     }
-    dsk = convert_legacy_graph(dsk)
+    dsk = convert_and_verify_keys(dsk)
     assert len(dsk) == 5
 
     optimized = resolve_aliases(dsk, {"fifth"}, reverse_dict(DependenciesMapping(dsk)))
@@ -901,3 +900,223 @@ def test_subgraph_dont_hold_in_memory_too_long_legacy():
     converted = convert_legacy_graph(dsk)
     assert converted["bar"]()
     assert OnlyTwice.total == 10
+
+
+def test_linear_fusion():
+    tasks = [
+        io := Task("foo", func, 1),
+        second := Task("second", func, io.ref()),
+        Task("third", func, second.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"third"})
+    assert len(result) == 2
+    assert isinstance(result["third"], Alias)
+    assert (
+        isinstance(result["foo-second-third"], Task)
+        and funcname(result["foo-second-third"].func) == "_execute_subgraph"
+    )
+
+    # Data Nodes don't get fused
+
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref()),
+        third := Task("third", func, second.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert len(result) == 2
+    assert isinstance(result["fourth"], Alias)
+    assert (
+        isinstance(result["foo-second-third-fourth"], Task)
+        and funcname(result["foo-second-third-fourth"].func) == "_execute_subgraph"
+    )
+    assert "foo" not in result
+
+    # Branch, so no fusion
+    tasks.append(Task("branch", func, third.ref()))
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert len(result) == 4
+    assert "foo-second-third" in result
+    assert isinstance(result["third"], Alias)
+
+    # Branch, so no fusion at all
+    tasks.append(Task("branch2", func, second.ref()))
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert len(result) == 6
+    assert not any("-" in k for k in dsk)
+
+
+def test_linear_fusion_intermediate_branch():
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref()),
+        third := Task("third", func, second.ref()),
+        other := Task("other", func, 1),
+        Task("fourth", func, third.ref(), other.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "foo-second-third" in result
+    assert isinstance(result["fourth"], Task)
+
+
+def test_linear_fusion_two_branches():
+    tasks = [
+        left_one := DataNode("left_one", "a"),
+        left_two := Task("left_two", func, left_one.ref()),
+        right_one := DataNode("right_one", "a"),
+        right_two := Task("right_two", func, right_one.ref()),
+        middle := Task("middle", func, right_two.ref(), left_two.ref()),
+        third := Task("third", func, middle.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "left_one-left_two" in result
+    assert "right_one-right_two" in result
+    assert isinstance(result["right_two"], Alias)
+    assert isinstance(result["left_two"], Alias)
+    assert isinstance(result["fourth"], Alias)
+    assert isinstance(result["third-fourth"], Task)
+
+
+def test_linear_fusion_multiple_outputs():
+    tasks = [
+        first := DataNode("first", "a"),
+        second := Task("second", func, first.ref()),
+        third := Task("third", func, second.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth", "second"})
+    assert "first-second" in result
+    assert "second" in result
+    assert isinstance(result["second"], Alias)
+    assert isinstance(result["fourth"], Alias)
+    assert isinstance(result["first-second"], Task)
+    assert isinstance(result["third-fourth"], Task)
+
+
+def test_nested_containers():
+    t = List(Task("key-1", func, "a", "b"), Task("key-2", func, "c", "d"))
+    assert t() == ["a-b", "c-d"]
+
+    t = List(Task("key-1", func, "a", TaskRef("b")), Task("key-2", func, "c", "d"))
+    assert t.dependencies == {"b"}
+    assert t({"b": "b"}) == ["a-b", "c-d"]
+
+    t = Dict(k=Task("key-1", func, "a", "b"), v=Task("key-2", func, "c", "d"))
+    assert not t.dependencies
+    assert t() == {"k": "a-b", "v": "c-d"}
+    t2 = Dict({"k": Task("key-1", func, "a", "b"), "v": Task("key-2", func, "c", "d")})
+    assert t == t2
+    assert t() == t2()
+    t = Dict(k=Task("key-1", func, "a", TaskRef("b")), v=Task("key-2", func, "c", "d"))
+    assert t.dependencies == {"b"}
+    assert t({"b": "b"}) == {"k": "a-b", "v": "c-d"}
+
+    t = Dict(
+        {
+            "k": Task("key-1", func, "a", TaskRef("b")),
+            # Use a hashable key that isn't a string. This cannot be used as
+            # kwargs, for instance
+            ("v", 1): Task("key-2", func, "c", "d"),
+        }
+    )
+    assert t.dependencies == {"b"}
+    assert t({"b": "b"}) == {"k": "a-b", ("v", 1): "c-d"}
+
+    t = Dict(
+        k=Task("key-1", func, "a", "b"),
+        v=Task("key-2", func, "c", "d"),
+    )
+    t2 = Dict(
+        v=Task("key-2", func, "c", "d"),
+        k=Task("key-1", func, "a", "b"),
+    )
+    assert t == t2
+    assert tokenize(t) == tokenize(t2)
+
+
+def test_block_io_fusion():
+
+    class SubTask(Task):
+
+        @property
+        def block_fusion(self) -> bool:
+            return True
+
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref()),
+        third := SubTask("third", func, second.ref()),
+        Task("fourth", func, third.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "foo-second" in result
+    assert isinstance(result["fourth"], Task)
+    assert isinstance(result["third"], SubTask)
+
+
+@pytest.mark.parametrize(
+    "task_type, python_type",
+    [
+        (Tuple, tuple),
+        (List, list),
+        (Set, set),
+    ],
+)
+def test_nested_containers_different_types(task_type, python_type):
+    t = task_type(Task("key-1", func, "a", TaskRef("b")), Task("key-2", func, "c", "d"))
+    assert t.dependencies == {"b"}
+    assert t({"b": "b"}) == python_type(("a-b", "c-d"))
+
+
+def test_substitute():
+    t1 = Task("key-1", func, TaskRef("a"), "b")
+    assert t1.substitute({"a": "a"}) is t1
+    assert t1.substitute({"a": "a"}, key="foo") is not t1
+    t2 = t1.substitute({"a": "c"})
+    assert t2 is not t1
+    assert t2.dependencies == {"c"}
+
+    assert t1({"a": "a"}) == t2({"c": "a"})
+
+
+def test_alias_task_ref_key():
+    t = Alias(TaskRef("a"), "b")
+    assert t.key == "a"
+    assert isinstance(t.key, str)
+
+
+def test_substitute_nested():
+    def func(alist):
+        return alist[0] + alist[1]["foo"]
+
+    t1 = Task(
+        "key-1",
+        func,
+        List(
+            TaskRef("a"),
+            Dict(
+                {
+                    "foo": TaskRef("b"),
+                }
+            ),
+        ),
+    )
+    assert t1.dependencies == {"a", "b"}
+    t2 = t1.substitute({"a": "c", "b": "d"})
+    assert t2.dependencies == {"c", "d"}
+    assert t1({"a": "a", "b": "b"}) == t2({"c": "a", "d": "b"})
+
+
+@pytest.mark.parametrize("Container", [Dict, List, Set, Tuple])
+def test_nested_containers_empty(Container):
+    assert Container(Container.klass())() == Container.klass()

@@ -125,8 +125,7 @@ def test_overlap_internal_asymmetric_small():
 def test_trim_internal():
     d = da.ones((40, 60), chunks=(10, 10))
     e = trim_internal(d, axes={0: 1, 1: 2}, boundary="reflect")
-    assert any("_overlap_trim_info" in k[0] for k in dict(e.dask))
-
+    assert len(collections_to_dsk([e])) == 24
     assert e.chunks == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
 
 
@@ -566,6 +565,18 @@ def test_map_overlap_deprecated_signature():
         y = da.map_overlap(x, func, 1, "reflect", False)
         assert y.compute() == 5
         assert y.shape == (3,)
+
+
+def test_map_overlap_trim_false_chunking():
+    a = np.arange(100)
+    c = da.from_array(a, chunks=15)
+
+    def f(x):
+        return x[20:-20]
+
+    d = da.map_overlap(f, c, depth={0: 20}, boundary=0, trim=False)
+    print(d.shape)
+    print(d.compute().shape)
 
 
 def test_nearest_overlap():

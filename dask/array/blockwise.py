@@ -6,9 +6,10 @@ import warnings
 import tlz as toolz
 
 from dask import base, utils
+from dask.blockwise import _blockwise_unpack_collections_task_spec
 from dask.blockwise import blockwise as core_blockwise
-from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ArrayBlockwiseDep
 
 
 def blockwise(
@@ -200,7 +201,7 @@ def blockwise(
             v = (v,)
         chunkss[k] = v
 
-    arginds = zip(arrays, args[1::2])
+    arginds = list(zip(arrays, args[1::2]))
     numblocks = {}
 
     dependencies = []
@@ -212,7 +213,8 @@ def blockwise(
     for arg, ind in arginds:
         if ind is None:
             arg = normalize_arg(arg)
-            arg, collections = unpack_collections(arg)
+            arg, collections = _blockwise_unpack_collections_task_spec(arg)
+
             dependencies.extend(collections)
         else:
             if (
@@ -224,16 +226,17 @@ def blockwise(
                     "Index string %s does not match array dimension %d"
                     % (ind, arg.ndim)
                 )
-            numblocks[arg.name] = arg.numblocks
-            arrays.append(arg)
-            arg = arg.name
+            if not isinstance(arg, ArrayBlockwiseDep):
+                numblocks[arg.name] = arg.numblocks
+                arrays.append(arg)
+                arg = arg.name
         argindsstr.extend((arg, ind))
 
     # Normalize keyword arguments
     kwargs2 = {}
     for k, v in kwargs.items():
         v = normalize_arg(v)
-        v, collections = unpack_collections(v)
+        v, collections = _blockwise_unpack_collections_task_spec(v)
         dependencies.extend(collections)
         kwargs2[k] = v
 

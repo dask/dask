@@ -2102,6 +2102,37 @@ def _cumsum(seq, initial_zero):
         return tuple(toolz.accumulate(add, seq))
 
 
+@functools.lru_cache
+def _max(seq):
+    if isinstance(seq, _HashIdWrapper):
+        seq = seq.wrapped
+    return max(seq)
+
+
+def cached_max(seq):
+    """Compute max with caching.
+
+    Caching is by the identity of `seq` rather than the value. It is thus
+    important that `seq` is a tuple of immutable objects, and this function
+    is intended for use where `seq` is a value that will persist (generally
+    block sizes).
+
+    Parameters
+    ----------
+    seq : tuple
+        Values to reduce
+
+    Returns
+    -------
+    tuple
+    """
+    assert isinstance(seq, tuple)
+    # Look up by identity first, to avoid a linear-time __hash__
+    # if we've seen this tuple object before.
+    result = _max(_HashIdWrapper(seq))
+    return result
+
+
 def cached_cumsum(seq, initial_zero=False):
     """Compute :meth:`toolz.accumulate` with caching.
 
@@ -2277,3 +2308,11 @@ class shorten_traceback:
         #     return exc_tb.tb_next
 
         return exc_tb
+
+
+def unzip(ls, nout):
+    """Unzip a list of lists into ``nout`` outputs."""
+    out = list(zip(*ls))
+    if not out:
+        out = [()] * nout
+    return out

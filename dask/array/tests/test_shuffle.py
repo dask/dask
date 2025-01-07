@@ -148,7 +148,7 @@ def test_dtype_taker(arr, darr):
     expected = arr[:, [1, 5, 6, 0, 3, 4, 2, 7]]
     assert_eq(result, expected)
     assert all(
-        v[1][1].dtype == np.uint8
+        v.value[1][1].dtype == np.uint8
         for k, v in dict(result.dask).items()
         if "shuffle-taker" in k
     )

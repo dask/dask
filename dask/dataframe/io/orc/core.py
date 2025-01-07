@@ -1,62 +1,19 @@
 from __future__ import annotations
 
-import copy
 from typing import TYPE_CHECKING, Literal
 
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 
+import dask.dataframe as dd
 from dask.base import compute_as_if_collection, tokenize
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.core import DataFrame, Scalar
-from dask.dataframe.io.io import from_map
 from dask.dataframe.io.orc.utils import ORCEngine
-from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import apply
 
 if TYPE_CHECKING:
     from dask.dataframe.io.orc.arrow import ArrowORCEngine
-
-
-class ORCFunctionWrapper(DataFrameIOFunction):
-    """
-    ORC Function-Wrapper Class
-    Reads ORC data from disk to produce a partition.
-    """
-
-    def __init__(self, fs, columns, schema, engine, index):
-        self.fs = fs
-        self._columns = columns
-        self.schema = schema
-        self.engine = engine
-        self.index = index
-
-    @property
-    def columns(self):
-        return self._columns
-
-    def project_columns(self, columns):
-        """Return a new ORCFunctionWrapper object with
-        a sub-column projection.
-        """
-        if columns == self.columns:
-            return self
-        func = copy.deepcopy(self)
-        func._columns = columns
-        return func
-
-    def __call__(self, parts):
-        _df = self.engine.read_partition(
-            self.fs,
-            parts,
-            self.schema,
-            self.columns,
-        )
-        if self.index:
-            _df.set_index(self.index, inplace=True)
-
-        return _df
 
 
 def _get_engine(
@@ -137,16 +94,33 @@ def read_orc(
         aggregate_files,
     )
 
-    # Construct the output collection with from_map
-    return from_map(
-        ORCFunctionWrapper(fs, columns, schema, engine, index),
+    if columns is not None and index in columns:
+        columns = [col for col in columns if col != index]
+    return dd.from_map(
+        _read_orc,
         parts,
+        engine=engine,
+        fs=fs,
+        schema=schema,
+        index=index,
         meta=meta,
-        divisions=[None] * (len(parts) + 1),
-        label="read-orc",
-        token=tokenize(fs_token, path, columns),
-        enforce_metadata=False,
+        columns=columns,
     )
+
+
+def _read_orc(parts, *, engine, fs, schema, index, columns=None):
+    if index is not None and columns is not None:
+        columns.append(index)
+    _df = engine.read_partition(
+        fs,
+        parts,
+        schema,
+        columns,
+    )
+    if index:
+        _df = _df.set_index(index)
+
+    return _df
 
 
 def to_orc(
@@ -235,9 +209,15 @@ def to_orc(
     dsk[(final_name, 0)] = (lambda x: None, part_tasks)
     graph = HighLevelGraph.from_collections((final_name, 0), dsk, dependencies=[df])
 
+    from dask.dataframe import DataFrame
+
     # Compute or return future
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
         return compute_as_if_collection(DataFrame, graph, part_tasks, **compute_kwargs)
-    return Scalar(graph, final_name, "")
+
+    from dask.dataframe import from_graph
+
+    dsk.update(df.optimize().__dask_graph__())
+    return from_graph(dsk, None, (None, None), [(final_name, 0)], "to-orc-persister")

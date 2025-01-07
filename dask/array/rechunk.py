@@ -20,8 +20,9 @@ import tlz as toolz
 from tlz import accumulate
 
 from dask import config
+from dask._task_spec import Alias, Task, TaskRef, parse_input
 from dask.array.chunk import getitem
-from dask.array.core import Array, concatenate3, normalize_chunks
+from dask.array.core import Array, concatenate_shaped, normalize_chunks
 from dask.array.utils import validate_axis
 from dask.array.wrap import empty
 from dask.base import tokenize
@@ -722,18 +723,25 @@ def _compute_rechunk(x, chunks):
                 slc.start == 0 and slc.stop == x.chunks[i][ind]
                 for i, (slc, ind) in enumerate(zip(slices, old_index))
             ):
-                rec_cat_arg_flat[rec_cat_index] = old_blocks[old_block_index]
+                rec_cat_arg_flat[rec_cat_index] = TaskRef(old_blocks[old_block_index])
             else:
-                intermediates[name] = (getitem, old_blocks[old_block_index], slices)
-                rec_cat_arg_flat[rec_cat_index] = name
+                intermediates[name] = Task(
+                    name, getitem, TaskRef(old_blocks[old_block_index]), slices
+                )
+                rec_cat_arg_flat[rec_cat_index] = TaskRef(name)
 
         assert rec_cat_index == rec_cat_arg.size - 1
 
         # New block is formed by concatenation of sliced old blocks
         if all(d == 1 for d in rec_cat_arg.shape):
-            x2[key] = rec_cat_arg.flat[0]
+            x2[key] = Alias(key, rec_cat_arg.flat[0])
         else:
-            x2[key] = (concatenate3, rec_cat_arg.tolist())
+            x2[key] = Task(
+                key,
+                concatenate_shaped,
+                parse_input(list(rec_cat_arg.flatten())),
+                subdims1,
+            )
 
     del old_blocks, new_index
 

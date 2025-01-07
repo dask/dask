@@ -8,11 +8,11 @@ from itertools import zip_longest
 import pandas as pd
 from fsspec.core import open_files
 
+import dask.dataframe as dd
 from dask.base import compute as dask_compute
 from dask.bytes import read_bytes
 from dask.core import flatten
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.io.io import from_delayed
 from dask.dataframe.utils import insert_meta_param_description, make_meta
 from dask.delayed import delayed
 
@@ -288,7 +288,7 @@ def read_json(
             for f in files
         ]
 
-    return from_delayed(parts, meta=meta)
+    return dd.from_delayed(parts, meta=meta)
 
 
 def read_json_chunk(

@@ -827,8 +827,8 @@ class HighLevelGraph(Graph):
         for k in dep_key1:
             if self.dependencies[k] != dependencies[k]:
                 raise ValueError(
-                    f"incorrect dependencies[{repr(k)}]: {repr(self.dependencies[k])} "
-                    f"expected {repr(dependencies[k])}"
+                    f"incorrect HLG dependencies[{repr(k)}]: {repr(self.dependencies[k])} "
+                    f"expected {repr(dependencies[k])} from task dependencies"
                 )
 
     def __repr__(self) -> str:
@@ -897,8 +897,6 @@ def to_graphviz(
     if color == "layer_type":
         layer_colors = {
             "DataFrameIOLayer": ["#CCC7F9", False],  # purple
-            "ShuffleLayer": ["#F9CCC7", False],  # rose
-            "SimpleShuffleLayer": ["#F9CCC7", False],  # rose
             "ArrayOverlayLayer": ["#FFD9F2", False],  # pink
             "BroadcastJoinLayer": ["#D9F2FF", False],  # blue
             "Blockwise": ["#D9FFE6", False],  # green

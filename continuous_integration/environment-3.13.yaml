@@ -1,18 +1,16 @@
 # This job includes coverage
-name: test-environment-310
+name: test-environment
 channels:
   - conda-forge
-  - nodefaults
 dependencies:
   # required dependencies
-  - python=3.10
+  - python=3.13
   - packaging
   - pyyaml
   - click
   - cloudpickle
   - partd
   - fsspec
-  - importlib_metadata
   - toolz
   # test dependencies
   - pre-commit
@@ -25,31 +23,29 @@ dependencies:
   - moto<5
   # Optional dependencies
   - mimesis
-  - numpy=1.24
-  - pandas=2.1
-  - numba
+  - numpy >=2  # only tested here
+  - pandas
+  #- numba  # not available for py 13
   - flask
   - fastparquet
   - h5py
-  - pytables
+  # Temporarily removing to allow `numpy >=2` to be installed
+  # - pytables
   - zarr
-  # `tiledb-py=0.17.5` lead to strange seg faults in CI.
-  # We should unpin when possible.
+  # `tiledb-py=0.17.5` lead to strange seg faults in CI, However 0.18 is needed for 3.11
   # https://github.com/dask/dask/pull/9569
-  - tiledb-py<0.17.4
-  - pyspark
-  - tiledb
+  # - tiledb-py # crashes on Python 3.11
+  # - pyspark
+  # - tiledb # crashes on Python 3.11
   - xarray
-  - numexpr>=2.8  # Something is pinning it to 2.7
   - sqlalchemy
-  - pyarrow=14.0.1
+  - pyarrow>=14.0.1
   - coverage
   - jsonschema
   # other -- IO
   - boto3
   - botocore
   - bokeh
-  - bottleneck
   - httpretty
   - aiohttp
   - s3fs>=2021.9.0
@@ -64,18 +60,19 @@ dependencies:
   - lz4
   - psutil
   - requests
-  - scikit-image
+  #- scikit-image  # not available for py 13
   - scikit-learn
   - scipy
   - python-snappy
-  - sparse
+  #- sparse  # not available for py 13
   - cachey
   - python-graphviz
   - python-cityhash
   - python-xxhash
-  - mmh3
+  #- mmh3  # only on pypi for py 13
   - jinja2
   - pip
   - pip:
     - git+https://github.com/dask/distributed
+    - mmh3
     - git+https://github.com/dask/dask-expr

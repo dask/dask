@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
     "Topic :: System :: Distributed Computing",
 ]
@@ -54,7 +55,7 @@ dataframe = [
     "pandas >= 2.0",
     "dask-expr >= 1.1, <1.2",  # dask-expr pins the dask version
 ]
-distributed = ["distributed == 2024.11.2"]
+distributed = ["distributed == 2024.12.1"]
 diagnostics = [
     "bokeh >= 3.1.0",
     "jinja2 >= 2.10.3",
@@ -70,6 +71,7 @@ test = [
     "pandas[test]",
     "pytest",
     "pytest-cov",
+    "pytest-mock",
     "pytest-rerunfailures",
     "pytest-timeout",
     "pytest-xdist",
