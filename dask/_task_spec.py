@@ -536,7 +536,11 @@ class Alias(GraphNode):
     target: KeyType
     __slots__ = tuple(__annotations__)
 
-    def __init__(self, key: KeyType, target: Alias | TaskRef | KeyType | None = None):
+    def __init__(
+        self, key: KeyType | TaskRef, target: Alias | TaskRef | KeyType | None = None
+    ):
+        if isinstance(key, TaskRef):
+            key = key.key
         self.key = key
         if target is None:
             target = key
