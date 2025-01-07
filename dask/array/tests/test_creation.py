@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from dask.base import collections_to_dsk
+
 pytest.importorskip("numpy")
 
 import numpy as np
@@ -955,6 +957,18 @@ def test_nan_zeros_ones_like(fn, shape_chunks, dtype):
         dafn(y1, dtype=dtype),
         npfn(y2, dtype=dtype),
     )
+
+
+def test_from_array_getitem_fused():
+    arr = np.arange(100).reshape(10, 10)
+    darr = da.from_array(arr, chunks=(5, 5))
+    result = darr[slice(1, 5), :][slice(1, 3), :]
+    dsk = collections_to_dsk([result])
+    # Ensure that slices are merged properly
+    assert dsk[("array-getitem-5fa417c3ed99231ec31894d38389c157", 0, 0)].args[0][
+        ("getitem-8509fd2f210394f1f14566e7eb864e4c", 0, 0)
+    ].args[1] == ((slice(2, 4), slice(0, None)))
+    assert_eq(result, arr[slice(1, 5), :][slice(1, 3), :])
 
 
 @pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
