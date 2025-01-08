@@ -19,11 +19,11 @@ def _array_expr_enabled() -> bool:
             use_array_expr is False and ARRAY_EXPR_ENABLED is True
         ):
             warnings.warn(
-                "The 'dataframe.query-planning' config is now set to "
+                "The 'array.query-planning' config is now set to "
                 f"{use_array_expr}, but query planning is already "
                 f"{'enabled' if ARRAY_EXPR_ENABLED else 'disabled'}. "
                 "The query-planning config can only be changed before "
-                "`dask.dataframe` is first imported!"
+                "`dask.array` is first imported!"
             )
         return ARRAY_EXPR_ENABLED  # type: ignore[return-value]
 

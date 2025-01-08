@@ -95,6 +95,7 @@ def df_ddf():
     return df, ddf
 
 
+@pytest.mark.filterwarnings("ignore:The behavior of DatetimeProperties")
 @pytest.mark.xfail(PANDAS_GE_300, reason="divisions are incorrect")
 def test_dt_accessor(df_ddf):
     df, ddf = df_ddf
@@ -177,13 +178,13 @@ def test_str_accessor(df_ddf):
 
     with ctx:
         expected = df.str_col.str.contains("d", case=False)
-    assert_eq(
-        ddf.str_col.str.contains("d", case=False),
-        expected,
-    )
-    assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
-        ddf.str_col.str.contains("d", case=False).dask
-    )
+        assert_eq(
+            ddf.str_col.str.contains("d", case=False),
+            expected,
+        )
+        assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
+            ddf.str_col.str.contains("d", case=False).dask
+        )
 
     for na in [True, False]:
         assert_eq(

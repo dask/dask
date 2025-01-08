@@ -1885,7 +1885,7 @@ def test_concat5():
     ]
 
     for case in cases:
-        from dask_expr._collection import FrameBase
+        from dask.dataframe.dask_expr._collection import FrameBase
 
         pdcase = [c.compute() if isinstance(c, FrameBase) else c for c in case]
 
