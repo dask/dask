@@ -426,6 +426,10 @@ class GraphNode:
         raise NotImplementedError
 
     @property
+    def data_producer(self) -> bool:
+        return False
+
+    @property
     def dependencies(self) -> frozenset:
         return self._dependencies
 
@@ -526,6 +530,7 @@ class GraphNode:
             outkey,
             (Dict({k: Alias(k) for k in external_deps}) if external_deps else {}),
             {},
+            data_producer=any(t.data_producer for t in tasks),
         )
 
 
@@ -607,6 +612,10 @@ class DataNode(GraphNode):
         self.typ = type(value)
         self._dependencies = _no_deps
 
+    @property
+    def data_producer(self) -> bool:
+        return True
+
     def copy(self):
         return DataNode(self.key, self.value)
 
@@ -663,6 +672,7 @@ class Task(GraphNode):
     func: Callable
     args: tuple
     kwargs: dict
+    _data_producer: bool
     _token: str | None
     _is_coro: bool | None
     _repr: str | None
@@ -675,6 +685,7 @@ class Task(GraphNode):
         func: Callable,
         /,
         *args: Any,
+        data_producer: bool = False,
         _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
@@ -700,6 +711,11 @@ class Task(GraphNode):
         self._is_coro = None
         self._token = None
         self._repr = None
+        self._data_producer = data_producer
+
+    @property
+    def data_producer(self) -> bool:
+        return self._data_producer
 
     def copy(self):
         return type(self)(
@@ -813,6 +829,7 @@ class Task(GraphNode):
                 key or self.key,
                 self.func,
                 *new_args,
+                data_producer=self.data_producer,
                 **new_kwargs,
             )
         elif key is None or key == self.key:
@@ -823,6 +840,7 @@ class Task(GraphNode):
                 key,
                 self.func,
                 *self.args,
+                data_producer=self.data_producer,
                 **self.kwargs,
             )
 
