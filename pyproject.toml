@@ -161,7 +161,7 @@ platform = "linux"
 # platform = win32
 # platform = darwin
 plugins = ["numpy.typing.mypy_plugin"]
-allow_untyped_decorators = false
+disallow_untyped_decorators = true
 ignore_missing_imports = true
 no_implicit_optional = true
 show_error_codes = true
@@ -176,7 +176,7 @@ exclude = "dask/dataframe/dask_expr/"
 module = [
     "dask.order",
 ]
-allow_untyped_defs = false
+disallow_untyped_defs = true
 
 [tool.codespell]
 ignore-words-list = "coo,nd,medias"
