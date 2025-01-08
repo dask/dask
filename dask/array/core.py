@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import math
 import operator
 import os
@@ -3005,6 +3006,32 @@ def ensure_int(f):
     if i != f:
         raise ValueError("Could not coerce %f to integer" % f)
     return i
+
+
+@functools.lru_cache
+def normalize_chunks_cached(
+    chunks, shape=None, limit=None, dtype=None, previous_chunks=None
+):
+    """Cached version of normalize_chunks.
+
+    .. note::
+
+        chunks are expected to be a scalar or a tuple.
+        previous_chunks are expected to be a tuple of tuples if given.
+
+    See :func:`normalize_chunks` for further documentation.
+    """
+    assert isinstance(
+        chunks, (tuple, int, str)
+    ), "Cached version of normalize_chunks expected chunks as tuple, int or string"
+    if previous_chunks is not None:
+        assert isinstance(
+            previous_chunks, tuple
+        ), "Cached version of normalize_chunks expected previous_chunks as tuple"
+
+    return normalize_chunks(
+        chunks, shape=shape, limit=limit, dtype=dtype, previous_chunks=previous_chunks
+    )
 
 
 def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks=None):
