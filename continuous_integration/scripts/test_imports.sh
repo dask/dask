@@ -6,7 +6,7 @@ test_import () {
     mamba clean --all
     echo "Create environment: python=$PYTHON_VERSION $1"
     # Create an empty environment
-    mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION packaging pyyaml fsspec toolz partd click cloudpickle importlib-metadata $1
+    mamba create -y -n test-imports -c conda-forge python=$PYTHON_VERSION packaging pyyaml fsspec toolz partd click cloudpickle importlib-metadata $1
     conda activate test-imports
     if [[ $1 =~ "distributed" ]]; then
         # dask[distributed] depends on the latest version of distributed
