@@ -25,6 +25,6 @@ test_import () {
 
 test_import ""                                "import dask, dask.base, dask.multiprocessing, dask.threaded, dask.optimization, dask.bag, dask.delayed, dask.graph_manipulation, dask.layers"
 test_import "numpy"                           "import dask.array"
-test_import "pandas pyarrow"                  "import dask.dataframe"
+test_import "pandas pyarrow<18"               "import dask.dataframe"
 test_import "bokeh"                           "import dask.diagnostics"
 test_import "distributed"                     "import dask.distributed"
