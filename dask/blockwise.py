@@ -236,6 +236,7 @@ def blockwise(
     concatenate=None,
     new_axes=None,
     dependencies=(),
+    data_producer=False,
     **kwargs,
 ):
     """Create a Blockwise symbolic mutable mapping
@@ -450,7 +451,7 @@ def blockwise(
         inputs_indices.extend((None,) * len(new_keys))
 
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
-    task = Task(output, func, *task_args, **kwargs)
+    task = Task(output, func, *task_args, data_producer=data_producer, **kwargs)
     subgraph = Blockwise(
         output,
         output_indices,
@@ -800,6 +801,7 @@ class Blockwise(Layer):
                 chunks.bind,
                 self.task,
                 TaskRef(blockwise_token(len(indices))),
+                data_producer=self.task.data_producer,
             )
             indices.append((TaskRef(bind_to), None))
         else:
