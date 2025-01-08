@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from dask.dataframe.dask_expr import from_pandas, read_sql_table
+from dask.dataframe import read_sql_table
+from dask.dataframe.dask_expr import from_pandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
 from dask.utils import tmpfile
 
