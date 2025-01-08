@@ -4,7 +4,6 @@ import os
 
 import pytest
 
-from dask._compatibility import LINUX
 from dask.dataframe._compat import PYARROW_GE_1500
 from dask.dataframe.dask_expr import read_parquet
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
