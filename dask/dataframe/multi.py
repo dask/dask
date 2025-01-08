@@ -326,7 +326,7 @@ def _split_partition(df, on, nsplits):
 
     # We are not joining (purely) on columns.  Need to
     # add a "_partitions" column to perform the split.
-    from dask_expr._collection import FrameBase
+    from dask.dataframe.dask_expr._collection import FrameBase
 
     if not isinstance(on, FrameBase):
         on = _select_columns_or_index(df, on)

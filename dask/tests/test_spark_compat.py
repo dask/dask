@@ -36,9 +36,6 @@ pytestmark = [
 @pytest.fixture(
     params=[
         "pyarrow",
-        pytest.param(
-            "fastparquet", marks=pytest.mark.filterwarnings("ignore::FutureWarning")
-        ),
     ]
 )
 def engine(request):
