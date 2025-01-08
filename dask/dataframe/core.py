@@ -9,7 +9,7 @@ from tlz import first, unique
 
 import dask.array as da
 from dask import core
-from dask.base import is_dask_collection, named_schedulers
+from dask.base import named_schedulers
 from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.dispatch import get_parallel_type
@@ -51,21 +51,6 @@ def _concat(args, ignore_index=False):
         if not args2
         else methods.concat(args2, uniform=True, ignore_index=ignore_index)
     )
-
-
-def _maybe_from_pandas(dfs):
-    from dask.dataframe.io import from_pandas
-
-    dfs = [
-        (
-            from_pandas(df, 1)
-            if (is_series_like(df) or is_dataframe_like(df))
-            and not is_dask_collection(df)
-            else df
-        )
-        for df in dfs
-    ]
-    return dfs
 
 
 def split_evenly(df, k):

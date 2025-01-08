@@ -1,38 +1,8 @@
 from __future__ import annotations
 
 import datetime
-from numbers import Integral
-
-from dask.dataframe import methods
 
 CombinedOutput = type("CombinedOutput", (tuple,), {})
-
-
-def _combined_parts(prev_part, current_part, next_part, before, after):
-    msg = (
-        "Partition size is less than overlapping "
-        "window size. Try using ``df.repartition`` "
-        "to increase the partition size."
-    )
-
-    if prev_part is not None and isinstance(before, Integral):
-        if prev_part.shape[0] != before:
-            raise NotImplementedError(msg)
-
-    if next_part is not None and isinstance(after, Integral):
-        if next_part.shape[0] != after:
-            raise NotImplementedError(msg)
-
-    parts = [p for p in (prev_part, current_part, next_part) if p is not None]
-    combined = methods.concat(parts)
-
-    return CombinedOutput(
-        (
-            combined,
-            len(prev_part) if prev_part is not None else None,
-            len(next_part) if next_part is not None else None,
-        )
-    )
 
 
 def overlap_chunk(func, before, after, *args, **kwargs):
@@ -77,23 +47,3 @@ def _head_timedelta(current, next_, after):
     overlapped : DataFrame
     """
     return next_[next_.index < (current.index.max() + after)]
-
-
-def _tail_timedelta(prevs, current, before):
-    """Return the concatenated rows of each dataframe in ``prevs`` whose
-    index is after the first observation in ``current`` - ``before``.
-
-    Parameters
-    ----------
-    current : DataFrame
-    prevs : list of DataFrame objects
-    before : timedelta
-
-    Returns
-    -------
-    overlapped : DataFrame
-    """
-    selected = methods.concat(
-        [prev[prev.index > (current.index.min() - before)] for prev in prevs]
-    )
-    return selected

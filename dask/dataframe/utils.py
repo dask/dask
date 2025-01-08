@@ -780,25 +780,9 @@ def pyarrow_strings_enabled() -> bool:
     """Config setting to convert objects to pyarrow strings"""
     convert_string = dask.config.get("dataframe.convert-string")
     if convert_string is None:
-        from dask.dataframe._pyarrow import check_pyarrow_string_supported
-
-        try:
-            check_pyarrow_string_supported()
-            convert_string = True
-        except RuntimeError:
-            convert_string = False
+        convert_string = True
     return convert_string
 
 
 def get_numeric_only_kwargs(numeric_only: bool | NoDefault) -> dict:
     return {} if numeric_only is no_default else {"numeric_only": numeric_only}
-
-
-def check_numeric_only_valid(numeric_only: bool | NoDefault, name: str) -> dict:
-    if numeric_only is not no_default:
-        return {"numeric_only": numeric_only}
-    elif numeric_only is no_default:
-        return {}
-    raise NotImplementedError(
-        f"numeric_only is not implemented for {name} for pandas < 1.5."
-    )

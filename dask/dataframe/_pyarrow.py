@@ -3,15 +3,11 @@ from __future__ import annotations
 from functools import partial
 
 import pandas as pd
-from packaging.version import Version
 
 from dask._compatibility import import_optional_dependency
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
-try:
-    pa = import_optional_dependency("pyarrow")
-except ImportError:
-    pa = None
+pa = import_optional_dependency("pyarrow")
 
 
 def is_pyarrow_string_dtype(dtype):
@@ -104,12 +100,3 @@ to_object_string = partial(
     index_check=is_pyarrow_string_index,
     string_dtype=object,
 )
-
-
-def check_pyarrow_string_supported():
-    """Make sure we have all the required versions"""
-    if pa is None or Version(pa.__version__) < Version("12.0.0"):
-        raise RuntimeError(
-            "Using dask's `dataframe.convert-string` configuration "
-            "option requires `pyarrow>=12` to be installed."
-        )

@@ -127,12 +127,8 @@ def read_sql_query(
             return dd.from_pandas(head, npartitions=1)
 
         if pyarrow_strings_enabled():
-            from dask.dataframe._pyarrow import (
-                check_pyarrow_string_supported,
-                to_pyarrow_string,
-            )
+            from dask.dataframe._pyarrow import to_pyarrow_string
 
-            check_pyarrow_string_supported()
             # to estimate partition size with pyarrow strings
             head = to_pyarrow_string(head)
 

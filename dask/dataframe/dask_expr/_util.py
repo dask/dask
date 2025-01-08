@@ -9,18 +9,15 @@ import numpy as np
 import pandas as pd
 from packaging.version import Version
 
-import dask
-from dask import config
+from dask import config, is_dask_collection
 from dask.dataframe._compat import is_string_dtype
-from dask.dataframe.core import is_dask_collection, is_dataframe_like, is_series_like
+from dask.dataframe.core import is_dataframe_like, is_series_like
 from dask.tokenize import normalize_token, tokenize
 from dask.utils import get_default_shuffle_method
 
 K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")
 
-DASK_VERSION = Version(dask.__version__)
-DASK_GT_20231201 = DASK_VERSION > Version("2023.12.1")
 PANDAS_VERSION = Version(pd.__version__)
 PANDAS_GE_300 = PANDAS_VERSION.major >= 3
 
