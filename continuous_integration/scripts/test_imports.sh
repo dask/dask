@@ -3,6 +3,7 @@ set -o errexit
 
 
 test_import () {
+    mamba clean
     echo "Create environment: python=$PYTHON_VERSION $1"
     # Create an empty environment
     mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION packaging pyyaml fsspec toolz partd click cloudpickle importlib-metadata $1
