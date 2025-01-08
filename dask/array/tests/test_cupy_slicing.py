@@ -6,6 +6,7 @@ import pytest
 pytestmark = pytest.mark.gpu
 
 import dask.array as da
+from dask import config
 from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
@@ -147,3 +148,15 @@ def test_index_with_int_dask_array_nocompute():
     result = x[idx]
     with pytest.raises(NotImplementedError):
         result.compute()
+
+
+@pytest.mark.parametrize("backend", ["cupy", "numpy"])
+def test_indexed_assign(backend):
+    # See: https://github.com/dask/dask/issues/11266
+    with config.set({"array.backend": backend}):
+        darr = da.random.default_rng().random((100, 3))
+        arr = darr.compute()
+        idx = (darr[:, 0] > 0.5).compute()
+        arr[idx] *= -1
+        darr[idx] *= -1
+        assert_eq(arr, darr, check_graph=False)
