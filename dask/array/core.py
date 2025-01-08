@@ -3016,19 +3016,11 @@ def normalize_chunks_cached(
 
     .. note::
 
-        chunks are expected to be a scalar or a tuple.
-        previous_chunks are expected to be a tuple of tuples if given.
+        chunks and previous_chunks are expected to be hashable. Dicts and lists aren't
+        allowed for this function.
 
     See :func:`normalize_chunks` for further documentation.
     """
-    assert isinstance(
-        chunks, (tuple, int, str)
-    ), "Cached version of normalize_chunks expected chunks as tuple, int or string"
-    if previous_chunks is not None:
-        assert isinstance(
-            previous_chunks, tuple
-        ), "Cached version of normalize_chunks expected previous_chunks as tuple"
-
     return normalize_chunks(
         chunks, shape=shape, limit=limit, dtype=dtype, previous_chunks=previous_chunks
     )
