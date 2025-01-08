@@ -311,6 +311,7 @@ def graph_from_arraylike(
             ArraySliceDep(chunks),
             out_ind,
             numblocks={},
+            data_producer=True,
             **kwargs,
         )
         return HighLevelGraph.from_collections(name, layer)
@@ -328,6 +329,7 @@ def graph_from_arraylike(
             ArraySliceDep(chunks),
             out_ind,
             numblocks={},
+            data_producer=True,
             **kwargs,
         )
 
