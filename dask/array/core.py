@@ -89,6 +89,11 @@ except ImportError:
     ARRAY_TEMPLATE = None
 
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
+T_AutoOrBytes = Union[Literal["auto"], str]
+T_ChunkVal = Union[T_IntOrNaN, T_AutoOrBytes]
+T_ChunkVals = tuple[T_ChunkVal, ...]
+T_ChunkValsDict = dict[int, T_ChunkVal]
+T_ChunksNormalized = tuple[tuple[T_IntOrNaN, ...], ...]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
@@ -3007,7 +3012,13 @@ def ensure_int(f):
     return i
 
 
-def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks=None):
+def normalize_chunks(
+    chunks: T_ChunkVal | T_ChunkVals | T_ChunkValsDict | T_ChunksNormalized,
+    shape: tuple[T_IntOrNaN, ...] | None = None,
+    limit: int | None = None,
+    dtype: np.typing.DTypeLike | None = None,
+    previous_chunks: T_ChunksNormalized | None = None,
+) -> T_ChunksNormalized:
     """Normalize chunks to tuple of tuples
 
     This takes in a variety of input types and information and produces a full
@@ -3102,82 +3113,143 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     >>> normalize_chunks((1, (np.nan,)), (1, np.nan))
     ((1,), (nan,))
     """
-    if dtype and not isinstance(dtype, np.dtype):
-        dtype = np.dtype(dtype)
-    if chunks is None:
-        raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
-    if isinstance(chunks, list):
-        chunks = tuple(chunks)
-    if isinstance(chunks, (Number, str)):
-        chunks = (chunks,) * len(shape)
-    if isinstance(chunks, dict):
-        chunks = tuple(chunks.get(i, None) for i in range(len(shape)))
-    if isinstance(chunks, np.ndarray):
-        chunks = chunks.tolist()
-    if not chunks and shape and all(s == 0 for s in shape):
-        chunks = ((0,),) * len(shape)
+    if shape is not None:
+        shape_: tuple[T_IntOrNaN, ...] = shape
+        shape_len: int = len(shape)
+    else:
+        shape_ = ()
+        shape_len = -1
 
-    if (
-        shape
-        and len(shape) == 1
-        and len(chunks) > 1
-        and all(isinstance(c, (Number, str)) for c in chunks)
-    ):
-        chunks = (chunks,)
-
-    if shape and len(chunks) != len(shape):
-        raise ValueError(
-            "Chunks and shape must be of the same length/dimension. "
-            "Got chunks=%s, shape=%s" % (chunks, shape)
-        )
-    if -1 in chunks or None in chunks:
-        chunks = tuple(s if c == -1 or c is None else c for c, s in zip(chunks, shape))
-
-    # If specifying chunk size in bytes, use that value to set the limit.
-    # Verify there is only one consistent value of limit or chunk-bytes used.
-    for c in chunks:
-        if isinstance(c, str) and c != "auto":
-            parsed = parse_bytes(c)
-            if limit is None:
-                limit = parsed
-            elif parsed != limit:
-                raise ValueError(
-                    "Only one consistent value of limit or chunk is allowed."
-                    "Used %s != %s" % (parsed, limit)
-                )
-    # Substitute byte limits with 'auto' now that limit is set.
-    chunks = tuple("auto" if isinstance(c, str) and c != "auto" else c for c in chunks)
-
-    if any(c == "auto" for c in chunks):
-        chunks = auto_chunks(chunks, shape, limit, dtype, previous_chunks)
-
-    allints = None
-    if chunks and shape is not None:
-        # allints: did we start with chunks as a simple tuple of ints?
-        allints = all(isinstance(c, int) for c in chunks)
-        chunks = _convert_int_chunk_to_tuple(shape, chunks)
-    for c in chunks:
-        if not c:
+    # Normalize chunks' outer tuple:
+    chunks_tuple: T_ChunkVals | T_ChunksNormalized
+    if isinstance(chunks, tuple):
+        chunks_tuple = chunks
+    elif isinstance(chunks, (int, float, str)):
+        chunks_tuple = (chunks,) * shape_len
+    elif isinstance(chunks, dict):
+        chunks_tuple = tuple(chunks.get(i, -1) for i in range(shape_len))
+    else:
+        if isinstance(chunks, list):  # type: ignore[unreachable]
+            # TODO: Not sure this should be encouraged typing wise, it's an easy fix.
+            chunks_tuple = tuple(chunks)
+        elif isinstance(chunks, np.ndarray):
+            # TODO: Not sure this should be encouraged typing wise, it's an easy fix.
+            chunks_tuple = tuple(chunks.tolist())
+        elif chunks is None:
+            raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
+        else:
             raise ValueError(
-                "Empty tuples are not allowed in chunks. Express "
-                "zero length dimensions with 0(s) in chunks"
+                f"{chunks=} is of type {type(chunks)} which is not supported."
             )
 
-    if not allints and shape is not None:
-        if not all(
-            c == s or (math.isnan(c) or math.isnan(s))
-            for c, s in zip(map(sum, chunks), shape)
+    if shape_len > 0:
+        # chunks=(3,2), shape=(6,)
+        if (
+            shape_len == 1
+            and len(chunks_tuple) > 1
+            and all(isinstance(c, (int, float, str)) for c in chunks_tuple)
         ):
+            # TODO: Missing outer tuple. How to narrow down the typing?
+            chunks_tuple = (chunks_tuple,)  # type: ignore[assignment]
+
+        # Null dimensions:
+        if len(chunks_tuple) == 0 and all(s == 0 for s in shape_):
+            chunks_tuple = ((0,),) * shape_len
+
+        # Check chunks and shape have the same length:
+        if len(chunks_tuple) != shape_len:
             raise ValueError(
-                "Chunks do not add up to shape. "
-                "Got chunks=%s, shape=%s" % (chunks, shape)
+                "Chunks and shape must be of the same length/dimension. "
+                f"Got chunks={chunks_tuple}, shape={shape_}"
             )
-    if allints or isinstance(sum(sum(_) for _ in chunks), int):
-        # Fastpath for when we already know chunks contains only integers
-        return tuple(tuple(ch) for ch in chunks)
-    return tuple(
-        tuple(int(x) if not math.isnan(x) else np.nan for x in c) for c in chunks
-    )
+        shape_or_falses: tuple[T_IntOrNaN, ...] = shape_
+    elif shape_len == 0:
+        shape_or_falses = ()
+    else:
+        # shape is None. Just broadcast a tuple with dummy values to the same
+        # size as chunks:
+        shape_or_falses = (False,) * len(chunks_tuple)
+
+    chunks_list_fin: list[tuple[T_IntOrNaN, ...] | Literal["auto"]] = []
+    any_auto = False
+    for c, s in zip(chunks_tuple, shape_or_falses):
+        if isinstance(c, (tuple, list)):
+            if len(c) == 0:
+                raise ValueError(
+                    "Empty tuples are not allowed in chunks. Express "
+                    "zero length dimensions with 0(s) in chunks"
+                )
+            if s is not False and (
+                sum(c) != s and not (math.isnan(s) or any(math.isnan(x) for x in c))
+            ):
+                raise ValueError(
+                    "Chunks do not add up to shape. "
+                    f"Got chunks={chunks_tuple}, shape={shape_}"
+                )
+            chunks_list_fin.append(
+                tuple(int(x) if not math.isnan(x) else np.nan for x in c)
+            )
+
+        elif c == -1 or c is None:
+            if s is not False:
+                chunks_list_fin.append((s,))
+            else:
+                raise ValueError(
+                    "Using -1 or None in chunks without shape is not allowed."
+                )
+
+        elif isinstance(c, (int, float)):
+            if s is not False:
+                sb = blockdims_from_blockshape((s,), (c,))
+                chunks_list_fin.append(sb[0])
+            else:
+                chunks_list_fin.append((int(c) if not math.isnan(c) else np.nan,))
+
+        elif isinstance(c, str):
+            if c == "auto":
+                chunks_list_fin.append("auto")
+                any_auto = True
+            else:
+                # If specifying chunk size in bytes, use that value to set the limit.
+                # Verify there is only one consistent value of limit or chunk-bytes used.
+                parsed = parse_bytes(c)
+                if limit is None:
+                    limit = parsed
+                elif parsed != limit:
+                    raise ValueError(
+                        "Only one consistent value of limit or chunk is allowed."
+                        f"Used {parsed} != {limit}"
+                    )
+                # Substitute byte limits with 'auto' now that limit is set.
+                chunks_list_fin.append("auto")
+                any_auto = True
+        else:
+            raise ValueError(
+                "Chunk element is not supported. "
+                f"Got {c} of type {type(c)} from chunks={chunks_tuple}"
+            )
+
+    if any_auto:
+        if dtype is not None:
+            dtype = np.dtype(dtype)
+
+        chunks_auto = auto_chunks(
+            chunks_list_fin, shape_, limit, dtype, previous_chunks
+        )
+        return sum(
+            (
+                (
+                    blockdims_from_blockshape((s,), (c,))
+                    if not isinstance(c, (tuple, list))
+                    else (c,)
+                )
+                for s, c in zip(shape_, chunks_auto)
+            ),
+            (),
+        )
+    else:
+        # TODO: the chunks are ints or nans only. How to narrow this down?
+        return tuple(chunks_list_fin)  # type: ignore[arg-type]
 
 
 def _convert_int_chunk_to_tuple(shape, chunks):

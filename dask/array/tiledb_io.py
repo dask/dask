@@ -3,9 +3,9 @@ from __future__ import annotations
 from dask.array import core
 
 
-def _tiledb_to_chunks(tiledb_array):
+def _tiledb_to_chunks(tiledb_array) -> tuple[int, ...]:
     schema = tiledb_array.schema
-    return list(schema.domain.dim(i).tile for i in range(schema.ndim))
+    return tuple(schema.domain.dim(i).tile.item() for i in range(schema.ndim))
 
 
 def from_tiledb(uri, attribute=None, chunks=None, storage_options=None, **kwargs):
