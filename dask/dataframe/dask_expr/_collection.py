@@ -2404,7 +2404,7 @@ Expr={expr}"""
         parallel=False,
         engine_kwargs=None,
     ):
-        from dask.dataframe.dask_expr.io.sql import to_sql
+        from dask.dataframe.io.sql import to_sql
 
         return to_sql(
             self,
@@ -2424,13 +2424,13 @@ Expr={expr}"""
 
     def to_orc(self, path, *args, **kwargs):
         """See dd.to_orc docstring for more information"""
-        from dask.dataframe.dask_expr.io.orc import to_orc
+        from dask.dataframe.io.orc import to_orc
 
         return to_orc(self, path, *args, **kwargs)
 
     def to_csv(self, filename, **kwargs):
         """See dd.to_csv docstring for more information"""
-        from dask.dataframe.dask_expr.io.csv import to_csv
+        from dask.dataframe.io.csv import to_csv
 
         return to_csv(self, filename, **kwargs)
 
@@ -2479,7 +2479,7 @@ Expr={expr}"""
 
     def to_hdf(self, path_or_buf, key, mode="a", append=False, **kwargs):
         """See dd.to_hdf docstring for more information"""
-        from dask.dataframe.dask_expr.io.hdf import to_hdf
+        from dask.dataframe.io.hdf import to_hdf
 
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 

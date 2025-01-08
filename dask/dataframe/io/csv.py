@@ -550,6 +550,7 @@ def read_pandas(
     # rows to skip.
     names = kwargs.get("names", None)
     header = kwargs.get("header", "infer" if names is None else None)
+    kwargs["header"] = header
     need = 1 if header is None else 2
     if isinstance(header, int):
         firstrow += header
