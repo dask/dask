@@ -891,6 +891,8 @@ def to_csv(
     --------
     fsspec.open_files
     """
+    df = df.optimize()
+
     if single_file and name_function is not None:
         raise ValueError("name_function is not supported under the single file mode")
     if header_first_partition_only is None:

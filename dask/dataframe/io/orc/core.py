@@ -165,6 +165,7 @@ def to_orc(
     --------
     read_orc: Read ORC data to dask.dataframe
     """
+    df = df.optimize()
 
     # Get engine
     engine = _get_engine(engine)
