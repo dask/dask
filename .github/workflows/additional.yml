@@ -52,6 +52,7 @@ jobs:
           python-version: "3.10"
           activate-environment: test-environment
           auto-activate-base: false
+          mamba-version: 1.5.11
 
       - name: Run import tests
         env:
