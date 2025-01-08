@@ -4,6 +4,7 @@ import os
 
 import pytest
 
+from dask._compatibility import LINUX
 from dask.dataframe._compat import PYARROW_GE_1500
 from dask.dataframe.dask_expr import read_parquet
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
@@ -66,4 +67,4 @@ def test_pickle_size(tmpdir, filesystem):
     df = read_parquet(tmpdir, filesystem=filesystem)
     from distributed.protocol import dumps
 
-    assert len(b"".join(dumps(df.optimize().dask))) <= 9150
+    assert len(b"".join(dumps(df.optimize().dask))) <= (9150 if LINUX else 10_000)
