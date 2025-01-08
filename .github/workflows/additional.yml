@@ -24,6 +24,7 @@ jobs:
           environment-file: continuous_integration/environment-3.12.yaml
           activate-environment: test-environment
           auto-activate-base: false
+          mamba-version: 1.5.11
 
       - name: Install
         run: source continuous_integration/scripts/install.sh
