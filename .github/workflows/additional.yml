@@ -46,7 +46,7 @@ jobs:
       - name: Setup Conda
         uses: conda-incubator/setup-miniconda@v3.1.0
         with:
-          miniforge-version: latest
+          miniforge-version: 24.11.0
           use-mamba: true
           channel-priority: strict
           python-version: "3.10"
