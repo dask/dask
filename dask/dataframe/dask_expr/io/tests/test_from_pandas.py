@@ -25,6 +25,7 @@ def test_from_pandas(pdf, sort):
     assert df.npartitions == 2
     assert df.divisions == (0, 3, 5)
     assert_eq(df, pdf, sort_results=sort)
+    assert all(tsk.data_producer for tsk in df.dask.values())
 
 
 def test_from_pandas_noargs(pdf):

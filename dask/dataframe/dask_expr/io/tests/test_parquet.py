@@ -133,6 +133,8 @@ def test_pyarrow_filesystem(parquet_file):
     df_pa = read_parquet(parquet_file, filesystem=filesystem)
     df = read_parquet(parquet_file)
     assert assert_eq(df, df_pa)
+    assert all(tsk.data_producer for tsk in df.dask.values())
+    assert all(tsk.data_producer for tsk in df.optimize().dask.values())
 
 
 @pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")

@@ -24,7 +24,6 @@ from dask._task_spec import (
     parse_input,
     resolve_aliases,
 )
-from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
 from dask.sizeof import sizeof
 from dask.tokenize import tokenize
@@ -970,8 +969,8 @@ def test_block_io_fusion():
 def test_data_producer():
     tasks = [
         io := DataNode("foo", 1),
-        second := Task("second", func, io.ref(), data_producer=True),
-        third := Task("third", func, io.ref(), data_producer=True),
+        second := Task("second", func, io.ref(), _data_producer=True),
+        third := Task("third", func, io.ref(), _data_producer=True),
         fourth := Task("fourth", func, second.ref()),
         fifth := Task("fifth", func, third.ref()),
         Task("sixth", func, fourth.ref(), fifth.ref()),

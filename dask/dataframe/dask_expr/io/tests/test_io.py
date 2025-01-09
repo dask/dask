@@ -100,6 +100,11 @@ def test_io_fusion(tmpdir, fmt):
     # All tasks should be fused for each partition
     assert len(df2.dask) == df2.npartitions
     assert_eq(df2, df[["a", "b"]] + 1)
+    assert all(
+        tsk.data_producer
+        for k, tsk in df.dask.items()
+        if not k[0].startswith("_to_string")
+    )
 
 
 def test_csv_integer_usecols(tmpdir):
@@ -226,6 +231,7 @@ def test_parquet_complex_filters(tmpdir):
 
     assert_eq(got, expect)
     assert_eq(got.optimize(), expect)
+    assert all(tsk.data_producer for tsk in df.dask.values())
 
 
 @pytest.mark.parametrize("optimize", [True, False])
@@ -309,6 +315,17 @@ def test_from_map(tmpdir, meta, label, allow_projection, enforce_metadata):
     assert_eq(df["a"], pdf["a"], check_index=False)
     assert_eq(df[["a"]], pdf[["a"]], check_index=False)
     assert_eq(df[["a", "b"]], pdf[["a", "b"]], check_index=False)
+    assert all(
+        tsk.data_producer
+        for key, tsk in df.__dask_graph__().items()
+        if not key[0].startswith("_to_string")
+    )
+    if allow_projection:
+        assert all(
+            tsk.data_producer
+            for key, tsk in df[["a"]].optimize(fuse=False).__dask_graph__().items()
+            if not key[0].startswith("_to_string")
+        )
 
     if label:
         if pyarrow_strings_enabled():
