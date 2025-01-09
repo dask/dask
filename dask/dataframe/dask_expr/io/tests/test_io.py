@@ -451,12 +451,10 @@ def test_from_dask_array_projection():
     arr = da.from_array(arr_np, chunks=(50, 10))
     pdf = pd.DataFrame(arr_np)
     df = from_dask_array(arr)
-    # Project possible np.int64(0) argument
+    # Check getitem[np.int64(0)]
     dd.assert_eq(pdf[pdf.columns[0]], df[df.columns[0]])
-    # Project possible Index([0, 1], dtype='int64') argument
-    dd.assert_eq(pdf[pdf.columns[0:2]], df[df.columns[0:2]])
-    # Project list argument
-    dd.assert_eq(pdf[list(pdf.columns[0:2])], df[list(df.columns[0:2])])
+    # Check loc[:, np.int64(0)]
+    dd.assert_eq(pdf.loc[:, pdf.columns[0]], df.loc[:, df.columns[0]])
 
 
 def test_from_dict():
