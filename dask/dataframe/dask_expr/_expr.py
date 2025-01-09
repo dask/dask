@@ -3851,6 +3851,9 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
     elif column_union not in expr.frame.columns:
         # we are accesing the index
         column_union = []
+    elif hasattr(column_union, "item"):
+        # Handle numpy scalar
+        column_union = column_union.item()
 
     if column_union == expr.frame.columns:
         return
