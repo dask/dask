@@ -5,6 +5,30 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2025.01.0:
+
+2025.01.0
+---------
+
+Highlights
+^^^^^^^^^^
+
+Legacy Dask DataFrame Implementation removed
+""""""""""""""""""""""""""""""""""""""""""""
+
+This release drops the legacy Dask DataFrame implementation. The API with
+query planning is now the only available Dask DataFrame implementation.
+
+This enforces the deprecation of the configuration:
+
+.. code-block::
+
+    dask.config.set({"dataframe.query-planning": False})
+
+Dask-Expr was merged into the dask/dask repository. It is no longer necessary
+to install dask-expr separately.
+
+
 .. _v2024.12.1:
 
 2024.12.1
