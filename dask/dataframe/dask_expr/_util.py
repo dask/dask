@@ -226,3 +226,9 @@ def _is_any_real_numeric_dtype(arr_or_dtype):
 def get_specified_shuffle(shuffle_method):
     # Take the config shuffle if given, otherwise defer evaluation until optimize
     return shuffle_method or config.get("dataframe.shuffle.method", None)
+
+
+def _columns_equal(left, right):
+    if is_scalar(left) == is_scalar(right):
+        return _convert_to_list(left) == _convert_to_list(right)
+    return False

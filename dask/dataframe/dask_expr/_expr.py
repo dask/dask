@@ -34,6 +34,7 @@ from dask.dataframe.core import (
 from dask.dataframe.dask_expr import _core as core
 from dask.dataframe.dask_expr._util import (
     _calc_maybe_new_divisions,
+    _columns_equal,
     _convert_to_list,
     _tokenize_deterministic,
     _tokenize_partial,
@@ -3851,14 +3852,11 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
     elif column_union not in expr.frame.columns:
         # we are accesing the index
         column_union = []
-    elif hasattr(column_union, "item"):
-        # Handle numpy scalar
-        column_union = column_union.item()
 
-    if column_union == expr.frame.columns:
+    if _columns_equal(column_union, expr.frame.columns):
         return
     result = type(expr)(expr.frame[column_union], *expr.operands[1:])
-    if column_union == parent.operand("columns"):
+    if _columns_equal(column_union, parent.operand("columns")):
         return result
     return type(parent)(result, parent.operand("columns"))
 
