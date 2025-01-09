@@ -7,7 +7,7 @@ import operator
 import numpy as np
 import pyarrow as pa
 
-from dask._task_spec import List, Task
+from dask._task_spec import DataNode, List, Task
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import apply_and_enforce, is_dataframe_like
@@ -140,7 +140,10 @@ class FusedIO(BlockwiseIO):
         bucket = self._fusion_buckets[index]
         # FIXME: This will likely require a wrapper
         return Task(
-            name, methods.concat, List(*(expr._filtered_task(name, i) for i in bucket))
+            name,
+            methods.concat,
+            List(*(expr._filtered_task(name, i) for i in bucket)),
+            _data_producer=True,
         )
 
     @functools.cached_property
@@ -216,6 +219,7 @@ class FusedParquetIO(FusedIO):
             columns,
             schema,
             **to_pandas_kwargs,
+            _data_producer=True,
         )
 
 
@@ -295,8 +299,11 @@ class FromMap(PartitionsFiltered, BlockwiseIO):
                 *vals,
                 *self.args,
                 **self.apply_kwargs,
+                _data_producer=True,
             )
-        return Task(name, self.func, *vals, *self.args, **self.apply_kwargs)
+        return Task(
+            name, self.func, *vals, *self.args, **self.apply_kwargs, _data_producer=True
+        )
 
 
 class FromMapProjectable(FromMap):
@@ -509,14 +516,16 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
     def _locations(self):
         return self._divisions_and_locations[1]
 
-    def _filtered_task(self, name: Key, index: int) -> Task:
+    def _filtered_task(self, name: Key, index: int) -> DataNode:  # type: ignore
         start, stop = self._locations()[index : index + 2]
         part = self.frame.iloc[start:stop]
         if self.pyarrow_strings_enabled:
             part = to_pyarrow_string(part)
         if self.operand("columns") is not None:
-            return part[self.columns[0]] if self._series else part[self.columns]
-        return part
+            return DataNode(
+                name, part[self.columns[0]] if self._series else part[self.columns]
+            )
+        return DataNode(name, part)
 
     def __str__(self):
         if self._absorb_projections and self.operand("columns"):
@@ -662,9 +671,22 @@ class FromArray(PartitionsFiltered, BlockwiseIO):
 
         if is_series_like(self._meta):
             return Task(
-                name, type(self._meta), data, idx, self._meta.dtype, self._meta.name
+                name,
+                type(self._meta),
+                data,
+                idx,
+                self._meta.dtype,
+                self._meta.name,
+                _data_producer=True,
             )
         else:
             if data.ndim == 2:
                 data = data[:, self._column_indices]
-            return Task(name, type(self._meta), data, idx, self._meta.columns)
+            return Task(
+                name,
+                type(self._meta),
+                data,
+                idx,
+                self._meta.columns,
+                _data_producer=True,
+            )
