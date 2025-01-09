@@ -1181,6 +1181,7 @@ class ReadParquetPyarrowFS(ReadParquet):
             arrow_to_pandas=self.arrow_to_pandas,
             dtype_backend=self.kwargs.get("dtype_backend"),
             pyarrow_strings_enabled=self.pyarrow_strings_enabled,
+            _data_producer=True,
         )
 
     @staticmethod
@@ -1401,7 +1402,7 @@ class ReadParquetFSSpec(ReadParquet):
         return dataset_info
 
     def _filtered_task(self, name: Key, index: int) -> Task:
-        tsk = Task(name, self._io_func, self._plan["parts"][index])
+        tsk = Task(name, self._io_func, self._plan["parts"][index], _data_producer=True)
         if self._series:
             return Task(name, operator.getitem, tsk, self.columns[0])
         return tsk

@@ -65,6 +65,7 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
                 name,
                 functools.partial(check_meta, meta=self._meta, funcname="from_delayed"),
                 TaskRef((self.delayed_container._name, index)),
+                _data_producer=True,
             )
         else:
             return Alias((self.delayed_container._name, index))  # type: ignore

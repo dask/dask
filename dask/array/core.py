@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import math
 import operator
 import os
@@ -311,7 +312,7 @@ def graph_from_arraylike(
             ArraySliceDep(chunks),
             out_ind,
             numblocks={},
-            data_producer=True,
+            _data_producer=True,
             **kwargs,
         )
         return HighLevelGraph.from_collections(name, layer)
@@ -329,7 +330,7 @@ def graph_from_arraylike(
             ArraySliceDep(chunks),
             out_ind,
             numblocks={},
-            data_producer=True,
+            _data_producer=True,
             **kwargs,
         )
 
@@ -3005,6 +3006,24 @@ def ensure_int(f):
     if i != f:
         raise ValueError("Could not coerce %f to integer" % f)
     return i
+
+
+@functools.lru_cache
+def normalize_chunks_cached(
+    chunks, shape=None, limit=None, dtype=None, previous_chunks=None
+):
+    """Cached version of normalize_chunks.
+
+    .. note::
+
+        chunks and previous_chunks are expected to be hashable. Dicts and lists aren't
+        allowed for this function.
+
+    See :func:`normalize_chunks` for further documentation.
+    """
+    return normalize_chunks(
+        chunks, shape=shape, limit=limit, dtype=dtype, previous_chunks=previous_chunks
+    )
 
 
 def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks=None):
