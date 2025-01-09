@@ -95,6 +95,16 @@ def is_scalar(x):
     return not isinstance(x, Expr)
 
 
+def _columns_equal(left_columns, right_columns):
+    # Checks if left_columns and right_columns are equal.
+    # It is possible that one of the arguments is a
+    # numpy array or a numpy scalar. Therefore, we
+    # cannot always rely on the == operator.
+    if is_scalar(left_columns) == is_scalar(right_columns):
+        return _convert_to_list(left_columns) == _convert_to_list(right_columns)
+    return False
+
+
 def _tokenize_deterministic(*args, **kwargs) -> str:
     # Utility to be strict about deterministic tokens
     return tokenize(*args, ensure_deterministic=True, **kwargs)
@@ -226,9 +236,3 @@ def _is_any_real_numeric_dtype(arr_or_dtype):
 def get_specified_shuffle(shuffle_method):
     # Take the config shuffle if given, otherwise defer evaluation until optimize
     return shuffle_method or config.get("dataframe.shuffle.method", None)
-
-
-def _columns_equal(left, right):
-    if is_scalar(left) == is_scalar(right):
-        return _convert_to_list(left) == _convert_to_list(right)
-    return False

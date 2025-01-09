@@ -428,6 +428,20 @@ def test_from_dask_array_scalar_columns(columns):
     assert_eq(df, pdf)
 
 
+def test_from_dask_array_projection():
+    rng = np.random.default_rng()
+    arr_np = rng.random((100, 10))
+    arr = da.from_array(arr_np, chunks=(50, 10))
+    pdf = pd.DataFrame(arr_np)
+    df = from_dask_array(arr)
+    # Project possible np.int64(0) argument
+    dd.assert_eq(pdf[pdf.columns[0]], df[df.columns[0]])
+    # Project possible Index([0, 1], dtype='int64') argument
+    dd.assert_eq(pdf[pdf.columns[0:2]], df[df.columns[0:2]])
+    # Project list argument
+    dd.assert_eq(pdf[list(pdf.columns[0:2])], df[list(df.columns[0:2])])
+
+
 def test_from_dict():
     data = {"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]}
     result = from_dict(data, npartitions=2)
