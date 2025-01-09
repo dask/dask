@@ -78,7 +78,7 @@ class LocIndexer(Indexer):
             iindexer = key
             cindexer = None
 
-        if is_scalar(cindexer) and hasattr(cindexer, "item"):
+        if isinstance(cindexer, np.generic):
             cindexer = cindexer.item()
 
         return self._loc(iindexer, cindexer)

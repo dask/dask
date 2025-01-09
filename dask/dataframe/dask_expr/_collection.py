@@ -416,7 +416,7 @@ class FrameBase(DaskMethodsMixin):
             other = list(other)
         elif isinstance(other, list):
             other = other.copy()
-        elif is_scalar(other) and hasattr(other, "item"):
+        elif isinstance(other, np.generic):
             other = other.item()
         return new_collection(self.expr.__getitem__(other))
 
