@@ -195,10 +195,10 @@ class _MultiContainer(Container):
 SubgraphType = None
 
 
-def _execute_subgraph(inner_dsk, outkey, inkeys):
+def _execute_subgraph(inner_dsk, outkey, inkeys, *dependencies):
     final = {}
     final.update(inner_dsk)
-    for k, v in inkeys.items():
+    for k, v in zip(inkeys, dependencies):
         final[k] = DataNode(None, v)
     res = execute_graph(final, keys=[outkey])
     return res[outkey]
@@ -465,13 +465,14 @@ class GraphNode:
             raise ValueError(f"Cannot fuse tasks with multiple outputs {leafs}")
 
         outkey = leafs.pop()
-
+        ordered_deps = tuple(external_deps)
         return Task(
             key or outkey,
             _execute_subgraph,
             {t.key: t for t in tasks},
             outkey,
-            (Dict({k: Alias(k) for k in external_deps}) if external_deps else {}),
+            ordered_deps,
+            *(TaskRef(k) for k in ordered_deps),
             _data_producer=any(t.data_producer for t in tasks),
         )
 

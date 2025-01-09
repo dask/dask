@@ -112,7 +112,7 @@ def lazify_task(task, start=True):
             assert len(task.args) == 1
             task = task.args[0]
         if task.func is _execute_subgraph:
-            subgraph, outkey, inkeys = task.args
+            subgraph, outkey, inkeys, *dependencies = task.args
             # If there is a reify at the output of the subgraph we don't want to act
             final_task = lazify_task(subgraph[outkey], True)
             subgraph = {
@@ -125,6 +125,7 @@ def lazify_task(task, start=True):
                 subgraph,
                 outkey,
                 inkeys,
+                *dependencies,
                 _data_producer=task.data_producer,
             )
         return Task(
