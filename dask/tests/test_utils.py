@@ -11,7 +11,6 @@ from tlz import curry
 
 from dask import get
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import SubgraphCallable
 from dask.utils import (
     Dispatch,
     M,
@@ -773,11 +772,6 @@ def test_stringify():
         skeys = [str(k) for k in keys]
         assert all(isinstance(k, str) for k in sdsk)
         assert get(dsk, keys) == get(sdsk, skeys)
-
-    dsk = {("y", 1): (SubgraphCallable({"x": ("y", 1)}, "x", (("y", 1),)), (("z", 1),))}
-    dsk = stringify(dsk, exclusive=set(dsk) | {("z", 1)})
-    assert dsk[("y", 1)][0].dsk["x"] == "('y', 1)"
-    assert dsk[("y", 1)][1][0] == "('z', 1)"
 
 
 @pytest.mark.parametrize(

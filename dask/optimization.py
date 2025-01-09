@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import math
 import numbers
-from collections.abc import Iterable
 from enum import Enum
-from typing import Any
 
-from dask import config, core, utils
+from dask import config, utils
 from dask._task_spec import GraphNode
-from dask.base import normalize_token, tokenize
 from dask.core import (
     flatten,
     get_dependencies,
@@ -18,8 +15,6 @@ from dask.core import (
     subs,
     toposort,
 )
-from dask.tokenize import normalize_token, tokenize
-from dask.typing import Graph, Key
 
 
 def cull(dsk, keys):
@@ -469,7 +464,6 @@ def fuse(
     max_height=_default,
     max_depth_new_edges=_default,
     rename_keys=_default,
-    fuse_subgraphs=_default,
 ):
     """Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
@@ -515,11 +509,6 @@ def fuse(
         If False, then the top-most key will be used.  For advanced usage, a
         function to create the new name is also accepted.
         dask.config key: ``optimization.fuse.rename-keys``
-    fuse_subgraphs : bool or None, optional (default None)
-        Whether to fuse multiple tasks into ``SubgraphCallable`` objects.
-        Set to None to let the default optimizer of individual dask collections decide.
-        If no collection-specific default exists, None defaults to False.
-        dask.config key: ``optimization.fuse.subgraphs``
 
     Returns
     -------
@@ -557,11 +546,6 @@ def fuse(
         assert max_width is not _default
     if max_width is None:
         max_width = 1.5 + ave_width * math.log(ave_width + 1)
-    if fuse_subgraphs is _default:
-        fuse_subgraphs = config.get("optimization.fuse.subgraphs")
-        assert fuse_subgraphs is not _default
-    if fuse_subgraphs is None:
-        fuse_subgraphs = False
 
     if not ave_width or not max_height:
         return dsk, dependencies
@@ -608,11 +592,9 @@ def fuse(
         ):
             reducible.add(k)
 
-    if not reducible and (
-        not fuse_subgraphs or all(len(set(v)) != 1 for v in rdeps.values())
-    ):
+    if not reducible and (all(len(set(v)) != 1 for v in rdeps.values())):
         # Quick return if there's nothing to do. Only progress if there's tasks
-        # fusible by the main `fuse`, or by `fuse_subgraphs` if enabled.
+        # fusible by the main `fuse`
         return dsk, deps
 
     rv = dsk.copy()
@@ -894,9 +876,6 @@ def fuse(
                 # Traverse upwards
                 parent = rdeps[parent][0]
 
-    if fuse_subgraphs:
-        _inplace_fuse_subgraphs(rv, keys, deps, fused_trees, rename_keys)
-
     if key_renamer:
         for root_key, fused_keys in fused_trees.items():
             alias = key_renamer(fused_keys)
@@ -907,137 +886,3 @@ def fuse(
                 deps[root_key] = {alias}
 
     return rv, deps
-
-
-def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
-    """Subroutine of fuse.
-
-    Mutates dsk, dependencies, and fused_trees inplace"""
-    # locate all members of linear chains
-    child2parent = {}
-    unfusible = set()
-    for parent in dsk:
-        deps = dependencies[parent]
-        has_many_children = len(deps) > 1
-        for child in deps:
-            if keys is not None and child in keys:
-                unfusible.add(child)
-            elif child in child2parent:
-                del child2parent[child]
-                unfusible.add(child)
-            elif has_many_children:
-                unfusible.add(child)
-            elif child not in unfusible:
-                child2parent[child] = parent
-
-    # construct the chains from ancestor to descendant
-    chains = []
-    parent2child = {v: k for k, v in child2parent.items()}
-    while child2parent:
-        child, parent = child2parent.popitem()
-        chain = [child, parent]
-        while parent in child2parent:
-            parent = child2parent.pop(parent)
-            del parent2child[parent]
-            chain.append(parent)
-        chain.reverse()
-        while child in parent2child:
-            child = parent2child.pop(child)
-            del child2parent[child]
-            chain.append(child)
-        # Skip chains with < 2 executable tasks
-        ntasks = 0
-        for key in chain:
-            ntasks += istask(dsk[key])
-            if ntasks > 1:
-                chains.append(chain)
-                break
-
-    # Mutate dsk fusing chains into subgraphs
-    for chain in chains:
-        subgraph = {k: dsk[k] for k in chain}
-        outkey = chain[0]
-
-        # Update dependencies and graph
-        inkeys_set = dependencies[outkey] = dependencies[chain[-1]]
-        for k in chain[1:]:
-            del dependencies[k]
-            del dsk[k]
-
-        # Create new task
-        inkeys = tuple(inkeys_set)
-        dsk[outkey] = (SubgraphCallable(subgraph, outkey, inkeys),) + inkeys
-
-        # Mutate `fused_trees` if key renaming is needed (renaming done in fuse)
-        if rename_keys:
-            chain2 = []
-            for k in chain:
-                subchain = fused_trees.pop(k, False)
-                if subchain:
-                    chain2.extend(subchain)
-                else:
-                    chain2.append(k)
-            fused_trees[outkey] = chain2
-
-
-class SubgraphCallable:
-    """Create a callable object from a dask graph.
-
-    Parameters
-    ----------
-    dsk : dict
-        A dask graph
-    outkey : Dask key
-        The output key from the graph
-    inkeys : list
-        A list of keys to be used as arguments to the callable.
-    name : str, optional
-        The name to use for the function.
-    """
-
-    dsk: Graph
-    outkey: Key
-    inkeys: tuple[Key, ...]
-    name: str
-    __slots__ = tuple(__annotations__)
-
-    def __init__(
-        self, dsk: Graph, outkey: Key, inkeys: Iterable[Key], name: str | None = None
-    ):
-        self.dsk = dsk
-        self.outkey = outkey
-        self.inkeys = tuple(inkeys)
-        if name is None:
-            name = "subgraph_callable-" + tokenize(dsk, outkey, self.inkeys)
-        self.name = name
-
-    def __repr__(self) -> str:
-        return self.name
-
-    def __eq__(self, other: Any) -> bool:
-        return (
-            type(self) is type(other)
-            and self.name == other.name
-            and self.outkey == other.outkey
-            and set(self.inkeys) == set(other.inkeys)
-        )
-
-    def __call__(self, *args: Any) -> Any:
-        if not len(args) == len(self.inkeys):
-            raise ValueError("Expected %d args, got %d" % (len(self.inkeys), len(args)))
-        return core.get(self.dsk, self.outkey, dict(zip(self.inkeys, args)))
-
-    def __reduce__(self) -> tuple:
-        return SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name)
-
-    def __hash__(self) -> int:
-        return hash((self.outkey, frozenset(self.inkeys), self.name))
-
-    def __dask_tokenize__(self) -> object:
-        return (
-            "SubgraphCallable",
-            normalize_token(self.dsk),
-            self.outkey,
-            self.inkeys,
-            self.name,
-        )

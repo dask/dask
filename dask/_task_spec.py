@@ -214,72 +214,17 @@ def convert_legacy_task(
     if isinstance(task, GraphNode):
         return task
 
-    global SubgraphType
-
-    if SubgraphType is None:
-        from dask.optimization import SubgraphCallable
-
-        SubgraphType = SubgraphCallable
-
     if type(task) is tuple and task and callable(task[0]):
         func, args = task[0], task[1:]
-        if isinstance(func, SubgraphType):
-            subgraph = func
-            all_keys_inner = _MultiContainer(
-                subgraph.dsk, set(subgraph.inkeys), all_keys
-            )
-            sub_dsk = subgraph.dsk
-            deps: set[KeyType] = set()
-            converted_subgraph = convert_legacy_graph(sub_dsk, all_keys_inner)
-            for v in converted_subgraph.values():
-                if isinstance(v, GraphNode):
-                    deps.update(v.dependencies)
-
-            # There is an explicit and implicit way to provide dependencies /
-            # data to a SubgraphCallable. Since we're not recursing into any
-            # containers any more we'll have to provide those arguments in a
-            # more explicit way as a separate argument.
-
-            # The explicit way are arguments to the subgraph callable. Those can
-            # again be tasks.
-
-            explicit_inkeys = dict()
-            for k, target in zip(subgraph.inkeys, args):
-                explicit_inkeys[k] = t = convert_legacy_task(None, target, all_keys)
-                if isinstance(t, GraphNode):
-                    deps.update(t.dependencies)
-            explicit_inkeys_wrapped = Dict(explicit_inkeys)
-            deps.update(explicit_inkeys_wrapped.dependencies)
-
-            # The implicit way is when the tasks inside of the subgraph are
-            # referencing keys that are not part of the subgraph but are part of
-            # the outer graph.
-
-            deps -= set(subgraph.dsk)
-            deps -= set(subgraph.inkeys)
-
-            implicit_inkeys = dict()
-            for k in deps - explicit_inkeys_wrapped.dependencies:
-                assert k is not None
-                implicit_inkeys[k] = Alias(k)
-            return Task(
-                key,
-                _execute_subgraph,
-                converted_subgraph,
-                func.outkey,
-                explicit_inkeys_wrapped,
-                Dict(implicit_inkeys),
-            )
-        else:
-            new_args = []
-            new: object
-            for a in args:
-                if isinstance(a, dict):
-                    new = Dict(a)
-                else:
-                    new = convert_legacy_task(None, a, all_keys)
-                new_args.append(new)
-            return Task(key, func, *new_args)
+        new_args = []
+        new: object
+        for a in args:
+            if isinstance(a, dict):
+                new = Dict(a)
+            else:
+                new = convert_legacy_task(None, a, all_keys)
+            new_args.append(new)
+        return Task(key, func, *new_args)
     try:
         if isinstance(task, (bytes, int, float, str, tuple)):
             if task in all_keys:
