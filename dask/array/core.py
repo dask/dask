@@ -2040,10 +2040,19 @@ class Array(DaskMethodsMixin):
                 "Use normal slicing instead when only using slices. Got: {}".format(key)
             )
         elif any(is_dask_collection(k) for k in key):
-            raise IndexError(
-                "vindex does not support indexing with dask objects. Call compute "
-                "on the indexer first to get an evalurated array. Got: {}".format(key)
-            )
+            if math.prod(self.numblocks) == 1 and len(key) == 1 and self.ndim == 1:
+                idxr = key[0]
+                # we can broadcast in this case
+                return idxr.map_blocks(
+                    _numpy_vindex, self, dtype=self.dtype, chunks=idxr.chunks
+                )
+            else:
+                raise IndexError(
+                    "vindex does not support indexing with dask objects. Call compute "
+                    "on the indexer first to get an evalurated array. Got: {}".format(
+                        key
+                    )
+                )
         return _vindex(self, *key)
 
     @property
@@ -6092,6 +6101,10 @@ class BlockView:
         Return a flattened list of all the blocks in the array in C order.
         """
         return [self[idx] for idx in np.ndindex(self.shape)]
+
+
+def _numpy_vindex(indexer, arr):
+    return arr[indexer]
 
 
 from dask.array.blockwise import blockwise
