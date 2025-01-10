@@ -2893,7 +2893,7 @@ class Partitions(Expr):
 
     def _simplify_down(self):
         from dask.dataframe.dask_expr import SetIndexBlockwise
-        from dask.dataframe.dask_expr._resample import ResampleAggregation
+        from dask.dataframe.tseries.resample import ResampleAggregation
 
         if isinstance(self.frame, Blockwise) and not isinstance(
             self.frame, (BlockwiseIO, Fused, SetIndexBlockwise, ResampleAggregation)
