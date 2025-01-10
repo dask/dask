@@ -4033,7 +4033,7 @@ def _extract_meta(x, nonempty=False):
         return x
 
 
-def _emulate(func, *args, udf=False, **kwargs):
+def emulate(func, *args, udf=False, **kwargs):
     """
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
@@ -4053,7 +4053,7 @@ def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
         # Use non-normalized kwargs here, as we want the real values (not
         # delayed values)
         a = [meta_nonempty(arg._meta) if isinstance(arg, Expr) else arg for arg in args]
-        meta = _emulate(func, *a, udf=True, **kwargs)
+        meta = emulate(func, *a, udf=True, **kwargs)
         meta_is_emulated = True
     else:
         meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
