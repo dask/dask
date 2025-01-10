@@ -3881,7 +3881,7 @@ def to_zarr(
 
     if storage_options:
         if _zarr_v3():
-            store = zarr.storage.RemoteStore(
+            store = zarr.storage.FsspecStore(
                 url, mode=kwargs.pop("mode", "a"), **storage_options
             )
         else:
