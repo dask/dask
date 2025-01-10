@@ -3101,7 +3101,7 @@ class DataFrame(FrameBase):
                 "installed."
             )
         if meta is None:
-            meta = expr._emulate(M.map, self, func, na_action=na_action, udf=True)
+            meta = expr.emulate(M.map, self, func, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta))
         return new_collection(expr.Map(self, arg=func, na_action=na_action, meta=meta))
 
@@ -3233,7 +3233,7 @@ class DataFrame(FrameBase):
             )
             raise NotImplementedError(msg)
         if meta is no_default:
-            meta = expr._emulate(
+            meta = expr.emulate(
                 M.apply, self, function, args=args, udf=True, axis=axis, **kwargs
             )
             warnings.warn(meta_warning(meta))
@@ -4200,7 +4200,7 @@ class Series(FrameBase):
                     expr.MapAlign(self, arg, op=None, na_action=na_action, meta=meta)
                 )
         if meta is None:
-            meta = expr._emulate(M.map, self, arg, na_action=na_action, udf=True)
+            meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta))
         return new_collection(expr.Map(self, arg=arg, na_action=na_action, meta=meta))
 
@@ -4384,7 +4384,7 @@ class Series(FrameBase):
         """
         self._validate_axis(axis)
         if meta is no_default:
-            meta = expr._emulate(M.apply, self, function, args=args, udf=True, **kwargs)
+            meta = expr.emulate(M.apply, self, function, args=args, udf=True, **kwargs)
             warnings.warn(meta_warning(meta))
         return new_collection(self.expr.apply(function, *args, meta=meta, **kwargs))
 
@@ -4727,7 +4727,7 @@ class Index(Series):
                     expr.MapIndexAlign(self, arg, na_action, meta, is_monotonic)
                 )
         if meta is None:
-            meta = expr._emulate(M.map, self, arg, na_action=na_action, udf=True)
+            meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta))
         return new_collection(
             expr.Map(
