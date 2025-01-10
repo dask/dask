@@ -200,6 +200,16 @@ class MergeAsofIndexed(MergeAsof):
         return self.left.divisions
 
     @functools.cached_property
+    def left_on(self):
+        # For optimisation
+        return self.left_by
+
+    @functools.cached_property
+    def right_on(self):
+        # For optimisation
+        return self.right_by
+
+    @functools.cached_property
     def _kwargs(self):
         return {
             "left_index": self.left_index,

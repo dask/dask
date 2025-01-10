@@ -24,6 +24,26 @@ def test_merge_asof_indexed():
     assert_eq(c, C)
 
 
+def test_merge_asof_indexed_optimiser():
+    A = pd.DataFrame(
+        {"left_val": list("abcd" * 3), "foo": 1},
+        index=[1, 3, 7, 9, 10, 13, 14, 17, 20, 24, 25, 28],
+    )
+    a = from_pandas(A, npartitions=4)
+    B = pd.DataFrame(
+        {"right_val": list("xyz" * 4), "bar": 2},
+        index=[1, 2, 3, 6, 7, 10, 12, 14, 16, 19, 23, 26],
+    )
+    b = from_pandas(B, npartitions=3)
+
+    C = pd.merge_asof(A, B, left_index=True, right_index=True)
+    c = merge_asof(a, b, left_index=True, right_index=True)
+    c = c.optimize(fuse=False)
+    c = c[["left_val", "right_val"]]
+
+    assert_eq(c, C[["left_val", "right_val"]])
+
+
 def test_merge_asof_on_basic():
     A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
     a = from_pandas(A, npartitions=2)
