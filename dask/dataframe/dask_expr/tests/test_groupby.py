@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import dask
-from dask.dataframe.dask_expr import PANDAS_GE_300, from_pandas
+from dask.dataframe.dask_expr import from_pandas
 from dask.dataframe.dask_expr._groupby import Aggregation, GroupByUDFBlockwise
 from dask.dataframe.dask_expr._reductions import TreeReduce
 from dask.dataframe.dask_expr._shuffle import Shuffle, TaskShuffle, divisions_lru
@@ -127,10 +127,7 @@ def test_groupby_reduction_optimize(pdf, df):
 def test_std_columns_int():
     df = pd.DataFrame({0: [5], 1: [5]})
     ddf = from_pandas(df, npartitions=2)
-    if PANDAS_GE_300:
-        assert_eq(ddf.groupby(ddf[0]).std(), df.groupby(df[0]).std())
-    else:
-        assert_eq(ddf.groupby(ddf[0]).std(), df.groupby(df[0].copy()).std())
+    assert_eq(ddf.groupby(ddf[0]).std(), df.groupby(df[0]).std())
 
 
 @pytest.mark.parametrize(

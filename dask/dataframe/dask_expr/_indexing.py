@@ -78,6 +78,9 @@ class LocIndexer(Indexer):
             iindexer = key
             cindexer = None
 
+        if isinstance(cindexer, np.generic):
+            cindexer = cindexer.item()
+
         return self._loc(iindexer, cindexer)
 
     def _loc(self, iindexer, cindexer):
