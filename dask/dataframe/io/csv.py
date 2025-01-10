@@ -550,6 +550,7 @@ def read_pandas(
     # rows to skip.
     names = kwargs.get("names", None)
     header = kwargs.get("header", "infer" if names is None else None)
+    kwargs["header"] = header
     need = 1 if header is None else 2
     if isinstance(header, int):
         firstrow += header
@@ -891,6 +892,8 @@ def to_csv(
     --------
     fsspec.open_files
     """
+    df = df.optimize()
+
     if single_file and name_function is not None:
         raise ValueError("name_function is not supported under the single file mode")
     if header_first_partition_only is None:

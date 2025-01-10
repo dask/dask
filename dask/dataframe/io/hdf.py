@@ -135,6 +135,7 @@ def to_hdf(
     read_hdf:
     to_parquet:
     """
+    df = df.optimize()
     if dask_kwargs is None:
         dask_kwargs = {}
 

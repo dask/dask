@@ -11,6 +11,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask import config
 from dask.array.utils import assert_eq as array_assert_eq
+from dask.dataframe import read_csv
 from dask.dataframe.dask_expr import (
     DataFrame,
     from_array,
@@ -19,7 +20,6 @@ from dask.dataframe.dask_expr import (
     from_map,
     from_pandas,
     optimize,
-    read_csv,
     read_parquet,
 )
 from dask.dataframe.dask_expr._expr import Replace
