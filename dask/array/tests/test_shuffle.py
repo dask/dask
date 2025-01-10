@@ -159,18 +159,23 @@ def test_shuffle_chunks_given():
     darr = da.from_array(arr, chunks=(10, 6, 25))
 
     indexer = [[5, 2, 10, 7, 8, 1, 12], [14, 0, 9, 4, 6], [3, 11, 13]]
-    chunks = ((25, 25), (7, 5, 3), (30, 30, 10))
-    result = darr.shuffle(indexer, axis=1, chunks=chunks)
-    assert result.chunks == chunks
+    result = darr.shuffle(indexer, axis=1, chunks={0: (25, 25), 2: (30, 30, 10)})
+    assert result.chunks == ((25, 25), (7, 5, 3), (30, 30, 10))
     assert_eq(result, arr[:, list(flatten(indexer))])
 
-    with pytest.raises(AssertionError, match="chunks must be a tuple of tuples"):
-        darr.shuffle(indexer, axis=1, chunks=(1, 1, 1))
+    result = darr.shuffle(indexer, axis=1, chunks={0: (5,) * 10, 2: (10,) * 7})
+    assert result.chunks == ((5,) * 10, (15,), (10,) * 7)
+    assert_eq(result, arr[:, list(flatten(indexer))])
 
-    with pytest.raises(AssertionError, match="Indexer and chunks must match"):
-        darr.shuffle(indexer, axis=1, chunks=((25, 25), (7, 5, 2), (30, 30, 10)))
+    with pytest.raises(AssertionError, match="chunks must be given as tuples"):
+        darr.shuffle(indexer, axis=1, chunks={0: 1, 2: 1})
 
     with pytest.raises(
-        AssertionError, match="Indexer and chunks must have the same length"
+        AssertionError, match="chunks along shuffled axis are determined automatically"
     ):
-        darr.shuffle(indexer, axis=1, chunks=((25, 25), (7, 5), (30, 30, 10)))
+        darr.shuffle(indexer, axis=1, chunks={0: (1,), 1: (1,), 2: (2,)})
+
+    with pytest.raises(
+        AssertionError, match="chunks for all axis except shuffled axis are required"
+    ):
+        darr.shuffle(indexer, axis=1, chunks={0: (1,)})

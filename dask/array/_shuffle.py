@@ -22,7 +22,7 @@ def shuffle(
     x: Array,
     indexer: list[list[int]],
     axis: int,
-    chunks: Literal["auto"] | tuple[tuple[int, ...], ...] = "auto",
+    chunks: Literal["auto"] | dict[int, tuple[int, ...]] = "auto",
 ) -> Array:
     """
     Reorders one dimensions of a Dask Array based on an indexer.
@@ -52,8 +52,8 @@ def shuffle(
         other chunks.
 
         If chunks are provided explicitly, the dimensions that aren't shuffled are
-        rechunked to the given size. The chunks along the shuffled dimension must match
-        the indexer that is given for the shuffle.
+        rechunked to the given size. The chunks along the shuffled dimension are
+        determined automatically.
 
     Examples
     --------
@@ -87,13 +87,16 @@ def shuffle(
         )
     assert isinstance(axis, int), "axis must be an integer"
     _validate_indexer(x.chunks, indexer, axis)
+    original_chunks = x.chunks
 
     x = _rechunk_other_dimensions(x, max(map(len, indexer)), axis, chunks)
 
     token = tokenize(x, indexer, axis)
     out_name = f"shuffle-{token}"
 
-    chunks, layer = _shuffle(x.chunks, indexer, axis, x.name, out_name, token, chunks)
+    chunks, layer = _shuffle(
+        x.chunks, indexer, axis, x.name, out_name, token, chunks, original_chunks
+    )
     if len(layer) == 0:
         return Array(x.dask, x.name, x.chunks, meta=x)
 
@@ -153,14 +156,20 @@ def _rechunk_other_dimensions(
     x: Array,
     longest_group: int,
     axis: int,
-    chunks: Literal["auto"] | tuple[tuple[int, ...], ...] = "auto",
+    chunks: Literal["auto"] | dict[int, tuple[int, ...]] = "auto",
 ) -> Array:
     if chunks != "auto":
         assert all(
-            isinstance(c, tuple) for c in chunks
-        ), "chunks must be a tuple of tuples"
-        chunks_list = list(chunks)
-        chunks_list[axis] = x.chunks[axis]
+            isinstance(c, tuple) for c in chunks.values()
+        ), "chunks must be given as tuples"
+        assert (
+            axis not in chunks
+        ), "chunks along shuffled axis are determined automatically"
+        assert (
+            len(chunks) == len(x.chunks) - 1
+        ), "chunks for all axis except shuffled axis are required"
+        chunks_list = list(chunks.values())
+        chunks_list.insert(axis, x.chunks[axis])
         return x.rechunk(tuple(chunks_list))
 
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
@@ -205,7 +214,8 @@ def _shuffle(
     in_name,
     out_name,
     token,
-    old_chunks: Literal["auto"] | tuple[tuple[int, ...], ...] = "auto",
+    old_chunks: Literal["auto"] | dict[int, tuple[int, ...]] = "auto",
+    previous_chunks=None,
 ):
     _validate_indexer(chunks, indexer, axis)
 
@@ -219,40 +229,33 @@ def _shuffle(
         else:
             return chunks, {}
 
-    if old_chunks == "auto":
-        indexer = copy.deepcopy(indexer)
+    indexer = copy.deepcopy(indexer)
 
-        chunksize_tolerance = config.get("array.chunk-size-tolerance")
-        chunk_size_limit = int(
-            sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance
-        )
+    factor = 1
+    if old_chunks != "auto":
+        factor = math.prod(
+            [max(c) for i, c in enumerate(previous_chunks) if i != axis]
+        ) / math.prod(list(map(max, old_chunks.values())))
 
-        # Figure out how many groups we can put into one chunk
-        current_chunk: list[int] = []
-        new_chunks = []
-        for idx in indexer:
-            if (
-                len(current_chunk) + len(idx) > chunk_size_limit
-                and len(current_chunk) > 0
-            ):
-                new_chunks.append(np.array(current_chunk))
-                current_chunk = idx.copy()
-            else:
-                current_chunk.extend(idx)
-                if len(current_chunk) > chunk_size_limit / chunksize_tolerance:
-                    new_chunks.append(np.array(current_chunk))
-                    current_chunk = []
-        if len(current_chunk) > 0:
+    chunksize_tolerance = config.get("array.chunk-size-tolerance")
+    chunk_size_limit = int(
+        sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance * factor
+    )
+
+    # Figure out how many groups we can put into one chunk
+    current_chunk: list[int] = []
+    new_chunks = []
+    for idx in indexer:
+        if len(current_chunk) + len(idx) > chunk_size_limit and len(current_chunk) > 0:
             new_chunks.append(np.array(current_chunk))
-    else:
-        assert len(indexer) == len(
-            old_chunks[axis]
-        ), "Indexer and chunks must have the same length"
-        assert all(
-            len(idx) == c for idx, c in zip(indexer, old_chunks[axis])
-        ), "Indexer and chunks must match"
-        new_chunks = list(map(np.array, indexer))
-        chunk_size_limit = max(old_chunks[axis])
+            current_chunk = idx.copy()
+        else:
+            current_chunk.extend(idx)
+            if len(current_chunk) > chunk_size_limit / chunksize_tolerance:
+                new_chunks.append(np.array(current_chunk))
+                current_chunk = []
+    if len(current_chunk) > 0:
+        new_chunks.append(np.array(current_chunk))
 
     chunk_boundaries = np.cumsum(chunks[axis])
 
