@@ -116,8 +116,6 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `cytoolz`_       | ``>=0.11.2``    | Faster cythonized implementation of internal iterators, functions, and dictionaries                     |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `dask-expr`_     |                 | Required for ``dask.dataframe``; Pins to a specific Dask version                                        |
-+------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `dask-ml`_       | ``>=1.4.0``     | Common machine learning functions scaled with Dask                                                      |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `fastavro`_      | ``>=1.1.0``     | Storing and reading data from Apache Avro files                                                         |
@@ -200,7 +198,6 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _cityhash: https://github.com/escherba/python-cityhash
 .. _crick: https://github.com/dask/crick
 .. _cytoolz: https://github.com/pytoolz/cytoolz
-.. _dask-expr: https://github.com/dask-contrib/dask-expr
 .. _dask-ml: https://ml.dask.org/
 .. _fastavro: https://fastavro.readthedocs.io/en/latest/
 .. _graphviz: https://graphviz.readthedocs.io/en/stable/

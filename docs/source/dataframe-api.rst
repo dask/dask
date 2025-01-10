@@ -1,7 +1,7 @@
 Dask DataFrame API with Logical Query Planning
 ==============================================
 
-.. currentmodule:: dask_expr._collection
+.. currentmodule:: dask.dataframe
 
 DataFrame
 ~~~~~~~~~
@@ -126,12 +126,10 @@ DataFrame
     DataFrame.to_bag
     DataFrame.to_csv
     DataFrame.to_dask_array
-    DataFrame.to_dask_dataframe
     DataFrame.to_delayed
     DataFrame.to_hdf
     DataFrame.to_html
     DataFrame.to_json
-    DataFrame.to_legacy_dataframe
     DataFrame.to_parquet
     DataFrame.to_records
     DataFrame.to_string
@@ -376,7 +374,7 @@ The accessor implementations are consistent with the current Dask DataFrame impl
 Groupby Operations
 ~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr._groupby
+.. currentmodule:: dask.dataframe.dask_expr._groupby
 
 DataFrame Groupby
 *****************
@@ -451,7 +449,7 @@ Custom Aggregation
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr._collection
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/
@@ -459,7 +457,7 @@ Rolling Operations
    Series.rolling
    DataFrame.rolling
 
-.. currentmodule:: dask_expr._rolling
+.. currentmodule:: dask.dataframe.dask_expr._rolling
 
 .. autosummary::
    :toctree: generated/
@@ -481,7 +479,7 @@ Rolling Operations
 Create DataFrames
 ~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr
+.. currentmodule:: dask.dataframe.dask_expr
 
 .. autosummary::
    :toctree: generated/
@@ -506,7 +504,7 @@ Create DataFrames
 Store DataFrames
 ~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/
@@ -531,7 +529,7 @@ Convert DataFrames
 Reshape DataFrames
 ~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/
@@ -543,7 +541,7 @@ Reshape DataFrames
 Concatenate DataFrames
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr._collection
+.. currentmodule:: dask.dataframe.dask_expr._collection
 
 .. autosummary::
    :toctree: generated/
@@ -557,7 +555,7 @@ Concatenate DataFrames
 Resampling
 ~~~~~~~~~~
 
-.. currentmodule:: dask_expr._resample
+.. currentmodule:: dask.dataframe.dask_expr._resample
 
 .. autosummary::
    :toctree: generated/
@@ -596,7 +594,7 @@ Dask Metadata
 Query Planning and Optimization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr._collection
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/
@@ -608,7 +606,7 @@ Query Planning and Optimization
 Other functions
 ~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask_expr._collection
+.. currentmodule:: dask.dataframe
 
 .. autosummary::
    :toctree: generated/

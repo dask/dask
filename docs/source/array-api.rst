@@ -521,6 +521,17 @@ Generalized Ufuncs
    gufunc
 
 
+Downstream Libraries API
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.api
+
+.. autosummary::
+   :toctree: generated/
+
+   normalize_chunks_cached
+   normalize_chunks
+
 Internal functions
 ~~~~~~~~~~~~~~~~~~
 

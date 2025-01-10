@@ -112,8 +112,7 @@ def lazify_task(task, start=True):
             assert len(task.args) == 1
             task = task.args[0]
         if task.func is _execute_subgraph:
-            subgraph = task.args[0]
-            outkey = task.args[1]
+            subgraph, outkey, inkeys = task.args
             # If there is a reify at the output of the subgraph we don't want to act
             final_task = lazify_task(subgraph[outkey], True)
             subgraph = {
@@ -125,8 +124,8 @@ def lazify_task(task, start=True):
                 _execute_subgraph,
                 subgraph,
                 outkey,
-                *task.args[2:],
-                **task.kwargs,
+                inkeys,
+                _data_producer=task.data_producer,
             )
         return Task(
             task.key,
@@ -1633,7 +1632,7 @@ class Bag(DaskMethodsMixin):
             dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
-        from dask_expr import from_graph
+        from dask.dataframe.dask_expr import from_graph
 
         return from_graph(dsk, meta, divisions, dfs.__dask_keys__(), "from-bag")
 
@@ -2570,7 +2569,7 @@ def random_state_data_python(
 
         random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
         arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
-        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]
+        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]  # type: ignore
 
     except ImportError:
         # Pure python (much slower)

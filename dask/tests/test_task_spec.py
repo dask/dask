@@ -24,9 +24,7 @@ from dask._task_spec import (
     parse_input,
     resolve_aliases,
 )
-from dask.base import tokenize
 from dask.core import keys_in_tasks, reverse_dict
-from dask.optimization import SubgraphCallable
 from dask.sizeof import sizeof
 from dask.tokenize import tokenize
 from dask.utils import funcname
@@ -391,64 +389,6 @@ def test_array_as_argument():
     t2 = Task("key-2", func, np.array([1, t.ref()]), "b")
     assert t2({"key-1": "foo"}) != "[1 foo]-b"
     assert not _get_dependencies(np.array([1, t.ref()]))
-
-
-def test_subgraph_callable():
-    def add(a, b):
-        return a + b
-
-    subgraph = SubgraphCallable(
-        {
-            "_2": (add, "_0", "_1"),
-            "_3": (add, TaskRef("add-123"), "_2"),
-        },
-        "_3",
-        ("_0", "_1"),
-    )
-
-    dsk = {
-        "a": 1,
-        "b": 2,
-        "c": (subgraph, "a", "b"),
-    }
-    new_dsk = convert_and_verify_keys(dsk)
-    assert new_dsk["c"].dependencies == {"a", "b", "add-123"}
-    assert (
-        new_dsk["c"](
-            {
-                "add-123": 123,
-                "a": 1,
-                "b": 2,
-            }
-        )
-        == 126
-    )
-
-
-def apply(func, args, kwargs=None):
-    return func(*args, **(kwargs or {}))
-
-
-def test_redirect_to_subgraph_callable():
-    subgraph = SubgraphCallable(
-        {
-            "out": (apply, func3, ["_0"], (dict, [["some", "dict"]])),
-        },
-        "out",
-        ("_0",),
-    )
-    dsk = {
-        "alias": "foo",
-        "foo": (func, (subgraph, (func2, "bar", "baz")), "second_arg"),
-    }
-    new_dsk = convert_and_verify_keys(dsk)
-
-    t = new_dsk["alias"]
-    assert t.dependencies == {"foo"}
-    t = new_dsk["foo"]
-    assert not t.dependencies
-
-    assert t() == "bar=baz//some=dict-second_arg"
 
 
 @pytest.mark.parametrize(
@@ -864,44 +804,6 @@ def test_fused_dont_hold_in_memory_too_long():
     assert OnlyTwice.total == 10
 
 
-def test_subgraph_dont_hold_in_memory_too_long_legacy():
-    prev = None
-
-    # If we execute a fused task we want to release objects as quickly as
-    # possible. If every task generates this object, we must at most hold two of
-    # them in memory
-    class OnlyTwice:
-        counter = 0
-        total = 0
-
-        def __init__(self):
-            OnlyTwice.counter += 1
-            OnlyTwice.total += 1
-            if OnlyTwice.counter > 2:
-                raise ValueError("Didn't release as expected")
-
-        def __del__(self):
-            OnlyTwice.counter -= 1
-
-    def generate_object(arg):
-        return OnlyTwice()
-
-    prev = None
-    subgraph = {}
-    for ix in range(10):
-        subgraph[f"key-{ix}"] = (generate_object, prev if prev else "foo")
-        prev = f"key-{ix}"
-    subgraph_callable = SubgraphCallable(
-        subgraph,
-        "key-9",
-        (),
-    )
-    dsk = {"bar": (subgraph_callable,)}
-    converted = convert_legacy_graph(dsk)
-    assert converted["bar"]()
-    assert OnlyTwice.total == 10
-
-
 def test_linear_fusion():
     tasks = [
         io := Task("foo", func, 1),
@@ -1064,6 +966,26 @@ def test_block_io_fusion():
     assert isinstance(result["third"], SubTask)
 
 
+def test_data_producer():
+    tasks = [
+        io := DataNode("foo", 1),
+        second := Task("second", func, io.ref(), _data_producer=True),
+        third := Task("third", func, io.ref(), _data_producer=True),
+        fourth := Task("fourth", func, second.ref()),
+        fifth := Task("fifth", func, third.ref()),
+        Task("sixth", func, fourth.ref(), fifth.ref()),
+    ]
+
+    dsk = {t.key: t for t in tasks}
+    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert "second-fourth" in result
+    assert "third-fifth" in result
+    assert result["second-fourth"].data_producer
+    assert result["third-fifth"].data_producer
+    assert not result["sixth"].data_producer
+    assert result["foo"].data_producer
+
+
 @pytest.mark.parametrize(
     "task_type, python_type",
     [
@@ -1087,6 +1009,12 @@ def test_substitute():
     assert t2.dependencies == {"c"}
 
     assert t1({"a": "a"}) == t2({"c": "a"})
+
+
+def test_alias_task_ref_key():
+    t = Alias(TaskRef("a"), "b")
+    assert t.key == "a"
+    assert isinstance(t.key, str)
 
 
 def test_substitute_nested():

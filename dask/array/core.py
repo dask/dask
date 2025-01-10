@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import math
 import operator
 import os
@@ -311,6 +312,7 @@ def graph_from_arraylike(
             ArraySliceDep(chunks),
             out_ind,
             numblocks={},
+            _data_producer=True,
             **kwargs,
         )
         return HighLevelGraph.from_collections(name, layer)
@@ -328,6 +330,7 @@ def graph_from_arraylike(
             ArraySliceDep(chunks),
             out_ind,
             numblocks={},
+            _data_producer=True,
             **kwargs,
         )
 
@@ -2037,10 +2040,19 @@ class Array(DaskMethodsMixin):
                 "Use normal slicing instead when only using slices. Got: {}".format(key)
             )
         elif any(is_dask_collection(k) for k in key):
-            raise IndexError(
-                "vindex does not support indexing with dask objects. Call compute "
-                "on the indexer first to get an evalurated array. Got: {}".format(key)
-            )
+            if math.prod(self.numblocks) == 1 and len(key) == 1 and self.ndim == 1:
+                idxr = key[0]
+                # we can broadcast in this case
+                return idxr.map_blocks(
+                    _numpy_vindex, self, dtype=self.dtype, chunks=idxr.chunks
+                )
+            else:
+                raise IndexError(
+                    "vindex does not support indexing with dask objects. Call compute "
+                    "on the indexer first to get an evalurated array. Got: {}".format(
+                        key
+                    )
+                )
         return _vindex(self, *key)
 
     @property
@@ -3003,6 +3015,24 @@ def ensure_int(f):
     if i != f:
         raise ValueError("Could not coerce %f to integer" % f)
     return i
+
+
+@functools.lru_cache
+def normalize_chunks_cached(
+    chunks, shape=None, limit=None, dtype=None, previous_chunks=None
+):
+    """Cached version of normalize_chunks.
+
+    .. note::
+
+        chunks and previous_chunks are expected to be hashable. Dicts and lists aren't
+        allowed for this function.
+
+    See :func:`normalize_chunks` for further documentation.
+    """
+    return normalize_chunks(
+        chunks, shape=shape, limit=limit, dtype=dtype, previous_chunks=previous_chunks
+    )
 
 
 def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks=None):
@@ -6071,6 +6101,10 @@ class BlockView:
         Return a flattened list of all the blocks in the array in C order.
         """
         return [self[idx] for idx in np.ndindex(self.shape)]
+
+
+def _numpy_vindex(indexer, arr):
+    return arr[indexer]
 
 
 from dask.array.blockwise import blockwise
