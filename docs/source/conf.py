@@ -415,6 +415,46 @@ redirect_files = [
     ("how-to/setup-prometheus.html", "prometheus.html"),
 ]
 
+for func in [
+    "aggregate",
+    "apply",
+    "bfill",
+    "count",
+    "cumcount",
+    "cumprod",
+    "cumsum",
+    "fillna",
+    "ffill",
+    "get_group",
+    "max",
+    "mean",
+    "min",
+    "size",
+    "std",
+    "sum",
+    "var",
+    "cov",
+    "corr",
+    "first",
+    "last",
+    "idxmin",
+    "idxmax",
+    "rolling",
+    "transform",
+]:
+    redirect_files.append(
+        (
+            f"generated/dask.dataframe.groupby.DataFrameGroupBy.{func}.html",
+            f"generated/dask.dataframe.api.GroupBy.{func}.html",
+        )
+    )
+    redirect_files.append(
+        (
+            f"generated/dask.dataframe.groupby.SeriesGroupBy.{func}.html",
+            f"generated/dask.dataframe.api.SeriesGroupBy.{func}.html",
+        )
+    )
+
 
 redirect_template = """\
 <html>
