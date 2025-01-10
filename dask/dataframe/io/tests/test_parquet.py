@@ -919,6 +919,48 @@ def test_append_dict_column(tmpdir):
     assert_eq(expect, result)
 
 
+@PYARROW_MARK
+def test_filter_with_struct_column(tmpdir):
+    # Check filtering on a table containing
+    # a multi-field struct column.
+    table = pa.Table.from_arrays(
+        [
+            pa.array(
+                [
+                    {"subfield1": 10, "subfield2": 12},
+                    {"subfield1": 20, "subfield2": 12},
+                    {"subfield1": 30, "subfield2": 12},
+                ]
+            ),
+            pa.array(["aa", "bb", "bb"]),
+        ],
+        schema=pa.schema(
+            [
+                (
+                    "nested_column",
+                    pa.struct([("subfield1", pa.int32()), ("subfield2", pa.int32())]),
+                ),
+                ("id", pa.string()),
+            ]
+        ),
+    )
+    fn = str(tmpdir) + "file.parq"
+    pq.write_table(table, fn)
+
+    pdf = table.to_pandas()
+    assert_eq(dd.read_parquet(fn), pdf)
+    assert_eq(
+        dd.read_parquet(fn, filters=[("id", "not in", ["bb"])]),
+        pdf[pdf["id"] != "bb"],
+        check_index=False,
+    )
+    assert_eq(
+        dd.read_parquet(fn, filters=[("id", "in", ["bb"])]),
+        pdf[pdf["id"] == "bb"],
+        check_index=False,
+    )
+
+
 def test_ordering(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame(

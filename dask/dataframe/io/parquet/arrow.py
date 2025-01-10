@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import json
 import operator
 import textwrap
@@ -284,9 +285,19 @@ def _get_rg_statistics(row_group, col_names):
     statistics for all columns.
     """
 
-    row_group_schema = {
-        col_name: i for i, col_name in enumerate(row_group.schema.names)
-    }
+    row_group_schema = dict(
+        zip(
+            row_group.schema.names,
+            itertools.accumulate(
+                [
+                    # Need to account for multi-field struct columns
+                    max(row_group.schema.types[i].num_fields, 1)
+                    for i in range(len(row_group.schema.names) - 1)
+                ],
+                initial=0,
+            ),
+        )
+    )
 
     def name_stats(column_name):
         col = row_group.metadata.column(row_group_schema[column_name])
