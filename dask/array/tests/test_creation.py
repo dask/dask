@@ -988,6 +988,22 @@ def test_nan_zeros_ones_like(fn, shape_chunks, dtype):
     )
 
 
+def test_from_array_getitem_fused():
+    arr = np.arange(100).reshape(10, 10)
+    darr = da.from_array(arr, chunks=(5, 5))
+    result = darr[slice(1, 5), :][slice(1, 3), :]
+    dsk = collections_to_dsk([result])
+    # Ensure that slices are merged properly
+    key = [k for k in dsk if "array-getitem" in k[0]][0]
+    key_2 = [
+        k
+        for k, v in dsk[key].args[0].items()
+        if "getitem" in k[0] and not isinstance(v, Alias)
+    ][0]
+    assert dsk[key].args[0][key_2].args[1] == ((slice(2, 4), slice(0, None)))
+    assert_eq(result, arr[slice(1, 5), :][slice(1, 3), :])
+
+
 @pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
 @pytest.mark.parametrize("dtype", ["u4", np.float32, None, np.int64])
 def test_nan_empty_like(shape_chunks, dtype):
