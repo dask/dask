@@ -2406,7 +2406,7 @@ Expr={expr}"""
         parallel=False,
         engine_kwargs=None,
     ):
-        from dask.dataframe.dask_expr.io.sql import to_sql
+        from dask.dataframe.io.sql import to_sql
 
         return to_sql(
             self,
@@ -2426,13 +2426,13 @@ Expr={expr}"""
 
     def to_orc(self, path, *args, **kwargs):
         """See dd.to_orc docstring for more information"""
-        from dask.dataframe.dask_expr.io.orc import to_orc
+        from dask.dataframe.io.orc import to_orc
 
         return to_orc(self, path, *args, **kwargs)
 
     def to_csv(self, filename, **kwargs):
         """See dd.to_csv docstring for more information"""
-        from dask.dataframe.dask_expr.io.csv import to_csv
+        from dask.dataframe.io.csv import to_csv
 
         return to_csv(self, filename, **kwargs)
 
@@ -2481,7 +2481,7 @@ Expr={expr}"""
 
     def to_hdf(self, path_or_buf, key, mode="a", append=False, **kwargs):
         """See dd.to_hdf docstring for more information"""
-        from dask.dataframe.dask_expr.io.hdf import to_hdf
+        from dask.dataframe.io.hdf import to_hdf
 
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
@@ -5081,65 +5081,6 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     if columns is not None and isinstance(columns, list) and not len(columns):
         columns = None
     return from_dask_array(x, columns=columns, index=index, meta=meta)
-
-
-@dataframe_creation_dispatch.register_inplace("pandas")
-def read_csv(
-    path,
-    *args,
-    header="infer",
-    storage_options=None,
-    **kwargs,
-):
-    from dask.dataframe.io.csv import read_csv as _read_csv
-
-    return _read_csv(
-        path,
-        *args,
-        header=header,
-        storage_options=storage_options,
-        **kwargs,
-    )
-
-
-def read_table(
-    path,
-    *args,
-    header="infer",
-    usecols=None,
-    storage_options=None,
-    **kwargs,
-):
-    from dask.dataframe.io.csv import read_table as _read_table
-
-    return _read_table(
-        path,
-        *args,
-        header=header,
-        storage_options=storage_options,
-        usecols=usecols,
-        **kwargs,
-    )
-
-
-def read_fwf(
-    path,
-    *args,
-    header="infer",
-    usecols=None,
-    storage_options=None,
-    **kwargs,
-):
-    from dask.dataframe.io.csv import read_fwf as _read_fwf
-
-    return _read_fwf(
-        path,
-        *args,
-        header=header,
-        storage_options=storage_options,
-        usecols=usecols,
-        **kwargs,
-    )
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
