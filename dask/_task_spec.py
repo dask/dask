@@ -459,7 +459,7 @@ class GraphNode:
         for t in tasks:
             all_deps.update(t.dependencies)
             all_keys.add(t.key)
-        external_deps = tuple(all_deps - all_keys)
+        external_deps = tuple(sorted(all_deps - all_keys))
         leafs = all_keys - all_deps
         if len(leafs) > 1:
             raise ValueError(f"Cannot fuse tasks with multiple outputs {leafs}")
