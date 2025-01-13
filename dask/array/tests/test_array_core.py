@@ -4929,8 +4929,8 @@ def test_to_zarr_storage_options():
     a = da.arange(16).reshape((4, 4)).rechunk(2)
 
     with tmpdir() as d:
-        a.to_zarr(d, storage_options={"anon": True})
-        a2 = da.from_zarr(d, storage_options={"anon": True})
+        a.to_zarr(d, storage_options={"fs": None})
+        a2 = da.from_zarr(d, storage_options={"fs": None})
         assert_eq(a2, a)
 
 
