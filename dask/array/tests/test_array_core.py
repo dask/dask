@@ -4930,8 +4930,8 @@ def test_to_zarr_storage_options():
 
     with tmpdir() as d:
         a.to_zarr(d, storage_options={"anon": True})
-        a2 = da.from_zarr(d)
-    assert_eq(a2, a)
+        a2 = da.from_zarr(d, storage_options={"anon": True})
+        assert_eq(a2, a)
 
 
 def test_tiledb_roundtrip():

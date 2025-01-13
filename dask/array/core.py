@@ -3748,7 +3748,7 @@ def from_zarr(
             url = os.fspath(url)
         if storage_options:
             if _zarr_v3():
-                store = zarr.store.RemoteStore(url, **storage_options)
+                store = zarr.store.FsspecStore(url, **storage_options)
             else:
                 store = zarr.storage.FSStore(url, **storage_options)
         else:
