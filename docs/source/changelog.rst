@@ -25,8 +25,26 @@ This enforces the deprecation of the configuration:
 
     dask.config.set({"dataframe.query-planning": False})
 
-Dask-Expr was merged into the dask/dask repository. It is no longer necessary
-to install dask-expr separately.
+Dask-Expr was merged into the dask package as well as the dask/dask repository.
+It is no longer necessary to install dask-expr separately.
+
+Reducing Memory Pressure for Xarray Workloads
+"""""""""""""""""""""""""""""""""""""""""""""
+
+Dask introduced a mechanism that is called
+![root task queuing](https://distributed.dask.org/en/stable/scheduling-policies.html#queuing)
+in 2022. This mechanism allows Dask to detect tasks that are reading data from storage
+and schedule them defensively to avoid memory pressure on the cluster through overproduction
+of these tasks. The underlying mechanism was very fragile and failed for specific types of
+computations like opening multiple zarr stores or loading a large number of netcdf files.
+
+The recent changes in Dask's task graph representation allow for more robust
+detection of root tasks. This change makes the detection mechanism independent of the workload
+running and is especially beneficial for Xarray workloads.
+
+This results in significantly more memory stability and a reduced memory footprint
+for workloads where root task detection was previously failing and makes the expected memory
+profile deterministic and independent of the topology of the task graph.
 
 
 .. _v2024.12.1:
