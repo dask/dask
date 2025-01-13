@@ -4923,6 +4923,17 @@ def test_zarr_regions():
             a.to_zarr(d, region=(slice(2), slice(2)))
 
 
+def test_to_zarr_storage_options():
+    pytest.importorskip("zarr")
+
+    a = da.arange(16).reshape((4, 4)).rechunk(2)
+
+    with tmpdir() as d:
+        a.to_zarr(d, storage_options={"anon": True})
+        a2 = da.from_zarr(d)
+    assert_eq(a2, a)
+
+
 def test_tiledb_roundtrip():
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking

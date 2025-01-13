@@ -3881,8 +3881,13 @@ def to_zarr(
 
     if storage_options:
         if _zarr_v3():
+            read_only = (
+                kwargs["read_only"]
+                if "read_only" in kwargs
+                else kwargs.pop("mode", "a") == "r"
+            )
             store = zarr.storage.FsspecStore(
-                url, mode=kwargs.pop("mode", "a"), **storage_options
+                url, read_only=read_only, **storage_options
             )
         else:
             store = zarr.storage.FSStore(url, **storage_options)
