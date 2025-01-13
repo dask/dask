@@ -5,9 +5,9 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
-.. _v2025.01.0:
+.. _v2025.1.0:
 
-2025.01.0
+2025.1.0
 ---------
 
 Highlights
