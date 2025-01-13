@@ -21,6 +21,13 @@ V = TypeVar("V")
 PANDAS_VERSION = Version(pd.__version__)
 PANDAS_GE_300 = PANDAS_VERSION.major >= 3
 
+try:
+    import azure.identity  # noqa: F401
+
+    azure_identity_installed = True
+except ImportError:
+    azure_identity_installed = False
+
 
 def _calc_maybe_new_divisions(df, periods, freq):
     """Maybe calculate new divisions by periods of size freq
@@ -226,3 +233,11 @@ def _is_any_real_numeric_dtype(arr_or_dtype):
 def get_specified_shuffle(shuffle_method):
     # Take the config shuffle if given, otherwise defer evaluation until optimize
     return shuffle_method or config.get("dataframe.shuffle.method", None)
+
+
+if azure_identity_installed:
+    from azure.identity import DefaultAzureCredential
+
+    @normalize_token.register(DefaultAzureCredential)
+    def tokenize_azure_credential(obj):
+        return obj.__reduce__()
