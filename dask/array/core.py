@@ -3748,7 +3748,9 @@ def from_zarr(
             url = os.fspath(url)
         if storage_options:
             if _zarr_v3():
-                store = zarr.store.RemoteStore(url, **storage_options)
+                store = zarr.storage.FsspecStore.from_url(
+                    url, storage_options=storage_options
+                )
             else:
                 store = zarr.storage.FSStore(url, **storage_options)
         else:
@@ -3881,8 +3883,13 @@ def to_zarr(
 
     if storage_options:
         if _zarr_v3():
-            store = zarr.storage.FsspecStore(
-                url, mode=kwargs.pop("mode", "a"), **storage_options
+            read_only = (
+                kwargs["read_only"]
+                if "read_only" in kwargs
+                else kwargs.pop("mode", "a") == "r"
+            )
+            store = zarr.storage.FsspecStore.from_url(
+                url, read_only=read_only, storage_options=storage_options
             )
         else:
             store = zarr.storage.FSStore(url, **storage_options)
