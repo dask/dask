@@ -270,7 +270,7 @@ def collect_env(env: Mapping[str, str] | None = None) -> dict:
 
     for name, value in env.items():
         if name.startswith("DASK_"):
-            varname = name[5:].lower().replace("__", ".")
+            varname = name[5:].swapcase().replace("__", ".")
             d[varname] = interpret_value(value)
 
     result: dict = {}
