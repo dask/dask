@@ -21,13 +21,6 @@ V = TypeVar("V")
 PANDAS_VERSION = Version(pd.__version__)
 PANDAS_GE_300 = PANDAS_VERSION.major >= 3
 
-try:
-    import azure.identity  # noqa: F401
-
-    azure_identity_installed = True
-except ImportError:
-    azure_identity_installed = False
-
 
 def _calc_maybe_new_divisions(df, periods, freq):
     """Maybe calculate new divisions by periods of size freq
