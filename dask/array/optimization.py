@@ -60,7 +60,7 @@ def optimize(dsk, keys, **kwargs):
 
     dsk = convert_legacy_graph(dsk)
     dsk = fuse_linear_task_spec(dsk, keys=keys)
-    dsk = optimize_slices(dsk)
+    dsk = _optimize_slices(dsk)
 
     return dsk
 
@@ -91,7 +91,7 @@ def _is_getter_task(
     return None
 
 
-def optimize_slices(dsk):
+def _optimize_slices(dsk):
     """Optimize slices
     1.  Fuse repeated slices, like x[5:][2:6] -> x[7:11]
 
@@ -108,7 +108,7 @@ def optimize_slices(dsk):
         if not (isinstance(v, Task) and v.func is _execute_subgraph):
             continue
 
-        inner_graph: dict = v.args[0]
+        inner_graph: dict = v.args[0]  # type: ignore
 
         seen = set()
 
