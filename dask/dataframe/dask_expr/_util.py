@@ -235,7 +235,8 @@ def get_specified_shuffle(shuffle_method):
     return shuffle_method or config.get("dataframe.shuffle.method", None)
 
 
-if azure_identity_installed:
+@normalize_token.register_lazy("azure-identity")
+def register_azure_identity():
     from azure.identity import DefaultAzureCredential
 
     @normalize_token.register(DefaultAzureCredential)
