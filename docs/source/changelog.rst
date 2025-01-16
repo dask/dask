@@ -31,8 +31,7 @@ It is no longer necessary to install dask-expr separately.
 Reducing Memory Pressure for Xarray Workloads
 """""""""""""""""""""""""""""""""""""""""""""
 
-Dask introduced a mechanism that is called
-![root task queuing](https://distributed.dask.org/en/stable/scheduling-policies.html#queuing)
+Dask introduced a mechanism that is called `root task queuing <https://distributed.dask.org/en/stable/scheduling-policies.html#queuing>`_
 in 2022. This mechanism allows Dask to detect tasks that are reading data from storage
 and schedule them defensively to avoid memory pressure on the cluster through overproduction
 of these tasks. The underlying mechanism was very fragile and failed for specific types of
