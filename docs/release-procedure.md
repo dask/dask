@@ -25,9 +25,7 @@ Releasing dask and distributed:
 
 *   Update the versions in all pyproject.toml
     *   distributed version in pyproject.toml of dask/dask
-    *   dask-expr version range in pyproject.toml of dask/dask
     *   dask version in distributed/pyproject.toml
-    *   dask version in dask-expr/pyproject.toml
 
 *   Commit
 
@@ -41,7 +39,6 @@ Releasing dask and distributed:
 
         git push https://github.com/dask/dask main --tags
         git push https://github.com/dask/distributed main --tags
-        git push https://github.com/dask/dask-expr main --tags
 
 *   Upload to PyPI
 
