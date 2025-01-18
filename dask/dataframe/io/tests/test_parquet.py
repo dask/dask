@@ -171,7 +171,6 @@ def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     ).compute()
     files = os.listdir(fn)
     assert "_metadata" not in files
-    # Fastparquet doesn't currently handle a directory without "_metadata"
     read_df = dd.read_parquet(
         os.path.join(fn, "*.parquet"),
         index=["a"],
@@ -1680,7 +1679,6 @@ def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, 
 
 @pytest.fixture(
     params=[
-        # fastparquet 0.1.3
         {
             "columns": [
                 {

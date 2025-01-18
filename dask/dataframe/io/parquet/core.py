@@ -280,16 +280,6 @@ def create_metadata_file(
         to infer file-system information).
     """
 
-    # Get engine.
-    # Note that "fastparquet" is not supported.
-    if isinstance(engine, str):
-        engine = get_engine(engine)
-        if engine is not _ENGINES.get("pyarrow"):
-            raise ValueError(
-                "fastparquet is not a supported engine for create_metadata_file."
-                "Please install pyarrow."
-            )
-
     # Process input path list
     if fs is None:
         # Only do this if an fsspec file-system object is not
@@ -371,9 +361,8 @@ def get_engine(engine: Literal["auto", "pyarrow"] | type[Engine]) -> type[Engine
 
     Parameters
     ----------
-    engine : {'auto', 'pyarrow', 'fastparquet'} or Engine subclass
-        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
-        it is installed, and falls back to the deprecated ``fastparquet`` otherwise.
+    engine : {'auto', 'pyarrow'} or Engine subclass
+        Parquet library to use. Defaults to 'pyarrow'.
 
     This can be used to inject third-party engine; e.g. from dask_cudf.
     """
@@ -478,8 +467,6 @@ def apply_filters(parts, statistics, filters):
         as an AND conjunction. To express OR in predicates, one must use the
         (preferred) List[List[Tuple]] notation.
 
-        Note that the "fastparquet" engine does not currently support DNF for
-        the filtering of partitioned columns (List[Tuple] is required).
     Returns
     -------
     parts, statistics: the same as the input, but possibly a subset

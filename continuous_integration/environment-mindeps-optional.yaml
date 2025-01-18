@@ -27,7 +27,6 @@ dependencies:
   - cytoolz=0.11.2
   - dask-ml=1.4.0
   - fastavro=1.4.7
-  - fastparquet=0.8.2
   - h5py=3.4.0
   - ipycytoscape=1.0.1
   - IPython=7.30.1
