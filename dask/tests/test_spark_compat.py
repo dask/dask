@@ -12,7 +12,6 @@ from dask.datasets import timeseries
 pytest.importorskip("pandas")
 pyspark = pytest.importorskip("pyspark")
 pa = pytest.importorskip("pyarrow")
-pytest.importorskip("fastparquet")
 dd = pytest.importorskip("dask.dataframe")
 
 import numpy as np
@@ -116,10 +115,7 @@ def test_roundtrip_parquet_dask_to_spark(spark_session, npartitions, tmpdir, eng
     tmpdir = str(tmpdir)
     ddf = dd.from_pandas(pdf, npartitions=npartitions)
 
-    # Papercut: https://github.com/dask/fastparquet/issues/646#issuecomment-885614324
-    kwargs = {"times": "int96"} if engine == "fastparquet" else {}
-
-    ddf.to_parquet(tmpdir, engine=engine, write_index=False, **kwargs)
+    ddf.to_parquet(tmpdir, engine=engine, write_index=False)
 
     sdf = spark_session.read.parquet(tmpdir)
     sdf = sdf.toPandas()

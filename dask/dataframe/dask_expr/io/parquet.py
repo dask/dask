@@ -564,10 +564,9 @@ def to_parquet(
     # If write_index==True (default), reset the index and record the
     # name of the original index in `index_cols` (we will set the name
     # to the NONE_LABEL constant if it is originally `None`).
-    # `fastparquet` will use `index_cols` to specify the index column(s)
-    # in the metadata.  `pyarrow` will revert the `reset_index` call
+    # `pyarrow` will revert the `reset_index` call
     # below if `index_cols` is populated (because pyarrow will want to handle
-    # index preservation itself).  For both engines, the column index
+    # index preservation itself).  The column index
     # will be written to "pandas metadata" if write_index=True
     index_cols = []
     if write_index:
