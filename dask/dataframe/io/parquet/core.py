@@ -279,6 +279,8 @@ def create_metadata_file(
         behavior on remote file systems ("naked" paths cannot be used
         to infer file-system information).
     """
+    if isinstance(engine, str):
+        engine = get_engine(engine)
 
     # Process input path list
     if fs is None:
