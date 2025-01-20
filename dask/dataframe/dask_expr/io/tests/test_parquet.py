@@ -119,13 +119,6 @@ def test_to_parquet(tmpdir, write_metadata_file):
         df2.to_parquet(tmpdir, overwrite=True)
 
 
-def test_to_parquet_engine(tmpdir):
-    pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
-    df = from_pandas(pdf, npartitions=2)
-    with pytest.raises(NotImplementedError, match="not supported"):
-        df.to_parquet(tmpdir + "engine.parquet", engine="fastparquet")
-
-
 @pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_pyarrow_filesystem(parquet_file):
     filesystem = fs.LocalFileSystem()

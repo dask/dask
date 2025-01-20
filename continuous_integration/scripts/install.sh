@@ -16,7 +16,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
         --extra-index-url https://pypi.fury.io/arrow-nightlies/ \
         --prefer-binary --pre pyarrow
 
-    mamba uninstall --force fastparquet
     python -m pip install \
         --upgrade \
         locket \
@@ -25,7 +24,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/partd \
         git+https://github.com/dask/zict \
         git+https://github.com/dask/distributed \
-        git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python
     mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image h5py
     python -m pip install --no-deps --pre --retries 10 \

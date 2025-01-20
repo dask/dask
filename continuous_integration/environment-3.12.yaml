@@ -28,7 +28,6 @@ dependencies:
   - pandas
   - numba
   - flask
-  - fastparquet
   - h5py
   # Temporarily removing to allow `numpy >=2` to be installed
   # - pytables

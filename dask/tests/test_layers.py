@@ -148,17 +148,6 @@ def _pq_pyarrow(tmpdir):
     return ddf1
 
 
-def _pq_fastparquet(tmpdir):
-    pytest.importorskip("fastparquet")
-    pd = pytest.importorskip("pandas")
-    dd = pytest.importorskip("dask.dataframe")
-
-    df = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
-    with pytest.warns(FutureWarning):
-        df.to_parquet(str(tmpdir), engine="fastparquet")
-        return dd.read_parquet(str(tmpdir), engine="fastparquet")
-
-
 def _read_csv(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
@@ -178,7 +167,6 @@ def _read_csv(tmpdir):
         (_dataframe_tree_reduction, "pandas."),
         (_dataframe_broadcast_join, "pandas."),
         (_pq_pyarrow, "pandas."),
-        (_pq_fastparquet, "pandas."),
         (_read_csv, "pandas."),
         (_array_creation, "numpy."),
         (_array_map_overlap, "numpy."),

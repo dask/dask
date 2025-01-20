@@ -364,7 +364,7 @@ def _analyze_paths(file_list, fs, root=False):
     """Consolidate list of file-paths into parquet relative paths
 
     Note: This function was mostly copied from dask/fastparquet to
-    use in both `FastParquetEngine` and `ArrowEngine`."""
+    use in ArrowEngine`."""
 
     def _join_path(*path):
         def _scrub(i, p):

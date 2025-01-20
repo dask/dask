@@ -29,7 +29,6 @@ dependencies:
   - pandas=2
   - numba
   - flask
-  - fastparquet
   - h5py
   - pytables
   - zarr

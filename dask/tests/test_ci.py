@@ -25,7 +25,6 @@ def test_upstream_packages_installed():
         "bokeh",
         # "dask",
         # "distributed",
-        # "fastparquet",
         # "fsspec",
         "numpy",
         "pandas",
