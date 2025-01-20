@@ -5343,3 +5343,13 @@ def test_dataframe_into_delayed():
     result = delayed(delayed_func)(df)
     assert sum(map(len, result.dask.layers.values())) == 6
     result.compute()
+
+
+def test_array_to_df_conversion():
+    def foo(arr):
+        return pd.DataFrame(arr)
+
+    arr = da.random.random((100, 10), chunks=(10, 10))
+    result = arr.map_blocks(foo, meta=pd.DataFrame(np.random.random((1, 10))))
+    expected = pd.DataFrame(arr.compute())
+    assert_eq(result, expected, check_index=False)
