@@ -276,6 +276,51 @@ def test_pickle():
     assert t1.func is rtt2.func
 
 
+def test_pickle_size():
+    # We will serialize many of these objects which drives both memory usage and
+    # serialization runtime performance.
+    # Reducing pickle size is beneficial but the numbers below are determined
+    # empirically
+    # Analyzing the output with pickletools.dis is useful to debug memoization
+    # and serialization by value
+
+    a = Alias("a", "b")
+    # We cannot shrink it to nothing
+    assert len(pickle.dumps(a)) < 55
+    b = Alias("b", "c")
+    # But most of it should be overhead that is memoized
+    assert len(pickle.dumps((a, b))) <= 70
+
+    # Pickle should be able to memoize this. On py3.10 that's 2 additional bytes
+    assert len(pickle.dumps((a, b, b))) <= len(pickle.dumps((a, b))) + 10
+
+    t1 = Task("key-1", func, "a", "b")
+    assert len(pickle.dumps(t1)) < 120
+
+    t2 = Task("key-2", func, TaskRef("key-1"), "c")
+    assert len(pickle.dumps(t2)) < 140
+
+    assert len(pickle.dumps((t1, t2))) < 170
+
+    l = List(t1, t2)
+    assert len(pickle.dumps(l)) < 270
+
+    sizes = []
+    growth = []
+    inner = List(t1, t2)
+    for depth in range(20):
+        inner = List(inner, t1)
+        size = len(pickle.dumps(inner))
+        if len(sizes) > 0:
+            growth.append(size - sizes[-1][1])
+        sizes.append((depth, size))
+    growth = set(growth)
+    # If this breaks, something cannot be memoized. That's very concerning
+    assert len(growth) == 1
+    # If this goes up, that's not great but not a disaster
+    assert growth.pop() <= 25
+
+
 def test_tokenize():
     t = Task("key-1", func, "a", "b")
     assert tokenize(t) == tokenize(t)

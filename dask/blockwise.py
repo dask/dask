@@ -12,7 +12,7 @@ import tlz as toolz
 
 import dask
 from dask import base, utils
-from dask._task_spec import Dict, GraphNode, List, Task, TaskRef, parse_input
+from dask._task_spec import BaseTask, Dict, GraphNode, List, Task, TaskRef, parse_input
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, ishashable, keys_in_tasks, reverse_dict
 from dask.delayed import Delayed, finalize
@@ -520,7 +520,7 @@ class Blockwise(Layer):
 
     output: str
     output_indices: tuple[str, ...]
-    task: Task
+    task: BaseTask
     indices: tuple[tuple[str | TaskRef, tuple[str, ...] | None], ...]
     numblocks: Mapping[str, Sequence[int]]
     concatenate: bool | None
@@ -532,7 +532,7 @@ class Blockwise(Layer):
         self,
         output: str,
         output_indices: Iterable[str],
-        task: Task,
+        task: BaseTask,
         indices: Iterable[tuple[str | TaskRef | BlockwiseDep, Iterable[str] | None]],
         numblocks: Mapping[str, Sequence[int]],
         concatenate: bool | None = None,
