@@ -26,6 +26,7 @@ import dask.array as da
 import dask.dataframe.dask_expr._backends  # noqa: F401
 import dask.dataframe.methods as methods
 from dask import compute, get_annotations
+from dask._expr import OptimizerStage
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
@@ -50,7 +51,6 @@ from dask.dataframe.dask_expr._categorical import (
     GetCategories,
 )
 from dask.dataframe.dask_expr._concat import Concat
-from dask.dataframe.dask_expr._core import OptimizerStage
 from dask.dataframe.dask_expr._datetime import DatetimeAccessor
 from dask.dataframe.dask_expr._describe import DescribeNonNumeric, DescribeNumeric
 from dask.dataframe.dask_expr._dispatch import get_collection_type

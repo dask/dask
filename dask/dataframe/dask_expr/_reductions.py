@@ -747,7 +747,7 @@ class PivotTableAbstract(ApplyConcatApply):
     @classmethod
     def aggregate(cls, inputs: list, **kwargs):  # type: ignore
         df = _concat(inputs)
-        return cls.aggregate_func(df, **kwargs)
+        return cls.aggregate_func(df, **kwargs)  # type: ignore
 
 
 class PivotTableSum(PivotTableAbstract):

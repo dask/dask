@@ -1670,8 +1670,8 @@ class _DNF:
             ):
                 # Simple dict to make sure field comes first in filter
                 flip = {LE: GE, LT: GT, GE: LE, GT: LT}
-                op = predicate_expr
-                op = flip.get(op, op)._operator_repr
+                op = predicate_expr  # type: ignore
+                op = flip.get(op, op)._operator_repr  # type: ignore
                 column = predicate_expr.right.columns[0]
                 value = predicate_expr.left
                 _filters = (column, op, value)

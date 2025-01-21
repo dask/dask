@@ -307,7 +307,7 @@ class SimpleShuffle(PartitionsFiltered, Shuffle):
     _defaults = {
         "_partitions": None,
         "original_partitioning_index": None,
-        "partitioning_index": "_partitions",  # type: ignore
+        "partitioning_index": "_partitions",
         "ignore_index": False,
         "options": None,
     }

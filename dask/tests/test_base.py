@@ -80,7 +80,7 @@ def test_is_dask_collection_dask_expr_does_not_materialize():
     pytest.importorskip("pandas")
     dx = pytest.importorskip("dask.dataframe.dask_expr")
 
-    class DoNotMaterialize(dx._core.Expr):
+    class DoNotMaterialize(dask._expr.Expr):
         @property
         def _meta(self):
             return 0

@@ -14,6 +14,7 @@ import pandas as pd
 from pandas.errors import PerformanceWarning
 from tlz import merge_sorted, partition, unique
 
+from dask import _expr as core
 from dask._task_spec import Alias, DataNode, Task, TaskRef, execute_graph
 from dask.array import Array
 from dask.core import flatten
@@ -31,7 +32,6 @@ from dask.dataframe.core import (
     safe_head,
     total_mem_usage,
 )
-from dask.dataframe.dask_expr import _core as core
 from dask.dataframe.dask_expr._util import (
     _BackendData,
     _calc_maybe_new_divisions,
@@ -1711,14 +1711,14 @@ class ToFrame(Elemwise):
 
 class ToFrameIndex(ToFrame):
     _parameters = ["frame", "index", "name"]
-    _defaults = {"name": no_default, "index": True}  # type: ignore
+    _defaults = {"name": no_default, "index": True}
     _keyword_only = ["name", "index"]
     operation = M.to_frame
     _filter_passthrough = True
 
 
 class ToSeriesIndex(ToFrameIndex):
-    _defaults = {"name": no_default, "index": None}  # type: ignore
+    _defaults = {"name": no_default, "index": None}
     operation = M.to_series
     _preserves_partitioning_information = True
 
@@ -1771,7 +1771,7 @@ class Apply(Elemwise):
     """A good example of writing a less-trivial blockwise operation"""
 
     _parameters = ["frame", "function", "args", "meta", "kwargs"]
-    _defaults = {"args": (), "kwargs": {}}  # type: ignore
+    _defaults = {"args": (), "kwargs": {}}
     operation = M.apply
 
     @functools.cached_property
@@ -2003,7 +2003,7 @@ class Assign(Elemwise):
 
 class Eval(Elemwise):
     _parameters = ["frame", "_expr", "expr_kwargs"]
-    _defaults = {"expr_kwargs": {}}  # type: ignore
+    _defaults = {"expr_kwargs": {}}
     _keyword_only = ["expr_kwargs"]
     operation = M.eval
 
@@ -3114,7 +3114,7 @@ def optimize_until(expr: Expr, stage: core.OptimizerStage) -> Expr:
         return result
 
     # Simplify
-    expr = result.simplify()
+    expr = result.simplify()  # type: ignore
     if stage == "simplified-logical":
         return expr
 
@@ -3124,12 +3124,12 @@ def optimize_until(expr: Expr, stage: core.OptimizerStage) -> Expr:
         return expr
 
     # Lower
-    expr = expr.lower_completely()
+    expr = expr.lower_completely()  # type: ignore
     if stage == "physical":
         return expr
 
     # Simplify again
-    expr = expr.simplify()
+    expr = expr.simplify()  # type: ignore
     if stage == "simplified-physical":
         return expr
 
