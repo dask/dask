@@ -402,9 +402,12 @@ class GraphNode:
         return False
 
     def __sizeof__(self) -> int:
-        return sum(
-            sizeof(getattr(self, sl)) for sl in type(self).__slots__
-        ) + sys.getsizeof(type(self))
+        all_slots: list[str] = []
+        for t in type(self).mro():
+            all_slots.extend(getattr(t, "__slots__", ()))
+        return sum(sizeof(getattr(self, sl)) for sl in all_slots) + sys.getsizeof(
+            type(self)
+        )
 
     def substitute(
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
@@ -791,6 +794,8 @@ class BaseTask(GraphNode):
 
 
 class Task(BaseTask):
+    __slots__ = ()
+
     def __setstate__(self, state):
         (
             self.key,
