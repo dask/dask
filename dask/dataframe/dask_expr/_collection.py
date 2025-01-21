@@ -104,7 +104,6 @@ from dask.dataframe.dask_expr._util import (
     _is_any_real_numeric_dtype,
     _maybe_from_pandas,
     _raise_if_object_series,
-    _tokenize_deterministic,
     _validate_axis,
     get_specified_shuffle,
     is_scalar,
@@ -127,6 +126,7 @@ from dask.dataframe.utils import (
     pyarrow_strings_enabled,
 )
 from dask.delayed import Delayed, delayed
+from dask.tokenize import _tokenize_deterministic
 from dask.utils import (
     IndexCallable,
     M,

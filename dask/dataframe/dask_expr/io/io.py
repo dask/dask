@@ -22,13 +22,10 @@ from dask.dataframe.dask_expr._expr import (
     no_default,
 )
 from dask.dataframe.dask_expr._reductions import Len
-from dask.dataframe.dask_expr._util import (
-    _BackendData,
-    _convert_to_list,
-    _tokenize_deterministic,
-)
+from dask.dataframe.dask_expr._util import _BackendData, _convert_to_list
 from dask.dataframe.dispatch import make_meta
 from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
+from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import funcname, is_series_like
 
