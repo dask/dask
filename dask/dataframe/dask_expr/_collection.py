@@ -4972,10 +4972,18 @@ def from_array(arr, chunksize=50_000, columns=None, meta=None):
     return new_collection(result)
 
 
-def from_graph(*args, **kwargs):
+def from_graph(layer, _meta, divisions, keys, name_prefix):
     from dask.dataframe.dask_expr.io.io import FromGraph
 
-    return new_collection(FromGraph(*args, **kwargs))
+    return new_collection(
+        FromGraph(
+            layer=layer,
+            _meta=_meta,
+            divisions=divisions,
+            keys=keys,
+            name_prefix=name_prefix,
+        )
+    )
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
