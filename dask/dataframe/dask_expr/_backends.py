@@ -88,6 +88,7 @@ def create_array_collection(expr):
     # to infer that we want to create an array is the only way that is guaranteed
     # to be a general solution.
     # We can get rid of this when we have an Array expression
+    import dask.array as da
     from dask.highlevelgraph import HighLevelGraph
     from dask.layers import Blockwise
 
@@ -96,7 +97,6 @@ def create_array_collection(expr):
     name = result._name
     meta = result._meta
     divisions = result.divisions
-    import dask.array as da
 
     chunks = ((np.nan,) * (len(divisions) - 1),) + tuple((d,) for d in meta.shape[1:])
     if len(chunks) > 1:
@@ -123,6 +123,12 @@ def create_array_collection(expr):
 
 @get_collection_type.register(np.ndarray)
 def get_collection_type_array(_):
+    import dask.array as da
+
+    if da._array_expr_enabled():
+        from dask.array._array_expr._collection import Array
+
+        return Array
     return create_array_collection
 
 
