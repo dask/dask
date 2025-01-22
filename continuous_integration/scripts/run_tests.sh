@@ -3,9 +3,9 @@
 set -e
 
 if [[ $ARRAYEXPR == 'true' ]]; then
-    export MARKERS="-m 'array-expr'"
+    export MARKERS="-m 'array_expr'"
 else
-    export MARKERS="-m 'not array-expr'"
+    export MARKERS="-m 'not array_expr'"
 fi
 
 if [[ $PARALLEL == 'true' ]]; then
