@@ -93,7 +93,3 @@ class ArrayExpr(Expr):
                 "This often means that you are attempting to use an unsupported "
                 f"API function.."
             )
-
-    def __array_function__(self, func, types, args, kwargs):
-        # TODO(expr-soon): Function is needed for duck_array check
-        raise NotImplementedError

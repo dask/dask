@@ -8,6 +8,7 @@ import tlz as toolz
 
 from dask import is_dask_collection
 from dask.array._array_expr._expr import ArrayExpr
+from dask.array._array_expr._utils import compute_meta
 from dask.array.core import (
     _elemwise_handle_where,
     _enforce_dtype,
@@ -16,7 +17,6 @@ from dask.array.core import (
     is_scalar_for_elemwise,
     normalize_arg,
 )
-from dask.array.utils import compute_meta
 from dask.blockwise import _blockwise_unpack_collections_task_spec
 from dask.blockwise import blockwise as core_blockwise
 from dask.layers import ArrayBlockwiseDep
@@ -120,7 +120,7 @@ class Blockwise(ArrayExpr):
                 f"{self.token or funcname(self.func).strip('_')}-"
                 + _tokenize_deterministic(
                     self.func, self.out_ind, self.dtype, *self.args, **self.kwargs
-                ),
+                )
             )
 
     def _layer(self):

@@ -98,7 +98,7 @@ class Array(DaskMethodsMixin):
         return elemwise(operator.add, other, self)
 
     def __mul__(self, other):
-        return elemwise(operator.add, self, other)
+        return elemwise(operator.mul, self, other)
 
     def __rmul__(self, other):
         return elemwise(operator.mul, other, self)
@@ -126,6 +126,10 @@ class Array(DaskMethodsMixin):
 
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
+
+    def __array_function__(self, func, types, args, kwargs):
+        # TODO(expr-soon): Not done yet, but needed for assert_eq to identify us as an Array
+        raise NotImplementedError
 
 
 def from_graph(layer, _meta, chunks, keys, name_prefix):
