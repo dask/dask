@@ -5,13 +5,13 @@ import operator
 import numpy as np
 import toolz
 
+from dask._collections import new_collection
 from dask.array._array_expr._blockwise import Blockwise, Elemwise
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array._array_expr._io import FromGraph
 from dask.array.core import finalize
 from dask.base import DaskMethodsMixin, named_schedulers
 from dask.core import flatten
-from dask.dataframe.dask_expr import new_collection
 from dask.utils import key_split
 
 

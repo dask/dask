@@ -9,13 +9,13 @@ from threading import Lock
 
 import numpy as np
 
+from dask._collections import new_collection
 from dask.array._array_expr._collection import Array
 from dask.array._array_expr._io import IO
 from dask.array.backends import array_creation_dispatch
 from dask.array.core import asarray, broadcast_shapes, normalize_chunks
 from dask.array.creation import arange
 from dask.array.utils import asarray_safe
-from dask.dataframe.dask_expr import new_collection
 from dask.tokenize import tokenize
 from dask.utils import cached_property, derived_from, random_state_data, typename
 
