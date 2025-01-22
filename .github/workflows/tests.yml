@@ -1,4 +1,4 @@
-name: Tests
+   name: Tests
 
 on:
   push:
@@ -28,6 +28,7 @@ jobs:
         os: ["windows-latest", "ubuntu-latest", "macos-14"]
         environment: ["3.10", "3.11", "3.12", "3.13"]
         extra: [null]
+        array-expr: ["false"]
         exclude:
           - os: "macos-14"
             environment: "3.10"
@@ -51,6 +52,9 @@ jobs:
           - os: "ubuntu-latest"
             environment: "3.12"
             extra: "pandas-nightly"
+          - os: "ubuntu-latest"
+            environment: "3.12"
+            array-expr: "true"
 
     env:
       PARALLEL: "true"
@@ -101,6 +105,8 @@ jobs:
 
       - name: Run tests
         id: run_tests
+        env:
+          ARRAYEXPR: ${{ matrix.array-expr }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage

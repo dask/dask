@@ -148,8 +148,8 @@ class Blockwise(ArrayExpr):
                         "Index string %s does not match array dimension %d"
                         % (ind, arg.ndim)
                     )
-                # TODO(expr): This sucks! We should pass the arguments directly into the graph
-                # instead of wrapping them into this stupid class
+                # TODO(expr): this class is a confusing crutch to pass arguments to the
+                #  graph, we should write them directly into the graph
                 if not isinstance(arg, ArrayBlockwiseDep):
                     numblocks[arg.name] = arg.numblocks
                     arrays.append(arg)
