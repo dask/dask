@@ -106,7 +106,7 @@ jobs:
       - name: Enable Array Expr
         if: ${{ matrix.array-expr == 'true' }}
         run: |
-          export DASK_ARRAY__QUERY_PLANNING="False"
+          export DASK_ARRAY__QUERY_PLANNING="True"
           echo "DASK_ARRAY__QUERY_PLANNING: $DASK_ARRAY__QUERY_PLANNING"
           echo "DASK_DATAFRAME__QUERY_PLANNING=$DASK_ARRAY__QUERY_PLANNING" >> $GITHUB_ENV
 
