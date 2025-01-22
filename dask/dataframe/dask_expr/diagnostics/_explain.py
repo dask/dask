@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dask.dataframe.dask_expr._core import OptimizerStage
+from dask._expr import OptimizerStage
 from dask.dataframe.dask_expr._expr import Expr, Projection, optimize_until
 from dask.dataframe.dask_expr._merge import Merge
 from dask.dataframe.dask_expr.io.parquet import ReadParquet

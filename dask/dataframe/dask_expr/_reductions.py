@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
+from typing import Any as AnyT
 
 import numpy as np
 import pandas as pd
@@ -37,8 +38,9 @@ from dask.dataframe.dask_expr._expr import (
     determine_column_projection,
     plain_column_projection,
 )
-from dask.dataframe.dask_expr._util import _tokenize_deterministic, is_scalar
+from dask.dataframe.dask_expr._util import is_scalar
 from dask.dataframe.dispatch import make_meta, meta_nonempty
+from dask.tokenize import _tokenize_deterministic
 from dask.typing import no_default
 from dask.utils import M, apply, funcname
 
@@ -783,7 +785,7 @@ class Reduction(ApplyConcatApply):
     methods.
     """
 
-    _defaults = {
+    _defaults: AnyT = {
         "skipna": True,
         "numeric_only": False,
         "min_count": 0,

@@ -442,3 +442,8 @@ def register_numpy():
     @normalize_token.register(np.dtype)
     def normalize_dtype(dtype):
         return dtype.str
+
+
+def _tokenize_deterministic(*args, **kwargs) -> str:
+    # Utility to be strict about deterministic tokens
+    return tokenize(*args, ensure_deterministic=True, **kwargs)

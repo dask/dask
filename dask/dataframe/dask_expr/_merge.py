@@ -33,11 +33,7 @@ from dask.dataframe.dask_expr._shuffle import (
     _is_numeric_cast_type,
     _select_columns_or_index,
 )
-from dask.dataframe.dask_expr._util import (
-    _convert_to_list,
-    _tokenize_deterministic,
-    is_scalar,
-)
+from dask.dataframe.dask_expr._util import _convert_to_list, is_scalar
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.multi import (
     _concat_wrapper,
@@ -46,6 +42,7 @@ from dask.dataframe.multi import (
     merge_chunk,
 )
 from dask.dataframe.shuffle import partitioning_index
+from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import apply, get_default_shuffle_method
 

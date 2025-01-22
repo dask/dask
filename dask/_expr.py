@@ -7,15 +7,13 @@ from collections import defaultdict
 from collections.abc import Generator
 from typing import TYPE_CHECKING, Literal
 
-import pandas as pd
 import toolz
 
 import dask
 from dask._task_spec import Task
-from dask.dataframe.core import is_dataframe_like, is_index_like, is_series_like
-from dask.dataframe.dask_expr._util import _BackendData, _tokenize_deterministic
+from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
-from dask.utils import funcname, import_required, is_arraylike
+from dask.utils import funcname, import_required
 
 if TYPE_CHECKING:
     # TODO import from typing (requires Python >=3.10)
@@ -70,14 +68,7 @@ class Expr:
         return None
 
     def _operands_for_repr(self):
-        to_include = []
-        for param, operand in zip(self._parameters, self.operands):
-            if isinstance(operand, Expr) or (
-                not isinstance(operand, (pd.Series, pd.DataFrame))
-                and operand != self._defaults.get(param)
-            ):
-                to_include.append(f"{param}={operand!r}")
-        return to_include
+        raise NotImplementedError("Subclasses should implement this method")
 
     def __str__(self):
         s = ", ".join(self._operands_for_repr())
@@ -102,33 +93,7 @@ class Expr:
         return header
 
     def _tree_repr_lines(self, indent=0, recursive=True):
-        header = funcname(type(self)) + ":"
-        lines = []
-        for i, op in enumerate(self.operands):
-            if isinstance(op, Expr):
-                if recursive:
-                    lines.extend(op._tree_repr_lines(2))
-            else:
-                if isinstance(op, _BackendData):
-                    op = op._data
-
-                # TODO: this stuff is pandas-specific
-                if isinstance(op, pd.core.base.PandasObject):
-                    op = "<pandas>"
-                elif is_dataframe_like(op):
-                    op = "<dataframe>"
-                elif is_index_like(op):
-                    op = "<index>"
-                elif is_series_like(op):
-                    op = "<series>"
-                elif is_arraylike(op):
-                    op = "<array>"
-                header = self._tree_repr_argument_construction(i, op, header)
-
-        lines = [header] + lines
-        lines = [" " * indent + line for line in lines]
-
-        return lines
+        raise NotImplementedError("Subclasses should implement this method")
 
     def tree_repr(self):
         return os.linesep.join(self._tree_repr_lines())
@@ -248,7 +213,7 @@ class Expr:
 
         return {
             (self._name, i): self._task((self._name, i), i)
-            for i in range(self.npartitions)
+            for i in range(self.npartitions)  # type: ignore
         }
 
     def rewrite(self, kind: str, rewritten):
@@ -301,7 +266,7 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
-            for operand in expr.operands:
+            for operand in expr.operands:  # type: ignore
                 if isinstance(operand, Expr):
                     new = operand.rewrite(kind=kind, rewritten=rewritten)
                     rewritten[operand._name] = new
@@ -368,7 +333,7 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
-            for operand in expr.operands:
+            for operand in expr.operands:  # type: ignore
                 if isinstance(operand, Expr):
                     # Bandaid for now, waiting for Singleton
                     dependents[operand._name].append(weakref.ref(expr))
@@ -431,7 +396,7 @@ class Expr:
         # Lower all children
         new_operands = []
         changed = False
-        for operand in out.operands:
+        for operand in out.operands:  # type: ignore
             if isinstance(operand, Expr):
                 new = operand.lower_once(lowered)
                 if new._name != operand._name:
@@ -487,35 +452,6 @@ class Expr:
     @property
     def _meta(self):
         raise NotImplementedError()
-
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError as err:
-            if key.startswith("_meta"):
-                # Avoid a recursive loop if/when `self._meta*`
-                # produces an `AttributeError`
-                raise RuntimeError(
-                    f"Failed to generate metadata for {self}. "
-                    "This operation may not be supported by the current backend."
-                )
-
-            # Allow operands to be accessed as attributes
-            # as long as the keys are not already reserved
-            # by existing methods/properties
-            _parameters = type(self)._parameters
-            if key in _parameters:
-                idx = _parameters.index(key)
-                return self.operands[idx]
-            if is_dataframe_like(self._meta) and key in self._meta.columns:
-                return self[key]
-
-            link = "https://github.com/dask-contrib/dask-expr/blob/main/README.md#api-coverage"
-            raise AttributeError(
-                f"{err}\n\n"
-                "This often means that you are attempting to use an unsupported "
-                f"API function. Current API coverage is documented here: {link}."
-            )
 
     def __dask_graph__(self):
         """Traverse expression tree, collect layers"""
@@ -627,7 +563,7 @@ class Expr:
 
         changed = False
         new_operands = []
-        for i, operand in enumerate(self.operands):
+        for i, operand in enumerate(self.operands):  # type: ignore
             if i < len(self._parameters) and self._parameters[i] in substitutions:
                 new_operands.append(substitutions[self._parameters[i]])
                 changed = True
