@@ -5,7 +5,7 @@ set -e
 if [[ $ARRAYEXPR == 'true' ]]; then
     export MARKERS="--runarrayexpr'"
 else
-    export MARKERS="--runarrayexpr"
+    export MARKERS=""
 fi
 
 if [[ $PARALLEL == 'true' ]]; then
