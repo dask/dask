@@ -56,6 +56,7 @@ except ImportError:
 
 def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true", help="run slow tests")
+    parser.addoption("--runarrayexpr", action="store_true", help="run array-expr tests")
 
 
 def pytest_runtest_setup(item):

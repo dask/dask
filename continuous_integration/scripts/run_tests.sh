@@ -3,9 +3,9 @@
 set -e
 
 if [[ $ARRAYEXPR == 'true' ]]; then
-    export MARKERS="-m 'array_expr'"
+    export MARKERS="--runarrayexpr'"
 else
-    export MARKERS="-m 'array_expr'"
+    export MARKERS="--runarrayexpr"
 fi
 
 if [[ $PARALLEL == 'true' ]]; then
@@ -17,6 +17,6 @@ if [[ $COVERAGE == 'true' ]]; then
 fi
 
 echo "py.test $MARKERS dask --runslow $XTRATESTARGS"
-py.test dask --runslow $XTRATESTARGS
+py.test dask --runslow $MARKERS $XTRATESTARGS
 
 set +e
