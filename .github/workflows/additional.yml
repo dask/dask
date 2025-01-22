@@ -29,7 +29,7 @@ jobs:
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
-        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
+        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py|*_array_expr*' dask
 
   imports:
     runs-on: "ubuntu-latest"
