@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import operator
+
 import pytest
 
-import dask.array._array_expr as da
+import dask.array as da
 from dask.array import assert_eq
+from dask.array._array_expr._rechunk import Rechunk
 
 
 @pytest.fixture()
@@ -33,3 +36,31 @@ def test_arithmetic_ops(arr, op):
     result = getattr(arr, op)(2)
     expected = getattr(arr.compute(), op)(2)
     assert_eq(result, expected)
+
+
+@pytest.mark.array_expr
+def test_rechunk(arr):
+    result = arr.rechunk((7, 3))
+    expected = arr.compute()
+    assert_eq(result, expected)
+
+
+@pytest.mark.array_expr
+def test_blockwise():
+    x = da.random.random((10, 10), chunks=(5, 5))
+    z = da.blockwise(operator.add, "ij", x, "ij", 100, None, dtype=x.dtype)
+    assert_eq(z, x.compute() + 100)
+
+    x = da.random.random((10, 10), chunks=(5, 5))
+    z = da.blockwise(operator.add, "ij", x, "ij", x, "ij", dtype=x.dtype)
+    expr = z.expr.optimize()
+    assert len(list(expr.find_operations(Rechunk))) == 0
+    assert_eq(z, x.compute() * 2)
+
+    # align
+    x = da.random.random((10, 10), chunks=(5, 5))
+    y = da.random.random((10, 10), chunks=(7, 3))
+    z = da.blockwise(operator.add, "ij", x, "ij", y, "ij", dtype=x.dtype)
+    expr = z.expr.optimize()
+    assert len(list(expr.find_operations(Rechunk))) > 0
+    assert_eq(z, x.compute() + y.compute())

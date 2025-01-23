@@ -349,6 +349,7 @@ if _array_expr_enabled():
             blockwise,
             elemwise,
             random,
+            rechunk,
         )
 
         arange = raise_not_implemented_error("arange")
@@ -375,7 +376,6 @@ if _array_expr_enabled():
         ma = raise_not_implemented_error("ma")
         overlap = raise_not_implemented_error("overlap")
         atop = raise_not_implemented_error("atop")
-        blockwise = raise_not_implemented_error("blockwise")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
         asanyarray = raise_not_implemented_error("asanyarray")
         block = raise_not_implemented_error("block")
@@ -414,7 +414,6 @@ if _array_expr_enabled():
         optimize = raise_not_implemented_error("optimize")
         map_overlap = raise_not_implemented_error("map_overlap")
         percentile = raise_not_implemented_error("percentile")
-        rechunk = raise_not_implemented_error("rechunk")
         all = raise_not_implemented_error("all")
         any = raise_not_implemented_error("any")
         argmax = raise_not_implemented_error("argmax")

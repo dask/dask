@@ -128,6 +128,16 @@ class Array(DaskMethodsMixin):
         # TODO(expr-soon): Not done yet, but needed for assert_eq to identify us as an Array
         raise NotImplementedError
 
+    def rechunk(
+        self,
+        chunks="auto",
+        threshold=None,
+        block_size_limit=None,
+        balance=False,
+        method=None,
+    ):
+        return rechunk(self, chunks, threshold, block_size_limit, balance, method)
+
 
 def from_graph(layer, _meta, chunks, keys, name_prefix):
     return new_collection(
@@ -150,7 +160,7 @@ def blockwise(
     dtype=None,
     adjust_chunks=None,
     new_axes=None,
-    align_arrays=False,  # TODO(expr-soon): Change to True
+    align_arrays=True,
     concatenate=None,
     meta=None,
     **kwargs,
@@ -291,7 +301,6 @@ def blockwise(
     array([[1235, 1236],
            [1237, 1238]])
     """
-    assert not align_arrays  # TODO(expr-soon): Remove
     new_axes = new_axes or {}
 
     # Input Validation
@@ -376,3 +385,75 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
     return new_collection(Elemwise(op, dtype, name, where, *args))
+
+
+def rechunk(
+    x,
+    chunks="auto",
+    threshold=None,
+    block_size_limit=None,
+    balance=False,
+    method=None,
+):
+    """
+    Convert blocks in dask array x for new chunks.
+
+    Parameters
+    ----------
+    x: dask array
+        Array to be rechunked.
+    chunks:  int, tuple, dict or str, optional
+        The new block dimensions to create. -1 indicates the full size of the
+        corresponding dimension. Default is "auto" which automatically
+        determines chunk sizes.
+    threshold: int, optional
+        The graph growth factor under which we don't bother introducing an
+        intermediate step.
+    block_size_limit: int, optional
+        The maximum block size (in bytes) we want to produce
+        Defaults to the configuration value ``array.chunk-size``
+    balance : bool, default False
+        If True, try to make each chunk to be the same size.
+
+        This means ``balance=True`` will remove any small leftover chunks, so
+        using ``x.rechunk(chunks=len(x) // N, balance=True)``
+        will almost certainly result in ``N`` chunks.
+    method: {'tasks', 'p2p'}, optional.
+        Rechunking method to use.
+
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.ones((1000, 1000), chunks=(100, 100))
+
+    Specify uniform chunk sizes with a tuple
+
+    >>> y = x.rechunk((1000, 10))
+
+    Or chunk only specific dimensions with a dictionary
+
+    >>> y = x.rechunk({0: 1000})
+
+    Use the value ``-1`` to specify that you want a single chunk along a
+    dimension or the value ``"auto"`` to specify that dask can freely rechunk a
+    dimension to attain blocks of a uniform block size
+
+    >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
+
+    If a chunk size does not divide the dimension then rechunk will leave any
+    unevenness to the last chunk.
+
+    >>> x.rechunk(chunks=(400, -1)).chunks
+    ((400, 400, 200), (1000,))
+
+    However if you want more balanced chunks, and don't mind Dask choosing a
+    different chunksize for you then you can use the ``balance=True`` option.
+
+    >>> x.rechunk(chunks=(400, -1), balance=True).chunks
+    ((500, 500), (1000,))
+    """
+
+    return new_collection(
+        x.expr.rechunk(chunks, threshold, block_size_limit, balance, method)
+    )
