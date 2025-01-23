@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from functools import cached_property
+from functools import cached_property, reduce
+from operator import mul
 
 import numpy as np
 import toolz
@@ -41,6 +42,11 @@ class ArrayExpr(Expr):
     @cached_property
     def numblocks(self):
         return tuple(map(len, self.chunks))
+
+    @cached_property
+    def size(self) -> T_IntOrNaN:
+        """Number of elements in array"""
+        return reduce(mul, self.shape, 1)
 
     @property
     def name(self):

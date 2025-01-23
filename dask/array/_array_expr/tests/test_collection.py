@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import operator
 
+import numpy as np
 import pytest
 
 import dask.array as da
@@ -64,3 +65,34 @@ def test_blockwise():
     expr = z.expr.optimize()
     assert len(list(expr.find_operations(Rechunk))) > 0
     assert_eq(z, x.compute() + y.compute())
+
+
+@pytest.mark.parametrize("func", ["min", "max", "sum", "prod", "mean", "any", "all"])
+def test_reductions(arr, func):
+    # var and std need __array_function__
+    result = getattr(arr, func)(axis=0)
+    expected = getattr(arr.compute(), func)(axis=0)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        "sum",
+        "mean",
+        "any",
+        "all",
+        "max",
+        "min",
+        "nanmin",
+        "nanmax",
+        "nanmean",
+        "nansum",
+        "nanprod",
+    ],
+)
+def test_reductions_toplevel(arr, func):
+    # var and std need __array_function__
+    result = getattr(da, func)(arr, axis=0)
+    expected = getattr(np, func)(arr.compute(), axis=0)
+    assert_eq(result, expected)
