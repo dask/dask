@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import operator
+import warnings
 
 import numpy as np
 import toolz
@@ -8,11 +9,11 @@ import toolz
 from dask._collections import new_collection
 from dask.array._array_expr._blockwise import Blockwise, Elemwise
 from dask.array._array_expr._expr import ArrayExpr
-from dask.array._array_expr._io import FromGraph
+from dask.array._array_expr._io import FromArray, FromGraph
 from dask.array.core import T_IntOrNaN, finalize
-from dask.base import DaskMethodsMixin, named_schedulers
+from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
-from dask.utils import key_split
+from dask.utils import is_arraylike, key_split
 
 
 class Array(DaskMethodsMixin):
@@ -654,4 +655,44 @@ def rechunk(
 
     return new_collection(
         x.expr.rechunk(chunks, threshold, block_size_limit, balance, method)
+    )
+
+
+def from_array(
+    x,
+    chunks="auto",
+    lock=False,
+    asarray=None,
+    fancy=True,
+    getitem=None,
+    meta=None,
+    inline_array=False,
+):
+    if isinstance(x, Array):
+        raise ValueError(
+            "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
+        )
+    elif is_dask_collection(x):
+        warnings.warn(
+            "Passing an object to dask.array.from_array which is already a "
+            "Dask collection. This can lead to unexpected behavior."
+        )
+
+    if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
+        x = np.array(x)
+
+    if is_arraylike(x) and hasattr(x, "copy"):
+        x = x.copy()
+
+    return new_collection(
+        FromArray(
+            x,
+            chunks,
+            lock=lock,
+            asarray=asarray,
+            fancy=fancy,
+            getitem=getitem,
+            meta=meta,
+            inline_array=inline_array,
+        )
     )
