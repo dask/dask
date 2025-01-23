@@ -64,9 +64,6 @@ class Array(DaskMethodsMixin):
     def simplify(self):
         return new_collection(self.expr.simplify())
 
-    def lower_once(self):
-        return new_collection(self.expr.lower_once({}))
-
     @property
     def _meta(self):
         return self.expr._meta
@@ -153,7 +150,7 @@ def blockwise(
     dtype=None,
     adjust_chunks=None,
     new_axes=None,
-    align_arrays=True,
+    align_arrays=False,  # TODO(expr-soon): Change to True
     concatenate=None,
     meta=None,
     **kwargs,
@@ -294,6 +291,7 @@ def blockwise(
     array([[1235, 1236],
            [1237, 1238]])
     """
+    assert not align_arrays  # TODO(expr-soon): Remove
     new_axes = new_axes or {}
 
     # Input Validation
