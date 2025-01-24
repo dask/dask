@@ -5145,9 +5145,16 @@ def test_dask_array_holds_scipy_sparse_containers():
 @pytest.mark.parametrize("sparse_module_path", ["scipy.sparse", "cupyx.scipy.sparse"])
 def test_scipy_sparse_indexing(index, sparse_module_path):
     sp = pytest.importorskip(sparse_module_path)
-    x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
-    x[x < 0.9] = 0
-    y = x.map_blocks(sp.csr_matrix)
+
+    if sparse_module_path == "cupyx.scipy.sparse":
+        backend = "cupy"
+    else:
+        backend = "numpy"
+
+    with dask.config.set({"array.backend": backend}):
+        x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        y = x.map_blocks(sp.csr_matrix)
 
     assert not (
         x[index, :].compute(scheduler="single-threaded")
