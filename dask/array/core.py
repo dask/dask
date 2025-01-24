@@ -1299,7 +1299,22 @@ def finalize(results):
             return concatenate3(results)
         else:
             results2 = results2[0]
-    return unpack_singleton(results)
+
+    results = unpack_singleton(results)
+    # Single chunk. There is a risk that the result holds a buffer stored in the
+    # graph or on a process-local Worker. Deep copy to make sure that nothing can
+    # accidentally write back to it.
+    try:
+        return results.copy()  # numpy, sparse, scipy.sparse (any version)
+    except AttributeError:
+        pass
+    try:
+        # Future-proof: Array API-compliant backends
+        xp = results.__array_namespace__()
+        return xp.asarray(results, copy=True)
+    except (AttributeError, TypeError):
+        # Not an Array API object
+        return results
 
 
 CHUNKS_NONE_ERROR_MESSAGE = """
@@ -1713,13 +1728,19 @@ class Array(DaskMethodsMixin):
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
-    def __array__(self, dtype=None, **kwargs):
+    def __array__(self, dtype=None, copy=None):
+        if copy is False:
+            raise ValueError("Can't acquire a memory view of a Dask array")
+
         x = self.compute()
-        if dtype and x.dtype != dtype:
-            x = x.astype(dtype)
-        if not isinstance(x, np.ndarray):
-            x = np.array(x)
-        return x
+
+        # Apply requested dtype and convert non-numpy backends to numpy.
+        # If copy is True, numpy is going to perform its own deep copy
+        # after this method returns.
+        # If copy is None, finalize() ensures that the returned object
+        # does not share memory with an object stored in the graph or on a
+        # process-local Worker.
+        return np.asarray(x, dtype=dtype)
 
     def __array_function__(self, func, types, args, kwargs):
         import dask.array as module
