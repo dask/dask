@@ -1427,6 +1427,7 @@ class ValueCounts(ReductionConstantDim):
     reduction_chunk = M.value_counts
     reduction_aggregate = methods.value_counts_aggregate
     reduction_combine = methods.value_counts_combine
+    split_by = None
 
     @functools.cached_property
     def _meta(self):
@@ -1441,8 +1442,8 @@ class ValueCounts(ReductionConstantDim):
             return func(_concat(inputs), observed=True, **kwargs)
 
     @property
-    def split_by(self):
-        return self.frame._meta.name
+    def shuffle_by_index(self):
+        return True
 
     @property
     def chunk_kwargs(self):
