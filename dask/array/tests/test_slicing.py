@@ -1131,3 +1131,9 @@ def test_vindex_with_dask_array():
 
     with pytest.raises(IndexError, match=msg):
         darr.vindex[(dindexer, None)]
+
+
+def test_positional_indexer_newaxis():
+    arr = da.array([0, 1, 2])
+    new = arr[[True, True, False], np.newaxis]
+    assert_eq(new, arr.compute()[[True, True, False], np.newaxis])
