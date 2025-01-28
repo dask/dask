@@ -616,7 +616,7 @@ def _get_dependencies(obj: object) -> set | frozenset:
     return _no_deps
 
 
-class BaseTask(GraphNode):
+class Task(GraphNode):
     func: Callable
     args: tuple
     kwargs: dict
@@ -746,6 +746,30 @@ class BaseTask(GraphNode):
             return self.func(*new_argspec, **kwargs)
         return self.func(*new_argspec)
 
+    def __setstate__(self, state):
+        (
+            self.key,
+            self.func,
+            self.args,
+            self._token,
+            self._data_producer,
+            self._dependencies,
+            self.kwargs,
+        ) = state
+        self._is_coro = None
+        self._repr = None
+
+    def __getstate__(self):
+        return (
+            self.key,
+            self.func,
+            self.args,
+            self._token,
+            self._data_producer,
+            self._dependencies,
+            self.kwargs,
+        )
+
     @property
     def is_coro(self):
         if self._is_coro is None:
@@ -760,7 +784,7 @@ class BaseTask(GraphNode):
 
     def substitute(
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
-    ) -> BaseTask:
+    ) -> Task:
         subs_filtered = {
             k: v for k, v in subs.items() if k in self.dependencies and k != v
         }
@@ -791,32 +815,6 @@ class BaseTask(GraphNode):
                 _data_producer=self.data_producer,
                 **self.kwargs,
             )
-
-
-class Task(BaseTask):
-    __slots__ = ()
-
-    def __setstate__(self, state):
-        (
-            self.key,
-            self.func,
-            self.args,
-            self._token,
-            self._data_producer,
-            self._dependencies,
-            self.kwargs,
-        ) = state
-
-    def __getstate__(self):
-        return (
-            self.key,
-            self.func,
-            self.args,
-            self._token,
-            self._data_producer,
-            self._dependencies,
-            self.kwargs,
-        )
 
 
 class NestedContainer(Task):

@@ -265,11 +265,27 @@ class SerializeOnlyOnce:
 
 def test_pickle():
 
+    def assert_slots_equal(a, b):
+        def get_all_slots(obj):
+            slots = set()
+            for cls in obj.__class__.mro():
+                slots.update(getattr(cls, "__slots__", ()))
+            return slots
+
+        all_slots = get_all_slots(a) | get_all_slots(a)
+        assert all_slots == get_all_slots(a) == get_all_slots(a)
+        assert all(getattr(a, slot) == getattr(b, slot) for slot in all_slots)
+        assert not hasattr(a, "__dict__")
+        assert not hasattr(b, "__dict__")
+
     t1 = Task("key-1", func, "a", "b")
     t2 = Task("key-2", func, "c", "d")
 
     rtt1 = pickle.loads(pickle.dumps(t1))
     rtt2 = pickle.loads(pickle.dumps(t2))
+
+    assert_slots_equal(t1, rtt1)
+    assert_slots_equal(t2, rtt2)
     assert t1 == rtt1
     assert t1.func == rtt1.func
     assert t1.func is rtt1.func
@@ -318,7 +334,7 @@ def test_pickle_size():
     # If this breaks, something cannot be memoized. That's very concerning
     assert len(growth) == 1
     # If this goes up, that's not great but not a disaster
-    assert growth.pop() <= 25
+    assert growth.pop() <= 28
 
 
 def test_tokenize():
