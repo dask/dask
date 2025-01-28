@@ -5268,6 +5268,15 @@ def test_nbytes_auto():
         normalize_chunks(("10B", "10B"), shape=(10, 10), limit=20, dtype="float64")
 
 
+def test_auto_chunks():
+    chunks = ((1264, 1264, 1264, 1264, 1264, 1264, 1045), (1264, 491))
+    shape = sum(chunks[0]), sum(chunks[1])
+    result = normalize_chunks(
+        ("auto", "auto"), shape=shape, dtype="int32", previous_chunks=chunks
+    )
+    assert result == ((8629,), (1755,))
+
+
 def test_auto_chunks_h5py():
     h5py = pytest.importorskip("h5py")
 
