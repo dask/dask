@@ -3349,6 +3349,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     chunks[a] = shape[a]
                     multiplier_remaining = _trivial_aggregate(a)
                     largest_block *= shape[a]
+                    result[a] = (shape[a],)
                     continue
                 elif reduce_case or max(previous_chunks[a]) > max_chunk_size:
                     result[a] = round_to(proposed, ideal_shape[a])
