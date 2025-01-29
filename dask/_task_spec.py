@@ -835,15 +835,20 @@ class NestedContainer(Task):
 
     def __getstate__(self):
         state = super().__getstate__()
+        state = list(state)
+        slots = self.__class__.get_all_slots()
+        ix = slots.index("kwargs")
         # The constructor as a kwarg is redundant since this is encoded in the
         # class itself. Serializing the builtin types is not trivial
         # This saves about 15% of overhead
-        state[-1].pop("constructor", None)
+        state[ix] = state[ix].copy()
+        state[ix].pop("constructor", None)
         return state
 
     def __setstate__(self, state):
-        state[-1]["constructor"] = self.constructor
-        return super().__setstate__(state)
+        super().__setstate__(state)
+        self.kwargs["constructor"] = self.__class__.constructor
+        return self
 
     def __repr__(self):
         return f"{type(self).__name__}({self.args})"

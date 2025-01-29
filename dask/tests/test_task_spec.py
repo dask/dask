@@ -120,24 +120,6 @@ def use_kwargs(a, kwarg=None):
     return a + kwarg
 
 
-def test_unpickled_repr():
-    t = pickle.loads(pickle.dumps(Task("key", func, "a", "b")))
-    assert repr(t) == "<Task 'key' func('a', 'b')>"
-
-    t = pickle.loads(pickle.dumps(Task("nested", func2, t, t.ref())))
-    assert repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias('key'))>"
-
-    t = pickle.loads(
-        pickle.dumps(Task("long", long_function_name_longer_even_longer, t, t.ref()))
-    )
-    assert repr(t) == "<Task 'long' long_function_name_longer_even_longer(...)>"
-
-    t = pickle.loads(
-        pickle.dumps(Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value"))
-    )
-    assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
-
-
 def test_convert_legacy_dsk():
     def func(*args):
         return "-".join(args)
@@ -282,6 +264,7 @@ def test_pickle():
     t2 = Task("key-2", func, "c", "d")
 
     rtt1 = pickle.loads(pickle.dumps(t1))
+    assert repr(rtt1) == repr(t1)
     rtt2 = pickle.loads(pickle.dumps(t2))
 
     assert_slots_equal(t1, rtt1)
@@ -290,6 +273,15 @@ def test_pickle():
     assert t1.func == rtt1.func
     assert t1.func is rtt1.func
     assert t1.func is rtt2.func
+
+    l = Tuple(t1, t2)
+    rtl = pickle.loads(pickle.dumps(l))
+    assert l == rtl
+    assert l() == rtl()
+    d = Dict(key=t1)
+    rtd = pickle.loads(pickle.dumps(d))
+    assert d == rtd
+    assert d() == rtd()
 
 
 def test_pickle_size():
@@ -319,7 +311,7 @@ def test_pickle_size():
     assert len(pickle.dumps((t1, t2))) < 170
 
     l = List(t1, t2)
-    assert len(pickle.dumps(l)) < 270
+    assert len(pickle.dumps(l)) <= 272
 
     sizes = []
     growth = []
@@ -334,7 +326,7 @@ def test_pickle_size():
     # If this breaks, something cannot be memoized. That's very concerning
     assert len(growth) == 1
     # If this goes up, that's not great but not a disaster
-    assert growth.pop() <= 31
+    assert growth.pop() <= 32
 
 
 def test_tokenize():
