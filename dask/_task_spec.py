@@ -58,7 +58,7 @@ import itertools
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
-from functools import partial
+from functools import lru_cache, partial
 from typing import Any, TypeVar, cast
 
 from dask.sizeof import sizeof
@@ -478,6 +478,14 @@ class GraphNode:
             _data_producer=any(t.data_producer for t in tasks),
         )
 
+    @classmethod
+    @lru_cache
+    def get_all_slots(cls):
+        slots = set()
+        for c in cls.mro():
+            slots.update(getattr(c, "__slots__", ()))
+        return sorted(slots)
+
 
 _no_deps: frozenset = frozenset()
 
@@ -747,28 +755,13 @@ class Task(GraphNode):
         return self.func(*new_argspec)
 
     def __setstate__(self, state):
-        (
-            self.key,
-            self.func,
-            self.args,
-            self._token,
-            self._data_producer,
-            self._dependencies,
-            self.kwargs,
-        ) = state
-        self._is_coro = None
-        self._repr = None
+        slots = self.__class__.get_all_slots()
+        for sl, val in zip(slots, state):
+            setattr(self, sl, val)
 
     def __getstate__(self):
-        return (
-            self.key,
-            self.func,
-            self.args,
-            self._token,
-            self._data_producer,
-            self._dependencies,
-            self.kwargs,
-        )
+        slots = self.__class__.get_all_slots()
+        return tuple(getattr(self, sl) for sl in slots)
 
     @property
     def is_coro(self):

@@ -334,7 +334,7 @@ def test_pickle_size():
     # If this breaks, something cannot be memoized. That's very concerning
     assert len(growth) == 1
     # If this goes up, that's not great but not a disaster
-    assert growth.pop() <= 28
+    assert growth.pop() <= 31
 
 
 def test_tokenize():
