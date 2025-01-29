@@ -439,7 +439,7 @@ def arange_safe(*args, like, **kwargs):
 
 
 def _array_like_safe(np_func, da_func, a, like, **kwargs):
-    from dask.array.core import Array
+    from dask.array import Array
 
     if like is a and hasattr(a, "__array_function__"):
         return a

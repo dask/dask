@@ -29,6 +29,14 @@ def create_array_collection(expr):
     from dask.highlevelgraph import HighLevelGraph
     from dask.layers import Blockwise
 
+    if da._array_expr_enabled():
+        from dask.array._array_expr._expr import ArrayExpr
+
+        if isinstance(expr, ArrayExpr):
+            from dask.array._array_expr._collection import Array
+
+            return Array(expr)
+
     result = expr.optimize()
     dsk = result.__dask_graph__()
     name = result._name
@@ -42,6 +50,8 @@ def create_array_collection(expr):
         else:
             # dask-expr provides a dict only
             layer = dsk
+
+        new_keys = []
         if isinstance(layer, Blockwise):
             layer.new_axes["j"] = chunks[1][0]
             layer.output_indices = layer.output_indices + ("j",)
@@ -55,17 +65,19 @@ def create_array_collection(expr):
                 if isinstance(task, Task):
                     task = Alias(new_key, task.key)
                 layer[new_key] = task
-    return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+                new_keys.append(new_key)
+    else:
+        new_keys = [(name, 0)]
+    if da._array_expr_enabled():
+        from dask.array._array_expr._collection import from_graph
+
+        return from_graph(dsk, meta, chunks, set(new_keys), name)
+    else:
+        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
 
 
 @get_collection_type.register(np.ndarray)
 def get_collection_type_array(_):
-    import dask.array as da
-
-    if da._array_expr_enabled():
-        from dask.array._array_expr._collection import Array
-
-        return Array
     return create_array_collection
 
 

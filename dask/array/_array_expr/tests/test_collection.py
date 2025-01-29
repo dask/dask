@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array import assert_eq
+from dask import is_dask_collection
+from dask.array import Array, assert_eq
 from dask.array._array_expr._rechunk import Rechunk
 
 
@@ -103,3 +104,31 @@ def test_from_array():
     d = da.from_array(x, chunks=(5, 5))
     assert_eq(d, x)
     assert d.chunks == ((5, 5), (5, 5))
+
+
+@pytest.mark.array_expr
+def test_is_dask_collection_doesnt_materialize():
+    class ArrayTest(Array):
+        def __dask_graph__(self):
+            raise NotImplementedError
+
+    arr = ArrayTest(da.random.random((10, 10), chunks=(5, 5)).expr)
+    assert is_dask_collection(arr)
+    with pytest.raises(NotImplementedError):
+        arr.__dask_graph__()
+
+
+def test_astype():
+    x = da.random.randint(1, 100, (10, 10), chunks=(5, 5))
+    result = x.astype(np.float64)
+    expected = x.compute().astype(np.float64)
+    assert_eq(result, expected)
+
+
+def test_stack_promote_type():
+    i = np.arange(10, dtype="i4")
+    f = np.arange(10, dtype="f4")
+    di = da.from_array(i, chunks=5)
+    df = da.from_array(f, chunks=5)
+    res = da.stack([di, df])
+    assert_eq(res, np.stack([i, f]))

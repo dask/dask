@@ -109,7 +109,7 @@ class Blockwise(ArrayExpr):
                         raise NotImplementedError(
                             "adjust_chunks values must be callable, int, or tuple"
                         )
-            chunks = tuple(chunks)
+        chunks = tuple(chunks)
         return chunks
 
     @cached_property
@@ -311,3 +311,40 @@ class Elemwise(Blockwise):
                 + ([self.where] if self.where is not True else [])
             )
         )
+
+
+class Transpose(Blockwise):
+    _parameters = ["array", "axes"]
+    func = staticmethod(np.transpose)
+    align_arrays = False
+    adjust_chunks = None
+    concatenate = None
+    token = "transpose"
+
+    @property
+    def new_axes(self):
+        return {}
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def _meta_provided(self):
+        return self.array._meta
+
+    @property
+    def dtype(self):
+        return self._meta.dtype
+
+    @property
+    def out_ind(self):
+        return self.axes
+
+    @property
+    def kwargs(self):
+        return {"axes": self.axes}
+
+    @property
+    def args(self):
+        return (self.array, tuple(range(self.array.ndim)))
