@@ -402,9 +402,7 @@ class GraphNode:
         return False
 
     def __sizeof__(self) -> int:
-        all_slots: list[str] = []
-        for t in type(self).mro():
-            all_slots.extend(getattr(t, "__slots__", ()))
+        all_slots = self.get_all_slots()
         return sum(sizeof(getattr(self, sl)) for sl in all_slots) + sys.getsizeof(
             type(self)
         )
@@ -481,10 +479,12 @@ class GraphNode:
     @classmethod
     @lru_cache
     def get_all_slots(cls):
-        slots = set()
+        slots = list()
         for c in cls.mro():
-            slots.update(getattr(c, "__slots__", ()))
-        return sorted(slots)
+            slots.extend(getattr(c, "__slots__", ()))
+        # Interestingly, sorting this causes the nested containers to pickle
+        # more efficiently
+        return sorted(set(slots))
 
 
 _no_deps: frozenset = frozenset()
