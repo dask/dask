@@ -25,7 +25,7 @@ def test_make_timeseries():
     assert df.divisions[-1] == pd.Timestamp("2014-07-31")
     tm.assert_index_equal(df.columns, pd.Index(["A", "B", "C"]))
     assert df["A"].head().dtype == float
-    assert np.issubdtype(df["B"].head(), np.intp)
+    assert np.issubdtype(df["B"].head(), np.integer)
     assert df["C"].head().dtype == get_string_dtype()
     assert df.index.name == "timestamp"
     assert df.head().index.name == df.index.name
