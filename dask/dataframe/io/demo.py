@@ -13,7 +13,6 @@ import pandas as pd
 from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe._pyarrow import is_object_string_dtype
 from dask.dataframe.io.utils import DataFrameIOFunction
-from dask.tokenize import tokenize
 from dask.utils import random_state_data
 
 __all__ = [
@@ -401,60 +400,17 @@ def make_timeseries(
     2000-01-01 06:00:00   960   Charlie  0.788245
     2000-01-01 08:00:00  1031     Kevin  0.466002
     """
-    if dtypes is None:
-        dtypes = {"name": str, "id": int, "x": float, "y": float}
+    from dask.dataframe.dask_expr.datasets import timeseries
 
-    divisions = list(pd.date_range(start=start, end=end, freq=partition_freq))
-    npartitions = len(divisions) - 1
-    if seed is None:
-        # Get random integer seed for each partition. We can
-        # call `random_state_data` in `MakeDataframePart`
-        state_data = np.random.randint(2e9, size=npartitions)
-    else:
-        state_data = random_state_data(npartitions, seed)
-
-    # Build parts
-    parts = []
-    for i in range(len(divisions) - 1):
-        parts.append((divisions[i : i + 2], state_data[i]))
-
-    kwargs["freq"] = freq
-    index_dtype = "datetime64[ns]"
-    meta_start, meta_end = list(pd.date_range(start="2000", freq=freq, periods=2))
-
-    from dask.dataframe import _dask_expr_enabled
-
-    if _dask_expr_enabled():
-        from dask.dataframe.dask_expr import from_map
-
-        k = {}
-    else:
-        from dask.dataframe.io.io import from_map
-
-        k = {"token": tokenize(start, end, dtypes, freq, partition_freq, state_data)}
-
-    # Construct the output collection with from_map
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message="dask_expr does not", category=UserWarning
-        )
-        return from_map(
-            MakeDataframePart(index_dtype, dtypes, kwargs),
-            parts,
-            meta=make_dataframe_part(
-                index_dtype,
-                meta_start,
-                meta_end,
-                dtypes,
-                list(dtypes.keys()),
-                state_data[0],
-                kwargs,
-            ),
-            divisions=divisions,
-            label="make-timeseries",
-            enforce_metadata=False,
-            **k,
-        )
+    return timeseries(
+        start=start,
+        end=end,
+        dtypes=dtypes,
+        freq=freq,
+        partition_freq=partition_freq,
+        seed=seed,
+        **kwargs,
+    )
 
 
 def with_spec(spec: DatasetSpec, seed: int | None = None):
