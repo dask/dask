@@ -3,9 +3,9 @@
 set -e
 
 if [[ $ARRAYEXPR == 'true' ]]; then
-    export MARKERS="--runarrayexpr"
+    export MARKERS="-m array_expr"
 else
-    export MARKERS=""
+    export MARKERS="-m 'not array_expr'"
 fi
 
 if [[ $PARALLEL == 'true' ]]; then
@@ -16,7 +16,7 @@ if [[ $COVERAGE == 'true' ]]; then
     export XTRATESTARGS="--cov=dask --cov-report=xml --junit-xml pytest.xml $XTRATESTARGS"
 fi
 
-echo "py.testdask --runslow $MARKERS $XTRATESTARGS"
-py.test dask --runslow $MARKERS $XTRATESTARGS
+echo "py.test $MARKERS dask --runslow $XTRATESTARGS"
+py.test $MARKERS dask --runslow $XTRATESTARGS
 
 set +e
