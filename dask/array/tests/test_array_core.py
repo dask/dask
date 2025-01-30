@@ -5145,9 +5145,16 @@ def test_dask_array_holds_scipy_sparse_containers():
 @pytest.mark.parametrize("sparse_module_path", ["scipy.sparse", "cupyx.scipy.sparse"])
 def test_scipy_sparse_indexing(index, sparse_module_path):
     sp = pytest.importorskip(sparse_module_path)
-    x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
-    x[x < 0.9] = 0
-    y = x.map_blocks(sp.csr_matrix)
+
+    if sparse_module_path == "cupyx.scipy.sparse":
+        backend = "cupy"
+    else:
+        backend = "numpy"
+
+    with dask.config.set({"array.backend": backend}):
+        x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        y = x.map_blocks(sp.csr_matrix)
 
     assert not (
         x[index, :].compute(scheduler="single-threaded")
@@ -5266,6 +5273,15 @@ def test_nbytes_auto():
         normalize_chunks(("100B", "10B"), shape=(10, 10), dtype="float64")
     with pytest.raises(ValueError):
         normalize_chunks(("10B", "10B"), shape=(10, 10), limit=20, dtype="float64")
+
+
+def test_auto_chunks():
+    chunks = ((1264, 1264, 1264, 1264, 1264, 1264, 1045), (1264, 491))
+    shape = sum(chunks[0]), sum(chunks[1])
+    result = normalize_chunks(
+        ("auto", "auto"), shape=shape, dtype="int32", previous_chunks=chunks
+    )
+    assert result == ((8629,), (1755,))
 
 
 def test_auto_chunks_h5py():

@@ -45,7 +45,7 @@ from dask.dataframe.dask_expr._expr import (
     determine_column_projection,
 )
 from dask.dataframe.dask_expr._reductions import Len
-from dask.dataframe.dask_expr._util import _convert_to_list, _tokenize_deterministic
+from dask.dataframe.dask_expr._util import _convert_to_list
 from dask.dataframe.dask_expr.io import BlockwiseIO, PartitionsFiltered
 from dask.dataframe.dask_expr.io.io import FusedParquetIO
 from dask.dataframe.io.parquet.core import (
@@ -60,7 +60,7 @@ from dask.dataframe.io.parquet.core import (
 from dask.dataframe.io.parquet.utils import _split_user_options
 from dask.dataframe.io.utils import _is_local_fs
 from dask.delayed import delayed
-from dask.tokenize import normalize_token, tokenize
+from dask.tokenize import _tokenize_deterministic, normalize_token, tokenize
 from dask.typing import Key
 from dask.utils import apply, funcname, natural_sort_key, parse_bytes, typename
 

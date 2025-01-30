@@ -14,6 +14,7 @@ import pandas as pd
 from pandas.errors import PerformanceWarning
 from tlz import merge_sorted, partition, unique
 
+from dask import _expr as core
 from dask._task_spec import Alias, DataNode, Task, TaskRef, execute_graph
 from dask.array import Array
 from dask.core import flatten
@@ -31,11 +32,10 @@ from dask.dataframe.core import (
     safe_head,
     total_mem_usage,
 )
-from dask.dataframe.dask_expr import _core as core
 from dask.dataframe.dask_expr._util import (
+    _BackendData,
     _calc_maybe_new_divisions,
     _convert_to_list,
-    _tokenize_deterministic,
     _tokenize_partial,
     is_scalar,
 )
@@ -48,7 +48,7 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
     valid_divisions,
 )
-from dask.tokenize import normalize_token
+from dask.tokenize import _tokenize_deterministic, normalize_token
 from dask.typing import Key, no_default
 from dask.utils import (
     M,
@@ -105,6 +105,74 @@ class Expr(core.Expr):
     @property
     def nbytes(self):
         return NBytes(self)
+
+    def _tree_repr_lines(self, indent=0, recursive=True):
+        header = funcname(type(self)) + ":"
+        lines = []
+        for i, op in enumerate(self.operands):
+            if isinstance(op, Expr):
+                if recursive:
+                    lines.extend(op._tree_repr_lines(2))
+            else:
+                if isinstance(op, _BackendData):
+                    op = op._data
+
+                # TODO: this stuff is pandas-specific
+                if isinstance(op, pd.core.base.PandasObject):
+                    op = "<pandas>"
+                elif is_dataframe_like(op):
+                    op = "<dataframe>"
+                elif is_index_like(op):
+                    op = "<index>"
+                elif is_series_like(op):
+                    op = "<series>"
+                elif is_arraylike(op):
+                    op = "<array>"
+                header = self._tree_repr_argument_construction(i, op, header)
+
+        lines = [header] + lines
+        lines = [" " * indent + line for line in lines]
+
+        return lines
+
+    def _operands_for_repr(self):
+        to_include = []
+        for param, operand in zip(self._parameters, self.operands):
+            if isinstance(operand, Expr) or (
+                not isinstance(operand, (pd.Series, pd.DataFrame))
+                and operand != self._defaults.get(param)
+            ):
+                to_include.append(f"{param}={operand!r}")
+        return to_include
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError as err:
+            if key.startswith("_meta"):
+                # Avoid a recursive loop if/when `self._meta*`
+                # produces an `AttributeError`
+                raise RuntimeError(
+                    f"Failed to generate metadata for {self}. "
+                    "This operation may not be supported by the current backend."
+                )
+
+            # Allow operands to be accessed as attributes
+            # as long as the keys are not already reserved
+            # by existing methods/properties
+            _parameters = type(self)._parameters
+            if key in _parameters:
+                idx = _parameters.index(key)
+                return self.operands[idx]
+            if is_dataframe_like(self._meta) and key in self._meta.columns:
+                return self[key]
+
+            link = "https://github.com/dask-contrib/dask-expr/blob/main/README.md#api-coverage"
+            raise AttributeError(
+                f"{err}\n\n"
+                "This often means that you are attempting to use an unsupported "
+                f"API function. Current API coverage is documented here: {link}."
+            )
 
     def __getitem__(self, other):
         if isinstance(other, Expr):
@@ -590,7 +658,7 @@ class MapPartitions(Blockwise):
         "token",
         "kwargs",
     ]
-    _defaults = {
+    _defaults: dict = {
         "kwargs": None,
         "align_dataframes": True,
         "parent_meta": None,
@@ -842,7 +910,7 @@ class MapOverlap(MapPartitions):
         "token",
         "kwargs",
     ]
-    _defaults = {
+    _defaults: dict = {
         "meta": None,
         "enfore_metadata": True,
         "transform_divisions": True,
@@ -1420,7 +1488,7 @@ class ToTimestamp(Elemwise):
 
 class CombineSeries(Elemwise):
     _parameters = ["frame", "other", "func", "fill_value"]
-    _defaults = {"fill_value": None}
+    _defaults: dict = {"fill_value": None}
     operation = M.combine
 
     @functools.cached_property

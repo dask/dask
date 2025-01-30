@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
+from typing import Any as AnyT
 
 import numpy as np
 import pandas as pd
@@ -37,8 +38,9 @@ from dask.dataframe.dask_expr._expr import (
     determine_column_projection,
     plain_column_projection,
 )
-from dask.dataframe.dask_expr._util import _tokenize_deterministic, is_scalar
+from dask.dataframe.dask_expr._util import is_scalar
 from dask.dataframe.dispatch import make_meta, meta_nonempty
+from dask.tokenize import _tokenize_deterministic
 from dask.typing import no_default
 from dask.utils import M, apply, funcname
 
@@ -783,7 +785,7 @@ class Reduction(ApplyConcatApply):
     methods.
     """
 
-    _defaults = {
+    _defaults: AnyT = {
         "skipna": True,
         "numeric_only": False,
         "min_count": 0,
@@ -1425,6 +1427,7 @@ class ValueCounts(ReductionConstantDim):
     reduction_chunk = M.value_counts
     reduction_aggregate = methods.value_counts_aggregate
     reduction_combine = methods.value_counts_combine
+    split_by = None
 
     @functools.cached_property
     def _meta(self):
@@ -1439,8 +1442,8 @@ class ValueCounts(ReductionConstantDim):
             return func(_concat(inputs), observed=True, **kwargs)
 
     @property
-    def split_by(self):
-        return self.frame._meta.name
+    def shuffle_by_index(self):
+        return True
 
     @property
     def chunk_kwargs(self):
