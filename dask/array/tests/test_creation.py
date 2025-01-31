@@ -264,6 +264,7 @@ def test_arange_dtype_force(dtype):
     assert da.arange(np.int64(10), dtype=dtype).dtype == dtype
 
 
+@pytest.mark.skipif(np.array(0).dtype == np.int32, reason="64-bit platforms only")
 @pytest.mark.parametrize(
     "start,stop,step",
     [
@@ -271,12 +272,7 @@ def test_arange_dtype_force(dtype):
         (2**63 - 1, 2**63 - 10_000, -1),
         (0, 2**63 - 1, 2**63 - 10_000),
         (0.0, 2**63 - 1, 2**63 - 10_000),
-        pytest.param(
-            *(0.0, -9_131_138_316_486_228_481, -92_233_720_368_547_759),
-            marks=pytest.mark.skipif(
-                np.array(0).dtype == np.int32, reason="64-bit platforms only"
-            ),
-        ),
+        (0.0, -9_131_138_316_486_228_481, -92_233_720_368_547_759),
     ],
 )
 def test_arange_very_large_args(start, stop, step):
