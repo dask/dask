@@ -227,6 +227,26 @@ def test_arange():
     nparr = np.arange(0, -1, 0.5)
     assert_eq(darr, nparr)
 
+    # stop and/or step as kwargs
+    darr = da.arange(stop=10)
+    nparr = np.arange(stop=10)
+    assert_eq(darr, nparr)
+
+    darr = da.arange(10, step=2)
+    nparr = np.arange(10, step=2)
+    assert_eq(darr, nparr)
+
+    darr = da.arange(stop=10, step=2)
+    nparr = np.arange(stop=10, step=2)
+    assert_eq(darr, nparr)
+
+    darr = da.arange(3, stop=10, step=2)
+    nparr = np.arange(3, stop=10, step=2)
+    assert_eq(darr, nparr)
+
+    with pytest.raises(TypeError, match="requires stop"):
+        da.arange()
+
     # Unexpected or missing kwargs
     with pytest.raises(TypeError, match="whatsthis"):
         da.arange(10, chunks=-1, whatsthis=1)
