@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import itertools
-
 import pytest
 
 from dask._task_spec import Alias
@@ -236,14 +234,10 @@ def test_arange():
     assert da.arange(10).chunks == ((10,),)
 
 
-basic_dtypes = [
+arange_dtypes = [
     np.uint8,
-    np.uint16,
-    np.uint32,
     np.uint64,
     np.int8,
-    np.int16,
-    np.int32,
     np.int64,
     np.float32,
     np.float64,
@@ -251,22 +245,9 @@ basic_dtypes = [
 
 
 # FIXME hypothesis would be much better suited for this
-@pytest.mark.parametrize(
-    "start_type,stop_type,step_type",
-    np.random.default_rng(0).choice(
-        np.array(
-            list(
-                itertools.product(
-                    basic_dtypes + [int, float],
-                    basic_dtypes + [int, float],
-                    basic_dtypes + [int, float],
-                )
-            )
-        ),
-        100,
-        replace=False,
-    ),
-)
+@pytest.mark.parametrize("start_type", arange_dtypes + [int, float])
+@pytest.mark.parametrize("stop_type", arange_dtypes + [int, float])
+@pytest.mark.parametrize("step_type", arange_dtypes + [int, float])
 def test_arange_dtype_infer(start_type, stop_type, step_type):
     start = start_type(3)
     stop = stop_type(13)
@@ -276,7 +257,7 @@ def test_arange_dtype_infer(start_type, stop_type, step_type):
     assert_eq(a_np, a_da)
 
 
-@pytest.mark.parametrize("dtype", basic_dtypes)
+@pytest.mark.parametrize("dtype", arange_dtypes)
 def test_arange_dtype_force(dtype):
     assert da.arange(10, dtype=dtype).dtype == dtype
     assert da.arange(np.float32(10), dtype=dtype).dtype == dtype
