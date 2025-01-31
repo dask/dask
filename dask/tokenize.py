@@ -112,23 +112,18 @@ normalize_token.register(
 )
 
 
-def normalize_token_safe(x):
-    """A thread safe version of normalize_token"""
-    with tokenize_lock:
-        return normalize_token(x)
-
-
 @normalize_token.register((types.MappingProxyType, dict))
 def normalize_dict(d):
-    if id(d) in _SEEN:
-        return "__seen", _SEEN[id(d)][0]
-    _SEEN[id(d)] = len(_SEEN), d
-    try:
-        return "dict", _normalize_seq_func(
-            sorted(d.items(), key=lambda kv: hash(kv[0]))
-        )
-    finally:
-        _SEEN.pop(id(d), None)
+    with tokenize_lock:
+        if id(d) in _SEEN:
+            return "__seen", _SEEN[id(d)][0]
+        _SEEN[id(d)] = len(_SEEN), d
+        try:
+            return "dict", _normalize_seq_func(
+                sorted(d.items(), key=lambda kv: hash(kv[0]))
+            )
+        finally:
+            _SEEN.pop(id(d), None)
 
 
 @normalize_token.register(OrderedDict)
@@ -151,13 +146,14 @@ def _normalize_seq_func(seq: Iterable[object]) -> tuple[object, ...]:
             return item
         return normalize_token(item)
 
-    if id(seq) in _SEEN:
-        return "__seen", _SEEN[id(seq)][0]
-    _SEEN[id(seq)] = len(_SEEN), seq
-    try:
-        return tuple(map(_inner_normalize_token, seq))
-    finally:
-        del _SEEN[id(seq)]
+    with tokenize_lock:
+        if id(seq) in _SEEN:
+            return "__seen", _SEEN[id(seq)][0]
+        _SEEN[id(seq)] = len(_SEEN), seq
+        try:
+            return tuple(map(_inner_normalize_token, seq))
+        finally:
+            del _SEEN[id(seq)]
 
 
 @normalize_token.register((tuple, list))
