@@ -112,6 +112,12 @@ normalize_token.register(
 )
 
 
+def normalize_token_safe(x):
+    """A thread safe version of normalize_token"""
+    with tokenize_lock:
+        return normalize_token(x)
+
+
 @normalize_token.register((types.MappingProxyType, dict))
 def normalize_dict(d):
     if id(d) in _SEEN:
