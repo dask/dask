@@ -18,7 +18,7 @@ from dask.array._array_expr._expr import (
     unify_chunks_expr,
 )
 from dask.array._array_expr._io import FromArray, FromGraph
-from dask.array.core import T_IntOrNaN, finalize, getter_inline
+from dask.array.core import T_IntOrNaN, _should_delegate, finalize, getter_inline
 from dask.array.dispatch import concatenate_lookup
 from dask.array.utils import meta_from_array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
@@ -456,6 +456,49 @@ class Array(DaskMethodsMixin):
         from dask.array._array_expr._map_blocks import map_blocks
 
         return map_blocks(func, self, *args, **kwargs)
+
+    @property
+    def _elemwise(self):
+        return elemwise
+
+    def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
+        out = kwargs.get("out", ())
+        for x in inputs + out:
+            if _should_delegate(self, x):
+                return NotImplemented
+
+        if method == "__call__":
+            if numpy_ufunc is np.matmul:
+                from dask.array.routines import matmul
+
+                # special case until apply_gufunc handles optional dimensions
+                return matmul(*inputs, **kwargs)
+            if numpy_ufunc.signature is not None:
+                from dask.array._array_expr._gufunc import apply_gufunc
+
+                return apply_gufunc(
+                    numpy_ufunc, numpy_ufunc.signature, *inputs, **kwargs
+                )
+            if numpy_ufunc.nout > 1:
+                from dask.array import ufunc
+
+                try:
+                    da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+                except AttributeError:
+                    return NotImplemented
+                return da_ufunc(*inputs, **kwargs)
+            else:
+                return elemwise(numpy_ufunc, *inputs, **kwargs)
+        elif method == "outer":
+            from dask.array import ufunc
+
+            try:
+                da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+            except AttributeError:
+                return NotImplemented
+            return da_ufunc.outer(*inputs, **kwargs)
+        else:
+            return NotImplemented
 
 
 def from_graph(layer, _meta, chunks, keys, name_prefix):

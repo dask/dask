@@ -17,3 +17,4 @@ from dask.array._array_expr._collection import (
 from dask.array._array_expr._creation import arange, empty, linspace, ones, zeros
 from dask.array._array_expr._map_blocks import map_blocks
 from dask.array._array_expr._reductions import _tree_reduce, reduction
+from dask.array._array_expr._ufunc import *
