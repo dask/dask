@@ -27,6 +27,10 @@ from packaging.version import Version
 from tlz import accumulate, concat, first, partition
 from toolz import frequencies
 
+from dask._compatibility import import_optional_dependency
+
+xr = import_optional_dependency("xarray", errors="ignore")
+
 from dask import compute, config, core
 from dask._task_spec import List, Task, TaskRef
 from dask.array import chunk
@@ -3364,6 +3368,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     chunks[a] = shape[a]
                     multiplier_remaining = _trivial_aggregate(a)
                     largest_block *= shape[a]
+                    result[a] = (shape[a],)
                     continue
                 elif reduce_case or max(previous_chunks[a]) > max_chunk_size:
                     result[a] = round_to(proposed, ideal_shape[a])
@@ -3627,6 +3632,11 @@ def from_array(
         raise ValueError(
             "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
         )
+
+    if xr is not None and isinstance(x, xr.DataArray) and x.chunks is not None:
+        if isinstance(x.data, Array):
+            return x.data
+
     elif is_dask_collection(x):
         warnings.warn(
             "Passing an object to dask.array.from_array which is already a "
