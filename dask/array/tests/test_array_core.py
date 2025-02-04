@@ -55,7 +55,7 @@ from dask.array.core import (
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reshape import _not_implemented_message
 from dask.array.utils import assert_eq, same_keys
-from dask.base import compute_as_if_collection, tokenize
+from dask.base import collections_to_dsk, compute_as_if_collection, tokenize
 from dask.blockwise import (
     _make_blockwise_graph,
     broadcast_dimensions,
@@ -5602,6 +5602,20 @@ def test_from_array_copies():
     dx = da.from_array(x, chunks=chunks)
     x[2:4, x[0] > 3] = -5
     assert_eq(original_array, dx)
+
+
+def test_from_array_xarray_dataarray():
+    xr = pytest.importorskip("xarray")
+    arr = xr.DataArray(da.random.random((1000, 1000), chunks=(50, 50)))
+    dask_array = da.from_array(arr)
+    dsk = collections_to_dsk([dask_array])
+    assert len(dsk) == 400
+    assert all(k[0].startswith("random_sample") for k in dsk)
+    assert_eq(dask_array, arr.data)
+
+    arr = xr.DataArray(np.random.random((100, 100)))
+    dask_array = da.from_array(arr)
+    assert_eq(dask_array.compute().data, arr.data)
 
 
 def test_load_store_chunk():
