@@ -1307,12 +1307,6 @@ def finalize(results):
     try:
         return results.copy()  # numpy, sparse, scipy.sparse (any version)
     except AttributeError:
-        pass
-    try:
-        # Future-proof: Array API-compliant backends
-        xp = results.__array_namespace__()
-        return xp.asarray(results, copy=True)
-    except (AttributeError, TypeError):
         # Not an Array API object
         return results
 
