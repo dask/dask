@@ -1726,7 +1726,13 @@ class Array(DaskMethodsMixin):
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
-    def __array__(self, dtype=None, copy=None):
+    def __array__(self, dtype=None, copy=None, **kwargs):
+        if kwargs:
+            warnings.warn(
+                f"Extra keyword arguments {kwargs} are ignored and won't be "
+                "accepted in the future",
+                FutureWarning,
+            )
         if copy is False:
             raise ValueError("Can't acquire a memory view of a Dask array")
 

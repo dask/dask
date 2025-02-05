@@ -516,6 +516,12 @@ def test_numpy_asarray_copy_default(asarray, chunks):
     assert x[0].compute() == 0
 
 
+def test_array_interface_deprecated_kwargs():
+    x = da.ones(10)
+    with pytest.warns(FutureWarning, match="ignored"):
+        x.__array__(something="foo")
+
+
 @pytest.mark.parametrize("chunks", [5, 10])
 def test_compute_copy(chunks):
     """Test that compute() never returns an object that shares
