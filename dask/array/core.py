@@ -4516,6 +4516,10 @@ def load_store_chunk(
     if lock:
         lock.acquire()
     try:
+        if isinstance(x, np.ndarray):
+            print(x.dtype, x.size)
+        else:
+            print(type(x), x)
         if x is not None and x.size != 0:
             if is_arraylike(x):
                 out[index] = x
