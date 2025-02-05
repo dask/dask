@@ -1734,7 +1734,11 @@ class Array(DaskMethodsMixin):
                 FutureWarning,
             )
         if copy is False:
-            raise ValueError("Can't acquire a memory view of a Dask array")
+            warnings.warn(
+                "Can't acquire a memory view of a Dask array. "
+                "This will raise in the future.",
+                FutureWarning,
+            )
 
         x = self.compute()
 

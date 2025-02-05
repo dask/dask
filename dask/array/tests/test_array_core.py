@@ -467,8 +467,9 @@ def test_numpy_asarray_copy_false(asarray, chunks):
     """Test that np.*array(x, copy=False) is forbidden"""
     x = da.asarray(np.arange(10), chunks=chunks)
     # Loudly crash if numpy demands for a view of dask's memory
-    with pytest.raises(ValueError, match="Can't acquire a memory view of a Dask array"):
-        asarray(x, copy=False)
+    with pytest.warns(FutureWarning, match="Can't acquire a memory view"):
+        y = asarray(x, copy=False)
+    assert_eq(y, np.arange(10))
 
 
 @pytest.mark.parametrize(
