@@ -436,7 +436,7 @@ def arange(
     meta = meta_from_array(like) if like is not None else None
 
     if dtype is None:
-        dtype = np.arange(start, stop, step * num if num else step).dtype
+        dtype = np.arange(type(start)(0), type(stop)(0), step).dtype
 
     chunks = normalize_chunks(chunks, (num,), dtype=dtype)
 
