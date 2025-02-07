@@ -659,12 +659,21 @@ class FromArray(PartitionsFiltered, BlockwiseIO):
         divisions = divisions + (len(self.frame) - 1,)
         return divisions
 
+    @functools.cached_property
+    def unfiltered_divisions(self):
+        return self._divisions()
+
     def _filtered_task(self, name: Key, index: int) -> Task:
         data = self.frame[slice(index * self.chunksize, (index + 1) * self.chunksize)]
-        if index == len(self.divisions) - 2:
-            idx = range(self.divisions[index], self.divisions[index + 1] + 1)
+        if index == len(self.unfiltered_divisions) - 2:
+            idx = range(
+                self.unfiltered_divisions[index],
+                self.unfiltered_divisions[index + 1] + 1,
+            )
         else:
-            idx = range(self.divisions[index], self.divisions[index + 1])
+            idx = range(
+                self.unfiltered_divisions[index], self.unfiltered_divisions[index + 1]
+            )
 
         if is_series_like(self._meta):
             return Task(
