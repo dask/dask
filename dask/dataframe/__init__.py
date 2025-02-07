@@ -14,9 +14,12 @@ def _dask_expr_enabled() -> bool:
 _dask_expr_enabled()
 
 
+import dask.array._array_expr._backends  # Import this to register array dispatch # noqa: F401
+
 # Ensure that dtypes are registered
 import dask.dataframe._dtypes
 import dask.dataframe._pyarrow_compat
+from dask._dispatch import get_collection_type
 from dask.base import compute
 from dask.dataframe import backends, dispatch
 from dask.dataframe.dask_expr import (
@@ -32,7 +35,6 @@ from dask.dataframe.dask_expr import (
     from_graph,
     from_map,
     from_pandas,
-    get_collection_type,
     get_dummies,
     isna,
     map_overlap,

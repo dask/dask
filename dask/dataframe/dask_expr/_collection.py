@@ -26,6 +26,7 @@ import dask.array as da
 import dask.dataframe.dask_expr._backends  # noqa: F401
 import dask.dataframe.methods as methods
 from dask import compute, get_annotations
+from dask._collections import new_collection
 from dask._expr import OptimizerStage
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
@@ -53,7 +54,6 @@ from dask.dataframe.dask_expr._categorical import (
 from dask.dataframe.dask_expr._concat import Concat
 from dask.dataframe.dask_expr._datetime import DatetimeAccessor
 from dask.dataframe.dask_expr._describe import DescribeNonNumeric, DescribeNumeric
-from dask.dataframe.dask_expr._dispatch import get_collection_type
 from dask.dataframe.dask_expr._expr import (
     BFill,
     Diff,
@@ -4807,13 +4807,6 @@ class Scalar(FrameBase):
 
     def to_delayed(self, optimize_graph=True):
         return super().to_delayed(optimize_graph=optimize_graph)[0]
-
-
-def new_collection(expr):
-    """Create new collection from an expr"""
-    meta = expr._meta
-    expr._name  # Ensure backend is imported
-    return get_collection_type(meta)(expr)
 
 
 def optimize(collection, fuse=True):
