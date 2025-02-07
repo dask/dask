@@ -4804,7 +4804,7 @@ def asarray(
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(
-                # Pass the dtype parameter to np.asanyarray, not to map_blocks
+                # Pass the dtype parameter to np.asarray, not to map_blocks
                 partial(np.asarray, like=like_meta, dtype=dtype, order=order)
             )
         else:
