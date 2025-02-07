@@ -629,26 +629,33 @@ def to_parquet(
     else:
         ctx = contextlib.nullcontext()
 
-    with ctx:
-        out = new_collection(
-            ToParquet(
-                df,
-                path,
-                fs,
-                fmd,
-                engine,
-                i_offset,
-                partition_on,
-                write_metadata_file,
-                name_function,
-                toolz.merge(
-                    kwargs,
-                    {"compression": compression, "custom_metadata": custom_metadata},
-                    extra_write_kwargs,
-                ),
-                append,
-            )
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="Dask annotations ", category=UserWarning
         )
+        with ctx:
+            out = new_collection(
+                ToParquet(
+                    df,
+                    path,
+                    fs,
+                    fmd,
+                    engine,
+                    i_offset,
+                    partition_on,
+                    write_metadata_file,
+                    name_function,
+                    toolz.merge(
+                        kwargs,
+                        {
+                            "compression": compression,
+                            "custom_metadata": custom_metadata,
+                        },
+                        extra_write_kwargs,
+                    ),
+                    append,
+                )
+            )
 
     if compute:
         out = out.compute(**compute_kwargs)
