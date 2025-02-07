@@ -245,7 +245,8 @@ class Concat(Expr):
                 for frame in self._frames
             ]
             if all(
-                sorted(cols) == sorted(get_columns_or_name(frame))
+                set(cols) == set(get_columns_or_name(frame))
+                and len(cols) == len(get_columns_or_name(frame))
                 for frame, cols in zip(self._frames, columns_frame)
             ):
                 return
@@ -253,7 +254,8 @@ class Concat(Expr):
             frames = [
                 (
                     frame[cols]
-                    if sorted(cols) != sorted(get_columns_or_name(frame))
+                    if set(cols) != set(get_columns_or_name(frame))
+                    or len(cols) != len(get_columns_or_name(frame))
                     else frame
                 )
                 for frame, cols in zip(self._frames, columns_frame)
