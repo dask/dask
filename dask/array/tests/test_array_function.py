@@ -226,9 +226,30 @@ def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
     )
 
 
-@pytest.mark.parametrize("func", [da.array, da.asarray, da.asanyarray, da.tri])
-def test_like_raises(func):
-    assert_eq(func(1, like=func(1)), func(1))
+@pytest.mark.parametrize("like_ns", (np, da))
+@pytest.mark.parametrize("func", [da.array, da.asarray, da.asanyarray])
+def test_like(func, like_ns):
+    like = like_ns.array(0, dtype=np.int16)
+
+    assert_eq(func(1, like=like), da.array(1))
+    assert_eq(func(1.1, like=like), da.array(1.1))
+    assert_eq(func(np.int8(1), like=like, dtype=np.int32), da.array(1, dtype=np.int32))
+    assert_eq(func(1, like=like, dtype=np.int32), da.array(1, dtype=np.int32))
+    assert_eq(func(1.1, like=like, dtype=np.int32), da.array(1, dtype=np.int32))
+
+    assert_eq(func(da.array(1, dtype=np.int8), like=like), da.array(1, dtype=np.int8))
+    assert_eq(func(da.array(1.1), like=like), da.array(1.1))
+    assert_eq(
+        func(da.array(1, dtype=np.int8), like=like, dtype=np.int32),
+        da.array(1, dtype=np.int32),
+    )
+
+
+@pytest.mark.parametrize("like_ns", (np, da))
+def test_tri_like(like_ns):
+    like = like_ns.array(0)
+    assert_eq(da.tri(1, like=like), da.tri(1))
+    assert_eq(da.tri(1, like=like, dtype=np.float32), da.tri(1, dtype=np.float32))
 
 
 @pytest.mark.parametrize("func", [np.array, np.asarray, np.asanyarray])
