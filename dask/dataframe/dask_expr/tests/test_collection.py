@@ -2594,6 +2594,8 @@ def test_astype_filter_pushdown(df, pdf):
 def test_warn_annotations():
     from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
 
+    dask.dataframe.dask_expr._collection._WARN_ANNOTATIONS = True
+
     with pytest.warns(UserWarning, match="annotations.*retries.*ignore"):
         with dask.annotate(retries=3):
             from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
