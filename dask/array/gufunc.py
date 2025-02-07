@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import math
 import re
 
 import numpy as np
 from tlz import concat, merge, unique
 
+from dask.array._shuffle import _calculate_new_chunksizes
 from dask.array.core import Array, apply_infer_dtype, asarray, blockwise, getitem
 from dask.array.utils import meta_from_array
 from dask.core import flatten
 from dask.highlevelgraph import HighLevelGraph
+from dask.utils import cached_max
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
@@ -448,6 +451,30 @@ significantly.".format(
                 raise ValueError(
                     f"Dimension `'{dim}'` with different chunksize present"
                 )
+
+    if allow_rechunk:
+        new_args = []
+        for a, dims in zip(args, input_dimss):
+            factor = 1
+            changeable_dimensions = set()
+            for i, d in enumerate(dims):
+                if d not in loop_output_dims:
+                    # This will be rechunked to -1
+                    factor *= a.shape[i] / max(a.chunks[i])
+                elif max(a.chunks[i]) > 1:
+                    # Dimensions that we can reduce to compensate for the increase
+                    changeable_dimensions.add(i)
+            if factor > 1 and len(changeable_dimensions) > 0:
+                result = _calculate_new_chunksizes(
+                    a.chunks,
+                    list(a.chunks),
+                    changeable_dimensions,
+                    math.prod(map(cached_max, a.chunks)) / factor,
+                )
+                new_args.append(a.rechunk(result))
+            else:
+                new_args.append(a)
+        args = new_args
 
     ## Apply function - use blockwise here
     arginds = list(concat(zip(args, input_dimss)))

@@ -5,6 +5,61 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2025.1.1:
+
+2025.1.1
+---------
+
+Highlights
+^^^^^^^^^^
+
+Automatically adjust chunksizes in ``xarray.apply_ufunc``
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+``apply_ufunc`` requires the core dimension to have ``chunksize=-1``. The underlying
+rechunking operation will automatically adjust the chunksize of the core dimension
+but keep the other dimensions the same. This can cause exploding chunksizes under the hood.
+
+This release adds an intermediate step that resizes the non-core dimensions by the same factor
+that the core dimension will increase to keep the maximum chunksize under control. This behavior
+is automatically enabled when ``allow_rechunk=True`` is set.
+
+.. code-block::
+
+    import xarray as xr
+    import dask.array as da
+
+    arr = xr.DataArray(
+        da.random.random((1, 750, 45910), chunks=(1, "auto", -1)),
+        dims=["band", "y", "x"],
+    )
+
+    result = arr.interp(
+        y=arr.coords["y"],
+        method="linear",
+    )
+.. grid:: 2
+
+    .. grid-item:: **Previously**
+
+        Individual chunks are exploding to 25 GiB, likely causing out of memory errors.
+
+        .. image:: images/changelog/gufunc_chunksizes_exploding.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are exploding to 25 GiB, likely causing out of memory errors.
+
+    .. grid-item:: **Now**
+
+        Dask will now automatically split individual chunks into chunks that will have the
+        same chunksize minus a small tolerance.
+
+        .. image:: images/changelog/gufunc_chunksizes_constant.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are now roughly the same size
+
+
 .. _v2025.1.0:
 
 2025.1.0
