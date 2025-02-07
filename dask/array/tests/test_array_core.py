@@ -5771,3 +5771,17 @@ def test_load_store_chunk():
     )
     expected = np.array([])
     assert all(actual == expected)
+
+
+def test_scalar_setitem():
+    """After a da.Array.__getitem__ call that returns a scalar, the chunk contains a
+    read-only np.generic instead of a writeable np.ndarray. This is a specific quirk of
+    numpy; cupy and other backends always return a 0-dimensional array.
+    Make sure that __setitem__ still works.
+    """
+    x = da.zeros(1)
+    y = x[0]
+    assert isinstance(y.compute(), np.generic)
+    y[()] = 2
+    assert_eq(y, 2.0)
+    assert isinstance(y.compute(), np.ndarray)
