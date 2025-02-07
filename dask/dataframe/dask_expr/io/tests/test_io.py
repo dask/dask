@@ -519,3 +519,11 @@ def test_to_bag():
         {"x": "c", "y": 4},
         {"x": "d", "y": 5},
     ]
+
+
+def test_from_array_partition_pruning():
+    arr = np.random.random(size=(200, 2))
+    df = dd.from_array(arr, chunksize=100)
+    result = df.partitions[1]
+    expected = arr[100:]
+    assert_eq(result, pd.DataFrame(expected, index=list(range(100, 200))))
