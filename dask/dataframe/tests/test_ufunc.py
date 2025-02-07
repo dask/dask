@@ -14,6 +14,9 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 
+if da._array_expr_enabled():
+    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
+
 _BASE_UFUNCS = [
     "conj",
     "exp",

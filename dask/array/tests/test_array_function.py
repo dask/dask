@@ -8,6 +8,9 @@ import dask.array as da
 from dask.array.tests.test_dispatch import EncapsulateNDArray, WrappedArray
 from dask.array.utils import assert_eq
 
+if da._array_expr_enabled():
+    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
+
 
 @pytest.mark.parametrize(
     "func",
