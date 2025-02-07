@@ -231,7 +231,7 @@ def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
 def test_like(func, like_ns):
     like = like_ns.array(0, dtype=np.int16)
 
-    assert_eq(func(1, like=like), da.array(1, dtype=np.int64))
+    assert_eq(func(1, like=like), da.array(1))
     assert_eq(func(1.1, like=like), da.array(1.1))
     assert_eq(func(np.int8(1), like=like, dtype=np.int32), da.array(1, dtype=np.int32))
     assert_eq(func(1, like=like, dtype=np.int32), da.array(1, dtype=np.int32))
