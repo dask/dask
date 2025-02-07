@@ -4181,15 +4181,13 @@ def test_setitem_1d():
 
     x[x > 6] = -1
     x[x % 2 == 0] = -2
+    x[[2, 3]] = -3
 
     dx[dx > 6] = -1
     dx[dx % 2 == 0] = -2
+    dx[da.asarray([2, 3])] = -3
 
     assert_eq(x, dx)
-
-    index = da.arange(3)
-    with pytest.raises(ValueError, match="Boolean index assignment in Dask"):
-        dx[index] = 1
 
 
 def test_setitem_masked():
@@ -4464,7 +4462,6 @@ def test_setitem_extended_API_2d_rhs_func_of_lhs():
 def test_setitem_extended_API_2d_mask(index, value):
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.data, chunks=(2, 3))
-    dx[index] = value
     # See https://github.com/numpy/numpy/issues/23000 for the `RuntimeWarning`
     with warnings.catch_warnings():
         warnings.filterwarnings(
@@ -4473,7 +4470,8 @@ def test_setitem_extended_API_2d_mask(index, value):
             message="invalid value encountered in cast",
         )
         x[index] = value
-        dx = dx.persist()
+        dx[index] = value
+    dx = dx.persist()
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
@@ -4532,13 +4530,6 @@ def test_setitem_errs():
     with pytest.raises(IndexError):
         x[[[True, True, False, False]], 0] = 5
 
-    # Too many/not enough booleans
-    with pytest.raises(IndexError):
-        x[[True, True, False]] = 5
-
-    with pytest.raises(IndexError):
-        x[[False, True, True, True, False]] = 5
-
     # 2-d indexing a single dimension
     with pytest.raises(IndexError):
         x[[[1, 2, 3]], 0] = 5
@@ -4583,6 +4574,45 @@ def test_setitem_errs():
     x = da.ones((3, 3), dtype=int)
     with pytest.raises(ValueError, match="cannot convert float NaN to integer"):
         x[:, 1] = np.nan
+    with pytest.raises(ValueError, match="cannot convert float infinity to integer"):
+        x[:, 1] = np.inf
+    with pytest.raises(ValueError, match="cannot convert float infinity to integer"):
+        x[:, 1] = -np.inf
+
+
+@pytest.mark.parametrize("idx_namespace", [np, da])
+def test_setitem_bool_index_errs(idx_namespace):
+    x = da.ones((3, 4), chunks=(2, 2))
+    y = da.ones(4, chunks=2)
+    array = idx_namespace.array
+
+    # Shape mismatch
+    with pytest.raises(ValueError):
+        y[array([True, True, True, False])] = [2, 3]
+
+    with pytest.raises(ValueError):
+        # A naive where(idx, val, x) would produce a result
+        y[array([True, True, True, False])] = [1, 2, 3, 4]
+
+    with pytest.raises(ValueError):
+        y[array([True, True, True, False])] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValueError):
+        y[array([True, False, False, True])] = [1, 2, 3, 4, 5]
+
+    # Too many/not enough booleans
+    with pytest.raises(IndexError):
+        y[array([True, False, True])] = 5
+
+    with pytest.raises(IndexError):
+        y[array([False, True, True, True, False])] = 5
+
+    # Situations where a naive da.where(idx, val, x) would produce a result
+    with pytest.raises(IndexError):
+        x[array([True, False, False, True])] = 1
+
+    with pytest.raises(IndexError):
+        y[array([[True], [False]])] = 1  # da.where would broadcast to ndim=2
 
 
 def test_zero_slice_dtypes():
@@ -5785,3 +5815,16 @@ def test_scalar_setitem():
     y[()] = 2
     assert_eq(y, 2.0)
     assert isinstance(y.compute(), np.ndarray)
+
+
+@pytest.mark.parametrize(
+    "idx", [[0], [True, False], da.array([0]), da.array([True, False])]
+)
+@pytest.mark.parametrize(
+    "val",
+    [3.3, np.float64(3.3), np.int64(3), da.array(3.3), da.array(3, dtype=np.int64)],
+)
+def test_setitem_no_dtype_broadcast(idx, val):
+    x = da.array([1, 2], dtype=np.int32)
+    x[idx] = val
+    assert_eq(x, da.array([3, 2], dtype=np.int32))
