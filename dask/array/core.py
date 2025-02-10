@@ -4815,7 +4815,10 @@ def asarray(
     else:
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
-            return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
+            return a.map_blocks(
+                # Pass the dtype parameter to np.asarray, not to map_blocks
+                partial(np.asarray, like=like_meta, dtype=dtype, order=order)
+            )
         else:
             a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
 
@@ -4889,7 +4892,10 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
     else:
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
-            return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
+            return a.map_blocks(
+                # Pass the dtype parameter to np.asanyarray, not to map_blocks
+                partial(np.asanyarray, like=like_meta, dtype=dtype, order=order)
+            )
         else:
             a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
 
