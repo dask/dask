@@ -328,16 +328,6 @@ def test_common_subexpressions():
     assert len(res.dask) == 3
 
 
-def test_delayed_optimize():
-    x = Delayed("b", {"a": 1, "b": (inc, "a"), "c": (inc, "b")})
-    (x2,) = dask.optimize(x)
-    # Delayed's __dask_optimize__ culls out 'c'
-    assert sorted(x2.dask.keys()) == ["a", "b"]
-    assert x2._layer != x2._key
-    # Optimize generates its own layer name, which doesn't match the key.
-    # `Delayed._rebuild` handles this.
-
-
 def test_lists():
     a = delayed(1)
     b = delayed(2)

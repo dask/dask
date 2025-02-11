@@ -11,9 +11,10 @@ import toolz
 
 import dask
 from dask._task_spec import Task
+from dask.core import reverse_dict
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
-from dask.utils import funcname, import_required
+from dask.utils import ensure_dict, funcname, import_required
 
 if TYPE_CHECKING:
     # TODO import from typing (requires Python >=3.10)
@@ -46,7 +47,10 @@ class Expr:
 
     operands: list
 
-    def __new__(cls, *args, **kwargs):
+    operands: list
+    _token: str | None
+
+    def __new__(cls, *args, _token=None, **kwargs):
         operands = list(args)
         for parameter in cls._parameters[len(operands) :]:
             try:
@@ -55,6 +59,7 @@ class Expr:
                 operands.append(cls._defaults[parameter])
         assert not kwargs, kwargs
         inst = object.__new__(cls)
+        inst._token = _token
         inst.operands = [_unpack_collections(o) for o in operands]
         _name = inst._name
         if _name in Expr._instances:
@@ -127,10 +132,15 @@ class Expr:
     def __dask_tokenize__(self):
         return self._name
 
+    @staticmethod
+    def _reconstruct(*args):
+        typ, *operands, token = args
+        return typ(*operands, _token=token)
+
     def __reduce__(self):
         if dask.config.get("dask-expr-no-serialize", False):
             raise RuntimeError(f"Serializing a {type(self)} object")
-        return type(self), tuple(self.operands)
+        return Expr._reconstruct, tuple([type(self)] + self.operands + [self._token])
 
     def _depth(self, cache=None):
         """Depth of the expression tree
@@ -462,11 +472,16 @@ class Expr:
 
     @functools.cached_property
     def _name(self) -> str:
-        return self._funcname + "-" + _tokenize_deterministic(*self.operands)
+        if not self._token:
+            self._token = _tokenize_deterministic(*self.operands)
+        return self._funcname + "-" + self._token
 
     @property
     def _meta(self):
         raise NotImplementedError()
+
+    def __dask_annotations__(self):
+        return {}
 
     def __dask_graph__(self):
         """Traverse expression tree, collect layers"""
@@ -806,3 +821,234 @@ def optimize_until(expr: Expr, stage: OptimizerStage) -> Expr:
         return expr
 
     raise ValueError(f"Stage {stage!r} not supported.")
+class HLGExpr(Expr):
+    _parameters = [
+        "dsk",
+        "low_level_optimizer",
+        "output_keys",
+        "finalize_compute",
+    ]
+    _defaults = {
+        "low_level_optimizer": None,
+        "output_keys": None,
+        "finalize_compute": None,
+    }
+
+    @staticmethod
+    def from_collection(collection, optimize_graph=True):
+        if hasattr(collection, "dask"):
+            dsk = collection.dask.copy()
+        else:
+            dsk = collection.__dask_graph__()
+            from dask.highlevelgraph import HighLevelGraph
+
+            if not isinstance(dsk, HighLevelGraph):
+
+                dsk = HighLevelGraph.from_collections(
+                    str(id(collection)), dsk, dependencies=()
+                )
+        return HLGExpr(
+            dsk=dsk,
+            low_level_optimizer=(
+                collection.__dask_optimize__ if optimize_graph else None
+            ),
+            output_keys=collection.__dask_keys__(),
+            finalize_compute=collection.__dask_postcompute__,
+        )
+
+    def __dask_annotations__(self):
+        annotations_by_type = {}
+        for layer in self.operand("dsk").layers.values():
+            if layer.annotations:
+                annot = layer.annotations
+                for annot_type, value in annot.items():
+                    annotations_by_type[annot_type].update(
+                        {k: (value(k) if callable(value) else value) for k in layer}
+                    )
+        return annotations_by_type
+
+    def _operands_for_repr(self):
+        return [
+            f"{param}={repr(op)}" for param, op in zip(self._parameters, self.operands)
+        ]
+
+    def _tree_repr_lines(self, indent=0, recursive=True):
+        return " " * indent + repr(self)
+
+    def __dask_keys__(self):
+        if keys := self.operand("output_keys"):
+            return keys
+        dsk = self.operand("dsk")
+        # Note: This will materialize
+        dependencies = dsk.get_all_dependencies()
+        dependents = reverse_dict(dependencies)
+        keys = [d for d in dependents if not dependents[d] and d in dsk]
+        self.operands[self._parameters.index("output_keys")] = keys
+        return keys
+
+    def _layer(self) -> dict:
+        dsk = self.operand("dsk")
+
+        keys = self.operand("output_keys")
+        optimizer = self.operand("low_level_optimizer")
+        if keys is None and optimizer is not None:
+            keys = self.__dask_keys__()
+
+        if (optimizer := self.operand("low_level_optimizer")) is not None:
+            return ensure_dict(optimizer(dsk, keys))
+        return ensure_dict(dsk)
+
+
+class _HLGExprSequence(Expr):
+    _parameters = ["hlgs", "optimizer"]
+
+    def __getitem__(self, other):
+        return self.operands[other]
+
+    def _operands_for_repr(self):
+        return [
+            f"name={self.operand('name')!r}",
+            f"dsk={self.operand('dsk')!r}",
+        ]
+
+    def _tree_repr_lines(self, indent=0, recursive=True):
+        return self._operands_for_repr()
+
+    def _layer(self) -> dict:
+        from dask.highlevelgraph import HighLevelGraph
+
+        graphs, keys = [], []
+        for v in self.operand("hlgs"):
+            if isinstance(v, HLGExpr):
+                dsk = v.operand("dsk")
+            else:
+                # FinalizeCompute
+                dsk = v._layer()
+            if not isinstance(dsk, HighLevelGraph):
+                dsk = HighLevelGraph.from_collections(
+                    str(id(dsk)), dsk, dependencies=()
+                )
+
+            graphs.append(dsk)
+            keys.append(v.__dask_keys__())
+
+        dsk = HighLevelGraph.merge(*graphs)
+        if (optimizer := self.operand("optimizer")) is not None:
+            return ensure_dict(optimizer(dsk, keys))
+        return ensure_dict(dsk)
+
+    def __dask_annotations__(self):
+        annotations_by_type = {}
+        for v in self.operand("hlgs"):
+            if isinstance(v, HLGExpr):
+                annotations_by_type.update(v.__dask_annotations__())
+        return annotations_by_type
+
+    def __dask_keys__(self) -> list:
+        all_keys = []
+        for op in self.operand("hlgs"):
+            all_keys.append(op.__dask_keys__())
+        return all_keys
+
+
+class _ExprSequence(Expr):
+    def __getitem__(self, other):
+        return self.operands[other]
+
+    def _layer(self) -> dict:
+        return toolz.merge(op._layer() for op in self.operands)
+
+    def __dask_keys__(self) -> list:
+        all_keys = []
+        for op in self.operands:
+            all_keys.append(op.__dask_keys__())
+        return all_keys
+
+    def __len__(self):
+        return len(self.operands)
+
+    def __iter__(self):
+        return iter(self.operands)
+
+    def _simplify_down(self):
+        if isinstance(self, _ExprSequence):
+            is_hlg_expr = [isinstance(op, HLGExpr) for op in self]
+            if all(is_hlg_expr):
+                optimizers = {
+                    op.operand("low_level_optimizer")
+                    for op in self
+                    if op.operand("low_level_optimizer")
+                }
+                if not optimizers:
+                    opt = None
+                elif len(optimizers) > 1:
+                    raise NotImplementedError(
+                        "All collections must use the same optimizers"
+                    )
+                else:
+                    opt = optimizers.pop()
+                return _HLGExprSequence(hlgs=self.operands, optimizer=opt)
+            elif any(is_hlg_expr):
+                raise NotImplementedError()
+
+
+class FinalizeCompute(Expr):
+    _parameters = ["expr"]
+
+    def _simplify_down(self):
+
+        expr = self.operands[0]
+        if isinstance(expr, FinalizeCompute):
+            return expr
+        if isinstance(expr, _ExprSequence):
+            return _ExprSequence(
+                *(FinalizeCompute(op) for op in expr.operands),
+            )
+        if isinstance(expr, (_HLGExprSequence, HLGExpr)):
+            return HLGFinalizeCompute(expr)
+        try:
+            from dask.dataframe.dask_expr._expr import Expr as DFExpr
+            from dask.dataframe.dask_expr._expr import FinalizeComputeDF
+
+            if isinstance(expr, DFExpr):
+                return FinalizeComputeDF(expr)
+        except ImportError:
+            pass
+        return expr
+
+
+def _convert_dask_keys(keys):
+    from dask._task_spec import List, TaskRef
+
+    assert isinstance(keys, list)
+    new_keys = []
+    for key in keys:
+        if isinstance(key, list):
+            new_keys.append(_convert_dask_keys(key))
+        else:
+            new_keys.append(TaskRef(key))
+    return List(*new_keys)
+
+
+class HLGFinalizeCompute(Expr):
+    _parameters = ["dsk"]
+
+    def _layer(self) -> dict:
+        expr = self.operand("dsk")
+        # TODO: Is this copy necessary? Is layer always guaranteeing a copy?
+        dsk = expr._layer().copy()
+
+        func, extra_args = expr.operand("finalize_compute")()
+        keys = expr.__dask_keys__()
+        # TODO: Unclear if this special case is actually necessary. If so, that
+        # might also be doable with a simplify?
+
+        # if func is single_key and len(keys) == 1 and not extra_args:
+        #     names[i] = keys[0]
+        # else:
+        name = self._name
+        dsk[name] = Task(name, func, _convert_dask_keys(keys), *extra_args)
+        return dsk
+
+    def __dask_keys__(self):
+        return [self._name]
