@@ -5,14 +5,14 @@ import inspect
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Hashable, Iterator, Mapping
+from collections.abc import Hashable, Iterable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager, suppress
 from contextvars import ContextVar
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from tlz import groupby, merge
 
@@ -23,13 +23,10 @@ from dask.core import get as simple_get
 from dask.core import quote
 from dask.system import CPU_COUNT
 from dask.typing import Key, SchedulerGetCallable
-from dask.utils import (
-    apply,
-    ensure_dict,
-    is_namedtuple_instance,
-    key_split,
-    shorten_traceback,
-)
+from dask.utils import apply, is_namedtuple_instance, key_split, shorten_traceback
+
+if TYPE_CHECKING:
+    from dask._expr import Expr
 
 _DistributedClient = None
 _get_distributed_client = None
@@ -407,54 +404,63 @@ def optimization_function(x):
     return getattr(x, "__dask_optimize__", dont_optimize)
 
 
-def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwargs):
+def collections_to_dsk(
+    collections: Iterable,
+    optimize_graph: bool = True,
+) -> Expr:
     """
     Convert many collections into a single dask graph, after optimization
     """
-    from dask.highlevelgraph import HighLevelGraph
+    if not isinstance(collections, (tuple, list, set)):
+        raise TypeError(
+            f"Have to provide an iterable of dask collections. Instead got {type(collections)}"
+        )
+    from dask._expr import HLGExpr, _ExprSequence
 
-    optimizations = tuple(optimizations) + tuple(config.get("optimizations", ()))
+    groups = groupby(optimization_function, collections)
 
-    if optimize_graph:
-        groups = groupby(optimization_function, collections)
+    graphs = []
+    for collections in groups.values():
+        exprs = []
+        for coll in collections:
+            from dask.delayed import Delayed
 
-        graphs = []
-        for opt, val in groups.items():
-            dsk, keys = _extract_graph_and_keys(val)
-            dsk = opt(dsk, keys, **kwargs)
+            if isinstance(coll, Delayed) or not hasattr(coll, "expr"):
+                exprs.append(
+                    HLGExpr.from_collection(coll, optimize_graph=optimize_graph)
+                )
+            else:
+                exprs.append(coll.expr)
 
-            for opt_inner in optimizations:
-                dsk = opt_inner(dsk, keys, **kwargs)
-
-            graphs.append(dsk)
-
-        # Merge all graphs
-        if any(isinstance(graph, HighLevelGraph) for graph in graphs):
-            dsk = HighLevelGraph.merge(*graphs)
+        if len(exprs) > 1:
+            graphs.append(_ExprSequence(*exprs))
         else:
-            dsk = merge(*map(ensure_dict, graphs))
+            graphs.append(exprs[0])
+
+    if len(exprs) > 1:
+        # FIXME: This is a mixed collection type case. Is this even tested
+        # anywhere?
+        return _ExprSequence(*graphs)
     else:
-        dsk, _ = _extract_graph_and_keys(collections)
-
-    return dsk
+        return exprs[0]
 
 
-def _extract_graph_and_keys(vals):
-    """Given a list of dask vals, return a single graph and a list of keys such
-    that ``get(dsk, keys)`` is equivalent to ``[v.compute() for v in vals]``."""
-    from dask.highlevelgraph import HighLevelGraph
+# def _extract_graph_and_keys(vals):
+#     """Given a list of dask vals, return a single graph and a list of keys such
+#     that ``get(dsk, keys)`` is equivalent to ``[v.compute() for v in vals]``."""
+#     from dask.highlevelgraph import HighLevelGraph
 
-    graphs, keys = [], []
-    for v in vals:
-        graphs.append(v.__dask_graph__())
-        keys.append(v.__dask_keys__())
+#     graphs, keys = [], []
+#     for v in vals:
+#         graphs.append(v.__dask_graph__())
+#         keys.append(v.__dask_keys__())
 
-    if any(isinstance(graph, HighLevelGraph) for graph in graphs):
-        graph = HighLevelGraph.merge(*graphs)
-    else:
-        graph = merge(*map(ensure_dict, graphs))
+#     if any(isinstance(graph, HighLevelGraph) for graph in graphs):
+#         graph = HighLevelGraph.merge(*graphs)
+#     else:
+#         graph = merge(*map(ensure_dict, graphs))
 
-    return graph, keys
+#     return graph, keys
 
 
 def unpack_collections(*args, traverse=True):
@@ -583,16 +589,19 @@ def optimize(*args, traverse=True, **kwargs):
     >>> b2.compute() == b.compute()
     np.True_
     """
+    # TODO: This API is problematic. The approach to using postpersist forces us
+    # to materialize the graph. Most low level optimizations will materialize as
+    # well
     collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
-    dsk = collections_to_dsk(collections, **kwargs)
+    dsk = collections_to_dsk(collections)
 
     postpersists = []
     for a in collections:
         r, s = a.__dask_postpersist__()
-        postpersists.append(r(dsk, *s))
+        postpersists.append(r(dsk.__dask_graph__(), *s))
 
     return repack(postpersists)
 
@@ -651,17 +660,35 @@ def compute(
         collections=collections,
         get=get,
     )
+    from dask._expr import FinalizeCompute
 
-    dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
-    keys, postcomputes = [], []
-    for x in collections:
-        keys.append(x.__dask_keys__())
-        postcomputes.append(x.__dask_postcompute__())
+    expr = collections_to_dsk(collections, optimize_graph)
+    expr = FinalizeCompute(expr)
 
     with shorten_traceback():
+        # The high level optimize will have to be called client side (for now)
+        # The optimize can internally trigger already a computation (e.g.
+        # parquet is reading some statistics). To move this to the scheduler,
+        # we'd have to establish something like a scheduler-client
+
+        # Another caveat is that optimize will only lock in the expression names
+        # after optimization. Names are determined using tokenize and tokenize
+        # is not cross-interpreter (let alone cross-host) stable such that we
+        # have to lock this in before sending stuff (otherwise we'd need to
+        # change the graph submission to a handshake which introduces all sorts
+        # of concurrency control issues)
+        expr = expr.optimize()
+        # FIXME: What exactly is __dask_keys__ supposed to return?
+        keys = list(flatten(expr.__dask_keys__()))
+
+        # Everything below this should happen on the scheduler. The dask_graph
+        # is materializing and the low level optimizers are running if
+        # appropriate, i.e. the `schedule` interface has to be changed to use a
+        # __dask_graph__ (if available)
+        dsk = expr.__dask_graph__()
         results = schedule(dsk, keys, **kwargs)
 
-    return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
+    return repack(results)
 
 
 def visualize(
@@ -754,7 +781,7 @@ def visualize(
     """
     args, _ = unpack_collections(*args, traverse=traverse)
 
-    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    dsk = collections_to_dsk(args, optimize_graph=optimize_graph).__dask_graph__()
 
     return visualize_dsk(
         dsk=dsk,
@@ -989,7 +1016,7 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
                     )
                     return repack(results)
 
-    dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
+    dsk = collections_to_dsk(collections, optimize_graph)
     keys, postpersists = [], []
     for a in collections:
         a_keys = list(flatten(a.__dask_keys__()))

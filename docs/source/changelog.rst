@@ -5,6 +5,14 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+Next Release
+------------
+
+Breaking changes
+""""""""""""""""
+- Support for custom low level optimizers removed
+
+
 .. _v2025.3.0:
 
 2025.3.0
@@ -125,7 +133,7 @@ See :pr-distributed:`8991` by `Hendrik Makait`_ for more details.
 .. _v2025.1.0:
 
 2025.1.0
----------
+--------
 
 Highlights
 ^^^^^^^^^^
@@ -176,7 +184,7 @@ Improved scheduler responsiveness for large task graphs
 This release reduces the number of Python object references
 related to tracking tasks by the Dask scheduler. This increases
 scheduler responsiveness by reducing the time needed to run
-garbage collection on the scheduler. 
+garbage collection on the scheduler.
 
 See :issue:`8958`, :pr:`11608`, :pr:`11600`, :pr:`11598`,
 :pr:`11597`, and :pr-distributed:`8963` from `Hendrik Makait`_ for more details.
