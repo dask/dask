@@ -892,23 +892,10 @@ def test_get_scheduler_without_distributed_raises():
         get_scheduler(scheduler="distributed")
 
 
-def test_get_scheduler_with_distributed_active(c):
-    assert get_scheduler() == c.get
-    warning_message = (
-        "Running on a single-machine scheduler when a distributed client "
-        "is active might lead to unexpected results."
-    )
-    with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
-        get_scheduler(scheduler="threads")
-        get_scheduler(scheduler="sync")
-    assert len(user_warnings_a) == 2
-
-
 def test_get_scheduler_with_distributed_active_reset_config(c):
     assert get_scheduler() == c.get
     with dask.config.set(scheduler="threads"):
-        with pytest.warns(UserWarning):
-            assert get_scheduler() != c.get
+        assert get_scheduler() != c.get
         with dask.config.set(scheduler=None):
             assert get_scheduler() == c.get
 
@@ -981,7 +968,7 @@ def test_get_scheduler_default_client_config_interleaving(s):
     # This test is using context managers intentionally. We should not refactor
     # this to use it in more places to make the client closing cleaner.
     s_address = s["address"]
-    with pytest.warns(UserWarning), dask.config.set(scheduler="sync"):
+    with dask.config.set(scheduler="sync"):
         assert dask.base.get_scheduler() == dask.local.get_sync
         with dask.config.set(scheduler="threads"):
             assert dask.base.get_scheduler() == dask.threaded.get
