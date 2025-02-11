@@ -528,6 +528,18 @@ class Expr(core.Expr):
         return optimize_blockwise_fusion(self)
 
 
+from dask._expr import FinalizeCompute
+
+
+class FinalizeComputeDF(FinalizeCompute, Expr):
+    _parameters = ["frame"]
+
+    def _simplify_down(self):
+        from dask.dataframe.dask_expr._repartition import Repartition
+
+        return Repartition(self.frame, 1)
+
+
 class Literal(Expr):
     """Represent a literal (known) value as an `Expr`"""
 
