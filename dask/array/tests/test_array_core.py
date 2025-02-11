@@ -52,10 +52,10 @@ from dask.array.core import (
     stack,
     store,
 )
-from dask.array.numpy_compat import NUMPY_GE_200
+from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_210
 from dask.array.reshape import _not_implemented_message
 from dask.array.utils import assert_eq, same_keys
-from dask.base import compute_as_if_collection, tokenize
+from dask.base import collections_to_dsk, compute_as_if_collection, tokenize
 from dask.blockwise import (
     _make_blockwise_graph,
     broadcast_dimensions,
@@ -411,6 +411,136 @@ def test_Array_computation():
     assert_eq(np.array(a), np.eye(3))
     assert isinstance(a.compute(), np.ndarray)
     assert float(a[0, 0]) == 1
+
+
+@pytest.mark.parametrize("asarray", [np.asarray, np.asanyarray, np.array])
+def test_numpy_asarray_dtype(asarray):
+    """Test dtype= parameter of np.*array()"""
+    x = da.arange(10, dtype="i2")
+    nx = asarray(x, dtype="i4")
+    assert nx.dtype == np.int32
+
+
+@pytest.mark.parametrize(
+    "asarray",
+    [
+        np.array,
+        pytest.param(
+            np.asarray,
+            marks=pytest.mark.skipif(not NUMPY_GE_200, reason="no copy kwarg"),
+        ),
+        pytest.param(
+            np.asanyarray,
+            marks=pytest.mark.skipif(not NUMPY_GE_210, reason="no copy kwarg"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("chunks", [5, 10])
+def test_numpy_asarray_copy_true(asarray, chunks):
+    """Test np.*array(x, copy=True)"""
+    x = da.asarray(np.arange(10), chunks=chunks)
+
+    nx = asarray(x, copy=True)
+    nx[0] = 42
+    # Did not write back to the buffer held in the Dask graph
+    assert x[0].compute() == 0
+
+
+@pytest.mark.parametrize(
+    "asarray",
+    [
+        pytest.param(
+            np.array,
+            marks=pytest.mark.skipif(
+                not NUMPY_GE_200, reason="copy kwarg not forwarded to dask"
+            ),
+        ),
+        pytest.param(
+            np.asarray,
+            marks=pytest.mark.skipif(not NUMPY_GE_200, reason="no copy kwarg"),
+        ),
+        pytest.param(
+            np.asanyarray,
+            marks=pytest.mark.skipif(not NUMPY_GE_210, reason="no copy kwarg"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("chunks", [5, 10])
+def test_numpy_asarray_copy_false(asarray, chunks):
+    """Test that np.*array(x, copy=False) is forbidden"""
+    x = da.asarray(np.arange(10), chunks=chunks)
+    # Loudly crash if numpy demands for a view of dask's memory
+    with pytest.warns(FutureWarning, match="Can't acquire a memory view"):
+        y = asarray(x, copy=False)
+    assert_eq(y, np.arange(10))
+
+
+@pytest.mark.parametrize(
+    "asarray",
+    [
+        pytest.param(
+            np.array,
+            marks=pytest.mark.skipif(not NUMPY_GE_200, reason="copy=None invalid"),
+        ),
+        pytest.param(
+            np.asarray,
+            marks=pytest.mark.skipif(not NUMPY_GE_200, reason="no copy kwarg"),
+        ),
+        pytest.param(
+            np.asanyarray,
+            marks=pytest.mark.skipif(not NUMPY_GE_210, reason="no copy kwarg"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("chunks", [5, 10])
+def test_numpy_asarray_copy_none(asarray, chunks):
+    """Test np.*array(x, copy=None)"""
+    x = da.asarray(np.arange(10), chunks=chunks)
+
+    nx = asarray(x, copy=None)
+    nx[0] = 42
+    # Did not write back to the buffer held in the Dask graph
+    assert x[0].compute() == 0
+
+
+@pytest.mark.parametrize("asarray", [np.asarray, np.asanyarray, np.array])
+@pytest.mark.parametrize("chunks", [5, 10])
+def test_numpy_asarray_copy_default(asarray, chunks):
+    """Test that np.*array() never returns an object that shares
+    a buffer with the dask graph or a process-local Worker
+    """
+    x = da.asarray(np.arange(10), chunks=chunks)
+
+    # array() defaults to copy=True.
+    # asarray() and asanyarray() default to copy=None.
+    # For Dask, it doesn't make a difference.
+    nx = asarray(x)
+    nx[0] = 42
+    # Did not write back to the buffer held in the Dask graph
+    assert x[0].compute() == 0
+
+
+def test_array_interface_deprecated_kwargs():
+    x = da.ones(10)
+    with pytest.warns(FutureWarning, match="ignored"):
+        x.__array__(something="foo")
+
+
+@pytest.mark.parametrize("chunks", [5, 10])
+def test_compute_copy(chunks):
+    """Test that compute() never returns an object that shares
+    a buffer with the dask graph or a process-local Worker
+    """
+    x = da.asarray(np.arange(10), chunks=chunks)
+
+    nx = x.compute()
+    nx[0] = 42
+    # Did not write back to the buffer held in the Dask graph
+    assert x[0].compute() == 0
+
+    (nx,) = dask.compute(x)
+    nx[0] = 42
+    assert x[0].compute() == 0
 
 
 def test_Array_numpy_gufunc_call__array_ufunc__01():
@@ -5148,9 +5278,16 @@ def test_dask_array_holds_scipy_sparse_containers():
 @pytest.mark.parametrize("sparse_module_path", ["scipy.sparse", "cupyx.scipy.sparse"])
 def test_scipy_sparse_indexing(index, sparse_module_path):
     sp = pytest.importorskip(sparse_module_path)
-    x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
-    x[x < 0.9] = 0
-    y = x.map_blocks(sp.csr_matrix)
+
+    if sparse_module_path == "cupyx.scipy.sparse":
+        backend = "cupy"
+    else:
+        backend = "numpy"
+
+    with dask.config.set({"array.backend": backend}):
+        x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        y = x.map_blocks(sp.csr_matrix)
 
     assert not (
         x[index, :].compute(scheduler="single-threaded")
@@ -5269,6 +5406,15 @@ def test_nbytes_auto():
         normalize_chunks(("100B", "10B"), shape=(10, 10), dtype="float64")
     with pytest.raises(ValueError):
         normalize_chunks(("10B", "10B"), shape=(10, 10), limit=20, dtype="float64")
+
+
+def test_auto_chunks():
+    chunks = ((1264, 1264, 1264, 1264, 1264, 1264, 1045), (1264, 491))
+    shape = sum(chunks[0]), sum(chunks[1])
+    result = normalize_chunks(
+        ("auto", "auto"), shape=shape, dtype="int32", previous_chunks=chunks
+    )
+    assert result == ((8629,), (1755,))
 
 
 def test_auto_chunks_h5py():
@@ -5591,6 +5737,20 @@ def test_from_array_copies():
     assert_eq(original_array, dx)
 
 
+def test_from_array_xarray_dataarray():
+    xr = pytest.importorskip("xarray")
+    arr = xr.DataArray(da.random.random((1000, 1000), chunks=(50, 50)))
+    dask_array = da.from_array(arr)
+    dsk = collections_to_dsk([dask_array])
+    assert len(dsk) == 400
+    assert all(k[0].startswith("random_sample") for k in dsk)
+    assert_eq(dask_array, arr.data)
+
+    arr = xr.DataArray(np.random.random((100, 100)))
+    dask_array = da.from_array(arr)
+    assert_eq(dask_array.compute().data, arr.data)
+
+
 def test_load_store_chunk():
     actual = np.array([0, 0, 0, 0, 0, 0])
     load_store_chunk(
@@ -5614,3 +5774,17 @@ def test_load_store_chunk():
     )
     expected = np.array([])
     assert all(actual == expected)
+
+
+def test_scalar_setitem():
+    """After a da.Array.__getitem__ call that returns a scalar, the chunk contains a
+    read-only np.generic instead of a writeable np.ndarray. This is a specific quirk of
+    numpy; cupy and other backends always return a 0-dimensional array.
+    Make sure that __setitem__ still works.
+    """
+    x = da.zeros(1)
+    y = x[0]
+    assert isinstance(y.compute(), np.generic)
+    y[()] = 2
+    assert_eq(y, 2.0)
+    assert isinstance(y.compute(), np.ndarray)

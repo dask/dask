@@ -27,6 +27,10 @@ from packaging.version import Version
 from tlz import accumulate, concat, first, partition
 from toolz import frequencies
 
+from dask._compatibility import import_optional_dependency
+
+xr = import_optional_dependency("xarray", errors="ignore")
+
 from dask import compute, config, core
 from dask._task_spec import List, Task, TaskRef
 from dask.array import chunk
@@ -1299,7 +1303,16 @@ def finalize(results):
             return concatenate3(results)
         else:
             results2 = results2[0]
-    return unpack_singleton(results)
+
+    results = unpack_singleton(results)
+    # Single chunk. There is a risk that the result holds a buffer stored in the
+    # graph or on a process-local Worker. Deep copy to make sure that nothing can
+    # accidentally write back to it.
+    try:
+        return results.copy()  # numpy, sparse, scipy.sparse (any version)
+    except AttributeError:
+        # Not an Array API object
+        return results
 
 
 CHUNKS_NONE_ERROR_MESSAGE = """
@@ -1713,13 +1726,29 @@ class Array(DaskMethodsMixin):
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
-    def __array__(self, dtype=None, **kwargs):
+    def __array__(self, dtype=None, copy=None, **kwargs):
+        if kwargs:
+            warnings.warn(
+                f"Extra keyword arguments {kwargs} are ignored and won't be "
+                "accepted in the future",
+                FutureWarning,
+            )
+        if copy is False:
+            warnings.warn(
+                "Can't acquire a memory view of a Dask array. "
+                "This will raise in the future.",
+                FutureWarning,
+            )
+
         x = self.compute()
-        if dtype and x.dtype != dtype:
-            x = x.astype(dtype)
-        if not isinstance(x, np.ndarray):
-            x = np.array(x)
-        return x
+
+        # Apply requested dtype and convert non-numpy backends to numpy.
+        # If copy is True, numpy is going to perform its own deep copy
+        # after this method returns.
+        # If copy is None, finalize() ensures that the returned object
+        # does not share memory with an object stored in the graph or on a
+        # process-local Worker.
+        return np.asarray(x, dtype=dtype)
 
     def __array_function__(self, func, types, args, kwargs):
         import dask.array as module
@@ -3349,6 +3378,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     chunks[a] = shape[a]
                     multiplier_remaining = _trivial_aggregate(a)
                     largest_block *= shape[a]
+                    result[a] = (shape[a],)
                     continue
                 elif reduce_case or max(previous_chunks[a]) > max_chunk_size:
                     result[a] = round_to(proposed, ideal_shape[a])
@@ -3612,6 +3642,11 @@ def from_array(
         raise ValueError(
             "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
         )
+
+    if xr is not None and isinstance(x, xr.DataArray) and x.chunks is not None:
+        if isinstance(x.data, Array):
+            return x.data
+
     elif is_dask_collection(x):
         warnings.warn(
             "Passing an object to dask.array.from_array which is already a "
@@ -4768,7 +4803,10 @@ def asarray(
     else:
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
-            return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
+            return a.map_blocks(
+                # Pass the dtype parameter to np.asarray, not to map_blocks
+                partial(np.asarray, like=like_meta, dtype=dtype, order=order)
+            )
         else:
             a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
 
@@ -4842,7 +4880,10 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
     else:
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
-            return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
+            return a.map_blocks(
+                # Pass the dtype parameter to np.asanyarray, not to map_blocks
+                partial(np.asanyarray, like=like_meta, dtype=dtype, order=order)
+            )
         else:
             a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
 
