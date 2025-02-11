@@ -455,39 +455,6 @@ Expr={expr}"""
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
 
-    def compute(self, fuse=True, concatenate=True, **kwargs):
-        """Compute this DataFrame.
-
-        This turns a lazy Dask DataFrame into an in-memory pandas DataFrame.
-        The entire dataset must fit into memory before calling this operation.
-
-        The optimizer runs over the DataFrame before triggering the computation.
-        The optimizer injects a repartition operation that reduces the partition
-        count to 1 to enable better optimization strategies.
-
-        Parameters
-        ----------
-        fuse : bool, default True
-            Whether to fuse the expression tree before computing. Fusing significantly
-            reduces the number of tasks and improves performance. It shouldn't be
-            disabled unless absolutely necessary.
-        concatenate : bool, default True
-            Whether to concatenate all partitions into a single one before computing.
-            Concatenating enables more powerful optimizations but it also incurs additional
-            data transfer cost. Generally, it should be enabled.
-        kwargs
-            Extra keywords to forward to the base compute function.
-
-        See Also
-        --------
-        dask.compute
-        """
-        out = self
-        if not isinstance(out, Scalar) and concatenate:
-            out = out.repartition(npartitions=1)
-        out = out.optimize(fuse=fuse)
-        return DaskMethodsMixin.compute(out, **kwargs)
-
     def analyze(self, filename: str | None = None, format: str | None = None) -> None:
         """Outputs statistics about every node in the expression.
 
