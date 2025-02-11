@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import dask.array as da
-from dask.base import collections_to_dsk
+from dask.base import collections_to_expr
 
 
 def test_map_blocks_block_id_fusion():
@@ -11,5 +11,5 @@ def test_map_blocks_block_id_fusion():
         return x
 
     result = arr.map_blocks(dummy).astype("f8")
-    dsk = collections_to_dsk([result])
-    assert len(dsk) == 20
+    dsk = collections_to_expr([result])
+    assert len(dsk.__dask_graph__()) == 20

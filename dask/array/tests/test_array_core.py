@@ -55,7 +55,7 @@ from dask.array.core import (
 from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_210
 from dask.array.reshape import _not_implemented_message
 from dask.array.utils import assert_eq, same_keys
-from dask.base import collections_to_dsk, compute_as_if_collection, tokenize
+from dask.base import collections_to_expr, compute_as_if_collection, tokenize
 from dask.blockwise import (
     _make_blockwise_graph,
     broadcast_dimensions,
@@ -5834,7 +5834,7 @@ def test_from_array_xarray_dataarray():
     xr = pytest.importorskip("xarray")
     arr = xr.DataArray(da.random.random((1000, 1000), chunks=(50, 50)))
     dask_array = da.from_array(arr)
-    dsk = collections_to_dsk([dask_array])
+    dsk = collections_to_expr([dask_array]).__dask_graph__()
     assert len(dsk) == 400
     assert all(k[0].startswith("random_sample") for k in dsk)
     assert_eq(dask_array, arr.data)

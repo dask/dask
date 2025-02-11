@@ -11,9 +11,10 @@ from functools import partial
 from tlz import concat, curry, merge, unique
 
 from dask import config
+from dask._expr import FinalizeCompute
 from dask.base import (
     DaskMethodsMixin,
-    dont_optimize,
+    collections_to_expr,
     is_dask_collection,
     named_schedulers,
     replace_name_in_key,
@@ -206,13 +207,11 @@ def to_task_dask(expr):
         return expr.key, expr.dask
 
     if is_dask_collection(expr):
-        name = "finalize-" + tokenize(expr, pure=True)
-        keys = expr.__dask_keys__()
-        opt = getattr(expr, "__dask_optimize__", dont_optimize)
-        finalize, args = expr.__dask_postcompute__()
-        dsk = {name: (finalize, keys) + args}
-        dsk.update(opt(expr.__dask_graph__(), keys))
-        return name, dsk
+        expr = collections_to_expr(expr)
+        expr = FinalizeCompute(expr)
+        expr = expr.optimize()
+        (name,) = expr.__dask_keys__()
+        return name, expr.__dask_graph__()
 
     if type(expr) is type(iter(list())):
         expr = list(expr)
