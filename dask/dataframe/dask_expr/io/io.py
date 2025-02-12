@@ -7,6 +7,7 @@ import operator
 import numpy as np
 import pyarrow as pa
 
+from dask import delayed
 from dask._task_spec import DataNode, List, Task
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -256,10 +257,11 @@ class FromMap(PartitionsFiltered, BlockwiseIO):
     def _meta(self):
         if self.operand("user_meta") is not no_default:
             meta = self.operand("user_meta")
+            return make_meta(meta)
         else:
             vals = [v[0] for v in self.iterables]
-            meta = self.func(*vals, *self.args, **self.kwargs)
-        return make_meta(meta)
+            meta = delayed(self.func)(*vals, *self.args, **self.kwargs)
+            return delayed(make_meta)(meta).compute()
 
     def _divisions(self):
         if self.operand("user_divisions"):
