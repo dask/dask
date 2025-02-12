@@ -1938,30 +1938,43 @@ class Array(DaskMethodsMixin):
         if value is np.ma.masked:
             value = np.ma.masked_all((), dtype=self.dtype)
 
-        if (
-            not is_dask_collection(value)
-            and issubclass(self.dtype.type, Integral)
-            and np.isnan(value).any()
-        ):
-            raise ValueError("cannot convert float NaN to integer")
+        if not is_dask_collection(value) and self.dtype.kind in "iu":
+            if np.isnan(value).any():
+                raise ValueError("cannot convert float NaN to integer")
+            if np.isinf(value).any():
+                raise ValueError("cannot convert float infinity to integer")
 
-        ## Use the "where" method for cases when key is an Array
+        # Suppress dtype broadcasting; __setitem__ can't change the dtype.
+        # Use asanyarray to retain e.g. np.ma objects.
+        value = asanyarray(value, dtype=self.dtype, like=self)
+
+        if isinstance(key, Array) and (
+            key.dtype.kind in "iu"
+            or (key.dtype == bool and key.ndim == 1 and self.ndim > 1)
+        ):
+            key = (key,)
+
+        ## Use the "where" method for cases when key is an Array of bools
         if isinstance(key, Array):
             from dask.array.routines import where
 
-            if isinstance(value, Array) and value.ndim > 1:
-                raise ValueError("boolean index array should have 1 dimension")
-            try:
-                y = where(key, value, self)
-            except ValueError as e:
-                raise ValueError(
-                    "Boolean index assignment in Dask "
-                    "expects equally shaped arrays.\nExample: da1[da2] = da3 "
-                    "where da1.shape == (4,), da2.shape == (4,) "
-                    "and da3.shape == (4,).\n"
-                    "Alternatively, you can use the extended API that supports"
-                    "indexing with tuples.\nExample: da1[(da2,)] = da3."
-                ) from e
+            if key.shape != self.shape:
+                raise IndexError(
+                    f"boolean index shape {key.shape} must match indexed array's "
+                    f"{self.shape}."
+                )
+
+            # If value has ndim > 0, they must be broadcastable to self.shape[idx].
+            # This raises when the bool mask causes the size to become unknown,
+            # e.g. this is valid in numpy but raises here:
+            # x = da.array([1,2,3])
+            # x[da.array([True, True, False])] = [4, 5]
+            if value.ndim:
+                value = broadcast_to(value, self[key].shape)
+
+            y = where(key, value, self)
+            # FIXME does any backend allow mixed ops vs. numpy?
+            # If yes, is it wise to let them change the meta?
             self._meta = y._meta
             self.dask = y.dask
             self._name = y.name
@@ -1973,7 +1986,6 @@ class Array(DaskMethodsMixin):
 
         # Still here? Then apply the assignment to other type of
         # indices via the `setitem_array` function.
-        value = asanyarray(value)
 
         out = "setitem-" + tokenize(self, key, value)
         dsk = setitem_array(out, self, key, value)
