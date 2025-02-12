@@ -67,6 +67,9 @@ from dask.layers import Blockwise
 from dask.utils import SerializableLock, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, hlg_layer_topological, inc
 
+if da._array_expr_enabled():
+    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
+
 
 @pytest.mark.parametrize("inline_array", [True, False])
 def test_graph_from_arraylike(inline_array):
