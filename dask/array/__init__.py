@@ -319,7 +319,7 @@ try:
     from dask.base import compute
 
     if _array_expr_enabled():
-        import dask_expr.array as da
+        import dask.array._array_expr as da
 
         da = importlib.reload(da)
 
@@ -344,28 +344,30 @@ if _array_expr_enabled():
         return inner_func
 
     try:
-        from dask_expr.array import (  # type: ignore
+        from dask.array._array_expr import (  # type: ignore
             Array,
-            arange,
-            asarray,
-            empty,
-            from_array,
-            linspace,
-            mean,
-            moment,
-            nanmean,
-            nanstd,
-            nansum,
-            nanvar,
-            ones,
-            prod,
+            blockwise,
+            elemwise,
             random,
-            std,
-            sum,
-            var,
-            zeros,
         )
 
+        arange = raise_not_implemented_error("arange")
+        asarray = raise_not_implemented_error("asarray")
+        empty = raise_not_implemented_error("empty")
+        from_array = raise_not_implemented_error("from_array")
+        linspace = raise_not_implemented_error("linspace")
+        mean = raise_not_implemented_error("mean")
+        moment = raise_not_implemented_error("moment")
+        nanmean = raise_not_implemented_error("nanmean")
+        nanstd = raise_not_implemented_error("nanstd")
+        nansum = raise_not_implemented_error("nansum")
+        nanvar = raise_not_implemented_error("nanvar")
+        ones = raise_not_implemented_error("ones")
+        prod = raise_not_implemented_error("prod")
+        std = raise_not_implemented_error("std")
+        sum = raise_not_implemented_error("sum")
+        var = raise_not_implemented_error("var")
+        zeros = raise_not_implemented_error("zeros")
         backends = raise_not_implemented_error("backends")
         fft = raise_not_implemented_error("fft")
         lib = raise_not_implemented_error("lib")
@@ -614,6 +616,6 @@ if _array_expr_enabled():
         from dask.base import compute
 
     except ImportError:
-        import dask.array as da
+        import dask.array as da  # type: ignore
 
         da = importlib.reload(da)

@@ -27,6 +27,9 @@ from dask.array.rechunk import (
 from dask.array.utils import assert_eq
 from dask.utils import funcname
 
+if da._array_expr_enabled():
+    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
+
 
 def test_rechunk_internals_1():
     """Test the cumdims_label and _breakpoints and

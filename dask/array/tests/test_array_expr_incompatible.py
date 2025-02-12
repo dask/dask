@@ -10,7 +10,7 @@ from dask.array.core import concatenate3
 from dask.array.tests.test_dispatch import EncapsulateNDArray
 
 if da._array_expr_enabled():
-    pytest.skip("mock doesn't work")
+    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
 
 
 @pytest.mark.parametrize("one_d", [True, False])
