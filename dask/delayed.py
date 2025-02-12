@@ -20,7 +20,7 @@ from dask.base import (
 )
 from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
-from dask.core import flatten, quote
+from dask.core import quote
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import fuse
 from dask.typing import Graph, NestedKeys
@@ -539,7 +539,6 @@ def optimize(dsk, keys, **kwargs):
 
     if not isinstance(dsk, HighLevelGraph):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
-    dsk = dsk.cull(set(flatten(keys)))
     return dsk
 
 
