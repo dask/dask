@@ -273,15 +273,21 @@ def test_store_kwargs():
     assert called[0]
 
 
-def test_setitem_1d():
+@pytest.mark.parametrize(
+    "chunks", (-1, pytest.param(5, marks=pytest.mark.xfail(reason="dask/dask#11730")))
+)
+def test_setitem_1d(chunks):
     x = cupy.arange(10)
-    dx = da.from_array(x.copy(), chunks=(5,))
+    dx = da.from_array(x.copy(), chunks=chunks)
 
     x[x > 6] = -1
     x[x % 2 == 0] = -2
+    idx = cupy.asarray([2, 3])
+    x[idx,] = -3
 
     dx[dx > 6] = -1
     dx[dx % 2 == 0] = -2
+    dx[da.from_array(idx)] = -3
 
     assert_eq(x, dx)
 
