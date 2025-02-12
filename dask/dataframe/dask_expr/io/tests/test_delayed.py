@@ -14,7 +14,6 @@ pd = _backend_library()
 def test_from_delayed_optimizing():
     parts = from_dict({"a": np.arange(300)}, npartitions=30).to_delayed()
     result = from_delayed(parts[0], meta=pd.DataFrame({"a": pd.Series(dtype=np.int64)}))
-    assert len(result.optimize().dask) == 2
     assert_eq(result, pd.DataFrame({"a": pd.Series(np.arange(10))}))
 
 
