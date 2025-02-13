@@ -61,6 +61,8 @@ from dask.utils import (
     random_state_data,
 )
 
+optimize = core.optimize
+
 
 class Expr(core.Expr):
     """Primary class for all Expressions
@@ -521,6 +523,9 @@ class Expr(core.Expr):
         if predicate is None:
             predicate = parent.predicate.substitute(self, self.frame)
         return type(self)(self.frame[predicate], *self.operands[1:])
+
+    def fuse(self):
+        return optimize_blockwise_fusion(self)
 
 
 class Literal(Expr):
@@ -3074,7 +3079,7 @@ class _DelayedExpr(Expr):
 
 
 class DelayedsExpr(Expr):
-    _parameters = []  # type: ignore
+    _parameters = []
 
     def __init__(self, *delayed_objects):
         self.operands = delayed_objects
@@ -3106,64 +3111,6 @@ class DelayedsExpr(Expr):
 @normalize_token.register(Expr)
 def normalize_expression(expr):
     return expr._name
-
-
-def optimize_until(expr: Expr, stage: core.OptimizerStage) -> Expr:
-    result = expr
-    if stage == "logical":
-        return result
-
-    # Simplify
-    expr = result.simplify()  # type: ignore
-    if stage == "simplified-logical":
-        return expr
-
-    # Manipulate Expression to make it more efficient
-    expr = expr.rewrite(kind="tune", rewritten={})
-    if stage == "tuned-logical":
-        return expr
-
-    # Lower
-    expr = expr.lower_completely()  # type: ignore
-    if stage == "physical":
-        return expr
-
-    # Simplify again
-    expr = expr.simplify()  # type: ignore
-    if stage == "simplified-physical":
-        return expr
-
-    # Final graph-specific optimizations
-    expr = optimize_blockwise_fusion(expr)
-    if stage == "fused":
-        return expr
-
-    raise ValueError(f"Stage {stage!r} not supported.")
-
-
-def optimize(expr: Expr, fuse: bool = True) -> Expr:
-    """High level query optimization
-
-    This leverages three optimization passes:
-
-    1.  Class based simplification using the ``_simplify`` function and methods
-    2.  Blockwise fusion
-
-    Parameters
-    ----------
-    expr:
-        Input expression to optimize
-    fuse:
-        whether or not to turn on blockwise fusion
-
-    See Also
-    --------
-    simplify
-    optimize_blockwise_fusion
-    """
-    stage: core.OptimizerStage = "fused" if fuse else "simplified-physical"
-
-    return optimize_until(expr, stage)
 
 
 def is_broadcastable(dfs, s):

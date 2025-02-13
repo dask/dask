@@ -40,9 +40,11 @@ def _unpack_collections(o):
 
 
 class Expr:
-    _parameters = []  # type: ignore
+    _parameters: list[str] = []
     _defaults: dict[str, Any] = {}
-    _instances = weakref.WeakValueDictionary()  # type: ignore
+    _instances: weakref.WeakValueDictionary[str, Expr] = weakref.WeakValueDictionary()
+
+    operands: list
 
     def __new__(cls, *args, **kwargs):
         operands = list(args)
@@ -99,16 +101,21 @@ class Expr:
         return os.linesep.join(self._tree_repr_lines())
 
     def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+        from dask.dataframe.dask_expr._expr import Expr as DFExpr
         from dask.dataframe.dask_expr.diagnostics import analyze
 
-        return analyze(self, filename=filename, format=format)  # type: ignore
+        if not isinstance(self, DFExpr):
+            raise TypeError(
+                "analyze is only supported for dask.dataframe.Expr objects."
+            )
+        return analyze(self, filename=filename, format=format)
 
     def explain(
         self, stage: OptimizerStage = "fused", format: str | None = None
     ) -> None:
         from dask.dataframe.dask_expr.diagnostics import explain
 
-        return explain(self, stage, format)  # type: ignore
+        return explain(self, stage, format)
 
     def pprint(self):
         for line in self._tree_repr_lines():
@@ -266,7 +273,7 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
-            for operand in expr.operands:  # type: ignore
+            for operand in expr.operands:
                 if isinstance(operand, Expr):
                     new = operand.rewrite(kind=kind, rewritten=rewritten)
                     rewritten[operand._name] = new
@@ -333,7 +340,7 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
-            for operand in expr.operands:  # type: ignore
+            for operand in expr.operands:
                 if isinstance(operand, Expr):
                     # Bandaid for now, waiting for Singleton
                     dependents[operand._name].append(weakref.ref(expr))
@@ -353,6 +360,14 @@ class Expr:
             break
 
         return expr
+
+    def optimize(self, fuse: bool = False) -> Expr:
+        stage: OptimizerStage = "fused" if fuse else "simplified-physical"
+
+        return optimize_until(self, stage)
+
+    def fuse(self) -> Expr:
+        return self
 
     def simplify(self) -> Expr:
         expr = self
@@ -396,7 +411,7 @@ class Expr:
         # Lower all children
         new_operands = []
         changed = False
-        for operand in out.operands:  # type: ignore
+        for operand in out.operands:
             if isinstance(operand, Expr):
                 new = operand.lower_once(lowered)
                 if new._name != operand._name:
@@ -442,11 +457,11 @@ class Expr:
         return
 
     @functools.cached_property
-    def _funcname(self):
+    def _funcname(self) -> str:
         return funcname(type(self)).lower()
 
     @functools.cached_property
-    def _name(self):
+    def _name(self) -> str:
         return self._funcname + "-" + _tokenize_deterministic(*self.operands)
 
     @property
@@ -563,7 +578,7 @@ class Expr:
 
         changed = False
         new_operands = []
-        for i, operand in enumerate(self.operands):  # type: ignore
+        for i, operand in enumerate(self.operands):
             if i < len(self._parameters) and self._parameters[i] in substitutions:
                 new_operands.append(substitutions[self._parameters[i]])
                 changed = True
@@ -733,3 +748,61 @@ def collect_dependents(expr) -> defaultdict:
             stack.append(dep)
             dependents[dep._name].append(weakref.ref(node))
     return dependents
+
+
+def optimize(expr: Expr, fuse: bool = True) -> Expr:
+    """High level query optimization
+
+    This leverages three optimization passes:
+
+    1.  Class based simplification using the ``_simplify`` function and methods
+    2.  Blockwise fusion
+
+    Parameters
+    ----------
+    expr:
+        Input expression to optimize
+    fuse:
+        whether or not to turn on blockwise fusion
+
+    See Also
+    --------
+    simplify
+    optimize_blockwise_fusion
+    """
+    stage: OptimizerStage = "fused" if fuse else "simplified-physical"
+
+    return optimize_until(expr, stage)
+
+
+def optimize_until(expr: Expr, stage: OptimizerStage) -> Expr:
+    result = expr
+    if stage == "logical":
+        return result
+
+    # Simplify
+    expr = result.simplify()
+    if stage == "simplified-logical":
+        return expr
+
+    # Manipulate Expression to make it more efficient
+    expr = expr.rewrite(kind="tune", rewritten={})
+    if stage == "tuned-logical":
+        return expr
+
+    # Lower
+    expr = expr.lower_completely()
+    if stage == "physical":
+        return expr
+
+    # Simplify again
+    expr = expr.simplify()
+    if stage == "simplified-physical":
+        return expr
+
+    # Final graph-specific optimizations
+    expr = expr.fuse()
+    if stage == "fused":
+        return expr
+
+    raise ValueError(f"Stage {stage!r} not supported.")
