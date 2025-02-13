@@ -13,8 +13,8 @@ Highlights
 ^^^^^^^^^^
 
 This release includes a critical fix that fixes a deadlock that can arise
-when seceded task are rescheduled, or cancelled and resubmitted, e.g. due to a worker being
-lost.
+when seceded task are rescheduled, or cancelled and resubmitted, e.g. due
+to a worker being lost.
 
 See :pr-distributed:`8991` by `Hendrik Makait`_ for more details.
 
