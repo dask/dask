@@ -968,7 +968,7 @@ def expand_pad_value(array, pad_value):
     return pad_value
 
 
-def get_pad_shapes_chunks(array, pad_width, axes):
+def get_pad_shapes_chunks(array, pad_width, axes, mode):
     """
     Helper function for finding shapes and chunks of end pads.
     """
@@ -979,7 +979,12 @@ def get_pad_shapes_chunks(array, pad_width, axes):
     for d in axes:
         for i in range(2):
             pad_shapes[i][d] = pad_width[d][i]
-            pad_chunks[i][d] = (pad_width[d][i],)
+            if mode != "constant" or pad_width[d][i] == 0:
+                pad_chunks[i][d] = (pad_width[d][i],)
+            else:
+                pad_chunks[i][d] = normalize_chunks(
+                    (max(pad_chunks[i][d]),), (pad_width[d][i],)
+                )[0]
 
     pad_shapes = [tuple(s) for s in pad_shapes]
     pad_chunks = [tuple(c) for c in pad_chunks]
@@ -1021,7 +1026,9 @@ def pad_edge(array, pad_width, mode, **kwargs):
 
     result = array
     for d in range(array.ndim):
-        pad_shapes, pad_chunks = get_pad_shapes_chunks(result, pad_width, (d,))
+        pad_shapes, pad_chunks = get_pad_shapes_chunks(
+            result, pad_width, (d,), mode=mode
+        )
         pad_arrays = [result, result]
 
         if mode == "constant":
