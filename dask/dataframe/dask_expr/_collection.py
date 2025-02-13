@@ -2502,13 +2502,17 @@ Expr={expr}"""
         --------
         dask_expr.from_delayed
         """
+        from dask.highlevelgraph import HighLevelGraph
+
         if optimize_graph:
             frame = self.optimize()
         else:
             frame = self
         keys = frame.__dask_keys__()
         graph = frame.__dask_graph__()
-        return [Delayed(k, graph) for k in keys]
+        layer = "delayed-" + frame._name
+        graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
+        return [Delayed(k, graph, layer=layer) for k in keys]
 
     def to_backend(self, backend: str | None = None, **kwargs):
         """Move to a new DataFrame backend

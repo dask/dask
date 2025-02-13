@@ -331,8 +331,8 @@ def test_common_subexpressions():
 def test_delayed_optimize():
     x = Delayed("b", {"a": 1, "b": (inc, "a"), "c": (inc, "b")})
     (x2,) = dask.optimize(x)
-    # Delayed's __dask_optimize__ does not cull out 'c'
-    assert sorted(x2.dask.keys()) == ["a", "b", "c"]
+    # Delayed's __dask_optimize__ culls out 'c'
+    assert sorted(x2.dask.keys()) == ["a", "b"]
     assert x2._layer != x2._key
     # Optimize generates its own layer name, which doesn't match the key.
     # `Delayed._rebuild` handles this.
@@ -843,7 +843,7 @@ def test_annotations_survive_optimization():
     (d_opt,) = dask.optimize(d)
     assert type(d_opt.dask) is HighLevelGraph
     assert len(d_opt.dask.layers) == 1
-    assert len(d_opt.dask.layers["b"]) == 3  # c is not culled
+    assert len(d_opt.dask.layers["b"]) == 2  # c is culled
     assert d_opt.dask.layers["b"].annotations == {"foo": "bar"}
 
 
