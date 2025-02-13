@@ -15,7 +15,7 @@ import pandas as pd
 from pandas.api.types import is_dtype_equal
 
 import dask
-from dask.base import get_scheduler, is_dask_collection
+from dask.base import is_dask_collection
 from dask.core import get_deps
 from dask.dataframe._compat import tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
@@ -611,28 +611,22 @@ def assert_divisions(ddf, scheduler=None):
         except AttributeError:
             return x.index
 
-    get = get_scheduler(scheduler=scheduler, collections=[type(ddf)])
-    results = get(ddf.dask, ddf.__dask_keys__())
-    for i, df in enumerate(results[:-1]):
-        if len(df):
-            assert index(df).min() >= ddf.divisions[i]
-            assert index(df).max() < ddf.divisions[i + 1]
-
-    if len(results[-1]):
-        assert index(results[-1]).min() >= ddf.divisions[-2]
-        assert index(results[-1]).max() <= ddf.divisions[-1]
+    ddf.enforce_runtime_divisions().compute(
+        scheduler=scheduler, collections=[type(ddf)]
+    )
 
 
 def assert_sane_keynames(ddf):
-    if not hasattr(ddf, "dask"):
-        return
-    for k in ddf.dask.keys():
-        while isinstance(k, tuple):
-            k = k[0]
-        assert isinstance(k, (str, bytes))
-        assert len(k) < 100
-        assert " " not in k
-        assert k.split("-")[0].isidentifier(), k
+    if hasattr(ddf, "__dask_graph__"):
+        dsk = ddf.optimize()
+        dsk = dsk.__dask_graph__()
+        for k in dsk:
+            while isinstance(k, tuple):
+                k = k[0]
+            assert isinstance(k, (str, bytes))
+            assert len(k) < 100
+            assert " " not in k
+            assert k.split("-")[0].isidentifier(), k
 
 
 def assert_dask_dtypes(ddf, res, numeric_equal=True):

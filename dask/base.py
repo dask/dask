@@ -685,8 +685,7 @@ def compute(
         # is materializing and the low level optimizers are running if
         # appropriate, i.e. the `schedule` interface has to be changed to use a
         # __dask_graph__ (if available)
-        dsk = expr.__dask_graph__()
-        results = schedule(dsk, keys, **kwargs)
+        results = schedule(expr, keys, **kwargs)
 
     return repack(results)
 

@@ -846,7 +846,7 @@ def test_optimize_None():
 
     def my_get(dsk, keys):
         # but they aren't. +1 for the finalize task
-        assert len(dsk) == len(y.dask) + 1
+        assert len(dsk.__dask_graph__()) == len(y.dask) + 1
         return dask.get(dsk, keys)
 
     with dask.config.set(array_optimize=None, scheduler=my_get):
