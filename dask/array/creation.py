@@ -382,7 +382,9 @@ def linspace(
 
 
 @array_creation_dispatch.register_inplace("numpy")
-def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
+def arange(
+    start=None, /, stop=None, step=1, *, chunks="auto", like=None, dtype=None, **kwargs
+):
     """
     Return evenly spaced values from `start` to `stop` with step size `step`.
 
@@ -395,13 +397,15 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
 
     Parameters
     ----------
-    start : int, optional
-        The starting value of the sequence. The default is 0.
-    stop : int
-        The end of the interval, this value is excluded from the interval.
-    step : int, optional
-        The spacing between the values. The default is 1 when not specified.
-        The last value of the sequence.
+    start : int | float, optional
+        If ``stop`` is specified, the start of interval (inclusive); otherwise, the end
+        of the interval (exclusive). Default: 0 when ``stop`` is specified.
+    stop : int | float
+        The end of the interval (exclusive).
+    step : int | float, optional
+        The distance between two adjacent elements ``(out[i+1] - out[i])``.
+        Must not be 0; may be negative, this results in an empty array if stop >= start.
+        Default: 1.
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
@@ -420,29 +424,19 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
     --------
     dask.array.linspace
     """
-    if len(args) == 1:
+    if start is None and stop is None:
+        raise TypeError("arange() requires stop to be specified.")
+    elif start is None:
         start = 0
-        stop = args[0]
-        step = 1
-    elif len(args) == 2:
-        start = args[0]
-        stop = args[1]
-        step = 1
-    elif len(args) == 3:
-        start, stop, step = args
-    else:
-        raise TypeError(
-            """
-        arange takes 3 positional arguments: arange([start], stop, [step])
-        """
-        )
+    elif stop is None:
+        start, stop = 0, start
 
     num = int(max(np.ceil((stop - start) / step), 0))
 
     meta = meta_from_array(like) if like is not None else None
 
     if dtype is None:
-        dtype = np.arange(start, stop, step * num if num else step).dtype
+        dtype = np.arange(type(start)(0), type(stop)(0), step).dtype
 
     chunks = normalize_chunks(chunks, (num,), dtype=dtype)
 
