@@ -991,6 +991,23 @@ def test_pad_udf(kwargs):
     assert_eq(np_r, da_r)
 
 
+def test_pad_constant_chunksizes():
+    array = dask.array.ones((10, 10), chunks=(1, 1))
+    result = dask.array.pad(
+        array, ((0, 16 - 10), (0, 0)), mode="constant", constant_values=0
+    )
+    assert tuple(map(max, result.chunks)) == (1, 1)
+    assert_eq(
+        result,
+        np.pad(
+            array.compute(),
+            mode="constant",
+            constant_values=0,
+            pad_width=((0, 16 - 10), (0, 0)),
+        ),
+    )
+
+
 def test_auto_chunks():
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.ones((10000, 10000))
