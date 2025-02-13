@@ -47,7 +47,6 @@ class Expr:
 
     operands: list
 
-    operands: list
     _token: str | None
 
     def __new__(cls, *args, _token=None, **kwargs):
@@ -821,6 +820,8 @@ def optimize_until(expr: Expr, stage: OptimizerStage) -> Expr:
         return expr
 
     raise ValueError(f"Stage {stage!r} not supported.")
+
+
 class HLGExpr(Expr):
     _parameters = [
         "dsk",
@@ -885,6 +886,12 @@ class HLGExpr(Expr):
         keys = [d for d in dependents if not dependents[d] and d in dsk]
         self.operands[self._parameters.index("output_keys")] = keys
         return keys
+
+    def __dask_tokenize__(self):
+        # There is currently not way to hash a HighLevelGraph fast and reliably.
+        # It is important for dask-expr for this to not be duplicated so we'll
+        # just use the ID.
+        return str(id(self))
 
     def _layer(self) -> dict:
         dsk = self.operand("dsk")

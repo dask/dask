@@ -24,6 +24,7 @@ from dask.utils_test import inc
 
 class Tuple:
     __dask_scheduler__ = staticmethod(dask.threaded.get)
+    __dask_optimize__ = None
 
     def __init__(self, dsk, keys):
         self._dask = dsk
