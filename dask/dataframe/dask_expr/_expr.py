@@ -1660,7 +1660,7 @@ class EnforceRuntimeDivisions(Blockwise):
             self.divisions[index + 1],
             index == (self.npartitions - 1),
         ]
-        return (self.operation,) + tuple(args)  # type: ignore
+        return Task(name, self.operation, *args)
 
 
 class Abs(Elemwise):
