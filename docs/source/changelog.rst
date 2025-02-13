@@ -7,6 +7,20 @@ Changelog
 
 .. _v2025.1.0:
 
+2025.2.0
+
+Highlights
+^^^^^^^^^^
+
+This release includes a critical fix that fixes a deadlock that can arise
+when seceded task are rescheduled, or cancelled and resubmitted, e.g. due
+to a worker being lost.
+
+See :pr-distributed:`8991` by `Hendrik Makait`_ for more details.
+
+
+.. _v2025.1.0:
+
 2025.1.0
 ---------
 
