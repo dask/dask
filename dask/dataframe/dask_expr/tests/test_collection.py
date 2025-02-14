@@ -2785,3 +2785,11 @@ def test_to_backend_simplify():
         assert str(df2.expr) != str(df[["y"]].expr)
         df3 = df2.simplify()
         assert str(df3.expr) == str(df[["y"]].expr)
+
+
+def test_projection_on_series():
+    pdf = pd.DataFrame(data={"a": [1, 3, 2]}).a
+    df = from_pandas(pdf, npartitions=1)
+    result = df.replace(1, 5)
+    assert_eq(result, pdf.replace(1, 5))
+    assert_eq(result.fillna(0), pdf.replace(1, 5).fillna(0))
