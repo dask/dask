@@ -4575,19 +4575,22 @@ def test_meta_nonempty_uses_meta_value_if_provided():
         assert_eq(expected, actual)
 
 
-def test_dask_dataframe_holds_scipy_sparse_containers():
+@pytest.mark.parametrize("container", ["array", "matrix"])
+def test_dask_dataframe_holds_scipy_sparse_containers(container):
     sparse = pytest.importorskip("scipy.sparse")
     da = pytest.importorskip("dask.array")
+    cls = sparse.csr_matrix if container == "matrix" else sparse.csr_array
+
     x = da.random.random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
     df = dd.from_dask_array(x)
-    y = df.map_partitions(sparse.csr_matrix)
+    y = df.map_partitions(cls)
 
     assert isinstance(y, da.Array)
 
     vs = y.to_delayed().flatten().tolist()
     values = dask.compute(*vs, scheduler="single-threaded")
-    assert all(isinstance(v, sparse.csr_matrix) for v in values)
+    assert all(isinstance(v, cls) for v in values)
 
 
 @pytest.mark.xfail(reason="we can't do this yet")

@@ -1455,9 +1455,12 @@ def test_reduction_with_non_comparable_objects():
     assert_eq(b.fold(max, max), StrictReal(9))
 
 
-def test_reduction_with_sparse_matrices():
+@pytest.mark.parametrize("container", ["array", "matrix"])
+def test_reduction_with_sparse_matrices(container):
     sp = pytest.importorskip("scipy.sparse")
-    b = db.from_sequence([sp.csr_matrix([0]) for x in range(4)], partition_size=2)
+    cls = sp.csr_matrix if container == "matrix" else sp.csr_array
+
+    b = db.from_sequence([cls([0]) for x in range(4)], partition_size=2)
 
     def sp_reduce(a, b):
         return sp.vstack([a, b])

@@ -5271,26 +5271,30 @@ def test_partitions_indexer():
 
 
 @pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
-def test_dask_array_holds_scipy_sparse_containers():
+@pytest.mark.parametrize("container", ["array", "matrix"])
+def test_dask_array_holds_scipy_sparse_containers(container):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
+
+    cls = scipy.sparse.csr_matrix if container == "matrix" else scipy.sparse.csr_array
+    kind = scipy.sparse.spmatrix if container == "matrix" else scipy.sparse.sparray
 
     x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
     xx = x.compute()
-    y = x.map_blocks(scipy.sparse.csr_matrix)
+    y = x.map_blocks(cls)
 
     vs = y.to_delayed().flatten().tolist()
     values = dask.compute(*vs, scheduler="single-threaded")
-    assert all(isinstance(v, scipy.sparse.csr_matrix) for v in values)
+    assert all(isinstance(v, cls) for v in values)
 
     yy = y.compute(scheduler="single-threaded")
-    assert isinstance(yy, scipy.sparse.spmatrix)
+    assert isinstance(yy, kind)
     assert (yy == xx).all()
 
-    z = x.T.map_blocks(scipy.sparse.csr_matrix)
+    z = x.T.map_blocks(cls)
     zz = z.compute(scheduler="single-threaded")
-    assert isinstance(zz, scipy.sparse.spmatrix)
+    assert isinstance(zz, kind)
     assert (zz == xx.T).all()
 
 
@@ -5305,8 +5309,15 @@ def test_dask_array_holds_scipy_sparse_containers():
         [True, False] * 500,
     ],
 )
-@pytest.mark.parametrize("sparse_module_path", ["scipy.sparse", "cupyx.scipy.sparse"])
-def test_scipy_sparse_indexing(index, sparse_module_path):
+@pytest.mark.parametrize(
+    ("sparse_module_path", "container"),
+    [
+        ("scipy.sparse", "csr_matrix"),
+        ("scipy.sparse", "csr_array"),
+        ("cupyx.scipy.sparse", "csr_matrix"),
+    ],
+)
+def test_scipy_sparse_indexing(index, sparse_module_path, container):
     sp = pytest.importorskip(sparse_module_path)
 
     if sparse_module_path == "cupyx.scipy.sparse":
@@ -5317,7 +5328,7 @@ def test_scipy_sparse_indexing(index, sparse_module_path):
     with dask.config.set({"array.backend": backend}):
         x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
-        y = x.map_blocks(sp.csr_matrix)
+        y = x.map_blocks(getattr(sp, container))
 
     assert not (
         x[index, :].compute(scheduler="single-threaded")
@@ -5326,9 +5337,12 @@ def test_scipy_sparse_indexing(index, sparse_module_path):
 
 
 @pytest.mark.parametrize("axis", [0, 1])
-def test_scipy_sparse_concatenate(axis):
+@pytest.mark.parametrize("container", ["array", "matrix"])
+def test_scipy_sparse_concatenate(axis, container):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
+
+    cls = scipy.sparse.csr_matrix if container == "matrix" else scipy.sparse.csr_array
 
     rng = da.random.default_rng()
 
@@ -5338,7 +5352,7 @@ def test_scipy_sparse_concatenate(axis):
         x = rng.random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
         xs.append(x)
-        ys.append(x.map_blocks(scipy.sparse.csr_matrix))
+        ys.append(x.map_blocks(cls))
 
     z = da.concatenate(ys, axis=axis)
     z = z.compute()
@@ -5347,7 +5361,7 @@ def test_scipy_sparse_concatenate(axis):
         sp_concatenate = scipy.sparse.vstack
     elif axis == 1:
         sp_concatenate = scipy.sparse.hstack
-    z_expected = sp_concatenate([scipy.sparse.csr_matrix(e.compute()) for e in xs])
+    z_expected = sp_concatenate([cls(e.compute()) for e in xs])
 
     assert (z != z_expected).nnz == 0
 
