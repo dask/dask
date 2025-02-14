@@ -5,14 +5,9 @@ import pytest
 from numpy.testing import assert_equal
 
 import dask.array as da
+from dask.array import apply_gufunc, as_gufunc, gufunc
 from dask.array.core import Array
-from dask.array.gufunc import (
-    _parse_gufunc_signature,
-    _validate_normalize_axes,
-    apply_gufunc,
-    as_gufunc,
-    gufunc,
-)
+from dask.array.gufunc import _parse_gufunc_signature, _validate_normalize_axes
 from dask.array.utils import assert_eq
 
 

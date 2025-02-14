@@ -18,7 +18,13 @@ from dask.array._array_expr._expr import (
     unify_chunks_expr,
 )
 from dask.array._array_expr._io import FromArray, FromGraph
-from dask.array.core import T_IntOrNaN, _should_delegate, finalize, getter_inline
+from dask.array.core import (
+    T_IntOrNaN,
+    _should_delegate,
+    check_if_handled_given_other,
+    finalize,
+    getter_inline,
+)
 from dask.array.dispatch import concatenate_lookup
 from dask.array.utils import meta_from_array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
@@ -186,6 +192,120 @@ class Array(DaskMethodsMixin):
 
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
+
+    def __abs__(self):
+        return elemwise(operator.abs, self)
+
+    @check_if_handled_given_other
+    def __and__(self, other):
+        return elemwise(operator.and_, self, other)
+
+    @check_if_handled_given_other
+    def __rand__(self, other):
+        return elemwise(operator.and_, other, self)
+
+    @check_if_handled_given_other
+    def __div__(self, other):
+        return elemwise(operator.div, self, other)
+
+    @check_if_handled_given_other
+    def __rdiv__(self, other):
+        return elemwise(operator.div, other, self)
+
+    @check_if_handled_given_other
+    def __eq__(self, other):
+        return elemwise(operator.eq, self, other)
+
+    @check_if_handled_given_other
+    def __gt__(self, other):
+        return elemwise(operator.gt, self, other)
+
+    @check_if_handled_given_other
+    def __ge__(self, other):
+        return elemwise(operator.ge, self, other)
+
+    def __invert__(self):
+        return elemwise(operator.invert, self)
+
+    @check_if_handled_given_other
+    def __lshift__(self, other):
+        return elemwise(operator.lshift, self, other)
+
+    @check_if_handled_given_other
+    def __rlshift__(self, other):
+        return elemwise(operator.lshift, other, self)
+
+    @check_if_handled_given_other
+    def __lt__(self, other):
+        return elemwise(operator.lt, self, other)
+
+    @check_if_handled_given_other
+    def __le__(self, other):
+        return elemwise(operator.le, self, other)
+
+    @check_if_handled_given_other
+    def __mod__(self, other):
+        return elemwise(operator.mod, self, other)
+
+    @check_if_handled_given_other
+    def __rmod__(self, other):
+        return elemwise(operator.mod, other, self)
+
+    @check_if_handled_given_other
+    def __ne__(self, other):
+        return elemwise(operator.ne, self, other)
+
+    def __neg__(self):
+        return elemwise(operator.neg, self)
+
+    @check_if_handled_given_other
+    def __or__(self, other):
+        return elemwise(operator.or_, self, other)
+
+    def __pos__(self):
+        return self
+
+    @check_if_handled_given_other
+    def __ror__(self, other):
+        return elemwise(operator.or_, other, self)
+
+    @check_if_handled_given_other
+    def __rshift__(self, other):
+        return elemwise(operator.rshift, self, other)
+
+    @check_if_handled_given_other
+    def __rrshift__(self, other):
+        return elemwise(operator.rshift, other, self)
+
+    @check_if_handled_given_other
+    def __xor__(self, other):
+        return elemwise(operator.xor, self, other)
+
+    @check_if_handled_given_other
+    def __rxor__(self, other):
+        return elemwise(operator.xor, other, self)
+
+    @check_if_handled_given_other
+    def __matmul__(self, other):
+        # TODO(expr-soon)
+        raise NotImplementedError
+
+    @check_if_handled_given_other
+    def __rmatmul__(self, other):
+        # TODO(expr-soon)
+        raise NotImplementedError
+
+    @check_if_handled_given_other
+    def __divmod__(self, other):
+        from dask.array._array_expr._ufunc import divmod
+
+        return divmod(self, other)
+
+    @check_if_handled_given_other
+    def __rdivmod__(self, other):
+        from dask.array._array_expr._ufunc import divmod
+
+        return divmod(other, self)
 
     def __array_function__(self, func, types, args, kwargs):
         # TODO(expr-soon): Not done yet, but needed for assert_eq to identify us as an Array
@@ -461,6 +581,45 @@ class Array(DaskMethodsMixin):
     def _elemwise(self):
         return elemwise
 
+    @property
+    def real(self):
+        from dask.array._array_expr._ufunc import real
+
+        return real(self)
+
+    @property
+    def imag(self):
+        from dask.array._array_expr._ufunc import imag
+
+        return imag(self)
+
+    def conj(self):
+        """Complex-conjugate all elements.
+
+        Refer to :func:`dask.array.conj` for full documentation.
+
+        See Also
+        --------
+        dask.array.conj : equivalent function
+        """
+        from dask.array._array_expr._ufunc import conj
+
+        return conj(self)
+
+    def clip(self, min=None, max=None):
+        """Return an array whose values are limited to ``[min, max]``.
+        One of max or min must be given.
+
+        Refer to :func:`dask.array.clip` for full documentation.
+
+        See Also
+        --------
+        dask.array.clip : equivalent function
+        """
+        from dask.array._array_expr._ufunc import clip
+
+        return clip(self, min, max)
+
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
@@ -480,7 +639,7 @@ class Array(DaskMethodsMixin):
                     numpy_ufunc, numpy_ufunc.signature, *inputs, **kwargs
                 )
             if numpy_ufunc.nout > 1:
-                from dask.array import ufunc
+                from dask.array._array_expr import _ufunc as ufunc
 
                 try:
                     da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
@@ -490,7 +649,7 @@ class Array(DaskMethodsMixin):
             else:
                 return elemwise(numpy_ufunc, *inputs, **kwargs)
         elif method == "outer":
-            from dask.array import ufunc
+            from dask.array._array_expr import _ufunc as ufunc
 
             try:
                 da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
@@ -746,6 +905,9 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
 
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
+    # TODO(expr-soon): We should probably go through blockwise here
+    args = [asanyarray(a) for a in args]
+
     return new_collection(Elemwise(op, dtype, name, where, *args))
 
 
@@ -830,6 +992,7 @@ def from_array(
     getitem=None,
     meta=None,
     inline_array=False,
+    name=None,
 ):
     if isinstance(x, Array):
         raise ValueError(

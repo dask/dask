@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import functools
 from functools import partial
 from operator import getitem
 
 import numpy as np
 
 from dask import core
+from dask._collections import new_collection
 from dask.array._array_expr._collection import Array, asarray, blockwise, elemwise
+from dask.array._array_expr._expr import ArrayExpr
 from dask.array.core import apply_infer_dtype
 from dask.base import is_dask_collection
-from dask.highlevelgraph import HighLevelGraph
-from dask.tokenize import normalize_token
+from dask.tokenize import _tokenize_deterministic, normalize_token
 from dask.utils import derived_from, funcname
 
 
@@ -166,7 +168,7 @@ class ufunc:
             B,
             B_inds,
             dtype=dtype,
-            token=self.__name__ + ".outer",
+            name=self.__name__ + ".outer-" + _tokenize_deterministic(self._ufunc),
             **kwargs,
         )
 
@@ -294,54 +296,47 @@ def angle(x, deg=0):
     return np.angle(x, deg=deg)
 
 
+class DoubleOutputs(ArrayExpr):
+    _parameters = ["array", "index", "meta", "name", "func"]
+
+    @functools.cached_property
+    def _meta(self):
+        meta = self.operand("meta")
+        a = np.empty_like(meta, shape=(1,) * meta.ndim, dtype=meta.dtype)
+        result = self.operand("func")(a)
+        return result[self.operand("index")]
+
+    @functools.cached_property
+    def chunks(self):
+        return self.array.chunks
+
+    @functools.cached_property
+    def _name(self):
+        return self.operand("name") + _tokenize_deterministic(*self.operands)
+
+    def _layer(self) -> dict:
+        return {
+            (self._name,) + key[1:]: (getitem, key, self.operand("index"))
+            for key in core.flatten(self.array.__dask_keys__())
+        }
+
+
 @derived_from(np)
 def frexp(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.frexp, x, dtype=object)
-    left = "mantissa-" + tmp.name
-    right = "exponent-" + tmp.name
-    ldsk = {
-        (left,) + key[1:]: (getitem, key, 0)
-        for key in core.flatten(tmp.__dask_keys__())
-    }
-    rdsk = {
-        (right,) + key[1:]: (getitem, key, 1)
-        for key in core.flatten(tmp.__dask_keys__())
-    }
-
-    a = np.empty_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
-    l, r = np.frexp(a)
-
-    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, meta=l)
-    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, meta=r)
-    return L, R
+    left = DoubleOutputs(tmp, 0, getattr(x, "_meta", x), "mantissa-", np.frexp)
+    right = DoubleOutputs(tmp, 1, getattr(x, "_meta", x), "exponent-", np.frexp)
+    return new_collection(left), new_collection(right)
 
 
 @derived_from(np)
 def modf(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.modf, x, dtype=object)
-    left = "modf1-" + tmp.name
-    right = "modf2-" + tmp.name
-    ldsk = {
-        (left,) + key[1:]: (getitem, key, 0)
-        for key in core.flatten(tmp.__dask_keys__())
-    }
-    rdsk = {
-        (right,) + key[1:]: (getitem, key, 1)
-        for key in core.flatten(tmp.__dask_keys__())
-    }
-
-    a = np.ones_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
-    l, r = np.modf(a)
-
-    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
-    L = Array(graph, left, chunks=tmp.chunks, meta=l)
-    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
-    R = Array(graph, right, chunks=tmp.chunks, meta=r)
-    return L, R
+    left = DoubleOutputs(tmp, 0, getattr(x, "_meta", x), "modf1-", np.modf)
+    right = DoubleOutputs(tmp, 1, getattr(x, "_meta", x), "modf2-", np.modf)
+    return new_collection(left), new_collection(right)
 
 
 @derived_from(np)

@@ -6,7 +6,7 @@ import re
 import numpy as np
 from tlz import concat, merge, unique
 
-from dask.array._array_expr._collection import Array, asarray, blockwise, getitem
+from dask.array._array_expr._collection import Array, asarray, blockwise
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array.core import apply_infer_dtype
 from dask.array.utils import meta_from_array

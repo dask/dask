@@ -18,9 +18,6 @@ import dask.array as da
 from dask.array.numpy_compat import NUMPY_GE_200, AxisError
 from dask.array.utils import assert_eq, same_keys
 
-if da._array_expr_enabled():
-    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
-
 
 def test_array():
     x = np.ones(5, dtype="i4")

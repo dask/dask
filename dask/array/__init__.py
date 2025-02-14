@@ -349,6 +349,8 @@ if _array_expr_enabled():
             abs,
             absolute,
             add,
+            angle,
+            apply_gufunc,
             arange,
             arccos,
             arccosh,
@@ -358,6 +360,7 @@ if _array_expr_enabled():
             arctan2,
             arctanh,
             array,
+            as_gufunc,
             asanyarray,
             asarray,
             bitwise_and,
@@ -376,6 +379,7 @@ if _array_expr_enabled():
             deg2rad,
             degrees,
             divide,
+            divmod,
             elemwise,
             empty,
             equal,
@@ -390,9 +394,12 @@ if _array_expr_enabled():
             fmax,
             fmin,
             fmod,
+            frexp,
             from_array,
+            frompyfunc,
             greater,
             greater_equal,
+            gufunc,
             hypot,
             i0,
             imag,
@@ -423,6 +430,7 @@ if _array_expr_enabled():
             maximum,
             minimum,
             mod,
+            modf,
             multiply,
             nan_to_num,
             negative,
@@ -510,9 +518,6 @@ if _array_expr_enabled():
         tile = raise_not_implemented_error("tile")
         tri = raise_not_implemented_error("tri")
         zeros_like = raise_not_implemented_error("zeros_like")
-        apply_gufunc = raise_not_implemented_error("apply_gufunc")
-        as_gufunc = raise_not_implemented_error("as_gufunc")
-        gufunc = raise_not_implemented_error("gufunc")  # type: ignore
         moveaxis = raise_not_implemented_error("moveaxis")
         rollaxis = raise_not_implemented_error("rollaxis")
         optimize = raise_not_implemented_error("optimize")
@@ -606,11 +611,6 @@ if _array_expr_enabled():
         where = raise_not_implemented_error("where")
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")
-        angle = raise_not_implemented_error("angle")
-        divmod = raise_not_implemented_error("divmod")
-        frexp = raise_not_implemented_error("frexp")
-        frompyfunc = raise_not_implemented_error("frompyfunc")
-        modf = raise_not_implemented_error("modf")
         full = raise_not_implemented_error("full")
 
         from dask.array.utils import assert_eq
