@@ -125,7 +125,8 @@ jobs:
         # ensure this runs even if pytest fails
         if: >
           always() &&
-          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
+          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure') &&
+          matrix.array-expr == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-${{ matrix.environment }}-${{ matrix.extra }}
