@@ -1105,7 +1105,7 @@ def test_like_forgets_graph(func):
     internally store the graph of x
     """
     x = da.arange(3).map_blocks(lambda x: x)
-    with pytest.raises(Exception, match="Can't pickle local object"):
+    with pytest.raises(Exception, match="local object"):
         pickle.dumps(x)
 
     a = func(1, like=x)
