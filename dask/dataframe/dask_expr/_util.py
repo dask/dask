@@ -221,3 +221,12 @@ def _is_any_real_numeric_dtype(arr_or_dtype):
 def get_specified_shuffle(shuffle_method):
     # Take the config shuffle if given, otherwise defer evaluation until optimize
     return shuffle_method or config.get("dataframe.shuffle.method", None)
+
+
+@normalize_token.register_lazy("azure-identity")
+def register_azure_identity():
+    from azure.identity import DefaultAzureCredential
+
+    @normalize_token.register(DefaultAzureCredential)
+    def tokenize_azure_credential(obj):
+        return obj.__reduce__()
