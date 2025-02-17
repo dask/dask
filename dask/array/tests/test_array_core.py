@@ -71,6 +71,16 @@ if da._array_expr_enabled():
     pytest.skip("parametrize using unsupported functions", allow_module_level=True)
 
 
+def skip_if_no_sparray():
+    try:
+        import scipy
+    except ImportError:
+        skip = True
+    else:
+        skip = Version(scipy.__version__) < Version("1.11")
+    
+    return pytest.mark.skipif(skip, reason="scipy<1.11 has no sparray")
+
 @pytest.mark.parametrize("inline_array", [True, False])
 def test_graph_from_arraylike(inline_array):
     d = 2
@@ -5271,7 +5281,7 @@ def test_partitions_indexer():
 
 
 @pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
-@pytest.mark.parametrize("container", ["array", "matrix"])
+@pytest.mark.parametrize("container", [pytest.param("array", marks=skip_if_no_sparray()), "matrix"])
 def test_dask_array_holds_scipy_sparse_containers(container):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
@@ -5313,7 +5323,7 @@ def test_dask_array_holds_scipy_sparse_containers(container):
     ("sparse_module_path", "container"),
     [
         ("scipy.sparse", "csr_matrix"),
-        ("scipy.sparse", "csr_array"),
+        pytest.param("scipy.sparse", "csr_array", marks=skip_if_no_sparray()),
         ("cupyx.scipy.sparse", "csr_matrix"),
     ],
 )
@@ -5337,7 +5347,7 @@ def test_scipy_sparse_indexing(index, sparse_module_path, container):
 
 
 @pytest.mark.parametrize("axis", [0, 1])
-@pytest.mark.parametrize("container", ["array", "matrix"])
+@pytest.mark.parametrize("container", [pytest.param("array", marks=skip_if_no_sparray()), "matrix"])
 def test_scipy_sparse_concatenate(axis, container):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse

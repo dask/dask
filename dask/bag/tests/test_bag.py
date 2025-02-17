@@ -1458,6 +1458,8 @@ def test_reduction_with_non_comparable_objects():
 @pytest.mark.parametrize("container", ["array", "matrix"])
 def test_reduction_with_sparse_matrices(container):
     sp = pytest.importorskip("scipy.sparse")
+    if container == "array" and not hasattr(sp, "csr_array"):
+        pytest.skip("scipy<1.11 has no sparray")
     cls = sp.csr_matrix if container == "matrix" else sp.csr_array
 
     b = db.from_sequence([cls([0]) for x in range(4)], partition_size=2)

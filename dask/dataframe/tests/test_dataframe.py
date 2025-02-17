@@ -4579,6 +4579,8 @@ def test_meta_nonempty_uses_meta_value_if_provided():
 def test_dask_dataframe_holds_scipy_sparse_containers(container):
     sparse = pytest.importorskip("scipy.sparse")
     da = pytest.importorskip("dask.array")
+    if container == "array" and not hasattr(sparse, "csr_array"):
+        pytest.skip("scipy<1.11 has no sparray")
     cls = sparse.csr_matrix if container == "matrix" else sparse.csr_array
 
     x = da.random.random((1000, 10), chunks=(100, 10))
