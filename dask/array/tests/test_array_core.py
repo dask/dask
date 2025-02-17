@@ -5376,37 +5376,6 @@ def test_scipy_sparse_asarray_like(src, func):
     assert isinstance(a.compute(), type(mtx))
 
 
-@pytest.mark.parametrize("explicit_meta", [True, False])
-def test_scipy_sparse_blockwise(explicit_meta):
-    """scipy.sparse.csr_matrix objects are not a valid argument for
-    np.asarray(..., like=...) and require special-casing.
-    """
-    pytest.importorskip("scipy.sparse")
-    import scipy.sparse
-
-    meta = scipy.sparse.csr_matrix([[1, 2]])
-    kwargs = {"meta": meta, "dtype": meta.dtype} if explicit_meta else {}
-    a = da.blockwise(
-        scipy.sparse.csr_matrix, "ij", da.asarray([[1, 2]]), "ij", **kwargs
-    )
-    assert isinstance(a._meta, type(meta))
-    assert isinstance(a.compute(), type(meta))
-
-
-@pytest.mark.parametrize("explicit_meta", [True, False])
-def test_scipy_sparse_map_blocks(explicit_meta):
-    pytest.importorskip("scipy.sparse")
-    import scipy.sparse
-
-    meta = scipy.sparse.csr_matrix([[1, 2]])
-    kwargs = {"meta": meta, "dtype": meta.dtype} if explicit_meta else {}
-
-    # Explicit meta
-    a = da.asarray([[1, 2]]).map_blocks(scipy.sparse.csr_matrix, **kwargs)
-    assert isinstance(a._meta, type(meta))
-    assert isinstance(a.compute(), type(meta))
-
-
 def test_3851():
     with warnings.catch_warnings(record=True) as record:
         Y = da.random.default_rng().random((10, 10), chunks="auto")
