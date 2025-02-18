@@ -45,7 +45,6 @@ from dask.dataframe.dask_expr._util import (
     PANDAS_GE_300,
     _convert_to_list,
     get_specified_shuffle,
-    is_scalar,
 )
 from dask.dataframe.dispatch import concat, make_meta, meta_nonempty
 from dask.dataframe.groupby import (
@@ -82,7 +81,7 @@ from dask.dataframe.groupby import (
     _var_agg,
     _var_chunk,
 )
-from dask.dataframe.utils import insert_meta_param_description
+from dask.dataframe.utils import insert_meta_param_description, is_scalar
 from dask.typing import Key
 from dask.utils import M, derived_from, is_index_like
 
