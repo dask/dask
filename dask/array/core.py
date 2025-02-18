@@ -45,7 +45,12 @@ from dask.array.dispatch import (  # noqa: F401
 )
 from dask.array.numpy_compat import NUMPY_GE_200, _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
-from dask.array.utils import compute_meta, meta_from_array
+from dask.array.utils import (
+    asanyarray_safe,
+    asarray_safe,
+    compute_meta,
+    meta_from_array,
+)
 from dask.base import (
     DaskMethodsMixin,
     compute_as_if_collection,
@@ -4813,8 +4818,6 @@ def asarray(
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
     else:
-        from dask.array.utils import asarray_safe
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(
@@ -4892,8 +4895,6 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
     else:
-        from dask.array.utils import asanyarray_safe
-
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
             return a.map_blocks(
