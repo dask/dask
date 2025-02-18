@@ -5356,22 +5356,17 @@ def test_array_to_df_conversion():
     assert_eq(result, expected, check_index=False)
 
 
-def test_map_partitions_always_series():
+@pytest.mark.parametrize("npartitions", [1, 5])
+def test_map_partitions_always_series(npartitions):
     pdf = pd.DataFrame({"x": range(50)})
-    ddf = dd.from_pandas(pdf, 5)
+    ddf = dd.from_pandas(pdf, npartitions)
 
     def assert_series(x):
         assert isinstance(x, pd.Series)
         return x
 
-    res = (
-        ddf.x.map_partitions(M.min)
-        .map_partitions(assert_series)
-        .compute(scheduler="sync")
-    )
+    res = ddf.x.map_partitions(M.min).map_partitions(assert_series).compute()
     assert len(res) == ddf.npartitions
     assert min(res) == min(pdf.x)
 
-    assert (
-        ddf.x.map_partitions(M.min).count().compute(scheduler="sync") == ddf.npartitions
-    )
+    assert ddf.x.map_partitions(M.min).count().compute() == ddf.npartitions
