@@ -2799,8 +2799,6 @@ def test_getitem_triggering_unnecessary_alignment():
     result = ddf[ddf.C]
     expr = result.expr.optimize()
     assert expr.__dask_graph__()
-    print(df[df.C])
-    print(result.compute())
     assert_eq(result, df[df.C])
 
 

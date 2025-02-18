@@ -520,7 +520,9 @@ class Expr(core.Expr):
     def _filter_simplification(self, parent, predicate=None):
         if predicate is None:
             predicate = parent.predicate.substitute(self, self.frame)
-        return type(self)(self.frame[predicate], *self.operands[1:])
+        if are_co_aligned(self.frame, predicate):
+            # Only do this if we are aligned
+            return type(self)(self.frame[predicate], *self.operands[1:])
 
     def fuse(self):
         return optimize_blockwise_fusion(self)
