@@ -810,7 +810,8 @@ def optimize_until(expr: Expr, stage: OptimizerStage) -> Expr:
         return expr
 
     # Simplify again
-    expr = expr.simplify()
+    # FIXME: https://github.com/dask/dask/issues/11759
+    expr = expr.simplify().lower_completely()
     if stage == "simplified-physical":
         return expr
 
