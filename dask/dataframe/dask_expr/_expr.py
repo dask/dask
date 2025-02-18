@@ -37,7 +37,6 @@ from dask.dataframe.dask_expr._util import (
     _calc_maybe_new_divisions,
     _convert_to_list,
     _tokenize_partial,
-    is_scalar,
 )
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chunk
@@ -45,6 +44,7 @@ from dask.dataframe.shuffle import drop_overlap, get_overlap
 from dask.dataframe.utils import (
     clear_known_categories,
     drop_by_shallow_copy,
+    is_scalar,
     raise_on_meta_error,
     valid_divisions,
 )
