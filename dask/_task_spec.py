@@ -224,7 +224,7 @@ def convert_legacy_task(
             new_args.append(new)
         return Task(key, func, *new_args)
     try:
-        if isinstance(task, (bytes, int, float, str, tuple)):
+        if isinstance(task, (int, float, str, tuple)):
             if task in all_keys:
                 if key is None:
                     return Alias(task)
