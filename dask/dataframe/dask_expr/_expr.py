@@ -178,8 +178,6 @@ class Expr(core.Expr):
 
     def __getitem__(self, other):
         if isinstance(other, Expr):
-            if not are_co_aligned(self, other):
-                return FilterAlign(self, other)
             return Filter(self, other)
         else:
             return Projection(self, other)  # df[["a", "b", "c"]]

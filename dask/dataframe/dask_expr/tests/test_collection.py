@@ -2786,6 +2786,24 @@ def test_to_backend_simplify():
         assert str(df3.expr) == str(df[["y"]].expr)
 
 
+def test_getitem_triggering_unnecessary_alignment():
+    df = pd.DataFrame(
+        {
+            "A": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "B": [9, 8, 7, 6, 5, 4, 3, 2, 1],
+            "C": [True, False, True] * 3,
+        },
+        columns=list("ABC"),
+    )
+    ddf = from_pandas(df, 2)
+    result = ddf[ddf.C]
+    expr = result.expr.optimize()
+    assert expr.__dask_graph__()
+    print(df[df.C])
+    print(result.compute())
+    assert_eq(result, df[df.C])
+
+
 def test_projection_on_series():
     pdf = pd.DataFrame(data={"a": [1, 3, 2]}).a
     df = from_pandas(pdf, npartitions=1)
