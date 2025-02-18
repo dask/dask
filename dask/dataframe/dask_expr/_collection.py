@@ -106,7 +106,6 @@ from dask.dataframe.dask_expr._util import (
     _raise_if_object_series,
     _validate_axis,
     get_specified_shuffle,
-    is_scalar,
 )
 from dask.dataframe.dask_expr.io import FromPandasDivisions, FromScalars
 from dask.dataframe.dispatch import (
@@ -121,6 +120,7 @@ from dask.dataframe.utils import (
     has_known_categories,
     index_summary,
     insert_meta_param_description,
+    is_scalar,
     meta_frame_constructor,
     meta_series_constructor,
     pyarrow_strings_enabled,

@@ -18,6 +18,7 @@ from dask.dataframe.utils import (
     has_known_categories,
     is_dataframe_like,
     is_index_like,
+    is_scalar,
     is_series_like,
     meta_frame_constructor,
     meta_series_constructor,
@@ -95,7 +96,13 @@ def apply_and_enforce(*args, **kwargs):
     func = kwargs.pop("_func")
     meta = kwargs.pop("_meta")
     df = func(*args, **kwargs)
-    if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
+
+    if any(
+        bool(is_dataframe_like(obj) or is_series_like(obj) or is_index_like(obj))
+        for obj in [df, meta]
+    ):
+        if is_scalar(df):
+            df = pd.Series(df)
         if not len(df):
             return meta
         if is_dataframe_like(df):

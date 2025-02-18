@@ -20,7 +20,6 @@ from dask.dataframe.dask_expr._expr import (
     Projection,
     are_co_aligned,
 )
-from dask.dataframe.dask_expr._util import is_scalar
 from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.indexing import (
     _coerce_loc_index,
@@ -28,6 +27,7 @@ from dask.dataframe.indexing import (
     _partition_of_index_value,
     _partitions_of_index_values,
 )
+from dask.dataframe.utils import is_scalar
 from dask.typing import Key
 from dask.utils import is_arraylike, is_series_like
 

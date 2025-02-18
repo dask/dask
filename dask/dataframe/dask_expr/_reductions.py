@@ -38,8 +38,8 @@ from dask.dataframe.dask_expr._expr import (
     determine_column_projection,
     plain_column_projection,
 )
-from dask.dataframe.dask_expr._util import is_scalar
 from dask.dataframe.dispatch import make_meta, meta_nonempty
+from dask.dataframe.utils import is_scalar
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import no_default
 from dask.utils import M, apply, funcname

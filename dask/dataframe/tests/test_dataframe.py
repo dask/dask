@@ -903,6 +903,7 @@ def test_map_partitions():
         d.map_partitions(lambda df: 1),
         pd.Series([1, 1, 1], dtype=np.int64),
         check_divisions=False,
+        check_index=False,
     )
 
 
@@ -5353,3 +5354,19 @@ def test_array_to_df_conversion():
     result = arr.map_blocks(foo, meta=pd.DataFrame(np.random.random((1, 10))))
     expected = pd.DataFrame(arr.compute())
     assert_eq(result, expected, check_index=False)
+
+
+@pytest.mark.parametrize("npartitions", [1, 5])
+def test_map_partitions_always_series(npartitions):
+    pdf = pd.DataFrame({"x": range(50)})
+    ddf = dd.from_pandas(pdf, npartitions)
+
+    def assert_series(x):
+        assert isinstance(x, pd.Series)
+        return x
+
+    res = ddf.x.map_partitions(M.min).map_partitions(assert_series).compute()
+    assert len(res) == ddf.npartitions
+    assert min(res) == min(pdf.x)
+
+    assert ddf.x.map_partitions(M.min).count().compute() == ddf.npartitions

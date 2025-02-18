@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import functools
 from collections import OrderedDict, UserDict
-from collections.abc import Hashable, Iterable, Sequence
+from collections.abc import Hashable
 from typing import Any, Literal, TypeVar, cast
 
-import numpy as np
 import pandas as pd
 from packaging.version import Version
 
@@ -77,22 +76,6 @@ def _convert_to_list(column) -> list | None:
     else:
         column = [column]
     return column
-
-
-def is_scalar(x):
-    # np.isscalar does not work for some pandas scalars, for example pd.NA
-    if isinstance(x, (Sequence, Iterable)) and not isinstance(x, str):
-        return False
-    elif hasattr(x, "dtype"):
-        return isinstance(x, np.ScalarType)
-    if isinstance(x, dict):
-        return False
-    if isinstance(x, (str, int)) or x is None:
-        return True
-
-    from dask.dataframe.dask_expr._expr import Expr
-
-    return not isinstance(x, Expr)
 
 
 def _tokenize_partial(expr, ignore: list | None = None) -> str:

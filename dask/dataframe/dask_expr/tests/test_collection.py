@@ -22,7 +22,6 @@ from dask.dataframe.dask_expr import (
     expr,
     from_dict,
     from_pandas,
-    is_scalar,
     isna,
     optimize,
     to_datetime,
@@ -40,7 +39,7 @@ from dask.dataframe.dask_expr._shuffle import Shuffle
 from dask.dataframe.dask_expr.datasets import timeseries
 from dask.dataframe.dask_expr.io import FromPandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
-from dask.dataframe.utils import UNKNOWN_CATEGORIES, pyarrow_strings_enabled
+from dask.dataframe.utils import UNKNOWN_CATEGORIES, is_scalar, pyarrow_strings_enabled
 from dask.utils import M
 
 # Set DataFrame backend for this module
