@@ -24,6 +24,7 @@ from dask.utils_test import inc
 
 class Tuple:
     __dask_scheduler__ = staticmethod(dask.threaded.get)
+    __dask_optimize__ = None
 
     def __init__(self, dsk, keys):
         self._dask = dsk
@@ -326,16 +327,6 @@ def test_common_subexpressions():
     assert a[0].key in res.dask
     assert a.key in res.dask
     assert len(res.dask) == 3
-
-
-def test_delayed_optimize():
-    x = Delayed("b", {"a": 1, "b": (inc, "a"), "c": (inc, "b")})
-    (x2,) = dask.optimize(x)
-    # Delayed's __dask_optimize__ culls out 'c'
-    assert sorted(x2.dask.keys()) == ["a", "b"]
-    assert x2._layer != x2._key
-    # Optimize generates its own layer name, which doesn't match the key.
-    # `Delayed._rebuild` handles this.
 
 
 def test_lists():
