@@ -445,6 +445,8 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
             try:
                 return list(self.frame.columns)
             except AttributeError:
+                if self.ndim == 1:
+                    return [self.name]
                 return []
         else:
             return _convert_to_list(columns_operand)

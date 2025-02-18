@@ -3867,7 +3867,9 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
         # we are accesing the index
         column_union = []
 
-    if column_union == expr.frame.columns:
+    if column_union == expr.frame.columns or not column_union and expr.ndim < 2:
+        # this projection is for the index, but the elements are unknown, so
+        # don't project
         return
     result = type(expr)(expr.frame[column_union], *expr.operands[1:])
     if column_union == parent.operand("columns"):
