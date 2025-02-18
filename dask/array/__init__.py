@@ -359,6 +359,7 @@ if _array_expr_enabled():
             arctan,
             arctan2,
             arctanh,
+            argwhere,
             array,
             as_gufunc,
             asanyarray,
@@ -368,9 +369,12 @@ if _array_expr_enabled():
             bitwise_or,
             bitwise_xor,
             blockwise,
+            broadcast_arrays,
+            broadcast_to,
             cbrt,
             ceil,
             clip,
+            compress,
             concatenate,
             conj,
             copysign,
@@ -403,6 +407,7 @@ if _array_expr_enabled():
             hypot,
             i0,
             imag,
+            indices,
             invert,
             iscomplex,
             isfinite,
@@ -428,6 +433,7 @@ if _array_expr_enabled():
             logical_xor,
             map_blocks,
             maximum,
+            meshgrid,
             minimum,
             mod,
             modf,
@@ -442,11 +448,14 @@ if _array_expr_enabled():
             rad2deg,
             radians,
             random,
+            ravel,
             real,
             rechunk,
             reciprocal,
             reduction,
             remainder,
+            reshape,
+            reshape_blockwise,
             right_shift,
             rint,
             sign,
@@ -494,8 +503,6 @@ if _array_expr_enabled():
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
         block = raise_not_implemented_error("block")
-        broadcast_arrays = raise_not_implemented_error("broadcast_arrays")
-        broadcast_to = raise_not_implemented_error("broadcast_to")
         from_delayed = raise_not_implemented_error("from_delayed")
         from_npy_stack = raise_not_implemented_error("from_npy_stack")
         from_zarr = raise_not_implemented_error("from_zarr")
@@ -510,8 +517,6 @@ if _array_expr_enabled():
         eye = raise_not_implemented_error("eye")
         fromfunction = raise_not_implemented_error("fromfunction")
         full_like = raise_not_implemented_error("full_like")
-        indices = raise_not_implemented_error("indices")
-        meshgrid = raise_not_implemented_error("meshgrid")
         ones_like = raise_not_implemented_error("ones_like")
         pad = raise_not_implemented_error("pad")
         repeat = raise_not_implemented_error("repeat")
@@ -536,12 +541,10 @@ if _array_expr_enabled():
         nanmedian = raise_not_implemented_error("nanmedian")
         topk = raise_not_implemented_error("topk")
         trace = raise_not_implemented_error("trace")
-        reshape = raise_not_implemented_error("reshape")
         allclose = raise_not_implemented_error("allclose")
         append = raise_not_implemented_error("append")
         apply_along_axis = raise_not_implemented_error("apply_along_axis")
         apply_over_axes = raise_not_implemented_error("apply_over_axes")
-        argwhere = raise_not_implemented_error("argwhere")
         around = raise_not_implemented_error("around")
         atleast_1d = raise_not_implemented_error("atleast_1d")
         atleast_2d = raise_not_implemented_error("atleast_2d")
@@ -550,7 +553,6 @@ if _array_expr_enabled():
         bincount = raise_not_implemented_error("bincount")
         choose = raise_not_implemented_error("choose")
         coarsen = raise_not_implemented_error("coarsen")
-        compress = raise_not_implemented_error("compress")
         corrcoef = raise_not_implemented_error("corrcoef")
         count_nonzero = raise_not_implemented_error("count_nonzero")
         cov = raise_not_implemented_error("cov")
@@ -583,7 +585,6 @@ if _array_expr_enabled():
         outer = raise_not_implemented_error("outer")
         piecewise = raise_not_implemented_error("piecewise")
         ptp = raise_not_implemented_error("ptp")
-        ravel = raise_not_implemented_error("ravel")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
         result_type = raise_not_implemented_error("result_type")
         roll = raise_not_implemented_error("roll")

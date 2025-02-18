@@ -3,6 +3,9 @@ from __future__ import annotations
 import operator
 import warnings
 from collections.abc import Iterable
+from functools import cached_property, reduce
+from numbers import Number
+from operator import mul
 
 import numpy as np
 import toolz
@@ -13,19 +16,24 @@ from dask.array import chunk
 from dask.array._array_expr._blockwise import Blockwise, Elemwise, Transpose
 from dask.array._array_expr._expr import (
     ArrayExpr,
+    BroadcastTo,
     Concatenate,
     Stack,
     unify_chunks_expr,
 )
 from dask.array._array_expr._io import FromArray, FromGraph
+from dask.array._array_expr._slicing import slice_with_bool_dask_array
 from dask.array.core import (
     T_IntOrNaN,
     _should_delegate,
+    broadcast_chunks,
+    broadcast_shapes,
     check_if_handled_given_other,
     finalize,
     getter_inline,
 )
 from dask.array.dispatch import concatenate_lookup
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.utils import meta_from_array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
@@ -109,6 +117,10 @@ class Array(DaskMethodsMixin):
     def numblocks(self):
         return self.expr.numblocks
 
+    @cached_property
+    def npartitions(self):
+        return reduce(mul, self.numblocks, 1)
+
     @property
     def size(self) -> T_IntOrNaN:
         return self.expr.size
@@ -147,9 +159,7 @@ class Array(DaskMethodsMixin):
         if any(isinstance(i, Array) and i.dtype.kind in "iu" for i in index2):
             self, index2 = slice_with_int_dask_array(self, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
-            # TODO(expr-soon): This is simple but needs ravel which needs reshape,
-            # which is not simple. Trivial to add after we have reshape
-            raise NotImplementedError
+            return slice_with_bool_dask_array(self, index2)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
             return self
@@ -658,6 +668,36 @@ class Array(DaskMethodsMixin):
             return da_ufunc.outer(*inputs, **kwargs)
         else:
             return NotImplemented
+
+    def reshape(self, *shape, merge_chunks=True, limit=None):
+        """Reshape array to new shape
+
+        Refer to :func:`dask.array.reshape` for full documentation.
+
+        See Also
+        --------
+        dask.array.reshape : equivalent function
+        """
+        from dask.array._array_expr._reshape import reshape
+
+        if len(shape) == 1 and not isinstance(shape[0], Number):
+            shape = shape[0]
+        return reshape(self, shape, merge_chunks=merge_chunks, limit=limit)
+
+    def ravel(self):
+        """Return a flattened array.
+
+        Refer to :func:`dask.array.ravel` for full documentation.
+
+        See Also
+        --------
+        dask.array.ravel : equivalent function
+        """
+        from dask.array._array_expr._routines import ravel
+
+        return ravel(self)
+
+    flatten = ravel
 
 
 def from_graph(layer, _meta, chunks, keys, name_prefix):
@@ -1408,3 +1448,66 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     uc_args = list(concat((s, i) for s, i in zip(seq_tmp, inds)))
     _, seq2, _ = unify_chunks_expr(*uc_args)
     return new_collection(Concatenate(seq2[0], axis, meta, *seq2[1:]))
+
+
+def broadcast_to(x, shape, chunks=None, meta=None):
+    """Broadcast an array to a new shape.
+
+    Parameters
+    ----------
+    x : array_like
+        The array to broadcast.
+    shape : tuple
+        The shape of the desired array.
+    chunks : tuple, optional
+        If provided, then the result will use these chunks instead of the same
+        chunks as the source array. Setting chunks explicitly as part of
+        broadcast_to is more efficient than rechunking afterwards. Chunks are
+        only allowed to differ from the original shape along dimensions that
+        are new on the result or have size 1 the input array.
+    meta : empty ndarray
+        empty ndarray created with same NumPy backend, ndim and dtype as the
+        Dask Array being created (overrides dtype)
+
+    Returns
+    -------
+    broadcast : dask array
+
+    See Also
+    --------
+    :func:`numpy.broadcast_to`
+    """
+    x = asarray(x)
+    shape = tuple(shape)
+
+    if meta is None:
+        meta = meta_from_array(x)
+
+    if x.shape == shape and (chunks is None or chunks == x.chunks):
+        return x
+
+    return new_collection(BroadcastTo(x, shape, chunks))
+
+
+@derived_from(np)
+def broadcast_arrays(*args, subok=False):
+    subok = bool(subok)
+
+    to_array = asanyarray if subok else asarray
+    args = tuple(to_array(e).expr for e in args)
+
+    # Unify uneven chunking
+    inds = [list(reversed(range(x.ndim))) for x in args]
+    uc_args = concat(zip(args, inds))
+    _, args, _ = unify_chunks_expr(*uc_args)
+    args = list(map(new_collection, args))
+
+    shape = broadcast_shapes(*(e.shape for e in args))
+    chunks = broadcast_chunks(*(e.chunks for e in args))
+
+    if NUMPY_GE_200:
+        result = tuple(broadcast_to(e, shape=shape, chunks=chunks) for e in args)
+    else:
+        result = [broadcast_to(e, shape=shape, chunks=chunks) for e in args]
+
+    return result

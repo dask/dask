@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import functools
+import warnings
 from itertools import product
 from numbers import Integral
 
 import numpy as np
-from toolz import pluck
+from toolz import concat, pluck
 
+from dask import core
+from dask._collections import new_collection
 from dask._task_spec import Alias, DataNode, Task, TaskRef
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array.chunk import getitem
@@ -14,6 +17,7 @@ from dask.array.slicing import (
     _slice_1d,
     check_index,
     expander,
+    getitem_variadic,
     new_blockdim,
     normalize_slice,
     posify_index,
@@ -208,6 +212,117 @@ def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
         meta=x._meta,
     )
     return y
+
+
+def slice_with_bool_dask_array(x, index):
+    """Slice x with one or more dask arrays of bools
+
+    This is a helper function of `Array.__getitem__`.
+
+    Parameters
+    ----------
+    x: Array
+    index: tuple with as many elements as x.ndim, among which there are
+           one or more Array's with dtype=bool
+
+    Returns
+    -------
+    tuple of (sliced x, new index)
+
+    where the new index is the same as the input, but with slice(None)
+    replaced to the original slicer when a filter has been applied.
+
+    Note: The sliced x will have nan chunks on the sliced axes.
+    """
+    from dask.array import Array, blockwise, elemwise
+
+    if len(index) == 1 and index[0].ndim == x.ndim:
+        if not np.isnan(x.shape).any() and not np.isnan(index[0].shape).any():
+            x = x.ravel()
+            index = tuple(i.ravel() for i in index)
+        elif x.ndim > 1:
+            warnings.warn(
+                "When slicing a Dask array of unknown chunks with a boolean mask "
+                "Dask array, the output array may have a different ordering "
+                "compared to the equivalent NumPy operation. This will raise an "
+                "error in a future release of Dask.",
+                stacklevel=3,
+            )
+        y = elemwise(getitem, x, *index, dtype=x.dtype)
+        return new_collection(NaNChunks(y))
+
+    if any(
+        isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1 for ind in index
+    ):
+        raise NotImplementedError(
+            "Slicing with dask.array of bools only permitted when "
+            "the indexer has only one dimension or when "
+            "it has the same dimension as the sliced "
+            "array"
+        )
+    indexes = [
+        ind if isinstance(ind, Array) and ind.dtype == bool else slice(None)
+        for ind in index
+    ]
+
+    arginds = []
+    i = 0
+    for ind in indexes:
+        if isinstance(ind, Array) and ind.dtype == bool:
+            new = (ind, tuple(range(i, i + ind.ndim)))
+            i += x.ndim
+        else:
+            new = (slice(None), None)
+            i += 1
+        arginds.append(new)
+
+    arginds = list(concat(arginds))
+
+    result = blockwise(
+        getitem_variadic,
+        tuple(range(x.ndim)),
+        x,
+        tuple(range(x.ndim)),
+        *arginds,
+        dtype=x.dtype,
+    )
+    return new_collection(NanChunksMultiDim(result, *index))
+
+
+class NaNChunks(ArrayExpr):
+    _parameters = ["array"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.array._meta
+
+    @functools.cached_property
+    def chunks(self):
+        return ((np.nan,) * self.array.npartitions,)
+
+    def _layer(self) -> dict:
+        return {
+            (self._name, i): k
+            for i, k in enumerate(core.flatten(self.array.__dask_keys__()))
+        }
+
+
+class NanChunksMultiDim(NaNChunks):
+    _parameters = ["array"]
+
+    @functools.cached_property
+    def index(self):
+        return self.operands[1:]
+
+    @functools.cached_property
+    def chunks(self):
+        chunks = []
+        for ind, chunk in zip(self.index, self.array.chunks):
+            if isinstance(ind, ArrayExpr) and ind.dtype == bool:
+                chunks.append((np.nan,) * len(chunk))
+            else:
+                chunks.append(chunk)
+        return tuple(chunks)
 
 
 class ArrayOffsetDep(ArrayBlockwiseDep):

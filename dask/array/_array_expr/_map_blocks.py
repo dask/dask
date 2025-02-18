@@ -274,16 +274,25 @@ def map_blocks(
             "   or:   da.map_blocks(function, x, y, z)"
         )
         raise TypeError(msg % type(func).__name__)
+
+    prefix = None
     if token:
         warnings.warn(
-            "The `token=` keyword to `map_blocks` has been moved to `name=`. "
-            "Please use `name=` instead as the `token=` keyword will be removed "
+            "The `token=` keyword to `map_blocks` has been moved to `prefix=`. "
+            "Please use `prefix=` instead as the `token=` keyword will be removed "
             "in a future release.",
             category=FutureWarning,
         )
-        name = token
+        prefix = token
 
-    name = f"{name or funcname(func)}"
+    if name is not None:
+        warnings.warn(
+            "The `name=` keyword to map_blocks is deprecated and will be removed in a "
+            "future release.",
+            category=FutureWarning,
+        )
+
+    name = f"{prefix or funcname(func)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):

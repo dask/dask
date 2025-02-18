@@ -10,10 +10,12 @@ from dask.array._array_expr._expr import ArrayExpr
 from dask.array.chunk import arange as _arange
 from dask.array.chunk import linspace as _linspace
 from dask.array.core import normalize_chunks
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.utils import meta_from_array
 from dask.array.wrap import _parse_wrap_args, broadcast_trick
 from dask.blockwise import blockwise as core_blockwise
 from dask.layers import ArrayChunkShapeDep
+from dask.utils import derived_from
 
 
 class Arange(ArrayExpr):
@@ -269,3 +271,102 @@ def linspace(
         return result, result.expr.step
     else:
         return result
+
+
+def indices(dimensions, dtype=int, chunks="auto"):
+    """
+    Implements NumPy's ``indices`` for Dask Arrays.
+
+    Generates a grid of indices covering the dimensions provided.
+
+    The final array has the shape ``(len(dimensions), *dimensions)``. The
+    chunks are used to specify the chunking for axis 1 up to
+    ``len(dimensions)``. The 0th axis always has chunks of length 1.
+
+    Parameters
+    ----------
+    dimensions : sequence of ints
+        The shape of the index grid.
+    dtype : dtype, optional
+        Type to use for the array. Default is ``int``.
+    chunks : sequence of ints, str
+        The size of each block.  Must be one of the following forms:
+
+        - A blocksize like (500, 1000)
+        - A size in bytes, like "100 MiB" which will choose a uniform
+          block-like shape
+        - The word "auto" which acts like the above, but uses a configuration
+          value ``array.chunk-size`` for the chunk size
+
+        Note that the last block will have fewer samples if ``len(array) % chunks != 0``.
+
+    Returns
+    -------
+    grid : dask array
+    """
+    dimensions = tuple(dimensions)
+    dtype = np.dtype(dtype)
+    chunks = normalize_chunks(chunks, shape=dimensions, dtype=dtype)
+
+    if len(dimensions) != len(chunks):
+        raise ValueError("Need same number of chunks as dimensions.")
+
+    xi = []
+    for i in range(len(dimensions)):
+        xi.append(arange(dimensions[i], dtype=dtype, chunks=(chunks[i],)))
+
+    grid = []
+    if all(dimensions):
+        grid = meshgrid(*xi, indexing="ij")
+
+    if grid:
+        from dask.array._array_expr._collection import stack
+
+        grid = stack(grid)
+    else:
+        grid = empty((len(dimensions),) + dimensions, dtype=dtype, chunks=(1,) + chunks)
+
+    return grid
+
+
+@derived_from(np)
+def meshgrid(*xi, sparse=False, indexing="xy", **kwargs):
+    sparse = bool(sparse)
+
+    if "copy" in kwargs:
+        raise NotImplementedError("`copy` not supported")
+
+    if kwargs:
+        raise TypeError("unsupported keyword argument(s) provided")
+
+    if indexing not in ("ij", "xy"):
+        raise ValueError("`indexing` must be `'ij'` or `'xy'`")
+
+    from dask.array._array_expr._collection import asarray
+
+    xi = [asarray(e) for e in xi]
+    xi = [e.flatten() for e in xi]
+
+    if indexing == "xy" and len(xi) > 1:
+        xi[0], xi[1] = xi[1], xi[0]
+
+    grid = []
+    for i in range(len(xi)):
+        s = len(xi) * [None]
+        s[i] = slice(None)
+        s = tuple(s)
+
+        r = xi[i][s]
+
+        grid.append(r)
+
+    if not sparse:
+        from dask.array._array_expr._collection import broadcast_arrays
+
+        grid = broadcast_arrays(*grid)
+
+    if indexing == "xy" and len(xi) > 1:
+        grid = (grid[1], grid[0], *grid[2:])
+
+    out_type = tuple if NUMPY_GE_200 else list
+    return out_type(grid)

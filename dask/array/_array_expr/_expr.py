@@ -12,8 +12,14 @@ from tlz import accumulate
 
 from dask._expr import Expr
 from dask.array.chunk import getitem
-from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
+from dask.array.core import (
+    T_IntOrNaN,
+    common_blockdim,
+    normalize_chunks,
+    unknown_chunk_message,
+)
 from dask.blockwise import broadcast_dimensions
+from dask.core import quote
 from dask.layers import ArrayBlockwiseDep
 from dask.tokenize import _tokenize_deterministic
 from dask.utils import cached_cumsum
@@ -281,3 +287,53 @@ class Concatenate(ArrayExpr):
         ]
 
         return dict(zip(keys, values))
+
+
+class BroadcastTo(ArrayExpr):
+    _parameters = ["array", "shape", "chunks"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.array._meta
+
+    @functools.cached_property
+    def _name(self):
+        return "broadcast_to-" + _tokenize_deterministic(*self.operands)
+
+    @functools.cached_property
+    def chunks(self):
+        chunks = self.operand("chunks")
+        shape = self.operand("shape")
+        ndim_new = len(shape) - self.array.ndim
+        x = self.array
+        if chunks is None:
+            chunks = tuple((s,) for s in shape[:ndim_new]) + tuple(
+                bd if old > 1 else (new,)
+                for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])
+            )
+        else:
+            chunks = normalize_chunks(
+                chunks, shape, dtype=x.dtype, previous_chunks=x.chunks
+            )
+            for old_bd, new_bd in zip(x.chunks, chunks[ndim_new:]):
+                if old_bd != new_bd and old_bd != (1,):
+                    raise ValueError(
+                        "cannot broadcast chunks %s to chunks %s: "
+                        "new chunks must either be along a new "
+                        "dimension or a dimension of size 1" % (x.chunks, chunks)
+                    )
+        return chunks
+
+    def _layer(self) -> dict:
+        dsk = {}
+        ndim_new = len(self.operand("shape")) - self.array.ndim
+        enumerated_chunks = product(*(enumerate(bds) for bds in self.chunks))
+        for new_index, chunk_shape in (zip(*ec) for ec in enumerated_chunks):
+            old_index = tuple(
+                0 if bd == (1,) else i
+                for bd, i in zip(self.array.chunks, new_index[ndim_new:])
+            )
+            old_key = (self.array._name,) + old_index
+            new_key = (self._name,) + new_index
+            dsk[new_key] = (np.broadcast_to, old_key, quote(chunk_shape))
+        return dsk
