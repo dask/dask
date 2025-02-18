@@ -1643,14 +1643,26 @@ class Where(Elemwise):
 
 
 def _check_divisions(df, i, division_min, division_max, last):
+    if not len(df):
+        return df
+    if is_index_like(df):
+        index = df
+    else:
+        try:
+            index = df.index.get_level_values(0)
+        except AttributeError:
+            index = df.index
     # Check divisions
-    real_min = df.index.min()
-    real_max = df.index.max()
+    real_min = index.min()
+    real_max = index.max()
     # Upper division of the last partition is often set to
     # the max value. For all other partitions, the upper
     # division should be greater than the maximum value.
-    valid_min = real_min >= division_min
-    valid_max = (real_max <= division_max) if last else (real_max < division_max)
+    valid_min = valid_max = True
+    if not pd.isna(division_min):
+        valid_min = real_min >= division_min
+    if not pd.isna(division_max):
+        valid_max = (real_max <= division_max) if last else (real_max < division_max)
     if not (valid_min and valid_max):
         raise RuntimeError(
             f"`enforce_runtime_divisions` failed for partition {i}."
