@@ -1628,9 +1628,16 @@ class Where(Elemwise):
 def _check_divisions(df, i, division_min, division_max, last):
     if not len(df):
         return df
+    if is_index_like(df):
+        index = df
+    else:
+        try:
+            index = df.index.get_level_values(0)
+        except AttributeError:
+            index = df.index
     # Check divisions
-    real_min = df.index.min()
-    real_max = df.index.max()
+    real_min = index.min()
+    real_max = index.max()
     # Upper division of the last partition is often set to
     # the max value. For all other partitions, the upper
     # division should be greater than the maximum value.
