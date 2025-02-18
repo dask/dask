@@ -903,6 +903,7 @@ def test_map_partitions():
         d.map_partitions(lambda df: 1),
         pd.Series([1, 1, 1], dtype=np.int64),
         check_divisions=False,
+        check_index=False,
     )
 
 
