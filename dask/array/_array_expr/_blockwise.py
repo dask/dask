@@ -187,7 +187,10 @@ class Blockwise(ArrayExpr):
         if self.align_arrays:
             _, arrays, changed = unify_chunks_expr(*self.args)
             if changed:
-                return type(self)(*self.operands[: len(self._parameters)], *arrays)
+                args = []
+                for idx, arr in zip(self.args[1::2], arrays):
+                    args.extend([arr, idx])
+                return type(self)(*self.operands[: len(self._parameters)], *args)
 
 
 class Elemwise(Blockwise):

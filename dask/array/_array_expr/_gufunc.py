@@ -6,12 +6,13 @@ import re
 import numpy as np
 from tlz import concat, merge, unique
 
-from dask.array._array_expr._collection import Array, asarray, blockwise
+from dask._collections import new_collection
+from dask.array._array_expr._collection import asarray, blockwise
 from dask.array._array_expr._expr import ArrayExpr
-from dask.array.core import apply_infer_dtype
+from dask.array.chunk import getitem
+from dask.array.core import apply_infer_dtype, normalize_chunks
 from dask.array.utils import meta_from_array
 from dask.core import flatten
-from dask.highlevelgraph import HighLevelGraph
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
@@ -391,6 +392,7 @@ def apply_gufunc(
         shape = arg.shape
         iax = tuple(a if a < 0 else a - len(shape) for a in iax)
         tidc = tuple(i for i in range(-len(shape) + 0, 0) if i not in iax) + iax
+        print(arg)
         transposed_arg = arg.transpose(tidc)
         transposed_args.append(transposed_arg)
     args = transposed_args
@@ -491,22 +493,35 @@ significantly.".format(
     ## Split output
     leaf_arrs = []
     for i, (ocd, oax, meta) in enumerate(zip(output_coredimss, output_axes, metas)):
-        core_output_shape = tuple(core_shapes[d] for d in ocd)
-        core_chunkinds = len(ocd) * (0,)
-        output_shape = loop_output_shape + core_output_shape
-        output_chunks = loop_output_chunks + core_output_shape
-        leaf_name = "%s_%d-%s" % (name, i, token)
-        leaf_dsk = {
-            (leaf_name,)
-            + key[1:]
-            + core_chunkinds: ((getitem, key, i) if nout else key)
-            for key in keys
-        }
-        graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
-        meta = meta_from_array(meta, len(output_shape))
-        leaf_arr = Array(
-            graph, leaf_name, chunks=output_chunks, shape=output_shape, meta=meta
+        leaf_arr = new_collection(
+            GUfuncLeafExpr(
+                tmp,
+                i,
+                name,
+                loop_output_chunks,
+                core_shapes,
+                ocd,
+                nout,
+                meta,
+                loop_output_shape,
+            )
         )
+        # core_output_shape = tuple(core_shapes[d] for d in ocd)
+        # core_chunkinds = len(ocd) * (0,)
+        # output_shape = loop_output_shape + core_output_shape
+        # output_chunks = loop_output_chunks + core_output_shape
+        # leaf_name = "%s_%d-%s" % (name, i, token)
+        # leaf_dsk = {
+        #     (leaf_name,)
+        #     + key[1:]
+        #     + core_chunkinds: ((getitem, key, i) if nout else key)
+        #     for key in keys
+        # }
+        # graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
+        # meta = meta_from_array(meta, len(output_shape))
+        # leaf_arr = Array(
+        #     graph, leaf_name, chunks=output_chunks, shape=output_shape, meta=meta
+        # )
 
         ### Axes:
         if keepdims:
@@ -528,24 +543,47 @@ significantly.".format(
 
 
 class GUfuncLeafExpr(ArrayExpr):
-    _parameters = ["array", "i", "name_prefix"]
+    _parameters = [
+        "array",
+        "i",
+        "name_prefix",
+        "loop_output_chunks",
+        "core_shapes",
+        "ocd",
+        "nout",
+        "input_meta",
+        "loop_output_shape",
+    ]
+
+    @functools.cached_property
+    def _meta(self):
+        return meta_from_array(self.input_meta, len(self._shape))
 
     @functools.cached_property
     def _name(self):
-        return "%s_%d-%s" % (self.name_prefix, self.i, self.token)
+        return "%s_%d-%s" % (self.name_prefix, self.i, self.array._name.split("-")[-1])
+
+    @functools.cached_property
+    def _shape(self):
+        core_output_shape = tuple(self.core_shapes[d] for d in self.ocd)
+        return self.loop_output_shape + core_output_shape
+
+    @functools.cached_property
+    def chunks(self):
+        output_chunks = self.loop_output_chunks + tuple(
+            self.core_shapes[d] for d in self.ocd
+        )
+        return normalize_chunks(output_chunks, self._shape, dtype=self._meta.dtype)
 
     def _layer(self):
-        return {}
-        # core_chunkinds = len(ocd) * (0,)
-        # leaf_name = self._name
-        # leaf_dsk = {
-        #     (leaf_name,)
-        #     + key[1:]
-        #     + core_chunkinds: ((getitem, key, i) if nout else key)
-        #     for key in keys
-        # }
-
-    pass
+        core_chunkinds = len(self.ocd) * (0,)
+        leaf_dsk = {
+            (self._name,)
+            + key[1:]
+            + core_chunkinds: ((getitem, key, self.i) if self.nout else key)
+            for key in list(flatten(self.array.__dask_keys__()))
+        }
+        return leaf_dsk
 
 
 class gufunc:

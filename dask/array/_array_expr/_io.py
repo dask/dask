@@ -86,7 +86,7 @@ class FromArray(IO):
     def _meta(self):
         if self.operand("meta") is not None:
             return meta_from_array(self.operand("meta"), dtype=self.array.dtype)
-        return self.array[tuple(slice(0, 0) for _ in range(self.array.ndim))]
+        return meta_from_array(self.array, dtype=getattr(self.array, "dtype", None))
 
     @functools.cached_property
     def asarray_arg(self):
