@@ -15,6 +15,7 @@ def arr():
     return da.random.random((10, 10), chunks=(5, 6))
 
 
+@pytest.mark.array_expr
 @pytest.mark.parametrize(
     "op",
     [
