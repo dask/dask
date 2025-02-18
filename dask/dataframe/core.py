@@ -95,7 +95,14 @@ def apply_and_enforce(*args, **kwargs):
     func = kwargs.pop("_func")
     meta = kwargs.pop("_meta")
     df = func(*args, **kwargs)
-    if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
+    from dask.dataframe.dask_expr._util import is_scalar
+
+    if any(
+        bool(is_dataframe_like(obj) or is_series_like(obj) or is_index_like(obj))
+        for obj in [df, meta]
+    ):
+        if is_scalar(df):
+            df = pd.Series(df)
         if not len(df):
             return meta
         if is_dataframe_like(df):

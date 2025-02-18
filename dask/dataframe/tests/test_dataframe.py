@@ -5353,3 +5353,24 @@ def test_array_to_df_conversion():
     result = arr.map_blocks(foo, meta=pd.DataFrame(np.random.random((1, 10))))
     expected = pd.DataFrame(arr.compute())
     assert_eq(result, expected, check_index=False)
+
+
+def test_map_partitions_always_series():
+    pdf = pd.DataFrame({"x": range(50)})
+    ddf = dd.from_pandas(pdf, 5)
+
+    def assert_series(x):
+        assert isinstance(x, pd.Series)
+        return x
+
+    res = (
+        ddf.x.map_partitions(M.min)
+        .map_partitions(assert_series)
+        .compute(scheduler="sync")
+    )
+    assert len(res) == ddf.npartitions
+    assert min(res) == min(pdf.x)
+
+    assert (
+        ddf.x.map_partitions(M.min).count().compute(scheduler="sync") == ddf.npartitions
+    )
