@@ -222,63 +222,7 @@ class Merge(Expr):
         return self.right
 
     def _divisions(self):
-        if self._is_single_partition_broadcast:
-            use_left = self.right_index or _contains_index_name(
-                self.right._meta, self.right_on
-            )
-            use_right = self.left_index or _contains_index_name(
-                self.left._meta, self.left_on
-            )
-            if (
-                use_right
-                and self.left.npartitions == 1
-                and self.how in ("right", "inner")
-            ):
-                return self.right.divisions
-            elif (
-                use_left
-                and self.right.npartitions == 1
-                and self.how in ("inner", "left", "leftsemi")
-            ):
-                return self.left.divisions
-            else:
-                _npartitions = max(self.left.npartitions, self.right.npartitions)
-
-        elif self.merge_indexed_left and self.merge_indexed_right:
-            divisions = list(
-                unique(merge_sorted(self.left.divisions, self.right.divisions))
-            )
-            if len(divisions) == 1:
-                return (divisions[0], divisions[0])
-            if self.left.npartitions == 1 and self.right.npartitions == 1:
-                return (min(divisions), max(divisions))
-            return divisions
-
-        elif self.is_broadcast_join:
-            meta_index_names = set(self._meta.index.names)
-            if (
-                self.broadcast_side == "left"
-                and set(self.right._meta.index.names) == meta_index_names
-            ):
-                if self.right_index:
-                    return self._bcast_right.divisions
-                _npartitions = self._bcast_right.npartitions
-            elif (
-                self.broadcast_side == "right"
-                and set(self.left._meta.index.names) == meta_index_names
-            ):
-                if self.left_index:
-                    return self._bcast_left.divisions
-                _npartitions = self._bcast_left.npartitions
-            else:
-                _npartitions = max(self.left.npartitions, self.right.npartitions)
-
-        elif self.operand("_npartitions") is not None:
-            _npartitions = self.operand("_npartitions")
-        else:
-            _npartitions = max(self.left.npartitions, self.right.npartitions)
-
-        return (None,) * (_npartitions + 1)
+        return self._lower().divisions
 
     @functools.cached_property
     def broadcast_side(self):
@@ -449,7 +393,7 @@ class Merge(Expr):
             left = RearrangeByColumn(
                 left,
                 shuffle_left_on,
-                npartitions_out=self._npartitions,
+                npartitions_out=max(self.left.npartitions, self.right.npartitions),
                 method=shuffle_method,
                 index_shuffle=left_index,
             )
@@ -459,7 +403,7 @@ class Merge(Expr):
             right = RearrangeByColumn(
                 right,
                 shuffle_right_on,
-                npartitions_out=self._npartitions,
+                npartitions_out=max(self.left.npartitions, self.right.npartitions),
                 method=shuffle_method,
                 index_shuffle=right_index,
             )
@@ -902,9 +846,8 @@ class BlockwiseMerge(Merge, Blockwise):
         return result
 
     def _divisions(self):
-        if self.left.npartitions == self.right.npartitions:
-            return super()._divisions()
-        is_unknown = any(d is None for d in super()._divisions())
+        is_unknown = self.left.divisions[0] is None or self.right.divisions[0] is None
+
         frame = (
             self.left if self.left.npartitions > self.right.npartitions else self.right
         )
