@@ -390,7 +390,9 @@ class Merge(Expr):
                 shuffle_right_on=shuffle_right_on,
                 _npartitions=shuffle_npartitions,
             )
-        if shuffle_left_on and not left_already_partitioned:
+        if shuffle_left_on and not (
+            left_already_partitioned and self.left.npartitions == shuffle_npartitions
+        ):
             # Shuffle left
             left = RearrangeByColumn(
                 left,
@@ -400,7 +402,9 @@ class Merge(Expr):
                 index_shuffle=left_index,
             )
 
-        if shuffle_right_on and not right_already_partitioned:
+        if shuffle_right_on and not (
+            right_already_partitioned and self.right.npartitions == shuffle_npartitions
+        ):
             # Shuffle right
             right = RearrangeByColumn(
                 right,
