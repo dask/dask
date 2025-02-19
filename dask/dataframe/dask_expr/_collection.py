@@ -397,6 +397,8 @@ class FrameBase(DaskMethodsMixin):
 
     def __getitem__(self, other):
         if isinstance(other, FrameBase):
+            if not expr.are_co_aligned(self.expr, other.expr):
+                return new_collection(expr.FilterAlign(self, other))
             return new_collection(self.expr.__getitem__(other.expr))
         elif isinstance(other, slice):
             from pandas.api.types import is_float_dtype
