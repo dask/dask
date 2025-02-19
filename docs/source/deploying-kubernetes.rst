@@ -1,3 +1,5 @@
+.. _deploying-kubernetes:
+
 Kubernetes
 ==========
 
