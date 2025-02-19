@@ -163,7 +163,7 @@ class Merge(Expr):
         return predicate_columns
 
     def __str__(self):
-        return f"Merge({self._name[-7:]})"
+        return f"{type(self).__qualname__}({self._name[-7:]})"
 
     @property
     def unique_partition_mapping_columns_from_shuffle(self):
@@ -848,14 +848,23 @@ class BlockwiseMerge(Merge, Blockwise):
         return result
 
     def _divisions(self):
-        is_unknown = self.left.divisions[0] is None or self.right.divisions[0] is None
-
-        frame = (
-            self.left if self.left.npartitions > self.right.npartitions else self.right
+        use_left = self.right_index or _contains_index_name(
+            self.right._meta, self.right_on
         )
-        if is_unknown:
-            return (None,) * (frame.npartitions + 1)
-        return frame.divisions
+        use_right = self.left_index or _contains_index_name(
+            self.left._meta, self.left_on
+        )
+        if use_right and self.left.npartitions == 1 and self.how in ("right", "inner"):
+            return self.right.divisions
+        elif (
+            use_left
+            and self.right.npartitions == 1
+            and self.how in ("inner", "left", "leftsemi")
+        ):
+            return self.left.divisions
+        else:
+            _npartitions = max(self.left.npartitions, self.right.npartitions)
+            return (None,) * (_npartitions + 1)
 
     def _lower(self):
         return None
@@ -889,7 +898,7 @@ class JoinRecursive(Expr):
             )
 
     def _divisions(self):
-        return self.lower_completely().divisions
+        return self.lower_completely()._divisions()
 
     def _lower(self):
         if self.how == "left":
