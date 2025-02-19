@@ -349,6 +349,27 @@ if _array_expr_enabled():
             blockwise,
             elemwise,
             random,
+            rechunk,
+            reduction,
+        )
+        from dask.array.reductions import (
+            all,
+            any,
+            max,
+            mean,
+            min,
+            moment,
+            nanmax,
+            nanmean,
+            nanmin,
+            nanprod,
+            nanstd,
+            nansum,
+            nanvar,
+            prod,
+            std,
+            sum,
+            var,
         )
 
         arange = raise_not_implemented_error("arange")
@@ -356,17 +377,7 @@ if _array_expr_enabled():
         empty = raise_not_implemented_error("empty")
         from_array = raise_not_implemented_error("from_array")
         linspace = raise_not_implemented_error("linspace")
-        mean = raise_not_implemented_error("mean")
-        moment = raise_not_implemented_error("moment")
-        nanmean = raise_not_implemented_error("nanmean")
-        nanstd = raise_not_implemented_error("nanstd")
-        nansum = raise_not_implemented_error("nansum")
-        nanvar = raise_not_implemented_error("nanvar")
         ones = raise_not_implemented_error("ones")
-        prod = raise_not_implemented_error("prod")
-        std = raise_not_implemented_error("std")
-        sum = raise_not_implemented_error("sum")
-        var = raise_not_implemented_error("var")
         zeros = raise_not_implemented_error("zeros")
         backends = raise_not_implemented_error("backends")
         fft = raise_not_implemented_error("fft")
@@ -375,7 +386,6 @@ if _array_expr_enabled():
         ma = raise_not_implemented_error("ma")
         overlap = raise_not_implemented_error("overlap")
         atop = raise_not_implemented_error("atop")
-        blockwise = raise_not_implemented_error("blockwise")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
         asanyarray = raise_not_implemented_error("asanyarray")
         block = raise_not_implemented_error("block")
@@ -414,26 +424,17 @@ if _array_expr_enabled():
         optimize = raise_not_implemented_error("optimize")
         map_overlap = raise_not_implemented_error("map_overlap")
         percentile = raise_not_implemented_error("percentile")
-        rechunk = raise_not_implemented_error("rechunk")
-        all = raise_not_implemented_error("all")
-        any = raise_not_implemented_error("any")
         argmax = raise_not_implemented_error("argmax")
         argmin = raise_not_implemented_error("argmin")
         argtopk = raise_not_implemented_error("argtopk")
         cumprod = raise_not_implemented_error("cumprod")
         cumsum = raise_not_implemented_error("cumsum")
-        max = raise_not_implemented_error("max")
         median = raise_not_implemented_error("median")
-        min = raise_not_implemented_error("min")
         nanargmax = raise_not_implemented_error("nanargmax")
         nanargmin = raise_not_implemented_error("nanargmin")
         nancumprod = raise_not_implemented_error("nancumprod")
         nancumsum = raise_not_implemented_error("nancumsum")
-        nanmax = raise_not_implemented_error("nanmax")
         nanmedian = raise_not_implemented_error("nanmedian")
-        nanmin = raise_not_implemented_error("nanmin")
-        nanprod = raise_not_implemented_error("nanprod")
-        reduction = raise_not_implemented_error("reduction")
         topk = raise_not_implemented_error("topk")
         trace = raise_not_implemented_error("trace")
         reshape = raise_not_implemented_error("reshape")

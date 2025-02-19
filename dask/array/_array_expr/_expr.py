@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from functools import cached_property
+from functools import cached_property, reduce
+from operator import mul
+
+import numpy as np
+import toolz
 
 from dask._expr import Expr
-from dask.array.core import T_IntOrNaN
+from dask.array.core import T_IntOrNaN, common_blockdim
+from dask.blockwise import broadcast_dimensions
 from dask.utils import cached_cumsum
 
 
@@ -37,6 +42,11 @@ class ArrayExpr(Expr):
     @cached_property
     def numblocks(self):
         return tuple(map(len, self.chunks))
+
+    @cached_property
+    def size(self) -> T_IntOrNaN:
+        """Number of elements in array"""
+        return reduce(mul, self.shape, 1)
 
     @property
     def name(self):
@@ -93,3 +103,65 @@ class ArrayExpr(Expr):
                 "This often means that you are attempting to use an unsupported "
                 f"API function.."
             )
+
+    def rechunk(
+        self,
+        chunks="auto",
+        threshold=None,
+        block_size_limit=None,
+        balance=False,
+        method=None,
+    ):
+        if self.ndim > 0 and all(s == 0 for s in self.shape):
+            return self
+
+        from dask.array._array_expr._rechunk import Rechunk
+
+        return Rechunk(self, chunks, threshold, block_size_limit, balance, method)
+
+
+def unify_chunks_expr(*args):
+    # TODO(expr): This should probably be a dedicated expression
+    # This is the implementation that expects the inputs to be expressions, the public facing
+    # variant needs to sanitize the inputs
+    arginds = list(toolz.partition(2, args))
+    arrays, inds = zip(*arginds)
+    if all(ind is None for ind in inds):
+        return {}, list(arrays), False
+    if all(ind == inds[0] for ind in inds) and all(
+        a.chunks == arrays[0].chunks for a in arrays
+    ):
+        return dict(zip(inds[0], arrays[0].chunks)), arrays, False
+
+    nameinds = []
+    blockdim_dict = dict()
+    for a, ind in arginds:
+        if ind is not None:
+            nameinds.append((a.name, ind))
+            blockdim_dict[a.name] = a.chunks
+        else:
+            nameinds.append((a, ind))
+
+    chunkss = broadcast_dimensions(nameinds, blockdim_dict, consolidate=common_blockdim)
+
+    arrays = []
+    changed = False
+    for a, i in arginds:
+        if i is None:
+            pass
+        else:
+            chunks = tuple(
+                (
+                    chunkss[j]
+                    if a.shape[n] > 1
+                    else (a.shape[n],) if not np.isnan(sum(chunkss[j])) else None
+                )
+                for n, j in enumerate(i)
+            )
+            if chunks != a.chunks and all(a.chunks):
+                a = a.rechunk(chunks)
+                changed = True
+            else:
+                pass
+        arrays.extend([a, i])
+    return chunkss, arrays, changed
