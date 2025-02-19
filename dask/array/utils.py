@@ -446,14 +446,22 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
 
     if isinstance(like, Array):
         return da_func(a, **kwargs)
-    elif isinstance(a, Array):
-        if is_cupy_type(a._meta):
-            a = a.compute(scheduler="sync")
 
-    try:
-        return np_func(a, like=meta_from_array(like), **kwargs)
-    except TypeError:
-        return np_func(a, **kwargs)
+    if isinstance(a, Array) and is_cupy_type(a._meta):
+        a = a.compute(scheduler="sync")
+
+    if hasattr(like, "__array_function__"):
+        return np_func(a, like=like, **kwargs)
+
+    if type(like).__module__.startswith("scipy.sparse"):
+        # e.g. scipy.sparse.csr_matrix
+        kwargs.pop("order", None)
+        return type(like)(a, **kwargs)
+
+    # Unknown namespace with no __array_function__ support.
+    # Quietly disregard like= parameter.
+    # FIXME is there a use case for this?
+    return np_func(a, **kwargs)
 
 
 def array_safe(a, like, **kwargs):
