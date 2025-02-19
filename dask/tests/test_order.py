@@ -8,6 +8,7 @@ from packaging.version import Version
 
 import dask
 from dask import delayed
+from dask._compatibility import WINDOWS
 from dask.base import collections_to_dsk, key_split, visualize_dsk
 from dask.core import get_deps
 from dask.order import _connecting_to_roots, diagnostics, ndependencies, order
@@ -254,6 +255,7 @@ def _rechunk_merge_graph():
     }
 
 
+@pytest.mark.skipif(WINDOWS, reason="Broken pipe on Windows")
 def test_visualize_int_overflow():
     pytest.importorskip("graphviz")
     pytest.importorskip("matplotlib")
