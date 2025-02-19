@@ -120,24 +120,6 @@ def use_kwargs(a, kwarg=None):
     return a + kwarg
 
 
-def test_unpickled_repr():
-    t = pickle.loads(pickle.dumps(Task("key", func, "a", "b")))
-    assert repr(t) == "<Task 'key' func('a', 'b')>"
-
-    t = pickle.loads(pickle.dumps(Task("nested", func2, t, t.ref())))
-    assert repr(t) == "<Task 'nested' func2(<Task 'key' func('a', 'b')>, Alias('key'))>"
-
-    t = pickle.loads(
-        pickle.dumps(Task("long", long_function_name_longer_even_longer, t, t.ref()))
-    )
-    assert repr(t) == "<Task 'long' long_function_name_longer_even_longer(...)>"
-
-    t = pickle.loads(
-        pickle.dumps(Task("kwarg", use_kwargs, "foo", kwarg="kwarg_value"))
-    )
-    assert repr(t) == "<Task 'kwarg' use_kwargs('foo', kwarg='kwarg_value')>"
-
-
 def test_convert_legacy_dsk():
     def func(*args):
         return "-".join(args)
@@ -265,15 +247,86 @@ class SerializeOnlyOnce:
 
 def test_pickle():
 
+    def assert_slots_equal(a, b):
+        def get_all_slots(obj):
+            slots = set()
+            for cls in obj.__class__.mro():
+                slots.update(getattr(cls, "__slots__", ()))
+            return slots
+
+        all_slots = get_all_slots(a) | get_all_slots(a)
+        assert all_slots == get_all_slots(a) == get_all_slots(a)
+        assert all(getattr(a, slot) == getattr(b, slot) for slot in all_slots)
+        assert not hasattr(a, "__dict__")
+        assert not hasattr(b, "__dict__")
+
     t1 = Task("key-1", func, "a", "b")
     t2 = Task("key-2", func, "c", "d")
 
     rtt1 = pickle.loads(pickle.dumps(t1))
+    assert repr(rtt1) == repr(t1)
     rtt2 = pickle.loads(pickle.dumps(t2))
+
+    assert_slots_equal(t1, rtt1)
+    assert_slots_equal(t2, rtt2)
     assert t1 == rtt1
     assert t1.func == rtt1.func
     assert t1.func is rtt1.func
     assert t1.func is rtt2.func
+
+    l = Tuple(t1, t2)
+    rtl = pickle.loads(pickle.dumps(l))
+    assert l == rtl
+    assert l() == rtl()
+    d = Dict(key=t1)
+    rtd = pickle.loads(pickle.dumps(d))
+    assert d == rtd
+    assert d() == rtd()
+
+
+def test_pickle_size():
+    # We will serialize many of these objects which drives both memory usage and
+    # serialization runtime performance.
+    # Reducing pickle size is beneficial but the numbers below are determined
+    # empirically
+    # Analyzing the output with pickletools.dis is useful to debug memoization
+    # and serialization by value
+
+    a = Alias("a", "b")
+    # We cannot shrink it to nothing
+    assert len(pickle.dumps(a)) < 55
+    b = Alias("b", "c")
+    # But most of it should be overhead that is memoized
+    assert len(pickle.dumps((a, b))) <= 70
+
+    # Pickle should be able to memoize this. On py3.10 that's 2 additional bytes
+    assert len(pickle.dumps((a, b, b))) <= len(pickle.dumps((a, b))) + 10
+
+    t1 = Task("key-1", func, "a", "b")
+    assert len(pickle.dumps(t1)) < 120
+
+    t2 = Task("key-2", func, TaskRef("key-1"), "c")
+    assert len(pickle.dumps(t2)) < 140
+
+    assert len(pickle.dumps((t1, t2))) < 170
+
+    l = List(t1, t2)
+    assert len(pickle.dumps(l)) <= 272
+
+    sizes = []
+    growth = []
+    inner = List(t1, t2)
+    for depth in range(20):
+        inner = List(inner, t1)
+        size = len(pickle.dumps(inner))
+        if len(sizes) > 0:
+            growth.append(size - sizes[-1][1])
+        sizes.append((depth, size))
+    growth = set(growth)
+    # If this breaks, something cannot be memoized. That's very concerning
+    assert len(growth) == 1
+    # If this goes up, that's not great but not a disaster
+    assert growth.pop() <= 32
 
 
 def test_tokenize():
