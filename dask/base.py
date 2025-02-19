@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import uuid
-import warnings
 from collections import OrderedDict
 from collections.abc import Hashable, Iterable, Iterator, Mapping
 from concurrent.futures import Executor
@@ -607,7 +606,13 @@ def optimize(*args, traverse=True, **kwargs):
 
 
 def compute(
-    *args, traverse=True, optimize_graph=True, scheduler=None, get=None, **kwargs
+    *args,
+    traverse=True,
+    optimize_graph=True,
+    scheduler=None,
+    get=None,
+    allow_async=True,
+    **kwargs,
 ):
     """Compute several dask collections at once.
 
@@ -659,6 +664,7 @@ def compute(
         scheduler=scheduler,
         collections=collections,
         get=get,
+        allow_async=allow_async,
     )
     from dask._expr import FinalizeCompute
 
@@ -1147,11 +1153,6 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     _DistributedClient.current(allow_global=True)
                     client_available = True
             if scheduler in named_schedulers:
-                if client_available:
-                    warnings.warn(
-                        "Running on a single-machine scheduler when a distributed client "
-                        "is active might lead to unexpected results."
-                    )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
                 if not client_available:
@@ -1180,7 +1181,9 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         #     return get_client(scheduler).get
 
     if config.get("scheduler", None):
-        return get_scheduler(scheduler=config.get("scheduler", None))
+        return get_scheduler(
+            scheduler=config.get("scheduler", None), allow_async=allow_async
+        )
 
     if config.get("get", None):
         raise ValueError(get_err_msg)
