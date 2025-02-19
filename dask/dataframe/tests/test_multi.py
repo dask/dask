@@ -2433,16 +2433,20 @@ def test_pairwise_merge_results_in_identical_output_df(
     assert_eq(ddf_pairwise, ddf_loop)
 
 
-def test_simpler_case():
+@pytest.mark.parametrize("npartitions_left", [1, 2, 3])
+@pytest.mark.parametrize("npartitions_right", [1, 2, 3])
+@pytest.mark.parametrize("how", ["left", "right", "outer"])
+def test_ensure_npartitions_properly_set(how, npartitions_left, npartitions_right):
     ddf_right = dd.from_pandas(
         pd.DataFrame(
             {"A": [5, 6, 7, 8], "B": [4, 3, 2, 1]},
             index=[0, 1, 2, 3],
         ),
-        1,
+        npartitions_right,
     )
-    ddf_left = dd.from_pandas(pd.DataFrame(index=[0, 1, 3]), 2)
-    res = ddf_left.join(ddf_right, how="left")
+    ddf_left = dd.from_pandas(pd.DataFrame(index=[0, 1, 3]), npartitions_left)
+    res = ddf_left.join(ddf_right, how=how)
     assert res.expr._npartitions == res.npartitions
+    assert res.npartitions == len(res.divisions) - 1
     assert len(res) == len(res.compute())
     assert len(res) == sum(res.map_partitions(len).compute())
