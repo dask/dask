@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pickle
+
 import pytest
 
 from dask._task_spec import Alias
@@ -1093,3 +1095,18 @@ def test_nan_full_like(val, shape_chunks, dtype):
         da.full_like(y1, val, dtype=dtype),
         np.full_like(y2, val, dtype=dtype),
     )
+
+
+@pytest.mark.parametrize(
+    "func", [da.array, da.asarray, da.asanyarray, da.arange, da.tri]
+)
+def test_like_forgets_graph(func):
+    """Test that array creation functions with like=x do not
+    internally store the graph of x
+    """
+    x = da.arange(3).map_blocks(lambda x: x)
+    with pytest.raises(Exception, match="local object"):
+        pickle.dumps(x)
+
+    a = func(1, like=x)
+    pickle.dumps(a)
