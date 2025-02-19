@@ -23,6 +23,8 @@ import tlz as toolz
 from fsspec.utils import stringify_path
 from toolz import identity
 
+from distributed.protocol import dask_deserialize, dask_serialize
+
 import dask
 from dask._task_spec import Task, TaskRef
 from dask.core import flatten
@@ -71,7 +73,27 @@ def _tokenize_fileinfo(fileinfo):
         fileinfo.path,
         fileinfo.size,
         fileinfo.mtime_ns,
-        fileinfo.size,
+    )
+
+
+@dask_serialize.register(pa.fs.FileInfo)
+def _serialize_fileinfo(fileinfo):
+    return {}, [
+        (
+            fileinfo.path,
+            fileinfo.size,
+            fileinfo.mtime_ns,
+        )
+    ]
+
+
+@dask_deserialize.register(pa.fs.FileInfo)
+def _deserialize_fileinfo(header, frames):
+    path, size, mtime_ns = frames[0]
+    return pa.fs.FileInfo(
+        path=path,
+        size=size,
+        mtime_ns=mtime_ns,
     )
 
 
@@ -930,7 +952,9 @@ class ReadParquetPyarrowFS(ReadParquet):
         # we'd like this thing to be as low overhead as possible
         with dask.config.set({"distributed.diagnostics.computations.nframes": 0}):
             token_stats = flatten(
-                dask.compute(_collect_statistics_plan(files, fragments))
+                dask.compute(
+                    _collect_statistics_plan(files, fragments), allow_async=False
+                )
             )
         for token, stats in token_stats:
             _STATS_CACHE[token] = stats
