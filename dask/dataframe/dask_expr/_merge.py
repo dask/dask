@@ -672,6 +672,9 @@ class HashJoinP2P(Merge, PartitionsFiltered):
             dsk[t.key] = t
         return dsk
 
+    def _divisions(self):
+        return (None,) * (self._npartitions + 1)
+
     def _simplify_up(self, parent, dependents):
         return
 
