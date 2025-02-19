@@ -452,7 +452,7 @@ def arange(
         blockstop = start + ((elem_count + bs) * step)
         task = Task(
             (name, i),
-            partial(chunk.arange, like=like),
+            partial(chunk.arange, like=meta),
             blockstart,
             blockstop,
             step,
