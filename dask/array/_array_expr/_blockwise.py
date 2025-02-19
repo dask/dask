@@ -7,7 +7,7 @@ import numpy as np
 import tlz as toolz
 
 from dask import is_dask_collection
-from dask.array._array_expr._expr import ArrayExpr
+from dask.array._array_expr._expr import ArrayExpr, unify_chunks_expr
 from dask.array._array_expr._utils import compute_meta
 from dask.array.core import (
     _elemwise_handle_where,
@@ -69,16 +69,21 @@ class Blockwise(ArrayExpr):
 
     @cached_property
     def chunks(self):
-        arginds = [(a, i) for (a, i) in toolz.partition(2, self.args) if i is not None]
-        chunkss = {}
-        # For each dimension, use the input chunking that has the most blocks;
-        # this will ensure that broadcasting works as expected, and in
-        # particular the number of blocks should be correct if the inputs are
-        # consistent.
-        for arg, ind in arginds:
-            for c, i in zip(arg.chunks, ind):
-                if i not in chunkss or len(c) > len(chunkss[i]):
-                    chunkss[i] = c
+        if self.align_arrays:
+            chunkss, arrays, _ = unify_chunks_expr(*self.args)
+        else:
+            arginds = [
+                (a, i) for (a, i) in toolz.partition(2, self.args) if i is not None
+            ]
+            chunkss = {}
+            # For each dimension, use the input chunking that has the most blocks;
+            # this will ensure that broadcasting works as expected, and in
+            # particular the number of blocks should be correct if the inputs are
+            # consistent.
+            for arg, ind in arginds:
+                for c, i in zip(arg.chunks, ind):
+                    if i not in chunkss or len(c) > len(chunkss[i]):
+                        chunkss[i] = c
 
         for k, v in self.new_axes.items():
             if not isinstance(v, tuple):
@@ -177,6 +182,12 @@ class Blockwise(ArrayExpr):
             **kwargs2,
         )
         return dict(graph)
+
+    def _lower(self):
+        if self.align_arrays:
+            _, arrays, changed = unify_chunks_expr(*self.args)
+            if changed:
+                return type(self)(*self.operands[: len(self._parameters)], *arrays)
 
 
 class Elemwise(Blockwise):
