@@ -81,3 +81,10 @@ if scipy_installed:  # type: ignore[misc]
     @get_collection_type.register(sp.csr_matrix)
     def get_collection_type_array(_):
         return create_array_collection
+
+
+if scipy_installed and hasattr(sp, "sparray"):  # type: ignore[misc]
+
+    @get_collection_type.register(sp.csr_array)
+    def get_collection_type_array(_):
+        return create_array_collection
