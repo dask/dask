@@ -205,7 +205,7 @@ class Merge(Expr):
     def _npartitions(self):
         if self.operand("_npartitions") is not None:
             return self.operand("_npartitions")
-        return max(self.left.npartitions, self.right.npartitions)
+        return len(self._divisions()) - 1
 
     @property
     def _bcast_left(self):
@@ -273,8 +273,10 @@ class Merge(Expr):
             else:
                 _npartitions = max(self.left.npartitions, self.right.npartitions)
 
+        elif self.operand("_npartitions") is not None:
+            _npartitions = self.operand("_npartitions")
         else:
-            _npartitions = self._npartitions
+            _npartitions = max(self.left.npartitions, self.right.npartitions)
 
         return (None,) * (_npartitions + 1)
 
