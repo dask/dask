@@ -58,7 +58,7 @@ import itertools
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
-from functools import partial
+from functools import lru_cache, partial
 from typing import Any, TypeVar, cast
 
 from dask.sizeof import sizeof
@@ -402,9 +402,10 @@ class GraphNode:
         return False
 
     def __sizeof__(self) -> int:
-        return sum(
-            sizeof(getattr(self, sl)) for sl in type(self).__slots__
-        ) + sys.getsizeof(type(self))
+        all_slots = self.get_all_slots()
+        return sum(sizeof(getattr(self, sl)) for sl in all_slots) + sys.getsizeof(
+            type(self)
+        )
 
     def substitute(
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
@@ -475,6 +476,16 @@ class GraphNode:
             _data_producer=any(t.data_producer for t in tasks),
         )
 
+    @classmethod
+    @lru_cache
+    def get_all_slots(cls):
+        slots = list()
+        for c in cls.mro():
+            slots.extend(getattr(c, "__slots__", ()))
+        # Interestingly, sorting this causes the nested containers to pickle
+        # more efficiently
+        return sorted(set(slots))
+
 
 _no_deps: frozenset = frozenset()
 
@@ -497,6 +508,9 @@ class Alias(GraphNode):
             target = target.key
         self.target = target
         self._dependencies = frozenset((self.target,))
+
+    def __reduce__(self):
+        return Alias, (self.key, self.target)
 
     def copy(self):
         return Alias(self.key, self.target)
@@ -740,6 +754,15 @@ class Task(GraphNode):
             return self.func(*new_argspec, **kwargs)
         return self.func(*new_argspec)
 
+    def __setstate__(self, state):
+        slots = self.__class__.get_all_slots()
+        for sl, val in zip(slots, state):
+            setattr(self, sl, val)
+
+    def __getstate__(self):
+        slots = self.__class__.get_all_slots()
+        return tuple(getattr(self, sl) for sl in slots)
+
     @property
     def is_coro(self):
         if self._is_coro is None:
@@ -809,6 +832,23 @@ class NestedContainer(Task):
             _dependencies=_dependencies,
             **kwargs,
         )
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state = list(state)
+        slots = self.__class__.get_all_slots()
+        ix = slots.index("kwargs")
+        # The constructor as a kwarg is redundant since this is encoded in the
+        # class itself. Serializing the builtin types is not trivial
+        # This saves about 15% of overhead
+        state[ix] = state[ix].copy()
+        state[ix].pop("constructor", None)
+        return state
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        self.kwargs["constructor"] = self.__class__.constructor
+        return self
 
     def __repr__(self):
         return f"{type(self).__name__}({self.args})"
