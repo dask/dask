@@ -1184,16 +1184,15 @@ def store(
             )
     del regions
 
-    # Optimize all sources together
+    # Merge source graphs together
     sources_hlg = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
-    sources_layer = Array.__dask_optimize__(
-        sources_hlg, list(core.flatten([e.__dask_keys__() for e in sources]))
-    )
+    sources_keys = set(core.flatten([e.__dask_keys__() for e in sources]))
+    sources_layer = sources_hlg.cull(sources_keys)
     sources_name = "store-sources-" + tokenize(sources)
     layers = {sources_name: sources_layer}
     dependencies: dict[str, set[str]] = {sources_name: set()}
 
-    # Optimize all targets together
+    # Merge target graphs together
     targets_keys = []
     targets_dsks = []
     for t in targets:
@@ -1205,7 +1204,7 @@ def store(
 
     if targets_dsks:
         targets_hlg = HighLevelGraph.merge(*targets_dsks)
-        targets_layer = Delayed.__dask_optimize__(targets_hlg, targets_keys)
+        targets_layer = targets_hlg.cull(targets_keys)
         targets_name = "store-targets-" + tokenize(targets_keys)
         layers[targets_name] = targets_layer
         dependencies[targets_name] = set()
