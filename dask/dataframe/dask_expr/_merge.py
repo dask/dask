@@ -222,16 +222,6 @@ class Merge(Expr):
         return self.right
 
     def _divisions(self):
-        if self.merge_indexed_left and self.merge_indexed_right:
-            divisions = list(
-                unique(merge_sorted(self.left.divisions, self.right.divisions))
-            )
-            if len(divisions) == 1:
-                return (divisions[0], divisions[0])
-            if self.left.npartitions == 1 and self.right.npartitions == 1:
-                return (min(divisions), max(divisions))
-            return divisions
-
         if self._is_single_partition_broadcast:
             use_left = self.right_index or _contains_index_name(
                 self.right._meta, self.right_on
@@ -253,6 +243,16 @@ class Merge(Expr):
                 return self.left.divisions
             else:
                 _npartitions = max(self.left.npartitions, self.right.npartitions)
+
+        elif self.merge_indexed_left and self.merge_indexed_right:
+            divisions = list(
+                unique(merge_sorted(self.left.divisions, self.right.divisions))
+            )
+            if len(divisions) == 1:
+                return (divisions[0], divisions[0])
+            if self.left.npartitions == 1 and self.right.npartitions == 1:
+                return (min(divisions), max(divisions))
+            return divisions
 
         elif self.is_broadcast_join:
             meta_index_names = set(self._meta.index.names)
