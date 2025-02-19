@@ -25,6 +25,10 @@ except ImportError:
     pass
 
 
+if da._array_expr_enabled():
+    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
+
+
 @pytest.mark.parametrize("asarray", asarrays)
 def test_meta_from_array(asarray):
     x = np.array(1)
