@@ -2431,3 +2431,18 @@ def test_pairwise_merge_results_in_identical_output_df(
     ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
 
     assert_eq(ddf_pairwise, ddf_loop)
+
+
+def test_simpler_case():
+    ddf_right = dd.from_pandas(
+        pd.DataFrame(
+            {"A": [5, 6, 7, 8], "B": [4, 3, 2, 1]},
+            index=[0, 1, 2, 3],
+        ),
+        1,
+    )
+    ddf_left = dd.from_pandas(pd.DataFrame(index=[0, 1, 3]), 2)
+    res = ddf_left.join(ddf_right, how="left")
+    assert res.expr._npartitions == res.npartitions
+    assert len(res) == len(res.compute())
+    assert len(res) == sum(res.map_partitions(len).compute())
