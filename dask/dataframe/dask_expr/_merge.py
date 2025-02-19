@@ -862,6 +862,11 @@ class BlockwiseMerge(Merge, Blockwise):
             and self.how in ("inner", "left", "leftsemi")
         ):
             return self.left.divisions
+        elif (
+            self.left.npartitions == self.right.npartitions
+            and self.left.divisions == self.right.divisions
+        ):
+            return self.left.divisions
         else:
             _npartitions = max(self.left.npartitions, self.right.npartitions)
             return (None,) * (_npartitions + 1)
