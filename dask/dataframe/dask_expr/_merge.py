@@ -281,7 +281,7 @@ class Merge(Expr):
             )
         else:
             result = tuple(on) in expr.unique_partition_mapping_columns_from_shuffle
-        return result and expr.npartitions == self.npartitions
+        return result
 
     def _lower(self):
         # Lower from an abstract expression
@@ -366,6 +366,9 @@ class Merge(Expr):
                     self.indicator,
                 )
 
+        shuffle_npartitions = self.operand("_npartitions") or max(
+            self.left.npartitions, self.right.npartitions
+        )
         if (shuffle_left_on or shuffle_right_on) and (
             shuffle_method == "p2p"
             or shuffle_method is None
@@ -385,15 +388,14 @@ class Merge(Expr):
                 right_index=right_index,
                 shuffle_left_on=shuffle_left_on,
                 shuffle_right_on=shuffle_right_on,
-                _npartitions=self.operand("_npartitions"),
+                _npartitions=shuffle_npartitions,
             )
-
         if shuffle_left_on and not left_already_partitioned:
             # Shuffle left
             left = RearrangeByColumn(
                 left,
                 shuffle_left_on,
-                npartitions_out=max(self.left.npartitions, self.right.npartitions),
+                npartitions_out=shuffle_npartitions,
                 method=shuffle_method,
                 index_shuffle=left_index,
             )
@@ -403,7 +405,7 @@ class Merge(Expr):
             right = RearrangeByColumn(
                 right,
                 shuffle_right_on,
-                npartitions_out=max(self.left.npartitions, self.right.npartitions),
+                npartitions_out=shuffle_npartitions,
                 method=shuffle_method,
                 index_shuffle=right_index,
             )
