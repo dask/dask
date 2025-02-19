@@ -6,6 +6,8 @@ Optimizer
 .. note::
     Dask DataFrame supports Query Planning since version 2024.03.0
 
+.. _dataframe.optimizer:
+
 Optimization steps
 ------------------
 
