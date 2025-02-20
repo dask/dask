@@ -17,7 +17,7 @@ from tlz import groupby, merge
 
 from dask import config, local
 from dask._compatibility import EMSCRIPTEN
-from dask._task_spec import DataNode, List, Task, TaskRef
+from dask._task_spec import DataNode, Dict, List, Task, TaskRef
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.system import CPU_COUNT
@@ -502,9 +502,10 @@ def unpack_collections(*args, traverse=True):
                     tok, getitem, TaskRef(collections_token), len(collections)
                 )
                 collections.append(expr)
-            return tok
+            return TaskRef(tok)
 
         tok = uuid.uuid4().hex
+        tsk: DataNode | Task
         if not traverse:
             tsk = DataNode(None, expr)
         else:
@@ -516,14 +517,14 @@ def unpack_collections(*args, traverse=True):
                 # FIXME: This reconstruction doesn't cover all namedtuple types
                 is_namedtuple_instance(expr)
             ):
-                tsk = Task(tok, typ, List(*[_unpack(i) for i in expr]))
+                tsk = Task(tok, typ, List([_unpack(i) for i in expr]))
             elif typ in (dict, OrderedDict):
-                tsk = Task(tok, typ, dict(expr))
+                tsk = Task(tok, typ, Dict(expr))
             elif dataclasses.is_dataclass(expr) and not isinstance(expr, type):
                 tsk = Task(
                     tok,
                     typ,
-                    dict(
+                    Dict(
                         {
                             f.name: _unpack(getattr(expr, f.name))
                             for f in dataclasses.fields(expr)
@@ -534,10 +535,10 @@ def unpack_collections(*args, traverse=True):
                 return expr
 
         repack_dsk[tok] = tsk
-        return tok
+        return TaskRef(tok)
 
     out = uuid.uuid4().hex
-    repack_dsk[out] = (tuple, [_unpack(i) for i in args])
+    repack_dsk[out] = Task(out, tuple, List([_unpack(i) for i in args]))
 
     def repack(results):
         dsk = repack_dsk.copy()
