@@ -438,12 +438,12 @@ def collections_to_dsk(
         else:
             graphs.append(exprs[0])
 
-    if len(exprs) > 1:
+    if len(graphs) > 1:
         # FIXME: This is a mixed collection type case. Is this even tested
         # anywhere?
         return _ExprSequence(*graphs)
     else:
-        return exprs[0]
+        return graphs[0]
 
 
 # def _extract_graph_and_keys(vals):
@@ -556,7 +556,12 @@ def optimize(*args, traverse=True, **kwargs):
     collections to delayed objects, or to manually apply the optimizations at
     strategic points.
 
-    Note that in most cases you shouldn't need to call this method directly.
+    Note that in most cases you shouldn't need to call this function directly.
+
+    Warning::
+
+        This function triggers a materialization of the collections and looses
+        any annotations attached to HLG layers.
 
     Parameters
     ----------

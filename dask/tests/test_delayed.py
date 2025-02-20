@@ -81,7 +81,8 @@ def test_to_task_dask():
     task, dask = to_task_dask(x)
     assert task in dask
     f = dask.pop(task)
-    assert f == (tuple, ["a", "b", "c"])
+    assert f.func == tuple
+    assert f.dependencies == {"a", "b", "c"}
     assert dask == x._dask
 
 
@@ -829,13 +830,9 @@ def test_annotations_survive_optimization():
     assert len(d.dask.layers["b"]) == 3
     assert d.dask.layers["b"].annotations == {"foo": "bar"}
 
-    # Ensure optimizing a Delayed object returns a HighLevelGraph
-    # and doesn't loose annotations
-    (d_opt,) = dask.optimize(d)
-    assert type(d_opt.dask) is HighLevelGraph
-    assert len(d_opt.dask.layers) == 1
-    assert len(d_opt.dask.layers["b"]) == 2  # c is culled
-    assert d_opt.dask.layers["b"].annotations == {"foo": "bar"}
+    assert collections_to_dsk([d]).optimize().__dask_annotations__() == {
+        "foo": {k: "bar" for k in d.__dask_graph__()}
+    }
 
 
 def test_delayed_function_attributes_forwarded():
@@ -863,12 +860,12 @@ def test_delayed_fusion():
         return i + 3
 
     obj = test3(test2(test(10)))
-    dsk = dict(collections_to_dsk([obj]))
+    dsk = collections_to_dsk([obj]).__dask_graph__()
     assert len(dsk) == 3
 
     obj2 = test3(test2(test(10)))
     with dask.config.set({"optimization.fuse.delayed": True}):
-        dsk2 = dict(collections_to_dsk([obj]))
+        dsk2 = collections_to_dsk([obj]).__dask_graph__()
         result = dask.compute(obj2)
     assert len(dsk2) == 2
     assert dask.compute(obj) == result
