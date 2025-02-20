@@ -838,11 +838,13 @@ class HLGExpr(Expr):
 
     @staticmethod
     def from_collection(collection, optimize_graph=True):
+        from dask.highlevelgraph import HighLevelGraph
+
         if hasattr(collection, "dask"):
             dsk = collection.dask.copy()
+            assert isinstance(dsk, HighLevelGraph)
         else:
             dsk = collection.__dask_graph__()
-            from dask.highlevelgraph import HighLevelGraph
 
             if not isinstance(dsk, HighLevelGraph):
 
@@ -858,8 +860,8 @@ class HLGExpr(Expr):
             finalize_compute=collection.__dask_postcompute__,
         )
 
-    def __dask_annotations__(self):
-        annotations_by_type = {}
+    def __dask_annotations__(self) -> dict[str, dict[Key, object]]:
+        annotations_by_type: defaultdict[str, dict[Key, object]] = defaultdict(dict)
         for layer in self.operand("dsk").layers.values():
             if layer.annotations:
                 annot = layer.annotations
@@ -867,7 +869,7 @@ class HLGExpr(Expr):
                     annotations_by_type[annot_type].update(
                         {k: (value(k) if callable(value) else value) for k in layer}
                     )
-        return annotations_by_type
+        return dict(annotations_by_type)
 
     def _operands_for_repr(self):
         return [
