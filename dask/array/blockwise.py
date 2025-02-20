@@ -269,8 +269,9 @@ def blockwise(
             if ind in adjust_chunks:
                 if callable(adjust_chunks[ind]):
                     chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
-                elif isinstance(adjust_chunks[ind], numbers.Integral) or isnan(
-                    adjust_chunks[ind]
+                elif isinstance(adjust_chunks[ind], numbers.Integral) or (
+                    isinstance(adjust_chunks[ind], numbers.Real) and 
+                    isnan(adjust_chunks[ind])
                 ):
                     chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
