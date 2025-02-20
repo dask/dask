@@ -869,6 +869,19 @@ class BlockwiseMerge(Merge, Blockwise):
             and self.how in ("inner", "left", "leftsemi")
         ):
             return self.left.divisions
+        elif (
+            self.left.npartitions == self.right.npartitions
+            and self.merge_indexed_left
+            and self.merge_indexed_right
+        ):
+            divisions = list(
+                unique(merge_sorted(self.left.divisions, self.right.divisions))
+            )
+            if len(divisions) == 1:
+                return (divisions[0], divisions[0])
+            if self.left.npartitions == 1 and self.right.npartitions == 1:
+                return (min(divisions), max(divisions))
+            return divisions
         else:
             _npartitions = max(self.left.npartitions, self.right.npartitions)
             return (None,) * (_npartitions + 1)
