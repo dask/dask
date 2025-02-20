@@ -11,6 +11,9 @@ Next Release
 Breaking changes
 """"""""""""""""
 - Support for custom low level optimizers removed
+- Top level dask.optimize will now always trigger graph materialization.
+  Previously this was not always the case. This also causes any low level HLG
+  annotations to be dropped.
 
 
 .. _v2025.2.0:
