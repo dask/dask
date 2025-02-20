@@ -511,15 +511,12 @@ def unpack_collections(*args, traverse=True):
         else:
             # Treat iterators like lists
             typ = list if isinstance(expr, Iterator) else type(expr)
-            if (
-                typ in (list, tuple, set)
-                or
-                # FIXME: This reconstruction doesn't cover all namedtuple types
-                is_namedtuple_instance(expr)
-            ):
-                tsk = Task(tok, typ, List([_unpack(i) for i in expr]))
+            if typ in (list, tuple, set):
+                tsk = Task(tok, typ, List(*[_unpack(i) for i in expr]))
             elif typ in (dict, OrderedDict):
-                tsk = Task(tok, typ, Dict(expr))
+                tsk = Task(
+                    tok, typ, Dict({_unpack(k): _unpack(v) for k, v in expr.items()})
+                )
             elif dataclasses.is_dataclass(expr) and not isinstance(expr, type):
                 tsk = Task(
                     tok,
@@ -531,6 +528,8 @@ def unpack_collections(*args, traverse=True):
                         }
                     ),
                 )
+            elif is_namedtuple_instance(expr):
+                tsk = Task(tok, typ, *[_unpack(i) for i in expr])
             else:
                 return expr
 
@@ -538,7 +537,7 @@ def unpack_collections(*args, traverse=True):
         return TaskRef(tok)
 
     out = uuid.uuid4().hex
-    repack_dsk[out] = Task(out, tuple, List([_unpack(i) for i in args]))
+    repack_dsk[out] = Task(out, tuple, List(*[_unpack(i) for i in args]))
 
     def repack(results):
         dsk = repack_dsk.copy()

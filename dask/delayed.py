@@ -601,6 +601,8 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
             layer = next(iter(dsk.layers))
         else:
             layer = None
+        if not isinstance(dsk, HighLevelGraph):
+            dsk = HighLevelGraph.from_collections(key, dsk, dependencies=())
         return Delayed(key, dsk, self._length, layer=layer)
 
     def __repr__(self):
