@@ -18,18 +18,12 @@ from tlz import groupby, merge
 
 from dask import config, local
 from dask._compatibility import EMSCRIPTEN
+from dask._task_spec import DataNode, Dict, List, Task, TaskRef
 from dask.core import flatten
 from dask.core import get as simple_get
-from dask.core import quote
 from dask.system import CPU_COUNT
 from dask.typing import Key, SchedulerGetCallable
-from dask.utils import (
-    apply,
-    ensure_dict,
-    is_namedtuple_instance,
-    key_split,
-    shorten_traceback,
-)
+from dask.utils import ensure_dict, is_namedtuple_instance, key_split, shorten_traceback
 
 _DistributedClient = None
 _get_distributed_client = None
@@ -493,47 +487,50 @@ def unpack_collections(*args, traverse=True):
         if is_dask_collection(expr):
             tok = tokenize(expr)
             if tok not in repack_dsk:
-                repack_dsk[tok] = (getitem, collections_token, len(collections))
+                repack_dsk[tok] = Task(
+                    tok, getitem, TaskRef(collections_token), len(collections)
+                )
                 collections.append(expr)
-            return tok
+            return TaskRef(tok)
 
         tok = uuid.uuid4().hex
+        tsk: DataNode | Task
         if not traverse:
-            tsk = quote(expr)
+            tsk = DataNode(None, expr)
         else:
             # Treat iterators like lists
             typ = list if isinstance(expr, Iterator) else type(expr)
             if typ in (list, tuple, set):
-                tsk = (typ, [_unpack(i) for i in expr])
+                tsk = Task(tok, typ, List(*[_unpack(i) for i in expr]))
             elif typ in (dict, OrderedDict):
-                tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
+                tsk = Task(
+                    tok, typ, Dict({_unpack(k): _unpack(v) for k, v in expr.items()})
+                )
             elif dataclasses.is_dataclass(expr) and not isinstance(expr, type):
-                tsk = (
-                    apply,
+                tsk = Task(
+                    tok,
                     typ,
-                    (),
-                    (
-                        dict,
-                        [
-                            [f.name, _unpack(getattr(expr, f.name))]
+                    Dict(
+                        {
+                            f.name: _unpack(getattr(expr, f.name))
                             for f in dataclasses.fields(expr)
-                        ],
+                        }
                     ),
                 )
             elif is_namedtuple_instance(expr):
-                tsk = (typ, *[_unpack(i) for i in expr])
+                tsk = Task(tok, typ, *[_unpack(i) for i in expr])
             else:
                 return expr
 
         repack_dsk[tok] = tsk
-        return tok
+        return TaskRef(tok)
 
     out = uuid.uuid4().hex
-    repack_dsk[out] = (tuple, [_unpack(i) for i in args])
+    repack_dsk[out] = Task(out, tuple, List(*[_unpack(i) for i in args]))
 
     def repack(results):
         dsk = repack_dsk.copy()
-        dsk[collections_token] = quote(results)
+        dsk[collections_token] = DataNode(collections_token, results)
         return simple_get(dsk, out)
 
     # The original `collections` is kept alive by the closure
