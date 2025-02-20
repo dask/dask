@@ -3,6 +3,7 @@ from __future__ import annotations
 import numbers
 import warnings
 
+from math import isnan
 import tlz as toolz
 
 from dask import base, utils
@@ -268,7 +269,7 @@ def blockwise(
             if ind in adjust_chunks:
                 if callable(adjust_chunks[ind]):
                     chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
-                elif isinstance(adjust_chunks[ind], numbers.Integral):
+                elif isinstance(adjust_chunks[ind], numbers.Integral) or isnan(adjust_chunks[ind]):
                     chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
                     if len(adjust_chunks[ind]) != len(chunks[i]):
