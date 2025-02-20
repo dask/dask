@@ -2448,5 +2448,6 @@ def test_ensure_npartitions_properly_set(how, npartitions_left, npartitions_righ
     res = ddf_left.join(ddf_right, how=how)
     assert res.expr._npartitions == res.npartitions
     assert res.npartitions == len(res.divisions) - 1
+    assert res.npartitions == res.optimize().npartitions
     assert len(res) == len(res.compute())
     assert len(res) == sum(res.map_partitions(len).compute())
