@@ -979,10 +979,9 @@ def test_from_dict_backends(backend):
         assert_eq(expected, got_classmethod)
 
 
-@pytest.mark.parametrize("backend", [
-    "pandas",
-    pytest.param("cudf", marks=pytest.mark.gpu)
-])
+@pytest.mark.parametrize(
+    "backend", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_sorted_division_locations_duplicates(backend):
     _lib = pytest.importorskip(backend)
     seq = _lib.Series([0, 0, 1, 2])
