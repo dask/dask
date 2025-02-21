@@ -326,7 +326,6 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         if duplicates:
             # Note: cupy requires casts to `int` below
             if ind is None:
-                # ind = int((seq_unique == seq[i]).nonzero()[0][0])
                 ind = bisect.bisect_left(seq_unique, seq[i])
             if enforce_exact:
                 # Avoid "over-stepping" too many unique
