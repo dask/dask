@@ -283,7 +283,6 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     # any divisions we extract from seq are plain Python scalars.
     seq = tolist(seq)
     # we use bisect later, so we need sorted.
-    # TODO: check if `set` preserves order, if so drop `sorted`.
     seq_unique = sorted(set(seq))
     duplicates = len(seq_unique) < len(seq)
     enforce_exact = False
