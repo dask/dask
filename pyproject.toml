@@ -68,6 +68,7 @@ complete = [
     "lz4 >= 4.3.2",
 ]
 test = [
+    "flaky",
     "pandas[test]",
     "pytest",
     "pytest-cov",
