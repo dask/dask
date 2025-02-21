@@ -5370,3 +5370,24 @@ def test_map_partitions_always_series(npartitions):
     assert min(res) == min(pdf.x)
 
     assert ddf.x.map_partitions(M.min).count().compute() == ddf.npartitions
+
+
+def test_partitions_are_plain_scalars():
+    # https://github.com/dask/dask/issues/11765
+    df = pd.DataFrame(
+        {"a": range(8), "index": [1, 5, 10, 11, 12, 100, 200, 300]}
+    ).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    result = ddf.divisions[0]
+    assert type(result) is int
+
+
+def test_datetime_partitions_are_plain_scalars():
+    df = pd.DataFrame(
+        {"a": range(8), "index": pd.date_range("2000", periods=8)}
+    ).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    result = ddf.divisions[0]
+    assert type(result) is pd.Timestamp
