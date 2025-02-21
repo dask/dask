@@ -23,7 +23,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/intake/filesystem_spec \
         git+https://github.com/dask/partd \
         git+https://github.com/dask/zict \
-        git+https://github.com/dask/distributed \
+        git+https://github.com/fjetter/distributed@wrap_hlg_expr \
         git+https://github.com/zarr-developers/zarr-python
     mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image h5py
     python -m pip install --no-deps --pre --retries 10 \

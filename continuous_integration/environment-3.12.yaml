@@ -75,4 +75,4 @@ dependencies:
   - matplotlib  # visualize test
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+    - git+https://github.com/fjetter/distributed@wrap_hlg_expr

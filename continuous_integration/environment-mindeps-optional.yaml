@@ -50,7 +50,7 @@ dependencies:
   - pip
   - pip:
       # optional dependencies pulled in by pip install dask[distributed]
-      - git+https://github.com/dask/distributed
+      - git+https://github.com/fjetter/distributed@wrap_hlg_expr
   # test dependencies
   - pre-commit
   - pytest
