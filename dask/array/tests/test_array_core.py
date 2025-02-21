@@ -5381,6 +5381,30 @@ def test_scipy_sparse_concatenate(axis, container):
     assert (z != z_expected).nnz == 0
 
 
+@pytest.mark.parametrize("func", [da.asarray, da.asanyarray])
+@pytest.mark.parametrize("src", [[[1, 2]], np.asarray([[1, 2]]), da.asarray([[1, 2]])])
+def test_scipy_sparse_asarray_like(src, func):
+    """scipy.sparse.csr_matrix objects are not a valid argument for
+    np.asarray(..., like=...) and require special-casing.
+    """
+    pytest.importorskip("scipy.sparse")
+    import scipy.sparse
+
+    mtx = scipy.sparse.csr_matrix([[3, 4, 5], [6, 7, 8]])
+    like = da.from_array(mtx)
+
+    a = func(src, like=like)
+    assert isinstance(a._meta, type(mtx))
+    assert isinstance(a.compute(), type(mtx))
+
+    # Respect dtype; quietly disregard order
+    a = func(src, dtype=np.float32, order="C", like=like)
+    assert a.dtype == np.float32
+    assert a.compute().dtype == np.float32
+    assert isinstance(a._meta, type(mtx))
+    assert isinstance(a.compute(), type(mtx))
+
+
 def test_3851():
     with warnings.catch_warnings(record=True) as record:
         Y = da.random.default_rng().random((10, 10), chunks="auto")

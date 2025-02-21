@@ -45,7 +45,12 @@ from dask.array.dispatch import (  # noqa: F401
 )
 from dask.array.numpy_compat import NUMPY_GE_200, _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
-from dask.array.utils import compute_meta, meta_from_array
+from dask.array.utils import (
+    asanyarray_safe,
+    asarray_safe,
+    compute_meta,
+    meta_from_array,
+)
 from dask.base import (
     DaskMethodsMixin,
     compute_as_if_collection,
@@ -4817,10 +4822,10 @@ def asarray(
         if isinstance(a, Array):
             return a.map_blocks(
                 # Pass the dtype parameter to np.asarray, not to map_blocks
-                partial(np.asarray, like=like_meta, dtype=dtype, order=order)
+                partial(asarray_safe, like=like_meta, dtype=dtype, order=order)
             )
         else:
-            a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
+            a = asarray_safe(a, like=like_meta, dtype=dtype, order=order)
 
     a = from_array(a, getitem=getter_inline, **kwargs)
     return _as_dtype(a, dtype)
@@ -4894,10 +4899,10 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         if isinstance(a, Array):
             return a.map_blocks(
                 # Pass the dtype parameter to np.asanyarray, not to map_blocks
-                partial(np.asanyarray, like=like_meta, dtype=dtype, order=order)
+                partial(asanyarray_safe, like=like_meta, dtype=dtype, order=order)
             )
         else:
-            a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
+            a = asanyarray_safe(a, like=like_meta, dtype=dtype, order=order)
 
     a = from_array(
         a,
