@@ -11,7 +11,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask import config
 from dask.dataframe._compat import tm
-from dask.dataframe.io.io import _meta_from_array
+from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
 from dask.dataframe.utils import assert_eq, get_string_dtype
 from dask.delayed import Delayed, delayed
 
@@ -977,3 +977,15 @@ def test_from_dict_backends(backend):
         # Check from_dict classmethod
         got_classmethod = got.from_dict(data, npartitions=2)
         assert_eq(expected, got_classmethod)
+
+
+@pytest.mark.parametrize("backend", [
+    "pandas",
+    pytest.param("cudf", marks=pytest.mark.gpu)
+])
+def test_sorted_division_locations_duplicates(backend):
+    _lib = pytest.importorskip(backend)
+    seq = _lib.Series([0, 0, 1, 2])
+    divisions, locations = sorted_division_locations(seq, npartitions=2)
+    assert divisions == [0, 1, 2]
+    assert locations == [0, 2, 4]
