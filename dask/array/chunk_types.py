@@ -134,6 +134,13 @@ try:
 except ImportError:
     pass
 
+try:
+    from scipy.sparse import sparray
+
+    register_chunk_type(sparray)
+except ImportError:
+    pass
+
 
 def is_valid_chunk_type(type):
     """Check if given type is a valid chunk and downcast array type"""

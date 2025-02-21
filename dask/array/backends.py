@@ -231,6 +231,15 @@ def register_scipy_sparse():
     tensordot_lookup.register(scipy.sparse.spmatrix, _tensordot_scipy_sparse)
     take_lookup.register(scipy.sparse.spmatrix, sparse_take)
 
+    try:
+        from scipy.sparse import sparray
+    except ImportError:
+        pass  # sparray is not available in older scipy versions
+    else:
+        concatenate_lookup.register(sparray, _concatenate)
+        tensordot_lookup.register(sparray, _tensordot_scipy_sparse)
+        take_lookup.register(sparray, sparse_take)
+
 
 def _tensordot_scipy_sparse(a, b, axes):
     assert a.ndim == b.ndim == 2

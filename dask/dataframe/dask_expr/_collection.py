@@ -5038,7 +5038,7 @@ def from_dict(
     )
 
 
-def from_dask_array(x, columns=None, index=None, meta=None):
+def from_dask_array(x, columns=None, index=None, meta=None) -> DataFrame:
     """Create a Dask DataFrame from a Dask Array.
 
     Converts a 2d array into a DataFrame and a 1d array into a Series.
