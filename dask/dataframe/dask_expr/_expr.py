@@ -2178,7 +2178,7 @@ class Projection(Elemwise):
             if not isinstance(a, list):
                 # df[scalar][b] -> First selection coerces to Series
                 return
-            elif isinstance(b, list):
+            elif pd.types.is_list_like(b):
                 assert all(bb in a for bb in b)
             else:
                 assert b in a
