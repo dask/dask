@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from dask.blockwise import BlockwiseDepDict, blockwise
-from dask.dataframe.dispatch import meta_lib_from_array
+from dask.dataframe.dispatch import meta_lib_from_array, tolist
 from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.highlevelgraph import HighLevelGraph
 from dask.tokenize import tokenize
@@ -284,6 +284,11 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     seq_unique = seq.unique() if hasattr(seq, "unique") else np.unique(seq)
     duplicates = len(seq_unique) < len(seq)
     enforce_exact = False
+
+    # Convert from an ndarray to a plain list so that
+    # any divisions we extract from seq are plain Python scalars.
+    seq = tolist(seq)
+
     if duplicates:
         offsets = (
             # Avoid numpy conversion (necessary for dask-cudf)
