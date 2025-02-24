@@ -7,6 +7,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
+from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.utils import is_index_like
 
@@ -46,6 +47,17 @@ def _partitions_of_index_values(divisions, values):
         raise ValueError(msg)
 
     results = defaultdict(list)
+
+    # values here can be lots of things, including arrays, lists,
+    # and extension arrays like Categorical. Not all of these
+    # are supported by tolist, so we ignore the ones we can't handle.
+    try:
+        tolist = methods.tolist_dispatch.dispatch(type(values))
+    except TypeError:
+        pass
+    else:
+        values = tolist(values)
+
     for val in values:
         i = bisect.bisect_right(divisions, val)
         div = min(len(divisions) - 2, max(0, i - 1))

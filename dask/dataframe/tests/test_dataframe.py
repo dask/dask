@@ -5396,3 +5396,16 @@ def test_datetime_partitions_are_plain_scalars():
 
     result = ddf.divisions[0]
     assert type(result) is pd.Timestamp
+
+
+def test_loc_partitions_are_plain_scalars():
+    indexer = pd.Series([1, 100, 300])
+    df = pd.DataFrame(
+        {"a": range(8), "index": [1, 5, 10, 11, 12, 100, 200, 300]}
+    ).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+    result = ddf.loc[indexer]
+    assert type(result.divisions[0]) is int
+
+    result = ddf.loc[indexer.tolist()]
+    assert type(result.divisions[0]) is int

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 from threading import Lock
 from typing import TYPE_CHECKING
 
@@ -278,24 +279,16 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     if (npartitions is None) == (chunksize is None):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
-    # Find unique-offset array (if duplicates exist).
-    # Note that np.unique(seq) should work in all cases
-    # for newer versions of numpy/pandas
-    seq_unique = seq.unique() if hasattr(seq, "unique") else np.unique(seq)
-    duplicates = len(seq_unique) < len(seq)
-    enforce_exact = False
-
     # Convert from an ndarray to a plain list so that
     # any divisions we extract from seq are plain Python scalars.
     seq = tolist(seq)
+    # we use bisect later, so we need sorted.
+    seq_unique = sorted(set(seq))
+    duplicates = len(seq_unique) < len(seq)
+    enforce_exact = False
 
     if duplicates:
-        offsets = (
-            # Avoid numpy conversion (necessary for dask-cudf)
-            seq.searchsorted(seq_unique, side="left")
-            if hasattr(seq, "searchsorted")
-            else np.array(seq).searchsorted(seq_unique, side="left")
-        )
+        offsets = [bisect.bisect_left(seq, x) for x in seq_unique]
         enforce_exact = npartitions and len(offsets) >= npartitions
     else:
         offsets = seq_unique = None
@@ -332,7 +325,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         if duplicates:
             # Note: cupy requires casts to `int` below
             if ind is None:
-                ind = int((seq_unique == seq[i]).nonzero()[0][0])
+                ind = bisect.bisect_left(seq_unique, seq[i])
             if enforce_exact:
                 # Avoid "over-stepping" too many unique
                 # values when npartitions is approximately
