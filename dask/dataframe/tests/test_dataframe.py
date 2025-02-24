@@ -903,6 +903,7 @@ def test_map_partitions():
         d.map_partitions(lambda df: 1),
         pd.Series([1, 1, 1], dtype=np.int64),
         check_divisions=False,
+        check_index=False,
     )
 
 
@@ -4575,19 +4576,24 @@ def test_meta_nonempty_uses_meta_value_if_provided():
         assert_eq(expected, actual)
 
 
-def test_dask_dataframe_holds_scipy_sparse_containers():
+@pytest.mark.parametrize("container", ["array", "matrix"])
+def test_dask_dataframe_holds_scipy_sparse_containers(container):
     sparse = pytest.importorskip("scipy.sparse")
     da = pytest.importorskip("dask.array")
+    if container == "array" and not hasattr(sparse, "csr_array"):
+        pytest.skip("scipy<1.11 has no sparray")
+    cls = sparse.csr_matrix if container == "matrix" else sparse.csr_array
+
     x = da.random.random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
     df = dd.from_dask_array(x)
-    y = df.map_partitions(sparse.csr_matrix)
+    y = df.map_partitions(cls)
 
     assert isinstance(y, da.Array)
 
     vs = y.to_delayed().flatten().tolist()
     values = dask.compute(*vs, scheduler="single-threaded")
-    assert all(isinstance(v, sparse.csr_matrix) for v in values)
+    assert all(isinstance(v, cls) for v in values)
 
 
 @pytest.mark.xfail(reason="we can't do this yet")
@@ -5353,3 +5359,53 @@ def test_array_to_df_conversion():
     result = arr.map_blocks(foo, meta=pd.DataFrame(np.random.random((1, 10))))
     expected = pd.DataFrame(arr.compute())
     assert_eq(result, expected, check_index=False)
+
+
+@pytest.mark.parametrize("npartitions", [1, 5])
+def test_map_partitions_always_series(npartitions):
+    pdf = pd.DataFrame({"x": range(50)})
+    ddf = dd.from_pandas(pdf, npartitions)
+
+    def assert_series(x):
+        assert isinstance(x, pd.Series)
+        return x
+
+    res = ddf.x.map_partitions(M.min).map_partitions(assert_series).compute()
+    assert len(res) == ddf.npartitions
+    assert min(res) == min(pdf.x)
+
+    assert ddf.x.map_partitions(M.min).count().compute() == ddf.npartitions
+
+
+def test_partitions_are_plain_scalars():
+    # https://github.com/dask/dask/issues/11765
+    df = pd.DataFrame(
+        {"a": range(8), "index": [1, 5, 10, 11, 12, 100, 200, 300]}
+    ).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    result = ddf.divisions[0]
+    assert type(result) is int
+
+
+def test_datetime_partitions_are_plain_scalars():
+    df = pd.DataFrame(
+        {"a": range(8), "index": pd.date_range("2000", periods=8)}
+    ).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    result = ddf.divisions[0]
+    assert type(result) is pd.Timestamp
+
+
+def test_loc_partitions_are_plain_scalars():
+    indexer = pd.Series([1, 100, 300])
+    df = pd.DataFrame(
+        {"a": range(8), "index": [1, 5, 10, 11, 12, 100, 200, 300]}
+    ).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+    result = ddf.loc[indexer]
+    assert type(result.divisions[0]) is int
+
+    result = ddf.loc[indexer.tolist()]
+    assert type(result.divisions[0]) is int

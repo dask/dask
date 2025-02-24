@@ -5,7 +5,7 @@ import re
 import sys
 import textwrap
 import traceback
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from numbers import Number
 from typing import TypeVar, overload
@@ -15,7 +15,7 @@ import pandas as pd
 from pandas.api.types import is_dtype_equal
 
 import dask
-from dask.base import get_scheduler, is_dask_collection
+from dask.base import is_dask_collection
 from dask.core import get_deps
 from dask.dataframe._compat import tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
@@ -41,6 +41,22 @@ try:
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
+
+
+def is_scalar(x):
+    # np.isscalar does not work for some pandas scalars, for example pd.NA
+    if isinstance(x, (Sequence, Iterable)) and not isinstance(x, str):
+        return False
+    elif hasattr(x, "dtype"):
+        return isinstance(x, np.ScalarType)
+    if isinstance(x, dict):
+        return False
+    if isinstance(x, (str, int)) or x is None:
+        return True
+
+    from dask.dataframe.dask_expr._expr import Expr
+
+    return not isinstance(x, Expr)
 
 
 def is_integer_na_dtype(t):
@@ -588,24 +604,7 @@ def assert_divisions(ddf, scheduler=None):
     if not getattr(ddf, "known_divisions", False):
         return
 
-    def index(x):
-        if is_index_like(x):
-            return x
-        try:
-            return x.index.get_level_values(0)
-        except AttributeError:
-            return x.index
-
-    get = get_scheduler(scheduler=scheduler, collections=[type(ddf)])
-    results = get(ddf.dask, ddf.__dask_keys__())
-    for i, df in enumerate(results[:-1]):
-        if len(df):
-            assert index(df).min() >= ddf.divisions[i]
-            assert index(df).max() < ddf.divisions[i + 1]
-
-    if len(results[-1]):
-        assert index(results[-1]).min() >= ddf.divisions[-2]
-        assert index(results[-1]).max() <= ddf.divisions[-1]
+    ddf.enforce_runtime_divisions().compute(scheduler=scheduler)
 
 
 def assert_sane_keynames(ddf, key_max_length=100):

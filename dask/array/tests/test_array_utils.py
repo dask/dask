@@ -25,6 +25,10 @@ except ImportError:
     pass
 
 
+if da._array_expr_enabled():
+    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
+
+
 @pytest.mark.parametrize("asarray", asarrays)
 def test_meta_from_array(asarray):
     x = np.array(1)
@@ -78,6 +82,24 @@ def test_meta_from_array_type_inputs():
     assert_eq(x, x)
 
     assert da.from_array(np.ones(5).astype(np.int32), meta=np.ndarray).dtype == np.int32
+
+
+def test_meta_from_array_scipy_sparse():
+    pytest.importorskip("scipy.sparse")
+    import scipy.sparse
+
+    # Note: csr_matrix can exclusively have ndim=2
+    x = scipy.sparse.csr_matrix([[2, 3]])
+    meta = meta_from_array(x)
+    assert isinstance(meta, type(x))
+
+    meta = meta_from_array(x, ndim=2)
+    assert isinstance(meta, type(x))
+    assert meta.shape == (0, 0)
+
+    meta = meta_from_array(x, dtype=np.float32)
+    assert isinstance(meta, type(x))
+    assert meta.dtype == np.float32
 
 
 @pytest.mark.parametrize(

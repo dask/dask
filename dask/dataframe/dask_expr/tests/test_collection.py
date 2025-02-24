@@ -22,7 +22,6 @@ from dask.dataframe.dask_expr import (
     expr,
     from_dict,
     from_pandas,
-    is_scalar,
     isna,
     optimize,
     to_datetime,
@@ -40,7 +39,7 @@ from dask.dataframe.dask_expr._shuffle import Shuffle
 from dask.dataframe.dask_expr.datasets import timeseries
 from dask.dataframe.dask_expr.io import FromPandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
-from dask.dataframe.utils import UNKNOWN_CATEGORIES, pyarrow_strings_enabled
+from dask.dataframe.utils import UNKNOWN_CATEGORIES, is_scalar, pyarrow_strings_enabled
 from dask.utils import M
 
 # Set DataFrame backend for this module
@@ -2594,6 +2593,8 @@ def test_astype_filter_pushdown(df, pdf):
 def test_warn_annotations():
     from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
 
+    dask.dataframe.dask_expr._collection._WARN_ANNOTATIONS = True
+
     with pytest.warns(UserWarning, match="annotations.*retries.*ignore"):
         with dask.annotate(retries=3):
             from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
@@ -2783,3 +2784,27 @@ def test_to_backend_simplify():
         assert str(df2.expr) != str(df[["y"]].expr)
         df3 = df2.simplify()
         assert str(df3.expr) == str(df[["y"]].expr)
+
+
+def test_getitem_triggering_unnecessary_alignment():
+    df = pd.DataFrame(
+        {
+            "A": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "B": [9, 8, 7, 6, 5, 4, 3, 2, 1],
+            "C": [True, False, True] * 3,
+        },
+        columns=list("ABC"),
+    )
+    ddf = from_pandas(df, 2)
+    result = ddf[ddf.C]
+    expr = result.expr.optimize()
+    assert expr.__dask_graph__()
+    assert_eq(result, df[df.C])
+
+
+def test_projection_on_series():
+    pdf = pd.DataFrame(data={"a": [1, 3, 2]}).a
+    df = from_pandas(pdf, npartitions=1)
+    result = df.replace(1, 5)
+    assert_eq(result, pdf.replace(1, 5))
+    assert_eq(result.fillna(0), pdf.replace(1, 5).fillna(0))

@@ -149,7 +149,7 @@ def keys_in_tasks(keys: Collection[Key], tasks: Iterable[Any], as_list: bool = F
 def iskey(key: object) -> bool:
     """Return True if the given object is a potential dask key; False otherwise.
 
-    The definition of a key in a Dask graph is any str, bytes, int, float, or tuple
+    The definition of a key in a Dask graph is any str, int, float, or tuple
     thereof.
 
     See Also
@@ -161,7 +161,7 @@ def iskey(key: object) -> bool:
     typ = type(key)
     if typ is tuple:
         return all(iskey(i) for i in cast(tuple, key))
-    return typ in {bytes, int, float, str}
+    return typ in {int, float, str}
 
 
 def validate_key(key: object) -> None:

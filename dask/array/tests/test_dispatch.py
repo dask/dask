@@ -10,6 +10,9 @@ from dask.array import Array
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
 from dask.array.utils import assert_eq
 
+if da._array_expr_enabled():
+    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
+
 
 def wrap(func_name):
     """
