@@ -78,6 +78,12 @@ def create_array_collection(expr):
 
 @get_collection_type.register(np.ndarray)
 def get_collection_type_array(_):
+    import dask.array as da
+
+    if da._array_expr_enabled():
+        from dask.array._array_expr._collection import Array
+
+        return Array
     return create_array_collection
 
 
@@ -91,5 +97,12 @@ if sparse_installed:  # type: ignore[misc]
 if scipy_installed:  # type: ignore[misc]
 
     @get_collection_type.register(sp.csr_matrix)
+    def get_collection_type_array(_):
+        return create_array_collection
+
+
+if scipy_installed and hasattr(sp, "sparray"):  # type: ignore[misc]
+
+    @get_collection_type.register(sp.csr_array)
     def get_collection_type_array(_):
         return create_array_collection

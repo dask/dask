@@ -141,6 +141,7 @@ class ArrayExpr(Expr):
         from dask.array._array_expr._rechunk import Rechunk
 
         result = Rechunk(self, chunks, threshold, block_size_limit, balance, method)
+        # Ensure that chunks are compatible
         result.chunks
         return result
 

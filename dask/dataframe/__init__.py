@@ -98,6 +98,7 @@ __all__ = [
     "merge",
     "merge_asof",
     "pivot_table",
+    "demo",
     "read_csv",
     "read_fwf",
     "read_hdf",

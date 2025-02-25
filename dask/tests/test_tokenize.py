@@ -10,6 +10,7 @@ import random
 import subprocess
 import sys
 import textwrap
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum, Flag, IntEnum, IntFlag
 from typing import Union
 
@@ -1446,3 +1447,20 @@ def test_tokenize_recursive_respects_ensure_deterministic():
 
     with pytest.raises(RuntimeError):
         tokenize(Foo(), ensure_deterministic=True)
+
+
+def test_tokenize_nested_sequence_thread_safe():
+    nested_list = []
+    for ix in range(100):
+        nested_list = [ix, nested_list]
+
+    nested_dict = {}
+    for ix in range(50):
+        nested_dict = {ix: nested_dict}
+
+    normalize_token(nested_list)
+    with ThreadPoolExecutor() as pool:
+        futures = [pool.submit(normalize_token, nested_list) for _ in range(1000)]
+        assert len({f.result() for f in futures}) == 1
+        futures = [pool.submit(normalize_token, nested_dict) for _ in range(1000)]
+        assert len({f.result() for f in futures}) == 1

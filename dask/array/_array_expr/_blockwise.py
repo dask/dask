@@ -109,7 +109,7 @@ class Blockwise(ArrayExpr):
                         raise NotImplementedError(
                             "adjust_chunks values must be callable, int, or tuple"
                         )
-        chunks = tuple(chunks)
+            chunks = tuple(chunks)
         return chunks
 
     @cached_property

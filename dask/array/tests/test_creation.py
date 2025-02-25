@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pickle
+
 import pytest
 
 from dask._task_spec import Alias
@@ -227,6 +229,26 @@ def test_arange():
     nparr = np.arange(0, -1, 0.5)
     assert_eq(darr, nparr)
 
+    # stop and/or step as kwargs
+    darr = da.arange(stop=10)
+    nparr = np.arange(stop=10)
+    assert_eq(darr, nparr)
+
+    darr = da.arange(10, step=2)
+    nparr = np.arange(10, step=2)
+    assert_eq(darr, nparr)
+
+    darr = da.arange(stop=10, step=2)
+    nparr = np.arange(stop=10, step=2)
+    assert_eq(darr, nparr)
+
+    darr = da.arange(3, stop=10, step=2)
+    nparr = np.arange(3, stop=10, step=2)
+    assert_eq(darr, nparr)
+
+    with pytest.raises(TypeError, match="requires stop"):
+        da.arange()
+
     # Unexpected or missing kwargs
     with pytest.raises(TypeError, match="whatsthis"):
         da.arange(10, chunks=-1, whatsthis=1)
@@ -234,35 +256,58 @@ def test_arange():
     assert da.arange(10).chunks == ((10,),)
 
 
+arange_dtypes = [
+    np.uint8,
+    np.uint64,
+    np.int8,
+    np.int64,
+    np.float32,
+    np.float64,
+]
+
+
+# FIXME hypothesis would be much better suited for this
+@pytest.mark.parametrize("start_type", arange_dtypes + [int, float])
+@pytest.mark.parametrize("stop_type", arange_dtypes + [int, float])
+@pytest.mark.parametrize("step_type", arange_dtypes + [int, float])
+def test_arange_dtype_infer(start_type, stop_type, step_type):
+    start = start_type(3)
+    stop = stop_type(13)
+    step = step_type(2)
+    a_np = np.arange(start, stop, step)
+    a_da = da.arange(start, stop, step)
+    assert_eq(a_np, a_da)
+
+
+@pytest.mark.parametrize("dtype", arange_dtypes)
+def test_arange_dtype_force(dtype):
+    assert da.arange(10, dtype=dtype).dtype == dtype
+    assert da.arange(np.float32(10), dtype=dtype).dtype == dtype
+    assert da.arange(np.int64(10), dtype=dtype).dtype == dtype
+
+
+@pytest.mark.skipif(np.array(0).dtype == np.int32, reason="64-bit platforms only")
 @pytest.mark.parametrize(
-    "start,stop,step,dtype",
+    "start,stop,step",
     [
-        (0, 1, 1, None),  # int64
-        (1.5, 2, 1, None),  # float64
-        (1, 2.5, 1, None),  # float64
-        (1, 2, 0.5, None),  # float64
-        (np.float32(1), np.float32(2), np.float32(1), None),  # promoted to float64
-        (np.int32(1), np.int32(2), np.int32(1), None),  # promoted to int64
-        (np.uint32(1), np.uint32(2), np.uint32(1), None),  # promoted to int64
-        (np.uint64(1), np.uint64(2), np.uint64(1), None),  # promoted to float64
-        (np.uint32(1), np.uint32(2), np.uint32(1), np.uint32),
-        (np.uint64(1), np.uint64(2), np.uint64(1), np.uint64),
-        # numpy.arange gives unexpected results
-        # https://github.com/numpy/numpy/issues/11505
-        # (1j, 2, 1, None),
-        # (1, 2j, 1, None),
-        # (1, 2, 1j, None),
-        # (1+2j, 2+3j, 1+.1j, None),
+        (2**63 - 10_000, 2**63 - 1, 1),
+        (2**63 - 1, 2**63 - 10_000, -1),
+        (0, 2**63 - 1, 2**63 - 10_000),
+        (0.0, 2**63 - 1, 2**63 - 10_000),
+        (0.0, -9_131_138_316_486_228_481, -92_233_720_368_547_759),
     ],
 )
-def test_arange_dtypes(start, stop, step, dtype):
-    a_np = np.arange(start, stop, step, dtype=dtype)
-    a_da = da.arange(start, stop, step, dtype=dtype, chunks=-1)
+def test_arange_very_large_args(start, stop, step):
+    """Test args that are very close to 2**63
+    https://github.com/dask/dask/issues/11706
+    """
+    a_np = np.arange(start, stop, step)
+    a_da = da.arange(start, stop, step)
     assert_eq(a_np, a_da)
 
 
 @pytest.mark.xfail(
-    reason="Casting floats to ints is not supported since edge"
+    reason="Casting floats to ints is not supported since edge "
     "behavior is not specified or guaranteed by NumPy."
 )
 def test_arange_cast_float_int_step():
@@ -948,6 +993,23 @@ def test_pad_udf(kwargs):
     assert_eq(np_r, da_r)
 
 
+def test_pad_constant_chunksizes():
+    array = dask.array.ones((10, 10), chunks=(1, 1))
+    result = dask.array.pad(
+        array, ((0, 16 - 10), (0, 0)), mode="constant", constant_values=0
+    )
+    assert tuple(map(max, result.chunks)) == (1, 1)
+    assert_eq(
+        result,
+        np.pad(
+            array.compute(),
+            mode="constant",
+            constant_values=0,
+            pad_width=((0, 16 - 10), (0, 0)),
+        ),
+    )
+
+
 def test_auto_chunks():
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.ones((10000, 10000))
@@ -1033,3 +1095,18 @@ def test_nan_full_like(val, shape_chunks, dtype):
         da.full_like(y1, val, dtype=dtype),
         np.full_like(y2, val, dtype=dtype),
     )
+
+
+@pytest.mark.parametrize(
+    "func", [da.array, da.asarray, da.asanyarray, da.arange, da.tri]
+)
+def test_like_forgets_graph(func):
+    """Test that array creation functions with like=x do not
+    internally store the graph of x
+    """
+    x = da.arange(3).map_blocks(lambda x: x)
+    with pytest.raises(Exception, match="local object"):
+        pickle.dumps(x)
+
+    a = func(1, like=x)
+    pickle.dumps(a)

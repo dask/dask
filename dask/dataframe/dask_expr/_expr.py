@@ -37,7 +37,6 @@ from dask.dataframe.dask_expr._util import (
     _calc_maybe_new_divisions,
     _convert_to_list,
     _tokenize_partial,
-    is_scalar,
 )
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chunk
@@ -45,6 +44,7 @@ from dask.dataframe.shuffle import drop_overlap, get_overlap
 from dask.dataframe.utils import (
     clear_known_categories,
     drop_by_shallow_copy,
+    is_scalar,
     raise_on_meta_error,
     valid_divisions,
 )
@@ -60,6 +60,8 @@ from dask.utils import (
     pseudorandom,
     random_state_data,
 )
+
+optimize = core.optimize
 
 
 class Expr(core.Expr):
@@ -176,8 +178,6 @@ class Expr(core.Expr):
 
     def __getitem__(self, other):
         if isinstance(other, Expr):
-            if not are_co_aligned(self, other):
-                return FilterAlign(self, other)
             return Filter(self, other)
         else:
             return Projection(self, other)  # df[["a", "b", "c"]]
@@ -520,7 +520,12 @@ class Expr(core.Expr):
     def _filter_simplification(self, parent, predicate=None):
         if predicate is None:
             predicate = parent.predicate.substitute(self, self.frame)
-        return type(self)(self.frame[predicate], *self.operands[1:])
+        if are_co_aligned(self.frame, predicate):
+            # Only do this if we are aligned
+            return type(self)(self.frame[predicate], *self.operands[1:])
+
+    def fuse(self):
+        return optimize_blockwise_fusion(self)
 
 
 class Literal(Expr):
@@ -1626,14 +1631,26 @@ class Where(Elemwise):
 
 
 def _check_divisions(df, i, division_min, division_max, last):
+    if not len(df):
+        return df
+    if is_index_like(df):
+        index = df
+    else:
+        try:
+            index = df.index.get_level_values(0)
+        except AttributeError:
+            index = df.index
     # Check divisions
-    real_min = df.index.min()
-    real_max = df.index.max()
+    real_min = index.min()
+    real_max = index.max()
     # Upper division of the last partition is often set to
     # the max value. For all other partitions, the upper
     # division should be greater than the maximum value.
-    valid_min = real_min >= division_min
-    valid_max = (real_max <= division_max) if last else (real_max < division_max)
+    valid_min = valid_max = True
+    if not pd.isna(division_min):
+        valid_min = real_min >= division_min
+    if not pd.isna(division_max):
+        valid_max = (real_max <= division_max) if last else (real_max < division_max)
     if not (valid_min and valid_max):
         raise RuntimeError(
             f"`enforce_runtime_divisions` failed for partition {i}."
@@ -1660,7 +1677,7 @@ class EnforceRuntimeDivisions(Blockwise):
             self.divisions[index + 1],
             index == (self.npartitions - 1),
         ]
-        return (self.operation,) + tuple(args)  # type: ignore
+        return Task(name, self.operation, *args)
 
 
 class Abs(Elemwise):
@@ -3074,7 +3091,7 @@ class _DelayedExpr(Expr):
 
 
 class DelayedsExpr(Expr):
-    _parameters = []  # type: ignore
+    _parameters = []
 
     def __init__(self, *delayed_objects):
         self.operands = delayed_objects
@@ -3106,64 +3123,6 @@ class DelayedsExpr(Expr):
 @normalize_token.register(Expr)
 def normalize_expression(expr):
     return expr._name
-
-
-def optimize_until(expr: Expr, stage: core.OptimizerStage) -> Expr:
-    result = expr
-    if stage == "logical":
-        return result
-
-    # Simplify
-    expr = result.simplify()  # type: ignore
-    if stage == "simplified-logical":
-        return expr
-
-    # Manipulate Expression to make it more efficient
-    expr = expr.rewrite(kind="tune", rewritten={})
-    if stage == "tuned-logical":
-        return expr
-
-    # Lower
-    expr = expr.lower_completely()  # type: ignore
-    if stage == "physical":
-        return expr
-
-    # Simplify again
-    expr = expr.simplify()  # type: ignore
-    if stage == "simplified-physical":
-        return expr
-
-    # Final graph-specific optimizations
-    expr = optimize_blockwise_fusion(expr)
-    if stage == "fused":
-        return expr
-
-    raise ValueError(f"Stage {stage!r} not supported.")
-
-
-def optimize(expr: Expr, fuse: bool = True) -> Expr:
-    """High level query optimization
-
-    This leverages three optimization passes:
-
-    1.  Class based simplification using the ``_simplify`` function and methods
-    2.  Blockwise fusion
-
-    Parameters
-    ----------
-    expr:
-        Input expression to optimize
-    fuse:
-        whether or not to turn on blockwise fusion
-
-    See Also
-    --------
-    simplify
-    optimize_blockwise_fusion
-    """
-    stage: core.OptimizerStage = "fused" if fuse else "simplified-physical"
-
-    return optimize_until(expr, stage)
 
 
 def is_broadcastable(dfs, s):
@@ -3920,7 +3879,9 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
         # we are accesing the index
         column_union = []
 
-    if column_union == expr.frame.columns:
+    if column_union == expr.frame.columns or not column_union and expr.ndim < 2:
+        # this projection is for the index, but the elements are unknown, so
+        # don't project
         return
     result = type(expr)(expr.frame[column_union], *expr.operands[1:])
     if column_union == parent.operand("columns"):
