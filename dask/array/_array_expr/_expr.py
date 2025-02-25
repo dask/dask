@@ -10,8 +10,8 @@ import numpy as np
 import toolz
 from tlz import accumulate
 
-from dask._expr import Expr
-from dask._task_spec import Task, TaskRef
+from dask._expr import Expr, FinalizeCompute
+from dask._task_spec import List, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
@@ -76,7 +76,7 @@ class ArrayExpr(Expr):
             raise ValueError(msg)
         return int(sum(self.chunks[0]))
 
-    def __dask_keys__(self):
+    def __dask_keys_refs__(self):
         out = self.lower_completely()
         if self._cached_keys is not None:
             return self._cached_keys
@@ -85,16 +85,33 @@ class ArrayExpr(Expr):
 
         def keys(*args):
             if not chunks:
-                return [(name,)]
+                return List(TaskRef((name,)))
             ind = len(args)
             if ind + 1 == len(numblocks):
-                result = [(name,) + args + (i,) for i in range(numblocks[ind])]
+                result = List(
+                    *(TaskRef((name,) + args + (i,)) for i in range(numblocks[ind]))
+                )
             else:
-                result = [keys(*(args + (i,))) for i in range(numblocks[ind])]
+                result = List(*(keys(*(args + (i,))) for i in range(numblocks[ind])))
             return result
 
         self._cached_keys = result = keys()
         return result
+
+    def __dask_tokenize__(self):
+        return self._name
+
+    def __dask_keys__(self):
+        # TODO: Should this be a cached property instead? Do I need to cache
+        # this unwrapping?
+        key_refs = self.__dask_keys_refs__()
+
+        def unwrap(task):
+            if isinstance(task, List):
+                return [unwrap(t) for t in task.args]
+            return task.key
+
+        return unwrap(key_refs)
 
     def __hash__(self):
         return hash(self._name)
@@ -216,7 +233,7 @@ class Stack(ArrayExpr):
 
     @functools.cached_property
     def _name(self):
-        return "stack-" + _tokenize_deterministic(*self.operands)
+        return "stack-" + self.deterministic_token
 
     def _layer(self) -> dict:
         keys = list(product([self._name], *[range(len(bd)) for bd in self.chunks]))
@@ -282,3 +299,20 @@ class Concatenate(ArrayExpr):
         ]
 
         return dict(zip(keys, values))
+class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
+    _parameters = ["arr"]
+
+    def chunks(self):
+        return (self.arr.shape,)
+
+    def _simplify_down(self):
+        if self.arr.numblocks in ((), (1,)):
+            return self.arr
+        else:
+            from dask.array._array_expr._rechunk import Rechunk
+
+            return Rechunk(
+                self.arr,
+                tuple(-1 for _ in range(self.arr.ndim)),
+                method="tasks",
+            )
