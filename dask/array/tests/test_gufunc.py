@@ -700,3 +700,25 @@ def test_as_gufunc_with_meta():
     # the expected output to a `np.ndarray`, as `meta` defines the output
     # should be.
     assert_eq(np.array([expected[1].compute()]), result[1].compute())
+
+
+def test_gufunc_chunksizes_adjustment():
+    def foo(x, *args):
+        # simulating xarray interpolate (kind off)
+        return x
+
+    arr = da.random.random((1, 459, 750), chunks=(1, -1, 250))
+    arr2 = da.random.random((750,), chunks=(-1,))
+
+    result = apply_gufunc(
+        foo,
+        "(dim0_0),(dim0_1),(dim0_2)->(dim0)",
+        *[arr, arr2, arr2.copy()],
+        keepdims=False,
+        output_dtypes=["float64"],
+        output_sizes={"dim0": 750},
+        vectorize=False,
+        allow_rechunk=True,
+    )
+    assert result.chunks == ((1,), (153, 153, 153), (750,))
+    assert_eq(result, arr.compute())
