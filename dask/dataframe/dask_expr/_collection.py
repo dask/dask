@@ -5519,10 +5519,10 @@ def concat(
         Concat(
             join,
             ignore_order,
-            kwargs,
             axis,
             ignore_unknown_divisions,
             interleave_partitions,
+            kwargs,
             *dfs,
         )
     )
