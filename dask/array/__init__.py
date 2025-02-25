@@ -653,6 +653,7 @@ if _array_expr_enabled():
             random,
             rechunk,
             reduction,
+            stack,
         )
         from dask.array.reductions import (
             all,
@@ -670,10 +671,7 @@ if _array_expr_enabled():
             nanvar,
             ones,
             prod,
-            random,
-            rechunk,
             reduction,
-            stack,
             std,
             sum,
             var,
