@@ -1019,6 +1019,8 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             )
 
     (bins_ref, range_ref), deps = unpack_collections([bins, range])
+    if not isinstance(bins, np.ndarray):
+        raise NotImplementedError
 
     # Map the histogram to all bins, forming a 2D array of histograms, stacked for each chunk
     if weights is None:

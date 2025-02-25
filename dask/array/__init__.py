@@ -473,6 +473,34 @@ if _array_expr_enabled():
             true_divide,
             trunc,
             zeros,
+            array,
+            result_type,
+            atleast_1d,
+            atleast_2d,
+            atleast_3d,
+            vstack,
+            hstack,
+            dstack,
+            swapaxes,
+            transpose,
+            flip,
+            flipud,
+            fliplr,
+            rot90,
+            tensordot,
+            dot,
+            vdot,
+            matmul,
+            outer,
+            apply_along_axis,
+            apply_over_axes,
+            ptp,
+            ediff1d,
+            diff,
+            gradient,
+            digitize,
+            searchsorted,
+
         )
         from dask.array.reductions import (
             all,
@@ -543,12 +571,7 @@ if _array_expr_enabled():
         trace = raise_not_implemented_error("trace")
         allclose = raise_not_implemented_error("allclose")
         append = raise_not_implemented_error("append")
-        apply_along_axis = raise_not_implemented_error("apply_along_axis")
-        apply_over_axes = raise_not_implemented_error("apply_over_axes")
         around = raise_not_implemented_error("around")
-        atleast_1d = raise_not_implemented_error("atleast_1d")
-        atleast_2d = raise_not_implemented_error("atleast_2d")
-        atleast_3d = raise_not_implemented_error("atleast_3d")
         average = raise_not_implemented_error("average")
         bincount = raise_not_implemented_error("bincount")
         choose = raise_not_implemented_error("choose")
@@ -557,47 +580,28 @@ if _array_expr_enabled():
         count_nonzero = raise_not_implemented_error("count_nonzero")
         cov = raise_not_implemented_error("cov")
         delete = raise_not_implemented_error("delete")
-        diff = raise_not_implemented_error("diff")
-        digitize = raise_not_implemented_error("digitize")
-        dot = raise_not_implemented_error("dot")
-        dstack = raise_not_implemented_error("dstack")
-        ediff1d = raise_not_implemented_error("ediff1d")
         einsum = raise_not_implemented_error("einsum")
         expand_dims = raise_not_implemented_error("expand_dims")
         extract = raise_not_implemented_error("extract")
         flatnonzero = raise_not_implemented_error("flatnonzero")
-        flip = raise_not_implemented_error("flip")
-        fliplr = raise_not_implemented_error("fliplr")
-        flipud = raise_not_implemented_error("flipud")
-        gradient = raise_not_implemented_error("gradient")
         histogram = raise_not_implemented_error("histogram")
         histogram2d = raise_not_implemented_error("histogram2d")
         histogramdd = raise_not_implemented_error("histogramdd")
-        hstack = raise_not_implemented_error("hstack")
         insert = raise_not_implemented_error("insert")
         isclose = raise_not_implemented_error("isclose")
         isin = raise_not_implemented_error("isin")
         isnull = raise_not_implemented_error("isnull")
-        matmul = raise_not_implemented_error("matmul")
         ndim = raise_not_implemented_error("ndim")
         nonzero = raise_not_implemented_error("nonzero")
         notnull = raise_not_implemented_error("notnull")
-        outer = raise_not_implemented_error("outer")
         piecewise = raise_not_implemented_error("piecewise")
-        ptp = raise_not_implemented_error("ptp")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
-        result_type = raise_not_implemented_error("result_type")
         roll = raise_not_implemented_error("roll")
-        rot90 = raise_not_implemented_error("rot90")
         round = raise_not_implemented_error("round")
-        searchsorted = raise_not_implemented_error("searchsorted")
         select = raise_not_implemented_error("select")
         shape = raise_not_implemented_error("shape")
         squeeze = raise_not_implemented_error("squeeze")
-        swapaxes = raise_not_implemented_error("swapaxes")
         take = raise_not_implemented_error("take")
-        tensordot = raise_not_implemented_error("tensordot")
-        transpose = raise_not_implemented_error("transpose")
         tril = raise_not_implemented_error("tril")
         tril_indices = raise_not_implemented_error("tril_indices")
         tril_indices_from = raise_not_implemented_error("tril_indices_from")
@@ -607,8 +611,6 @@ if _array_expr_enabled():
         union1d = raise_not_implemented_error("union1d")
         unique = raise_not_implemented_error("unique")
         unravel_index = raise_not_implemented_error("unravel_index")
-        vdot = raise_not_implemented_error("vdot")
-        vstack = raise_not_implemented_error("vstack")
         where = raise_not_implemented_error("where")
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")
