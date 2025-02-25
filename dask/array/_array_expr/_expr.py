@@ -6,7 +6,8 @@ from operator import mul
 import numpy as np
 import toolz
 
-from dask._expr import Expr
+from dask._expr import Expr, FinalizeCompute
+from dask._task_spec import List, TaskRef
 from dask.array.core import T_IntOrNaN, common_blockdim
 from dask.blockwise import broadcast_dimensions
 from dask.utils import cached_cumsum
@@ -52,7 +53,7 @@ class ArrayExpr(Expr):
     def name(self):
         return self._name
 
-    def __dask_keys__(self):
+    def __dask_keys_refs__(self):
         out = self.lower_completely()
         if self._cached_keys is not None:
             return self._cached_keys
@@ -61,16 +62,33 @@ class ArrayExpr(Expr):
 
         def keys(*args):
             if not chunks:
-                return [(name,)]
+                return List(TaskRef((name,)))
             ind = len(args)
             if ind + 1 == len(numblocks):
-                result = [(name,) + args + (i,) for i in range(numblocks[ind])]
+                result = List(
+                    *(TaskRef((name,) + args + (i,)) for i in range(numblocks[ind]))
+                )
             else:
-                result = [keys(*(args + (i,))) for i in range(numblocks[ind])]
+                result = List(*(keys(*(args + (i,))) for i in range(numblocks[ind])))
             return result
 
         self._cached_keys = result = keys()
         return result
+
+    def __dask_tokenize__(self):
+        return self._name
+
+    def __dask_keys__(self):
+        # TODO: Should this be a cached property instead? Do I need to cache
+        # this unwrapping?
+        key_refs = self.__dask_keys_refs__()
+
+        def unwrap(task):
+            if isinstance(task, List):
+                return [unwrap(t) for t in task.args]
+            return task.key
+
+        return unwrap(key_refs)
 
     def __hash__(self):
         return hash(self._name)
@@ -165,3 +183,22 @@ def unify_chunks_expr(*args):
                 pass
         arrays.extend([a, i])
     return chunkss, arrays, changed
+
+
+class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
+    _parameters = ["arr"]
+
+    def chunks(self):
+        return (self.arr.shape,)
+
+    def _simplify_down(self):
+        if self.arr.numblocks in ((), (1,)):
+            return self.arr
+        else:
+            from dask.array._array_expr._rechunk import Rechunk
+
+            return Rechunk(
+                self.arr,
+                tuple(-1 for _ in range(self.arr.ndim)),
+                method="tasks",
+            )

@@ -1007,6 +1007,9 @@ class FinalizeCompute(Expr):
     _parameters = ["expr"]
 
     def _simplify_down(self):
+        # TODO: Probably introducing a method on the Expr to make this dispatch
+        # obsolete is nicer than all of those try/except blocks and it's easier
+        # to extend
 
         expr = self.operands[0]
         if isinstance(expr, FinalizeCompute):
@@ -1023,6 +1026,13 @@ class FinalizeCompute(Expr):
 
             if isinstance(expr, DFExpr):
                 return FinalizeComputeDF(expr)
+        except ImportError:
+            pass
+        try:
+            from dask.array._array_expr._expr import ArrayExpr, FinalizeComputeArray
+
+            if isinstance(expr, ArrayExpr):
+                return FinalizeComputeArray(expr)
         except ImportError:
             pass
         return expr
