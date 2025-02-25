@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from dask.dataframe import from_array
 from dask.dataframe.dask_expr import (
     DataFrame,
     FrameBase,
@@ -369,4 +370,13 @@ def test_concat_single_partition_known_divisions(join, npartitions):
 
     result = concat([df1, df2], axis=1, join=join)
     expected = pd.concat([df1.compute(), df2.compute()], axis=1, join=join)
+    assert_eq(result, expected)
+
+
+def test_concat_mixed_dtype_columns():
+    arr = np.random.random(size=(500, 4))
+    df1 = from_array(arr, chunksize=200, columns=[0, 1, 2, "_y"])
+    df2 = from_array(arr, chunksize=200, columns=[0, 1, 2, "_y"])
+    result = concat([df1, df2]).drop(["_y"], axis=1)
+    expected = pd.concat([df1.compute(), df2.compute()]).drop(columns="_y")
     assert_eq(result, expected)

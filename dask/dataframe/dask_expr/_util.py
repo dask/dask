@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import functools
 from collections import OrderedDict, UserDict
-from collections.abc import Hashable, Iterable, Sequence
+from collections.abc import Hashable
 from typing import Any, Literal, TypeVar, cast
 
-import numpy as np
 import pandas as pd
 from packaging.version import Version
 
 from dask import config, is_dask_collection
 from dask.dataframe._compat import is_string_dtype
 from dask.dataframe.core import is_dataframe_like, is_series_like
-from dask.tokenize import normalize_token, tokenize
+from dask.tokenize import _tokenize_deterministic, normalize_token
 from dask.utils import get_default_shuffle_method
 
 K = TypeVar("K", bound=Hashable)
@@ -79,27 +78,6 @@ def _convert_to_list(column) -> list | None:
     return column
 
 
-def is_scalar(x):
-    # np.isscalar does not work for some pandas scalars, for example pd.NA
-    if isinstance(x, (Sequence, Iterable)) and not isinstance(x, str):
-        return False
-    elif hasattr(x, "dtype"):
-        return isinstance(x, np.ScalarType)
-    if isinstance(x, dict):
-        return False
-    if isinstance(x, (str, int)) or x is None:
-        return True
-
-    from dask.dataframe.dask_expr._expr import Expr
-
-    return not isinstance(x, Expr)
-
-
-def _tokenize_deterministic(*args, **kwargs) -> str:
-    # Utility to be strict about deterministic tokens
-    return tokenize(*args, ensure_deterministic=True, **kwargs)
-
-
 def _tokenize_partial(expr, ignore: list | None = None) -> str:
     # Helper function to "tokenize" the operands
     # that are not in the `ignore` list
@@ -145,7 +123,7 @@ class _BackendData:
 
     @functools.cached_property
     def _token(self):
-        from dask.dataframe.dask_expr._util import _tokenize_deterministic
+        from dask.tokenize import _tokenize_deterministic
 
         return _tokenize_deterministic(self._data)
 

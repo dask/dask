@@ -28,6 +28,7 @@ jobs:
         os: ["windows-latest", "ubuntu-latest", "macos-14"]
         environment: ["3.10", "3.11", "3.12", "3.13"]
         extra: [null]
+        array-expr: ["false"]
         exclude:
           - os: "macos-14"
             environment: "3.10"
@@ -51,6 +52,9 @@ jobs:
           - os: "ubuntu-latest"
             environment: "3.12"
             extra: "pandas-nightly"
+          - os: "ubuntu-latest"
+            environment: "3.12"
+            array-expr: "true"
 
     env:
       PARALLEL: "true"
@@ -71,7 +75,7 @@ jobs:
           java-version: "11"
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.1.0
+        uses: conda-incubator/setup-miniconda@v3.1.1
         with:
           miniforge-version: latest
           use-mamba: true
@@ -99,8 +103,17 @@ jobs:
       - name: Install
         run: source continuous_integration/scripts/install.sh
 
+      - name: Enable Array Expr
+        if: ${{ matrix.array-expr == 'true' }}
+        run: |
+          export DASK_ARRAY__QUERY_PLANNING="True"
+          echo "DASK_ARRAY__QUERY_PLANNING: $DASK_ARRAY__QUERY_PLANNING"
+          echo "DASK_ARRAY__QUERY_PLANNING=$DASK_ARRAY__QUERY_PLANNING" >> $GITHUB_ENV
+
       - name: Run tests
         id: run_tests
+        env:
+          ARRAYEXPR: ${{ matrix.array-expr }}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
@@ -112,7 +125,8 @@ jobs:
         # ensure this runs even if pytest fails
         if: >
           always() &&
-          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
+          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure') &&
+          matrix.array-expr == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-${{ matrix.environment }}-${{ matrix.extra }}

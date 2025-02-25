@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dask.dataframe.dask_expr._core import OptimizerStage
-from dask.dataframe.dask_expr._expr import Expr, Projection, optimize_until
+from dask._expr import Expr as BaseExpr
+from dask._expr import OptimizerStage, optimize_until
+from dask.dataframe.dask_expr._expr import Expr, Projection
 from dask.dataframe.dask_expr._merge import Merge
 from dask.dataframe.dask_expr.io.parquet import ReadParquet
 from dask.utils import funcname, import_required
@@ -17,7 +18,7 @@ STAGE_LABELS: dict[OptimizerStage, str] = {
 
 
 def explain(
-    expr: Expr, stage: OptimizerStage = "fused", format: str | None = None
+    expr: BaseExpr, stage: OptimizerStage = "fused", format: str | None = None
 ) -> None:
     graphviz = import_required(
         "graphviz", "graphviz is a required dependency for using the explain method."
@@ -34,7 +35,7 @@ def explain(
     expr = optimize_until(expr, stage)
 
     seen = set(expr._name)
-    stack = [expr]
+    stack: list[BaseExpr] = [expr]
 
     while stack:
         node = stack.pop()
@@ -73,7 +74,7 @@ def _add_graphviz_edges(explain_info, graph):
         graph.edge(dep, name)
 
 
-def _explain_info(expr: Expr):
+def _explain_info(expr: BaseExpr):
     return {
         "name": expr._name,
         "label": funcname(type(expr)),
@@ -82,7 +83,10 @@ def _explain_info(expr: Expr):
     }
 
 
-def _explain_details(expr: Expr):
+def _explain_details(expr: BaseExpr):
+
+    if not isinstance(expr, Expr):
+        return {}
     details = {"npartitions": expr.npartitions}
 
     if isinstance(expr, Merge):
@@ -96,10 +100,10 @@ def _explain_details(expr: Expr):
     return details
 
 
-def _explain_dependencies(expr: Expr) -> list[tuple[str, str]]:
+def _explain_dependencies(expr: BaseExpr) -> list[tuple[str, str]]:
     dependencies = []
     for i, operand in enumerate(expr.operands):
-        if not isinstance(operand, Expr):
+        if not isinstance(operand, BaseExpr):
             continue
         param = expr._parameters[i] if i < len(expr._parameters) else ""
         dependencies.append((str(param), operand._name))

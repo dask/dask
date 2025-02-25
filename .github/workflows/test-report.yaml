@@ -26,7 +26,7 @@ jobs:
           repository: dask/distributed
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.1.0
+        uses: conda-incubator/setup-miniconda@v3.1.1
         with:
           miniforge-version: latest
           condarc-file: continuous_integration/condarc
@@ -60,7 +60,7 @@ jobs:
           mv test_report.html test_short_report.html deploy/
 
       - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@v4.7.2
+        uses: JamesIves/github-pages-deploy-action@v4.7.3
         with:
           branch: gh-pages
           folder: deploy

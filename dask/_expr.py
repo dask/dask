@@ -7,15 +7,13 @@ from collections import defaultdict
 from collections.abc import Generator
 from typing import TYPE_CHECKING, Literal
 
-import pandas as pd
 import toolz
 
 import dask
 from dask._task_spec import Task
-from dask.dataframe.core import is_dataframe_like, is_index_like, is_series_like
-from dask.dataframe.dask_expr._util import _BackendData, _tokenize_deterministic
+from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
-from dask.utils import funcname, import_required, is_arraylike
+from dask.utils import funcname, import_required
 
 if TYPE_CHECKING:
     # TODO import from typing (requires Python >=3.10)
@@ -42,9 +40,11 @@ def _unpack_collections(o):
 
 
 class Expr:
-    _parameters = []  # type: ignore
+    _parameters: list[str] = []
     _defaults: dict[str, Any] = {}
-    _instances = weakref.WeakValueDictionary()  # type: ignore
+    _instances: weakref.WeakValueDictionary[str, Expr] = weakref.WeakValueDictionary()
+
+    operands: list
 
     def __new__(cls, *args, **kwargs):
         operands = list(args)
@@ -70,14 +70,7 @@ class Expr:
         return None
 
     def _operands_for_repr(self):
-        to_include = []
-        for param, operand in zip(self._parameters, self.operands):
-            if isinstance(operand, Expr) or (
-                not isinstance(operand, (pd.Series, pd.DataFrame))
-                and operand != self._defaults.get(param)
-            ):
-                to_include.append(f"{param}={operand!r}")
-        return to_include
+        raise NotImplementedError("Subclasses should implement this method")
 
     def __str__(self):
         s = ", ".join(self._operands_for_repr())
@@ -102,48 +95,27 @@ class Expr:
         return header
 
     def _tree_repr_lines(self, indent=0, recursive=True):
-        header = funcname(type(self)) + ":"
-        lines = []
-        for i, op in enumerate(self.operands):
-            if isinstance(op, Expr):
-                if recursive:
-                    lines.extend(op._tree_repr_lines(2))
-            else:
-                if isinstance(op, _BackendData):
-                    op = op._data
-
-                # TODO: this stuff is pandas-specific
-                if isinstance(op, pd.core.base.PandasObject):
-                    op = "<pandas>"
-                elif is_dataframe_like(op):
-                    op = "<dataframe>"
-                elif is_index_like(op):
-                    op = "<index>"
-                elif is_series_like(op):
-                    op = "<series>"
-                elif is_arraylike(op):
-                    op = "<array>"
-                header = self._tree_repr_argument_construction(i, op, header)
-
-        lines = [header] + lines
-        lines = [" " * indent + line for line in lines]
-
-        return lines
+        raise NotImplementedError("Subclasses should implement this method")
 
     def tree_repr(self):
         return os.linesep.join(self._tree_repr_lines())
 
     def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+        from dask.dataframe.dask_expr._expr import Expr as DFExpr
         from dask.dataframe.dask_expr.diagnostics import analyze
 
-        return analyze(self, filename=filename, format=format)  # type: ignore
+        if not isinstance(self, DFExpr):
+            raise TypeError(
+                "analyze is only supported for dask.dataframe.Expr objects."
+            )
+        return analyze(self, filename=filename, format=format)
 
     def explain(
         self, stage: OptimizerStage = "fused", format: str | None = None
     ) -> None:
         from dask.dataframe.dask_expr.diagnostics import explain
 
-        return explain(self, stage, format)  # type: ignore
+        return explain(self, stage, format)
 
     def pprint(self):
         for line in self._tree_repr_lines():
@@ -248,7 +220,7 @@ class Expr:
 
         return {
             (self._name, i): self._task((self._name, i), i)
-            for i in range(self.npartitions)
+            for i in range(self.npartitions)  # type: ignore
         }
 
     def rewrite(self, kind: str, rewritten):
@@ -389,6 +361,14 @@ class Expr:
 
         return expr
 
+    def optimize(self, fuse: bool = False) -> Expr:
+        stage: OptimizerStage = "fused" if fuse else "simplified-physical"
+
+        return optimize_until(self, stage)
+
+    def fuse(self) -> Expr:
+        return self
+
     def simplify(self) -> Expr:
         expr = self
         seen = set()
@@ -477,45 +457,16 @@ class Expr:
         return
 
     @functools.cached_property
-    def _funcname(self):
+    def _funcname(self) -> str:
         return funcname(type(self)).lower()
 
     @functools.cached_property
-    def _name(self):
+    def _name(self) -> str:
         return self._funcname + "-" + _tokenize_deterministic(*self.operands)
 
     @property
     def _meta(self):
         raise NotImplementedError()
-
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError as err:
-            if key.startswith("_meta"):
-                # Avoid a recursive loop if/when `self._meta*`
-                # produces an `AttributeError`
-                raise RuntimeError(
-                    f"Failed to generate metadata for {self}. "
-                    "This operation may not be supported by the current backend."
-                )
-
-            # Allow operands to be accessed as attributes
-            # as long as the keys are not already reserved
-            # by existing methods/properties
-            _parameters = type(self)._parameters
-            if key in _parameters:
-                idx = _parameters.index(key)
-                return self.operands[idx]
-            if is_dataframe_like(self._meta) and key in self._meta.columns:
-                return self[key]
-
-            link = "https://github.com/dask-contrib/dask-expr/blob/main/README.md#api-coverage"
-            raise AttributeError(
-                f"{err}\n\n"
-                "This often means that you are attempting to use an unsupported "
-                f"API function. Current API coverage is documented here: {link}."
-            )
 
     def __dask_graph__(self):
         """Traverse expression tree, collect layers"""
@@ -797,3 +748,61 @@ def collect_dependents(expr) -> defaultdict:
             stack.append(dep)
             dependents[dep._name].append(weakref.ref(node))
     return dependents
+
+
+def optimize(expr: Expr, fuse: bool = True) -> Expr:
+    """High level query optimization
+
+    This leverages three optimization passes:
+
+    1.  Class based simplification using the ``_simplify`` function and methods
+    2.  Blockwise fusion
+
+    Parameters
+    ----------
+    expr:
+        Input expression to optimize
+    fuse:
+        whether or not to turn on blockwise fusion
+
+    See Also
+    --------
+    simplify
+    optimize_blockwise_fusion
+    """
+    stage: OptimizerStage = "fused" if fuse else "simplified-physical"
+
+    return optimize_until(expr, stage)
+
+
+def optimize_until(expr: Expr, stage: OptimizerStage) -> Expr:
+    result = expr
+    if stage == "logical":
+        return result
+
+    # Simplify
+    expr = result.simplify()
+    if stage == "simplified-logical":
+        return expr
+
+    # Manipulate Expression to make it more efficient
+    expr = expr.rewrite(kind="tune", rewritten={})
+    if stage == "tuned-logical":
+        return expr
+
+    # Lower
+    expr = expr.lower_completely()
+    if stage == "physical":
+        return expr
+
+    # Simplify again
+    expr = expr.simplify()
+    if stage == "simplified-physical":
+        return expr
+
+    # Final graph-specific optimizations
+    expr = expr.fuse()
+    if stage == "fused":
+        return expr
+
+    raise ValueError(f"Stage {stage!r} not supported.")

@@ -30,6 +30,299 @@ def _array_expr_enabled() -> bool:
     return use_array_expr if use_array_expr is not None else False
 
 
+__all__ = [
+    "bool",
+    "complex64",
+    "complex128",
+    "e",
+    "euler_gamma",
+    "float32",
+    "float64",
+    "inf",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "nan",
+    "newaxis",
+    "pi",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "backends",
+    "fft",
+    "lib",
+    "linalg",
+    "ma",
+    "overlap",
+    "random",
+    "shuffle",
+    "atop",
+    "blockwise",
+    "register_chunk_type",
+    "Array",
+    "PerformanceWarning",
+    "asanyarray",
+    "asarray",
+    "block",
+    "broadcast_arrays",
+    "broadcast_to",
+    "concatenate",
+    "from_array",
+    "from_delayed",
+    "from_npy_stack",
+    "from_zarr",
+    "map_blocks",
+    "stack",
+    "store",
+    "to_hdf5",
+    "to_npy_stack",
+    "to_zarr",
+    "unify_chunks",
+    "arange",
+    "diag",
+    "diagonal",
+    "empty_like",
+    "eye",
+    "fromfunction",
+    "full_like",
+    "indices",
+    "linspace",
+    "meshgrid",
+    "ones_like",
+    "pad",
+    "repeat",
+    "tile",
+    "tri",
+    "zeros_like",
+    "apply_gufunc",
+    "as_gufunc",
+    "gufunc",
+    "moveaxis",
+    "rollaxis",
+    "optimize",
+    "map_overlap",
+    "push",
+    "nanpercentile",
+    "percentile",
+    "rechunk",
+    "all",
+    "any",
+    "argmax",
+    "argmin",
+    "argtopk",
+    "cumprod",
+    "cumsum",
+    "max",
+    "mean",
+    "median",
+    "min",
+    "moment",
+    "nanargmax",
+    "nanargmin",
+    "nancumprod",
+    "nancumsum",
+    "nanmax",
+    "nanmean",
+    "nanmedian",
+    "nanmin",
+    "nanprod",
+    "nanquantile",
+    "nanstd",
+    "nansum",
+    "nanvar",
+    "prod",
+    "quantile",
+    "reduction",
+    "std",
+    "sum",
+    "topk",
+    "trace",
+    "var",
+    "reshape",
+    "reshape_blockwise",
+    "allclose",
+    "append",
+    "apply_along_axis",
+    "apply_over_axes",
+    "argwhere",
+    "around",
+    "array",
+    "atleast_1d",
+    "atleast_2d",
+    "atleast_3d",
+    "average",
+    "bincount",
+    "choose",
+    "coarsen",
+    "compress",
+    "corrcoef",
+    "count_nonzero",
+    "cov",
+    "delete",
+    "diff",
+    "digitize",
+    "dot",
+    "dstack",
+    "ediff1d",
+    "einsum",
+    "expand_dims",
+    "extract",
+    "flatnonzero",
+    "flip",
+    "fliplr",
+    "flipud",
+    "gradient",
+    "histogram",
+    "histogram2d",
+    "histogramdd",
+    "hstack",
+    "insert",
+    "isclose",
+    "isin",
+    "isnull",
+    "matmul",
+    "ndim",
+    "nonzero",
+    "notnull",
+    "outer",
+    "piecewise",
+    "ptp",
+    "ravel",
+    "ravel_multi_index",
+    "result_type",
+    "roll",
+    "rot90",
+    "round",
+    "searchsorted",
+    "select",
+    "shape",
+    "squeeze",
+    "swapaxes",
+    "take",
+    "tensordot",
+    "transpose",
+    "tril",
+    "tril_indices",
+    "tril_indices_from",
+    "triu",
+    "triu_indices",
+    "triu_indices_from",
+    "union1d",
+    "unique",
+    "unravel_index",
+    "vdot",
+    "vstack",
+    "where",
+    "from_tiledb",
+    "to_tiledb",
+    "abs",
+    "absolute",
+    "add",
+    "angle",
+    "arccos",
+    "arccosh",
+    "arcsin",
+    "arcsinh",
+    "arctan",
+    "arctan2",
+    "arctanh",
+    "bitwise_and",
+    "bitwise_not",
+    "bitwise_or",
+    "bitwise_xor",
+    "cbrt",
+    "ceil",
+    "clip",
+    "conj",
+    "copysign",
+    "cos",
+    "cosh",
+    "deg2rad",
+    "degrees",
+    "divide",
+    "divmod",
+    "equal",
+    "exp",
+    "exp2",
+    "expm1",
+    "fabs",
+    "fix",
+    "float_power",
+    "floor",
+    "floor_divide",
+    "fmax",
+    "fmin",
+    "fmod",
+    "frexp",
+    "frompyfunc",
+    "greater",
+    "greater_equal",
+    "hypot",
+    "i0",
+    "imag",
+    "invert",
+    "iscomplex",
+    "isfinite",
+    "isinf",
+    "isnan",
+    "isneginf",
+    "isposinf",
+    "isreal",
+    "ldexp",
+    "left_shift",
+    "less",
+    "less_equal",
+    "log",
+    "log1p",
+    "log2",
+    "log10",
+    "logaddexp",
+    "logaddexp2",
+    "logical_and",
+    "logical_not",
+    "logical_or",
+    "logical_xor",
+    "maximum",
+    "minimum",
+    "mod",
+    "modf",
+    "multiply",
+    "nan_to_num",
+    "negative",
+    "nextafter",
+    "not_equal",
+    "positive",
+    "power",
+    "rad2deg",
+    "radians",
+    "real",
+    "reciprocal",
+    "remainder",
+    "right_shift",
+    "rint",
+    "sign",
+    "signbit",
+    "sin",
+    "sinc",
+    "sinh",
+    "spacing",
+    "sqrt",
+    "square",
+    "subtract",
+    "tan",
+    "tanh",
+    "true_divide",
+    "trunc",
+    "assert_eq",
+    "empty",
+    "full",
+    "ones",
+    "zeros",
+    "compute",
+]
+
 try:
     from numpy import bool_ as bool
     from numpy import (
@@ -319,7 +612,7 @@ try:
     from dask.base import compute
 
     if _array_expr_enabled():
-        import dask_expr.array as da
+        import dask.array._array_expr as da
 
         da = importlib.reload(da)
 
@@ -344,28 +637,41 @@ if _array_expr_enabled():
         return inner_func
 
     try:
-        from dask_expr.array import (  # type: ignore
+        from dask.array._array_expr import (  # type: ignore
             Array,
-            arange,
-            asarray,
-            empty,
-            from_array,
-            linspace,
+            blockwise,
+            elemwise,
+            random,
+            rechunk,
+            reduction,
+        )
+        from dask.array.reductions import (
+            all,
+            any,
+            max,
             mean,
+            min,
             moment,
+            nanmax,
             nanmean,
+            nanmin,
+            nanprod,
             nanstd,
             nansum,
             nanvar,
-            ones,
             prod,
-            random,
             std,
             sum,
             var,
-            zeros,
         )
 
+        arange = raise_not_implemented_error("arange")
+        asarray = raise_not_implemented_error("asarray")
+        empty = raise_not_implemented_error("empty")
+        from_array = raise_not_implemented_error("from_array")
+        linspace = raise_not_implemented_error("linspace")
+        ones = raise_not_implemented_error("ones")
+        zeros = raise_not_implemented_error("zeros")
         backends = raise_not_implemented_error("backends")
         fft = raise_not_implemented_error("fft")
         lib = raise_not_implemented_error("lib")
@@ -373,7 +679,6 @@ if _array_expr_enabled():
         ma = raise_not_implemented_error("ma")
         overlap = raise_not_implemented_error("overlap")
         atop = raise_not_implemented_error("atop")
-        blockwise = raise_not_implemented_error("blockwise")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
         asanyarray = raise_not_implemented_error("asanyarray")
         block = raise_not_implemented_error("block")
@@ -412,26 +717,17 @@ if _array_expr_enabled():
         optimize = raise_not_implemented_error("optimize")
         map_overlap = raise_not_implemented_error("map_overlap")
         percentile = raise_not_implemented_error("percentile")
-        rechunk = raise_not_implemented_error("rechunk")
-        all = raise_not_implemented_error("all")
-        any = raise_not_implemented_error("any")
         argmax = raise_not_implemented_error("argmax")
         argmin = raise_not_implemented_error("argmin")
         argtopk = raise_not_implemented_error("argtopk")
         cumprod = raise_not_implemented_error("cumprod")
         cumsum = raise_not_implemented_error("cumsum")
-        max = raise_not_implemented_error("max")
         median = raise_not_implemented_error("median")
-        min = raise_not_implemented_error("min")
         nanargmax = raise_not_implemented_error("nanargmax")
         nanargmin = raise_not_implemented_error("nanargmin")
         nancumprod = raise_not_implemented_error("nancumprod")
         nancumsum = raise_not_implemented_error("nancumsum")
-        nanmax = raise_not_implemented_error("nanmax")
         nanmedian = raise_not_implemented_error("nanmedian")
-        nanmin = raise_not_implemented_error("nanmin")
-        nanprod = raise_not_implemented_error("nanprod")
-        reduction = raise_not_implemented_error("reduction")
         topk = raise_not_implemented_error("topk")
         trace = raise_not_implemented_error("trace")
         reshape = raise_not_implemented_error("reshape")
@@ -614,6 +910,6 @@ if _array_expr_enabled():
         from dask.base import compute
 
     except ImportError:
-        import dask.array as da
+        import dask.array as da  # type: ignore
 
         da = importlib.reload(da)

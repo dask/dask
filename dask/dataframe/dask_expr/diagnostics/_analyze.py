@@ -7,13 +7,14 @@ import pandas as pd
 
 from dask.base import DaskMethodsMixin
 from dask.dataframe.dask_expr._expr import Blockwise, Expr
-from dask.dataframe.dask_expr._util import _tokenize_deterministic, is_scalar
 from dask.dataframe.dask_expr.diagnostics._explain import (
     _add_graphviz_edges,
     _explain_info,
 )
 from dask.dataframe.dask_expr.io.io import FusedIO
+from dask.dataframe.utils import is_scalar
 from dask.sizeof import sizeof
+from dask.tokenize import _tokenize_deterministic
 from dask.utils import format_bytes, import_required
 
 if TYPE_CHECKING:

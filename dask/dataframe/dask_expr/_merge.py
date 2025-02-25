@@ -33,11 +33,7 @@ from dask.dataframe.dask_expr._shuffle import (
     _is_numeric_cast_type,
     _select_columns_or_index,
 )
-from dask.dataframe.dask_expr._util import (
-    _convert_to_list,
-    _tokenize_deterministic,
-    is_scalar,
-)
+from dask.dataframe.dask_expr._util import _convert_to_list
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.multi import (
     _concat_wrapper,
@@ -46,6 +42,8 @@ from dask.dataframe.multi import (
     merge_chunk,
 )
 from dask.dataframe.shuffle import partitioning_index
+from dask.dataframe.utils import is_scalar
+from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import apply, get_default_shuffle_method
 
@@ -165,7 +163,7 @@ class Merge(Expr):
         return predicate_columns
 
     def __str__(self):
-        return f"Merge({self._name[-7:]})"
+        return f"{type(self).__qualname__}({self._name[-7:]})"
 
     @property
     def unique_partition_mapping_columns_from_shuffle(self):
@@ -207,7 +205,7 @@ class Merge(Expr):
     def _npartitions(self):
         if self.operand("_npartitions") is not None:
             return self.operand("_npartitions")
-        return max(self.left.npartitions, self.right.npartitions)
+        return len(self._divisions()) - 1
 
     @property
     def _bcast_left(self):
@@ -224,61 +222,7 @@ class Merge(Expr):
         return self.right
 
     def _divisions(self):
-        if self.merge_indexed_left and self.merge_indexed_right:
-            divisions = list(
-                unique(merge_sorted(self.left.divisions, self.right.divisions))
-            )
-            if len(divisions) == 1:
-                return (divisions[0], divisions[0])
-            if self.left.npartitions == 1 and self.right.npartitions == 1:
-                return (min(divisions), max(divisions))
-            return divisions
-
-        if self._is_single_partition_broadcast:
-            use_left = self.right_index or _contains_index_name(
-                self.right._meta, self.right_on
-            )
-            use_right = self.left_index or _contains_index_name(
-                self.left._meta, self.left_on
-            )
-            if (
-                use_right
-                and self.left.npartitions == 1
-                and self.how in ("right", "inner")
-            ):
-                return self.right.divisions
-            elif (
-                use_left
-                and self.right.npartitions == 1
-                and self.how in ("inner", "left", "leftsemi")
-            ):
-                return self.left.divisions
-            else:
-                _npartitions = max(self.left.npartitions, self.right.npartitions)
-
-        elif self.is_broadcast_join:
-            meta_index_names = set(self._meta.index.names)
-            if (
-                self.broadcast_side == "left"
-                and set(self.right._meta.index.names) == meta_index_names
-            ):
-                if self.right_index:
-                    return self._bcast_right.divisions
-                _npartitions = self._bcast_right.npartitions
-            elif (
-                self.broadcast_side == "right"
-                and set(self.left._meta.index.names) == meta_index_names
-            ):
-                if self.left_index:
-                    return self._bcast_left.divisions
-                _npartitions = self._bcast_left.npartitions
-            else:
-                _npartitions = max(self.left.npartitions, self.right.npartitions)
-
-        else:
-            _npartitions = self._npartitions
-
-        return (None,) * (_npartitions + 1)
+        return self._lower().divisions
 
     @functools.cached_property
     def broadcast_side(self):
@@ -337,7 +281,7 @@ class Merge(Expr):
             )
         else:
             result = tuple(on) in expr.unique_partition_mapping_columns_from_shuffle
-        return result and expr.npartitions == self.npartitions
+        return result
 
     def _lower(self):
         # Lower from an abstract expression
@@ -422,6 +366,9 @@ class Merge(Expr):
                     self.indicator,
                 )
 
+        shuffle_npartitions = self.operand("_npartitions") or max(
+            self.left.npartitions, self.right.npartitions
+        )
         if (shuffle_left_on or shuffle_right_on) and (
             shuffle_method == "p2p"
             or shuffle_method is None
@@ -441,25 +388,28 @@ class Merge(Expr):
                 right_index=right_index,
                 shuffle_left_on=shuffle_left_on,
                 shuffle_right_on=shuffle_right_on,
-                _npartitions=self.operand("_npartitions"),
+                _npartitions=shuffle_npartitions,
             )
-
-        if shuffle_left_on and not left_already_partitioned:
+        if shuffle_left_on and not (
+            left_already_partitioned and self.left.npartitions == shuffle_npartitions
+        ):
             # Shuffle left
             left = RearrangeByColumn(
                 left,
                 shuffle_left_on,
-                npartitions_out=self._npartitions,
+                npartitions_out=shuffle_npartitions,
                 method=shuffle_method,
                 index_shuffle=left_index,
             )
 
-        if shuffle_right_on and not right_already_partitioned:
+        if shuffle_right_on and not (
+            right_already_partitioned and self.right.npartitions == shuffle_npartitions
+        ):
             # Shuffle right
             right = RearrangeByColumn(
                 right,
                 shuffle_right_on,
-                npartitions_out=self._npartitions,
+                npartitions_out=shuffle_npartitions,
                 method=shuffle_method,
                 index_shuffle=right_index,
             )
@@ -726,6 +676,9 @@ class HashJoinP2P(Merge, PartitionsFiltered):
             dsk[t.key] = t
         return dsk
 
+    def _divisions(self):
+        return (None,) * (self._npartitions + 1)
+
     def _simplify_up(self, parent, dependents):
         return
 
@@ -902,15 +855,36 @@ class BlockwiseMerge(Merge, Blockwise):
         return result
 
     def _divisions(self):
-        if self.left.npartitions == self.right.npartitions:
-            return super()._divisions()
-        is_unknown = any(d is None for d in super()._divisions())
-        frame = (
-            self.left if self.left.npartitions > self.right.npartitions else self.right
+        use_left = self.right_index or _contains_index_name(
+            self.right._meta, self.right_on
         )
-        if is_unknown:
-            return (None,) * (frame.npartitions + 1)
-        return frame.divisions
+        use_right = self.left_index or _contains_index_name(
+            self.left._meta, self.left_on
+        )
+        if use_right and self.left.npartitions == 1 and self.how in ("right", "inner"):
+            return self.right.divisions
+        elif (
+            use_left
+            and self.right.npartitions == 1
+            and self.how in ("inner", "left", "leftsemi")
+        ):
+            return self.left.divisions
+        elif (
+            self.left.npartitions == self.right.npartitions
+            and self.merge_indexed_left
+            and self.merge_indexed_right
+        ):
+            divisions = list(
+                unique(merge_sorted(self.left.divisions, self.right.divisions))
+            )
+            if len(divisions) == 1:
+                return (divisions[0], divisions[0])
+            if self.left.npartitions == 1 and self.right.npartitions == 1:
+                return (min(divisions), max(divisions))
+            return divisions
+        else:
+            _npartitions = max(self.left.npartitions, self.right.npartitions)
+            return (None,) * (_npartitions + 1)
 
     def _lower(self):
         return None
@@ -944,7 +918,7 @@ class JoinRecursive(Expr):
             )
 
     def _divisions(self):
-        return self.lower_completely().divisions
+        return self.lower_completely()._divisions()
 
     def _lower(self):
         if self.how == "left":
