@@ -1,5 +1,23 @@
 from __future__ import annotations
 
+__all__ = [
+    "Bag",
+    "Item",
+    "map",
+    "range",
+    "zip",
+    "concat",
+    "from_delayed",
+    "from_sequence",
+    "from_url",
+    "map_partitions",
+    "to_textfiles",
+    "read_avro",
+    "read_text",
+    "assert_eq",
+    "compute",
+]
+
 try:
     from dask.bag.avro import read_avro
     from dask.bag.core import Bag, Item
