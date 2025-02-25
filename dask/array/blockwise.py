@@ -186,7 +186,6 @@ def blockwise(
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
     else:
-        chunkss, arrays = unify_chunks(*args)
         arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
         chunkss = {}
         # For each dimension, use the input chunking that has the most blocks;
