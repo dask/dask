@@ -388,10 +388,12 @@ def test_concat_optimize_project(axis, interleave_partitions):
     df1 = from_dict({"a": range(10), "b": range(10)}, npartitions=2)
     df2 = from_dict({"c": [5, 2, 3] + list(range(7))}, npartitions=3)
     df2.clear_divisions()
-    concated = concat(
+    concatenated = concat(
         [df1, df2], axis=axis, interleave_partitions=interleave_partitions
     )
-    optimized = concated.optimize()
+    optimized = concatenated.optimize()
     optimized_project = optimized[["a", "c"]]
-    optimized_project = optimized_project.compute()
-    assert_eq(optimized_project, concated[["a", "c"]])
+    assert_eq(optimized_project, concatenated[["a", "c"]])
+    assert (
+        optimized_project.optimize()._name == concatenated[["a", "c"]].optimize()._name
+    )
