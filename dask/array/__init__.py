@@ -641,6 +641,7 @@ if _array_expr_enabled():
             Array,
             blockwise,
             elemwise,
+            from_array,
             random,
             rechunk,
             reduction,
@@ -668,7 +669,6 @@ if _array_expr_enabled():
         arange = raise_not_implemented_error("arange")
         asarray = raise_not_implemented_error("asarray")
         empty = raise_not_implemented_error("empty")
-        from_array = raise_not_implemented_error("from_array")
         linspace = raise_not_implemented_error("linspace")
         ones = raise_not_implemented_error("ones")
         zeros = raise_not_implemented_error("zeros")

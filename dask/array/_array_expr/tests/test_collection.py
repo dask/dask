@@ -96,3 +96,10 @@ def test_reductions_toplevel(arr, func):
     result = getattr(da, func)(arr, axis=0)
     expected = getattr(np, func)(arr.compute(), axis=0)
     assert_eq(result, expected)
+
+
+def test_from_array():
+    x = np.random.random((10, 10))
+    d = da.from_array(x, chunks=(5, 5))
+    assert_eq(d, x)
+    assert d.chunks == ((5, 5), (5, 5))
