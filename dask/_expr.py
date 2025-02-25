@@ -848,15 +848,16 @@ class HLGExpr(Expr):
 
         if hasattr(collection, "dask"):
             dsk = collection.dask.copy()
-            assert isinstance(dsk, HighLevelGraph)
         else:
             dsk = collection.__dask_graph__()
 
-            if not isinstance(dsk, HighLevelGraph):
+        # Delayed objects still ship with low level graphs as `dask` when going
+        # through optimize / persist
+        if not isinstance(dsk, HighLevelGraph):
 
-                dsk = HighLevelGraph.from_collections(
-                    str(id(collection)), dsk, dependencies=()
-                )
+            dsk = HighLevelGraph.from_collections(
+                str(id(collection)), dsk, dependencies=()
+            )
         return HLGExpr(
             dsk=dsk,
             low_level_optimizer=(
