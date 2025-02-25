@@ -28,10 +28,10 @@ class Concat(Expr):
     _parameters = [
         "join",
         "ignore_order",
-        "_kwargs",
         "axis",
         "ignore_unknown_divisions",
         "interleave_partitions",
+        "_kwargs",
     ]
     _defaults = {
         "join": "outer",
@@ -167,6 +167,8 @@ class Concat(Expr):
                     self.join,
                     self.ignore_order,
                     self.axis,
+                    self.ignore_unknown_divisions,
+                    self.interleave_partitions,
                     self._kwargs,
                     *cast_dfs,
                 )
@@ -220,6 +222,8 @@ class Concat(Expr):
                 self.join,
                 self.ignore_order,
                 self.axis,
+                self.ignore_unknown_divisions,
+                self.interleave_partitions,
                 self._kwargs,
                 *cast_dfs,
             )
@@ -228,6 +232,8 @@ class Concat(Expr):
             self.join,
             self.ignore_order,
             self.axis,
+            self.ignore_unknown_divisions,
+            self.interleave_partitions,
             self._kwargs,
             *cast_dfs,
         )
@@ -264,12 +270,13 @@ class Concat(Expr):
             result = type(self)(
                 self.join,
                 self.ignore_order,
-                self._kwargs,
                 self.axis,
                 self.ignore_unknown_divisions,
                 self.interleave_partitions,
+                self._kwargs,
                 *frames,
             )
+
             if result.columns == _convert_to_list(parent.operand("columns")):
                 if result.ndim == parent.ndim:
                     return result
@@ -280,8 +287,6 @@ class Concat(Expr):
 
 
 class StackPartition(Concat):
-    _parameters = ["join", "ignore_order", "axis", "_kwargs"]
-    _defaults = {"join": "outer", "ignore_order": False, "_kwargs": {}, "axis": 0}
 
     def _layer(self):
         dsk, i = {}, 0
