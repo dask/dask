@@ -510,12 +510,7 @@ def unpack_collections(*args, traverse=True):
                 tsk = Task(
                     tok,
                     typ,
-                    Dict(
-                        {
-                            f.name: _unpack(getattr(expr, f.name))
-                            for f in dataclasses.fields(expr)
-                        }
-                    ),
+                    *[_unpack(getattr(expr, f.name)) for f in dataclasses.fields(expr)],
                 )
             elif is_namedtuple_instance(expr):
                 tsk = Task(tok, typ, *[_unpack(i) for i in expr])
