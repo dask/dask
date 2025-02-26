@@ -3493,6 +3493,7 @@ class MaybeAlignPartitions(Expr):
                 dfs[0].divisions == df.divisions and df.known_divisions for df in dfs
             )
             or len(self.divisions) == 2
+            and max(map(lambda x: len(x.divisions), dfs)) == 2
         ):
             return self._expr_cls(*self.operands)
         elif self.divisions[0] is None:
