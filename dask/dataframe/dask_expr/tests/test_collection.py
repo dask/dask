@@ -2808,3 +2808,15 @@ def test_projection_on_series():
     result = df.replace(1, 5)
     assert_eq(result, pdf.replace(1, 5))
     assert_eq(result.fillna(0), pdf.replace(1, 5).fillna(0))
+
+
+def test_align_known_divisions_in_assign():
+    df = pd.DataFrame({"a": [1, 2], 1: [5, 6]})
+    ddf = from_pandas(df, npartitions=2)
+    ddf = ddf.assign(c=df["a"])
+    assert ddf.npartitions == 1
+    ddf = ddf.repartition(npartitions=1)
+    assert ddf.optimize().npartitions == 1
+    df = df.assign(c=df["a"])
+    assert_eq(ddf, df)
+    assert_eq(ddf.optimize(), df)
