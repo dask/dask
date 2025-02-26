@@ -4511,6 +4511,9 @@ def test_map_partition_sparse():
 def test_mixed_dask_array_operations():
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[4, 5, 6])
     ddf = dd.from_pandas(df, npartitions=2)
+    assert (ddf.x + ddf.x.values).npartitions >= (
+        ddf.x + ddf.x.values
+    ).optimize().npartitions
 
     assert_eq(df.x + df.x.values, ddf.x + ddf.x.values)
     assert_eq(df.x.values + df.x, ddf.x.values + ddf.x)
