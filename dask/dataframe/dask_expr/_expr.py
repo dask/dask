@@ -3653,6 +3653,7 @@ class OpAlignPartitions(MaybeAlignPartitions):
             len(dfs) == 1
             or all(dfs[0].divisions == df.divisions for df in dfs)
             or len(self.divisions) == 2
+            and max(map(lambda x: len(x.divisions), dfs)) == 2
         ):
             return self._op(self.frame, self.op, self.other, *self.operands[3:])
 
@@ -4022,6 +4023,8 @@ def calc_divisions_for_align(*exprs, allow_shuffle=True):
     dfs = [df for df in exprs if isinstance(df, Expr) and df.ndim > 0]
     if not all(df.known_divisions for df in dfs):
         return (None,) * (max(df.npartitions for df in dfs) + 1)
+    if all(dfs[0].divisions == df.divisions for df in dfs):
+        return dfs[0].divisions
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
     if len(divisions) == 1:  # single value for index
         divisions = (divisions[0], divisions[0])
