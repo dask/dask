@@ -809,7 +809,7 @@ def normalize_index(idx, shape):
     >>> normalize_index(np.array([[True, False], [False, True], [True, True]]), (3, 2))
     (dask.array<array, shape=(3, 2), dtype=bool, chunksize=(3, 2), chunktype=numpy.ndarray>,)
     """
-    from dask.array.core import Array, from_array
+    from dask.array import Array, from_array
 
     if not isinstance(idx, tuple):
         idx = (idx,)

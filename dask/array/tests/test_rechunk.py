@@ -287,7 +287,10 @@ def test_rechunk_zero_dim_array_II():
 def test_rechunk_same():
     x = da.ones((24, 24), chunks=(4, 8))
     y = x.rechunk(x.chunks)
-    assert x is y
+    if da._array_expr_enabled():
+        assert x.optimize()._name == y.optimize()._name
+    else:
+        assert x is y
 
 
 def test_rechunk_same_fully_unknown():
@@ -298,7 +301,10 @@ def test_rechunk_same_fully_unknown():
     new_chunks = ((np.nan, np.nan), (10,))
     assert y.chunks == new_chunks
     result = y.rechunk(new_chunks)
-    assert y is result
+    if da._array_expr_enabled():
+        assert result.optimize()._name == y.optimize()._name
+    else:
+        assert result is y
 
 
 def test_rechunk_same_fully_unknown_floats():
@@ -311,7 +317,10 @@ def test_rechunk_same_fully_unknown_floats():
     y = dd.from_array(x).values
     new_chunks = ((float("nan"), float("nan")), (10,))
     result = y.rechunk(new_chunks)
-    assert y is result
+    if da._array_expr_enabled():
+        assert result.optimize()._name == y.optimize()._name
+    else:
+        assert result is y
 
 
 def test_rechunk_same_partially_unknown():
@@ -323,7 +332,10 @@ def test_rechunk_same_partially_unknown():
     new_chunks = ((5, 5, np.nan, np.nan), (10,))
     assert z.chunks == new_chunks
     result = z.rechunk(new_chunks)
-    assert z is result
+    if da._array_expr_enabled():
+        assert result.optimize()._name == z.optimize()._name
+    else:
+        assert result is z
 
 
 def test_rechunk_with_zero_placeholders():
