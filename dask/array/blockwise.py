@@ -246,7 +246,18 @@ def blockwise(
     if not out:
         out = "{}-{}".format(
             token or utils.funcname(func).strip("_"),
-            base.tokenize(func, out_ind, argindsstr, dtype, **kwargs),
+            base.tokenize(
+                func,
+                out_ind,
+                argindsstr,
+                adjust_chunks,
+                new_axes,
+                align_arrays,
+                concatenate,
+                meta,
+                dtype,
+                **kwargs,
+            ),
         )
 
     graph = core_blockwise(

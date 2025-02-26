@@ -31,7 +31,7 @@ def _make_file(dir, df=None, filename="myfile.parquet", **kwargs):
     return fn
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, clean_kwargs={"threads": False})
 async def test_io_fusion_merge(c, s, a, b, tmpdir):
     pdf = pd.DataFrame({c: range(100) for c in "abcdefghij"})
     p = dd.from_pandas(pdf, 2).to_parquet(tmpdir, compute=False)
@@ -51,11 +51,11 @@ async def test_io_fusion_merge(c, s, a, b, tmpdir):
 
 @pytest.mark.skipif(not PYARROW_GE_1500, reason="requires 15.0.0")
 @pytest.mark.filterwarnings("error")
-@gen_cluster(client=True)
-async def test_parquet_distriuted(c, s, a, b, tmpdir, filesystem):
+@gen_cluster(client=True, clean_kwargs={"threads": False})
+async def test_parquet_distributed(c, s, a, b, tmpdir, filesystem):
     pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
     df = read_parquet(_make_file(tmpdir, df=pdf), filesystem=filesystem)
-    assert_eq(await c.gather(c.compute(df.optimize())), pdf)
+    assert_eq(await c.gather(c.compute(df)), pdf)
 
 
 @pytest.mark.skipif(not PYARROW_GE_1500, reason="requires 15.0.0")
@@ -65,4 +65,6 @@ def test_pickle_size(tmpdir, filesystem):
     df = read_parquet(tmpdir, filesystem=filesystem)
     from distributed.protocol import dumps
 
-    assert len(b"".join(dumps(df.optimize().dask))) <= 10_000
+    assert (low_level := len(b"".join(dumps(df.optimize().dask)))) <= 10_000
+    # FIXME: The expression should be smaller than the raw graph
+    assert len(b"".join(dumps(df.optimize()))) <= low_level
