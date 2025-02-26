@@ -235,8 +235,10 @@ def _normalize_pickle(o: object) -> tuple:
     buffers: list[pickle.PickleBuffer] = []
     pik: int | None = None
     pik2: int
-
+    success = False
     for mod in [pickle, cloudpickle]:
+        if success:
+            break
         for _ in range(3):
             buffers.clear()
             try:
@@ -246,6 +248,7 @@ def _normalize_pickle(o: object) -> tuple:
             except Exception:
                 break
             if pik == pik2:
+                success = True
                 break
             pik = pik2
         else:

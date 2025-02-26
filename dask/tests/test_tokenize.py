@@ -1440,6 +1440,23 @@ def test_tokenize_pandas_arrow_strings():
     assert any(str(tok) == "string" for tok in flatten(tokens))
 
 
+class APickleable:
+    counter = 0
+
+    def __reduce__(self):
+        APickleable.counter += 1
+        return APickleable, ()
+
+
+def test_normalize_pickle():
+    a = APickleable()
+    tokenize(a)
+    # We're pickling multiple times because pickle is caching things on
+    # instances such that subsequent pickles can yield different results.
+    # For a trivial object like this, this should only happen twice
+    assert APickleable.counter <= 2
+
+
 def test_tokenize_recursive_respects_ensure_deterministic():
     class Foo:
         def __dask_tokenize__(self):
