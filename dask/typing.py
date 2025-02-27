@@ -110,7 +110,21 @@ class DaskCollection(Protocol):
     def __dask_graph__(self) -> Graph:
         """The Dask task graph.
 
-        Return the low level task graph as a dictionary of tasks.
+        The core Dask collections (Array, DataFrame, Bag, and Delayed)
+        use a :py:class:`~dask.highlevelgraph.HighLevelGraph` to
+        represent the collection task graph. It is also possible to
+        represent the task graph as a low level graph using a Python
+        dictionary.
+
+        Returns
+        -------
+        Mapping
+            The Dask task graph. If the instance returns a
+            :py:class:`dask.highlevelgraph.HighLevelGraph` then the
+            :py:func:`__dask_layers__` method must be implemented, as
+            defined by the :py:class:`~dask.typing.HLGDaskCollection`
+            protocol.
+
         """
         raise NotImplementedError("Inheriting class must implement this method.")
 

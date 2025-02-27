@@ -707,8 +707,7 @@ def test_persist_nested():
     assert isinstance(result[0]["a"], Delayed)
     assert isinstance(result[0]["b"][2], Delayed)
     assert isinstance(result[1][0], Delayed)
-    res = compute(*result)
-    assert res == ({"a": 6, "b": [1, 2, 7]}, (8, 2))
+    assert compute(*result) == ({"a": 6, "b": [1, 2, 7]}, (8, 2))
 
     res = persist([a, b], c, traverse=False)
     assert res[0][0] is a
