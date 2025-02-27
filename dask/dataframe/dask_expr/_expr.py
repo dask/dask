@@ -48,7 +48,7 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
     valid_divisions,
 )
-from dask.tokenize import _tokenize_deterministic, normalize_token
+from dask.tokenize import normalize_token
 from dask.typing import Key, no_default
 from dask.utils import (
     M,
@@ -607,7 +607,7 @@ class Blockwise(Expr):
             head = funcname(self.operation)
         else:
             head = funcname(type(self)).lower()
-        return head + "-" + _tokenize_deterministic(*self.operands)
+        return head + "-" + self.deterministic_token
 
     def _blockwise_arg(self, arg, i):
         """Return a Blockwise-task argument"""
@@ -685,7 +685,7 @@ class MapPartitions(Blockwise):
             head = self.token
         else:
             head = funcname(self.func).lower()
-        return head + "-" + _tokenize_deterministic(*self.operands)
+        return head + "-" + self.deterministic_token
 
     def _broadcast_dep(self, dep: Expr):
         # Always broadcast single-partition dependencies in MapPartitions
@@ -3101,7 +3101,7 @@ class DelayedsExpr(Expr):
 
     @functools.cached_property
     def _name(self):
-        return "delayed-container-" + _tokenize_deterministic(*self.operands)
+        return "delayed-container-" + self.deterministic_token
 
     def _layer(self) -> dict:
         dask = {}
@@ -3782,7 +3782,7 @@ class Fused(Blockwise):
 
     @functools.cached_property
     def _name(self):
-        return f"{str(self)}-{_tokenize_deterministic(*self.operands)}"
+        return f"{str(self)}-{self.deterministic_token}"
 
     def _divisions(self):
         return self.exprs[0]._divisions()

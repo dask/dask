@@ -15,7 +15,6 @@ from dask.array.core import (
     slices_from_chunks,
 )
 from dask.array.utils import meta_from_array
-from dask.tokenize import _tokenize_deterministic
 from dask.utils import SerializableLock
 
 
@@ -36,9 +35,7 @@ class FromGraph(IO):
 
     @functools.cached_property
     def _name(self):
-        return (
-            self.operand("name_prefix") + "-" + _tokenize_deterministic(*self.operands)
-        )
+        return self.operand("name_prefix") + "-" + self.deterministic_token
 
     def _layer(self):
         dsk = dict(self.operand("layer"))

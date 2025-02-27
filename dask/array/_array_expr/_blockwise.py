@@ -116,6 +116,15 @@ class Blockwise(ArrayExpr):
     def dtype(self):
         return self.operand("dtype")
 
+    @property
+    def deterministic_token(self):
+        if not self._determ_token:
+            # TODO: Is there an actual need to overwrite this?
+            self._determ_token = _tokenize_deterministic(
+                self.func, self.out_ind, self.dtype, *self.args, **self.kwargs
+            )
+        return self._determ_token
+
     @cached_property
     def _name(self):
         if "name" in self._parameters and self.operand("name"):
@@ -123,9 +132,7 @@ class Blockwise(ArrayExpr):
         else:
             return (
                 f"{self.token or funcname(self.func).strip('_')}-"
-                + _tokenize_deterministic(
-                    self.func, self.out_ind, self.dtype, *self.args, **self.kwargs
-                )
+                + self.deterministic_token
             )
 
     def _layer(self):

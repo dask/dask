@@ -276,14 +276,21 @@ class PartialReduce(ArrayExpr):
         "reduced_meta": None,
     }
 
+    @property
+    def deterministic_token(self):
+        if not self._determ_token:
+            # TODO: Is there an actual need to overwrite this?
+            self._determ_token = _tokenize_deterministic(
+                self.func, self.array, self.split_every, self.keepdims, self.dtype
+            )
+        return self._determ_token
+
     @cached_property
     def _name(self):
         return (
             (self.operand("name") or funcname(self.func))
             + "-"
-            + _tokenize_deterministic(
-                self.func, self.array, self.split_every, self.keepdims, self.dtype
-            )
+            + self.deterministic_token
         )
 
     @cached_property

@@ -40,7 +40,6 @@ from dask.dataframe.dask_expr._expr import (
 )
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.utils import is_scalar
-from dask.tokenize import _tokenize_deterministic
 from dask.typing import no_default
 from dask.utils import M, apply, funcname
 
@@ -326,7 +325,7 @@ class TreeReduce(Expr):
             name = funcname(self.combine.__self__).lower() + "-tree"
         else:
             name = funcname(self.combine)
-        return name + "-" + _tokenize_deterministic(*self.operands)
+        return name + "-" + self.deterministic_token
 
     def __dask_postcompute__(self):
         return toolz.first, ()
@@ -858,7 +857,7 @@ class CustomReduction(Reduction):
     @functools.cached_property
     def _name(self):
         name = self.operand("token") or funcname(type(self)).lower()
-        return name + "-" + _tokenize_deterministic(*self.operands)
+        return name + "-" + self.deterministic_token
 
     @classmethod
     def chunk(cls, df, **kwargs):

@@ -107,11 +107,7 @@ class FusedIO(BlockwiseIO):
 
     @functools.cached_property
     def _name(self):
-        return (
-            self.operand("_expr")._funcname
-            + "-fused-"
-            + _tokenize_deterministic(*self.operands)
-        )
+        return self.operand("_expr")._funcname + "-fused-" + self.deterministic_token
 
     @functools.cached_property
     def _meta(self):
@@ -167,7 +163,7 @@ class FusedParquetIO(FusedIO):
         return (
             funcname(type(self.operand("_expr"))).lower()
             + "-fused-parq-"
-            + _tokenize_deterministic(*self.operands)
+            + self.deterministic_token
         )
 
     @staticmethod
@@ -245,13 +241,9 @@ class FromMap(PartitionsFiltered, BlockwiseIO):
     @functools.cached_property
     def _name(self):
         if self.label is None:
-            return (
-                funcname(self.func).lower()
-                + "-"
-                + _tokenize_deterministic(*self.operands)
-            )
+            return funcname(self.func).lower() + "-" + self.deterministic_token
         else:
-            return self.label + "-" + _tokenize_deterministic(*self.operands)
+            return self.label + "-" + self.deterministic_token
 
     @functools.cached_property
     def _meta(self):
@@ -552,7 +544,7 @@ class FromPandasDivisions(FromPandas):
 
     @functools.cached_property
     def _name(self):
-        return "from_pd_divs" + "-" + _tokenize_deterministic(*self.operands)
+        return "from_pd_divs" + "-" + self.deterministic_token
 
     @property
     def _divisions_and_locations(self):

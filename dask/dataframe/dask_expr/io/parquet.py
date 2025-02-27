@@ -777,15 +777,18 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
     def _funcname(self):
         return "read_parquet"
 
-    @cached_property
-    def _name(self):
-        return (
-            self._funcname
-            + "-"
-            + _tokenize_deterministic(
+    @property
+    def deterministic_token(self):
+        if not self._determ_token:
+            # TODO: Is there an actual need to overwrite this?
+            self._determ_token = _tokenize_deterministic(
                 funcname(type(self)), self.checksum, *self.operands[:-1]
             )
-        )
+        return self._determ_token
+
+    @cached_property
+    def _name(self):
+        return self._funcname + "-" + self.deterministic_token
 
     @property
     def checksum(self):

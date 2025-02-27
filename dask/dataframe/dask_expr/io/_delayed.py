@@ -16,7 +16,6 @@ from dask.dataframe.dask_expr.io import BlockwiseIO
 from dask.dataframe.dispatch import make_meta
 from dask.dataframe.utils import check_meta, pyarrow_strings_enabled
 from dask.delayed import Delayed, delayed
-from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 
 if TYPE_CHECKING:
@@ -44,7 +43,7 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
     def _name(self):
         if self.prefix is None:
             return super()._name
-        return self.prefix + "-" + _tokenize_deterministic(*self.operands)
+        return self.prefix + "-" + self.deterministic_token
 
     @functools.cached_property
     def _meta(self):

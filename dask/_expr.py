@@ -46,7 +46,9 @@ class Expr:
 
     operands: list
 
-    def __new__(cls, *args, **kwargs):
+    _determ_token: str | None
+
+    def __new__(cls, *args, _determ_token=None, **kwargs):
         operands = list(args)
         for parameter in cls._parameters[len(operands) :]:
             try:
@@ -55,6 +57,8 @@ class Expr:
                 operands.append(cls._defaults[parameter])
         assert not kwargs, kwargs
         inst = object.__new__(cls)
+
+        inst._determ_token = _determ_token
         inst.operands = [_unpack_collections(o) for o in operands]
         _name = inst._name
         if _name in Expr._instances:
@@ -127,10 +131,17 @@ class Expr:
     def __dask_tokenize__(self):
         return self._name
 
+    @staticmethod
+    def _reconstruct(*args):
+        typ, *operands, token = args
+        return typ(*operands, _determ_token=token)
+
     def __reduce__(self):
         if dask.config.get("dask-expr-no-serialize", False):
             raise RuntimeError(f"Serializing a {type(self)} object")
-        return type(self), tuple(self.operands)
+        return Expr._reconstruct, tuple(
+            [type(self)] + self.operands + [self.deterministic_token]
+        )
 
     def _depth(self, cache=None):
         """Depth of the expression tree
@@ -460,9 +471,15 @@ class Expr:
     def _funcname(self) -> str:
         return funcname(type(self)).lower()
 
+    @property
+    def deterministic_token(self):
+        if not self._determ_token:
+            self._determ_token = _tokenize_deterministic(*self.operands)
+        return self._determ_token
+
     @functools.cached_property
     def _name(self) -> str:
-        return self._funcname + "-" + _tokenize_deterministic(*self.operands)
+        return self._funcname + "-" + self.deterministic_token
 
     @property
     def _meta(self):
