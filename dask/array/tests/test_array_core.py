@@ -1857,6 +1857,16 @@ def test_map_blocks_no_array_args():
     assert_eq(x, np.arange(8, dtype=np.float32))
 
 
+def test_map_blocks_unique_name_enforce_dim():
+    def func(some_3d, block_info=None):
+        return some_3d
+
+    input_arr = da.zeros((3, 4, 5), chunks=((3,), (4,), (5,)), dtype=np.float32)
+    x = da.map_blocks(func, input_arr, enforce_ndim=True, dtype=np.float32)
+    y = da.map_blocks(func, input_arr, enforce_ndim=False, dtype=np.float32)
+    assert x._name != y._name
+
+
 def test_map_blocks_unique_name_chunks_dtype():
     def func(block_info=None):
         loc = block_info[None]["array-location"]
