@@ -1156,10 +1156,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         raise ValueError(get_err_msg)
 
     try:
-        import distributed  # noqa: F401
-
         return get_scheduler(scheduler="distributed")
-    except (ImportError, ValueError):
+    except (ValueError, RuntimeError):
         pass
 
     if cls is not None:
