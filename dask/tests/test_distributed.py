@@ -23,6 +23,7 @@ from distributed.utils_test import (  # noqa F401
     loop,
     loop_in_thread,
     popen,
+    s,
     varying,
 )
 
@@ -70,16 +71,10 @@ def test_can_import_nested_things():
 @gen_cluster(client=True)
 async def test_persist(c, s, a, b):
     x = delayed(inc)(1)
-    (x2,) = persist(x)
+    x2 = c.persist(x)
 
     await wait(x2)
     assert x2.key in a.data or x2.key in b.data
-
-    y = delayed(inc)(10)
-    y2, one = persist(y, 1)
-
-    await wait(y2)
-    assert y2.key in a.data or y2.key in b.data
 
 
 def test_persist_nested(c):
@@ -436,7 +431,7 @@ def test_scheduler_equals_client(c):
 @gen_cluster(client=True)
 async def test_await(c, s, a, b):
     x = dask.delayed(inc)(1)
-    x = await x.persist()
+    x = await c.persist(x)
     assert x.key in s.tasks
     assert a.data or b.data
     assert all(f.done() for f in futures_of(x))
@@ -981,33 +976,33 @@ def test_write_single_hdf(c, lock_param):
         ddf.to_hdf(str(f), key="/ds_*", lock=lock_param)
 
 
-@gen_cluster(config={"scheduler": "sync"}, nthreads=[])
-async def test_get_scheduler_default_client_config_interleaving(s):
+def test_get_scheduler_default_client_config_interleaving(s):
     # This test is using context managers intentionally. We should not refactor
     # this to use it in more places to make the client closing cleaner.
-    with pytest.warns(UserWarning):
+    s_address = s["address"]
+    with pytest.warns(UserWarning), dask.config.set(scheduler="sync"):
         assert dask.base.get_scheduler() == dask.local.get_sync
         with dask.config.set(scheduler="threads"):
             assert dask.base.get_scheduler() == dask.threaded.get
-            client = await Client(s.address, set_as_default=False, asynchronous=True)
+            client = Client(s_address, set_as_default=False)
             try:
                 assert dask.base.get_scheduler() == dask.threaded.get
             finally:
-                await client.close()
+                client.close()
 
-            client = await Client(s.address, set_as_default=True, asynchronous=True)
+            client = Client(s_address, set_as_default=True)
             try:
                 assert dask.base.get_scheduler() == client.get
             finally:
-                await client.close()
+                client.close()
             assert dask.base.get_scheduler() == dask.threaded.get
 
             # FIXME: As soon as async with uses as_current this will be true as well
-            # async with Client(s.address, set_as_default=False, asynchronous=True) as c:
+            # async with Client(s_address, set_as_default=False, asynchronous=True) as c:
             #     assert dask.base.get_scheduler() == c.get
             # assert dask.base.get_scheduler() == dask.threaded.get
 
-            client = await Client(s.address, set_as_default=False, asynchronous=True)
+            client = Client(s_address, set_as_default=False)
             try:
                 assert dask.base.get_scheduler() == dask.threaded.get
                 with client.as_current():
@@ -1015,24 +1010,24 @@ async def test_get_scheduler_default_client_config_interleaving(s):
                     assert sc == client.get
                 assert dask.base.get_scheduler() == dask.threaded.get
             finally:
-                await client.close()
+                client.close()
 
             # If it comes to a race between default and current, current wins
-            client = await Client(s.address, set_as_default=True, asynchronous=True)
-            client2 = await Client(s.address, set_as_default=False, asynchronous=True)
+            client = Client(s_address, set_as_default=True)
+            client2 = Client(s_address, set_as_default=False)
             try:
                 with client2.as_current():
                     assert dask.base.get_scheduler() == client2.get
                 assert dask.base.get_scheduler() == client.get
             finally:
-                await client.close()
-                await client2.close()
+                client.close()
+                client2.close()
 
             assert dask.base.get_scheduler() == dask.threaded.get
 
         assert dask.base.get_scheduler() == dask.local.get_sync
 
-        client = await Client(s.address, set_as_default=True, asynchronous=True)
+        client = Client(s_address, set_as_default=True)
         try:
             assert dask.base.get_scheduler() == client.get
             with dask.config.set(scheduler="threads"):
@@ -1040,7 +1035,7 @@ async def test_get_scheduler_default_client_config_interleaving(s):
                 with client.as_current():
                     assert dask.base.get_scheduler() == client.get
         finally:
-            await client.close()
+            client.close()
 
 
 @gen_cluster(client=True)

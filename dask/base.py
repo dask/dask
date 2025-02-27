@@ -1156,9 +1156,9 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         raise ValueError(get_err_msg)
 
     try:
-        from distributed import get_client
+        import distributed  # noqa: F401
 
-        return get_client().get
+        return get_scheduler(scheduler="distributed")
     except (ImportError, ValueError):
         pass
 
