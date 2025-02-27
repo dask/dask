@@ -63,6 +63,10 @@ class ArrayExpr(Expr):
         return tuple(map(len, self.chunks))
 
     @cached_property
+    def npartitions(self):
+        return reduce(mul, self.numblocks, 1)
+
+    @cached_property
     def size(self) -> T_IntOrNaN:
         """Number of elements in array"""
         return reduce(mul, self.shape, 1)

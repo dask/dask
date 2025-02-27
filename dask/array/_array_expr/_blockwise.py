@@ -1,22 +1,14 @@
 from __future__ import annotations
 
 import numbers
-from collections.abc import Iterable
 
 import numpy as np
 import tlz as toolz
 
-from dask import is_dask_collection
 from dask.array._array_expr._expr import ArrayExpr, unify_chunks_expr
 from dask.array._array_expr._utils import compute_meta
-from dask.array.core import (
-    _elemwise_handle_where,
-    _enforce_dtype,
-    apply_infer_dtype,
-    broadcast_shapes,
-    is_scalar_for_elemwise,
-    normalize_arg,
-)
+from dask.array.core import normalize_arg
+from dask.array.utils import meta_from_array
 from dask.blockwise import _blockwise_unpack_collections_task_spec
 from dask.blockwise import blockwise as core_blockwise
 from dask.layers import ArrayBlockwiseDep
@@ -37,6 +29,7 @@ class Blockwise(ArrayExpr):
         "concatenate",
         "_meta_provided",
         "kwargs",
+        "_nan_chunks",
     ]
     _defaults = {
         "name": None,
@@ -48,6 +41,7 @@ class Blockwise(ArrayExpr):
         "concatenate": None,
         "_meta_provided": None,
         "kwargs": None,
+        "_nan_chunks": False,
     }
 
     @cached_property
@@ -65,7 +59,18 @@ class Blockwise(ArrayExpr):
         if self._meta_provided is not None:
             return self._meta_provided
         else:
-            return compute_meta(self.func, self.dtype, *self.args[::2], **self.kwargs)
+            result = compute_meta(
+                self.func, self.operand("dtype"), *self.args[::2], **self.kwargs
+            )
+            if result is None:
+                return meta_from_array(
+                    None, ndim=self.ndim, dtype=self.operand("dtype")
+                )
+            return result
+
+    @cached_property
+    def dtype(self):
+        return super().dtype
 
     @cached_property
     def chunks(self):
@@ -110,6 +115,8 @@ class Blockwise(ArrayExpr):
                             "adjust_chunks values must be callable, int, or tuple"
                         )
             chunks = tuple(chunks)
+        if self._nan_chunks:
+            return tuple((np.nan,) * len(c) for c in chunks)
         return tuple(map(tuple, chunks))
 
     @cached_property
@@ -200,131 +207,6 @@ class Blockwise(ArrayExpr):
                 return type(self)(*self.operands[: len(self._parameters)], *args)
 
 
-class Elemwise(Blockwise):
-    _parameters = ["op", "dtype", "name", "where"]
-    _defaults = {
-        "dtype": None,
-        "name": None,
-        "where": True,
-    }
-    align_arrays = True
-    new_axes: dict = {}
-    adjust_chunks = None
-    concatenate = None
-
-    @cached_property
-    def _meta(self):
-        return compute_meta(
-            self._info[0], self.dtype, *self.elemwise_args, **self.kwargs
-        )
-
-    @property
-    def elemwise_args(self):
-        return self.operands[len(self._parameters) :]
-
-    @property
-    def out_ind(self):
-        shapes = []
-        for arg in self.elemwise_args:
-            shape = getattr(arg, "shape", ())
-            if any(is_dask_collection(x) for x in shape):
-                # Want to exclude Delayed shapes and dd.Scalar
-                shape = ()
-            shapes.append(shape)
-        if isinstance(self.where, ArrayExpr):
-            shapes.append(self.where.shape)
-
-        shapes = [s if isinstance(s, Iterable) else () for s in shapes]
-        out_ndim = len(
-            broadcast_shapes(*shapes)
-        )  # Raises ValueError if dimensions mismatch
-        return tuple(range(out_ndim))[::-1]
-
-    @cached_property
-    def _info(self):
-        if self.operand("dtype") is not None:
-            need_enforce_dtype = True
-            dtype = self.operand("dtype")
-        else:
-            # We follow NumPy's rules for dtype promotion, which special cases
-            # scalars and 0d ndarrays (which it considers equivalent) by using
-            # their values to compute the result dtype:
-            # https://github.com/numpy/numpy/issues/6240
-            # We don't inspect the values of 0d dask arrays, because these could
-            # hold potentially very expensive calculations. Instead, we treat
-            # them just like other arrays, and if necessary cast the result of op
-            # to match.
-            vals = [
-                (
-                    np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
-                    if not is_scalar_for_elemwise(a)
-                    else a
-                )
-                for a in self.elemwise_args
-            ]
-            try:
-                dtype = apply_infer_dtype(
-                    self.op, vals, {}, "elemwise", suggest_dtype=False
-                )
-            except Exception:
-                raise NotImplementedError
-            need_enforce_dtype = any(
-                not is_scalar_for_elemwise(a) and a.ndim == 0
-                for a in self.elemwise_args
-            )
-
-        blockwise_kwargs = {}
-        op = self.op
-        if self.where is not True:
-            blockwise_kwargs["elemwise_where_function"] = op
-            op = _elemwise_handle_where
-
-        if need_enforce_dtype:
-            blockwise_kwargs.update(
-                {
-                    "enforce_dtype": dtype,
-                    "enforce_dtype_function": op,
-                }
-            )
-            op = _enforce_dtype
-
-        return op, dtype, blockwise_kwargs
-
-    @property
-    def func(self):
-        return self._info[0]
-
-    @property
-    def dtype(self):
-        return self._info[1]
-
-    @property
-    def kwargs(self):
-        return self._info[2]
-
-    @property
-    def token(self):
-        return funcname(self.op).strip("_")
-
-    @property
-    def args(self):
-        # for Blockwise rather than Elemwise
-        return tuple(
-            toolz.concat(
-                (
-                    a,
-                    (
-                        tuple(range(a.ndim)[::-1])
-                        if not is_scalar_for_elemwise(a)
-                        else None
-                    ),
-                )
-                for a in self.elemwise_args
-                + ([self.where] if self.where is not True else [])
-            )
-        )
-
-
 class Transpose(Blockwise):
     _parameters = ["array", "axes"]
     func = staticmethod(np.transpose)
@@ -332,6 +214,7 @@ class Transpose(Blockwise):
     adjust_chunks = None
     concatenate = None
     token = "transpose"
+    _nan_chunks = False
 
     @property
     def new_axes(self):

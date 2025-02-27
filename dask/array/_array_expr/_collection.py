@@ -3,9 +3,8 @@ from __future__ import annotations
 import operator
 import warnings
 from collections.abc import Iterable
-from functools import cached_property, reduce
+from functools import cached_property
 from numbers import Number
-from operator import mul
 
 import numpy as np
 import toolz
@@ -13,7 +12,7 @@ from toolz import concat, first
 
 from dask._collections import new_collection
 from dask.array import chunk
-from dask.array._array_expr._blockwise import Blockwise, Elemwise, Transpose
+from dask.array._array_expr._blockwise import Blockwise, Transpose
 from dask.array._array_expr._expr import (
     ArrayExpr,
     BroadcastTo,
@@ -23,21 +22,27 @@ from dask.array._array_expr._expr import (
 )
 from dask.array._array_expr._io import FromArray, FromGraph
 from dask.array._array_expr._slicing import slice_with_bool_dask_array
+from dask.array.chunk import getitem
 from dask.array.core import (
     T_IntOrNaN,
+    _elemwise_handle_where,
+    _elemwise_normalize_where,
+    _enforce_dtype,
     _should_delegate,
+    apply_infer_dtype,
     broadcast_chunks,
     broadcast_shapes,
     check_if_handled_given_other,
     finalize,
     getter_inline,
+    is_scalar_for_elemwise,
 )
 from dask.array.dispatch import concatenate_lookup
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.utils import meta_from_array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
-from dask.utils import derived_from, is_arraylike, key_split
+from dask.utils import derived_from, funcname, is_arraylike, key_split
 
 
 class Array(DaskMethodsMixin):
@@ -119,7 +124,7 @@ class Array(DaskMethodsMixin):
 
     @cached_property
     def npartitions(self):
-        return reduce(mul, self.numblocks, 1)
+        return self.expr.npartitions
 
     @property
     def size(self) -> T_IntOrNaN:
@@ -137,9 +142,26 @@ class Array(DaskMethodsMixin):
         if isinstance(index, str) or (
             isinstance(index, list) and index and all(isinstance(i, str) for i in index)
         ):
-            # TODO(expr-soon): needs map_blocks that we don't support yet,
-            #  but implementation is trivial after we have that
-            raise NotImplementedError()
+            if isinstance(index, str):
+                dt = self.dtype[index]
+            else:
+                dt = np.dtype(
+                    {
+                        "names": index,
+                        "formats": [self.dtype.fields[name][0] for name in index],
+                        "offsets": [self.dtype.fields[name][1] for name in index],
+                        "itemsize": self.dtype.itemsize,
+                    }
+                )
+
+            if dt.shape:
+                new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
+                chunks = self.chunks + tuple((i,) for i in dt.shape)
+                return self.map_blocks(
+                    getitem, index, dtype=dt.base, chunks=chunks, new_axis=new_axis
+                )
+            else:
+                return self.map_blocks(getitem, index, dtype=dt)
 
         if not isinstance(index, tuple):
             index = (index,)
@@ -330,6 +352,45 @@ class Array(DaskMethodsMixin):
             axes = tuple(range(self.ndim))[::-1]
 
         return new_collection(Transpose(self, axes))
+
+    def swapaxes(self, axis1, axis2):
+        """Return a view of the array with ``axis1`` and ``axis2`` interchanged.
+
+        Refer to :func:`dask.array.swapaxes` for full documentation.
+
+        See Also
+        --------
+        dask.array.swapaxes : equivalent function
+        """
+        from dask.array._array_expr._routines import swapaxes
+
+        return swapaxes(self, axis1, axis2)
+
+    def choose(self, choices):
+        """Use an index array to construct a new array from a set of choices.
+
+        Refer to :func:`dask.array.choose` for full documentation.
+
+        See Also
+        --------
+        dask.array.choose : equivalent function
+        """
+        from dask.array._array_expr._routines import choose
+
+        return choose(self, choices)
+
+    def squeeze(self, axis=None):
+        """Remove axes of length one from array.
+
+        Refer to :func:`dask.array.squeeze` for full documentation.
+
+        See Also
+        --------
+        dask.array.squeeze : equivalent function
+        """
+        from dask.array._array_expr._routines import squeeze
+
+        return squeeze(self, axis)
 
     @property
     def T(self):
@@ -724,6 +785,7 @@ def blockwise(
     align_arrays=True,
     concatenate=None,
     meta=None,
+    _nan_chunks=False,
     **kwargs,
 ):
     """Tensor operation: Generalized inner and outer products
@@ -891,6 +953,7 @@ def blockwise(
             concatenate,
             meta,
             kwargs,
+            _nan_chunks,
             *args,
         )
     )
@@ -936,19 +999,87 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     --------
     blockwise
     """
-    if where is not True:
-        # TODO(expr-soon): Need asarray for this
-        where = True
-
     if out is not None:
-        raise NotImplementedError("elemwise does not support out=")
+        # TODO(expr-soon): out is not handled
+        raise NotImplementedError
 
+    if kwargs:
+        raise TypeError(
+            f"{op.__name__} does not take the following keyword arguments "
+            f"{sorted(kwargs)}"
+        )
+
+    where = _elemwise_normalize_where(where)
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
-    # TODO(expr-soon): We should probably go through blockwise here
-    args = [asanyarray(a) for a in args]
+    shapes = []
+    for arg in args:
+        shape = getattr(arg, "shape", ())
+        if any(is_dask_collection(x) for x in shape):
+            # Want to exclude Delayed shapes and dd.Scalar
+            shape = ()
+        shapes.append(shape)
+    if isinstance(where, Array):
+        shapes.append(where.shape)
+    if isinstance(out, Array):
+        shapes.append(out.shape)
 
-    return new_collection(Elemwise(op, dtype, name, where, *args))
+    shapes = [s if isinstance(s, Iterable) else () for s in shapes]
+    out_ndim = len(
+        broadcast_shapes(*shapes)
+    )  # Raises ValueError if dimensions mismatch
+    expr_inds = tuple(range(out_ndim))[::-1]
+
+    if dtype is not None:
+        need_enforce_dtype = True
+    else:
+        # We follow NumPy's rules for dtype promotion, which special cases
+        # scalars and 0d ndarrays (which it considers equivalent) by using
+        # their values to compute the result dtype:
+        # https://github.com/numpy/numpy/issues/6240
+        # We don't inspect the values of 0d dask arrays, because these could
+        # hold potentially very expensive calculations. Instead, we treat
+        # them just like other arrays, and if necessary cast the result of op
+        # to match.
+        vals = [
+            (
+                np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
+                if not is_scalar_for_elemwise(a)
+                else a
+            )
+            for a in args
+        ]
+        try:
+            dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
+        except Exception:
+            return NotImplemented
+        need_enforce_dtype = any(
+            not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
+        )
+
+    blockwise_kwargs = dict(dtype=dtype, name=name, prefix=funcname(op).strip("_"))
+
+    if where is not True:
+        blockwise_kwargs["elemwise_where_function"] = op
+        op = _elemwise_handle_where
+        args.extend([where, out])
+
+    if need_enforce_dtype:
+        blockwise_kwargs["enforce_dtype"] = dtype
+        blockwise_kwargs["enforce_dtype_function"] = op
+        op = _enforce_dtype
+
+    result = blockwise(
+        op,
+        expr_inds,
+        *concat(
+            (a, tuple(range(a.ndim)[::-1]) if not is_scalar_for_elemwise(a) else None)
+            for a in args
+        ),
+        **blockwise_kwargs,
+    )
+
+    return result
 
 
 def rechunk(

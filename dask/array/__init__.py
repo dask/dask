@@ -642,8 +642,12 @@ if _array_expr_enabled():
             abs,
             absolute,
             add,
+            allclose,
             angle,
+            append,
+            apply_along_axis,
             apply_gufunc,
+            apply_over_axes,
             arange,
             arccos,
             arccosh,
@@ -653,10 +657,15 @@ if _array_expr_enabled():
             arctan2,
             arctanh,
             argwhere,
+            around,
             array,
             as_gufunc,
             asanyarray,
             asarray,
+            atleast_1d,
+            atleast_2d,
+            atleast_3d,
+            average,
             bitwise_and,
             bitwise_not,
             bitwise_or,
@@ -666,25 +675,43 @@ if _array_expr_enabled():
             broadcast_to,
             cbrt,
             ceil,
+            choose,
             clip,
+            coarsen,
             compress,
             concatenate,
             conj,
             copysign,
             cos,
             cosh,
+            count_nonzero,
+            cov,
             deg2rad,
             degrees,
+            delete,
+            diag,
+            diagonal,
+            diff,
+            digitize,
             divide,
             divmod,
+            dot,
+            dstack,
+            ediff1d,
             elemwise,
             empty,
             equal,
             exp,
             exp2,
+            expand_dims,
             expm1,
+            extract,
             fabs,
             fix,
+            flatnonzero,
+            flip,
+            fliplr,
+            flipud,
             float_power,
             floor,
             floor_divide,
@@ -694,19 +721,27 @@ if _array_expr_enabled():
             frexp,
             from_array,
             frompyfunc,
+            gradient,
             greater,
             greater_equal,
             gufunc,
+            histogram,
+            hstack,
             hypot,
             i0,
             imag,
             indices,
+            insert,
             invert,
+            isclose,
             iscomplex,
+            iscomplexobj,
             isfinite,
+            isin,
             isinf,
             isnan,
             isneginf,
+            isnull,
             isposinf,
             isreal,
             ldexp,
@@ -725,6 +760,7 @@ if _array_expr_enabled():
             logical_or,
             logical_xor,
             map_blocks,
+            matmul,
             maximum,
             meshgrid,
             minimum,
@@ -732,16 +768,24 @@ if _array_expr_enabled():
             modf,
             multiply,
             nan_to_num,
+            ndim,
             negative,
             nextafter,
+            nonzero,
             not_equal,
+            notnull,
             ones,
+            outer,
+            pad,
+            piecewise,
             positive,
             power,
+            ptp,
             rad2deg,
             radians,
             random,
             ravel,
+            ravel_multi_index,
             real,
             rechunk,
             reciprocal,
@@ -749,8 +793,15 @@ if _array_expr_enabled():
             remainder,
             reshape,
             reshape_blockwise,
+            result_type,
             right_shift,
             rint,
+            roll,
+            rot90,
+            round,
+            searchsorted,
+            select,
+            shape,
             sign,
             signbit,
             sin,
@@ -759,41 +810,31 @@ if _array_expr_enabled():
             spacing,
             sqrt,
             square,
+            squeeze,
             stack,
             subtract,
+            swapaxes,
+            take,
             tan,
             tanh,
+            tensordot,
+            transpose,
+            tri,
+            tril,
+            tril_indices,
+            tril_indices_from,
+            triu,
+            triu_indices,
+            triu_indices_from,
             true_divide,
             trunc,
-            zeros,
-            array,
-            result_type,
-            atleast_1d,
-            atleast_2d,
-            atleast_3d,
-            vstack,
-            hstack,
-            dstack,
-            swapaxes,
-            transpose,
-            flip,
-            flipud,
-            fliplr,
-            rot90,
-            tensordot,
-            dot,
+            union1d,
+            unique,
+            unravel_index,
             vdot,
-            matmul,
-            outer,
-            apply_along_axis,
-            apply_over_axes,
-            ptp,
-            ediff1d,
-            diff,
-            gradient,
-            digitize,
-            searchsorted,
-
+            vstack,
+            where,
+            zeros,
         )
         from dask.array.reductions import (
             all,
@@ -833,17 +874,13 @@ if _array_expr_enabled():
         to_npy_stack = raise_not_implemented_error("to_npy_stack")
         to_zarr = raise_not_implemented_error("to_zarr")
         unify_chunks = raise_not_implemented_error("unify_chunks")
-        diag = raise_not_implemented_error("diag")
-        diagonal = raise_not_implemented_error("diagonal")
         empty_like = raise_not_implemented_error("empty_like")
         eye = raise_not_implemented_error("eye")
         fromfunction = raise_not_implemented_error("fromfunction")
         full_like = raise_not_implemented_error("full_like")
         ones_like = raise_not_implemented_error("ones_like")
-        pad = raise_not_implemented_error("pad")
         repeat = raise_not_implemented_error("repeat")
         tile = raise_not_implemented_error("tile")
-        tri = raise_not_implemented_error("tri")
         zeros_like = raise_not_implemented_error("zeros_like")
         moveaxis = raise_not_implemented_error("moveaxis")
         rollaxis = raise_not_implemented_error("rollaxis")
@@ -863,49 +900,11 @@ if _array_expr_enabled():
         nanmedian = raise_not_implemented_error("nanmedian")
         topk = raise_not_implemented_error("topk")
         trace = raise_not_implemented_error("trace")
-        allclose = raise_not_implemented_error("allclose")
-        append = raise_not_implemented_error("append")
-        around = raise_not_implemented_error("around")
-        average = raise_not_implemented_error("average")
         bincount = raise_not_implemented_error("bincount")
-        choose = raise_not_implemented_error("choose")
-        coarsen = raise_not_implemented_error("coarsen")
         corrcoef = raise_not_implemented_error("corrcoef")
-        count_nonzero = raise_not_implemented_error("count_nonzero")
-        cov = raise_not_implemented_error("cov")
-        delete = raise_not_implemented_error("delete")
         einsum = raise_not_implemented_error("einsum")
-        expand_dims = raise_not_implemented_error("expand_dims")
-        extract = raise_not_implemented_error("extract")
-        flatnonzero = raise_not_implemented_error("flatnonzero")
-        histogram = raise_not_implemented_error("histogram")
         histogram2d = raise_not_implemented_error("histogram2d")
         histogramdd = raise_not_implemented_error("histogramdd")
-        insert = raise_not_implemented_error("insert")
-        isclose = raise_not_implemented_error("isclose")
-        isin = raise_not_implemented_error("isin")
-        isnull = raise_not_implemented_error("isnull")
-        ndim = raise_not_implemented_error("ndim")
-        nonzero = raise_not_implemented_error("nonzero")
-        notnull = raise_not_implemented_error("notnull")
-        piecewise = raise_not_implemented_error("piecewise")
-        ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
-        roll = raise_not_implemented_error("roll")
-        round = raise_not_implemented_error("round")
-        select = raise_not_implemented_error("select")
-        shape = raise_not_implemented_error("shape")
-        squeeze = raise_not_implemented_error("squeeze")
-        take = raise_not_implemented_error("take")
-        tril = raise_not_implemented_error("tril")
-        tril_indices = raise_not_implemented_error("tril_indices")
-        tril_indices_from = raise_not_implemented_error("tril_indices_from")
-        triu = raise_not_implemented_error("triu")
-        triu_indices = raise_not_implemented_error("triu_indices")
-        triu_indices_from = raise_not_implemented_error("triu_indices_from")
-        union1d = raise_not_implemented_error("union1d")
-        unique = raise_not_implemented_error("unique")
-        unravel_index = raise_not_implemented_error("unravel_index")
-        where = raise_not_implemented_error("where")
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")
         full = raise_not_implemented_error("full")

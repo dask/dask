@@ -24,6 +24,7 @@ def map_blocks(
     new_axis=None,
     enforce_ndim=False,
     meta=None,
+    prefix=None,
     **kwargs,
 ):
     """Map a function across all blocks of a dask array.
@@ -275,7 +276,6 @@ def map_blocks(
         )
         raise TypeError(msg % type(func).__name__)
 
-    prefix = None
     if token:
         warnings.warn(
             "The `token=` keyword to `map_blocks` has been moved to `prefix=`. "

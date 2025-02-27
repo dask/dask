@@ -18,11 +18,14 @@ from dask.array._array_expr._collection import (
 )
 from dask.array._array_expr._creation import (
     arange,
+    diag,
+    diagonal,
     empty,
     indices,
     linspace,
     meshgrid,
     ones,
+    pad,
     zeros,
 )
 from dask.array._array_expr._gufunc import *
