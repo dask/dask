@@ -55,7 +55,8 @@ class Arange(ArrayExpr):
         for i, bs in enumerate(self.chunks[0]):
             blockstart = start + (elem_count * step)
             blockstop = start + ((elem_count + bs) * step)
-            task = (
+            task = Task(
+                (self._name, i),
                 func,
                 blockstart,
                 blockstop,
