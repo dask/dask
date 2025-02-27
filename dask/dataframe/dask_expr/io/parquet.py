@@ -955,9 +955,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         # we'd like this thing to be as low overhead as possible
         with dask.config.set({"distributed.diagnostics.computations.nframes": 0}):
             token_stats = flatten(
-                dask.compute(
-                    _collect_statistics_plan(files, fragments), allow_async=False
-                )
+                dask.compute(_collect_statistics_plan(files, fragments))
             )
         for token, stats in token_stats:
             _STATS_CACHE[token] = stats
