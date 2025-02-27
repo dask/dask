@@ -1,19 +1,29 @@
 from __future__ import annotations
 
+import functools
+from bisect import bisect
 from functools import cached_property, reduce
-from operator import mul
+from itertools import product
+from operator import add, mul
 
 import numpy as np
 import toolz
+from tlz import accumulate
 
 from dask._expr import Expr
-from dask.array.core import T_IntOrNaN, common_blockdim
+from dask.array.chunk import getitem
+from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
+from dask.layers import ArrayBlockwiseDep
+from dask.tokenize import _tokenize_deterministic
 from dask.utils import cached_cumsum
 
 
 class ArrayExpr(Expr):
     _cached_keys = None
+
+    def _operands_for_repr(self):
+        return []
 
     @cached_property
     def shape(self) -> tuple[T_IntOrNaN, ...]:
@@ -37,6 +47,8 @@ class ArrayExpr(Expr):
 
     @cached_property
     def chunks(self):
+        if "chunks" in self._parameters:
+            return self.operand("chunks")
         raise NotImplementedError("Subclass must implement 'chunks'")
 
     @cached_property
@@ -51,6 +63,17 @@ class ArrayExpr(Expr):
     @property
     def name(self):
         return self._name
+
+    def __len__(self):
+        if not self.chunks:
+            raise TypeError("len() of unsized object")
+        if np.isnan(self.chunks[0]).any():
+            msg = (
+                "Cannot call len() on object with unknown chunk size."
+                f"{unknown_chunk_message}"
+            )
+            raise ValueError(msg)
+        return int(sum(self.chunks[0]))
 
     def __dask_keys__(self):
         out = self.lower_completely()
@@ -117,7 +140,10 @@ class ArrayExpr(Expr):
 
         from dask.array._array_expr._rechunk import Rechunk
 
-        return Rechunk(self, chunks, threshold, block_size_limit, balance, method)
+        result = Rechunk(self, chunks, threshold, block_size_limit, balance, method)
+        # Ensure that chunks are compatible
+        result.chunks
+        return result
 
 
 def unify_chunks_expr(*args):
@@ -136,7 +162,7 @@ def unify_chunks_expr(*args):
     nameinds = []
     blockdim_dict = dict()
     for a, ind in arginds:
-        if ind is not None:
+        if ind is not None and not isinstance(a, ArrayBlockwiseDep):
             nameinds.append((a.name, ind))
             blockdim_dict[a.name] = a.chunks
         else:
@@ -147,7 +173,7 @@ def unify_chunks_expr(*args):
     arrays = []
     changed = False
     for a, i in arginds:
-        if i is None:
+        if i is None or isinstance(a, ArrayBlockwiseDep):
             pass
         else:
             chunks = tuple(
@@ -163,5 +189,95 @@ def unify_chunks_expr(*args):
                 changed = True
             else:
                 pass
-        arrays.extend([a, i])
+        arrays.append(a)
     return chunkss, arrays, changed
+
+
+class Stack(ArrayExpr):
+    _parameters = ["array", "axis", "meta"]
+
+    @functools.cached_property
+    def args(self):
+        return [self.array] + self.operands[len(self._parameters) :]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.operand("meta")
+
+    @functools.cached_property
+    def chunks(self):
+        n = len(self.args)
+        return (
+            self.array.chunks[: self.axis]
+            + ((1,) * n,)
+            + self.array.chunks[self.axis :]
+        )
+
+    @functools.cached_property
+    def _name(self):
+        return "stack-" + _tokenize_deterministic(*self.operands)
+
+    def _layer(self) -> dict:
+        keys = list(product([self._name], *[range(len(bd)) for bd in self.chunks]))
+        names = [a.name for a in self.args]
+        axis = self.axis
+        ndim = self._meta.ndim - 1
+
+        inputs = [
+            (names[key[axis + 1]],) + key[1 : axis + 1] + key[axis + 2 :]
+            for key in keys
+        ]
+        values = [
+            Task(
+                key,
+                getitem,
+                TaskRef(inp),
+                (slice(None, None, None),) * axis
+                + (None,)
+                + (slice(None, None, None),) * (ndim - axis),
+            )
+            for key, inp in zip(keys, inputs)
+        ]
+        return dict(zip(keys, values))
+
+
+class Concatenate(ArrayExpr):
+    _parameters = ["array", "axis", "meta"]
+
+    @functools.cached_property
+    def args(self):
+        return [self.array] + self.operands[len(self._parameters) :]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.operand("meta")
+
+    @functools.cached_property
+    def chunks(self):
+        bds = [a.chunks for a in self.args]
+        chunks = (
+            bds[0][: self.axis]
+            + (sum((bd[self.axis] for bd in bds), ()),)
+            + bds[0][self.axis + 1 :]
+        )
+        return chunks
+
+    @functools.cached_property
+    def _name(self):
+        return "stack-" + _tokenize_deterministic(*self.operands)
+
+    def _layer(self) -> dict:
+        axis = self.axis
+        cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in self.args]))
+        keys = list(product([self._name], *[range(len(bd)) for bd in self.chunks]))
+        names = [a.name for a in self.args]
+
+        values = [
+            (names[bisect(cum_dims, key[axis + 1]) - 1],)
+            + key[1 : axis + 1]
+            + (key[axis + 1] - cum_dims[bisect(cum_dims, key[axis + 1]) - 1],)
+            + key[axis + 2 :]
+            for key in keys
+        ]
+
+        return dict(zip(keys, values))

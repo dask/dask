@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar, union_categoricals
 
-from dask.array.core import Array
+from dask.array import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
