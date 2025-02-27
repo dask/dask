@@ -23,8 +23,6 @@ import tlz as toolz
 from fsspec.utils import stringify_path
 from toolz import identity
 
-from distributed.protocol import dask_deserialize, dask_serialize
-
 import dask
 from dask._task_spec import Task, TaskRef
 from dask.core import flatten
@@ -73,27 +71,6 @@ def _tokenize_fileinfo(fileinfo):
         fileinfo.path,
         fileinfo.size,
         fileinfo.mtime_ns,
-    )
-
-
-@dask_serialize.register(pa.fs.FileInfo)
-def _serialize_fileinfo(fileinfo):
-    return {}, [
-        (
-            fileinfo.path,
-            fileinfo.size,
-            fileinfo.mtime_ns,
-        )
-    ]
-
-
-@dask_deserialize.register(pa.fs.FileInfo)
-def _deserialize_fileinfo(header, frames):
-    path, size, mtime_ns = frames[0]
-    return pa.fs.FileInfo(
-        path=path,
-        size=size,
-        mtime_ns=mtime_ns,
     )
 
 
