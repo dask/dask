@@ -6,6 +6,7 @@ from functools import partial
 import numpy as np
 
 from dask._collections import new_collection
+from dask._task_spec import Task
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array.chunk import arange as _arange
 from dask.array.chunk import linspace as _linspace
