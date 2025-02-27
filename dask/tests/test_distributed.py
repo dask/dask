@@ -23,6 +23,7 @@ from distributed.utils_test import (  # noqa F401
     loop,
     loop_in_thread,
     popen,
+    s,
     varying,
 )
 
@@ -70,16 +71,10 @@ def test_can_import_nested_things():
 @gen_cluster(client=True)
 async def test_persist(c, s, a, b):
     x = delayed(inc)(1)
-    (x2,) = persist(x)
+    x2 = c.persist(x)
 
     await wait(x2)
     assert x2.key in a.data or x2.key in b.data
-
-    y = delayed(inc)(10)
-    y2, one = persist(y, 1)
-
-    await wait(y2)
-    assert y2.key in a.data or y2.key in b.data
 
 
 def test_persist_nested(c):
@@ -436,7 +431,7 @@ def test_scheduler_equals_client(c):
 @gen_cluster(client=True)
 async def test_await(c, s, a, b):
     x = dask.delayed(inc)(1)
-    x = await x.persist()
+    x = await c.persist(x)
     assert x.key in s.tasks
     assert a.data or b.data
     assert all(f.done() for f in futures_of(x))
@@ -530,9 +525,8 @@ def test_blockwise_array_creation(c, io, fuse):
         pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
     ],
 )
-@pytest.mark.parametrize("fuse", [True, False, None])
 @pytest.mark.parametrize("from_futures", [True, False])
-def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
+def test_blockwise_dataframe_io(c, tmpdir, io, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
@@ -562,6 +556,27 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
+
+
+@gen_cluster(client=True)
+async def test_client_compute_parquet(c, s, a, b, tmpdir):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+    df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
+    ddf0 = dd.from_pandas(df, npartitions=3)
+    with dask.config.set({"admin.async-client-fallback": "sync"}):
+        with pytest.warns(UserWarning, match="asynchronous"):
+            ddf0.to_parquet(str(tmpdir))
+
+        ddf = dd.read_parquet(str(tmpdir))
+        await c.gather(c.compute(ddf))
+        with pytest.warns(UserWarning, match="asynchronous"):
+            dask.compute(ddf)
+    with dask.config.set({"admin.async-client-fallback": None}):
+        with pytest.raises(RuntimeError, match="asynchronous"):
+            ddf0.to_parquet(str(tmpdir))
+        with pytest.raises(RuntimeError, match="asynchronous"):
+            dask.compute(ddf)
 
 
 def test_blockwise_fusion_after_compute(c):
@@ -713,27 +728,28 @@ async def test_map_partitions_partition_info(c, s, a, b):
     assert res[1] == {"number": 1, "division": 5}
 
 
-@gen_cluster(client=True)
-async def test_futures_in_subgraphs(c, s, a, b):
+def test_futures_in_subgraphs(loop_in_thread):
     """Copied from distributed (tests/test_client.py)"""
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    with cluster() as (s, [a, b]), Client(s["address"], loop=loop_in_thread):
+        ddf = dd.from_pandas(
+            pd.DataFrame(
+                dict(
+                    uid=range(50),
+                    enter_time=pd.date_range(
+                        start="2020-01-01", end="2020-09-01", periods=50, tz="UTC"
+                    ),
+                )
+            ),
+            npartitions=5,
+        )
 
-    ddf = dd.from_pandas(
-        pd.DataFrame(
-            dict(
-                uid=range(50),
-                enter_time=pd.date_range(
-                    start="2020-01-01", end="2020-09-01", periods=50, tz="UTC"
-                ),
-            )
-        ),
-        npartitions=1,
-    )
-
-    ddf = ddf[ddf.uid.isin(range(29))].persist()
-    ddf["day"] = ddf.enter_time.dt.day_name()
-    ddf = await c.submit(ddf.categorize, columns=["day"], index=False)
+        ddf = ddf[ddf.uid.isin(range(29))].persist()
+        ddf["local_time"] = ddf.enter_time.dt.tz_convert("US/Central")
+        ddf["day"] = ddf.enter_time.dt.day_name()
+        ddf = ddf.categorize(columns=["day"], index=False)
+        ddf.compute()
 
 
 @gen_cluster(client=True)
@@ -961,33 +977,33 @@ def test_write_single_hdf(c, lock_param):
         ddf.to_hdf(str(f), key="/ds_*", lock=lock_param)
 
 
-@gen_cluster(config={"scheduler": "sync"}, nthreads=[])
-async def test_get_scheduler_default_client_config_interleaving(s):
+def test_get_scheduler_default_client_config_interleaving(s):
     # This test is using context managers intentionally. We should not refactor
     # this to use it in more places to make the client closing cleaner.
-    with pytest.warns(UserWarning):
+    s_address = s["address"]
+    with pytest.warns(UserWarning), dask.config.set(scheduler="sync"):
         assert dask.base.get_scheduler() == dask.local.get_sync
         with dask.config.set(scheduler="threads"):
             assert dask.base.get_scheduler() == dask.threaded.get
-            client = await Client(s.address, set_as_default=False, asynchronous=True)
+            client = Client(s_address, set_as_default=False)
             try:
                 assert dask.base.get_scheduler() == dask.threaded.get
             finally:
-                await client.close()
+                client.close()
 
-            client = await Client(s.address, set_as_default=True, asynchronous=True)
+            client = Client(s_address, set_as_default=True)
             try:
                 assert dask.base.get_scheduler() == client.get
             finally:
-                await client.close()
+                client.close()
             assert dask.base.get_scheduler() == dask.threaded.get
 
             # FIXME: As soon as async with uses as_current this will be true as well
-            # async with Client(s.address, set_as_default=False, asynchronous=True) as c:
+            # async with Client(s_address, set_as_default=False, asynchronous=True) as c:
             #     assert dask.base.get_scheduler() == c.get
             # assert dask.base.get_scheduler() == dask.threaded.get
 
-            client = await Client(s.address, set_as_default=False, asynchronous=True)
+            client = Client(s_address, set_as_default=False)
             try:
                 assert dask.base.get_scheduler() == dask.threaded.get
                 with client.as_current():
@@ -995,24 +1011,24 @@ async def test_get_scheduler_default_client_config_interleaving(s):
                     assert sc == client.get
                 assert dask.base.get_scheduler() == dask.threaded.get
             finally:
-                await client.close()
+                client.close()
 
             # If it comes to a race between default and current, current wins
-            client = await Client(s.address, set_as_default=True, asynchronous=True)
-            client2 = await Client(s.address, set_as_default=False, asynchronous=True)
+            client = Client(s_address, set_as_default=True)
+            client2 = Client(s_address, set_as_default=False)
             try:
                 with client2.as_current():
                     assert dask.base.get_scheduler() == client2.get
                 assert dask.base.get_scheduler() == client.get
             finally:
-                await client.close()
-                await client2.close()
+                client.close()
+                client2.close()
 
             assert dask.base.get_scheduler() == dask.threaded.get
 
         assert dask.base.get_scheduler() == dask.local.get_sync
 
-        client = await Client(s.address, set_as_default=True, asynchronous=True)
+        client = Client(s_address, set_as_default=True)
         try:
             assert dask.base.get_scheduler() == client.get
             with dask.config.set(scheduler="threads"):
@@ -1020,7 +1036,7 @@ async def test_get_scheduler_default_client_config_interleaving(s):
                 with client.as_current():
                     assert dask.base.get_scheduler() == client.get
         finally:
-            await client.close()
+            client.close()
 
 
 @gen_cluster(client=True)
@@ -1038,14 +1054,14 @@ async def test_release_persisted_futures_without_gc(c, s, a, b):
     gc.disable()
     try:
         x = da.arange(100, chunks=(20,))
-        y = (x + 1).persist()
+        y = c.persist(x + 1)
         future_refs = []
         coly = weakref.ref(y)
         future_refs.extend([weakref.ref(fut) for fut in futures_of(y)])
         colz = weakref.ref(y)
         y = await y
         # The issue only occurs if we persist the future again.
-        z = y[:20].persist()
+        z = c.persist(y[:20])
 
         future_refs.extend([weakref.ref(fut) for fut in futures_of(z)])
         colz = weakref.ref(z)

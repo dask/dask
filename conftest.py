@@ -95,3 +95,11 @@ def pytest_assertrepr_compare(op, left, right):
             f" left: {left.key} right: {right.key}",
             " Diff:",
         ] + diff
+
+
+@pytest.fixture(autouse=True, scope="session")
+def allow_distributed_async_clients():
+    import dask
+
+    with dask.config.set({"admin.async-client-fallback": "sync"}):
+        yield
