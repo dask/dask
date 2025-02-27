@@ -44,6 +44,7 @@ optimization:
     delayed: false
 
 admin:
+  async-client-fallback: null
   traceback:
     shorten:
       - concurrent[\\\/]futures[\\\/]

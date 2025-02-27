@@ -569,12 +569,19 @@ async def test_client_compute_parquet(c, s, a, b, tmpdir):
     dd = pytest.importorskip("dask.dataframe")
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
     ddf0 = dd.from_pandas(df, npartitions=3)
-    with pytest.warns(UserWarning, match="asynchronous"):
-        ddf0.to_parquet(str(tmpdir))
-    ddf = dd.read_parquet(str(tmpdir))
-    await c.gather(c.compute(ddf))
-    with pytest.warns(UserWarning, match="asynchronous"):
-        dask.compute(ddf)
+    with dask.config.set({"admin.async-client-fallback": "sync"}):
+        with pytest.warns(UserWarning, match="asynchronous"):
+            ddf0.to_parquet(str(tmpdir))
+
+        ddf = dd.read_parquet(str(tmpdir))
+        await c.gather(c.compute(ddf))
+        with pytest.warns(UserWarning, match="asynchronous"):
+            dask.compute(ddf)
+    with dask.config.set({"admin.async-client-fallback": None}):
+        with pytest.raises(RuntimeError, match="asynchronous"):
+            ddf0.to_parquet(str(tmpdir))
+        with pytest.raises(RuntimeError, match="asynchronous"):
+            dask.compute(ddf)
 
 
 def test_blockwise_fusion_after_compute(c):

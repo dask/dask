@@ -247,6 +247,11 @@ properties:
   admin:
     type: object
     properties:
+      allow-async-clients:
+        type: boolean
+        description: |
+          If False, raise an exception if dask.compute is attempting to select
+          an asynchronous Client. If True, fall back to a sync scheduler.
 
       traceback:
         type: object
