@@ -1062,19 +1062,13 @@ class HLGFinalizeCompute(Expr):
 
     def _layer(self) -> dict:
         expr = self.operand("dsk")
-        # TODO: Is this copy necessary? Is layer always guaranteeing a copy?
         dsk = expr._layer().copy()
 
         func, extra_args = expr.operand("finalize_compute")()
         keys = expr.__dask_keys__()
-        # TODO: Unclear if this special case is actually necessary. If so, that
-        # might also be doable with a simplify?
 
-        # if func is single_key and len(keys) == 1 and not extra_args:
-        #     names[i] = keys[0]
-        # else:
-        name = self._name
-        dsk[name] = Task(name, func, _convert_dask_keys(keys), *extra_args)
+        t = Task(self._name, func, _convert_dask_keys(keys), *extra_args)
+        dsk[t.key] = t
         return dsk
 
     def __dask_keys__(self):

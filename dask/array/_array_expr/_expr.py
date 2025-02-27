@@ -101,8 +101,6 @@ class ArrayExpr(Expr):
         return self._name
 
     def __dask_keys__(self):
-        # TODO: Should this be a cached property instead? Do I need to cache
-        # this unwrapping?
         key_refs = self.__dask_keys_refs__()
 
         def unwrap(task):

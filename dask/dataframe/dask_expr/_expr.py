@@ -15,6 +15,7 @@ from pandas.errors import PerformanceWarning
 from tlz import merge_sorted, partition, unique
 
 from dask import _expr as core
+from dask._expr import FinalizeCompute
 from dask._task_spec import Alias, DataNode, Task, TaskRef, execute_graph
 from dask.array import Array
 from dask.core import flatten
@@ -526,9 +527,6 @@ class Expr(core.Expr):
 
     def fuse(self):
         return optimize_blockwise_fusion(self)
-
-
-from dask._expr import FinalizeCompute
 
 
 class FinalizeComputeDF(FinalizeCompute, Expr):

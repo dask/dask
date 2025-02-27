@@ -677,9 +677,13 @@ def compute(
 
     with shorten_traceback():
         # The high level optimize will have to be called client side (for now)
-        # The optimize can internally trigger already a computation (e.g.
-        # parquet is reading some statistics). To move this to the scheduler,
-        # we'd have to establish something like a scheduler-client
+        # The optimize can internally trigger already a computation
+        # (e.g. parquet is reading some statistics). To move this to the
+        # scheduler we'd need some sort of scheduler-client to trigger a
+        # computation from inside the scheduler and continue with optimization
+        # once the results are in. An alternative could be to introduce a
+        # pre-optimize step for the Expressions that handles steps like these as
+        # a dedicated computation
 
         # Another caveat is that optimize will only lock in the expression names
         # after optimization. Names are determined using tokenize and tokenize
@@ -687,14 +691,10 @@ def compute(
         # have to lock this in before sending stuff (otherwise we'd need to
         # change the graph submission to a handshake which introduces all sorts
         # of concurrency control issues)
+
         expr = expr.optimize()
-        # FIXME: What exactly is __dask_keys__ supposed to return?
         keys = list(flatten(expr.__dask_keys__()))
 
-        # Everything below this should happen on the scheduler. The dask_graph
-        # is materializing and the low level optimizers are running if
-        # appropriate, i.e. the `schedule` interface has to be changed to use a
-        # __dask_graph__ (if available)
         results = schedule(expr, keys, **kwargs)
 
     return repack(results)
