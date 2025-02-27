@@ -16,7 +16,6 @@ from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
 from dask.layers import ArrayBlockwiseDep
-from dask.tokenize import _tokenize_deterministic
 from dask.utils import cached_cumsum
 
 
@@ -282,7 +281,7 @@ class Concatenate(ArrayExpr):
 
     @functools.cached_property
     def _name(self):
-        return "stack-" + _tokenize_deterministic(*self.operands)
+        return "stack-" + self.deterministic_token
 
     def _layer(self) -> dict:
         axis = self.axis
@@ -299,6 +298,8 @@ class Concatenate(ArrayExpr):
         ]
 
         return dict(zip(keys, values))
+
+
 class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
     _parameters = ["arr"]
 
