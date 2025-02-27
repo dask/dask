@@ -250,8 +250,8 @@ properties:
       async-client-fallback:
         type: [string, 'null']
         description: |
-          If False, raise an exception if dask.compute is attempting to select
-          an asynchronous Client. If True, fall back to a sync scheduler.
+          If not null, replace an asynchronous Client in get_scheduler/compute
+          with the provided scheduler type instead.
 
       traceback:
         type: object
