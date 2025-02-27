@@ -100,14 +100,15 @@ class Linspace(Arange):
         for i, bs in enumerate(self.chunks[0]):
             bs_space = bs - 1 if self.endpoint else bs
             blockstop = blockstart + (bs_space * self.step)
-            task = (
+            task = Task(
+                (self._name, i),
                 func,
                 blockstart,
                 blockstop,
                 bs,
             )
             blockstart = blockstart + (self.step * bs)
-            dsk[(self._name, i)] = task
+            dsk[task.key] = task
         return dsk
 
 
