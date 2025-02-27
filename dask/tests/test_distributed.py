@@ -728,27 +728,28 @@ async def test_map_partitions_partition_info(c, s, a, b):
     assert res[1] == {"number": 1, "division": 5}
 
 
-@gen_cluster(client=True)
-async def test_futures_in_subgraphs(c, s, a, b):
+def test_futures_in_subgraphs(loop_in_thread):
     """Copied from distributed (tests/test_client.py)"""
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    with cluster() as (s, [a, b]), Client(s["address"], loop=loop_in_thread):
+        ddf = dd.from_pandas(
+            pd.DataFrame(
+                dict(
+                    uid=range(50),
+                    enter_time=pd.date_range(
+                        start="2020-01-01", end="2020-09-01", periods=50, tz="UTC"
+                    ),
+                )
+            ),
+            npartitions=5,
+        )
 
-    ddf = dd.from_pandas(
-        pd.DataFrame(
-            dict(
-                uid=range(50),
-                enter_time=pd.date_range(
-                    start="2020-01-01", end="2020-09-01", periods=50, tz="UTC"
-                ),
-            )
-        ),
-        npartitions=1,
-    )
-
-    ddf = ddf[ddf.uid.isin(range(29))].persist()
-    ddf["day"] = ddf.enter_time.dt.day_name()
-    ddf = await c.submit(ddf.categorize, columns=["day"], index=False)
+        ddf = ddf[ddf.uid.isin(range(29))].persist()
+        ddf["local_time"] = ddf.enter_time.dt.tz_convert("US/Central")
+        ddf["day"] = ddf.enter_time.dt.day_name()
+        ddf = ddf.categorize(columns=["day"], index=False)
+        ddf.compute()
 
 
 @gen_cluster(client=True)
@@ -1053,14 +1054,14 @@ async def test_release_persisted_futures_without_gc(c, s, a, b):
     gc.disable()
     try:
         x = da.arange(100, chunks=(20,))
-        y = (x + 1).persist()
+        y = c.persist(x + 1)
         future_refs = []
         coly = weakref.ref(y)
         future_refs.extend([weakref.ref(fut) for fut in futures_of(y)])
         colz = weakref.ref(y)
         y = await y
         # The issue only occurs if we persist the future again.
-        z = y[:20].persist()
+        z = c.persist(y[:20])
 
         future_refs.extend([weakref.ref(fut) for fut in futures_of(z)])
         colz = weakref.ref(z)
