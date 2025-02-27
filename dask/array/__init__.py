@@ -639,12 +639,21 @@ if _array_expr_enabled():
     try:
         from dask.array._array_expr import (  # type: ignore
             Array,
+            arange,
+            array,
+            asanyarray,
+            asarray,
             blockwise,
+            concatenate,
             elemwise,
+            empty,
             from_array,
+            linspace,
+            map_blocks,
             random,
             rechunk,
             reduction,
+            stack,
         )
         from dask.array.reductions import (
             all,
@@ -660,18 +669,15 @@ if _array_expr_enabled():
             nanstd,
             nansum,
             nanvar,
+            ones,
             prod,
+            reduction,
             std,
             sum,
             var,
+            zeros,
         )
 
-        arange = raise_not_implemented_error("arange")
-        asarray = raise_not_implemented_error("asarray")
-        empty = raise_not_implemented_error("empty")
-        linspace = raise_not_implemented_error("linspace")
-        ones = raise_not_implemented_error("ones")
-        zeros = raise_not_implemented_error("zeros")
         backends = raise_not_implemented_error("backends")
         fft = raise_not_implemented_error("fft")
         lib = raise_not_implemented_error("lib")
@@ -680,16 +686,12 @@ if _array_expr_enabled():
         overlap = raise_not_implemented_error("overlap")
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
-        asanyarray = raise_not_implemented_error("asanyarray")
         block = raise_not_implemented_error("block")
         broadcast_arrays = raise_not_implemented_error("broadcast_arrays")
         broadcast_to = raise_not_implemented_error("broadcast_to")
-        concatenate = raise_not_implemented_error("concatenate")
         from_delayed = raise_not_implemented_error("from_delayed")
         from_npy_stack = raise_not_implemented_error("from_npy_stack")
         from_zarr = raise_not_implemented_error("from_zarr")
-        map_blocks = raise_not_implemented_error("map_blocks")
-        stack = raise_not_implemented_error("stack")
         store = raise_not_implemented_error("store")
         to_hdf5 = raise_not_implemented_error("to_hdf5")
         to_npy_stack = raise_not_implemented_error("to_npy_stack")
@@ -737,7 +739,6 @@ if _array_expr_enabled():
         apply_over_axes = raise_not_implemented_error("apply_over_axes")
         argwhere = raise_not_implemented_error("argwhere")
         around = raise_not_implemented_error("around")
-        array = raise_not_implemented_error("array")
         atleast_1d = raise_not_implemented_error("atleast_1d")
         atleast_2d = raise_not_implemented_error("atleast_2d")
         atleast_3d = raise_not_implemented_error("atleast_3d")
