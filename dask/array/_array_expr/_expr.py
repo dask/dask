@@ -11,6 +11,7 @@ import toolz
 from tlz import accumulate
 
 from dask._expr import Expr
+from dask._task_spec import Task, TaskRef
 from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
