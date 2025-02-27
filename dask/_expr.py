@@ -141,7 +141,7 @@ class Expr:
         if dask.config.get("dask-expr-no-serialize", False):
             raise RuntimeError(f"Serializing a {type(self)} object")
         return Expr._reconstruct, tuple(
-            [type(self)] + self.operands + [self.deterministic_token]
+            [type(self), *self.operands, self.deterministic_token]
         )
 
     def _depth(self, cache=None):
