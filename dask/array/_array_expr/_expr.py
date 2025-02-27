@@ -228,14 +228,15 @@ class Stack(ArrayExpr):
             for key in keys
         ]
         values = [
-            (
+            Task(
+                key,
                 getitem,
-                inp,
+                TaskRef(inp),
                 (slice(None, None, None),) * axis
                 + (None,)
                 + (slice(None, None, None),) * (ndim - axis),
             )
-            for inp in inputs
+            for key, inp in zip(keys, inputs)
         ]
         return dict(zip(keys, values))
 
