@@ -1070,6 +1070,26 @@ or with a Dask client
 """.strip()
 
 
+def _ensure_not_async(client):
+    if client.asynchronous:
+        if fallback := config.get("admin.async-client-fallback", None):
+            warnings.warn(
+                "Distributed Client detected but Client instance is "
+                f"asynchronous. Falling back to `{fallback}` scheduler. "
+                "To use an asynchronous Client, please use "
+                "``Client.compute`` and ``Client.gather`` "
+                "instead of the top level ``dask.compute``",
+                UserWarning,
+            )
+            return get_scheduler(scheduler=fallback)
+        else:
+            raise RuntimeError(
+                "Attempting to use an asynchronous "
+                "Client in a synchronous context of `dask.compute`"
+            )
+    return client.get
+
+
 def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     """Get scheduler function
 
@@ -1090,7 +1110,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         if callable(scheduler):
             return scheduler
         elif "Client" in type(scheduler).__name__ and hasattr(scheduler, "get"):
-            return scheduler.get
+            return _ensure_not_async(scheduler)
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
 
@@ -1114,23 +1134,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     )
                 assert _get_distributed_client is not None
                 client = _get_distributed_client()
-                if client.asynchronous:
-                    if fallback := config.get("admin.async-client-fallback", None):
-                        warnings.warn(
-                            "Distributed Client detected but Client instance is "
-                            f"asynchronous. Falling back to `{fallback}` scheduler. "
-                            "To use an asynchronous Client, please use "
-                            "``Client.compute`` and ``Client.gather`` "
-                            "instead of the top level ``dask.compute``",
-                            UserWarning,
-                        )
-                        return get_scheduler(scheduler=fallback)
-                    else:
-                        raise RuntimeError(
-                            "Attempting to use an asynchronous "
-                            "Client in a synchronous context of `dask.compute`"
-                        )
-                return client.get
+                return _ensure_not_async(client)
             else:
                 raise ValueError(
                     "Expected one of [distributed, %s]"
@@ -1156,8 +1160,10 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         raise ValueError(get_err_msg)
 
     try:
-        return get_scheduler(scheduler="distributed")
-    except (ValueError, RuntimeError):
+        from distributed import get_client
+
+        return _ensure_not_async(get_client())
+    except (ImportError, ValueError):
         pass
 
     if cls is not None:
