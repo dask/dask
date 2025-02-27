@@ -650,10 +650,12 @@ if _array_expr_enabled():
             from_array,
             linspace,
             map_blocks,
+            ones,
             random,
             rechunk,
             reduction,
             stack,
+            zeros,
         )
         from dask.array.reductions import (
             all,
@@ -669,13 +671,11 @@ if _array_expr_enabled():
             nanstd,
             nansum,
             nanvar,
-            ones,
             prod,
             reduction,
             std,
             sum,
             var,
-            zeros,
         )
 
         backends = raise_not_implemented_error("backends")
