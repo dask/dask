@@ -247,7 +247,7 @@ properties:
   admin:
     type: object
     properties:
-      allow-async-clients:
+      async-client-fallback:
         type: boolean
         description: |
           If False, raise an exception if dask.compute is attempting to select
