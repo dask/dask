@@ -530,9 +530,8 @@ def test_blockwise_array_creation(c, io, fuse):
         pytest.param("hdf", marks=pytest.mark.flaky(reruns=5)),
     ],
 )
-@pytest.mark.parametrize("fuse", [True, False, None])
 @pytest.mark.parametrize("from_futures", [True, False])
-def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
+def test_blockwise_dataframe_io(c, tmpdir, io, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
@@ -562,6 +561,20 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
+
+
+@gen_cluster(client=True)
+async def test_client_compute_parquet(c, s, a, b, tmpdir):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+    df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
+    ddf0 = dd.from_pandas(df, npartitions=3)
+    with pytest.warns(UserWarning, match="asynchronous"):
+        ddf0.to_parquet(str(tmpdir))
+    ddf = dd.read_parquet(str(tmpdir))
+    await c.gather(c.compute(ddf))
+    with pytest.warns(UserWarning, match="asynchronous"):
+        dask.compute(ddf)
 
 
 def test_blockwise_fusion_after_compute(c):

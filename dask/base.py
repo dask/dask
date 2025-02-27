@@ -1113,7 +1113,17 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                         f"Requested {scheduler} scheduler but no Client active."
                     )
                 assert _get_distributed_client is not None
-                return _get_distributed_client().get
+                client = _get_distributed_client()
+                if client.asynchronous:
+                    warnings.warn(
+                        "Distributed Client detected but Client instance is "
+                        "asynchronous. Falling back to 'sync' scheduler. "
+                        "To use an asynchronous Client, please use "
+                        "``Client.compute`` and ``Client.gather`` "
+                        "instead of the top level ``dask.compute``",
+                        UserWarning,
+                    )
+                    return get_scheduler(scheduler="sync")
             else:
                 raise ValueError(
                     "Expected one of [distributed, %s]"
