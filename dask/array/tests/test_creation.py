@@ -295,14 +295,17 @@ def test_arange_dtype_force(dtype):
         (0, 2**63 - 1, 2**63 - 10_000),
         (0.0, 2**63 - 1, 2**63 - 10_000),
         (0.0, -9_131_138_316_486_228_481, -92_233_720_368_547_759),
+        (-72_057_594_037_927_945, -72_057_594_037_927_938, 1.0),
+        (-72_057_594_037_927_945, -72_057_594_037_927_938, 1.5),
     ],
 )
-def test_arange_very_large_args(start, stop, step):
+@pytest.mark.parametrize("chunks", ["auto", 1])
+def test_arange_very_large_args(start, stop, step, chunks):
     """Test args that are very close to 2**63
     https://github.com/dask/dask/issues/11706
     """
     a_np = np.arange(start, stop, step)
-    a_da = da.arange(start, stop, step)
+    a_da = da.arange(start, stop, step, chunks=chunks)
     assert_eq(a_np, a_da)
 
 
