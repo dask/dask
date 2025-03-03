@@ -15,10 +15,12 @@ from dask.dataframe.dask_expr import from_dask_array
 from dask.dataframe.dask_expr._collection import Series, new_collection
 from dask.dataframe.dask_expr._expr import (
     Blockwise,
+    Expr,
     MaybeAlignPartitions,
     Partitions,
     Projection,
     are_co_aligned,
+    plain_column_projection,
 )
 from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.indexing import (
@@ -154,13 +156,52 @@ class LocIndexer(Indexer):
 
     def _loc_slice(self, iindexer, cindexer):
         assert isinstance(iindexer, slice)
+        if iindexer.step is not None and iindexer.step < 0:
+            obj = ReverseDataFrame(self.obj)
+            iindexer = slice(iindexer.start, iindexer.stop, -iindexer.step)
+        else:
+            obj = self.obj
         assert iindexer.step in (None, 1)
-        return new_collection(LocSlice(self.obj, iindexer, cindexer))
+        return new_collection(LocSlice(obj, iindexer, cindexer))
 
     def _loc_element(self, iindexer, cindexer):
         if iindexer < self.obj.divisions[0] or iindexer > self.obj.divisions[-1]:
             raise KeyError("the label [%s] is not in the index" % str(iindexer))
         return new_collection(LocElement(self.obj, iindexer, cindexer))
+
+
+def _reverse_partition(df):
+    return df.loc[::-1]
+
+
+class ReverseDataFrame(Expr):
+    _parameters = ["frame"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta
+
+    def _divisions(self):
+        return (None,) * (self.frame.npartitions + 1)
+
+    @functools.cached_property
+    def npartitions(self):
+        return self.frame.npartitions
+
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Projection):
+            return plain_column_projection(self, parent, dependents)
+
+    def _layer(self) -> dict:
+        npartitions = self.npartitions
+        return {
+            (self._name, i): Task(
+                TaskRef((self._name, i)),
+                _reverse_partition,
+                TaskRef((self.frame._name, npartitions - i - 1)),
+            )
+            for i in range(self.npartitions)  # type: ignore
+        }
 
 
 class LocBase(Blockwise):
@@ -277,6 +318,8 @@ class LocEmpty(LocList):
 
 
 class LocSlice(LocBase):
+    _projection_passthrough = True
+
     @functools.cached_property
     def start(self):
         if self.iindexer.start is not None:
