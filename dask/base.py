@@ -870,7 +870,10 @@ def visualize_dsk(
 
     # Determine which engine to dispatch to, first checking the kwarg, then config,
     # then whichever of graphviz or ipycytoscape are installed, in that order.
+      # Debugging
     engine = engine or config.get("visualization.engine", None)
+      # Debugging
+
 
     if not engine:
         try:
