@@ -200,7 +200,7 @@ class ReverseDataFrame(Expr):
                 _reverse_partition,
                 TaskRef((self.frame._name, npartitions - i - 1)),
             )
-            for i in range(self.npartitions)  # type: ignore
+            for i in range(self.npartitions)
         }
 
 
