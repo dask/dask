@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from dask.dataframe.dask_expr import from_pandas
+from dask.dataframe.dask_expr.io import FromPandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
 
 pd = _backend_library()
@@ -174,6 +175,17 @@ def test_loc_slicing():
     df = from_pandas(pdf, npartitions=npartitions)
     result = df["2024-03-01":"2024-09-30"]["A"]
     assert_eq(result, pdf["2024-03-01":"2024-09-30"]["A"])
+
+
+def test_reverse_indexing(df, pdf):
+    assert_eq(df.loc[::-1], pdf.loc[::-1])
+    result = df.loc[::-1][["x"]]
+    expected = pdf.loc[::-1][["x"]]
+    assert_eq(result, expected)
+    expr = result.expr.optimize(fuse=False)
+    assert expr.frame.frame.columns == ["x"] and isinstance(
+        expr.frame.frame, FromPandas
+    )
 
 
 def test_indexing_element_index():
