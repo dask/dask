@@ -1085,7 +1085,104 @@ def pad_edge(array, pad_width, mode, **kwargs):
     return result
 
 
-def pad_reuse(array, pad_width, mode, **kwargs):
+def _slice_at_axis(sl, axis):
+    """
+    Construct tuple of slices to slice an array in the given dimension.
+    """
+    return (slice(None),) * axis + (sl,) + (...,)
+
+
+def _pad_wrap_both(array, axis, left_pad, right_pad):
+    """
+    Wraps array along axis with at most left_pad and right_pad
+    Returns padded array along with left_pad and right_pad to iteratively
+    call this method.
+    """
+    out = []
+
+    if left_pad > 0:
+        chunk_length = min(array.shape[axis], left_pad)
+
+        left_slice = _slice_at_axis(slice(-chunk_length, None), axis)
+        left_chunk = array[left_slice]
+        out.append(left_chunk)
+
+        left_pad -= chunk_length
+
+    out.append(array)
+
+    if right_pad > 0:
+        chunk_length = min(array.shape[axis], right_pad)
+
+        right_slice = _slice_at_axis(slice(0, chunk_length), axis)
+        right_chunk = array[right_slice]
+        out.append(right_chunk)
+
+        right_pad -= chunk_length
+
+    return concatenate(out, axis=axis), left_pad, right_pad
+
+
+def _pad_reflect_both(array, axis, left_pad, right_pad, mode, reflect_type):
+    """
+    Pads array along axis with symmetric or reflect method.
+    Returns padded array along with left_pad and right_pad to iteratively
+    call this method.
+    """
+    out = []
+
+    if mode == "symmetric":
+        # Edge is included, we need to offset the pad amount by 1
+        edge_offset = 1
+        old_length_correction = 0
+    else:
+        assert mode == "reflect"
+        edge_offset = 0  # Edge is not included, no need to offset pad amount
+        old_length_correction = -1
+
+    old_length = array.shape[axis] + old_length_correction
+
+    if left_pad > 0:
+        chunk_length = min(old_length, left_pad)
+
+        # stop cannot be -1, set to None to include last element
+        stop = None if edge_offset == 1 else 0
+        start = chunk_length - edge_offset
+
+        left_slice = _slice_at_axis(slice(start, stop, -1), axis)
+        left_chunk = array[left_slice]
+
+        if reflect_type == "odd":
+            # Negate chunk and align with edge
+            edge_slice = _slice_at_axis(slice(0, 1), axis)
+            left_chunk = 2 * array[edge_slice] - left_chunk
+
+        left_pad -= chunk_length
+        out.append(left_chunk)
+
+    out.append(array)
+
+    if right_pad > 0:
+        chunk_length = min(old_length, right_pad)
+
+        start = edge_offset - 2
+        stop = start - chunk_length
+
+        right_slice = _slice_at_axis(slice(start, stop, -1), axis)
+        right_chunk = array[right_slice]
+
+        if reflect_type == "odd":
+            # Negate chunk and align with edge
+            edge_slice = _slice_at_axis(slice(-1, None), axis)
+            right_chunk = 2 * array[edge_slice] - right_chunk
+
+        out.append(right_chunk)
+        right_pad -= chunk_length
+
+    return concatenate(out, axis=axis), left_pad, right_pad
+
+
+def pad_reuse(array, pad_width, mode, reflect_type):
     """
     Helper function for padding boundaries with values in the array.
 
@@ -1093,53 +1190,23 @@ def pad_reuse(array, pad_width, mode, **kwargs):
     the array. Namely by reflecting them or tiling them to create periodic
     boundary constraints.
     """
+    assert reflect_type in {"even", "odd"}
 
-    if mode in {"reflect", "symmetric"}:
-        reflect_type = kwargs.get("reflect", "even")
-        if reflect_type == "odd":
-            raise NotImplementedError("`pad` does not support `reflect_type` of `odd`.")
-        if reflect_type != "even":
-            raise ValueError(
-                "unsupported value for reflect_type, must be one of (`even`, `odd`)"
-            )
+    if mode == "wrap":
+        for axis, (left_pad, right_pad) in enumerate(pad_width):
+            while left_pad > 0 or right_pad > 0:
+                array, left_pad, right_pad = _pad_wrap_both(
+                    array, axis, left_pad, right_pad
+                )
 
-    result = np.empty(array.ndim * (3,), dtype=object)
-    for idx in np.ndindex(result.shape):
-        select = []
-        orient = []
-        for i, s, pw in zip(idx, array.shape, pad_width):
-            if mode == "wrap":
-                pw = pw[::-1]
+    else:
+        for axis, (left_pad, right_pad) in enumerate(pad_width):
+            while left_pad > 0 or right_pad > 0:
+                array, left_pad, right_pad = _pad_reflect_both(
+                    array, axis, left_pad, right_pad, mode, reflect_type
+                )
 
-            if i < 1:
-                if mode == "reflect":
-                    select.append(slice(1, pw[0] + 1, None))
-                else:
-                    select.append(slice(None, pw[0], None))
-            elif i > 1:
-                if mode == "reflect":
-                    select.append(slice(s - pw[1] - 1, s - 1, None))
-                else:
-                    select.append(slice(s - pw[1], None, None))
-            else:
-                select.append(slice(None))
-
-            if i != 1 and mode in ["reflect", "symmetric"]:
-                orient.append(slice(None, None, -1))
-            else:
-                orient.append(slice(None))
-
-        select = tuple(select)
-        orient = tuple(orient)
-
-        if mode == "wrap":
-            idx = tuple(2 - i for i in idx)
-
-        result[idx] = array[select][orient]
-
-    result = block(result.tolist())
-
-    return result
+    return array
 
 
 def pad_stats(array, pad_width, mode, stat_length):
@@ -1295,7 +1362,8 @@ def pad(array, pad_width, mode="constant", **kwargs):
         return pad_edge(array, pad_width, mode, **kwargs)
     elif mode in {"edge", "empty"}:
         return pad_edge(array, pad_width, mode)
-    elif mode in ["reflect", "symmetric", "wrap"]:
-        return pad_reuse(array, pad_width, mode, **kwargs)
+    elif mode in {"wrap", "reflect", "symmetric"}:
+        reflect_type = kwargs.get("reflect_type", "even")
+        return pad_reuse(array, pad_width, mode, reflect_type)
 
     raise RuntimeError("unreachable")
