@@ -657,7 +657,7 @@ def compute(
 
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
-
+import dask 
 def visualize(
     *args,
     filename="mydask",
@@ -749,6 +749,10 @@ def visualize(
     args, _ = unpack_collections(*args, traverse=traverse)
 
     dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    
+    if engine is None:
+        engine = dask.config.get("visualization.engine", "graphviz")  # Fetch from config
+    print("DEBUG: Final visualization engine in visualize():", engine)  # Debugging
 
     return visualize_dsk(
         dsk=dsk,
@@ -772,6 +776,10 @@ def visualize_dsk(
     limit=None,
     **kwargs,
 ):
+    if engine is None:  
+        engine = dask.config.get("visualization.engine", "graphviz")  # Fetch from config
+    print("DEBUG: Final visualization engine in visualize_dsk():", engine)  # Debugging
+    
     color = kwargs.get("color")
     from dask.order import diagnostics, order
 
