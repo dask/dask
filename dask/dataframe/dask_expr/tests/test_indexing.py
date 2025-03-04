@@ -186,6 +186,14 @@ def test_reverse_indexing(df, pdf):
     assert expr.frame.frame.columns == ["x"] and isinstance(
         expr.frame.frame, FromPandas
     )
+    with pytest.raises(
+        ValueError, match="Can not use loc on DataFrame without known divisions"
+    ):
+        df.loc[1::-1].loc[5]
+    with pytest.raises(
+        ValueError, match="Can not use loc on DataFrame without known divisions"
+    ):
+        df.loc[:5:-1].loc[5]
 
 
 def test_indexing_element_index():
