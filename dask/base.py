@@ -778,7 +778,22 @@ def visualize_dsk(
 ):
     if engine is None:  
         engine = dask.config.get("visualization.engine", "graphviz")  # Fetch from config
-    print("DEBUG: Final visualization engine in visualize_dsk():", engine)  # Debugging
+    print("DEBUG: Final visualization engine in visualize_dsk():", engine)# Debugging
+    
+    if hasattr(dsk, "expr") and hasattr(dsk.expr, "_to_graphviz"):
+        print("DEBUG: Handling DataFrame Expression in visualize_dsk()")
+        return dsk.expr._to_graphviz()
+
+    if engine == "graphviz":
+        from dask.dot import dot_graph
+        return dot_graph(dsk, filename=filename, **kwargs)
+    elif engine in ("cytoscape", "ipycytoscape"):
+        from dask.dot import cytoscape_graph
+        return cytoscape_graph(dsk, filename=filename, **kwargs)
+    elif engine is None:
+        raise RuntimeError("No visualization engine detected, please install graphviz or ipycytoscape")
+    else:
+        raise ValueError(f"Visualization engine {engine} not recognized")
     
     color = kwargs.get("color")
     from dask.order import diagnostics, order
