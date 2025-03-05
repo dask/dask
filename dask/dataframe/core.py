@@ -406,7 +406,7 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def meta_warning(df):
+def meta_warning(df, method="apply"):
     """
     Provide an informative message when the user is asked to provide metadata
     """
@@ -421,14 +421,14 @@ def meta_warning(df):
         "function on a small dataset to guess output types. "
         "It is possible that Dask will guess incorrectly.\n"
         "To provide an explicit output types or to silence this message, "
-        "please provide the `meta=` keyword, as described in the map or "
-        "apply function that you are using."
+        f"please provide the `meta=` keyword, as described in the {method} function "
+        f"that you are using."
     )
     if meta_str:
         msg += (
             "\n"
-            "  Before: .apply(func)\n"
-            "  After:  .apply(func, meta=%s)\n" % str(meta_str)
+            f"  Before: .{method}(func)\n"
+            f"  After:  .{method}(func, meta=%s)\n" % str(meta_str)
         )
     return msg
 

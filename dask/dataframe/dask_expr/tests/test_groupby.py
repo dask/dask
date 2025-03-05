@@ -981,7 +981,7 @@ def test_groupby_size_drop_columns(df, pdf):
 
 
 @pytest.mark.filterwarnings("ignore:`meta` is not specified|DataFrameGroupBy.apply")
-def test_groupy_respect_shuffle_context(df, pdf):
+def test_groupby_respect_shuffle_context(df, pdf):
     def _check_task_shuffle(q):
         result = q.optimize(fuse=False)
         assert len([x for x in result.walk() if isinstance(x, TaskShuffle)]) > 0
