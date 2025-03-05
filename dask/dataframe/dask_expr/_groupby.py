@@ -1962,8 +1962,7 @@ class GroupBy:
 
     def _warn_if_no_meta(self, meta, method="apply"):
         if meta is no_default:
-            msg = f"""
-`meta` is not specified, inferred from partial data.
+            msg = f"""`meta` is not specified, inferred from partial data.
 Please provide `meta` if the result is unexpected.
   Before: .{method}(func)
   After:  .{method}(func, meta={{'x': 'f8', 'y': 'f8'}}) for dataframe result
