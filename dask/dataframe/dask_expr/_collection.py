@@ -4843,12 +4843,10 @@ def from_pandas(data, npartitions=None, sort=True, chunksize=None):
         The desired number of rows per index partition to use. Note that
         depending on the size and index of the dataframe, actual partition
         sizes may vary.
-    sort: bool
+    sort: bool, default True
         Sort the input by index first to obtain cleanly divided partitions
         (with known divisions).  If False, the input will not be sorted, and
         all divisions will be set to None. Default is True.
-    name: string, optional
-        An optional keyname for the dataframe.  Defaults to hashing the input
 
     Returns
     -------
