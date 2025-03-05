@@ -3108,7 +3108,7 @@ class DataFrame(FrameBase):
             )
         if meta is None:
             meta = expr.emulate(M.map, self, func, na_action=na_action, udf=True)
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="map"))
         return new_collection(expr.Map(self, arg=func, na_action=na_action, meta=meta))
 
     @derived_from(pd.DataFrame)
@@ -4201,13 +4201,13 @@ class Series(FrameBase):
         if isinstance(arg, Series):
             if not expr.are_co_aligned(self.expr, arg.expr):
                 if meta is None:
-                    warnings.warn(meta_warning(meta))
+                    warnings.warn(meta_warning(meta, method="map"))
                 return new_collection(
                     expr.MapAlign(self, arg, op=None, na_action=na_action, meta=meta)
                 )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="map"))
         return new_collection(expr.Map(self, arg=arg, na_action=na_action, meta=meta))
 
     @derived_from(pd.Series)
@@ -4728,13 +4728,13 @@ class Index(Series):
         if isinstance(arg, Series):
             if not expr.are_co_aligned(self.expr, arg.expr):
                 if meta is None:
-                    warnings.warn(meta_warning(meta))
+                    warnings.warn(meta_warning(meta, method="map"))
                 return new_collection(
                     expr.MapIndexAlign(self, arg, na_action, meta, is_monotonic)
                 )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="map"))
         return new_collection(
             expr.Map(
                 self, arg=arg, na_action=na_action, meta=meta, is_monotonic=is_monotonic
