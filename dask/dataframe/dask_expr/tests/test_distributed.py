@@ -283,7 +283,7 @@ async def test_merge_p2p_shuffle_projection_error(c, s, a, b):
 
 
 def test_sort_values():
-    with LocalCluster(processes=False, n_workers=2) as cluster:
+    with LocalCluster(processes=False, n_workers=2, dashboard_address=":0") as cluster:
         with Client(cluster) as client:  # noqa: F841
             pdf = pd.DataFrame({"a": [5] + list(range(100)), "b": 2})
             df = from_pandas(pdf, npartitions=10)
@@ -297,7 +297,7 @@ def test_sort_values():
 
 @pytest.mark.parametrize("add_repartition", [True, False])
 def test_merge_combine_similar_squash_merges(add_repartition):
-    with LocalCluster(processes=False, n_workers=2) as cluster:
+    with LocalCluster(processes=False, n_workers=2, dashboard_address=":0") as cluster:
         with Client(cluster) as client:  # noqa: F841
             pdf = pd.DataFrame(
                 {

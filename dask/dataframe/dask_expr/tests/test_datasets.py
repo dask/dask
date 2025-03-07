@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import pickle
-import sys
-
 import pytest
 
 from dask.dataframe._compat import PYARROW_GE_1500
@@ -117,20 +114,6 @@ def test_timeseries_deterministic_head(seed):
     assert_eq(df.head(), df.head())
     assert_eq(df["x"].head(), df.head()["x"])
     assert_eq(df.head()["x"], df["x"].partitions[0].compute().head())
-
-
-@pytest.mark.parametrize("seed", [42, None])
-def test_timeseries_gaph_size(seed):
-    from dask.datasets import timeseries as dd_timeseries
-
-    # Check that our graph size is reasonable
-    df = timeseries(seed=seed)
-    ddf = dd_timeseries(seed=seed)
-    graph_size = sys.getsizeof(pickle.dumps(df.dask))
-    graph_size_dd = sys.getsizeof(pickle.dumps(dict(ddf.dask)))
-    # Make sure we are close to the dask.dataframe graph size
-    threshold = 1.10
-    assert graph_size < threshold * graph_size_dd
 
 
 def test_dataset_head():

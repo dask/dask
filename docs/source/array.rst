@@ -38,8 +38,18 @@ these blocked algorithms using Dask graphs.
 Examples
 --------
 
-Visit https://examples.dask.org/array.html to see and run examples using
-Dask Array.
+Dask Array is used across a wide variety of applications — anywhere where working
+with large array dataset.
+
+This
+`Analyzing the National Water Model with Xarray, Dask, and Coiled <https://docs.coiled.io/user_guide/xarray.html?utm_source=dask-docs&utm_medium=array>`_
+example process 6 TB of geospatial data on a cluster using Xarray and Dask Array.
+The cluster in this example is deployed with
+`Coiled <https://coiled.io/?utm_source=dask-docs&utm_medium=array>`_,
+but there are many options for managing and deploying Dask.
+See our :doc:`deploying` documentation for more information on deployment options.
+
+You can also visit https://examples.dask.org/array.html for a collection of additional examples.
 
 Design
 ------

@@ -55,12 +55,12 @@ def timeseries(
     ...     id_lam=1000  # control number of items in id column
     ... )
     """
-    from dask.dataframe.io.demo import make_timeseries
+    from dask.dataframe.dask_expr.datasets import timeseries
 
     if dtypes is None:
         dtypes = {"name": str, "id": int, "x": float, "y": float}
 
-    return make_timeseries(
+    return timeseries(
         start=start,
         end=end,
         freq=freq,

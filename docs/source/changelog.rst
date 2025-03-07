@@ -5,6 +5,123 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2025.3.0:
+
+2025.3.0
+---------
+
+Highlights
+^^^^^^^^^^
+
+Automatically adjust chunksizes in ``xarray.apply_ufunc``
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+``apply_ufunc`` requires the core dimension to have ``chunksize=-1``. The underlying
+rechunking operation will automatically adjust the chunksize of the core dimension
+but keep the other dimensions the same. This can cause exploding chunksizes under the hood.
+
+This release adds an intermediate step that resizes the non-core dimensions by the same factor
+that the core dimension will increase to keep the maximum chunksize under control. This behavior
+is automatically enabled when ``allow_rechunk=True`` is set.
+
+.. code-block::
+
+    import xarray as xr
+    import dask.array as da
+
+    arr = xr.DataArray(
+        da.random.random((1, 750, 45910), chunks=(1, "auto", -1)),
+        dims=["band", "y", "x"],
+    )
+
+    result = arr.interp(
+        y=arr.coords["y"],
+        method="linear",
+    )
+.. grid:: 2
+
+    .. grid-item:: **Previously**
+
+        Individual chunks are exploding to 25 GiB, likely causing out of memory errors.
+
+        .. image:: images/changelog/gufunc_chunksizes_exploding.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are exploding to 25 GiB, likely causing out of memory errors.
+
+    .. grid-item:: **Now**
+
+        Dask will now automatically split individual chunks into chunks that will have the
+        same chunksize minus a small tolerance.
+
+        .. image:: images/changelog/gufunc_chunksizes_constant.png
+          :width: 100%
+          :align: center
+          :alt: Individual chunks are now roughly the same size
+
+.. _v2025.2.0:
+
+2025.2.0
+--------
+
+Highlights
+^^^^^^^^^^
+This release includes a critical fix that fixes a deadlock that can arise
+when seceded task are rescheduled, or cancelled and resubmitted, e.g. due
+to a worker being lost.
+
+See :pr-distributed:`8991` by `Hendrik Makait`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Add big array example (:pr:`11744`) `James Bourbeau`_
+  - Fix exploding chunksizes in pad for constant padding (:pr:`11743`) `Patrick Hoefler`_
+  - Move optimize method to base class (:pr:`11742`) `Florian Jetter`_
+  - Add changelog entry for fixed deadlock (:pr:`11741`) `Hendrik Makait`_
+  - Fix graph creation in ``dask-expr`` ``to_delayed`` (:pr:`11739`) `Patrick Hoefler`_
+  - Remove culling from delayed optimisation (:pr:`11737`) `Patrick Hoefler`_
+  - Compute meta for from_map on the cluster (:pr:`11738`) `Patrick Hoefler`_
+  - Bugs in ``__setitem__`` with dask bool mask (:pr:`11728`) `Guido Imperiale`_
+  - Implement infrastructure, random, blockwise and Elemwise  (:pr:`11689`) `Patrick Hoefler`_
+  - ``array`` / ``asarray`` with both ``like=`` and ``dtype=`` (:pr:`11733`) `Guido Imperiale`_
+  - Fix annotations warnings test (:pr:`11734`) `Patrick Hoefler`_
+  - Catch warnings when writing to remote storage with to_parquet (:pr:`11731`) `Patrick Hoefler`_
+  - Remove LocalCluster from tests (:pr:`11729`) `Patrick Hoefler`_
+  - Fix partition pruning when using from_array (:pr:`11725`) `Patrick Hoefler`_
+  - Fix concatentation with mixed dtype columns (:pr:`11727`) `Patrick Hoefler`_
+  - ``arange``: fix extreme values (:pr:`11707`) `Guido Imperiale`_
+  - Graph corruption on scalar ``getitem`` -> ``setitem`` (:pr:`11723`) `Guido Imperiale`_
+  - Never share buffers after compute() (:pr:`11697`) `Guido Imperiale`_
+  - Extract Dask Array from xarray DataArray in from_array (:pr:`11712`) `Patrick Hoefler`_
+  - ``arange``: support kwargs (:pr:`11710`) `Guido Imperiale`_
+  - Ensure ``normalize_token`` is threadsafe (:pr:`11709`) `Florian Jetter`_
+  - Expand advise for instance types and processes (:pr:`11705`) `Florian Jetter`_
+  - Drop legacy timeseries implementation (:pr:`11704`) `Florian Jetter`_
+  - Update Dask Cloud Provider documentation to include Nebius as a supported cloud option (:pr:`11703`) `Alexander`_
+  - Fix ``normalize_chunks`` when squashing into a single chunk (:pr:`11702`) `Patrick Hoefler`_
+  - Fix positional indexing with ``newaxis`` (:pr:`11699`) `Patrick Hoefler`_
+  - Set array backend in scipy-sparse-indexing (:pr:`11700`) `Tom Augspurger`_
+  - Fix ``value_counts`` shuffling strategy (:pr:`11698`) `Patrick Hoefler`_
+  - Disentangle core expression class from dataframe specific code (:pr:`11688`) `Patrick Hoefler`_
+  - Bump ``conda-incubator/setup-miniconda`` from 3.1.0 to 3.1.1 (:pr:`11685`)
+  - Fixup dataframe conversion from array methods (:pr:`11684`) `Patrick Hoefler`_
+  - Remove remaining artifacts of ``fastparquet`` (:pr:`11682`) `Patrick Hoefler`_
+
+  - Remove traceback from ``sizeof`` failure warning (:pr-distributed:`9006`) `Jacob Tomlinson`_
+  - Hotfix: Ignore negative occupancy (:pr-distributed:`9012`) `Hendrik Makait`_
+  - Remove expensive tokenization for key uniqueness check (:pr-distributed:`9009`) `Patrick Hoefler`_
+  - Fix CI for changes in ``from_map`` (:pr-distributed:`9011`) `Patrick Hoefler`_
+  - Avoid handling stale long-running messages on scheduler (:pr-distributed:`8991`) `Hendrik Makait`_
+  - Bump ``test_stress`` timeout (:pr-distributed:`9002`) `Tom Augspurger`_
+  - Poll in ``test_rmm_metrics`` test (:pr-distributed:`9004`) `Tom Augspurger`_
+  - Cache occupancy in ``WorkStealing.balance()`` (:pr-distributed:`9005`) `Hendrik Makait`_
+  - Homogeneous balancing by accounting for in-flight requests (:pr-distributed:`9003`) `Hendrik Makait`_
+  - Consistent estimation of task duration between stealing, adaptive and occupancy calculation (:pr-distributed:`9000`) `Hendrik Makait`_
+  - Increase default work-stealing interval by 10x (:pr-distributed:`8997`) `Hendrik Makait`_
+  - Remove occupancy plot from status dashboard (:pr-distributed:`8995`) `Hendrik Makait`_
+  - Bump ``conda-incubator/setup-miniconda`` from 3.1.0 to 3.1.1 (:pr-distributed:`8990`)
+
+
 .. _v2025.1.0:
 
 2025.1.0
@@ -9206,3 +9323,5 @@ Other
 .. _`Ilan Gold`: https://github.com/ilan-gold
 .. _`Jean-Baptiste Bayle`: https://github.com/j2bbayle
 .. _`dchudz`: https://github.com/dchudz
+.. _`Guido Imperiale`: https://github.com/crusaderky
+.. _`Alexander`: https://github.com/SalikovAlex

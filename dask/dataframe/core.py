@@ -18,6 +18,7 @@ from dask.dataframe.utils import (
     has_known_categories,
     is_dataframe_like,
     is_index_like,
+    is_scalar,
     is_series_like,
     meta_frame_constructor,
     meta_series_constructor,
@@ -95,7 +96,13 @@ def apply_and_enforce(*args, **kwargs):
     func = kwargs.pop("_func")
     meta = kwargs.pop("_meta")
     df = func(*args, **kwargs)
-    if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
+
+    if any(
+        bool(is_dataframe_like(obj) or is_series_like(obj) or is_index_like(obj))
+        for obj in [df, meta]
+    ):
+        if is_scalar(df):
+            df = pd.Series(df)
         if not len(df):
             return meta
         if is_dataframe_like(df):
@@ -399,7 +406,7 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def meta_warning(df):
+def meta_warning(df, method="apply"):
     """
     Provide an informative message when the user is asked to provide metadata
     """
@@ -414,14 +421,14 @@ def meta_warning(df):
         "function on a small dataset to guess output types. "
         "It is possible that Dask will guess incorrectly.\n"
         "To provide an explicit output types or to silence this message, "
-        "please provide the `meta=` keyword, as described in the map or "
-        "apply function that you are using."
+        f"please provide the `meta=` keyword, as described in the {method} function "
+        f"that you are using."
     )
     if meta_str:
         msg += (
             "\n"
-            "  Before: .apply(func)\n"
-            "  After:  .apply(func, meta=%s)\n" % str(meta_str)
+            f"  Before: .{method}(func)\n"
+            f"  After:  .{method}(func, meta=%s)\n" % str(meta_str)
         )
     return msg
 

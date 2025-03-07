@@ -11,6 +11,7 @@ import toolz
 from tlz import accumulate
 
 from dask._expr import Expr
+from dask._task_spec import Task, TaskRef
 from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
@@ -141,6 +142,7 @@ class ArrayExpr(Expr):
         from dask.array._array_expr._rechunk import Rechunk
 
         result = Rechunk(self, chunks, threshold, block_size_limit, balance, method)
+        # Ensure that chunks are compatible
         result.chunks
         return result
 
@@ -229,14 +231,15 @@ class Stack(ArrayExpr):
             for key in keys
         ]
         values = [
-            (
+            Task(
+                key,
                 getitem,
-                inp,
+                TaskRef(inp),
                 (slice(None, None, None),) * axis
                 + (None,)
                 + (slice(None, None, None),) * (ndim - axis),
             )
-            for inp in inputs
+            for key, inp in zip(keys, inputs)
         ]
         return dict(zip(keys, values))
 

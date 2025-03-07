@@ -66,13 +66,6 @@ def get_collection_type_index(_):
     return Index
 
 
-@get_collection_type.register(object)
-def get_collection_type_object(_):
-    from dask.dataframe.dask_expr._collection import Scalar
-
-    return Scalar
-
-
 ######################################
 # cuDF: Pandas Dataframes on the GPU #
 ######################################

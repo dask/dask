@@ -149,6 +149,10 @@ class Repartition(Expr):
         if isinstance(parent, Filter) and self._filter_passthrough_available(
             parent, dependents
         ):
+            if self._name == parent.predicate._name:
+                # We shouldn't push through the predicate, these pushdowns should
+                # always come from frame.
+                return
             return self._filter_simplification(parent)
         if isinstance(parent, Projection):
             return plain_column_projection(self, parent, dependents)
