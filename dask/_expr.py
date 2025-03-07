@@ -618,6 +618,19 @@ class Expr:
         **kwargs,
     ):
         from dask.dot import label, name
+        
+        engine = dask.config.get("visualization.engine", "graphviz")
+        print(f"DEBUG: Final visualization engine in _to_graphviz(): {engine}")
+
+        if engine in ("cytoscape", "ipycytoscape"):
+            from dask.dot import cytoscape_graph
+            
+            if hasattr(self, "visualize"):
+                return self.visualize(tasks=True, **kwargs)
+
+            raise AttributeError(
+                "This expression does not support visualization with cytoscape."
+            )
 
         graphviz = import_required(
             "graphviz",
