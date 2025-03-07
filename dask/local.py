@@ -426,7 +426,11 @@ def get_async(
         result_flat = {result}
     results = set(result_flat)
 
-    dsk = dict(convert_legacy_graph(dsk))
+    if not isinstance(dsk, Mapping):
+        # FIXME: This should be the default path but we still support passing
+        # raw dictionaries as input to, e.g. dask.get
+        dsk = dsk.__dask_graph__()
+    dsk = convert_legacy_graph(dsk)
     with local_callbacks(callbacks) as callbacks:
         _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
         started_cbs = []

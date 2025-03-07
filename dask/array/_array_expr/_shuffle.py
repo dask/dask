@@ -12,7 +12,6 @@ from dask.array._array_expr._expr import ArrayExpr
 from dask.array.chunk import getitem
 from dask.array.dispatch import concatenate_lookup, take_lookup
 from dask.base import tokenize
-from dask.tokenize import _tokenize_deterministic
 
 
 def _validate_indexer(chunks, indexer, axis):
@@ -55,10 +54,6 @@ class Shuffle(ArrayExpr):
     @functools.cached_property
     def _name(self):
         return f"{self.operand('name')}-{self._token}"
-
-    @functools.cached_property
-    def _token(self):
-        return _tokenize_deterministic(*self.operands)
 
     @functools.cached_property
     def chunks(self):
@@ -118,7 +113,7 @@ class Shuffle(ArrayExpr):
         intermediates: dict = dict()
         merges: dict = dict()
         dtype = np.min_scalar_type(max(max(chunks[axis]), self._chunk_size_limit))
-        split_name = f"shuffle-split-{self._token}"
+        split_name = f"shuffle-split-{self.deterministic_token}"
         slices = [slice(None)] * len(chunks)
         split_name_suffixes = count()
         sorter_name = "shuffle-sorter-"

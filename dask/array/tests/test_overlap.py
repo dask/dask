@@ -125,7 +125,7 @@ def test_overlap_internal_asymmetric_small():
 def test_trim_internal():
     d = da.ones((40, 60), chunks=(10, 10))
     e = trim_internal(d, axes={0: 1, 1: 2}, boundary="reflect")
-    assert len(collections_to_dsk([e])) == 24
+    assert len(collections_to_dsk([e]).__dask_graph__()) == 24
     assert e.chunks == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
 
 
@@ -960,5 +960,5 @@ def test_overlap_not_blowing_up_graph():
         dims=["x", "y", "z", "year"],
     )
     result = arr.rolling(dim={"year": 11}, center=True).construct("window_dim")
-    dc = collections_to_dsk([result.data])
+    dc = collections_to_dsk([result.data]).__dask_graph__()
     assert len(dc) <= 1651  # previously 3000
