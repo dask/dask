@@ -11,6 +11,7 @@ from numbers import Integral, Number
 from operator import mul
 
 import numpy as np
+from packaging.version import Version
 from tlz import accumulate, drop, pluck
 
 import dask.array as da
@@ -36,6 +37,11 @@ from dask.array.wrap import ones, zeros
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import apply, deepmap, derived_from
+
+try:
+    import numbagg
+except ImportError:
+    numbagg = None
 
 if da._array_expr_enabled():
     from dask.array._array_expr import _tree_reduce, reduction
@@ -1512,16 +1518,28 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
+    if (
+        numbagg is not None
+        and Version(numbagg.__version__).release >= (0, 7, 0)
+        and a.dtype.kind in "uif"
+        and not keepdims
+    ):
+        func = numbagg.nanmedian
+        kwargs = {}
+    else:
+        func = np.nanmedian
+        kwargs = {"keepdims": keepdims}
+
     result = a.map_blocks(
-        np.nanmedian,
+        func,
         axis=axis,
-        keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
         chunks=(
             [1 if ax in axis else c for ax, c in enumerate(a.chunks)]
             if keepdims
             else None
         ),
+        **kwargs,
     )
 
     result = handle_out(out, result)
@@ -1714,18 +1732,30 @@ def nanquantile(
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
-    if NUMPY_GE_200:
-        kwargs = {"weights": weights}
+    if (
+        numbagg is not None
+        and Version(numbagg.__version__).release >= (0, 8, 0)
+        and a.dtype.kind in "uif"
+        and weights is None
+        and method == "linear"
+        and not keepdims
+    ):
+        func = numbagg.nanquantile
+        kwargs = {"quantiles": q}
     else:
-        kwargs = {}
+        func = _custom_quantile
+        kwargs = {
+            "q": q,
+            "method": method,
+            "interpolation": interpolation,
+            "keepdims": keepdims,
+        }
+        if NUMPY_GE_200:
+            kwargs.update({"weights": weights})
 
     result = a.map_blocks(
-        _custom_quantile,
-        q=q,
-        method=method,
-        interpolation=interpolation,
+        func,
         axis=axis,
-        keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
         new_axis=0 if isinstance(q, Iterable) else None,
         chunks=_get_quantile_chunks(a, q, axis, keepdims),
