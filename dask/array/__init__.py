@@ -62,6 +62,7 @@ __all__ = [
     "ma",
     "overlap",
     "random",
+    "array_expr_enabled",
     "shuffle",
     "atop",
     "blockwise",
