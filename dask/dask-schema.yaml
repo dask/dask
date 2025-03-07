@@ -247,6 +247,11 @@ properties:
   admin:
     type: object
     properties:
+      async-client-fallback:
+        type: [string, 'null']
+        description: |
+          If not null, replace an asynchronous Client in get_scheduler/compute
+          with the provided scheduler type instead.
 
       traceback:
         type: object

@@ -5,7 +5,7 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    - cron: "0 6,18 * * *"  
+    - cron: "0 6,18 * * *"
 
 # When this workflow is queued, automatically cancel any previous running
 # or pending jobs from the same branch
@@ -110,6 +110,12 @@ jobs:
           echo "DASK_ARRAY__QUERY_PLANNING: $DASK_ARRAY__QUERY_PLANNING"
           echo "DASK_ARRAY__QUERY_PLANNING=$DASK_ARRAY__QUERY_PLANNING" >> $GITHUB_ENV
 
+      - name: Run import tests
+        id: import_tests
+        env:
+          ARRAYEXPR: ${{ matrix.array-expr }}
+        run: pytest dask/tests/test_imports.py
+
       - name: Run tests
         id: run_tests
         env:
@@ -125,7 +131,8 @@ jobs:
         # ensure this runs even if pytest fails
         if: >
           always() &&
-          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
+          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure') &&
+          matrix.array-expr == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-${{ matrix.environment }}-${{ matrix.extra }}

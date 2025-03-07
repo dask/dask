@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import numbers
 import warnings
+from math import isnan
 
+import numpy as np
 import tlz as toolz
 
 from dask import base, utils
@@ -244,7 +246,18 @@ def blockwise(
     if not out:
         out = "{}-{}".format(
             token or utils.funcname(func).strip("_"),
-            base.tokenize(func, out_ind, argindsstr, dtype, **kwargs),
+            base.tokenize(
+                func,
+                out_ind,
+                argindsstr,
+                adjust_chunks,
+                new_axes,
+                align_arrays,
+                concatenate,
+                meta,
+                dtype,
+                **kwargs,
+            ),
         )
 
     graph = core_blockwise(
@@ -268,7 +281,9 @@ def blockwise(
             if ind in adjust_chunks:
                 if callable(adjust_chunks[ind]):
                     chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
-                elif isinstance(adjust_chunks[ind], numbers.Integral):
+                elif isinstance(adjust_chunks[ind], numbers.Integral) or (
+                    np.isscalar(adjust_chunks[ind]) and isnan(adjust_chunks[ind])
+                ):
                     chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
                     if len(adjust_chunks[ind]) != len(chunks[i]):

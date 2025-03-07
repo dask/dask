@@ -6,6 +6,7 @@ from functools import partial
 import numpy as np
 
 from dask._collections import new_collection
+from dask._task_spec import Task
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array.chunk import arange as _arange
 from dask.array.chunk import linspace as _linspace
@@ -57,7 +58,8 @@ class Arange(ArrayExpr):
         for i, bs in enumerate(self.chunks[0]):
             blockstart = start + (elem_count * step)
             blockstop = start + ((elem_count + bs) * step)
-            task = (
+            task = Task(
+                (self._name, i),
                 func,
                 blockstart,
                 blockstop,
@@ -101,14 +103,15 @@ class Linspace(Arange):
         for i, bs in enumerate(self.chunks[0]):
             bs_space = bs - 1 if self.endpoint else bs
             blockstop = blockstart + (bs_space * self.step)
-            task = (
+            task = Task(
+                (self._name, i),
                 func,
                 blockstart,
                 blockstop,
                 bs,
             )
             blockstart = blockstart + (self.step * bs)
-            dsk[(self._name, i)] = task
+            dsk[task.key] = task
         return dsk
 
 

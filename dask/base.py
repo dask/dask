@@ -18,18 +18,12 @@ from tlz import groupby, merge
 
 from dask import config, local
 from dask._compatibility import EMSCRIPTEN
+from dask._task_spec import DataNode, Dict, List, Task, TaskRef
 from dask.core import flatten
 from dask.core import get as simple_get
-from dask.core import quote
 from dask.system import CPU_COUNT
 from dask.typing import Key, SchedulerGetCallable
-from dask.utils import (
-    apply,
-    ensure_dict,
-    is_namedtuple_instance,
-    key_split,
-    shorten_traceback,
-)
+from dask.utils import ensure_dict, is_namedtuple_instance, key_split, shorten_traceback
 
 _DistributedClient = None
 _get_distributed_client = None
@@ -495,47 +489,45 @@ def unpack_collections(*args, traverse=True):
         if is_dask_collection(expr):
             tok = tokenize(expr)
             if tok not in repack_dsk:
-                repack_dsk[tok] = (getitem, collections_token, len(collections))
+                repack_dsk[tok] = Task(
+                    tok, getitem, TaskRef(collections_token), len(collections)
+                )
                 collections.append(expr)
-            return tok
+            return TaskRef(tok)
 
         tok = uuid.uuid4().hex
+        tsk: DataNode | Task  # type: ignore
         if not traverse:
-            tsk = quote(expr)
+            tsk = DataNode(None, expr)
         else:
             # Treat iterators like lists
             typ = list if isinstance(expr, Iterator) else type(expr)
             if typ in (list, tuple, set):
-                tsk = (typ, [_unpack(i) for i in expr])
+                tsk = Task(tok, typ, List(*[_unpack(i) for i in expr]))
             elif typ in (dict, OrderedDict):
-                tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
+                tsk = Task(
+                    tok, typ, Dict({_unpack(k): _unpack(v) for k, v in expr.items()})
+                )
             elif dataclasses.is_dataclass(expr) and not isinstance(expr, type):
-                tsk = (
-                    apply,
+                tsk = Task(
+                    tok,
                     typ,
-                    (),
-                    (
-                        dict,
-                        [
-                            [f.name, _unpack(getattr(expr, f.name))]
-                            for f in dataclasses.fields(expr)
-                        ],
-                    ),
+                    *[_unpack(getattr(expr, f.name)) for f in dataclasses.fields(expr)],
                 )
             elif is_namedtuple_instance(expr):
-                tsk = (typ, *[_unpack(i) for i in expr])
+                tsk = Task(tok, typ, *[_unpack(i) for i in expr])
             else:
                 return expr
 
         repack_dsk[tok] = tsk
-        return tok
+        return TaskRef(tok)
 
     out = uuid.uuid4().hex
-    repack_dsk[out] = (tuple, [_unpack(i) for i in args])
+    repack_dsk[out] = Task(out, tuple, List(*[_unpack(i) for i in args]))
 
     def repack(results):
         dsk = repack_dsk.copy()
-        dsk[collections_token] = quote(results)
+        dsk[collections_token] = DataNode(collections_token, results)
         return simple_get(dsk, out)
 
     # The original `collections` is kept alive by the closure
@@ -1072,6 +1064,26 @@ or with a Dask client
 """.strip()
 
 
+def _ensure_not_async(client):
+    if client.asynchronous:
+        if fallback := config.get("admin.async-client-fallback", None):
+            warnings.warn(
+                "Distributed Client detected but Client instance is "
+                f"asynchronous. Falling back to `{fallback}` scheduler. "
+                "To use an asynchronous Client, please use "
+                "``Client.compute`` and ``Client.gather`` "
+                "instead of the top level ``dask.compute``",
+                UserWarning,
+            )
+            return get_scheduler(scheduler=fallback)
+        else:
+            raise RuntimeError(
+                "Attempting to use an asynchronous "
+                "Client in a synchronous context of `dask.compute`"
+            )
+    return client.get
+
+
 def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     """Get scheduler function
 
@@ -1092,7 +1104,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         if callable(scheduler):
             return scheduler
         elif "Client" in type(scheduler).__name__ and hasattr(scheduler, "get"):
-            return scheduler.get
+            return _ensure_not_async(scheduler)
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
 
@@ -1115,7 +1127,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                         f"Requested {scheduler} scheduler but no Client active."
                     )
                 assert _get_distributed_client is not None
-                return _get_distributed_client().get
+                client = _get_distributed_client()
+                return _ensure_not_async(client)
             else:
                 raise ValueError(
                     "Expected one of [distributed, %s]"
@@ -1143,7 +1156,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     try:
         from distributed import get_client
 
-        return get_client().get
+        return _ensure_not_async(get_client())
     except (ImportError, ValueError):
         pass
 

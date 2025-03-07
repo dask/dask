@@ -114,15 +114,16 @@ normalize_token.register(
 
 @normalize_token.register((types.MappingProxyType, dict))
 def normalize_dict(d):
-    if id(d) in _SEEN:
-        return "__seen", _SEEN[id(d)][0]
-    _SEEN[id(d)] = len(_SEEN), d
-    try:
-        return "dict", _normalize_seq_func(
-            sorted(d.items(), key=lambda kv: hash(kv[0]))
-        )
-    finally:
-        _SEEN.pop(id(d), None)
+    with tokenize_lock:
+        if id(d) in _SEEN:
+            return "__seen", _SEEN[id(d)][0]
+        _SEEN[id(d)] = len(_SEEN), d
+        try:
+            return "dict", _normalize_seq_func(
+                sorted(d.items(), key=lambda kv: hash(kv[0]))
+            )
+        finally:
+            _SEEN.pop(id(d), None)
 
 
 @normalize_token.register(OrderedDict)
@@ -145,13 +146,14 @@ def _normalize_seq_func(seq: Iterable[object]) -> tuple[object, ...]:
             return item
         return normalize_token(item)
 
-    if id(seq) in _SEEN:
-        return "__seen", _SEEN[id(seq)][0]
-    _SEEN[id(seq)] = len(_SEEN), seq
-    try:
-        return tuple(map(_inner_normalize_token, seq))
-    finally:
-        del _SEEN[id(seq)]
+    with tokenize_lock:
+        if id(seq) in _SEEN:
+            return "__seen", _SEEN[id(seq)][0]
+        _SEEN[id(seq)] = len(_SEEN), seq
+        try:
+            return tuple(map(_inner_normalize_token, seq))
+        finally:
+            del _SEEN[id(seq)]
 
 
 @normalize_token.register((tuple, list))
@@ -233,8 +235,10 @@ def _normalize_pickle(o: object) -> tuple:
     buffers: list[pickle.PickleBuffer] = []
     pik: int | None = None
     pik2: int
-
+    success = False
     for mod in [pickle, cloudpickle]:
+        if success:
+            break
         for _ in range(3):
             buffers.clear()
             try:
@@ -244,6 +248,7 @@ def _normalize_pickle(o: object) -> tuple:
             except Exception:
                 break
             if pik == pik2:
+                success = True
                 break
             pik = pik2
         else:

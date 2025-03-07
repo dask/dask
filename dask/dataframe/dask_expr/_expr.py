@@ -37,7 +37,6 @@ from dask.dataframe.dask_expr._util import (
     _calc_maybe_new_divisions,
     _convert_to_list,
     _tokenize_partial,
-    is_scalar,
 )
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chunk
@@ -45,10 +44,11 @@ from dask.dataframe.shuffle import drop_overlap, get_overlap
 from dask.dataframe.utils import (
     clear_known_categories,
     drop_by_shallow_copy,
+    is_scalar,
     raise_on_meta_error,
     valid_divisions,
 )
-from dask.tokenize import _tokenize_deterministic, normalize_token
+from dask.tokenize import normalize_token
 from dask.typing import Key, no_default
 from dask.utils import (
     M,
@@ -60,6 +60,8 @@ from dask.utils import (
     pseudorandom,
     random_state_data,
 )
+
+optimize = core.optimize
 
 
 class Expr(core.Expr):
@@ -176,8 +178,6 @@ class Expr(core.Expr):
 
     def __getitem__(self, other):
         if isinstance(other, Expr):
-            if not are_co_aligned(self, other):
-                return FilterAlign(self, other)
             return Filter(self, other)
         else:
             return Projection(self, other)  # df[["a", "b", "c"]]
@@ -520,7 +520,12 @@ class Expr(core.Expr):
     def _filter_simplification(self, parent, predicate=None):
         if predicate is None:
             predicate = parent.predicate.substitute(self, self.frame)
-        return type(self)(self.frame[predicate], *self.operands[1:])
+        if are_co_aligned(self.frame, predicate):
+            # Only do this if we are aligned
+            return type(self)(self.frame[predicate], *self.operands[1:])
+
+    def fuse(self):
+        return optimize_blockwise_fusion(self)
 
 
 class Literal(Expr):
@@ -602,7 +607,7 @@ class Blockwise(Expr):
             head = funcname(self.operation)
         else:
             head = funcname(type(self)).lower()
-        return head + "-" + _tokenize_deterministic(*self.operands)
+        return head + "-" + self.deterministic_token
 
     def _blockwise_arg(self, arg, i):
         """Return a Blockwise-task argument"""
@@ -680,7 +685,7 @@ class MapPartitions(Blockwise):
             head = self.token
         else:
             head = funcname(self.func).lower()
-        return head + "-" + _tokenize_deterministic(*self.operands)
+        return head + "-" + self.deterministic_token
 
     def _broadcast_dep(self, dep: Expr):
         # Always broadcast single-partition dependencies in MapPartitions
@@ -1626,14 +1631,26 @@ class Where(Elemwise):
 
 
 def _check_divisions(df, i, division_min, division_max, last):
+    if not len(df):
+        return df
+    if is_index_like(df):
+        index = df
+    else:
+        try:
+            index = df.index.get_level_values(0)
+        except AttributeError:
+            index = df.index
     # Check divisions
-    real_min = df.index.min()
-    real_max = df.index.max()
+    real_min = index.min()
+    real_max = index.max()
     # Upper division of the last partition is often set to
     # the max value. For all other partitions, the upper
     # division should be greater than the maximum value.
-    valid_min = real_min >= division_min
-    valid_max = (real_max <= division_max) if last else (real_max < division_max)
+    valid_min = valid_max = True
+    if not pd.isna(division_min):
+        valid_min = real_min >= division_min
+    if not pd.isna(division_max):
+        valid_max = (real_max <= division_max) if last else (real_max < division_max)
     if not (valid_min and valid_max):
         raise RuntimeError(
             f"`enforce_runtime_divisions` failed for partition {i}."
@@ -1660,7 +1677,7 @@ class EnforceRuntimeDivisions(Blockwise):
             self.divisions[index + 1],
             index == (self.npartitions - 1),
         ]
-        return (self.operation,) + tuple(args)  # type: ignore
+        return Task(name, self.operation, *args)
 
 
 class Abs(Elemwise):
@@ -3074,7 +3091,7 @@ class _DelayedExpr(Expr):
 
 
 class DelayedsExpr(Expr):
-    _parameters = []  # type: ignore
+    _parameters = []
 
     def __init__(self, *delayed_objects):
         self.operands = delayed_objects
@@ -3084,7 +3101,7 @@ class DelayedsExpr(Expr):
 
     @functools.cached_property
     def _name(self):
-        return "delayed-container-" + _tokenize_deterministic(*self.operands)
+        return "delayed-container-" + self.deterministic_token
 
     def _layer(self) -> dict:
         dask = {}
@@ -3106,64 +3123,6 @@ class DelayedsExpr(Expr):
 @normalize_token.register(Expr)
 def normalize_expression(expr):
     return expr._name
-
-
-def optimize_until(expr: Expr, stage: core.OptimizerStage) -> Expr:
-    result = expr
-    if stage == "logical":
-        return result
-
-    # Simplify
-    expr = result.simplify()  # type: ignore
-    if stage == "simplified-logical":
-        return expr
-
-    # Manipulate Expression to make it more efficient
-    expr = expr.rewrite(kind="tune", rewritten={})
-    if stage == "tuned-logical":
-        return expr
-
-    # Lower
-    expr = expr.lower_completely()  # type: ignore
-    if stage == "physical":
-        return expr
-
-    # Simplify again
-    expr = expr.simplify()  # type: ignore
-    if stage == "simplified-physical":
-        return expr
-
-    # Final graph-specific optimizations
-    expr = optimize_blockwise_fusion(expr)
-    if stage == "fused":
-        return expr
-
-    raise ValueError(f"Stage {stage!r} not supported.")
-
-
-def optimize(expr: Expr, fuse: bool = True) -> Expr:
-    """High level query optimization
-
-    This leverages three optimization passes:
-
-    1.  Class based simplification using the ``_simplify`` function and methods
-    2.  Blockwise fusion
-
-    Parameters
-    ----------
-    expr:
-        Input expression to optimize
-    fuse:
-        whether or not to turn on blockwise fusion
-
-    See Also
-    --------
-    simplify
-    optimize_blockwise_fusion
-    """
-    stage: core.OptimizerStage = "fused" if fuse else "simplified-physical"
-
-    return optimize_until(expr, stage)
 
 
 def is_broadcastable(dfs, s):
@@ -3534,6 +3493,7 @@ class MaybeAlignPartitions(Expr):
                 dfs[0].divisions == df.divisions and df.known_divisions for df in dfs
             )
             or len(self.divisions) == 2
+            and max(map(lambda x: len(x.divisions), dfs)) == 2
         ):
             return self._expr_cls(*self.operands)
         elif self.divisions[0] is None:
@@ -3694,6 +3654,7 @@ class OpAlignPartitions(MaybeAlignPartitions):
             len(dfs) == 1
             or all(dfs[0].divisions == df.divisions for df in dfs)
             or len(self.divisions) == 2
+            and max(map(lambda x: len(x.divisions), dfs)) == 2
         ):
             return self._op(self.frame, self.op, self.other, *self.operands[3:])
 
@@ -3821,7 +3782,7 @@ class Fused(Blockwise):
 
     @functools.cached_property
     def _name(self):
-        return f"{str(self)}-{_tokenize_deterministic(*self.operands)}"
+        return f"{str(self)}-{self.deterministic_token}"
 
     def _divisions(self):
         return self.exprs[0]._divisions()
@@ -3920,7 +3881,9 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
         # we are accesing the index
         column_union = []
 
-    if column_union == expr.frame.columns:
+    if column_union == expr.frame.columns or not column_union and expr.ndim < 2:
+        # this projection is for the index, but the elements are unknown, so
+        # don't project
         return
     result = type(expr)(expr.frame[column_union], *expr.operands[1:])
     if column_union == parent.operand("columns"):
@@ -4061,6 +4024,8 @@ def calc_divisions_for_align(*exprs, allow_shuffle=True):
     dfs = [df for df in exprs if isinstance(df, Expr) and df.ndim > 0]
     if not all(df.known_divisions for df in dfs):
         return (None,) * (max(df.npartitions for df in dfs) + 1)
+    if all(dfs[0].divisions == df.divisions for df in dfs):
+        return dfs[0].divisions
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
     if len(divisions) == 1:  # single value for index
         divisions = (divisions[0], divisions[0])

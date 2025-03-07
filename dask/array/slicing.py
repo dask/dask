@@ -12,7 +12,7 @@ import numpy as np
 from tlz import concat, memoize, merge, pluck
 
 from dask import core
-from dask._task_spec import Alias, Task, TaskRef
+from dask._task_spec import Alias, DataNode, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -209,7 +209,16 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
         for k, v in dsk.items():
             if k[0] == out_name:
                 k2 = (out_name,) + expand(k[1:], 0)
-                dsk2[k2] = Task(k2, v.func, v.args[0], expand_orig(v.args[1], None))
+                if isinstance(v.args[1], Alias):
+                    # positional indexing with newaxis
+                    indexer = expand_orig(dsk[v.args[1].key].value[1], None)
+                    tok = "shuffle-taker-" + tokenize(indexer)
+                    dsk2[tok] = DataNode(tok, (1, indexer))
+                    arg = TaskRef(tok)
+                else:
+                    arg = expand_orig(v.args[1], None)
+                # raise NotImplementedError
+                dsk2[k2] = Task(k2, v.func, v.args[0], arg)
             else:
                 dsk2[k] = v
 
@@ -2011,9 +2020,9 @@ def setitem(x, v, indices):
 
     Parameters
     ----------
-    x : numpy array
+    x : numpy/cupy/etc. array
         The array to be assigned to.
-    v : numpy array
+    v : numpy/cupy/etc. array
         The values which will be assigned.
     indices : list of `slice`, `int`, or numpy array
         The indices describing the elements of x to be assigned from
@@ -2029,7 +2038,7 @@ def setitem(x, v, indices):
 
     Returns
     -------
-    numpy array
+    numpy/cupy/etc. array
         A new independent array with assigned elements, unless v is
         empty (i.e. has zero size) in which case then the input array
         is returned and the indices are ignored.
@@ -2077,8 +2086,11 @@ def setitem(x, v, indices):
     if not np.ma.isMA(x) and np.ma.isMA(v):
         x = x.view(np.ma.MaskedArray)
 
-    # Copy the array to guarantee no other objects are corrupted
-    x = x.copy()
+    # Copy the array to guarantee no other objects are corrupted.
+    # When x is the output of a scalar __getitem__ call, it is a
+    # np.generic, which is read-only. Convert it to a (writeable)
+    # 0-d array. x could also be a cupy array etc.
+    x = np.asarray(x) if isinstance(x, np.generic) else x.copy()
 
     # Do the assignment
     try:

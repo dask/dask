@@ -209,18 +209,22 @@ For example:
     choosing chunk sizes that are aligned with your access patterns and
     algorithms.
 
-Processes and Threads
----------------------
+Processes, Threads and VM sizes
+-------------------------------
 
 If you're doing mostly numeric work with Numpy, pandas, Scikit-learn, Numba,
 and other libraries that release the `GIL <https://docs.python.org/3/glossary.html#term-global-interpreter-lock>`_, then use mostly threads.  If you're
 doing work on text data or Python collections like lists and dicts then use
 mostly processes.
 
-If you're on larger machines with a high thread count (greater than 10), then
-you should probably split things up into at least a few processes regardless.
-Python can be highly productive with 10 threads per process with numeric work,
-but not 50 threads.
+If you're on larger machines with a high thread count (much greater than 4),
+then you should probably split things up into at least a few processes
+regardless. Python can be highly productive with about 4 threads per process
+with numeric work, but not 50 threads.
+
+This is advise that generalizes to cloud computing and picking appropriate VM
+instance sizes. There is a lot of nuance to picking the _perfect_ instance but
+a good starting point is a 1:4 CPU to RAM ratio with one Worker instance per VM. You can adjust from there given your workload.
 
 For more information on threads, processes, and how to configure them in Dask, see
 :doc:`the scheduler documentation <scheduling>`.
@@ -229,7 +233,7 @@ For more information on threads, processes, and how to configure them in Dask, s
 Load Data with Dask
 -------------------
 
-A common anti-pattern we se is people creating large Python objects like a DataFrame
+A common anti-pattern we see is people creating large Python objects like a DataFrame
 or an Array on the client (i.e. their local machine) outside of Dask and then embedding
 them into the computation. This means that Dask has to send these objects over the network
 multiple times instead of just passing pointers to the data.

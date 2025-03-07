@@ -45,7 +45,6 @@ from dask.dataframe.dask_expr._util import (
     PANDAS_GE_300,
     _convert_to_list,
     get_specified_shuffle,
-    is_scalar,
 )
 from dask.dataframe.dispatch import concat, make_meta, meta_nonempty
 from dask.dataframe.groupby import (
@@ -82,7 +81,7 @@ from dask.dataframe.groupby import (
     _var_agg,
     _var_chunk,
 )
-from dask.dataframe.utils import insert_meta_param_description
+from dask.dataframe.utils import insert_meta_param_description, is_scalar
 from dask.typing import Key
 from dask.utils import M, derived_from, is_index_like
 
@@ -1961,15 +1960,14 @@ class GroupBy:
     def agg(self, *args, **kwargs):
         return self.aggregate(*args, **kwargs)
 
-    def _warn_if_no_meta(self, meta):
+    def _warn_if_no_meta(self, meta, method="apply"):
         if meta is no_default:
-            msg = (
-                "`meta` is not specified, inferred from partial data. "
-                "Please provide `meta` if the result is unexpected.\n"
-                "  Before: .apply(func)\n"
-                "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
-                "  or:     .apply(func, meta=('x', 'f8'))            for series result"
-            )
+            msg = f"""`meta` is not specified, inferred from partial data.
+Please provide `meta` if the result is unexpected.
+  Before: .{method}(func)
+  After:  .{method}(func, meta={{'x': 'f8', 'y': 'f8'}}) for dataframe result
+  or:     .{method}(func, meta=('x', 'f8'))            for series result
+"""
             warnings.warn(msg, stacklevel=3)
 
     @insert_meta_param_description(pad=12)
@@ -2074,7 +2072,7 @@ class GroupBy:
         -------
         applied : Series or DataFrame depending on columns keyword
         """
-        self._warn_if_no_meta(meta)
+        self._warn_if_no_meta(meta, method="transform")
         return self._transform_like_op(
             GroupByTransform, func, meta, shuffle_method, *args, **kwargs
         )
@@ -2110,7 +2108,7 @@ class GroupBy:
         """
         if "axis" in kwargs:
             raise TypeError("axis is not supported in shift.")
-        self._warn_if_no_meta(meta)
+        self._warn_if_no_meta(meta, method="shift")
         kwargs = {"periods": periods, **kwargs}
         return self._transform_like_op(
             GroupByShift, None, meta, shuffle_method, *args, **kwargs

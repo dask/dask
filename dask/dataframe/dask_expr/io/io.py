@@ -7,6 +7,7 @@ import operator
 import numpy as np
 import pyarrow as pa
 
+from dask import delayed
 from dask._task_spec import DataNode, List, Task
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -106,11 +107,7 @@ class FusedIO(BlockwiseIO):
 
     @functools.cached_property
     def _name(self):
-        return (
-            self.operand("_expr")._funcname
-            + "-fused-"
-            + _tokenize_deterministic(*self.operands)
-        )
+        return self.operand("_expr")._funcname + "-fused-" + self.deterministic_token
 
     @functools.cached_property
     def _meta(self):
@@ -166,7 +163,7 @@ class FusedParquetIO(FusedIO):
         return (
             funcname(type(self.operand("_expr"))).lower()
             + "-fused-parq-"
-            + _tokenize_deterministic(*self.operands)
+            + self.deterministic_token
         )
 
     @staticmethod
@@ -244,22 +241,19 @@ class FromMap(PartitionsFiltered, BlockwiseIO):
     @functools.cached_property
     def _name(self):
         if self.label is None:
-            return (
-                funcname(self.func).lower()
-                + "-"
-                + _tokenize_deterministic(*self.operands)
-            )
+            return funcname(self.func).lower() + "-" + self.deterministic_token
         else:
-            return self.label + "-" + _tokenize_deterministic(*self.operands)
+            return self.label + "-" + self.deterministic_token
 
     @functools.cached_property
     def _meta(self):
         if self.operand("user_meta") is not no_default:
             meta = self.operand("user_meta")
+            return make_meta(meta)
         else:
             vals = [v[0] for v in self.iterables]
-            meta = self.func(*vals, *self.args, **self.kwargs)
-        return make_meta(meta)
+            meta = delayed(self.func)(*vals, *self.args, **self.kwargs)
+            return delayed(make_meta)(meta).compute()
 
     def _divisions(self):
         if self.operand("user_divisions"):
@@ -443,6 +437,8 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
             try:
                 return list(self.frame.columns)
             except AttributeError:
+                if self.ndim == 1:
+                    return [self.name]
                 return []
         else:
             return _convert_to_list(columns_operand)
@@ -548,7 +544,7 @@ class FromPandasDivisions(FromPandas):
 
     @functools.cached_property
     def _name(self):
-        return "from_pd_divs" + "-" + _tokenize_deterministic(*self.operands)
+        return "from_pd_divs" + "-" + self.deterministic_token
 
     @property
     def _divisions_and_locations(self):
@@ -659,12 +655,21 @@ class FromArray(PartitionsFiltered, BlockwiseIO):
         divisions = divisions + (len(self.frame) - 1,)
         return divisions
 
+    @functools.cached_property
+    def unfiltered_divisions(self):
+        return self._divisions()
+
     def _filtered_task(self, name: Key, index: int) -> Task:
         data = self.frame[slice(index * self.chunksize, (index + 1) * self.chunksize)]
-        if index == len(self.divisions) - 2:
-            idx = range(self.divisions[index], self.divisions[index + 1] + 1)
+        if index == len(self.unfiltered_divisions) - 2:
+            idx = range(
+                self.unfiltered_divisions[index],
+                self.unfiltered_divisions[index + 1] + 1,
+            )
         else:
-            idx = range(self.divisions[index], self.divisions[index + 1])
+            idx = range(
+                self.unfiltered_divisions[index], self.unfiltered_divisions[index + 1]
+            )
 
         if is_series_like(self._meta):
             return Task(

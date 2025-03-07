@@ -28,10 +28,10 @@ class Concat(Expr):
     _parameters = [
         "join",
         "ignore_order",
-        "_kwargs",
         "axis",
         "ignore_unknown_divisions",
         "interleave_partitions",
+        "_kwargs",
     ]
     _defaults = {
         "join": "outer",
@@ -167,6 +167,8 @@ class Concat(Expr):
                     self.join,
                     self.ignore_order,
                     self.axis,
+                    self.ignore_unknown_divisions,
+                    self.interleave_partitions,
                     self._kwargs,
                     *cast_dfs,
                 )
@@ -220,6 +222,8 @@ class Concat(Expr):
                 self.join,
                 self.ignore_order,
                 self.axis,
+                self.ignore_unknown_divisions,
+                self.interleave_partitions,
                 self._kwargs,
                 *cast_dfs,
             )
@@ -228,6 +232,8 @@ class Concat(Expr):
             self.join,
             self.ignore_order,
             self.axis,
+            self.ignore_unknown_divisions,
+            self.interleave_partitions,
             self._kwargs,
             *cast_dfs,
         )
@@ -245,7 +251,8 @@ class Concat(Expr):
                 for frame in self._frames
             ]
             if all(
-                sorted(cols) == sorted(get_columns_or_name(frame))
+                set(cols) == set(get_columns_or_name(frame))
+                and len(cols) == len(get_columns_or_name(frame))
                 for frame, cols in zip(self._frames, columns_frame)
             ):
                 return
@@ -253,7 +260,8 @@ class Concat(Expr):
             frames = [
                 (
                     frame[cols]
-                    if sorted(cols) != sorted(get_columns_or_name(frame))
+                    if set(cols) != set(get_columns_or_name(frame))
+                    or len(cols) != len(get_columns_or_name(frame))
                     else frame
                 )
                 for frame, cols in zip(self._frames, columns_frame)
@@ -262,12 +270,13 @@ class Concat(Expr):
             result = type(self)(
                 self.join,
                 self.ignore_order,
-                self._kwargs,
                 self.axis,
                 self.ignore_unknown_divisions,
                 self.interleave_partitions,
+                self._kwargs,
                 *frames,
             )
+
             if result.columns == _convert_to_list(parent.operand("columns")):
                 if result.ndim == parent.ndim:
                     return result
@@ -278,8 +287,6 @@ class Concat(Expr):
 
 
 class StackPartition(Concat):
-    _parameters = ["join", "ignore_order", "axis", "_kwargs"]
-    _defaults = {"join": "outer", "ignore_order": False, "_kwargs": {}, "axis": 0}
 
     def _layer(self):
         dsk, i = {}, 0

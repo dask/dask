@@ -106,7 +106,6 @@ from dask.dataframe.dask_expr._util import (
     _raise_if_object_series,
     _validate_axis,
     get_specified_shuffle,
-    is_scalar,
 )
 from dask.dataframe.dask_expr.io import FromPandasDivisions, FromScalars
 from dask.dataframe.dispatch import (
@@ -121,6 +120,7 @@ from dask.dataframe.utils import (
     has_known_categories,
     index_summary,
     insert_meta_param_description,
+    is_scalar,
     meta_frame_constructor,
     meta_series_constructor,
     pyarrow_strings_enabled,
@@ -397,6 +397,8 @@ class FrameBase(DaskMethodsMixin):
 
     def __getitem__(self, other):
         if isinstance(other, FrameBase):
+            if not expr.are_co_aligned(self.expr, other.expr):
+                return new_collection(expr.FilterAlign(self, other))
             return new_collection(self.expr.__getitem__(other.expr))
         elif isinstance(other, slice):
             from pandas.api.types import is_float_dtype
@@ -2502,13 +2504,17 @@ Expr={expr}"""
         --------
         dask_expr.from_delayed
         """
+        from dask.highlevelgraph import HighLevelGraph
+
         if optimize_graph:
             frame = self.optimize()
         else:
             frame = self
         keys = frame.__dask_keys__()
         graph = frame.__dask_graph__()
-        return [Delayed(k, graph) for k in keys]
+        layer = "delayed-" + frame._name
+        graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
+        return [Delayed(k, graph, layer=layer) for k in keys]
 
     def to_backend(self, backend: str | None = None, **kwargs):
         """Move to a new DataFrame backend
@@ -3102,7 +3108,7 @@ class DataFrame(FrameBase):
             )
         if meta is None:
             meta = expr.emulate(M.map, self, func, na_action=na_action, udf=True)
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="map"))
         return new_collection(expr.Map(self, arg=func, na_action=na_action, meta=meta))
 
     @derived_from(pd.DataFrame)
@@ -4195,13 +4201,13 @@ class Series(FrameBase):
         if isinstance(arg, Series):
             if not expr.are_co_aligned(self.expr, arg.expr):
                 if meta is None:
-                    warnings.warn(meta_warning(meta))
+                    warnings.warn(meta_warning(meta, method="map"))
                 return new_collection(
                     expr.MapAlign(self, arg, op=None, na_action=na_action, meta=meta)
                 )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="map"))
         return new_collection(expr.Map(self, arg=arg, na_action=na_action, meta=meta))
 
     @derived_from(pd.Series)
@@ -4722,13 +4728,13 @@ class Index(Series):
         if isinstance(arg, Series):
             if not expr.are_co_aligned(self.expr, arg.expr):
                 if meta is None:
-                    warnings.warn(meta_warning(meta))
+                    warnings.warn(meta_warning(meta, method="map"))
                 return new_collection(
                     expr.MapIndexAlign(self, arg, na_action, meta, is_monotonic)
                 )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="map"))
         return new_collection(
             expr.Map(
                 self, arg=arg, na_action=na_action, meta=meta, is_monotonic=is_monotonic
@@ -4837,12 +4843,10 @@ def from_pandas(data, npartitions=None, sort=True, chunksize=None):
         The desired number of rows per index partition to use. Note that
         depending on the size and index of the dataframe, actual partition
         sizes may vary.
-    sort: bool
+    sort: bool, default True
         Sort the input by index first to obtain cleanly divided partitions
         (with known divisions).  If False, the input will not be sorted, and
         all divisions will be set to None. Default is True.
-    name: string, optional
-        An optional keyname for the dataframe.  Defaults to hashing the input
 
     Returns
     -------
@@ -5032,7 +5036,7 @@ def from_dict(
     )
 
 
-def from_dask_array(x, columns=None, index=None, meta=None):
+def from_dask_array(x, columns=None, index=None, meta=None) -> DataFrame:
     """Create a Dask DataFrame from a Dask Array.
 
     Converts a 2d array into a DataFrame and a 1d array into a Series.
@@ -5513,10 +5517,10 @@ def concat(
         Concat(
             join,
             ignore_order,
-            kwargs,
             axis,
             ignore_unknown_divisions,
             interleave_partitions,
+            kwargs,
             *dfs,
         )
     )
