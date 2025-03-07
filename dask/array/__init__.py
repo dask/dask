@@ -642,8 +642,9 @@ if _array_expr_enabled():
         return inner_func
 
     try:
+        from dask.array._array_expr import Array  # type: ignore
+        from dask.array._array_expr import _overlap as overlap  # type: ignore
         from dask.array._array_expr import (  # type: ignore
-            Array,
             arange,
             array,
             asanyarray,
@@ -661,13 +662,11 @@ if _array_expr_enabled():
             map_overlap,
             ones,
             ones_like,
-            overlap,
             random,
             rechunk,
             reduction,
             repeat,
             stack,
-            trim_overlap,
             zeros,
             zeros_like,
         )

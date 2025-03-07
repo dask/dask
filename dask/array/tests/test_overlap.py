@@ -42,6 +42,8 @@ else:
 
 from dask.array.utils import assert_eq, same_keys
 
+pytestmark = pytest.mark.normal_and_array_expr
+
 
 def test_overlap_internal():
     x = np.arange(64).reshape((8, 8))
@@ -290,15 +292,15 @@ def test_overlap():
 def test_overlap_allow_rechunk_kwarg():
     # The smallest array chunk is too small to fit overlap depth
     arr = da.arange(6, chunks=5)
-    da.overlap(arr, 2, "reflect", allow_rechunk=True)
+    da.overlap.overlap(arr, 2, "reflect", allow_rechunk=True)
     arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=True)
     with pytest.raises(ValueError):
-        da.overlap(arr, 2, "reflect", allow_rechunk=False)
+        da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
     with pytest.raises(ValueError):
         arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=False)
     # No rechunking required
     arr = da.arange(6, chunks=4)
-    da.overlap(arr, 2, "reflect", allow_rechunk=False)
+    da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
 
 
 def test_asymmetric_overlap_boundary_exception():
@@ -777,16 +779,18 @@ def test_push():
 @pytest.mark.parametrize("boundary", ["reflect", "periodic", "nearest", "none"])
 def test_trim_boundary(boundary):
     x = da.from_array(np.arange(24).reshape(4, 6), chunks=(2, 3))
-    x_overlaped = da.overlap(x, 2, boundary={0: "reflect", 1: boundary})
-    x_trimmed = da.trim_overlap(x_overlaped, 2, boundary={0: "reflect", 1: boundary})
+    x_overlaped = da.overlap.overlap(x, 2, boundary={0: "reflect", 1: boundary})
+    x_trimmed = da.overlap.trim_overlap(
+        x_overlaped, 2, boundary={0: "reflect", 1: boundary}
+    )
     assert_eq(x, x_trimmed)
 
-    x_overlaped = da.overlap(x, 2, boundary={1: boundary})
-    x_trimmed = da.trim_overlap(x_overlaped, 2, boundary={1: boundary})
+    x_overlaped = da.overlap.overlap(x, 2, boundary={1: boundary})
+    x_trimmed = da.overlap.trim_overlap(x_overlaped, 2, boundary={1: boundary})
     assert_eq(x, x_trimmed)
 
-    x_overlaped = da.overlap(x, 2, boundary=boundary)
-    x_trimmed = da.trim_overlap(x_overlaped, 2, boundary=boundary)
+    x_overlaped = da.overlap.overlap(x, 2, boundary=boundary)
+    x_trimmed = da.overlap.trim_overlap(x_overlaped, 2, boundary=boundary)
     assert_eq(x, x_trimmed)
 
 
