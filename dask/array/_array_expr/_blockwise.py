@@ -17,6 +17,7 @@ from dask.array.core import (
     is_scalar_for_elemwise,
     normalize_arg,
 )
+from dask.array.utils import meta_from_array
 from dask.blockwise import _blockwise_unpack_collections_task_spec
 from dask.blockwise import blockwise as core_blockwise
 from dask.layers import ArrayBlockwiseDep
@@ -63,9 +64,13 @@ class Blockwise(ArrayExpr):
     @cached_property
     def _meta(self):
         if self._meta_provided is not None:
-            return self._meta_provided
+            return meta_from_array(
+                self._meta_provided, ndim=self.ndim, dtype=self._meta_provided.dtype
+            )
         else:
-            return compute_meta(self.func, self.dtype, *self.args[::2], **self.kwargs)
+            return compute_meta(
+                self.func, self.operand("dtype"), *self.args[::2], **self.kwargs
+            )
 
     @cached_property
     def chunks(self):
@@ -114,14 +119,22 @@ class Blockwise(ArrayExpr):
 
     @cached_property
     def dtype(self):
-        return self.operand("dtype")
+        return super().dtype
 
     @property
     def deterministic_token(self):
         if not self._determ_token:
             # TODO: Is there an actual need to overwrite this?
             self._determ_token = _tokenize_deterministic(
-                self.func, self.out_ind, self.dtype, *self.args, **self.kwargs
+                self.func,
+                self.out_ind,
+                self.dtype,
+                self.adjust_chunks,
+                self.new_axes,
+                self.align_arrays,
+                self.concatenate,
+                *self.args,
+                **self.kwargs,
             )
         return self._determ_token
 

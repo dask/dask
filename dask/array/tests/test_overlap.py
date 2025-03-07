@@ -8,22 +8,38 @@ from dask.base import collections_to_dsk
 pytest.importorskip("numpy")
 
 import numpy as np
-from numpy.testing import assert_array_almost_equal, assert_array_equal
+from numpy.testing import assert_array_almost_equal
 
 import dask.array as da
-from dask.array.lib.stride_tricks import sliding_window_view
-from dask.array.overlap import (
-    boundaries,
-    constant,
-    ensure_minimum_chunksize,
-    nearest,
-    overlap,
-    overlap_internal,
-    periodic,
-    push,
-    reflect,
-    trim_internal,
-)
+
+if da._array_expr_enabled():
+    from dask.array._array_expr._overlap import (
+        boundaries,
+        constant,
+        ensure_minimum_chunksize,
+        nearest,
+        overlap,
+        overlap_internal,
+        periodic,
+        reflect,
+        sliding_window_view,
+        trim_internal,
+    )
+else:
+    from dask.array.lib.stride_tricks import sliding_window_view
+    from dask.array.overlap import (
+        boundaries,
+        constant,
+        ensure_minimum_chunksize,
+        nearest,
+        overlap,
+        overlap_internal,
+        periodic,
+        push,
+        reflect,
+        trim_internal,
+    )
+
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -122,6 +138,7 @@ def test_overlap_internal_asymmetric_small():
     assert same_keys(overlap_internal(d, {0: (0, 0), 1: (1, 1)}), result)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="blockwise fusion needed")  # type: ignore
 def test_trim_internal():
     d = da.ones((40, 60), chunks=(10, 10))
     e = trim_internal(d, axes={0: 1, 1: 2}, boundary="reflect")
@@ -273,15 +290,15 @@ def test_overlap():
 def test_overlap_allow_rechunk_kwarg():
     # The smallest array chunk is too small to fit overlap depth
     arr = da.arange(6, chunks=5)
-    da.overlap.overlap(arr, 2, "reflect", allow_rechunk=True)
+    da.overlap(arr, 2, "reflect", allow_rechunk=True)
     arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=True)
     with pytest.raises(ValueError):
-        da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
+        da.overlap(arr, 2, "reflect", allow_rechunk=False)
     with pytest.raises(ValueError):
         arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=False)
     # No rechunking required
     arr = da.arange(6, chunks=4)
-    da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
+    da.overlap(arr, 2, "reflect", allow_rechunk=False)
 
 
 def test_asymmetric_overlap_boundary_exception():
@@ -355,6 +372,7 @@ def test_map_overlap_no_depth(boundary):
     assert_eq(y, x)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="reshape needed")  # type: ignore
 def test_map_overlap_multiarray():
     # Same ndim, same numblocks, same chunks
     x = da.arange(10, chunks=5)
@@ -460,6 +478,7 @@ def test_map_overlap_multiarray_block_broadcast():
     assert_eq(z.sum(), 4.0 * (10 * 8 + 8))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="__array_function__ needed")  # type: ignore
 def test_map_overlap_multiarray_variadic():
     # Test overlapping row slices from 3D arrays
     xs = [
@@ -526,7 +545,7 @@ def test_map_overlap_trim_using_drop_axis_and_different_depths(drop_axis):
     y = da.map_overlap(
         _mean, x, depth=depth, boundary=boundary, drop_axis=drop_axis, dtype=float
     ).compute()
-    assert_array_almost_equal(expected, y)
+    assert_array_almost_equal(expected.compute(), y)
 
 
 def test_map_overlap_assumes_shape_matches_first_array_if_trim_is_false():
@@ -585,7 +604,7 @@ def test_nearest_overlap():
     darr = da.from_array(a, chunks=(6, 6))
     garr = overlap(darr, depth={0: 5, 1: 5}, boundary={0: "nearest", 1: "nearest"})
     tarr = trim_internal(garr, {0: 5, 1: 5}, boundary="nearest")
-    assert_array_almost_equal(tarr, a)
+    assert_eq(tarr, a)
 
 
 @pytest.mark.parametrize(
@@ -607,16 +626,16 @@ def test_different_depths_and_boundary_combinations(depth):
     constant = overlap(darr, depth=depth, boundary=42)
 
     result = trim_internal(reflected, depth, boundary="reflect")
-    assert_array_equal(result, expected)
+    assert_eq(result, expected)
 
     result = trim_internal(nearest, depth, boundary="nearest")
-    assert_array_equal(result, expected)
+    assert_eq(result, expected)
 
     result = trim_internal(periodic, depth, boundary="periodic")
-    assert_array_equal(result, expected)
+    assert_eq(result, expected)
 
     result = trim_internal(constant, depth, boundary=42)
-    assert_array_equal(result, expected)
+    assert_eq(result, expected)
 
 
 def test_one_chunk_along_axis():
@@ -738,6 +757,7 @@ def test_overlap_few_dimensions():
     assert len(c.dask) < 10 * len(a.dask)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="push needed")  # type: ignore
 def test_push():
     bottleneck = pytest.importorskip("bottleneck")
 
@@ -757,19 +777,17 @@ def test_push():
 @pytest.mark.parametrize("boundary", ["reflect", "periodic", "nearest", "none"])
 def test_trim_boundary(boundary):
     x = da.from_array(np.arange(24).reshape(4, 6), chunks=(2, 3))
-    x_overlaped = da.overlap.overlap(x, 2, boundary={0: "reflect", 1: boundary})
-    x_trimmed = da.overlap.trim_overlap(
-        x_overlaped, 2, boundary={0: "reflect", 1: boundary}
-    )
-    assert np.all(x == x_trimmed)
+    x_overlaped = da.overlap(x, 2, boundary={0: "reflect", 1: boundary})
+    x_trimmed = da.trim_overlap(x_overlaped, 2, boundary={0: "reflect", 1: boundary})
+    assert_eq(x, x_trimmed)
 
-    x_overlaped = da.overlap.overlap(x, 2, boundary={1: boundary})
-    x_trimmed = da.overlap.trim_overlap(x_overlaped, 2, boundary={1: boundary})
-    assert np.all(x == x_trimmed)
+    x_overlaped = da.overlap(x, 2, boundary={1: boundary})
+    x_trimmed = da.trim_overlap(x_overlaped, 2, boundary={1: boundary})
+    assert_eq(x, x_trimmed)
 
-    x_overlaped = da.overlap.overlap(x, 2, boundary=boundary)
-    x_trimmed = da.overlap.trim_overlap(x_overlaped, 2, boundary=boundary)
-    assert np.all(x == x_trimmed)
+    x_overlaped = da.overlap(x, 2, boundary=boundary)
+    x_trimmed = da.trim_overlap(x_overlaped, 2, boundary=boundary)
+    assert_eq(x, x_trimmed)
 
 
 def test_map_overlap_rechunks_array_if_needed():
@@ -952,6 +970,7 @@ def test_map_overlap_new_axis():
     assert_eq(expected, actual, check_shape=False, check_chunks=False)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="xarray doesn't work yet")  # type: ignore
 def test_overlap_not_blowing_up_graph():
     xr = pytest.importorskip("xarray")
 
