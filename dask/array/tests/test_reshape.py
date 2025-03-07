@@ -4,12 +4,11 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array import from_array
+from dask.array import from_array, reshape_blockwise
 from dask.array.reshape import (
     _smooth_chunks,
     contract_tuple,
     expand_tuple,
-    reshape_blockwise,
     reshape_rechunk,
 )
 from dask.array.utils import assert_eq
