@@ -398,8 +398,8 @@ def test_slicing_and_chunks():
 def test_slicing_and_unknown_chunks():
     a = da.ones((10, 5), chunks=5)
     a._chunks = ((np.nan, np.nan), (5,))
-    # with pytest.raises(ValueError, match="Array chunk size or shape is unknown"):
-    a[[0, 5]].compute()
+    with pytest.raises(ValueError, match="Array chunk size or shape is unknown"):
+        a[[0, 5]].compute()
 
 
 def test_slicing_identities():
