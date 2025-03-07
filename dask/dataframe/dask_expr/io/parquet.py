@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
+import pyarrow.dataset
 import pyarrow.dataset as pa_ds
 import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
@@ -1040,14 +1041,15 @@ class ReadParquetPyarrowFS(ReadParquet):
             if all_files[-1].base_name.endswith("_metadata"):
                 metadata_file = all_files.pop()
                 checksum = tokenize(metadata_file)
-                # TODO: dataset kwargs?
                 dataset = pa_ds.parquet_dataset(
                     metadata_file.path,
                     filesystem=self.fs,
                 )
                 dataset_info["using_metadata_file"] = True
-                dataset_info["fragments"] = _frags = list(dataset.get_fragments())
-                dataset_info["file_sizes"] = [None for fi in _frags]
+                dataset_info["fragments"] = [
+                    FragmentWrapper(frag, self.fs) for frag in dataset.get_fragments()
+                ]
+                dataset_info["file_sizes"] = [None] * len(dataset_info["fragments"])
 
         if checksum is None:
             checksum = tokenize(all_files)
@@ -1065,10 +1067,11 @@ class ReadParquetPyarrowFS(ReadParquet):
                 filters=self.filters,
             )
             dataset_info["using_metadata_file"] = False
-            dataset_info["fragments"] = dataset.fragments
+            dataset_info["fragments"] = [
+                FragmentWrapper(frag, self.fs) for frag in dataset.fragments
+            ]
             dataset_info["all_files"] = all_files
 
-        dataset_info["dataset"] = dataset
         dataset_info["schema"] = dataset.schema
         dataset_info["base_meta"] = dataset.schema.empty_table().to_pandas()
         self.operands[type(self)._parameters.index("_dataset_info_cache")] = (
@@ -1135,14 +1138,16 @@ class ReadParquetPyarrowFS(ReadParquet):
         ReadParquetPyarrowFS.fragments
         """
         if self.filters is not None:
-            if self._dataset_info["using_metadata_file"]:
-                ds = self._dataset_info["dataset"]
-            else:
-                ds = self._dataset_info["dataset"]._dataset
-            return np.array(
-                list(ds.get_fragments(filter=pq.filters_to_expression(self.filters)))
+            filter_expression = pq.filters_to_expression(self.filters)
+            frags = [frag.fragment for frag in self._dataset_info["fragments"]]
+            ds = pyarrow.dataset.FileSystemDataset(
+                frags,
+                self._dataset_info["schema"],
+                format=frags[0].format,
+                filesystem=self.fs,
             )
-        return np.array(self._dataset_info["fragments"])
+            return np.array(list(ds.get_fragments(filter=filter_expression)))
+        return np.array([frag.fragment for frag in self._dataset_info["fragments"]])
 
     @property
     def _fusion_compression_factor(self):
@@ -1986,6 +1991,8 @@ def _aggregate_statistics_to_file(stats):
 def _gather_statistics(frags):
     @dask.delayed
     def _collect_statistics(token_fragment):
+        if isinstance(token_fragment[1], FragmentWrapper):
+            token_fragment[1] = token_fragment[1].fragment
         return token_fragment[0], _extract_stats(token_fragment[1].metadata.to_dict())
 
     return dask.compute(
