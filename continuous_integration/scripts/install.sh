@@ -25,7 +25,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/zict \
         git+https://github.com/dask/distributed \
         git+https://github.com/zarr-developers/zarr-python
-    mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image h5py
+    mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image h5py numbagg
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         numpy \
