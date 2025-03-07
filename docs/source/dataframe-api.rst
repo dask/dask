@@ -130,6 +130,7 @@ DataFrame
     DataFrame.to_hdf
     DataFrame.to_html
     DataFrame.to_json
+    DataFrame.to_orc
     DataFrame.to_parquet
     DataFrame.to_records
     DataFrame.to_string
@@ -649,6 +650,7 @@ Store DataFrames
    to_records
    to_sql
    to_json
+   to_orc
 
 Convert DataFrames
 ~~~~~~~~~~~~~~~~~~
