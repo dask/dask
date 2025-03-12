@@ -382,9 +382,7 @@ def linspace(
 
 
 @array_creation_dispatch.register_inplace("numpy")
-def arange(
-    start=None, /, stop=None, step=1, *, chunks="auto", like=None, dtype=None, **kwargs
-):
+def arange(start=None, /, stop=None, step=1, *, chunks="auto", like=None, dtype=None):
     """
     Return evenly spaced values from `start` to `stop` with step size `step`.
 
@@ -431,6 +429,12 @@ def arange(
     elif stop is None:
         start, stop = 0, start
 
+    # Avoid loss of precision calculating blockstart and blockstop below
+    # when start is a very large int (~2**63) and step is a small float
+    if start != 0 and not np.isclose(start + step - start, step, atol=0):
+        r = arange(0, stop - start, step, chunks=chunks, dtype=dtype, like=like)
+        return r + start
+
     num = int(max(np.ceil((stop - start) / step), 0))
 
     meta = meta_from_array(like) if like is not None else None
@@ -440,16 +444,14 @@ def arange(
 
     chunks = normalize_chunks(chunks, (num,), dtype=dtype)
 
-    if kwargs:
-        raise TypeError("Unexpected keyword argument(s): %s" % ",".join(kwargs.keys()))
-
     name = "arange-" + tokenize((start, stop, step, chunks, dtype))
     dsk = {}
     elem_count = 0
 
     for i, bs in enumerate(chunks[0]):
-        blockstart = start + (elem_count * step)
-        blockstop = start + ((elem_count + bs) * step)
+        blockstart = start + elem_count * step
+        blockstop = start + (elem_count + bs) * step
+
         task = Task(
             (name, i),
             partial(chunk.arange, like=meta),
