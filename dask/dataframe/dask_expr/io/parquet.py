@@ -71,7 +71,6 @@ def _tokenize_fileinfo(fileinfo):
         fileinfo.path,
         fileinfo.size,
         fileinfo.mtime_ns,
-        fileinfo.size,
     )
 
 
