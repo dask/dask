@@ -496,7 +496,7 @@ def unpack_collections(*args, traverse=True):
             return TaskRef(tok)
 
         tok = uuid.uuid4().hex
-        tsk: DataNode | Task
+        tsk: DataNode | Task  # type: ignore
         if not traverse:
             tsk = DataNode(None, expr)
         else:

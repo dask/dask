@@ -475,7 +475,7 @@ def array_safe(a, like, **kwargs):
     to convert a `dask.Array` and CuPy doesn't implement `__array__` to
     prevent implicit copies to host.
     """
-    from dask.array.routines import array
+    from dask.array import array
 
     return _array_like_safe(np.array, array, a, like, **kwargs)
 
@@ -489,7 +489,7 @@ def asarray_safe(a, like, **kwargs):
     a.compute(scheduler="sync") before np.asarray, as downstream
     libraries are unlikely to know how to convert a dask.Array.
     """
-    from dask.array.core import asarray
+    from dask.array import asarray
 
     return _array_like_safe(np.asarray, asarray, a, like, **kwargs)
 
@@ -503,7 +503,7 @@ def asanyarray_safe(a, like, **kwargs):
     a.compute(scheduler="sync") before np.asanyarray, as downstream
     libraries are unlikely to know how to convert a dask.Array.
     """
-    from dask.array.core import asanyarray
+    from dask.array import asanyarray
 
     return _array_like_safe(np.asanyarray, asanyarray, a, like, **kwargs)
 
