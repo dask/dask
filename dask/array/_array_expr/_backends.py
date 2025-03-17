@@ -106,3 +106,23 @@ if scipy_installed and hasattr(sp, "sparray"):  # type: ignore[misc]
     @get_collection_type.register(sp.csr_array)
     def get_collection_type_array(_):
         return create_array_collection
+
+
+@get_collection_type.register(object)
+def get_collection_type_object(_):
+
+    return create_scalar_collection
+
+
+def create_scalar_collection(expr):
+    from dask.array._array_expr._expr import ArrayExpr
+
+    if isinstance(expr, ArrayExpr):
+        # This mirrors the legacy implementation in dask.array
+        from dask.array._array_expr._collection import Array
+
+        return Array(expr)
+
+    from dask.dataframe.dask_expr._collection import Scalar
+
+    return Scalar(expr)
