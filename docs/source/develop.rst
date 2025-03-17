@@ -96,21 +96,35 @@ Contributions to Dask can then be made by submitting pull requests on GitHub.
 Install
 ~~~~~~~
 
-From the top level of your cloned Dask repository you can install a
-local version of Dask, along with all necessary dependencies, using
-pip or conda_
+From the top level of your cloned Dask repository, you can install a local version of Dask along with all necessary dependencies. To avoid dependency conflicts and ensure compatibility, it is recommended to install Distributed from source when using pip.
 
-.. _conda: https://conda.io/
+**Using pip:**
 
-``pip``::
+1. Clone the Distributed repository (e.g., into a sibling directory):
 
-  python -m pip install -e ".[complete,test]"
+   .. code-block:: bash
 
-``conda``::
+      git clone https://github.com/dask/distributed.git ../distributed
 
-  conda env create -n dask-dev -f continuous_integration/environment-3.12.yaml
-  conda activate dask-dev
-  python -m pip install --no-deps -e .
+2. Install Distributed in editable mode:
+
+   .. code-block:: bash
+
+      python -m pip install -e ../distributed
+
+3. Install Dask in editable mode with all necessary dependencies:
+
+   .. code-block:: bash
+
+      python -m pip install -e ".[complete,test]"
+
+**Using conda:**
+
+.. code-block:: bash
+
+   conda env create -n dask-dev -f continuous_integration/environment-3.12.yaml
+   conda activate dask-dev
+   python -m pip install --no-deps -e .
 
 
 Run Tests
