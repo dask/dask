@@ -8,12 +8,29 @@ from dask.array._array_expr._collection import (
     asanyarray,
     asarray,
     blockwise,
+    broadcast_arrays,
+    broadcast_to,
     concatenate,
     elemwise,
     from_array,
     rechunk,
     stack,
 )
-from dask.array._array_expr._creation import arange, empty, linspace, ones, zeros
+from dask.array._array_expr._creation import (
+    arange,
+    diag,
+    diagonal,
+    empty,
+    indices,
+    linspace,
+    meshgrid,
+    ones,
+    pad,
+    zeros,
+)
+from dask.array._array_expr._gufunc import *
 from dask.array._array_expr._map_blocks import map_blocks
 from dask.array._array_expr._reductions import _tree_reduce, reduction
+from dask.array._array_expr._reshape import reshape, reshape_blockwise
+from dask.array._array_expr._routines import *
+from dask.array._array_expr._ufunc import *
