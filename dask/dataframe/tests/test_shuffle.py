@@ -34,8 +34,8 @@ meta = make_meta(
     {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
 )
 d = dd.repartition(pd.concat(dsk.values()), [0, 4, 9, 9])
-shuffle_func = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs)
-shuffle = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs)
+shuffle_func = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs, force=True)
+shuffle = lambda df, *args, **kwargs: df.shuffle(*args, **kwargs, force=True)
 full = d.compute()
 
 

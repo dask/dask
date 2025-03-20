@@ -831,6 +831,7 @@ Expr={expr}"""
         npartitions: int | None = None,
         shuffle_method: str | None = None,
         on_index: bool = False,
+        force: bool = False,
         **options,
     ):
         """Rearrange DataFrame into new partitions
@@ -838,11 +839,6 @@ Expr={expr}"""
         Uses hashing of `on` to map rows to output partitions. After this
         operation, rows with the same value of `on` will be in the same
         partition.
-
-        Note::
-
-            This forces the optimizer to keep the shuffle even if the final
-            expression could be further simplified.
 
         Parameters
         ----------
@@ -858,6 +854,9 @@ Expr={expr}"""
         on_index : bool, default False
             Whether to shuffle on the index. Mutually exclusive with 'on'.
             Set this to ``True`` if 'on' is not provided.
+        force : bool, default False
+            This forces the optimizer to keep the shuffle even if the final
+            expression could be further simplified.
         **options : optional
             Algorithm-specific options.
 
@@ -930,9 +929,12 @@ Expr={expr}"""
                 index_shuffle=on_index,
             )
         )
-        # TODO: This forces the optimizer to not remove the shuffle It would be
-        # nice to teach the optimizer directly (e.g. to avoid key renames, etc.)
-        return res.map_partitions(lambda x: x, meta=res._meta)
+        if force:
+            # TODO: This forces the optimizer to not remove the shuffle It would
+            # be nice to teach the optimizer directly (e.g. to avoid key
+            # renames, etc.)
+            return res.map_partitions(lambda x: x, meta=res._meta)
+        return res
 
     @derived_from(pd.DataFrame)
     def resample(self, rule, closed=None, label=None):
