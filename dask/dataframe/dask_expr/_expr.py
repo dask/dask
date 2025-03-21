@@ -458,8 +458,7 @@ class Expr(core.Expr):
     @property
     def npartitions(self):
         if "npartitions" in self._parameters:
-            idx = self._parameters.index("npartitions")
-            return self.operands[idx]
+            return self.operand("npartitions")
         else:
             return len(self.divisions) - 1
 
