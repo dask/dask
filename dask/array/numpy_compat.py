@@ -59,7 +59,7 @@ except TypeError:
             x = x.astype(dtype)
         return x
 
-    ma_divide = np.ma.core._DomainedBinaryOperation(  # type: ignore
+    ma_divide = np.ma.core._DomainedBinaryOperation(
         divide, np.ma.core._DomainSafeDivide(), 0, 1  # type: ignore
     )
 

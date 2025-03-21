@@ -102,32 +102,6 @@ class ArrayExpr(Expr):
     def optimize(self):
         return self.simplify().lower_completely()
 
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError as err:
-            if key.startswith("_meta"):
-                # Avoid a recursive loop if/when `self._meta*`
-                # produces an `AttributeError`
-                raise RuntimeError(
-                    f"Failed to generate metadata for {self}. "
-                    "This operation may not be supported by the current backend."
-                )
-
-            # Allow operands to be accessed as attributes
-            # as long as the keys are not already reserved
-            # by existing methods/properties
-            _parameters = type(self)._parameters
-            if key in _parameters:
-                idx = _parameters.index(key)
-                return self.operands[idx]
-
-            raise AttributeError(
-                f"{err}\n\n"
-                "This often means that you are attempting to use an unsupported "
-                f"API function.."
-            )
-
     def rechunk(
         self,
         chunks="auto",

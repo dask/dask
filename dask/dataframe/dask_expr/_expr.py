@@ -149,32 +149,12 @@ class Expr(core.Expr):
 
     def __getattr__(self, key):
         try:
-            return object.__getattribute__(self, key)
-        except AttributeError as err:
-            if key.startswith("_meta"):
-                # Avoid a recursive loop if/when `self._meta*`
-                # produces an `AttributeError`
-                raise RuntimeError(
-                    f"Failed to generate metadata for {self}. "
-                    "This operation may not be supported by the current backend."
-                )
+            return super().__getattr__(key)
+        except AttributeError:
 
-            # Allow operands to be accessed as attributes
-            # as long as the keys are not already reserved
-            # by existing methods/properties
-            _parameters = type(self)._parameters
-            if key in _parameters:
-                idx = _parameters.index(key)
-                return self.operands[idx]
             if is_dataframe_like(self._meta) and key in self._meta.columns:
                 return self[key]
-
-            link = "https://github.com/dask-contrib/dask-expr/blob/main/README.md#api-coverage"
-            raise AttributeError(
-                f"{err}\n\n"
-                "This often means that you are attempting to use an unsupported "
-                f"API function. Current API coverage is documented here: {link}."
-            )
+            raise
 
     def __getitem__(self, other):
         if isinstance(other, Expr):
