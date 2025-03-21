@@ -67,6 +67,9 @@ class Array(DaskMethodsMixin):
         out = self.expr.lower_completely()
         return out.__dask_keys__()
 
+    def __dask_tokenize__(self):
+        return "Array", self.expr._name
+
     def compute(self, **kwargs):
         return DaskMethodsMixin.compute(self.optimize(), **kwargs)
 

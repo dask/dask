@@ -22,7 +22,7 @@ from dask.array.slicing import (
 )
 from dask.array.utils import meta_from_array
 from dask.layers import ArrayBlockwiseDep
-from dask.tokenize import _tokenize_deterministic, tokenize
+from dask.tokenize import tokenize
 from dask.utils import cached_cumsum, is_arraylike
 
 
@@ -369,7 +369,7 @@ def take(x, index, axis=0):
 class Slice(ArrayExpr):
     @functools.cached_property
     def _name(self):
-        return f"getitem-{_tokenize_deterministic(*self.operands)}"
+        return f"getitem-{self.deterministic_token}"
 
     @functools.cached_property
     def _meta(self):
