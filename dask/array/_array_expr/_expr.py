@@ -11,7 +11,7 @@ import toolz
 from tlz import accumulate
 
 from dask._expr import Expr
-from dask._task_spec import Task, TaskRef
+from dask._task_spec import List, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
@@ -20,7 +20,6 @@ from dask.utils import cached_cumsum
 
 
 class ArrayExpr(Expr):
-    _cached_keys = None
 
     def _operands_for_repr(self):
         return []
@@ -75,25 +74,35 @@ class ArrayExpr(Expr):
             raise ValueError(msg)
         return int(sum(self.chunks[0]))
 
-    def __dask_keys__(self):
+    @functools.cached_property
+    def _cached_keys(self):
         out = self.lower_completely()
-        if self._cached_keys is not None:
-            return self._cached_keys
 
         name, chunks, numblocks = out.name, out.chunks, out.numblocks
 
         def keys(*args):
             if not chunks:
-                return [(name,)]
+                return List(TaskRef((name,)))
             ind = len(args)
             if ind + 1 == len(numblocks):
-                result = [(name,) + args + (i,) for i in range(numblocks[ind])]
+                result = List(
+                    *(TaskRef((name,) + args + (i,)) for i in range(numblocks[ind]))
+                )
             else:
-                result = [keys(*(args + (i,))) for i in range(numblocks[ind])]
+                result = List(*(keys(*(args + (i,))) for i in range(numblocks[ind])))
             return result
 
-        self._cached_keys = result = keys()
-        return result
+        return keys()
+
+    def __dask_keys__(self):
+        key_refs = self._cached_keys
+
+        def unwrap(task):
+            if isinstance(task, List):
+                return [unwrap(t) for t in task.args]
+            return task.key
+
+        return unwrap(key_refs)
 
     def __dask_tokenize__(self):
         return self._name
