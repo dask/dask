@@ -3065,7 +3065,7 @@ class _DelayedExpr(Expr):
     # TODO
     _parameters = ["obj"]
 
-    def __init__(self, obj):
+    def __init__(self, obj, _determ_token=None):
         self.obj = obj
         self.operands = [obj]
 
@@ -3093,7 +3093,7 @@ class _DelayedExpr(Expr):
 class DelayedsExpr(Expr):
     _parameters = []
 
-    def __init__(self, *delayed_objects):
+    def __init__(self, *delayed_objects, _determ_token=None):
         self.operands = delayed_objects
 
     def __str__(self):
