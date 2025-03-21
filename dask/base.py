@@ -14,7 +14,7 @@ from numbers import Integral, Number
 from operator import getitem
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
-from tlz import groupby, merge
+from tlz import merge
 
 from dask import config, local
 from dask._compatibility import EMSCRIPTEN
@@ -433,22 +433,14 @@ def collections_to_expr(
         raise ValueError("No collections provided")
     from dask._expr import HLGExpr, _ExprSequence
 
-    groups = groupby(optimization_function, collections)
-
     graphs = []
-    for collections in groups.values():
-        exprs = []
-        for coll in collections:
-            from dask.delayed import Delayed
+    for coll in collections:
+        from dask.delayed import Delayed
 
-            if isinstance(coll, Delayed) or not hasattr(coll, "expr"):
-                exprs.append(
-                    HLGExpr.from_collection(coll, optimize_graph=optimize_graph)
-                )
-            else:
-                exprs.append(coll.expr)
-
-        graphs.extend(exprs)
+        if isinstance(coll, Delayed) or not hasattr(coll, "expr"):
+            graphs.append(HLGExpr.from_collection(coll, optimize_graph=optimize_graph))
+        else:
+            graphs.append(coll.expr)
 
     if len(graphs) > 1 or is_iterable:
         return _ExprSequence(*graphs)
