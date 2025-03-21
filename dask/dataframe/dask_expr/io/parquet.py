@@ -717,7 +717,6 @@ def _determine_type_mapper(
 
 
 class ReadParquet(PartitionsFiltered, BlockwiseIO):
-    _pq_length_stats = None
     _absorb_projections = True
     _filter_passthrough = False
 
@@ -1074,9 +1073,7 @@ class ReadParquetPyarrowFS(ReadParquet):
 
         dataset_info["schema"] = dataset.schema
         dataset_info["base_meta"] = dataset.schema.empty_table().to_pandas()
-        self.operands[type(self)._parameters.index("_dataset_info_cache")] = (
-            dataset_info
-        )
+        self._dataset_info_cache = dataset_info
         return dataset_info
 
     @cached_property
@@ -1279,6 +1276,7 @@ class ReadParquetFSSpec(ReadParquet):
         "_partitions",
         "_series",
         "_dataset_info_cache",
+        "_pq_length_stats",
     ]
     _defaults = {
         "columns": None,
@@ -1299,6 +1297,7 @@ class ReadParquetFSSpec(ReadParquet):
         "_partitions": None,
         "_series": False,
         "_dataset_info_cache": None,
+        "_pq_length_stats": None,
     }
 
     @property
@@ -1410,9 +1409,7 @@ class ReadParquetFSSpec(ReadParquet):
         dataset_info["all_columns"] = all_columns
         dataset_info["calculate_divisions"] = self.calculate_divisions
 
-        self.operands[type(self)._parameters.index("_dataset_info_cache")] = (
-            dataset_info
-        )
+        self._dataset_info_cache - dataset_info
         return dataset_info
 
     def _filtered_task(self, name: Key, index: int) -> Task:
@@ -1480,29 +1477,27 @@ class ReadParquetFSSpec(ReadParquet):
         """Return known partition lengths using parquet statistics"""
         if not self.filters:
             self._update_length_statistics()
-            return tuple(  # type: ignore
+            return tuple(
                 length
-                for i, length in enumerate(self._pq_length_stats)  # type: ignore
+                for i, length in enumerate(self._pq_length_stats)
                 if not self._filtered or i in self._partitions
             )
         return None
 
-    def _update_length_statistics(self):
+    @cached_property
+    def _pq_length_stats(self):
         """Ensure that partition-length statistics are up to date"""
 
-        if not self._pq_length_stats:
-            if self._plan["statistics"]:
-                # Already have statistics from original API call
-                self._pq_length_stats = tuple(
-                    stat["num-rows"]
-                    for i, stat in enumerate(self._plan["statistics"])
-                    if not self._filtered or i in self._partitions
-                )
-            else:
-                # Need to go back and collect statistics
-                self._pq_length_stats = tuple(
-                    stat["num-rows"] for stat in _collect_pq_statistics(self)
-                )
+        if self._plan["statistics"]:
+            # Already have statistics from original API call
+            return tuple(
+                stat["num-rows"]
+                for i, stat in enumerate(self._plan["statistics"])
+                if not self._filtered or i in self._partitions
+            )
+        else:
+            # Need to go back and collect statistics
+            return tuple(stat["num-rows"] for stat in _collect_pq_statistics(self))
 
 
 #

@@ -164,6 +164,19 @@ class Expr:
                     cache[expr._name] = result[-1]
             return max(result)
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in ["operands", "_determ_token"]:
+            object.__setattr__(self, name, value)
+            return
+        try:
+            params = object.__getattribute__(type(self), "_parameters")
+            operands = object.__getattribute__(self, "operands")
+            operands[params.index(name)] = value
+        except ValueError:
+            raise AttributeError(
+                f"{type(self).__name__} object has no attribute {name}"
+            )
+
     def operand(self, key):
         # Access an operand unambiguously
         # (e.g. if the key is reserved by a method/property)

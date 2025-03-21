@@ -398,6 +398,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         "pyarrow_strings_enabled",
         "_partitions",
         "_series",
+        "_pd_length_stats",
     ]
     _defaults = {
         "npartitions": None,
@@ -407,8 +408,9 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         "_series": False,
         "chunksize": None,
         "pyarrow_strings_enabled": True,
+        "_pd_length_stats": None,
     }
-    _pd_length_stats = None
+    _pd_length_stats: tuple | None
     _absorb_projections = True
 
     @functools.cached_property
@@ -538,8 +540,14 @@ class FromPandasDivisions(FromPandas):
         "pyarrow_strings_enabled",
         "_partitions",
         "_series",
+        "_pd_length_stats",
     ]
-    _defaults = {"columns": None, "_partitions": None, "_series": False}
+    _defaults = {
+        "columns": None,
+        "_partitions": None,
+        "_series": False,
+        "_pd_length_stats": None,
+    }
     sort = True
 
     @functools.cached_property
