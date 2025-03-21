@@ -1181,19 +1181,21 @@ class SetPartition(SetIndex):
             drop, set_name = True, "_index"
         else:
             drop, set_name = self.drop, self.other._meta.name
-        kwargs = {
-            "other": self.other._name,
-            "partitions": self._npartitions_input,
-            "ascending": self.ascending,
-            "upsample": self.upsample,
-        }
+        lru_key = (
+            self.other._name,
+            self._npartitions_input,
+            self.ascending,
+            128e6,
+            self.upsample,
+        )
+        computed_divisions = divisions_lru.get(lru_key)
         index_set = _SetIndexPost(
             shuffled,
             self.other._meta.name,
             drop,
             set_name,
             self.frame._meta.columns.dtype,
-            kwargs,
+            computed_divisions,
             self.user_divisions,
         )
         return SortIndexBlockwise(index_set)
@@ -1217,7 +1219,7 @@ class _SetIndexPost(Blockwise):
         "drop",
         "set_name",
         "column_dtype",
-        "key_kwargs",
+        "computed_divisions",
         "user_divisions",
     ]
     _is_length_preserving = True
@@ -1253,16 +1255,8 @@ class _SetIndexPost(Blockwise):
     def _divisions(self):
         if self.operand("user_divisions") is not None:
             return self._get_culled_divisions(self.operand("user_divisions"))
-        kwargs = self.key_kwargs
-        key = (
-            kwargs["other"],
-            kwargs["partitions"],
-            kwargs["ascending"],
-            128e6,
-            kwargs["upsample"],
-        )
-        assert key in divisions_lru
-        return self._get_culled_divisions(divisions_lru[key][0])
+        assert self.computed_divisions is not None
+        return self._get_culled_divisions(self.computed_divisions[0])
 
 
 class SortIndexBlockwise(Blockwise):
