@@ -59,6 +59,74 @@ is automatically enabled when ``allow_rechunk=True`` is set.
           :align: center
           :alt: Individual chunks are now roughly the same size
 
+.. dropdown:: Additional changes
+
+  - Fix dataset info cache assignment (:pr:`11840`) `Florian Jetter`_
+  - Expr ``setattr`` (:pr:`11836`) `Florian Jetter`_
+  - Follow up to expression tokenization caching (:pr:`11837`) `Florian Jetter`_
+  - Consolidate ``getattr`` for expr classes (:pr:`11835`) `Florian Jetter`_
+  - Reduce pickle size of ``ReadParquet`` expression (:pr:`11797`) `Florian Jetter`_
+  - ``arange`` loses precision on ``~2**63`` (:pr:`11801`) `Guido Imperiale`_
+  - Remove ``numbagg`` from upstream build (:pr:`11821`) `Patrick Hoefler`_
+  - Dispatch to ``numbagg`` for ``nanmedian`` and ``nanquantile`` (:pr:`11817`) `Patrick Hoefler`_
+  - Make missing ``meta`` warning more ergonomic (:pr:`11814`) `Patrick Hoefler`_
+  - Remove ``name`` doc from ``from_pandas`` (:pr:`11812`) `Patrick Hoefler`_
+  - Implement an Array Scalar (:pr:`11810`) `Patrick Hoefler`_
+  - Added ``to_orc`` to DataFrame API (:pr:`11807`) `Tom Augspurger`_
+  - Implement reverse indexing for DataFrames (:pr:`11803`) `Patrick Hoefler`_
+  - Add lazy ``to_pandas_dispatch`` registration for ``cudf`` (:pr:`11799`) `Richard (Rick) Zamora`_
+  - Fix missing imports in array-expr (:pr:`11796`) `Florian Jetter`_
+  - Cache tokens on expressions and restore after pickle roundtrip (:pr:`11791`) `Florian Jetter`_
+  - Use random dashboard ports for ``LocalCluster`` in distributed tests (:pr:`11795`) `Florian Jetter`_
+  - Implement slicing for array-expr (:pr:`11783`) `Patrick Hoefler`_
+  - Never use an asynchronous ``Client`` when calling top level compute function (:pr:`11790`) `Florian Jetter`_
+  - Refactor import tests (:pr:`11794`) `Florian Jetter`_
+  - Migrate ``base.unpack_collections`` to ``Task`` class (:pr:`11793`) `Florian Jetter`_
+  - Ensure ``map_blocks`` generates unique tokens (:pr:`11792`) `Florian Jetter`_
+  - Speed up ``normalize_pickle`` by 50 percent (:pr:`11788`) `Florian Jetter`_
+  - Fix divisions calculation with duplicates (:pr:`11787`) `Patrick Hoefler`_
+  - Fix assign align for duplicated divisions (:pr:`11786`) `Patrick Hoefler`_
+  - Ensure concat optimize project does not raise (:pr:`11784`) `Florian Jetter`_
+  - Add array-expr from_array (:pr:`11772`) `Patrick Hoefler`_
+  - Keep chunksizes consistent in ``apply_gufunc`` (:pr:`11683`) `Patrick Hoefler`_
+  - Test ``dask.dataframe.__all__`` (:pr:`11782`) `Philipp A.`_
+  - Add ``__all__`` to ``dask.bag`` (:pr:`11781`) `Philipp A.`_
+  - Add test for ``dask.array.__all__`` (:pr:`11780`) `Philipp A.`_
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.7.2 to 4.7.3 (:pr:`11777`)
+  - Export ``dask.array`` members (:pr:`11779`) `Philipp A.`_
+  - Fix ``sorted_divisions_locations`` with duplicates (:pr:`11773`) `Tom Augspurger`_
+  - Fix small typo in ``best-practices.rst`` (:pr:`11775`) `Sergey Kolesnikov`_
+  - Allow unknown chunks in ``blockwise`` ``adjust_chunks`` (:pr:`11769`) `Lindsey Gray`_
+  - Fix crash in ``asarray(..., like=...)`` vs. ``scipy.sparse`` objects (:pr:`11755`) `Guido Imperiale`_
+  - Remove flaky optional dependency (:pr:`11771`) `Tom Augspurger`_
+  - Add support for scipy sparray (:pr:`11750`) `Philipp A.`_
+  - Added ``flaky`` to tests extra (:pr:`11770`) `Tom Augspurger`_
+  - Ensure divisions are plain scalars (:pr:`11767`) `Tom Augspurger`_
+  - Remove divisions code duplication (:pr:`11764`) `Florian Jetter`_
+  - Ensure divisions not diverging from ``npartitions`` in Merge (:pr:`11762`) `Florian Jetter`_
+  - Skip ``test_visualize_int_overflow`` on windows (:pr:`11761`) `Florian Jetter`_
+  - Reduce pickle size for tasks (:pr:`11687`) `Florian Jetter`_
+  - Implement ``unify_chunks`` and Rechunk (:pr:`11692`) `Patrick Hoefler`_
+  - Fix expression getitem to avoid alignment (:pr:`11760`) `Patrick Hoefler`_
+  - ``arange(..., like=x)`` embeds the graph of x (:pr:`11754`) `Guido Imperiale`_
+  - Simplify ``assert_divisions`` (:pr:`11745`) `Florian Jetter`_
+  - Fix Projection logic for Series objects (:pr:`11747`) `Patrick Hoefler`_
+  - Remove bytes as keys (:pr:`11757`) `Florian Jetter`_
+  - Ensure ``map_partitions`` returns Series object if function returns scalar (:pr:`11756`) `Florian Jetter`_
+  - Don't upload env twice (:pr:`11748`) `Patrick Hoefler`_
+
+  - Fix badges in readme (:pr-distributed:`9029`) `Florian Jetter`_
+  - Properly forward cancellation reason (:pr-distributed:`9028`) `Florian Jetter`_
+  - Fix ``bokeh`` circle (:pr-distributed:`9026`) `Florian Jetter`_
+  - Ensure ``FileInfo`` can be serialized (:pr-distributed:`9025`) `Florian Jetter`_
+  - Add ipykernel to skipped modules in code sampling (:pr-distributed:`9022`) `Matthew Rocklin`_
+  - SpecCluster: add option to *not* shut down the scheduler when the cluster is closed (:pr-distributed:`9021`) `Taylor Braun-Jones`_
+  - Fix CI by using ``client.persist(collection)`` instead of ``collection.persist()`` (:pr-distributed:`9020`) `Hendrik Makait`_
+  - Add redirect from prefix root to status (:pr-distributed:`9015`) `Isaac`_
+  - Bump ``JamesIves/github-pages-deploy-action`` from 4.7.2 to 4.7.3 (:pr-distributed:`9018`)
+  - Remove bytes keys from tests (:pr-distributed:`9017`) `Jacob Tomlinson`_
+
+
 .. _v2025.2.0:
 
 2025.2.0
@@ -9325,3 +9393,7 @@ Other
 .. _`dchudz`: https://github.com/dchudz
 .. _`Guido Imperiale`: https://github.com/crusaderky
 .. _`Alexander`: https://github.com/SalikovAlex
+.. _`Philipp A.`: https://github.com/flying-sheep
+.. _`Sergey Kolesnikov`: https://github.com/SCORE1387
+.. _`Taylor Braun-Jones`: https://github.com/nocnokneo
+.. _`Isaac`: https://github.com/icykip
