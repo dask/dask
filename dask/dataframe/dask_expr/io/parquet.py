@@ -1409,7 +1409,7 @@ class ReadParquetFSSpec(ReadParquet):
         dataset_info["all_columns"] = all_columns
         dataset_info["calculate_divisions"] = self.calculate_divisions
 
-        self._dataset_info_cache - dataset_info
+        self._dataset_info_cache = dataset_info
         return dataset_info
 
     def _filtered_task(self, name: Key, index: int) -> Task:
@@ -1476,7 +1476,6 @@ class ReadParquetFSSpec(ReadParquet):
     def _get_lengths(self) -> tuple | None:
         """Return known partition lengths using parquet statistics"""
         if not self.filters:
-            self._update_length_statistics()
             return tuple(
                 length
                 for i, length in enumerate(self._pq_length_stats)
