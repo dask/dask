@@ -12,7 +12,10 @@ Highlights
 ^^^^^^^^^^
 - When computing multiple dask Expr backed collections like DataFrames, they are
   now optimized together instead of individually.
-- Graph materialization and low level optimization is now being performed on the scheduler of a distributed cluster (if available)
+- Graph materialization and low level optimization is now being performed on the
+  scheduler of a distributed cluster (if available)
+- New kwarg `force` for ``DataFrame.shuffle`` which signals the optimizer to not
+  drop the shuffle during optimization.
 
 Breaking changes
 ^^^^^^^^^^^^^^^^
@@ -29,10 +32,6 @@ Breaking changes
   level optimization immediately but instead delays until the ``Expr`` instance
   is materialized, i.e. the returned object is no longer a mapping such that
   converting it to `dict` or iterating over it is not possible any more.
-- ``DataFrame.shuffle`` now guarantees a shuffle is happening even if the
-  optimizer might be able to remove it. For example ``ddf.shuffle(on='x').size``
-  will now shuffle the data before computing the size even though the final
-  result would not actually require the shuffle.
 
 
 .. _v2025.3.0:
