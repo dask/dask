@@ -21,7 +21,7 @@ Dask can be installed with conda or pip:
    # Install with pip (full installation)
    pip install "dask[complete]"
 
-For more information and options, see the install_documentation_.
+For more information and options, see the `installation guide`_.
 
 Quick Start
 -----------
@@ -52,7 +52,7 @@ New BSD. See `License File <https://github.com/dask/dask/blob/main/LICENSE.txt>`
 
 .. _documentation: https://docs.dask.org/en/stable/
 .. _website: https://dask.org/
-.. _install_documentation: https://docs.dask.org/en/stable/install.html
+.. _`installation guide`: https://docs.dask.org/en/stable/install.html
 .. |Build Status| image:: https://github.com/dask/dask/actions/workflows/tests.yml/badge.svg
    :target: https://github.com/dask/dask/actions/workflows/tests.yml
 .. |Coverage| image:: https://codecov.io/gh/dask/dask/branch/main/graph/badge.svg
