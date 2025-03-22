@@ -3,56 +3,33 @@ Dask
 
 |Build Status| |Coverage| |Doc Status| |Discourse| |Version Status| |NumFOCUS|
 
-Dask is a flexible parallel computing library for analytics. Visit our website_ or see 
-documentation_ for more information.
-
-Dask enables parallel and distributed computing in Python, allowing you to scale the Python tools you already know and love.
+Dask is a flexible parallel computing library for analytics, enabling you to scale the Python tools you already know and love. Visit the official `website`_ or explore the `documentation`_ for more information.
 
 Installation
------------
+------------
 
-Dask can be installed with conda or pip:
-
-.. code-block:: bash
-
-   # Install with conda
-   conda install dask
-
-   # Install with pip (full installation)
-   pip install "dask[complete]"
-
-For more information and options, see the `installation guide`_.
+For detailed installation instructions, including options for conda, pip, and source installations, visit the `installation guide`_.
 
 Quick Start
 -----------
 
-.. code-block:: python
-
-   # Create a Dask DataFrame
-   import dask.dataframe as dd
-   df = dd.read_csv('my-data-*.csv')
-   
-   # Use familiar pandas-like operations
-   result = df.groupby('column').mean().compute()
-   
-   # Create a local cluster
-   from dask.distributed import LocalCluster
-   cluster = LocalCluster()
-   client = cluster.get_client()
+New to Dask? Get up and running quickly with the `10 Minutes to Dask`_ tutorial. It provides a hands-on introduction to Dask's core features and workflows.
 
 Supported Python Versions
 -------------------------
 
-Dask supports Python 3.9 to 3.12.
+For the most up-to-date information on supported Python versions, check the "Requires: Python" field on the `PyPI page`_.
 
 LICENSE
 -------
 
-New BSD. See `License File <https://github.com/dask/dask/blob/main/LICENSE.txt>`__.
+Dask is licensed under the New BSD License. For details, see the `License File <https://github.com/dask/dask/blob/main/LICENSE.txt>`__.
 
 .. _documentation: https://docs.dask.org/en/stable/
 .. _website: https://dask.org/
 .. _`installation guide`: https://docs.dask.org/en/stable/install.html
+.. _`10 Minutes to Dask`: https://docs.dask.org/en/stable/10-minutes-to-dask.html
+.. _`PyPI page`: https://pypi.org/project/dask/
 .. |Build Status| image:: https://github.com/dask/dask/actions/workflows/tests.yml/badge.svg
    :target: https://github.com/dask/dask/actions/workflows/tests.yml
 .. |Coverage| image:: https://codecov.io/gh/dask/dask/branch/main/graph/badge.svg
