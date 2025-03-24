@@ -16,7 +16,7 @@ from tlz import merge
 import dask
 import dask.bag as db
 from dask import compute
-from dask.base import collections_to_dsk
+from dask.base import collections_to_expr
 from dask.delayed import Delayed, delayed, to_task_dask
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import inc
@@ -24,6 +24,7 @@ from dask.utils_test import inc
 
 class Tuple:
     __dask_scheduler__ = staticmethod(dask.threaded.get)
+    __dask_optimize__ = None
 
     def __init__(self, dsk, keys):
         self._dask = dsk
@@ -80,7 +81,8 @@ def test_to_task_dask():
     task, dask = to_task_dask(x)
     assert task in dask
     f = dask.pop(task)
-    assert f == (tuple, ["a", "b", "c"])
+    assert f.func == tuple
+    assert f.dependencies == {"a", "b", "c"}
     assert dask == x._dask
 
 
@@ -326,16 +328,6 @@ def test_common_subexpressions():
     assert a[0].key in res.dask
     assert a.key in res.dask
     assert len(res.dask) == 3
-
-
-def test_delayed_optimize():
-    x = Delayed("b", {"a": 1, "b": (inc, "a"), "c": (inc, "b")})
-    (x2,) = dask.optimize(x)
-    # Delayed's __dask_optimize__ culls out 'c'
-    assert sorted(x2.dask.keys()) == ["a", "b"]
-    assert x2._layer != x2._key
-    # Optimize generates its own layer name, which doesn't match the key.
-    # `Delayed._rebuild` handles this.
 
 
 def test_lists():
@@ -837,14 +829,10 @@ def test_annotations_survive_optimization():
     assert len(d.dask.layers) == 1
     assert len(d.dask.layers["b"]) == 3
     assert d.dask.layers["b"].annotations == {"foo": "bar"}
-
-    # Ensure optimizing a Delayed object returns a HighLevelGraph
-    # and doesn't loose annotations
-    (d_opt,) = dask.optimize(d)
-    assert type(d_opt.dask) is HighLevelGraph
-    assert len(d_opt.dask.layers) == 1
-    assert len(d_opt.dask.layers["b"]) == 2  # c is culled
-    assert d_opt.dask.layers["b"].annotations == {"foo": "bar"}
+    optimized = collections_to_expr([d]).optimize()
+    assert optimized.__dask_annotations__() == {
+        "foo": {k: "bar" for k in optimized.__dask_graph__()}
+    }
 
 
 def test_delayed_function_attributes_forwarded():
@@ -872,12 +860,12 @@ def test_delayed_fusion():
         return i + 3
 
     obj = test3(test2(test(10)))
-    dsk = dict(collections_to_dsk([obj]))
+    dsk = collections_to_expr([obj]).__dask_graph__()
     assert len(dsk) == 3
 
     obj2 = test3(test2(test(10)))
     with dask.config.set({"optimization.fuse.delayed": True}):
-        dsk2 = dict(collections_to_dsk([obj]))
+        dsk2 = collections_to_expr([obj]).__dask_graph__()
         result = dask.compute(obj2)
     assert len(dsk2) == 2
     assert dask.compute(obj) == result

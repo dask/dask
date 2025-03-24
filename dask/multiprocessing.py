@@ -213,7 +213,9 @@ def get(
             pool = MultiprocessingPoolExecutor(pool)
         cleanup = False
 
-    # Optimize Dask
+    if hasattr(dsk, "__dask_graph__"):
+        dsk = dsk.__dask_graph__()
+
     dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     if optimize_graph:
