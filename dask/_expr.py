@@ -176,7 +176,7 @@ class Expr:
             object.__setattr__(self, name, value)
             return
         try:
-            params = object.__getattribute__(type(self), "_parameters")
+            params = type(self)._parameters
             operands = object.__getattribute__(self, "operands")
             operands[params.index(name)] = value
         except ValueError:
