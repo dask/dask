@@ -125,6 +125,10 @@ jobs:
       - name: Coverage
         uses: codecov/codecov-action@v5
 
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+
       # The environment file is created in continuous_integration/scripts/install.sh
       # and can be useful when debugging locally
       - name: Upload conda environment and test results
