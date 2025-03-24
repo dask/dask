@@ -5,6 +5,7 @@ import functools
 import numpy as np
 from pandas.core.dtypes.common import is_datetime64_any_dtype, is_timedelta64_dtype
 
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.dask_expr._expr import (
     Blockwise,
     DropnaSeries,
@@ -43,7 +44,8 @@ class DescribeNumeric(Reduction):
             percentiles = self.percentiles or [0.25, 0.5, 0.75]
         else:
             percentiles = np.array(self.percentiles)
-            percentiles = np.append(percentiles, 0.5)
+            if not PANDAS_GE_300:
+                percentiles = np.append(percentiles, 0.5)
             percentiles = np.unique(percentiles)
             percentiles = list(percentiles)
 
