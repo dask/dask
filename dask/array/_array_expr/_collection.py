@@ -3,6 +3,8 @@ from __future__ import annotations
 import operator
 import warnings
 from collections.abc import Iterable
+from functools import cached_property
+from numbers import Number
 
 import numpy as np
 import toolz
@@ -10,20 +12,37 @@ from toolz import concat, first
 
 from dask._collections import new_collection
 from dask.array import chunk
-from dask.array._array_expr._blockwise import Blockwise, Elemwise, Transpose
+from dask.array._array_expr._blockwise import Blockwise, Transpose
 from dask.array._array_expr._expr import (
     ArrayExpr,
+    BroadcastTo,
     Concatenate,
     Stack,
     unify_chunks_expr,
 )
 from dask.array._array_expr._io import FromArray, FromGraph
-from dask.array.core import T_IntOrNaN, finalize, getter_inline
+from dask.array._array_expr._slicing import slice_with_bool_dask_array
+from dask.array.chunk import getitem
+from dask.array.core import (
+    T_IntOrNaN,
+    _elemwise_handle_where,
+    _elemwise_normalize_where,
+    _enforce_dtype,
+    _should_delegate,
+    apply_infer_dtype,
+    broadcast_chunks,
+    broadcast_shapes,
+    check_if_handled_given_other,
+    finalize,
+    getter_inline,
+    is_scalar_for_elemwise,
+)
 from dask.array.dispatch import concatenate_lookup
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.utils import meta_from_array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
-from dask.utils import derived_from, is_arraylike, key_split
+from dask.utils import derived_from, funcname, is_arraylike, key_split
 
 
 class Array(DaskMethodsMixin):
@@ -106,6 +125,10 @@ class Array(DaskMethodsMixin):
     def numblocks(self):
         return self.expr.numblocks
 
+    @cached_property
+    def npartitions(self):
+        return self.expr.npartitions
+
     @property
     def size(self) -> T_IntOrNaN:
         return self.expr.size
@@ -122,9 +145,26 @@ class Array(DaskMethodsMixin):
         if isinstance(index, str) or (
             isinstance(index, list) and index and all(isinstance(i, str) for i in index)
         ):
-            # TODO(expr-soon): needs map_blocks that we don't support yet,
-            #  but implementation is trivial after we have that
-            raise NotImplementedError()
+            if isinstance(index, str):
+                dt = self.dtype[index]
+            else:
+                dt = np.dtype(
+                    {
+                        "names": index,
+                        "formats": [self.dtype.fields[name][0] for name in index],
+                        "offsets": [self.dtype.fields[name][1] for name in index],
+                        "itemsize": self.dtype.itemsize,
+                    }
+                )
+
+            if dt.shape:
+                new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
+                chunks = self.chunks + tuple((i,) for i in dt.shape)
+                return self.map_blocks(
+                    getitem, index, dtype=dt.base, chunks=chunks, new_axis=new_axis
+                )
+            else:
+                return self.map_blocks(getitem, index, dtype=dt)
 
         if not isinstance(index, tuple):
             index = (index,)
@@ -144,9 +184,7 @@ class Array(DaskMethodsMixin):
         if any(isinstance(i, Array) and i.dtype.kind in "iu" for i in index2):
             self, index2 = slice_with_int_dask_array(self, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
-            # TODO(expr-soon): This is simple but needs ravel which needs reshape,
-            # which is not simple. Trivial to add after we have reshape
-            raise NotImplementedError
+            return slice_with_bool_dask_array(self, index2)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
             return self
@@ -190,6 +228,120 @@ class Array(DaskMethodsMixin):
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
 
+    def __abs__(self):
+        return elemwise(operator.abs, self)
+
+    @check_if_handled_given_other
+    def __and__(self, other):
+        return elemwise(operator.and_, self, other)
+
+    @check_if_handled_given_other
+    def __rand__(self, other):
+        return elemwise(operator.and_, other, self)
+
+    @check_if_handled_given_other
+    def __div__(self, other):
+        return elemwise(operator.div, self, other)
+
+    @check_if_handled_given_other
+    def __rdiv__(self, other):
+        return elemwise(operator.div, other, self)
+
+    @check_if_handled_given_other
+    def __eq__(self, other):
+        return elemwise(operator.eq, self, other)
+
+    @check_if_handled_given_other
+    def __gt__(self, other):
+        return elemwise(operator.gt, self, other)
+
+    @check_if_handled_given_other
+    def __ge__(self, other):
+        return elemwise(operator.ge, self, other)
+
+    def __invert__(self):
+        return elemwise(operator.invert, self)
+
+    @check_if_handled_given_other
+    def __lshift__(self, other):
+        return elemwise(operator.lshift, self, other)
+
+    @check_if_handled_given_other
+    def __rlshift__(self, other):
+        return elemwise(operator.lshift, other, self)
+
+    @check_if_handled_given_other
+    def __lt__(self, other):
+        return elemwise(operator.lt, self, other)
+
+    @check_if_handled_given_other
+    def __le__(self, other):
+        return elemwise(operator.le, self, other)
+
+    @check_if_handled_given_other
+    def __mod__(self, other):
+        return elemwise(operator.mod, self, other)
+
+    @check_if_handled_given_other
+    def __rmod__(self, other):
+        return elemwise(operator.mod, other, self)
+
+    @check_if_handled_given_other
+    def __ne__(self, other):
+        return elemwise(operator.ne, self, other)
+
+    def __neg__(self):
+        return elemwise(operator.neg, self)
+
+    @check_if_handled_given_other
+    def __or__(self, other):
+        return elemwise(operator.or_, self, other)
+
+    def __pos__(self):
+        return self
+
+    @check_if_handled_given_other
+    def __ror__(self, other):
+        return elemwise(operator.or_, other, self)
+
+    @check_if_handled_given_other
+    def __rshift__(self, other):
+        return elemwise(operator.rshift, self, other)
+
+    @check_if_handled_given_other
+    def __rrshift__(self, other):
+        return elemwise(operator.rshift, other, self)
+
+    @check_if_handled_given_other
+    def __xor__(self, other):
+        return elemwise(operator.xor, self, other)
+
+    @check_if_handled_given_other
+    def __rxor__(self, other):
+        return elemwise(operator.xor, other, self)
+
+    @check_if_handled_given_other
+    def __matmul__(self, other):
+        # TODO(expr-soon)
+        raise NotImplementedError
+
+    @check_if_handled_given_other
+    def __rmatmul__(self, other):
+        # TODO(expr-soon)
+        raise NotImplementedError
+
+    @check_if_handled_given_other
+    def __divmod__(self, other):
+        from dask.array._array_expr._ufunc import divmod
+
+        return divmod(self, other)
+
+    @check_if_handled_given_other
+    def __rdivmod__(self, other):
+        from dask.array._array_expr._ufunc import divmod
+
+        return divmod(other, self)
+
     def __array_function__(self, func, types, args, kwargs):
         # TODO(expr-soon): Not done yet, but needed for assert_eq to identify us as an Array
         raise NotImplementedError
@@ -203,6 +355,45 @@ class Array(DaskMethodsMixin):
             axes = tuple(range(self.ndim))[::-1]
 
         return new_collection(Transpose(self, axes))
+
+    def swapaxes(self, axis1, axis2):
+        """Return a view of the array with ``axis1`` and ``axis2`` interchanged.
+
+        Refer to :func:`dask.array.swapaxes` for full documentation.
+
+        See Also
+        --------
+        dask.array.swapaxes : equivalent function
+        """
+        from dask.array._array_expr._routines import swapaxes
+
+        return swapaxes(self, axis1, axis2)
+
+    def choose(self, choices):
+        """Use an index array to construct a new array from a set of choices.
+
+        Refer to :func:`dask.array.choose` for full documentation.
+
+        See Also
+        --------
+        dask.array.choose : equivalent function
+        """
+        from dask.array._array_expr._routines import choose
+
+        return choose(self, choices)
+
+    def squeeze(self, axis=None):
+        """Remove axes of length one from array.
+
+        Refer to :func:`dask.array.squeeze` for full documentation.
+
+        See Also
+        --------
+        dask.array.squeeze : equivalent function
+        """
+        from dask.array._array_expr._routines import squeeze
+
+        return squeeze(self, axis)
 
     @property
     def T(self):
@@ -460,6 +651,118 @@ class Array(DaskMethodsMixin):
 
         return map_blocks(func, self, *args, **kwargs)
 
+    @property
+    def _elemwise(self):
+        return elemwise
+
+    @property
+    def real(self):
+        from dask.array._array_expr._ufunc import real
+
+        return real(self)
+
+    @property
+    def imag(self):
+        from dask.array._array_expr._ufunc import imag
+
+        return imag(self)
+
+    def conj(self):
+        """Complex-conjugate all elements.
+
+        Refer to :func:`dask.array.conj` for full documentation.
+
+        See Also
+        --------
+        dask.array.conj : equivalent function
+        """
+        from dask.array._array_expr._ufunc import conj
+
+        return conj(self)
+
+    def clip(self, min=None, max=None):
+        """Return an array whose values are limited to ``[min, max]``.
+        One of max or min must be given.
+
+        Refer to :func:`dask.array.clip` for full documentation.
+
+        See Also
+        --------
+        dask.array.clip : equivalent function
+        """
+        from dask.array._array_expr._ufunc import clip
+
+        return clip(self, min, max)
+
+    def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
+        out = kwargs.get("out", ())
+        for x in inputs + out:
+            if _should_delegate(self, x):
+                return NotImplemented
+
+        if method == "__call__":
+            if numpy_ufunc is np.matmul:
+                from dask.array.routines import matmul
+
+                # special case until apply_gufunc handles optional dimensions
+                return matmul(*inputs, **kwargs)
+            if numpy_ufunc.signature is not None:
+                from dask.array._array_expr._gufunc import apply_gufunc
+
+                return apply_gufunc(
+                    numpy_ufunc, numpy_ufunc.signature, *inputs, **kwargs
+                )
+            if numpy_ufunc.nout > 1:
+                from dask.array._array_expr import _ufunc as ufunc
+
+                try:
+                    da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+                except AttributeError:
+                    return NotImplemented
+                return da_ufunc(*inputs, **kwargs)
+            else:
+                return elemwise(numpy_ufunc, *inputs, **kwargs)
+        elif method == "outer":
+            from dask.array._array_expr import _ufunc as ufunc
+
+            try:
+                da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
+            except AttributeError:
+                return NotImplemented
+            return da_ufunc.outer(*inputs, **kwargs)
+        else:
+            return NotImplemented
+
+    def reshape(self, *shape, merge_chunks=True, limit=None):
+        """Reshape array to new shape
+
+        Refer to :func:`dask.array.reshape` for full documentation.
+
+        See Also
+        --------
+        dask.array.reshape : equivalent function
+        """
+        from dask.array._array_expr._reshape import reshape
+
+        if len(shape) == 1 and not isinstance(shape[0], Number):
+            shape = shape[0]
+        return reshape(self, shape, merge_chunks=merge_chunks, limit=limit)
+
+    def ravel(self):
+        """Return a flattened array.
+
+        Refer to :func:`dask.array.ravel` for full documentation.
+
+        See Also
+        --------
+        dask.array.ravel : equivalent function
+        """
+        from dask.array._array_expr._routines import ravel
+
+        return ravel(self)
+
+    flatten = ravel
+
 
 def from_graph(layer, _meta, chunks, keys, name_prefix):
     return new_collection(
@@ -485,6 +788,7 @@ def blockwise(
     align_arrays=True,
     concatenate=None,
     meta=None,
+    _nan_chunks=False,
     **kwargs,
 ):
     """Tensor operation: Generalized inner and outer products
@@ -652,6 +956,7 @@ def blockwise(
             concatenate,
             meta,
             kwargs,
+            _nan_chunks,
             *args,
         )
     )
@@ -697,16 +1002,87 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     --------
     blockwise
     """
-    if where is not True:
-        # TODO(expr-soon): Need asarray for this
-        where = True
-
     if out is not None:
-        raise NotImplementedError("elemwise does not support out=")
+        # TODO(expr-soon): out is not handled
+        raise NotImplementedError
 
+    if kwargs:
+        raise TypeError(
+            f"{op.__name__} does not take the following keyword arguments "
+            f"{sorted(kwargs)}"
+        )
+
+    where = _elemwise_normalize_where(where)
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
-    return new_collection(Elemwise(op, dtype, name, where, *args))
+    shapes = []
+    for arg in args:
+        shape = getattr(arg, "shape", ())
+        if any(is_dask_collection(x) for x in shape):
+            # Want to exclude Delayed shapes and dd.Scalar
+            shape = ()
+        shapes.append(shape)
+    if isinstance(where, Array):
+        shapes.append(where.shape)
+    if isinstance(out, Array):
+        shapes.append(out.shape)
+
+    shapes = [s if isinstance(s, Iterable) else () for s in shapes]
+    out_ndim = len(
+        broadcast_shapes(*shapes)
+    )  # Raises ValueError if dimensions mismatch
+    expr_inds = tuple(range(out_ndim))[::-1]
+
+    if dtype is not None:
+        need_enforce_dtype = True
+    else:
+        # We follow NumPy's rules for dtype promotion, which special cases
+        # scalars and 0d ndarrays (which it considers equivalent) by using
+        # their values to compute the result dtype:
+        # https://github.com/numpy/numpy/issues/6240
+        # We don't inspect the values of 0d dask arrays, because these could
+        # hold potentially very expensive calculations. Instead, we treat
+        # them just like other arrays, and if necessary cast the result of op
+        # to match.
+        vals = [
+            (
+                np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
+                if not is_scalar_for_elemwise(a)
+                else a
+            )
+            for a in args
+        ]
+        try:
+            dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
+        except Exception:
+            return NotImplemented
+        need_enforce_dtype = any(
+            not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
+        )
+
+    blockwise_kwargs = dict(dtype=dtype, name=name, prefix=funcname(op).strip("_"))
+
+    if where is not True:
+        blockwise_kwargs["elemwise_where_function"] = op
+        op = _elemwise_handle_where
+        args.extend([where, out])
+
+    if need_enforce_dtype:
+        blockwise_kwargs["enforce_dtype"] = dtype
+        blockwise_kwargs["enforce_dtype_function"] = op
+        op = _enforce_dtype
+
+    result = blockwise(
+        op,
+        expr_inds,
+        *concat(
+            (a, tuple(range(a.ndim)[::-1]) if not is_scalar_for_elemwise(a) else None)
+            for a in args
+        ),
+        **blockwise_kwargs,
+    )
+
+    return result
 
 
 def rechunk(
@@ -790,6 +1166,7 @@ def from_array(
     getitem=None,
     meta=None,
     inline_array=False,
+    name=None,
 ):
     """Create dask array from something that looks like an array.
 
@@ -1357,3 +1734,66 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     uc_args = list(concat((s, i) for s, i in zip(seq_tmp, inds)))
     _, seq2, _ = unify_chunks_expr(*uc_args)
     return new_collection(Concatenate(seq2[0], axis, meta, *seq2[1:]))
+
+
+def broadcast_to(x, shape, chunks=None, meta=None):
+    """Broadcast an array to a new shape.
+
+    Parameters
+    ----------
+    x : array_like
+        The array to broadcast.
+    shape : tuple
+        The shape of the desired array.
+    chunks : tuple, optional
+        If provided, then the result will use these chunks instead of the same
+        chunks as the source array. Setting chunks explicitly as part of
+        broadcast_to is more efficient than rechunking afterwards. Chunks are
+        only allowed to differ from the original shape along dimensions that
+        are new on the result or have size 1 the input array.
+    meta : empty ndarray
+        empty ndarray created with same NumPy backend, ndim and dtype as the
+        Dask Array being created (overrides dtype)
+
+    Returns
+    -------
+    broadcast : dask array
+
+    See Also
+    --------
+    :func:`numpy.broadcast_to`
+    """
+    x = asarray(x)
+    shape = tuple(shape)
+
+    if meta is None:
+        meta = meta_from_array(x)
+
+    if x.shape == shape and (chunks is None or chunks == x.chunks):
+        return x
+
+    return new_collection(BroadcastTo(x, shape, chunks))
+
+
+@derived_from(np)
+def broadcast_arrays(*args, subok=False):
+    subok = bool(subok)
+
+    to_array = asanyarray if subok else asarray
+    args = tuple(to_array(e).expr for e in args)
+
+    # Unify uneven chunking
+    inds = [list(reversed(range(x.ndim))) for x in args]
+    uc_args = concat(zip(args, inds))
+    _, args, _ = unify_chunks_expr(*uc_args)
+    args = list(map(new_collection, args))
+
+    shape = broadcast_shapes(*(e.shape for e in args))
+    chunks = broadcast_chunks(*(e.chunks for e in args))
+
+    if NUMPY_GE_200:
+        result = tuple(broadcast_to(e, shape=shape, chunks=chunks) for e in args)
+    else:
+        result = [broadcast_to(e, shape=shape, chunks=chunks) for e in args]
+
+    return result
