@@ -210,9 +210,8 @@ def normalize_object(o):
         return _normalize_pickle(o)
     except Exception:
         _maybe_raise_nondeterministic(
-            f"Object {o!r} cannot be deterministically hashed. See "
-            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
-            "for more information."
+            f"Object {o!r} cannot be deterministically hashed. This likely "
+            "indicates that the object cannot be serialized deterministically."
         )
         return uuid.uuid4().hex
 

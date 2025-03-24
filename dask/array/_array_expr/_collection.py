@@ -51,6 +51,7 @@ class Array(DaskMethodsMixin):
         return from_graph, (
             state._meta,
             state.chunks,
+            # FIXME: This is using keys of the unoptimized graph
             list(flatten(state.__dask_keys__())),
             key_split(state._name),
         )

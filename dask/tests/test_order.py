@@ -9,7 +9,7 @@ from packaging.version import Version
 import dask
 from dask import delayed
 from dask._compatibility import WINDOWS
-from dask.base import collections_to_dsk, key_split, visualize_dsk
+from dask.base import collections_to_expr, key_split, visualize_dsk
 from dask.core import get_deps
 from dask.order import _connecting_to_roots, diagnostics, ndependencies, order
 from dask.utils_test import add, inc
@@ -36,7 +36,9 @@ def visualize(dsk, suffix="", **kwargs):
     measure used."""
     funcname = inspect.stack()[1][3] + suffix
     if hasattr(dsk, "__dask_graph__"):
-        dsk = collections_to_dsk([dsk], optimize_graph=True)
+        dsk = (
+            collections_to_expr([dsk], optimize_graph=True).optimize().__dask_graph__()
+        )
 
     node_attrs = {"penwidth": "6"}
     visualize_dsk(dsk, filename=f"{funcname}.pdf", node_attr=node_attrs, **kwargs)
@@ -1413,9 +1415,13 @@ def test_array_vs_dataframe(optimize):
     quad = ds**2
     quad["uv"] = ds.anom_u * ds.anom_v
     mean = quad.mean("time")
-    diag_array = diagnostics(collections_to_dsk([mean], optimize_graph=optimize))
+    diag_array = diagnostics(
+        collections_to_expr([mean], optimize_graph=optimize).optimize().__dask_graph__()
+    )
     diag_df = diagnostics(
-        collections_to_dsk([mean.to_dask_dataframe()], optimize_graph=optimize)
+        collections_to_expr([mean.to_dask_dataframe()], optimize_graph=optimize)
+        .optimize()
+        .__dask_graph__()
     )
     assert max(diag_df[1]) == 15
     assert max(diag_array[1]) == 38
@@ -1440,8 +1446,8 @@ def test_anom_mean():
     clim = arr.groupby("day").mean(dim="time")
     anom = arr.groupby("day") - clim
     anom_mean = anom.mean(dim="time")
-    graph = collections_to_dsk([anom_mean])
-    dependencies, dependents = get_deps(graph)
+    graph = collections_to_expr([anom_mean]).optimize().__dask_graph__()
+    _, dependents = get_deps(graph)
     diags, pressure = diagnostics(graph)
     # Encoding the "best" ordering for this graph is tricky. When inspecting the
     # visualization, one sees that there are small, connected tree-like steps at
@@ -2019,9 +2025,17 @@ def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reduce
 
     if keep_self:
         # Keeping self adds a layer that cannot be fused
-        dsk = collections_to_dsk([x, graph], optimize_graph=optimize)
+        dsk = (
+            collections_to_expr([x, graph], optimize_graph=optimize)
+            .optimize()
+            .__dask_graph__()
+        )
     else:
-        dsk = collections_to_dsk([graph], optimize_graph=optimize)
+        dsk = (
+            collections_to_expr([graph], optimize_graph=optimize)
+            .optimize()
+            .__dask_graph__()
+        )
     dependencies, dependents = get_deps(dsk)
     # Verify assumptions
     before = len(dsk)

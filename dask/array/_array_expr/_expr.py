@@ -10,7 +10,7 @@ import numpy as np
 import toolz
 from tlz import accumulate
 
-from dask._expr import Expr
+from dask._expr import Expr, FinalizeCompute
 from dask._task_spec import List, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
@@ -130,6 +130,9 @@ class ArrayExpr(Expr):
         # Ensure that chunks are compatible
         result.chunks
         return result
+
+    def finalize_compute(self):
+        return FinalizeComputeArray(self)
 
 
 def unify_chunks_expr(*args):
@@ -267,3 +270,22 @@ class Concatenate(ArrayExpr):
         ]
 
         return dict(zip(keys, values))
+
+
+class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
+    _parameters = ["arr"]
+
+    def chunks(self):
+        return (self.arr.shape,)
+
+    def _simplify_down(self):
+        if self.arr.numblocks in ((), (1,)):
+            return self.arr
+        else:
+            from dask.array._array_expr._rechunk import Rechunk
+
+            return Rechunk(
+                self.arr,
+                tuple(-1 for _ in range(self.arr.ndim)),
+                method="tasks",
+            )

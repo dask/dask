@@ -318,6 +318,8 @@ class MaterializedLayer(Layer):
         super().__init__(
             annotations=annotations, collection_annotations=collection_annotations
         )
+        if not isinstance(mapping, Mapping):
+            raise TypeError(f"mapping must be a Mapping. Instead got {type(mapping)}")
         self.mapping = mapping
 
     def __contains__(self, k):
@@ -996,4 +998,6 @@ def _get_some_layer_name(collection) -> str:
 
 @normalize_token.register(HighLevelGraph)
 def register_highlevelgraph(hlg):
+    # Note: Layer keys are not necessarily identifying HLGs uniquely
+    # see https://github.com/dask/dask/issues/9888
     return normalize_token(list(hlg.layers.keys()))

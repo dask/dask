@@ -19,7 +19,7 @@ import dask.bag as db
 from dask.base import (
     DaskMethodsMixin,
     clone_key,
-    collections_to_dsk,
+    collections_to_expr,
     compute,
     compute_as_if_collection,
     get_collection_names,
@@ -234,6 +234,7 @@ def test_replace_name_in_keys():
 class Tuple(DaskMethodsMixin):
     __slots__ = ("_dask", "_keys")
     __dask_scheduler__ = staticmethod(dask.threaded.get)
+    __dask_optimize__ = None
 
     def __init__(self, dsk, keys):
         self._dask = dsk
@@ -463,7 +464,8 @@ def test_compute_array_dataframe():
     darr = da.from_array(arr, chunks=(5, 5)) + 1
     df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 5, 3, 3]})
     ddf = dd.from_pandas(df, npartitions=2).a + 2
-    arr_out, df_out = compute(darr, ddf)
+    with pytest.warns(UserWarning, match="mixed.*materialize"):
+        arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
     dd.utils.assert_eq(df_out, df.a + 2)
 
@@ -606,16 +608,6 @@ def inc_to_dec(dsk, keys):
     return dsk
 
 
-def test_optimizations_keyword():
-    x = dask.delayed(inc)(1)
-    assert x.compute() == 2
-
-    with dask.config.set(optimizations=[inc_to_dec]):
-        assert x.compute() == 0
-
-    assert x.compute() == 2
-
-
 def test_optimize():
     x = dask.delayed(inc)(1)
     y = dask.delayed(inc)(x)
@@ -631,18 +623,6 @@ def test_optimize():
 
     # Computationally equivalent
     assert dask.compute(x2, y2, z2) == dask.compute(x, y, z)
-
-    # Applying optimizations before compute and during compute gives
-    # same results. Shows optimizations are occurring.
-    sols = dask.compute(x, y, z, optimizations=[inc_to_dec])
-    x3, y3, z3 = optimize(x, y, z, optimizations=[inc_to_dec])
-    assert dask.compute(x3, y3, z3) == sols
-
-    # Optimize respects global optimizations as well
-    with dask.config.set(optimizations=[inc_to_dec]):
-        x4, y4, z4 = optimize(x, y, z)
-    for a, b in zip([x3, y3, z3], [x4, y4, z4]):
-        assert dict(a.dask) == dict(b.dask)
 
 
 def test_optimize_nested():
@@ -866,7 +846,8 @@ def test_optimize_None():
     y = x[:9][1:8][::2] + 1  # normally these slices would be fused
 
     def my_get(dsk, keys):
-        assert dsk == dict(y.dask)  # but they aren't
+        # but they aren't. +1 for the finalize task
+        assert len(dsk.__dask_graph__()) == len(y.dask) + 1
         return dask.get(dsk, keys)
 
     with dask.config.set(array_optimize=None, scheduler=my_get):
@@ -875,7 +856,7 @@ def test_optimize_None():
 
 def test_scheduler_keyword():
     def schedule(dsk, keys, **kwargs):
-        return [[123]]
+        return [123]
 
     named_schedulers["foo"] = schedule
 
@@ -954,9 +935,9 @@ def test_optimizations_ctd():
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     x = da.arange(2, chunks=1)[:1]
-    dsk1 = collections_to_dsk([x])
+    dsk1 = collections_to_expr([x])
     with dask.config.set({"optimizations": [lambda dsk, keys: dsk]}):
-        dsk2 = collections_to_dsk([x])
+        dsk2 = collections_to_expr([x])
     assert dsk1 == dsk2
 
 
