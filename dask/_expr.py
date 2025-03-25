@@ -141,7 +141,7 @@ class Expr:
             # to tokenize all operands.
             # Note how this differs to the implementation of
             # Expr.deterministic_token
-            self._determ_token = _tokenize_deterministic(self.operands)
+            self._determ_token = _tokenize_deterministic(type(self), *self.operands)
         return self._determ_token
 
     @staticmethod
@@ -1081,6 +1081,11 @@ class _ExprSequence(Expr):
         for op in self.operands:
             all_keys.append(op.__dask_keys__())
         return all_keys
+
+    def __repr__(self):
+        return "ExprSequence(" + ", ".join(map(repr, self.operands)) + ")"
+
+    __str__ = __repr__
 
     def finalize_compute(self):
         return _ExprSequence(
