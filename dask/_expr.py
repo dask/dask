@@ -136,7 +136,13 @@ class Expr:
         return hash(self._name)
 
     def __dask_tokenize__(self):
-        return self._name
+        if not self._determ_token:
+            # If the subclass does not implement a __dask_tokenize__ we'll want
+            # to tokenize all operands.
+            # Note how this differs to the implementation of
+            # Expr.deterministic_token
+            self._determ_token = _tokenize_deterministic(type(self), *self.operands)
+        return self._determ_token
 
     @staticmethod
     def _reconstruct(*args):
@@ -494,7 +500,9 @@ class Expr:
     @property
     def deterministic_token(self):
         if not self._determ_token:
-            self._determ_token = _tokenize_deterministic(*self.operands)
+            # Just tokenize self to fall back on __dask_tokenize__
+            # Note how this differs to the implementation of __dask_tokenize__
+            self._determ_token = self.__dask_tokenize__()
         return self._determ_token
 
     @functools.cached_property
@@ -1073,6 +1081,11 @@ class _ExprSequence(Expr):
         for op in self.operands:
             all_keys.append(op.__dask_keys__())
         return all_keys
+
+    def __repr__(self):
+        return "ExprSequence(" + ", ".join(map(repr, self.operands)) + ")"
+
+    __str__ = __repr__
 
     def finalize_compute(self):
         return _ExprSequence(

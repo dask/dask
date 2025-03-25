@@ -49,7 +49,6 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
     valid_divisions,
 )
-from dask.tokenize import normalize_token
 from dask.typing import Key, no_default
 from dask.utils import (
     M,
@@ -3110,11 +3109,6 @@ class DelayedsExpr(Expr):
     @property
     def ndim(self):
         return 0
-
-
-@normalize_token.register(Expr)
-def normalize_expression(expr):
-    return expr._name
 
 
 def is_broadcastable(dfs, s):

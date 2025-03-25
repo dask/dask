@@ -104,9 +104,6 @@ class ArrayExpr(Expr):
 
         return unwrap(key_refs)
 
-    def __dask_tokenize__(self):
-        return self._name
-
     def __hash__(self):
         return hash(self._name)
 
