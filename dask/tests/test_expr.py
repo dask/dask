@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pickle
+
 import pytest
 
 from dask._expr import Expr, HLGExpr
@@ -46,3 +48,7 @@ def test_hlgexpr():
     assert tokenize(HLGExpr(dsk)) != tokenize(HLGExpr(dsk2))
     assert tokenize(HLGExpr(dsk)) != tokenize(HLGExpr(dsk3))
     assert tokenize(HLGExpr(dsk2)) != tokenize(HLGExpr(dsk3))
+
+    # Roundtrip preserves the tokens
+    for expr in [HLGExpr(dsk), HLGExpr(dsk2), HLGExpr(dsk3)]:
+        assert tokenize(pickle.loads(pickle.dumps(expr))) == tokenize(expr)
