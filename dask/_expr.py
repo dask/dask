@@ -136,7 +136,9 @@ class Expr:
         return hash(self._name)
 
     def __dask_tokenize__(self):
-        return self._name
+        if not self._determ_token:
+            self._determ_token = _tokenize_deterministic(self.operands)
+        return self._determ_token
 
     @staticmethod
     def _reconstruct(*args):
@@ -494,7 +496,7 @@ class Expr:
     @property
     def deterministic_token(self):
         if not self._determ_token:
-            self._determ_token = _tokenize_deterministic(*self.operands)
+            self._determ_token = _tokenize_deterministic(self)
         return self._determ_token
 
     @functools.cached_property
