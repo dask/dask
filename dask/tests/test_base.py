@@ -19,7 +19,6 @@ import dask.bag as db
 from dask.base import (
     DaskMethodsMixin,
     clone_key,
-    collections_to_expr,
     compute,
     compute_as_if_collection,
     get_collection_names,
@@ -929,16 +928,6 @@ def test_num_workers_config(scheduler):
     workers = {i.worker_id for i in prof.results}
 
     assert len(workers) == num_workers
-
-
-def test_optimizations_ctd():
-    pytest.importorskip("numpy")
-    da = pytest.importorskip("dask.array")
-    x = da.arange(2, chunks=1)[:1]
-    dsk1 = collections_to_expr([x])
-    with dask.config.set({"optimizations": [lambda dsk, keys: dsk]}):
-        dsk2 = collections_to_expr([x])
-    assert dsk1 == dsk2
 
 
 def test_clone_key():
