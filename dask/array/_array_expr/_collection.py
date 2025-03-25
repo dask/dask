@@ -191,6 +191,9 @@ class Array(DaskMethodsMixin):
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
 
+    def __abs__(self):
+        return elemwise(operator.abs, self)
+
     def __array_function__(self, func, types, args, kwargs):
         # TODO(expr-soon): Not done yet, but needed for assert_eq to identify us as an Array
         raise NotImplementedError
@@ -460,6 +463,21 @@ class Array(DaskMethodsMixin):
         from dask.array._array_expr._map_blocks import map_blocks
 
         return map_blocks(func, self, *args, **kwargs)
+
+    def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
+        """Map a function over blocks of the array with some overlap
+
+        Refer to :func:`dask.array.map_overlap` for full documentation.
+
+        See Also
+        --------
+        dask.array.map_overlap : equivalent function
+        """
+        from dask.array._array_expr._overlap import map_overlap
+
+        return map_overlap(
+            func, self, depth=depth, boundary=boundary, trim=trim, **kwargs
+        )
 
 
 def from_graph(layer, _meta, chunks, keys, name_prefix):
