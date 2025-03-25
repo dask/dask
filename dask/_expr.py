@@ -502,7 +502,7 @@ class Expr:
         if not self._determ_token:
             # Just tokenize self to fall back on __dask_tokenize__
             # Note how this differs to the implementation of __dask_tokenize__
-            self._determ_token = _tokenize_deterministic(self)
+            self._determ_token = self.__dask_tokenize__()
         return self._determ_token
 
     @functools.cached_property
