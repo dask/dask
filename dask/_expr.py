@@ -137,6 +137,10 @@ class Expr:
 
     def __dask_tokenize__(self):
         if not self._determ_token:
+            # If the subclass does not implement a __dask_tokenize__ we'll want
+            # to tokenize all operands.
+            # Note how this differs to the implementation of
+            # Expr.deterministic_token
             self._determ_token = _tokenize_deterministic(self.operands)
         return self._determ_token
 
@@ -496,6 +500,8 @@ class Expr:
     @property
     def deterministic_token(self):
         if not self._determ_token:
+            # Just tokenize self to fall back on __dask_tokenize__
+            # Note how this differs to the implementation of __dask_tokenize__
             self._determ_token = _tokenize_deterministic(self)
         return self._determ_token
 
