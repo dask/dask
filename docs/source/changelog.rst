@@ -5,6 +5,35 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+Next Release
+------------
+
+Highlights
+^^^^^^^^^^
+- When computing multiple dask Expr backed collections like DataFrames, they are
+  now optimized together instead of individually.
+- Graph materialization and low level optimization is now being performed on the
+  scheduler of a distributed cluster (if available)
+- New kwarg `force` for ``DataFrame.shuffle`` which signals the optimizer to not
+  drop the shuffle during optimization.
+
+Breaking changes
+^^^^^^^^^^^^^^^^
+- Support for custom low level optimizers removed
+- Top level dask.optimize will now always trigger graph materialization.
+  Previously this was not always the case. This also causes any low level HLG
+  annotations to be dropped.
+- DataFrame and Array compute results are now always concatenated on the
+  cluster. Previously, the behavior was dependent on the API used to call
+  compute (dask.compute, DaskCollection.compute or Client.compute).
+- ``dask.base.collections_to_dsk`` has been renamed to `collections_to_expr` and
+  no longer returns a ``HighLevelGraph`` or ``dict`` object but instead
+  guarantees an ``dask._expr.Expr`` object. Further, it no longer performs low
+  level optimization immediately but instead delays until the ``Expr`` instance
+  is materialized, i.e. the returned object is no longer a mapping such that
+  converting it to `dict` or iterating over it is not possible any more.
+
+
 .. _v2025.3.0:
 
 2025.3.0
@@ -193,7 +222,7 @@ See :pr-distributed:`8991` by `Hendrik Makait`_ for more details.
 .. _v2025.1.0:
 
 2025.1.0
----------
+--------
 
 Highlights
 ^^^^^^^^^^
@@ -244,7 +273,7 @@ Improved scheduler responsiveness for large task graphs
 This release reduces the number of Python object references
 related to tracking tasks by the Dask scheduler. This increases
 scheduler responsiveness by reducing the time needed to run
-garbage collection on the scheduler. 
+garbage collection on the scheduler.
 
 See :issue:`8958`, :pr:`11608`, :pr:`11600`, :pr:`11598`,
 :pr:`11597`, and :pr-distributed:`8963` from `Hendrik Makait`_ for more details.

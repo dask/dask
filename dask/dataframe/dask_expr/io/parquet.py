@@ -72,7 +72,6 @@ def _tokenize_fileinfo(fileinfo):
         fileinfo.path,
         fileinfo.size,
         fileinfo.mtime_ns,
-        fileinfo.size,
     )
 
 
@@ -777,8 +776,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
     def _funcname(self):
         return "read_parquet"
 
-    @property
-    def deterministic_token(self):
+    def __dask_tokenize__(self):
         if not self._determ_token:
             # TODO: Is there an actual need to overwrite this?
             self._determ_token = _tokenize_deterministic(

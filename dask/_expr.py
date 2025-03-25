@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import os
+import warnings
 import weakref
 from collections import defaultdict
 from collections.abc import Generator
@@ -11,9 +12,10 @@ import toolz
 
 import dask
 from dask._task_spec import Task
+from dask.core import reverse_dict
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
-from dask.utils import funcname, import_required
+from dask.utils import ensure_dict, funcname, import_required
 
 if TYPE_CHECKING:
     # TODO import from typing (requires Python >=3.10)
@@ -73,8 +75,13 @@ class Expr:
     def _tune_up(self, parent):
         return None
 
+    def finalize_compute(self):
+        return self
+
     def _operands_for_repr(self):
-        raise NotImplementedError("Subclasses should implement this method")
+        return [
+            f"{param}={repr(op)}" for param, op in zip(self._parameters, self.operands)
+        ]
 
     def __str__(self):
         s = ", ".join(self._operands_for_repr())
@@ -99,7 +106,7 @@ class Expr:
         return header
 
     def _tree_repr_lines(self, indent=0, recursive=True):
-        raise NotImplementedError("Subclasses should implement this method")
+        return " " * indent + repr(self)
 
     def tree_repr(self):
         return os.linesep.join(self._tree_repr_lines())
@@ -129,7 +136,13 @@ class Expr:
         return hash(self._name)
 
     def __dask_tokenize__(self):
-        return self._name
+        if not self._determ_token:
+            # If the subclass does not implement a __dask_tokenize__ we'll want
+            # to tokenize all operands.
+            # Note how this differs to the implementation of
+            # Expr.deterministic_token
+            self._determ_token = _tokenize_deterministic(type(self), *self.operands)
+        return self._determ_token
 
     @staticmethod
     def _reconstruct(*args):
@@ -140,7 +153,7 @@ class Expr:
         if dask.config.get("dask-expr-no-serialize", False):
             raise RuntimeError(f"Serializing a {type(self)} object")
         return Expr._reconstruct, tuple(
-            [type(self)] + self.operands + [self.deterministic_token]
+            [type(self), *self.operands, self.deterministic_token]
         )
 
     def _depth(self, cache=None):
@@ -169,7 +182,7 @@ class Expr:
             object.__setattr__(self, name, value)
             return
         try:
-            params = object.__getattribute__(type(self), "_parameters")
+            params = type(self)._parameters
             operands = object.__getattribute__(self, "operands")
             operands[params.index(name)] = value
         except ValueError:
@@ -487,7 +500,9 @@ class Expr:
     @property
     def deterministic_token(self):
         if not self._determ_token:
-            self._determ_token = _tokenize_deterministic(*self.operands)
+            # Just tokenize self to fall back on __dask_tokenize__
+            # Note how this differs to the implementation of __dask_tokenize__
+            self._determ_token = self.__dask_tokenize__()
         return self._determ_token
 
     @functools.cached_property
@@ -497,6 +512,9 @@ class Expr:
     @property
     def _meta(self):
         raise NotImplementedError()
+
+    def __dask_annotations__(self):
+        return {}
 
     def __dask_graph__(self):
         """Traverse expression tree, collect layers"""
@@ -862,3 +880,319 @@ def optimize_until(expr: Expr, stage: OptimizerStage) -> Expr:
         return expr
 
     raise ValueError(f"Stage {stage!r} not supported.")
+
+
+class LLGExpr(Expr):
+    """Low Level Graph Expression"""
+
+    _parameters = ["dsk"]
+
+    def __dask_keys__(self):
+        return list(self.operand("dsk"))
+
+    def __dask_tokenize__(self):
+        return str(id(self))
+
+    def _layer(self) -> dict:
+        return ensure_dict(self.operand("dsk"))
+
+
+class HLGExpr(Expr):
+    _parameters = [
+        "dsk",
+        "low_level_optimizer",
+        "output_keys",
+        "postcompute",
+        "_cached_optimized",
+    ]
+    _defaults = {
+        "low_level_optimizer": None,
+        "output_keys": None,
+        "postcompute": None,
+        "_cached_optimized": None,
+    }
+
+    @staticmethod
+    def from_collection(collection, optimize_graph=True):
+        from dask.highlevelgraph import HighLevelGraph
+
+        if hasattr(collection, "dask"):
+            dsk = collection.dask.copy()
+        else:
+            dsk = collection.__dask_graph__()
+
+        # Delayed objects still ship with low level graphs as `dask` when going
+        # through optimize / persist
+        if not isinstance(dsk, HighLevelGraph):
+
+            dsk = HighLevelGraph.from_collections(
+                str(id(collection)), dsk, dependencies=()
+            )
+        if optimize_graph and not hasattr(collection, "__dask_optimize__"):
+            warnings.warn(
+                f"Collection {type(collection)} does not define a "
+                "`__dask_optimize__` method. In the future this will raise. "
+                "If no optimization is desired, please set this to `None`.",
+                PendingDeprecationWarning,
+            )
+            low_level_optimizer = None
+        else:
+            low_level_optimizer = (
+                collection.__dask_optimize__ if optimize_graph else None
+            )
+        return HLGExpr(
+            dsk=dsk,
+            low_level_optimizer=low_level_optimizer,
+            output_keys=collection.__dask_keys__(),
+            postcompute=collection.__dask_postcompute__,
+        )
+
+    def finalize_compute(self):
+        return HLGFinalizeCompute(self)
+
+    def __dask_annotations__(self) -> dict[str, dict[Key, object]]:
+        # optimization has to be called (and cached) since blockwise fusion can
+        # alter annotations
+        # see `dask.blockwise.(_fuse_annotations|_can_fuse_annotations)`
+        dsk = self._optimized_dsk()
+        if isinstance(dsk, dict):
+            dsk = self.dsk
+        annotations_by_type: defaultdict[str, dict[Key, object]] = defaultdict(dict)
+        for layer in dsk.layers.values():
+            if layer.annotations:
+                annot = layer.annotations
+                for annot_type, value in annot.items():
+                    annotations_by_type[annot_type].update(
+                        {k: (value(k) if callable(value) else value) for k in layer}
+                    )
+        return dict(annotations_by_type)
+
+    def __dask_keys__(self):
+        if keys := self.operand("output_keys"):
+            return keys
+        dsk = self.operand("dsk")
+        # Note: This will materialize
+        dependencies = dsk.get_all_dependencies()
+        dependents = reverse_dict(dependencies)
+        keys = [d for d in dependents if not dependents[d] and d in dsk]
+        self.output_keys = keys
+        return keys
+
+    def __dask_tokenize__(self):
+        # There is currently not way to hash a HighLevelGraph fast and reliably.
+        # It is important for dask-expr for this to not be duplicated so we'll
+        # just use the ID.
+        return str(id(self))
+
+    def _optimized_dsk(self):
+        if self._cached_optimized:
+            return self._cached_optimized
+        keys = self.output_keys
+        optimizer = self.low_level_optimizer
+        if keys is None and optimizer is not None:
+            keys = self.__dask_keys__()
+        dsk = self.dsk
+        if (optimizer := self.low_level_optimizer) is not None:
+            dsk = optimizer(dsk, keys)
+        self._cached_optimized = dsk
+        return dsk
+
+    def _layer(self) -> dict:
+        dsk = self._optimized_dsk()
+        return ensure_dict(dsk)
+
+
+class _HLGExprSequence(Expr):
+
+    def __getitem__(self, other):
+        return self.operands[other]
+
+    def _operands_for_repr(self):
+        return [
+            f"name={self.operand('name')!r}",
+            f"dsk={self.operand('dsk')!r}",
+        ]
+
+    def _tree_repr_lines(self, indent=0, recursive=True):
+        return self._operands_for_repr()
+
+    def finalize_compute(self):
+        return HLGFinalizeCompute(self)
+
+    def __dask_graph__(self):
+        # This class has to override this and not just _layer to ensure the HLGs
+        # are not optimized individually
+        from dask.highlevelgraph import HighLevelGraph
+
+        groups = toolz.groupby(
+            lambda x: x.low_level_optimizer if isinstance(x, HLGExpr) else None,
+            self.operands,
+        )
+        outer_graphs = []
+        for optimizer, group in groups.items():
+            graphs = []
+            for hlg in group:
+                if isinstance(hlg, HLGExpr):
+                    graphs.append(hlg.dsk)
+                else:
+                    # FinalizeCompute
+                    graphs.append(hlg._layer())
+
+            dsk = HighLevelGraph.merge(*graphs)
+            keys = [v.__dask_keys__() for v in group]
+            if optimizer is not None:
+                dsk = optimizer(dsk, keys)
+            outer_graphs.append(dsk)
+
+        dsk = HighLevelGraph.merge(*outer_graphs)
+        return ensure_dict(dsk)
+
+    _layer = __dask_graph__
+
+    def __dask_annotations__(self):
+        annotations_by_type = {}
+        for hlg in self.operands:
+            for k, v in hlg.__dask_annotations__().items():
+                annotations_by_type.setdefault(k, {}).update(v)
+        return annotations_by_type
+
+    def __dask_keys__(self) -> list:
+        all_keys = []
+        for op in self.operands:
+            all_keys.append(op.__dask_keys__())
+        return all_keys
+
+
+class _ExprSequence(Expr):
+    """A sequence of expressions
+
+    This is used to be able to optimize multiple collections combined, e.g. when
+    being computed simultaneously with ``dask.compute((Expr1, Expr2))``.
+    """
+
+    def __getitem__(self, other):
+        return self.operands[other]
+
+    def _layer(self) -> dict:
+        return toolz.merge(op._layer() for op in self.operands)
+
+    def __dask_keys__(self) -> list:
+        all_keys = []
+        for op in self.operands:
+            all_keys.append(op.__dask_keys__())
+        return all_keys
+
+    def __repr__(self):
+        return "ExprSequence(" + ", ".join(map(repr, self.operands)) + ")"
+
+    __str__ = __repr__
+
+    def finalize_compute(self):
+        return _ExprSequence(
+            *(op.finalize_compute() for op in self.operands),
+        )
+
+    def __dask_annotations__(self):
+        annotations_by_type = {}
+        for op in self.operands:
+            for k, v in op.__dask_annotations__().items():
+                annotations_by_type.setdefault(k, {}).update(v)
+        return annotations_by_type
+
+    def __len__(self):
+        return len(self.operands)
+
+    def __iter__(self):
+        return iter(self.operands)
+
+    def _simplify_down(self):
+        from dask.highlevelgraph import HighLevelGraph
+
+        issue_warning = False
+        hlgs = []
+        for op in self.operands:
+            if isinstance(op, (HLGExpr, HLGFinalizeCompute)):
+                hlgs.append(op)
+            elif isinstance(op, dict):
+                hlgs.append(
+                    HLGExpr(
+                        dsk=HighLevelGraph.from_collections(
+                            str(id(op)), op, dependencies=()
+                        )
+                    )
+                )
+            elif hlgs:
+                issue_warning = True
+                opt = op.optimize()
+                hlgs.append(
+                    HLGExpr(
+                        dsk=HighLevelGraph.from_collections(
+                            opt._name, opt.__dask_graph__(), dependencies=()
+                        )
+                    )
+                )
+        if issue_warning:
+            warnings.warn(
+                "Computing mixed collections that are backed by "
+                "HighlevelGraphs/dicts and Expressions. "
+                "This forces Expressions to be materialized. "
+                "It is recommended to use only one type and separate the dask."
+                "compute calls if necessary.",
+                UserWarning,
+            )
+        if not hlgs:
+            return None
+        return _HLGExprSequence(*hlgs)
+
+
+class FinalizeCompute(Expr):
+    _parameters = ["expr"]
+
+    def _simplify_down(self):
+        return self.expr.finalize_compute()
+
+
+def _convert_dask_keys(keys):
+    from dask._task_spec import List, TaskRef
+
+    assert isinstance(keys, list)
+    new_keys = []
+    for key in keys:
+        if isinstance(key, list):
+            new_keys.append(_convert_dask_keys(key))
+        else:
+            new_keys.append(TaskRef(key))
+    return List(*new_keys)
+
+
+class HLGFinalizeCompute(Expr):
+    _parameters = ["dsk"]
+
+    def __dask_annotations__(self):
+        return self.dsk.__dask_annotations__()
+
+    def _simplify_down(self):
+        from dask.delayed import Delayed
+
+        # Skip finalization for Delayed
+        if self.dsk.postcompute() == Delayed.__dask_postcompute__(self.dsk):
+            return self.dsk
+        return self
+
+    @property
+    def _name(self):
+        return f"finalize-{self.deterministic_token}"
+
+    def _layer(self) -> dict:
+        expr = self.operand("dsk")
+        dsk = expr._layer().copy()
+
+        func, extra_args = expr.postcompute()
+        keys = expr.__dask_keys__()
+
+        t = Task(self._name, func, _convert_dask_keys(keys), *extra_args)
+        dsk[t.key] = t
+        return dsk
+
+    def __dask_keys__(self):
+        return [self._name]
