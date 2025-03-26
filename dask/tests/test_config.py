@@ -13,6 +13,7 @@ import yaml
 
 import dask.config
 from dask.config import (
+    _get_dot_file_paths,
     _get_paths,
     canonical_name,
     collect,
@@ -676,6 +677,22 @@ def test__get_paths(monkeypatch):
         paths = _get_paths()
         assert os.path.join(prefix, "etc", "dask") in paths
         assert len(paths) == len(set(paths))
+
+
+def test__get_dot_file_paths():
+    pwd = os.path.join(os.getcwd(), ".dask")
+    parent = os.path.join(os.path.dirname(os.getcwd()), ".dask")
+
+    open(pwd, "w").close()
+    open(parent, "w").close()
+
+    assert _get_dot_file_paths() == [parent, pwd]
+
+    os.remove(parent)
+    assert _get_dot_file_paths() == [pwd]
+
+    os.remove(pwd)
+    assert not _get_dot_file_paths()
 
 
 def test_default_search_paths():
