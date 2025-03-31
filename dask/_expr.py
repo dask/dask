@@ -157,7 +157,7 @@ class Expr:
             raise RuntimeError(f"Serializing a {type(self)} object")
         cache = {}
         for k, v in type(self).__dict__.items():
-            if isinstance(v, functools.cached_property):
+            if isinstance(v, functools.cached_property) and k in self.__dict__:
                 cache[k] = getattr(self, k)
 
         return Expr._reconstruct, tuple(
