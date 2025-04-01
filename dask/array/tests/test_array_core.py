@@ -2230,9 +2230,8 @@ def test_store_regions():
         assert isinstance(v, tuple)
         assert all([isinstance(e, da.Array) for e in v])
         if st_compute:
-            # FIXME: This assert is bad
-            # assert all(not any(dask.core.get_deps(e.dask)[0].values()) for e in v)
-            pass
+            for arr in v:
+                assert_has_persisted_data(arr)
         else:
             assert (at == 0).all() and (bt[region] == 0).all()
 
