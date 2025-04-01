@@ -1295,6 +1295,7 @@ class ReadParquetFSSpec(ReadParquet):
         "kwargs": {"dtype_backend": None},
         "_partitions": None,
         "_series": False,
+        "_dataset_info_cache": None,
         "_pq_length_stats": None,
     }
 
