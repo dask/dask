@@ -45,6 +45,7 @@ class Expr:
     _parameters: list[str] = []
     _defaults: dict[str, Any] = {}
     _instances: weakref.WeakValueDictionary[str, Expr] = weakref.WeakValueDictionary()
+    _pickle_functools_cache: bool = True
 
     operands: list
 
@@ -156,9 +157,10 @@ class Expr:
         if dask.config.get("dask-expr-no-serialize", False):
             raise RuntimeError(f"Serializing a {type(self)} object")
         cache = {}
-        for k, v in type(self).__dict__.items():
-            if isinstance(v, functools.cached_property) and k in self.__dict__:
-                cache[k] = getattr(self, k)
+        if type(self)._pickle_functools_cache:
+            for k, v in type(self).__dict__.items():
+                if isinstance(v, functools.cached_property) and k in self.__dict__:
+                    cache[k] = getattr(self, k)
 
         return Expr._reconstruct, tuple(
             [type(self), *self.operands, self.deterministic_token, cache]
