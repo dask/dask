@@ -287,56 +287,56 @@ class Rolling:
         )
 
     @derived_from(pd_Rolling)
-    def cov(self):
-        return self._single_agg(RollingCov)
+    def cov(self, *args, **kwargs):
+        return self._single_agg(RollingCov, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
     def apply(self, func, *args, **kwargs):
         return self._single_agg(RollingApply, how_args=(func, *args), how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def count(self):
-        return self._single_agg(RollingCount)
+    def count(self, *args, **kwargs):
+        return self._single_agg(RollingCount, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def sum(self):
-        return self._single_agg(RollingSum)
+    def sum(self, *args, **kwargs):
+        return self._single_agg(RollingSum, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def mean(self):
-        return self._single_agg(RollingMean)
+    def mean(self, *args, **kwargs):
+        return self._single_agg(RollingMean, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def min(self):
-        return self._single_agg(RollingMin)
+    def min(self, *args, **kwargs):
+        return self._single_agg(RollingMin, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def max(self):
-        return self._single_agg(RollingMax)
+    def max(self, *args, **kwargs):
+        return self._single_agg(RollingMax, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def var(self):
-        return self._single_agg(RollingVar)
+    def var(self, *args, **kwargs):
+        return self._single_agg(RollingVar, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def std(self):
-        return self._single_agg(RollingStd)
+    def std(self, *args, **kwargs):
+        return self._single_agg(RollingStd, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def median(self):
-        return self._single_agg(RollingMedian)
+    def median(self, *args, **kwargs):
+        return self._single_agg(RollingMedian, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def quantile(self, q):
-        return self._single_agg(RollingQuantile, how_args=(q,))
+    def quantile(self, q, *args, **kwargs):
+        return self._single_agg(RollingQuantile, how_args=(q, *args), how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def skew(self):
-        return self._single_agg(RollingSkew)
+    def skew(self, *args, **kwargs):
+        return self._single_agg(RollingSkew, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
-    def kurt(self):
-        return self._single_agg(RollingKurt)
+    def kurt(self, *args, **kwargs):
+        return self._single_agg(RollingKurt, how_args=args, how_kwargs=kwargs)
 
     @derived_from(pd_Rolling)
     def agg(self, func, *args, **kwargs):
