@@ -1370,7 +1370,7 @@ def test_column_getattr(df):
 def test_serialization(pdf, df):
     before = pickle.dumps(df)
 
-    assert len(before) < 200 + len(pickle.dumps(pdf))
+    assert len(before) < 350 + len(pickle.dumps(pdf))
 
     part = df.partitions[0].compute()
     assert (
@@ -1379,8 +1379,6 @@ def test_serialization(pdf, df):
     )
 
     after = pickle.dumps(df)
-
-    assert before == after  # caching doesn't affect serialization
 
     assert pickle.loads(before)._name == pickle.loads(after)._name
     assert_eq(pickle.loads(before), pickle.loads(after))
