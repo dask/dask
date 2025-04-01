@@ -76,6 +76,7 @@ def test_pickle_cached_properties():
         expr3 = MyExprCachedProperty(foo=1, bar=3)
         with pytest.raises(RuntimeError):
             expr3.cached_property
+
         def f(expr):
             # We want the cache to be part of the pickle, i.e. this is a
             # different process such that the type is reset and the property can
