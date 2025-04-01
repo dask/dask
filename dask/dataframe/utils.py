@@ -578,7 +578,7 @@ def assert_eq(
             if np.isnan(a):
                 assert np.isnan(b)
             else:
-                assert np.allclose(a, b, **kwargs)
+                assert np.allclose(a, b)
     return True
 
 
