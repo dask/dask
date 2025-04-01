@@ -716,6 +716,7 @@ def _determine_type_mapper(
 
 
 class ReadParquet(PartitionsFiltered, BlockwiseIO):
+    _pickle_functools_cache = False
     _absorb_projections = True
     _filter_passthrough = False
 
