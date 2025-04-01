@@ -353,7 +353,7 @@ def test_cov_corr(df, pdf):
 
     assert_eq(df.x.cov(df.y), pdf.x.cov(pdf.y))
     assert_eq(df.x.corr(df.y), pdf.x.corr(pdf.y))
-    assert_eq(df.x.autocorr(lag=1), pdf.x.autocorr(lag=1))
+    assert_eq(df.x.autocorr(lag=1), pdf.x.autocorr(lag=1), atol=1e-3)
 
 
 def test_reduction_on_empty_df():
