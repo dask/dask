@@ -4609,7 +4609,7 @@ def load_store_chunk(
 A = TypeVar("A", bound=ArrayLike)
 
 
-def load_chunk(out: A, index: slice, lock: Any, region) -> A:
+def load_chunk(out: A, index: slice, lock: Any, region: slice | None) -> A:
     return load_store_chunk(
         None,
         out=out,

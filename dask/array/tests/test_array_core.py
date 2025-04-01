@@ -67,6 +67,11 @@ from dask.layers import Blockwise
 from dask.utils import SerializableLock, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, hlg_layer_topological, inc
 
+try:
+    from distributed import futures_of
+except ModuleNotFoundError:
+    futures_of = lambda *args, **kwargs: []
+
 if da._array_expr_enabled():
     pytest.skip("parametrize using unsupported functions", allow_module_level=True)
 
@@ -80,6 +85,20 @@ def skip_if_no_sparray():
         skip = Version(scipy.__version__) < Version("1.11")
 
     return pytest.mark.skipif(skip, reason="scipy<1.11 has no sparray")
+
+
+def assert_has_persisted_data(arr):
+    has_persisted_data = False
+    if futures_of(arr):
+        has_persisted_data = True
+    else:
+        for layer in arr.dask.layers.values():
+            if isinstance(layer, MaterializedLayer) and any(
+                map(lambda obj: isinstance(obj, np.ndarray), layer.mapping.values())
+            ):
+                has_persisted_data = True
+                break
+    assert has_persisted_data
 
 
 @pytest.mark.parametrize("inline_array", [True, False])
@@ -2097,13 +2116,10 @@ def test_store_delayed_target():
     # test keeping result
     for st_compute in [False, True]:
         targs.clear()
-
         st = store([a, b], [atd, btd], return_stored=True, compute=st_compute)
-        # FIXME: The old assert was bad, It asserted that there is only a single
-        # layer but I believe what it actually wanted to test is whether the
-        # result is actually stored / persisted before returning.
-        # if st_compute:
-        #     assert all(not any(dask.core.get_deps(e.dask)[0].values()) for e in st)
+        if st_compute:
+            for arr in st:
+                assert_has_persisted_data(arr)
 
         st = dask.compute(*st)
 
@@ -2180,9 +2196,8 @@ def test_store_regions():
         assert isinstance(v, tuple)
         assert all([isinstance(e, da.Array) for e in v])
         if st_compute:
-            # FIXME: This assert is bad
-            # assert all(not any(dask.core.get_deps(e.dask)[0].values()) for e in v)
-            pass
+            for arr in v:
+                assert_has_persisted_data(arr)
         else:
             assert (at == 0).all() and (bt[region] == 0).all()
 
@@ -2307,6 +2322,11 @@ class ThreadSafeStore:
         self.concurrent_uses -= 1
 
 
+class BrokenStore:
+    def __setitem__(self, key, value):
+        raise RuntimeError("Broken store")
+
+
 class CounterLock:
     def __init__(self, *args, **kwargs):
         self.lock = Lock(*args, **kwargs)
@@ -2321,6 +2341,16 @@ class CounterLock:
     def release(self, *args, **kwargs):
         self.release_count += 1
         return self.lock.release(*args, **kwargs)
+
+
+def test_store_locks_failure_lock_released():
+    d = da.ones((10, 10), chunks=(2, 2))
+
+    lock = CounterLock()
+    # Ensure same lock applies over multiple stores
+    with pytest.raises(RuntimeError):
+        store(d, BrokenStore(), lock=lock, scheduler="threads")
+    assert lock.acquire_count == lock.release_count > 0
 
 
 def test_store_locks():
