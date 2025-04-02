@@ -99,4 +99,4 @@ following organizations (listed in alphabetical order):
 
 -   `Anaconda <https://www.anaconda.com/products/professional-services>`_
 -  `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=support>`_
--   `Quansight <https://www.quansight.com/open-source-support>`_
+-   `Quansight <https://www.quansight.com/>`_
