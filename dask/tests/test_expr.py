@@ -164,10 +164,11 @@ def test_hlg_expr_sequence_finalize():
     assert "y" in dsky
     assert dsky["y"] != hlgy.layers["ylayer"]["y"]
 
-    dskyz = (
-        _ExprSequence(hlgexprz, hlgexpry).finalize_compute().optimize().__dask_graph__()
-    )
+    expryz_opt = _ExprSequence(hlgexprz, hlgexpry).finalize_compute().optimize()
+    keys_yz = expryz_opt.__dask_keys__()
+    assert len(keys_yz) == 2
 
+    dskyz = expryz_opt.__dask_graph__()
     assert isinstance(dskyz, dict)
     expected = {}
     expected.update(next(iter(hlgx.layers.values())).mapping)
@@ -191,3 +192,45 @@ def test_hlg_expr_sequence_finalize():
     # both are fusing x
     assert "x" not in dskyz2
     assert len(dskyz2) == 2
+
+
+def test_hlg_expr_sequence_nested_keys():
+    xlayer = {"xlayer": MaterializedLayer({"x": DataNode("x", 1)})}
+    xdeps = {"xlayer": set()}
+    ylayer = {"ylayer": MaterializedLayer({"y": Task("y", func, TaskRef("x"))})}
+    ylayer.update(xlayer)
+    ydeps = {"ylayer": {"xlayer"}}
+    ydeps.update(xdeps)
+    hlgy = HighLevelGraph(ylayer, dependencies=ydeps)
+    zlayer = {"zlayer": MaterializedLayer({"z": Task("z", func, TaskRef("x"))})}
+    zlayer.update(xlayer)
+    zdeps = {"zlayer": {"xlayer"}}
+
+    zdeps.update(xdeps)
+    hlgz = HighLevelGraph(zlayer, dependencies=zdeps)
+    hlgexpry = HLGExpr(
+        hlgy,
+        low_level_optimizer=optimizer,
+        output_keys=[["y"], ["x"]],
+    )
+    hlgexprz = HLGExpr(
+        hlgz,
+        low_level_optimizer=optimizer,
+        output_keys=[["z"]],
+    )
+    expr = _ExprSequence(hlgexprz, hlgexpry)
+    expected = [[["z"]], [["y"], ["x"]]]
+    assert expr.__dask_keys__() == expected
+    assert expr.optimize().__dask_keys__() == expected
+
+    # Now with a different grouping / optimizer pass. These are handled
+    # separately internalyl and we want to make sure the sequence is putting it
+    # back together properly
+    hlgexprz = HLGExpr(
+        hlgz,
+        low_level_optimizer=optimizer2,
+        output_keys=[["z"]],
+    )
+    expr = _ExprSequence(hlgexprz, hlgexpry)
+    assert expr.__dask_keys__() == expected
+    assert expr.optimize().__dask_keys__() == expected

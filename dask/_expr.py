@@ -1093,6 +1093,10 @@ class _HLGExprSequence(Expr):
 
     _layer = __dask_graph__
 
+    def _simplify_down(self):
+        if len(self.operands) == 1:
+            return self.operands[0]
+
     def __dask_annotations__(self):
         annotations_by_type = {}
         for hlg in self.operands:
