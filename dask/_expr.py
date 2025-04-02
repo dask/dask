@@ -1230,6 +1230,16 @@ class HLGFinalizeCompute(HLGExpr):
     def _name(self):
         return f"finalize-{self.deterministic_token}"
 
+    def __dask_graph__(self):
+        # The baseclass __dask_graph__ will not just materialie this layer but
+        # also that of its dependencies, i.e. it will render the finalized and
+        # the non-finalized graph and combine them. We only want the finalized
+        # so we're overriding this.
+        # This is an artifact generated since the wrapped expression is
+        # identified automatically as a dependency but HLG expressions are not
+        # working in this layered way.
+        return self._layer()
+
     @property
     def hlg(self):
         expr = self.operand("dsk")
