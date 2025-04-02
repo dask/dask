@@ -1019,6 +1019,12 @@ class HLGExpr(Expr):
         return ensure_dict(dsk)
 
 
+class _HLGExprGroup(HLGExpr):
+    # Identical to HLGExpr
+    # Used internally to determine how output keys are supposed to be returned
+    pass
+
+
 class _HLGExprSequence(Expr):
 
     def __getitem__(self, other):
@@ -1060,7 +1066,7 @@ class _HLGExprSequence(Expr):
                 dsk = HighLevelGraph.merge(*graphs)
                 keys = [v.__dask_keys__() for v in group]
                 exprs.append(
-                    HLGExpr(
+                    _HLGExprGroup(
                         dsk=dsk,
                         low_level_optimizer=optimizer,
                         output_keys=keys,
@@ -1093,10 +1099,6 @@ class _HLGExprSequence(Expr):
 
     _layer = __dask_graph__
 
-    def _simplify_down(self):
-        if len(self.operands) == 1:
-            return self.operands[0]
-
     def __dask_annotations__(self):
         annotations_by_type = {}
         for hlg in self.operands:
@@ -1107,7 +1109,11 @@ class _HLGExprSequence(Expr):
     def __dask_keys__(self) -> list:
         all_keys = []
         for op in self.operands:
-            all_keys.append(op.__dask_keys__())
+            if isinstance(op, _HLGExprGroup):
+                all_keys.extend(op.__dask_keys__())
+            else:
+                all_keys.append(op.__dask_keys__())
+        assert all_keys is not None
         return all_keys
 
 
@@ -1127,7 +1133,7 @@ class _ExprSequence(Expr):
     def __dask_keys__(self) -> list:
         all_keys = []
         for op in self.operands:
-            all_keys.append(op.__dask_keys__())
+            all_keys.append(list(op.__dask_keys__()))
         return all_keys
 
     def __repr__(self):

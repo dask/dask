@@ -60,6 +60,7 @@ class MyExprCachedProperty(Expr):
         return self.foo + self.bar
 
 
+@pytest.mark.slow()
 def test_pickle_cached_properties():
     pytest.importorskip("distributed")
     from distributed import Nanny
