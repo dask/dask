@@ -176,11 +176,15 @@ def start_state_from_dask(dsk, cache=None, sortkey=None, keys=None):
     waiting = defaultdict(set)
     waiting_data = defaultdict(set)
     ready_set = set()
-
+    seen = set()
     while stack:
         key = stack.pop()
+        if key in seen:
+            continue
+        seen.add(key)
         dependents[key]
         waiting_data[key]
+        dependencies[key]
         task = dsk.get(key, None)
         if task is None:
             continue
@@ -189,24 +193,23 @@ def start_state_from_dask(dsk, cache=None, sortkey=None, keys=None):
             dependencies[key]
             for d in dependents[key]:
                 if d in waiting:
-                    waiting[d].discard(key)
+                    waiting[d].remove(key)
                     if not waiting[d]:
                         del waiting[d]
                         ready_set.add(d)
                 else:
                     ready_set.add(d)
         else:
-            dependencies[key] = set(task.dependencies)
             _wait = task.dependencies - set(cache)
             if not _wait:
                 ready_set.add(key)
             else:
                 waiting[key] = set(_wait)
             for dep in task.dependencies:
+                dependencies[key].add(dep)
                 dependents[dep].add(key)
-                if dep not in waiting:
-                    stack.append(dep)
-                    waiting_data[dep].add(key)
+                waiting_data[dep].add(key)
+                stack.append(dep)
 
     ready = sorted(ready_set, key=sortkey, reverse=True)
 
