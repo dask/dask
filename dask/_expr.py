@@ -1006,10 +1006,8 @@ class HLGExpr(Expr):
     def _optimized_dsk(self):
         if self._cached_optimized:
             return self._cached_optimized
-        keys = self.output_keys
         optimizer = self.low_level_optimizer
-        if keys is None and optimizer is not None:
-            keys = self.__dask_keys__()
+        keys = self.__dask_keys__()
         dsk = self.hlg
         if (optimizer := self.low_level_optimizer) is not None:
             dsk = optimizer(dsk, keys)

@@ -819,7 +819,10 @@ def test_optimize_globals():
     x = da.ones(10, chunks=(5,))
 
     def optimize_double(dsk, keys):
-        return {k: (mul, 2, v) for k, v in dsk.items()}
+        return {
+            k: (mul, 2, v) if not key_split(k).startswith("finalize") else v
+            for k, v in dsk.items()
+        }
 
     from dask.array.utils import assert_eq
 
