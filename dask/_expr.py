@@ -1113,7 +1113,6 @@ class _HLGExprSequence(Expr):
                 all_keys.extend(op.__dask_keys__())
             else:
                 all_keys.append(op.__dask_keys__())
-        assert all_keys is not None
         return all_keys
 
 
