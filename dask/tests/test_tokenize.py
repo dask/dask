@@ -1485,6 +1485,7 @@ def test_tokenize_nested_sequence_thread_safe():
 
 def test_tokenize_range_index():
     np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
     a = pd.RangeIndex(0, 10)
     b = pd.RangeIndex(0, 10)
     c = pd.RangeIndex(0, 20)
