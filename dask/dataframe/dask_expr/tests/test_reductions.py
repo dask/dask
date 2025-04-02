@@ -5,6 +5,7 @@ from datetime import datetime
 import numpy as np
 import pytest
 
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.dask_expr import from_pandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
 from dask.utils import M
@@ -347,6 +348,7 @@ def test_unimplemented_on_index(func, pdf, df):
         func(df.index)
 
 
+@pytest.mark.xfail(PANDAS_GE_300, reason="https://github.com/dask/dask/issues/11858")
 def test_cov_corr(df, pdf):
     assert_eq(df.cov(), pdf.cov())
     assert_eq(df.corr(), pdf.corr())
