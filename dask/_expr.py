@@ -975,7 +975,7 @@ class HLGExpr(Expr):
         # see `dask.blockwise.(_fuse_annotations|_can_fuse_annotations)`
         dsk = self._optimized_dsk()
         if isinstance(dsk, dict):
-            dsk = self.dsk
+            dsk = self.hlg
         annotations_by_type: defaultdict[str, dict[Key, object]] = defaultdict(dict)
         for layer in dsk.layers.values():
             if layer.annotations:
