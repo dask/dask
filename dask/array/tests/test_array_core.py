@@ -5918,3 +5918,30 @@ def test_setitem_no_dtype_broadcast(idx, val):
     x = da.array([1, 2], dtype=np.int32)
     x[idx] = val
     assert_eq(x, da.array([3, 2], dtype=np.int32))
+
+
+def test_store_sources_unoptimized_nocompute():
+    """Test that two sources can be optimized and share tasks after storing."""
+    total_calls = 0
+
+    def _shared_task(arr1):
+        nonlocal total_calls
+        total_calls += 1
+        return np.stack([arr1 + 1, arr1 + 2])
+
+    start = da.zeros((2, 2), chunks=1)
+    src = da.map_blocks(
+        _shared_task,
+        start,
+        dtype=start.dtype,
+        meta=np.array((), dtype=start.dtype),
+        new_axis=[0],
+        chunks=(2,) + start.chunks,
+    )
+    target1 = np.zeros((2, 2))
+    target2 = np.zeros((2, 2))
+    with dask.config.set(scheduler="single-threaded"):
+        store_res1 = da.store(src[0], target1, compute=False)
+        store_res2 = da.store(src[1], target2, compute=False)
+        da.compute(store_res1, store_res2)
+    assert total_calls == start.blocks.size

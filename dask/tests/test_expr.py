@@ -5,7 +5,18 @@ import pickle
 
 import pytest
 
-from dask._expr import Expr
+from dask._expr import Expr, HLGExpr, _ExprSequence
+from dask._task_spec import (
+    DataNode,
+    DependenciesMapping,
+    Task,
+    TaskRef,
+    fuse_linear_task_spec,
+    resolve_aliases,
+)
+from dask.core import flatten, reverse_dict
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.utils import ensure_dict
 
 
 class MyExpr(Expr):
@@ -88,3 +99,95 @@ def test_pickle_cached_properties():
         await c.submit(f, expr)
 
     test()
+
+
+def optimizer(dsk, keys):
+    dsk = ensure_dict(dsk)
+    keys = list(flatten(keys))
+    dsk = fuse_linear_task_spec(dsk, keys)
+    return resolve_aliases(
+        dsk,
+        keys,
+        reverse_dict(DependenciesMapping(dsk)),
+    )
+
+
+def optimizer2(dsk, keys):
+    return optimizer(dsk, keys)
+
+
+def func(*args, **kwargs):
+    pass
+
+
+def test_hlg_expr_sequence_finalize():
+    hlgx = HighLevelGraph(
+        xlayer := {"xlayer": MaterializedLayer({"x": DataNode("x", 1)})},
+        dependencies=(xdeps := {"xlayer": set()}),
+    )
+    ylayer = {"ylayer": MaterializedLayer({"y": Task("y", func, TaskRef("x"))})}
+    ylayer.update(xlayer)
+    ydeps = {"ylayer": {"xlayer"}}
+    ydeps.update(xdeps)
+    hlgy = HighLevelGraph(ylayer, dependencies=ydeps)
+    zlayer = {"zlayer": MaterializedLayer({"z": Task("z", func, TaskRef("x"))})}
+    zlayer.update(xlayer)
+    zdeps = {"zlayer": {"xlayer"}}
+
+    zdeps.update(xdeps)
+    hlgz = HighLevelGraph(zlayer, dependencies=zdeps)
+    hlgexprx = HLGExpr(
+        hlgx,
+        low_level_optimizer=optimizer,
+        output_keys=["x"],
+    )
+    hlgexpry = HLGExpr(
+        hlgy,
+        low_level_optimizer=optimizer,
+        output_keys=["y"],
+    )
+    hlgexprz = HLGExpr(
+        hlgz,
+        low_level_optimizer=optimizer,
+        output_keys=["z"],
+    )
+    dskx = hlgexprx.finalize_compute().optimize().__dask_graph__()
+    assert isinstance(dskx, dict)
+    assert len(dskx) == 1
+    assert "x" in dskx
+    assert dskx["x"] is hlgy.layers["xlayer"]["x"]
+
+    dsky = hlgexpry.finalize_compute().optimize().__dask_graph__()
+    assert isinstance(dsky, dict)
+    # Linear low level fusion
+    assert len(dsky) == 1
+    assert "y" in dsky
+    assert dsky["y"] != hlgy.layers["ylayer"]["y"]
+
+    dskyz = (
+        _ExprSequence(hlgexprz, hlgexpry).finalize_compute().optimize().__dask_graph__()
+    )
+
+    assert isinstance(dskyz, dict)
+    expected = {}
+    expected.update(next(iter(hlgx.layers.values())).mapping)
+    expected.update(next(iter(hlgy.layers.values())).mapping)
+    expected.update(next(iter(hlgz.layers.values())).mapping)
+    # This is building the graph properly without fusing anything
+    assert dskyz == expected
+
+    hlgexprz_different_optimizer = HLGExpr(
+        hlgz,
+        low_level_optimizer=optimizer2,
+        output_keys=["z"],
+    )
+
+    dskyz2 = (
+        _ExprSequence(hlgexprz_different_optimizer, hlgexpry)
+        .finalize_compute()
+        .optimize()
+        .__dask_graph__()
+    )
+    # both are fusing x
+    assert "x" not in dskyz2
+    assert len(dskyz2) == 2
