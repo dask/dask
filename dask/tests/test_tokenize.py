@@ -1481,3 +1481,37 @@ def test_tokenize_nested_sequence_thread_safe():
         assert len({f.result() for f in futures}) == 1
         futures = [pool.submit(normalize_token, nested_dict) for _ in range(1000)]
         assert len({f.result() for f in futures}) == 1
+
+
+def test_tokenize_range_index():
+    np = pytest.importorskip("numpy")
+    a = pd.RangeIndex(0, 10)
+    b = pd.RangeIndex(0, 10)
+    c = pd.RangeIndex(0, 20)
+    assert check_tokenize(a) == check_tokenize(b)
+    assert check_tokenize(a) != check_tokenize(c)
+
+    d = pd.RangeIndex(0, 10, step=2)
+    e = pd.RangeIndex(0, 10, step=3)
+    assert check_tokenize(d) != check_tokenize(e)
+
+    large = pd.RangeIndex(0, 1000000)
+    array_token = normalize_token(np.zeros(10))
+    assert isinstance(array_token[0], str)
+    # hex_buffer_output_len
+    hex_hash_len = 40
+    assert len(array_token[0]) == hex_hash_len
+
+    def assert_no_hashes(tokens):
+        if isinstance(tokens, (list, tuple)):
+            for token in tokens:
+                assert_no_hashes(token)
+        elif isinstance(tokens, dict):
+            for key, value in tokens.items():
+                assert_no_hashes(key)
+                assert_no_hashes(value)
+        elif isinstance(tokens, str):
+            if len(tokens) == hex_hash_len:
+                raise AssertionError("found a hash")
+
+    assert_no_hashes(normalize_token(large))
