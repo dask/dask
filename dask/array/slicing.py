@@ -322,6 +322,9 @@ def slice_slices_and_integers(
                 f"Arrays chunk sizes are unknown: {shape}{unknown_chunk_message}"
             )
 
+    # Extract 0-dimension ndarrays
+    index = [i.item() if is_arraylike(i) and i.ndim == 0 else i for i in index]
+
     assert all(isinstance(ind, (slice, Integral)) for ind in index)
     assert len(index) == len(blockdims)
 
