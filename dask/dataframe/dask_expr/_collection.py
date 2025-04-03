@@ -749,12 +749,13 @@ Expr={expr}"""
             except TypeError:
                 pass
             if not any(is_dask_collection(v) for v in values):
-                try:
-                    values = np.fromiter(values, dtype=object)
-                except ValueError:
-                    # Numpy 1.23 supports creating arrays of iterables, while lower
-                    # version 1.21.x and 1.22.x do not
-                    pass
+                # Avoid always passing a numpy array of object dtype
+                inferred_type = pd.api.types.infer_dtype(values, skipna=False)
+                object_like = {"mixed-integer", "mixed-integer-float", "decimal", "categorical", "time", "period", "mixed", "unknown-array"}
+                if inferred_type in object_like:
+                    values = np.fromiter(values, dtype=object, count=len(values))
+                else:
+                    values = np.asarray(values)
 
         return new_collection(
             expr.Isin(
