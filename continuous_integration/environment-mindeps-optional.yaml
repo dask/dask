@@ -42,7 +42,7 @@ dependencies:
   - scikit-image=0.19.0
   - scipy=1.7.2
   - sparse=0.13.0
-  - sqlalchemy=1.4.26
+  - sqlalchemy=2.0.36
   - tblib=1.6.0
   - tiledb-py=0.12
   - zarr=2.12.0
