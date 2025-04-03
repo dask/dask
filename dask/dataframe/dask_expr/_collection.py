@@ -751,7 +751,16 @@ Expr={expr}"""
             if not any(is_dask_collection(v) for v in values):
                 # Avoid always passing a numpy array of object dtype
                 inferred_type = pd.api.types.infer_dtype(values, skipna=False)
-                object_like = {"mixed-integer", "mixed-integer-float", "decimal", "categorical", "time", "period", "mixed", "unknown-array"}
+                object_like = {
+                    "mixed-integer",
+                    "mixed-integer-float",
+                    "decimal",
+                    "categorical",
+                    "time",
+                    "period",
+                    "mixed",
+                    "unknown-array",
+                }
                 if inferred_type in object_like:
                     values = np.fromiter(values, dtype=object, count=len(values))
                 else:
