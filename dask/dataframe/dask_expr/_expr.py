@@ -64,7 +64,7 @@ from dask.utils import (
 optimize = core.optimize
 
 
-class Expr(core.Expr):
+class Expr(core.SingletonExpr):
     """Primary class for all Expressions
 
     This mostly includes Dask protocols and various Pandas-like method
