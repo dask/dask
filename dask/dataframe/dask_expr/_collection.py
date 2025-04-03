@@ -753,7 +753,6 @@ Expr={expr}"""
                 inferred_type = pd.api.types.infer_dtype(values, skipna=False)
                 object_like = {
                     "mixed-integer",
-                    "mixed-integer-float",
                     "decimal",
                     "categorical",
                     "time",
