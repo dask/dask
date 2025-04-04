@@ -1016,7 +1016,7 @@ class HLGExpr(Expr):
         leafs = set(dependencies)
         for val in dependencies.values():
             leafs -= val
-        self.output_keys = leafs
+        self.output_keys = list(leafs)
         return self.output_keys
 
     @functools.cached_property
