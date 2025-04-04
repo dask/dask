@@ -10,7 +10,7 @@ import numpy as np
 import toolz
 from tlz import accumulate
 
-from dask._expr import Expr, FinalizeCompute
+from dask._expr import FinalizeCompute, SingletonExpr
 from dask._task_spec import List, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
@@ -19,7 +19,7 @@ from dask.layers import ArrayBlockwiseDep
 from dask.utils import cached_cumsum
 
 
-class ArrayExpr(Expr):
+class ArrayExpr(SingletonExpr):
 
     def _operands_for_repr(self):
         return []

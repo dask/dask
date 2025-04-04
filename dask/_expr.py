@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import os
+import uuid
 import warnings
 import weakref
 from collections import defaultdict
@@ -44,7 +45,7 @@ def _unpack_collections(o):
 class Expr:
     _parameters: list[str] = []
     _defaults: dict[str, Any] = {}
-    _instances: weakref.WeakValueDictionary[str, Expr] = weakref.WeakValueDictionary()
+
     _pickle_functools_cache: bool = True
 
     operands: list
@@ -63,11 +64,9 @@ class Expr:
 
         inst._determ_token = _determ_token
         inst.operands = [_unpack_collections(o) for o in operands]
-        _name = inst._name
-        if _name in Expr._instances:
-            return Expr._instances[_name]
-
-        Expr._instances[_name] = inst
+        # This is typically cached. Make sure the cache is populated by calling
+        # it once
+        inst._name
         return inst
 
     def _tune_down(self):
@@ -818,6 +817,32 @@ class Expr:
             )
 
 
+class SingletonExpr(Expr):
+    """A singleton Expr class
+
+    This is used to treat the subclassed expression as a singleton. Singletons
+    are deduplicated by expr._name which is typically based on the dask.tokenize
+    output.
+
+    This is a crucial performance optimization for expressions that walk through
+    an optimizer and are recreated repeatedly but isn't safe for objects that
+    cannot be reliably or quickly tokenized.
+    """
+
+    _instances: weakref.WeakValueDictionary[str, SingletonExpr]
+
+    def __new__(cls, *args, _determ_token=None, **kwargs):
+        if not hasattr(cls, "_instances"):
+            cls._instances = weakref.WeakValueDictionary()
+        inst = super().__new__(cls, *args, _determ_token=_determ_token, **kwargs)
+        _name = inst._name
+        if _name in cls._instances:
+            return cls._instances[_name]
+
+        cls._instances[_name] = inst
+        return inst
+
+
 def collect_dependents(expr) -> defaultdict:
     dependents = defaultdict(list)
     stack = [expr]
@@ -899,9 +924,6 @@ class LLGExpr(Expr):
 
     def __dask_keys__(self):
         return list(self.operand("dsk"))
-
-    def __dask_tokenize__(self):
-        return str(id(self))
 
     def _layer(self) -> dict:
         return ensure_dict(self.operand("dsk"))
@@ -997,12 +1019,6 @@ class HLGExpr(Expr):
         self.output_keys = keys
         return keys
 
-    def __dask_tokenize__(self):
-        # There is currently not way to hash a HighLevelGraph fast and reliably.
-        # It is important for dask-expr for this to not be duplicated so we'll
-        # just use the ID.
-        return str(id(self))
-
     def _optimized_dsk(self):
         if self._cached_optimized:
             return self._cached_optimized
@@ -1013,6 +1029,12 @@ class HLGExpr(Expr):
             dsk = optimizer(dsk, keys)
         self._cached_optimized = dsk
         return dsk
+
+    @property
+    def deterministic_token(self):
+        if not self._determ_token:
+            self._determ_token = uuid.uuid4().hex
+        return self._determ_token
 
     def _layer(self) -> dict:
         dsk = self._optimized_dsk()
