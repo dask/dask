@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     # TODO import from typing (requires Python >=3.10)
     from typing import Any, TypeAlias
 
+    from dask.highlevelgraph import HighLevelGraph
+
 OptimizerStage: TypeAlias = Literal[
     "logical",
     "simplified-logical",
@@ -995,9 +997,7 @@ class HLGExpr(Expr):
         # optimization has to be called (and cached) since blockwise fusion can
         # alter annotations
         # see `dask.blockwise.(_fuse_annotations|_can_fuse_annotations)`
-        dsk = self._optimized_dsk()
-        if isinstance(dsk, dict):
-            dsk = self.hlg
+        dsk = self._optimized_dsk
         annotations_by_type: defaultdict[str, dict[Key, object]] = defaultdict(dict)
         for layer in dsk.layers.values():
             if layer.annotations:
@@ -1019,16 +1019,17 @@ class HLGExpr(Expr):
         self.output_keys = keys
         return keys
 
-    def _optimized_dsk(self):
-        if self._cached_optimized:
-            return self._cached_optimized
+    @functools.cached_property
+    def _optimized_dsk(self) -> HighLevelGraph:
+        from dask.highlevelgraph import HighLevelGraph
+
+        keys = self.output_keys
         optimizer = self.low_level_optimizer
         keys = self.__dask_keys__()
         dsk = self.hlg
         if (optimizer := self.low_level_optimizer) is not None:
             dsk = optimizer(dsk, keys)
-        self._cached_optimized = dsk
-        return dsk
+        return HighLevelGraph.merge(dsk)
 
     @property
     def deterministic_token(self):
@@ -1037,7 +1038,7 @@ class HLGExpr(Expr):
         return self._determ_token
 
     def _layer(self) -> dict:
-        dsk = self._optimized_dsk()
+        dsk = self._optimized_dsk
         return ensure_dict(dsk)
 
 
@@ -1101,9 +1102,8 @@ class _HLGExprSequence(Expr):
             return None
         return _HLGExprSequence(*exprs)
 
-    def __dask_graph__(self) -> dict:
-        # This class has to override this and not just _layer to ensure the HLGs
-        # are not optimized individually
+    @functools.cached_property
+    def _optimized_dsk(self) -> HighLevelGraph:
         from dask.highlevelgraph import HighLevelGraph
 
         hlgexpr: HLGExpr
@@ -1116,17 +1116,29 @@ class _HLGExprSequence(Expr):
                 dsk = optimizer(dsk, keys)
             graphs.append(dsk)
 
-        dsk = HighLevelGraph.merge(*graphs)
-        return ensure_dict(dsk)
+        return HighLevelGraph.merge(*graphs)
+
+    def __dask_graph__(self):
+        # This class has to override this and not just _layer to ensure the HLGs
+        # are not optimized individually
+        return ensure_dict(self._optimized_dsk)
 
     _layer = __dask_graph__
 
-    def __dask_annotations__(self):
-        annotations_by_type = {}
-        for hlg in self.operands:
-            for k, v in hlg.__dask_annotations__().items():
-                annotations_by_type.setdefault(k, {}).update(v)
-        return annotations_by_type
+    def __dask_annotations__(self) -> dict[str, dict[Key, object]]:
+        # optimization has to be called (and cached) since blockwise fusion can
+        # alter annotations
+        # see `dask.blockwise.(_fuse_annotations|_can_fuse_annotations)`
+        dsk = self._optimized_dsk
+        annotations_by_type: defaultdict[str, dict[Key, object]] = defaultdict(dict)
+        for layer in dsk.layers.values():
+            if layer.annotations:
+                annot = layer.annotations
+                for annot_type, value in annot.items():
+                    annotations_by_type[annot_type].update(
+                        {k: (value(k) if callable(value) else value) for k in layer}
+                    )
+        return dict(annotations_by_type)
 
     def __dask_keys__(self) -> list:
         all_keys = []
