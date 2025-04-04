@@ -231,3 +231,78 @@ def test_hlg_expr_sequence_nested_keys():
     expr = _ExprSequence(hlgexprz, hlgexpry)
     assert expr.__dask_keys__() == expected
     assert expr.optimize().__dask_keys__() == expected
+
+
+def optimizer_with_annotations(dsk, keys):
+    annots = {}
+    for layer in dsk.layers.values():
+        if layer.annotations:
+            annots.update(layer.annotations)
+    out = optimizer(dsk, keys)
+    out = {f"{key}-optimized": val for key, val in out.items()}
+    return HighLevelGraph(
+        layers={"fused": MaterializedLayer(out, annotations=annots)},
+        dependencies={"fused": set()},
+    )
+
+
+def test_hlg_sequence_uses_annotations_of_optimized_dsk():
+    """
+    There was an issue where generating annotations would fall back to the HLG
+    objects that were not optimized in combination.
+    """
+    xlayer = {
+        "xlayer": MaterializedLayer({"x": DataNode("x", 1)}, annotations={"foo": 1})
+    }
+    xdeps = {"xlayer": set()}
+    ylayer = {"ylayer": MaterializedLayer({"y": Task("y", func, TaskRef("x"))})}
+    ylayer.update(xlayer)
+    ydeps = {"ylayer": {"xlayer"}}
+    ydeps.update(xdeps)
+    hlgy = HighLevelGraph(ylayer, dependencies=ydeps)
+    zlayer = {"zlayer": MaterializedLayer({"z": Task("z", func, TaskRef("x"))})}
+    zlayer.update(xlayer)
+    zdeps = {"zlayer": {"xlayer"}}
+
+    zdeps.update(xdeps)
+    hlgz = HighLevelGraph(zlayer, dependencies=zdeps)
+    hlgexpry = HLGExpr(
+        hlgy,
+        output_keys=[["y"], ["x"]],
+    )
+    hlgexprz = HLGExpr(
+        hlgz,
+        output_keys=[["z"]],
+    )
+    expr = _ExprSequence(hlgexprz, hlgexpry)
+
+    expected = {"foo": {"x": 1}}
+    assert hlgexprz.__dask_annotations__() == expected
+    assert hlgexprz.optimize().__dask_annotations__() == expected
+    assert expr.__dask_annotations__() == expected
+    assert expr.optimize().__dask_annotations__() == expected
+
+    def only_optimize_with_z(dsk, keys):
+        if "z" not in list(flatten(keys)):
+            raise RuntimeError("Don't optimize me")
+        return optimizer_with_annotations(dsk, keys)
+
+    hlgexpry = HLGExpr(
+        hlgy,
+        low_level_optimizer=only_optimize_with_z,
+        output_keys=[["y"], ["x"]],
+    )
+    hlgexprz = HLGExpr(
+        hlgz,
+        low_level_optimizer=only_optimize_with_z,
+        output_keys=[["z"]],
+    )
+    expr = _ExprSequence(hlgexprz, hlgexpry)
+
+    expected = {"foo": {"z-optimized": 1}}
+    assert hlgexprz.__dask_annotations__() == expected
+    assert hlgexprz.optimize().__dask_annotations__() == expected
+    expected = {"foo": {f"{key}-optimized": 1 for key in list("xyz")}}
+    with pytest.raises(RuntimeError, match="Don't optimize me"):
+        expr.__dask_annotations__()
+    assert expr.optimize().__dask_annotations__() == expected
