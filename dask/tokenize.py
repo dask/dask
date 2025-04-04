@@ -120,7 +120,7 @@ def normalize_dict(d):
         _SEEN[id(d)] = len(_SEEN), d
         try:
             return "dict", _normalize_seq_func(
-                sorted(d.items(), key=lambda kv: hash(kv[0]))
+                sorted(d.items(), key=lambda kv: str(kv[0]))
             )
         finally:
             _SEEN.pop(id(d), None)
