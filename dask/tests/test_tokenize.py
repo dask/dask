@@ -848,6 +848,7 @@ def test_nested_tokenize_seen():
 
 def test_tokenize_dict():
     # Insertion order is ignored. Keys can be an unsortable mix of types.
+    assert check_tokenize({"x": 1, 1: "x"}) == "ba2498a4c5583cc3ec540865185cdafd"
     assert check_tokenize({"x": 1, 1: "x"}) == check_tokenize({1: "x", "x": 1})
     assert check_tokenize({"x": 1, 1: "x"}) != check_tokenize({"x": 1, 2: "x"})
     assert check_tokenize({"x": 1, 1: "x"}) != check_tokenize({"x": 2, 1: "x"})
