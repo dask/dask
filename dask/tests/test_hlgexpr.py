@@ -13,6 +13,7 @@ from dask._task_spec import (
     fuse_linear_task_spec,
     resolve_aliases,
 )
+from dask.blockwise import blockwise, optimize_blockwise
 from dask.core import flatten, reverse_dict
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.tokenize import tokenize
@@ -248,3 +249,35 @@ def test_hlg_sequence_uses_annotations_of_optimized_dsk():
     with pytest.raises(RuntimeError, match="Don't optimize me"):
         expr.__dask_annotations__()
     assert expr.optimize().__dask_annotations__() == expected
+
+
+def test_hlg_blockwise_fusion():
+    b1 = blockwise(
+        lambda x: x,
+        "out1",
+        "i",
+        "x",
+        "i",
+        numblocks={"x": (2,)},
+    )
+    b2 = blockwise(
+        lambda x: x,
+        "out2",
+        "i",
+        "out1",
+        "i",
+        numblocks={"out1": (2,)},
+    )
+
+    layers = {"b1": b1, "b2": b2}
+    deps = {
+        "b1": set(),
+        "b2": {"b1"},
+    }
+    hlg = HighLevelGraph(layers, deps)
+    # Sanity check that the graph is correct
+    assert len(dict(hlg)) == 4
+    hlgexpr = HLGExpr(hlg, low_level_optimizer=optimize_blockwise)
+    assert len(hlgexpr.__dask_graph__()) == 2
+    assert len(hlgexpr.optimize().__dask_graph__()) == 2
+    assert len(hlgexpr.finalize_compute().optimize().__dask_graph__()) == 2

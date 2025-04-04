@@ -1008,7 +1008,7 @@ class HLGExpr(Expr):
         return dict(annotations_by_type)
 
     def __dask_keys__(self):
-        if keys := self.operand("output_keys"):
+        if (keys := self.operand("output_keys")) is not None:
             return keys
         dsk = self.hlg
         # Note: This will materialize
@@ -1017,13 +1017,12 @@ class HLGExpr(Expr):
         for val in dependencies.values():
             leafs -= val
         self.output_keys = leafs
-        return keys
+        return self.output_keys
 
     @functools.cached_property
     def _optimized_dsk(self) -> HighLevelGraph:
         from dask.highlevelgraph import HighLevelGraph
 
-        keys = self.output_keys
         optimizer = self.low_level_optimizer
         keys = self.__dask_keys__()
         dsk = self.hlg
