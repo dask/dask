@@ -232,7 +232,7 @@ def blockwise(
     output,
     output_indices,
     *arrind_pairs,
-    numblocks=None,
+    numblocks,
     concatenate=None,
     new_axes=None,
     dependencies=(),

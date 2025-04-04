@@ -13,7 +13,6 @@ import toolz
 
 import dask
 from dask._task_spec import Task
-from dask.core import reverse_dict
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import ensure_dict, funcname, import_required
@@ -1009,21 +1008,21 @@ class HLGExpr(Expr):
         return dict(annotations_by_type)
 
     def __dask_keys__(self):
-        if keys := self.operand("output_keys"):
+        if (keys := self.operand("output_keys")) is not None:
             return keys
         dsk = self.hlg
         # Note: This will materialize
         dependencies = dsk.get_all_dependencies()
-        dependents = reverse_dict(dependencies)
-        keys = [d for d in dependents if not dependents[d] and d in dsk]
-        self.output_keys = keys
-        return keys
+        leafs = set(dependencies)
+        for val in dependencies.values():
+            leafs -= val
+        self.output_keys = list(leafs)
+        return self.output_keys
 
     @functools.cached_property
     def _optimized_dsk(self) -> HighLevelGraph:
         from dask.highlevelgraph import HighLevelGraph
 
-        keys = self.output_keys
         optimizer = self.low_level_optimizer
         keys = self.__dask_keys__()
         dsk = self.hlg
@@ -1290,7 +1289,10 @@ class HLGFinalizeCompute(HLGExpr):
         from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 
         layers[t.key] = MaterializedLayer({t.key: t})
-        deps[t.key] = set(expr.dsk.dependencies)
+        leafs = set(deps)
+        for val in deps.values():
+            leafs -= val
+        deps[t.key] = leafs
         return HighLevelGraph(layers, dependencies=deps)
 
     def __dask_keys__(self):
