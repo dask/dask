@@ -5945,3 +5945,21 @@ def test_store_sources_unoptimized_nocompute():
         store_res2 = da.store(src[1], target2, compute=False)
         da.compute(store_res1, store_res2)
     assert total_calls == start.blocks.size
+
+
+def test_blockwise_fusion():
+    def custom_scheduler_get(dsk, keys, **kwargs):
+        """Custom scheduler that returns the result of the first key."""
+        dsk = dsk.__dask_graph__()
+        # two sum
+        # one sum agg
+        # one finalize Alias
+        assert len(dsk) == 4, "False number of tasks"
+        return [42 for _ in keys]
+
+    # First test that this mocking stuff works as expecged
+    with pytest.raises(AssertionError, match="False number of tasks"):
+        dask.compute(da.ones(10), scheduler=custom_scheduler_get)
+
+    a = ((da.ones(10, chunks=5) + 1) + 2).sum()
+    dask.compute(a, scheduler=custom_scheduler_get)
