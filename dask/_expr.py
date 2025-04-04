@@ -1236,7 +1236,7 @@ class HLGFinalizeCompute(HLGExpr):
         return f"finalize-{self.deterministic_token}"
 
     def __dask_graph__(self):
-        # The baseclass __dask_graph__ will not just materialie this layer but
+        # The baseclass __dask_graph__ will not just materialize this layer but
         # also that of its dependencies, i.e. it will render the finalized and
         # the non-finalized graph and combine them. We only want the finalized
         # so we're overriding this.
