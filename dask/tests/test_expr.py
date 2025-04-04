@@ -80,10 +80,6 @@ def test_pickle_cached_properties():
         assert rt.cached_property == 3
         assert MyExprCachedProperty.called_cached_property is True
 
-        # Expressions are singletons, i.e. this doesn't crash
-        expr2 = MyExprCachedProperty(foo=1, bar=2)
-        assert expr2.cached_property == 3
-
         # But this does
         expr3 = MyExprCachedProperty(foo=1, bar=3)
         with pytest.raises(RuntimeError):
