@@ -2983,9 +2983,6 @@ def test_round():
         False,
     ],
 )
-@pytest.mark.xfail(
-    PANDAS_GE_300, reason="https://github.com/dask/dask/issues/11858", strict=False
-)
 def test_cov_dataframe(numeric_only):
     df = _compat.makeMissingDataframe()
     ddf = dd.from_pandas(df, npartitions=6)
@@ -3010,9 +3007,6 @@ def test_cov_dataframe(numeric_only):
     assert res._name != res3._name
 
 
-@pytest.mark.xfail(
-    PANDAS_GE_300, reason="https://github.com/dask/dask/issues/11858", strict=False
-)
 def test_cov_series():
     df = _compat.makeMissingDataframe()
     a = df.A
@@ -3062,9 +3056,6 @@ def test_cov_gpu(numeric_only):
     assert res._name != res2._name
 
 
-@pytest.mark.xfail(
-    PANDAS_GE_300, reason="https://github.com/dask/dask/issues/11858", strict=False
-)
 def test_corr():
     # DataFrame
     df = _compat.makeMissingDataframe()
@@ -3179,9 +3170,6 @@ def test_cov_corr_stable():
         ),
         pytest.param(
             True,
-            marks=pytest.mark.xfail(
-                PANDAS_GE_300, reason="https://github.com/dask/dask/issues/11858"
-            ),
         ),
         pytest.param(
             False,
