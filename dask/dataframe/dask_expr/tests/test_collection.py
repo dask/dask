@@ -153,10 +153,9 @@ def test_column_projection_map_partitions(required_columns):
         return x.assign(zz=x["z"] + 1)
 
     df = df.map_partitions(myfunc, meta=myfunc(pdf), required_columns=required_columns)
-
     assert_eq(df["x"], myfunc(pdf)["x"])
     if required_columns:
-        set(df["x"].simplify().frame.frame.columns) == {"x", "z"}
+        assert set(df["x"].simplify().frame.frame.columns) == {"x", "z"}
 
 
 def test_setitem(pdf, df):

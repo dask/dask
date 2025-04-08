@@ -751,7 +751,7 @@ class MapPartitions(Blockwise):
     @staticmethod
     def projected_operation(mapped_func, post_projection, *args, **kwargs):
         # Apply a mapped function and then project columns.
-        # Used in `_simplify_up` to apply column projection.
+        # Used by `_simplify_up` to apply column projection.
         return mapped_func(*args, **kwargs)[post_projection]
 
     def _simplify_up(self, parent, dependents):
