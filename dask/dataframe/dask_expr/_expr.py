@@ -7,6 +7,7 @@ import operator
 import warnings
 from collections import defaultdict
 from collections.abc import Callable, Mapping
+from functools import partial
 from typing import Any as AnyType
 
 import numpy as np
@@ -651,6 +652,7 @@ class MapPartitions(Blockwise):
         "clear_divisions",
         "align_dataframes",
         "parent_meta",
+        "required_columns",
         "token",
         "kwargs",
     ]
@@ -658,6 +660,7 @@ class MapPartitions(Blockwise):
         "kwargs": None,
         "align_dataframes": True,
         "parent_meta": None,
+        "required_columns": None,
         "token": None,
     }
 
@@ -743,6 +746,33 @@ class MapPartitions(Blockwise):
                 self.func,
                 *args,
                 **kwargs,
+            )
+
+    @staticmethod
+    def projected_operation(mapped_func, post_projection, *args, **kwargs):
+        # Apply a mapped function and then project columns.
+        # Used in `_simplify_up` to apply column projection.
+        return mapped_func(*args, **kwargs)[post_projection]
+
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Projection) and self.required_columns is not None:
+            columns = determine_column_projection(
+                self, parent, dependents, additional_columns=self.required_columns
+            )
+            columns = [col for col in self.frame.columns if col in columns]
+
+            if columns == self.frame.columns:
+                # Don't add unnecessary Projections
+                return
+
+            return type(parent)(
+                type(self)(
+                    self.frame[columns],
+                    partial(self.projected_operation, self.func, parent.columns),
+                    self.meta[parent.columns],
+                    *self.operands[3:],
+                ),
+                *parent.operands[1:],
             )
 
 
@@ -972,6 +1002,7 @@ class MapOverlap(MapPartitions):
             self.transform_divisions,
             self.clear_divisions,
             self.align_dataframes,
+            None,
             None,
             self.token,
             self._kwargs,
