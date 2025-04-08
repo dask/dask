@@ -30,6 +30,7 @@ from dask.dataframe.utils import (
     valid_divisions,
 )
 from dask.local import get_sync
+from dask.tokenize import tokenize
 
 
 def test_make_meta():
@@ -689,3 +690,11 @@ def test_pyarrow_strings_enabled():
 
     with dask.config.set({"dataframe.convert-string": True}):
         assert pyarrow_strings_enabled() is True
+
+
+def test_tokenize_azure_credentials():
+    pytest.importorskip("azure.identity")
+    from azure.identity import DefaultAzureCredential
+
+    obj = DefaultAzureCredential()
+    assert tokenize(obj) == tokenize(obj)
