@@ -131,6 +131,7 @@ class MergeAsof(Merge):
                 True,
                 None,
                 None,
+                None,
                 self._kwargs,
                 self.right,
             )
@@ -151,6 +152,7 @@ class MergeAsof(Merge):
                 True,
                 False,
                 True,
+                None,
                 None,
                 None,
                 {"left_index": True, "right_index": True},
