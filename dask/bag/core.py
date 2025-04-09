@@ -57,10 +57,10 @@ from dask.base import (
     replace_name_in_key,
     tokenize,
 )
-from dask.blockwise import _blockwise_unpack_collections_task_spec, blockwise
+from dask.blockwise import blockwise
 from dask.context import globalmethod
 from dask.core import flatten, istask, quote
-from dask.delayed import Delayed
+from dask.delayed import Delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.sizeof import sizeof
 from dask.typing import Graph, NestedKeys, no_default
@@ -2095,7 +2095,7 @@ def unpack_scalar_dask_kwargs(kwargs):
     kwargs2 = {}
     dependencies = []
     for k, v in kwargs.items():
-        vv, collections = _blockwise_unpack_collections_task_spec(v)
+        vv, collections = unpack_collections(v)
         if not collections:
             kwargs2[k] = v
         else:
@@ -2268,7 +2268,7 @@ def map_partitions(func, *args, **kwargs):
             bags.append(a)
             args2.append(a)
         else:
-            a, collections = _blockwise_unpack_collections_task_spec(a)
+            a, collections = unpack_collections(a)
             args2.append(a)
             dependencies.extend(collections)
 

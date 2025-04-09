@@ -8,10 +8,12 @@ from collections.abc import Sequence
 from dataclasses import fields, is_dataclass, replace
 from functools import partial
 
-from tlz import concat, curry, merge, unique
+import toolz
+from tlz import concat, curry, merge
 
-from dask import config
+from dask import base, config, utils
 from dask._expr import FinalizeCompute
+from dask._task_spec import Alias, DataNode, List, Task, TaskRef, fuse_linear_task_spec
 from dask.base import (
     DaskMethodsMixin,
     collections_to_expr,
@@ -23,7 +25,6 @@ from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import fuse
 from dask.typing import Graph, NestedKeys
 from dask.utils import (
     OperatorMethodMixin,
@@ -45,11 +46,19 @@ def finalize(collection):
     assert is_dask_collection(collection)
 
     name = "finalize-" + tokenize(collection)
-    keys = collection.__dask_keys__()
-    finalize, args = collection.__dask_postcompute__()
-    layer = {name: (finalize, keys) + args}
-    graph = HighLevelGraph.from_collections(name, layer, dependencies=[collection])
-    return Delayed(name, graph)
+    expr = collections_to_expr(collection).finalize_compute()
+    return Delayed(name, expr)
+
+
+def _convert_dask_keys(keys: NestedKeys) -> List:
+    assert isinstance(keys, list)
+    new_keys: list[List | TaskRef] = []
+    for key in keys:
+        if isinstance(key, list):
+            new_keys.append(_convert_dask_keys(key))
+        else:
+            new_keys.append(TaskRef(key))
+    return List(*new_keys)
 
 
 def unpack_collections(expr):
@@ -87,17 +96,16 @@ def unpack_collections(expr):
     >>> collections
     (Delayed('a'), Delayed('b'))
     """
-    # FIXME: See blockwise._unpack_collections for a TaskSpec version
     if isinstance(expr, Delayed):
-        return expr._key, (expr,)
+        return Alias(expr._key), (expr,)
 
-    if is_dask_collection(expr):
-        if hasattr(expr, "optimize"):
-            # Optimize dask-expr collections
-            expr = expr.optimize()
+    # FIXME: Make this not trigger materialization
+    if base.is_dask_collection(expr):
+        expr = collections_to_expr(expr)
+        finalized = expr.finalize_compute().optimize()
+        dsk = finalized.__dask_graph__()
 
-        finalized = finalize(expr)
-        return finalized._key, (finalized,)
+        return unpack_collections(Delayed(finalized._name, dsk))
 
     if type(expr) is type(iter(list())):
         expr = list(expr)
@@ -109,21 +117,28 @@ def unpack_collections(expr):
     typ = type(expr)
 
     if typ in (list, tuple, set):
-        args, collections = unzip((unpack_collections(e) for e in expr), 2)
-        args = list(args)
-        collections = tuple(unique(concat(collections), key=id))
+        args, collections = utils.unzip((unpack_collections(e) for e in expr), 2)
+        collections = tuple(toolz.unique(toolz.concat(collections), key=id))
+        if not collections:
+            return expr, ()
+        args = List(*args)
         # Ensure output type matches input type
         if typ is not list:
-            args = (typ, args)
+            args = Task(None, typ, args)
         return args, collections
 
     if typ is dict:
         args, collections = unpack_collections([[k, v] for k, v in expr.items()])
-        return (dict, args), collections
+        if not collections:
+            return expr, ()
+        return Task(None, dict, args), collections
 
     if typ is slice:
         args, collections = unpack_collections([expr.start, expr.stop, expr.step])
-        return (slice, *args), collections
+        if not collections:
+            return expr, ()
+
+        return Task(None, apply, slice, args), collections
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
@@ -153,11 +168,13 @@ def unpack_collections(expr):
                     f"Failed to unpack {typ} instance. "
                     "Note that using a custom __init__ is not supported."
                 ) from e
-        return (apply, typ, (), (dict, args)), collections
+        return Task(None, apply, typ, (), Task(None, dict, args)), collections
 
-    if is_namedtuple_instance(expr):
+    if utils.is_namedtuple_instance(expr):
         args, collections = unpack_collections([v for v in expr])
-        return (typ, *args), collections
+        if not collections:
+            return expr, ()
+        return Task(None, typ, args), collections
 
     return expr, ()
 
@@ -517,16 +534,8 @@ def right(method):
     return partial(_swap, method)
 
 
-def _fuse_delayed(dsk, keys, **kwargs):
-    dependencies = dsk.get_all_dependencies()
-    dsk = ensure_dict(dsk)
-
-    dsk, _ = fuse(
-        dsk,
-        keys,
-        dependencies=dependencies,
-    )
-    return dsk
+def _apply2(func, *args, dask_kwargs):
+    return func(*args, **dask_kwargs)
 
 
 def optimize(dsk, keys, **kwargs):
@@ -534,7 +543,8 @@ def optimize(dsk, keys, **kwargs):
         keys = [keys]
 
     if config.get("optimization.fuse.delayed"):
-        dsk = _fuse_delayed(dsk, keys, **kwargs)
+        dsk = ensure_dict(dsk)
+        dsk = fuse_linear_task_spec(dsk, keys, **kwargs)
 
     if not isinstance(dsk, HighLevelGraph):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
@@ -548,7 +558,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "_dask", "_length", "_layer")
+    __slots__ = ("_key", "_dask", "_length", "_layer", "_expr")
 
     def __init__(self, key, dsk, length=None, layer=None):
         self._key = key
@@ -693,9 +703,10 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     if kwargs:
         dask_kwargs, collections2 = unpack_collections(kwargs)
         collections.extend(collections2)
-        task = (apply, func, list(args2), dask_kwargs)
+
+        task = Task(name, _apply2, func, *args2, dask_kwargs=dask_kwargs)
     else:
-        task = (func,) + args2
+        task = Task(name, func, *args2)
 
     graph = HighLevelGraph.from_collections(
         name, {name: task}, dependencies=collections
@@ -708,7 +719,7 @@ class DelayedLeaf(Delayed):
     __slots__ = ("_obj", "_pure", "_nout")
 
     def __init__(self, obj, key, pure=None, nout=None):
-        super().__init__(key, None)
+        super().__init__(key, None, length=nout)
         self._obj = obj
         self._pure = pure
         self._nout = nout
@@ -716,7 +727,7 @@ class DelayedLeaf(Delayed):
     @property
     def dask(self):
         return HighLevelGraph.from_collections(
-            self._key, {self._key: self._obj}, dependencies=()
+            self._key, {self._key: DataNode(self._key, self._obj)}, dependencies=()
         )
 
     def __call__(self, *args, **kwargs):

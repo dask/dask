@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 import os
 from collections.abc import Hashable, Iterable, Mapping, Sequence
-from dataclasses import fields, is_dataclass, replace
 from itertools import product
 from math import prod
 from typing import Any
@@ -11,11 +10,9 @@ from typing import Any
 import tlz as toolz
 
 import dask
-from dask import base, utils
-from dask._task_spec import Dict, GraphNode, List, Task, TaskRef, parse_input
+from dask._task_spec import GraphNode, List, Task, TaskRef, parse_input
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, ishashable, keys_in_tasks, reverse_dict
-from dask.delayed import Delayed, finalize
 from dask.highlevelgraph import HighLevelGraph, Layer
 from dask.optimization import fuse
 from dask.typing import Key
@@ -1574,97 +1571,3 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
             dependencies[name] = set()
 
     return HighLevelGraph(layers, dependencies)
-
-
-def _blockwise_unpack_collections_task_spec(expr):
-    # FIXME This is a copy of the delayed.unpack_collections function with the
-    # addition of the TaskSpec class. Eventually this should all be consolidated
-    # but to reduce the number of changes we'll vendor this here
-    # FIXME: There is also a dask.base version of unpack_collections that looks
-    # similar but is different. At the very least the names should be fixed
-    if isinstance(expr, Delayed):
-        return TaskRef(expr._key), (expr,)
-
-    if base.is_dask_collection(expr):
-        if hasattr(expr, "optimize"):
-            # Optimize dask-expr collections
-            expr = expr.optimize()
-
-        finalized = finalize(expr)
-        return TaskRef(finalized._key), (finalized,)
-
-    if type(expr) is type(iter(list())):
-        expr = list(expr)
-    elif type(expr) is type(iter(tuple())):
-        expr = tuple(expr)
-    elif type(expr) is type(iter(set())):
-        expr = set(expr)
-
-    typ = type(expr)
-
-    if typ in (list, tuple, set):
-        args, collections = utils.unzip(
-            (_blockwise_unpack_collections_task_spec(e) for e in expr), 2
-        )
-        collections = tuple(toolz.unique(toolz.concat(collections), key=id))
-        if not collections:
-            return expr, ()
-        args = List(*args)
-        # Ensure output type matches input type
-        if typ is not list:
-            args = Task(None, typ, args)
-        return args, collections
-
-    if typ is dict:
-        args, collections = _blockwise_unpack_collections_task_spec(
-            [[k, v] for k, v in expr.items()]
-        )
-        if not collections:
-            return expr, ()
-        return Dict(args), collections
-
-    if typ is slice:
-        args, collections = _blockwise_unpack_collections_task_spec(
-            [expr.start, expr.stop, expr.step]
-        )
-        if not collections:
-            return expr, ()
-        return Task(None, slice, *args), collections
-
-    if is_dataclass(expr):
-        args, collections = _blockwise_unpack_collections_task_spec(
-            [
-                [f.name, getattr(expr, f.name)]
-                for f in fields(expr)
-                if hasattr(expr, f.name)  # if init=False, field might not exist
-            ]
-        )
-        if not collections:
-            return expr, ()
-        try:
-            _fields = {
-                f.name: getattr(expr, f.name)
-                for f in fields(expr)
-                if hasattr(expr, f.name)
-            }
-            replace(expr, **_fields)
-        except (TypeError, ValueError) as e:
-            if isinstance(e, ValueError) or "is declared with init=False" in str(e):
-                raise ValueError(
-                    f"Failed to unpack {typ} instance. "
-                    "Note that using fields with `init=False` are not supported."
-                ) from e
-            else:
-                raise TypeError(
-                    f"Failed to unpack {typ} instance. "
-                    "Note that using a custom __init__ is not supported."
-                ) from e
-        return Task(None, typ, **dict(args)), collections
-
-    if utils.is_namedtuple_instance(expr):
-        args, collections = _blockwise_unpack_collections_task_spec([v for v in expr])
-        if not collections:
-            return expr, ()
-        return Task(None, typ, *args), collections
-
-    return expr, ()
