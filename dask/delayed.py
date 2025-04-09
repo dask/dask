@@ -13,7 +13,15 @@ from tlz import concat, curry, merge
 
 from dask import base, config, utils
 from dask._expr import FinalizeCompute
-from dask._task_spec import Alias, DataNode, List, Task, TaskRef, fuse_linear_task_spec
+from dask._task_spec import (
+    Alias,
+    DataNode,
+    GraphNode,
+    List,
+    Task,
+    TaskRef,
+    fuse_linear_task_spec,
+)
 from dask.base import (
     DaskMethodsMixin,
     collections_to_expr,
@@ -525,6 +533,8 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         if not name:
             name = f"{type(obj).__name__}-{tokenize(task, pure=pure)}"
         layer = {name: task}
+        if isinstance(task, GraphNode):
+            task.key = name
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
         return Delayed(name, graph, nout)
 
