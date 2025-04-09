@@ -14,7 +14,6 @@ from tlz import concat, curry, merge
 from dask import base, config, utils
 from dask._expr import FinalizeCompute
 from dask._task_spec import (
-    Alias,
     DataNode,
     GraphNode,
     List,
@@ -74,7 +73,19 @@ def unpack_collections(expr):
 
     - Replace ``Delayed`` with their keys
     - Convert literals to things the schedulers can handle
-    - Extract dask graphs from all enclosed values
+    - Extract dask graphs from all enclosed values.
+
+    Note, that the returned _task_ is not necessarily runnable and the caller is
+    responsible to deal with the output types accordingly.
+
+    The task is one of
+    - `TaskRef` as a pointer to the collection returned in collections. This is
+      not callable and should not be a top-level member of a dask task graph.
+    - A runnable task (i.e. subclass `GraphNode`) which can be embedded
+      directly into a task graph. This indicates that a dask collection was
+      encountered on a deeper nesting level and this runnable task restores the
+      input nesting with the computed dask collection replaced.
+    - The unaltered object as provided if no dask collections are found.
 
     Parameters
     ----------
@@ -84,7 +95,7 @@ def unpack_collections(expr):
 
     Returns
     -------
-    task : normalized task to be run
+    task : object
     collections : a tuple of collections
 
     Examples
@@ -94,30 +105,31 @@ def unpack_collections(expr):
     >>> b = delayed(2, 'b')
     >>> task, collections = unpack_collections([a, b, 3])
     >>> task
-    ['a', 'b', 3]
+    List((Alias('a'), Alias('b'), 3))
     >>> collections
     (Delayed('a'), Delayed('b'))
 
     >>> task, collections = unpack_collections({a: 1, b: 2})
     >>> task
-    (<class 'dict'>, [['a', 1], ['b', 2]])
+    <Task None dict(List((List((Alias('a'), 1)), List((Alias('b'), 2)))))>
     >>> collections
     (Delayed('a'), Delayed('b'))
     """
     if isinstance(expr, Delayed):
-        return Alias(expr._key), (expr,)
-
-    # Futures are TaskRef
-    if isinstance(expr, TaskRef):
-        return Alias(expr.key), ()
+        return TaskRef(expr._key), (expr,)
 
     # FIXME: Make this not trigger materialization
     if base.is_dask_collection(expr):
         expr = collections_to_expr(expr)
         finalized = expr.finalize_compute().optimize()
+        # FIXME: Make this also go away
         dsk = finalized.__dask_graph__()
+        keys = finalized.__dask_keys__()
+        if len(keys) > 1:
+            # `finalize_compute` _should_ guarantee that we only have one key
+            raise RuntimeError("Cannot unpack dask collections with non-trivial keys")
 
-        return unpack_collections(Delayed(finalized._name, dsk))
+        return unpack_collections(Delayed(keys[0], dsk))
 
     if type(expr) is type(iter(list())):
         expr = list(expr)
@@ -725,6 +737,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     graph = HighLevelGraph.from_collections(
         name, {name: task}, dependencies=collections
     )
+    graph.cull([name])
     nout = nout if nout is not None else None
     return Delayed(name, graph, length=nout)
 
