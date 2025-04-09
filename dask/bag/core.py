@@ -1906,17 +1906,24 @@ def from_delayed(values):
 
     if isinstance(values, Delayed):
         values = [values]
-    values = [
-        delayed(v) if not isinstance(v, Delayed) and hasattr(v, "key") else v
-        for v in values
-    ]
+    futures = [v for v in values if isinstance(v, TaskRef)]
+    if all_futures := (len(futures) == len(values)):
+        # All futures. Fast path
+        values = futures
+    else:
+        # Every Delayed generates a Layer, i.e. this path is much more expensive if there are many input values.
+        values = [
+            delayed(v) if not isinstance(v, (Delayed,)) and hasattr(v, "key") else v
+            for v in values
+        ]
 
     name = "bag-from-delayed-" + tokenize(*values)
-    names = [(name, i) for i in range(len(values))]
-    values2 = [(reify, v.key) for v in values]
-    dsk = dict(zip(names, values2))
+    tasks = [Task((name, i), reify, TaskRef(v.key)) for i, v in enumerate(values)]
+    dsk = {t.key: t for t in tasks}
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=values)
+    graph = HighLevelGraph.from_collections(
+        name, dsk, dependencies=values if not all_futures else ()
+    )
     return Bag(graph, name, len(values))
 
 
