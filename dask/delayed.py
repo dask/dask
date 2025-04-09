@@ -99,6 +99,10 @@ def unpack_collections(expr):
     if isinstance(expr, Delayed):
         return Alias(expr._key), (expr,)
 
+    # Futures are TaskRef
+    if isinstance(expr, TaskRef):
+        return Alias(expr.key), ()
+
     # FIXME: Make this not trigger materialization
     if base.is_dask_collection(expr):
         expr = collections_to_expr(expr)
