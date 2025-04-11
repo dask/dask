@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Iterable
+from collections.abc import Collection
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -75,7 +75,7 @@ def identity(x):
 
 
 def from_delayed(
-    dfs: Delayed | distributed.Future | Iterable[Delayed | distributed.Future],
+    dfs: Delayed | distributed.Future | Collection[Delayed | distributed.Future],
     meta=None,
     divisions: tuple | None = None,
     prefix: str | None = None,
@@ -119,7 +119,7 @@ def from_delayed(
     if isinstance(dfs, Delayed) or hasattr(dfs, "key"):
         dfs = [dfs]
 
-    if len(dfs) == 0:  # type: ignore
+    if len(dfs) == 0:
         raise TypeError("Must supply at least one delayed object")
 
     if meta is None:
@@ -132,16 +132,23 @@ def from_delayed(
         )
     elif divisions is not None:
         divs = list(divisions)
-        if len(divs) != len(dfs) + 1:  # type: ignore
+        if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
-    dfs = [
-        delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
-        for df in dfs
-    ]
+    futures = [v for v in dfs if isinstance(v, TaskRef)]
+    if len(futures) == len(dfs):
+        # All futures. Fast path
+        dfs = futures
+    else:
+        # Every Delayed generates a Layer, i.e. this path is much more expensive
+        # if there are many input values.
+        dfs = [
+            delayed(v) if not isinstance(v, (Delayed,)) and hasattr(v, "key") else v
+            for v in dfs
+        ]
 
     for item in dfs:
-        if not isinstance(item, Delayed):
+        if not (isinstance(item, Delayed) or isinstance(item, TaskRef)):
             raise TypeError("Expected Delayed object, got %s" % type(item).__name__)
 
     from dask.dataframe.dask_expr._collection import new_collection

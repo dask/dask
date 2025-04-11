@@ -10,6 +10,7 @@ import warnings
 import numpy as np
 from tlz import concat, frequencies
 
+from dask._task_spec import convert_legacy_graph
 from dask.array.numpy_compat import AxisError
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -213,8 +214,10 @@ def _check_dsk(dsk):
     key_collisions = set()
     # Allow redundant keys if the values are equivalent
     collisions = set()
+    all_keys = set(dsk)
+    layers = [convert_legacy_graph(layer, all_keys) for layer in dsk.layers.values()]
     for k in non_one.keys():
-        for layer in dsk.layers.values():
+        for layer in layers:
             try:
                 key_collisions.add(tokenize(layer[k]))
             except KeyError:

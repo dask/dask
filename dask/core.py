@@ -6,7 +6,12 @@ from typing import Any, Literal, TypeVar, cast, overload
 
 import toolz
 
-from dask._task_spec import DependenciesMapping, convert_legacy_graph, execute_graph
+from dask._task_spec import (
+    DependenciesMapping,
+    TaskRef,
+    convert_legacy_graph,
+    execute_graph,
+)
 from dask.typing import Graph, Key, NoDefault, no_default
 
 
@@ -136,6 +141,8 @@ def keys_in_tasks(keys: Collection[Key], tasks: Iterable[Any], as_list: bool = F
                 work.extend(w.values())
             elif isinstance(w, GraphNode):
                 work.extend(w.dependencies)
+            elif isinstance(w, TaskRef):
+                work.append(w.key)
             else:
                 try:
                     if w in keys:

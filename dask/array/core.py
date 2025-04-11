@@ -33,7 +33,7 @@ from dask.core import flatten
 xr = import_optional_dependency("xarray", errors="ignore")
 
 from dask import compute, config, core
-from dask._task_spec import List, Task, TaskRef
+from dask._task_spec import Alias, List, Task, TaskRef
 from dask.array import chunk
 from dask.array.chunk import getitem
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -3995,15 +3995,24 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     """
     from dask.delayed import Delayed, delayed
 
-    if not isinstance(value, Delayed) and hasattr(value, "key"):
-        value = delayed(value)
-
+    is_future = False
     name = name or "from-value-" + tokenize(value, shape, dtype, meta)
-    dsk = {(name,) + (0,) * len(shape): value.key}
+    if isinstance(value, TaskRef):
+        is_future = True
+    elif not isinstance(value, Delayed) and hasattr(value, "key"):
+        value = delayed(value)
+    task = Alias(
+        key=(name,) + (0,) * len(shape),
+        target=value.key,
+    )
+
+    dsk = {task.key: task}
     chunks = tuple((d,) for d in shape)
     # TODO: value._key may not be the name of the layer in value.dask
     # This should be fixed after we build full expression graphs
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
+    graph = HighLevelGraph.from_collections(
+        name, dsk, dependencies=[value] if not is_future else []
+    )
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 

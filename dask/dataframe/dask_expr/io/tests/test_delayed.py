@@ -14,7 +14,8 @@ pd = _backend_library()
 def test_from_delayed_optimizing():
     parts = from_dict({"a": np.arange(300)}, npartitions=30).to_delayed()
     result = from_delayed(parts[0], meta=pd.DataFrame({"a": pd.Series(dtype=np.int64)}))
-    assert len(result.optimize().dask) == 2
+    # +1 due to an Alias for correct naming
+    assert len(result.optimize().dask) == 3
     assert_eq(result, pd.DataFrame({"a": pd.Series(np.arange(10))}))
 
 
@@ -28,7 +29,8 @@ def test_from_delayed(prefix):
 
     df = from_delayed(dfs, meta=pdf.head(0), divisions=None, prefix=prefix)
     assert_eq(df, pdf)
-    assert len({k[0] for k in df.optimize().dask}) == 2
+    # +1 due to an Alias for correct naming
+    assert len({k[0] for k in df.optimize().dask}) == 3
     if prefix:
         assert df._name.startswith(prefix)
 
