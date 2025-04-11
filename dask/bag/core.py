@@ -1911,7 +1911,8 @@ def from_delayed(values):
         # All futures. Fast path
         values = futures
     else:
-        # Every Delayed generates a Layer, i.e. this path is much more expensive if there are many input values.
+        # Every Delayed generates a Layer, i.e. this path is much more expensive
+        # if there are many input values.
         values = [
             delayed(v) if not isinstance(v, (Delayed,)) and hasattr(v, "key") else v
             for v in values

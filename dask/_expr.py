@@ -13,6 +13,7 @@ import toolz
 
 import dask
 from dask._task_spec import Task
+from dask.core import flatten
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import ensure_dict, funcname, import_required
@@ -1299,3 +1300,48 @@ class HLGFinalizeCompute(HLGExpr):
 
     def __dask_keys__(self):
         return [self._name]
+
+
+class HLGDistinctKeys(Expr):
+    """
+    An expression that guarantees that all keys are suffixes with a unique id.
+    This can be used to break a common subexpression apart.
+    """
+
+    _parameters = ["expr", "suffix"]
+    _defaults = {"suffix": None}
+
+    def __dask_keys__(self):
+        return self.expr.__dask_keys__()
+
+    @staticmethod
+    def _identity(obj):
+        return obj
+
+    def _layer(self) -> dict:
+        dsk = self.expr._layer()
+        suffix = self.suffix or uuid.uuid4().hex
+
+        def _modify_key(k):
+            if isinstance(k, tuple):
+                return (_modify_key(k[0]),) + k[1:]
+            elif isinstance(k, (int, float)):
+                k = str(k)
+            return f"{k}-{suffix}"
+
+        subs = {
+            old_key: _modify_key(old_key)
+            for old_key in dsk
+            if old_key not in set(flatten(self.__dask_keys__()))
+        }
+        dsk2 = {
+            new_key: Task(
+                new_key,
+                HLGDistinctKeys._identity,
+                dsk.pop(old_key).substitute(subs),
+            )
+            for old_key, new_key in subs.items()
+        }
+        # only __dask_keys__ left
+        dsk2.update(dsk)
+        return dsk2

@@ -567,6 +567,64 @@ def test_array_delayed():
     assert (delayed_arr.compute() == arr).all()
 
 
+def test_array_delayed_complex_optimization():
+    # Ensure that collections that if multiple collections are passed to a
+    # Delayed function that they are optimized together
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("dask.array")
+    from dask.array.core import from_func
+    from dask.array.utils import assert_eq
+
+    called = False
+
+    def only_once():
+        nonlocal called
+        if called:
+            raise RuntimeError("Already executed")
+
+        called = True
+        return np.arange(100).reshape((10, 10))
+
+    darr = from_func(only_once, shape=(10, 10), dtype=int)
+    a = darr + 1
+    b = darr + 2
+    val = delayed(sum)([a, b, 1])
+    assert isinstance(val, Delayed)
+    np_arr = np.arange(100).reshape((10, 10))
+    assert_eq(val.compute(), (np_arr + 1) + (np_arr + 2) + 1)
+
+
+def test_array_delayed_complex_optimization_kwargs():
+    # Ensure that collections that if multiple collections are passed to a
+    # Delayed function that they are optimized together
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("dask.array")
+    from dask.array.core import from_func
+    from dask.array.utils import assert_eq
+
+    called = False
+
+    def only_once():
+        nonlocal called
+        if called:
+            raise RuntimeError("Already executed")
+
+        called = True
+        return np.arange(100).reshape((10, 10))
+
+    darr = from_func(only_once, shape=(10, 10), dtype=int)
+    a = darr + 1
+    b = darr + 2
+
+    def sum_kwargs_only(*, a, b, c):
+        return sum([a, b, c])
+
+    val = delayed(sum_kwargs_only)(a=a, b=b, c=1)
+    assert isinstance(val, Delayed)
+    np_arr = np.arange(100).reshape((10, 10))
+    assert_eq(val.compute(), (np_arr + 1) + (np_arr + 2) + 1)
+
+
 def test_array_bag_delayed():
     np = pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
