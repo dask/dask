@@ -850,25 +850,9 @@ def searchsorted(a, v, side="left", sorter=None):
     return out
 
 
-def _linspace(start_stop_num):
-    return np.linspace(*start_stop_num)
-
-
-def _linspace_from_delayed(start, stop, num=50):
-    linspace_name = "linspace-" + tokenize(start, stop, num)
-    start_stop_num, deps = unpack_collections([start, stop, num])
-    if len(deps) == 0:
-        return np.linspace(start, stop, num=num)
-
-    linspace_dsk = {
-        (linspace_name, 0): Task((linspace_name, 0), _linspace, start_stop_num)
-    }
-    linspace_graph = HighLevelGraph.from_collections(
-        linspace_name, linspace_dsk, dependencies=deps
-    )
-
-    chunks = ((np.nan,),) if is_dask_collection(num) else ((num,),)
-    return Array(linspace_graph, linspace_name, chunks, dtype=float)
+def _linspace(bins_range):
+    bins, (start, stop) = bins_range
+    return np.linspace(start, stop, num=bins + 1)
 
 
 def _block_hist(x, bins_range, weights=None):
@@ -1013,10 +997,26 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     token = tokenize(a, bins, range, weights, density)
     name = "histogram-sum-" + token
 
+    bins_range, deps = unpack_collections([bins, range])
+
     if scalar_bins:
-        bins = _linspace_from_delayed(range[0], range[1], bins + 1)
-        # ^ NOTE `range[1]` is safe because of the above check, and the initial check
-        # that range must not be None if `scalar_bins`
+        assert range is not None
+        assert bins is not None
+        if len(deps) == 0:
+            return np.linspace(range[0], range[1], num=bins + 1)
+        linspace_name = "linspace-" + tokenize(bins_range)
+
+        linspace_dsk = {
+            (linspace_name, 0): Task((linspace_name, 0), _linspace, bins_range)
+        }
+        linspace_graph = HighLevelGraph.from_collections(
+            linspace_name, linspace_dsk, dependencies=deps
+        )
+        if is_dask_collection(bins):
+            chunks = ((np.nan,),)
+        else:
+            chunks = ((bins + 1,),)
+        bins = Array(linspace_graph, linspace_name, chunks, dtype=float)
     else:
         if not isinstance(bins, (Array, np.ndarray)):
             bins = asarray(bins)
@@ -1024,8 +1024,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             raise ValueError(
                 f"bins must be a 1-dimensional array or sequence, got shape {bins.shape}"
             )
-
-    bins_range, deps = unpack_collections([bins, range])
 
     # Map the histogram to all bins, forming a 2D array of histograms, stacked for each chunk
     if weights is None:
