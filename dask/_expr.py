@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Literal
 import toolz
 
 import dask
-from dask._task_spec import Task
+from dask._task_spec import Task, convert_legacy_graph
 from dask.core import flatten
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
@@ -1319,7 +1319,7 @@ class ProhibitReuse(Expr):
         return obj
 
     def _layer(self) -> dict:
-        dsk = self.expr._layer()
+        dsk = convert_legacy_graph(self.expr._layer())
         suffix = self.suffix or uuid.uuid4().hex
 
         def _modify_key(k):

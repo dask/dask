@@ -19,6 +19,7 @@ from dask._task_spec import (
     List,
     Task,
     TaskRef,
+    convert_legacy_graph,
     fuse_linear_task_spec,
 )
 from dask.base import (
@@ -74,7 +75,7 @@ def _finalize_args_collections(args, collections):
 
     collections = ProhibitReuse(_ExprSequence(*collections)).optimize()
     new_keys = collections.__dask_keys__()
-    dsk = collections.__dask_graph__()
+    dsk = convert_legacy_graph(collections.__dask_graph__())
     collections = tuple(Delayed(k[0], cull(dsk, [k[0]])) for k in new_keys)
     subs = {old: new[0] for old, new in zip(old_keys, new_keys) if old != new}
     args = args.substitute(subs)
