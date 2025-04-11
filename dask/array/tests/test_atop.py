@@ -808,7 +808,9 @@ def test_svd():
     y = x * 2
     u, s, v = da.linalg.svd(y)
     z = y + u
-    assert_eq(z, z)
+    # FIXME: There is a key collision
+    # Deterministic https://github.com/dask/dask/issues/9888
+    assert_eq(z, z, check_graph=False)
 
 
 def test_args_delayed():
