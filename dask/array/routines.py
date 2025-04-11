@@ -1003,20 +1003,21 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         assert range is not None
         assert bins is not None
         if len(deps) == 0:
-            return np.linspace(range[0], range[1], num=bins + 1)
-        linspace_name = "linspace-" + tokenize(bins_range)
-
-        linspace_dsk = {
-            (linspace_name, 0): Task((linspace_name, 0), _linspace, bins_range)
-        }
-        linspace_graph = HighLevelGraph.from_collections(
-            linspace_name, linspace_dsk, dependencies=deps
-        )
-        if is_dask_collection(bins):
-            chunks = ((np.nan,),)
+            bins = np.linspace(range[0], range[1], num=bins + 1)
         else:
-            chunks = ((bins + 1,),)
-        bins = Array(linspace_graph, linspace_name, chunks, dtype=float)
+            linspace_name = "linspace-" + tokenize(bins_range)
+
+            linspace_dsk = {
+                (linspace_name, 0): Task((linspace_name, 0), _linspace, bins_range)
+            }
+            linspace_graph = HighLevelGraph.from_collections(
+                linspace_name, linspace_dsk, dependencies=deps
+            )
+            if is_dask_collection(bins):
+                chunks = ((np.nan,),)
+            else:
+                chunks = ((bins + 1,),)
+            bins = Array(linspace_graph, linspace_name, chunks, dtype=float)
     else:
         if not isinstance(bins, (Array, np.ndarray)):
             bins = asarray(bins)
