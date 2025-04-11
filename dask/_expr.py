@@ -1302,7 +1302,7 @@ class HLGFinalizeCompute(HLGExpr):
         return [self._name]
 
 
-class HLGDistinctKeys(Expr):
+class ProhibitReuse(Expr):
     """
     An expression that guarantees that all keys are suffixes with a unique id.
     This can be used to break a common subexpression apart.
@@ -1337,7 +1337,7 @@ class HLGDistinctKeys(Expr):
         dsk2 = {
             new_key: Task(
                 new_key,
-                HLGDistinctKeys._identity,
+                ProhibitReuse._identity,
                 dsk.pop(old_key).substitute(subs),
             )
             for old_key, new_key in subs.items()
