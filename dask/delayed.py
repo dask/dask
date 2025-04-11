@@ -146,18 +146,19 @@ def unpack_collections(expr, _return_collections=True):
     # a materialization
     if base.is_dask_collection(expr):
         if _return_collections:
-            expr = ProhibitReuse(collections_to_expr(expr))
-            finalized = expr.finalize_compute().optimize()
+            expr2 = ProhibitReuse(collections_to_expr(expr).finalize_compute())
+            finalized = expr2.optimize()
             # FIXME: Make this also go away
             dsk = finalized.__dask_graph__()
-            keys = finalized.__dask_keys__()
+            keys = list(flatten(finalized.__dask_keys__()))
             if len(keys) > 1:
                 # `finalize_compute` _should_ guarantee that we only have one key
                 raise RuntimeError(
-                    "Cannot unpack dask collections with non-trivial keys"
+                    "Cannot unpack dask collections which don't finalize to a "
+                    f"single key. Got {type(expr)} with {keys=}",
                 )
 
-            return unpack_collections(Delayed(next(flatten(keys)), dsk))
+            return unpack_collections(Delayed(keys[0], dsk))
         else:
             expr = collections_to_expr(expr).finalize_compute()
             (name,) = expr.__dask_keys__()
