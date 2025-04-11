@@ -1119,6 +1119,10 @@ def fuse_linear_task_spec(dsk, keys):
 def cull(
     dsk: dict[KeyType, GraphNode], keys: Iterable[KeyType]
 ) -> dict[KeyType, GraphNode]:
+    if not isinstance(keys, (list, set, tuple)):
+        raise TypeError(
+            f"Expected list, set or tuple for keys, got {type(keys).__name__}"
+        )
     work = set(keys)
     seen: set[KeyType] = set()
     dsk2 = {}

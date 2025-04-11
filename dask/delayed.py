@@ -12,7 +12,7 @@ import toolz
 from tlz import concat, curry, merge
 
 from dask import base, config, utils
-from dask._expr import FinalizeCompute
+from dask._expr import FinalizeCompute, HLGDistinctKeys, _ExprSequence
 from dask._task_spec import (
     DataNode,
     GraphNode,
@@ -68,7 +68,20 @@ def _convert_dask_keys(keys: NestedKeys) -> List:
     return List(*new_keys)
 
 
-def unpack_collections(expr):
+def _finalize_args_collections(args, collections):
+    old_keys = [c.__dask_keys__()[0] for c in collections]
+    from dask._task_spec import cull
+
+    collections = HLGDistinctKeys(_ExprSequence(*collections)).optimize()
+    new_keys = collections.__dask_keys__()
+    dsk = collections.__dask_graph__()
+    collections = tuple(Delayed(k[0], cull(dsk, [k[0]])) for k in new_keys)
+    subs = {old: new[0] for old, new in zip(old_keys, new_keys) if old != new}
+    args = args.substitute(subs)
+    return args, collections
+
+
+def unpack_collections(expr, _return_collections=True):
     """Normalize a python object and merge all sub-graphs.
 
     - Replace ``Delayed`` with their keys
@@ -93,6 +106,10 @@ def unpack_collections(expr):
         The object to be normalized. This function knows how to handle
         dask collections, as well as most builtin python types.
 
+    _optimize_collections: bool, optional
+        Internal use only!
+
+
     Returns
     -------
     task : object
@@ -116,20 +133,34 @@ def unpack_collections(expr):
     (Delayed('a'), Delayed('b'))
     """
     if isinstance(expr, Delayed):
-        return TaskRef(expr._key), (expr,)
+        if _return_collections:
+            return TaskRef(expr._key), (expr,)
+        else:
+            expr = collections_to_expr(expr).finalize_compute()
+            (name,) = expr.__dask_keys__()
+            return TaskRef(name), (expr,)
 
     # FIXME: Make this not trigger materialization
+    # Currently this is checking with hasattr for __dask_graph__ which triggers
+    # a materialization
     if base.is_dask_collection(expr):
-        expr = collections_to_expr(expr)
-        finalized = expr.finalize_compute().optimize()
-        # FIXME: Make this also go away
-        dsk = finalized.__dask_graph__()
-        keys = finalized.__dask_keys__()
-        if len(keys) > 1:
-            # `finalize_compute` _should_ guarantee that we only have one key
-            raise RuntimeError("Cannot unpack dask collections with non-trivial keys")
+        if _return_collections:
+            expr = collections_to_expr(expr)
+            finalized = expr.finalize_compute().optimize()
+            # FIXME: Make this also go away
+            dsk = finalized.__dask_graph__()
+            keys = finalized.__dask_keys__()
+            if len(keys) > 1:
+                # `finalize_compute` _should_ guarantee that we only have one key
+                raise RuntimeError(
+                    "Cannot unpack dask collections with non-trivial keys"
+                )
 
-        return unpack_collections(Delayed(keys[0], dsk))
+            return unpack_collections(Delayed(keys[0], dsk))
+        else:
+            expr = collections_to_expr(expr).finalize_compute()
+            (name,) = expr.__dask_keys__()
+            return TaskRef(name), (expr,)
 
     if type(expr) is type(iter(list())):
         expr = list(expr)
@@ -141,27 +172,40 @@ def unpack_collections(expr):
     typ = type(expr)
 
     if typ in (list, tuple, set):
-        args, collections = utils.unzip((unpack_collections(e) for e in expr), 2)
+        args, collections = utils.unzip(
+            (unpack_collections(e, _return_collections=False) for e in expr), 2
+        )
+
         collections = tuple(toolz.unique(toolz.concat(collections), key=id))
         if not collections:
             return expr, ()
         args = List(*args)
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
         # Ensure output type matches input type
         if typ is not list:
             args = Task(None, typ, args)
         return args, collections
 
     if typ is dict:
-        args, collections = unpack_collections([[k, v] for k, v in expr.items()])
+        args, collections = unpack_collections(
+            [[k, v] for k, v in expr.items()], _return_collections=False
+        )
         if not collections:
             return expr, ()
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
         return Task(None, dict, args), collections
 
     if typ is slice:
-        args, collections = unpack_collections([expr.start, expr.stop, expr.step])
+        args, collections = unpack_collections(
+            [expr.start, expr.stop, expr.step], _return_collections=False
+        )
         if not collections:
             return expr, ()
 
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
         return Task(None, apply, slice, args), collections
 
     if is_dataclass(expr):
@@ -170,10 +214,14 @@ def unpack_collections(expr):
                 [f.name, getattr(expr, f.name)]
                 for f in fields(expr)
                 if hasattr(expr, f.name)  # if init=False, field might not exist
-            ]
+            ],
+            _return_collections=False,
         )
         if not collections:
             return expr, ()
+
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
         try:
             _fields = {
                 f.name: getattr(expr, f.name)
@@ -195,9 +243,13 @@ def unpack_collections(expr):
         return Task(None, apply, typ, (), Task(None, dict, args)), collections
 
     if utils.is_namedtuple_instance(expr):
-        args, collections = unpack_collections([v for v in expr])
+        args, collections = unpack_collections(
+            [v for v in expr], _return_collections=False
+        )
         if not collections:
             return expr, ()
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
         return Task(None, typ, args), collections
 
     return expr, ()
@@ -737,7 +789,6 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     graph = HighLevelGraph.from_collections(
         name, {name: task}, dependencies=collections
     )
-    graph.cull([name])
     nout = nout if nout is not None else None
     return Delayed(name, graph, length=nout)
 

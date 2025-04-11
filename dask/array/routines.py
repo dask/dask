@@ -9,6 +9,7 @@ from numbers import Integral, Real
 import numpy as np
 from tlz import concat, interleave, sliding_window
 
+from dask._task_spec import Task, TaskRef
 from dask.array import chunk
 from dask.array.core import (
     Array,
@@ -849,14 +850,19 @@ def searchsorted(a, v, side="left", sorter=None):
     return out
 
 
-# TODO: dask linspace doesn't support delayed values
+def _linspace(start_stop_num):
+    return np.linspace(*start_stop_num)
+
+
 def _linspace_from_delayed(start, stop, num=50):
     linspace_name = "linspace-" + tokenize(start, stop, num)
-    (start_ref, stop_ref, num_ref), deps = unpack_collections([start, stop, num])
+    start_stop_num, deps = unpack_collections([start, stop, num])
     if len(deps) == 0:
         return np.linspace(start, stop, num=num)
 
-    linspace_dsk = {(linspace_name, 0): (np.linspace, start_ref, stop_ref, num_ref)}
+    linspace_dsk = {
+        (linspace_name, 0): Task((linspace_name, 0), _linspace, start_stop_num)
+    }
     linspace_graph = HighLevelGraph.from_collections(
         linspace_name, linspace_dsk, dependencies=deps
     )
@@ -865,7 +871,8 @@ def _linspace_from_delayed(start, stop, num=50):
     return Array(linspace_graph, linspace_name, chunks, dtype=float)
 
 
-def _block_hist(x, bins, range=None, weights=None):
+def _block_hist(x, bins_range, weights=None):
+    bins, range = bins_range
     return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
 
 
@@ -1018,12 +1025,12 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                 f"bins must be a 1-dimensional array or sequence, got shape {bins.shape}"
             )
 
-    (bins_ref, range_ref), deps = unpack_collections([bins, range])
+    bins_range, deps = unpack_collections([bins, range])
 
     # Map the histogram to all bins, forming a 2D array of histograms, stacked for each chunk
     if weights is None:
         dsk = {
-            (name, i, 0): (_block_hist, k, bins_ref, range_ref)
+            (name, i, 0): Task((name, i, 0), _block_hist, TaskRef(k), bins_range)
             for i, k in enumerate(flatten(a.__dask_keys__()))
         }
         dtype = np.histogram([])[0].dtype
@@ -1031,7 +1038,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, 0): (_block_hist, k, bins_ref, range_ref, w)
+            (name, i, 0): Task(
+                (name, i, 0), _block_hist, TaskRef(k), bins_range, TaskRef(w)
+            )
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
