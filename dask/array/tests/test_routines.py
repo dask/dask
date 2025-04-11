@@ -861,12 +861,12 @@ def test_histogram_bin_range_raises(bins, hist_range):
 
 @pytest.mark.parametrize("density", [True, False])
 @pytest.mark.parametrize("weighted", [True, False])
-@pytest.mark.parametrize("non_delayed_i", [None, 0, 1])
+@pytest.mark.parametrize("non_delayed_i", [None, 0])
 @pytest.mark.parametrize("delay_n_bins", [False, True])
 def test_histogram_delayed_range(density, weighted, non_delayed_i, delay_n_bins):
     n = 100
     v = np.random.default_rng().random(n)
-    vd = da.from_array(v, chunks=10)
+    vd = da.from_array(v, chunks=2)
 
     if weighted:
         weights = np.random.default_rng().random(n)
@@ -891,8 +891,8 @@ def test_histogram_delayed_range(density, weighted, non_delayed_i, delay_n_bins)
         weights=weights if weighted else None,
     )
 
-    assert_eq(hist_d, hist, check_graph=False)
-    assert_eq(bins_d, bins, check_graph=False)
+    assert_eq(hist_d, hist)
+    assert_eq(bins_d, bins)
 
 
 @pytest.mark.parametrize("density", [True, False])

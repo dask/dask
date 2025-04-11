@@ -145,7 +145,7 @@ def unpack_collections(expr, _return_collections=True):
     # a materialization
     if base.is_dask_collection(expr):
         if _return_collections:
-            expr = collections_to_expr(expr)
+            expr = ProhibitReuse(collections_to_expr(expr))
             finalized = expr.finalize_compute().optimize()
             # FIXME: Make this also go away
             dsk = finalized.__dask_graph__()
