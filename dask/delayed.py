@@ -157,7 +157,7 @@ def unpack_collections(expr, _return_collections=True):
                     "Cannot unpack dask collections with non-trivial keys"
                 )
 
-            return unpack_collections(Delayed(keys[0], dsk))
+            return unpack_collections(Delayed(next(flatten(keys)), dsk))
         else:
             expr = collections_to_expr(expr).finalize_compute()
             (name,) = expr.__dask_keys__()
