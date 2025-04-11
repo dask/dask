@@ -673,6 +673,9 @@ class Task(GraphNode):
     def data_producer(self) -> bool:
         return self._data_producer
 
+    def has_subgraph(self) -> bool:
+        return self.func == _execute_subgraph
+
     def copy(self):
         return type(self)(
             self.key,
