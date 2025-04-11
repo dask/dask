@@ -1269,7 +1269,7 @@ class HLGFinalizeCompute(HLGExpr):
 
     @property
     def _name(self):
-        return f"finalize-{self.deterministic_token}"
+        return f"finalize-{super()._name}"
 
     def __dask_graph__(self):
         # The baseclass __dask_graph__ will not just materialize this layer but

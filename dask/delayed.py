@@ -245,15 +245,19 @@ def unpack_collections(expr, _return_collections=True):
 
     if utils.is_namedtuple_instance(expr):
         args, collections = unpack_collections(
-            [v for v in expr], _return_collections=False
+            tuple(v for v in expr), _return_collections=False
         )
         if not collections:
             return expr, ()
         if _return_collections:
             args, collections = _finalize_args_collections(args, collections)
-        return Task(None, typ, args), collections
+        return Task(None, _reconstruct_namedtuple, typ, args), collections
 
     return expr, ()
+
+
+def _reconstruct_namedtuple(typ, fields):
+    return typ(*fields)
 
 
 def to_task_dask(expr):

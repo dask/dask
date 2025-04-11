@@ -105,14 +105,14 @@ def test_delayed_with_namedtuple():
 
     literal = dask.delayed(3)
     with_class = dask.delayed({"a": ANamedTuple(a=literal)})
+    assert with_class.compute() == {"a": ANamedTuple(a=3)}
 
     def return_nested(obj):
         return obj["a"].a
 
     final = delayed(return_nested)(with_class)
 
-    # FIXME: this is wrong
-    assert final.compute() == [3]
+    assert final.compute() == 3
 
 
 @dataclass
