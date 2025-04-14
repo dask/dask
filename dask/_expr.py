@@ -51,7 +51,7 @@ class Expr:
 
     _pickle_functools_cache: bool = True
 
-    _operands: list
+    operands: list
 
     _determ_token: str | None
 
@@ -66,15 +66,11 @@ class Expr:
         inst = object.__new__(cls)
 
         inst._determ_token = _determ_token
-        inst._operands = [_unpack_collections(o) for o in operands]
+        inst.operands = [_unpack_collections(o) for o in operands]
         # This is typically cached. Make sure the cache is populated by calling
         # it once
         inst._name
         return inst
-
-    @property
-    def operands(self):
-        return self._operands
 
     def _tune_down(self):
         return None
