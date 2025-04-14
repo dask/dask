@@ -34,10 +34,12 @@ OptimizerStage: TypeAlias = Literal[
 
 
 def _unpack_collections(o):
+    from dask.delayed import Delayed
+
     if isinstance(o, Expr):
         return o
 
-    if hasattr(o, "expr"):
+    if hasattr(o, "expr") and not isinstance(o, Delayed):
         return o.expr
     else:
         return o
