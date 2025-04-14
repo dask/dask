@@ -115,3 +115,29 @@ def test_singleton_expr():
     assert MySingletonInheritsCustomInitAsMixin(
         1, 2
     ) is not MySingletonInheritsCustomInitAsMixin(1, 2)
+
+
+@pytest.mark.slow()
+def test_refcounting_futures():
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+    distributed = pytest.importorskip("distributed")
+
+    # See https://github.com/dask/distributed/issues/9041
+    # Didn't reproduce with any of our fixtures
+    with distributed.Client(
+        n_workers=2, worker_class=distributed.Worker, dashboard=":0"
+    ) as client:
+
+        def gen(i):
+            return pd.DataFrame({"A": [i]}, index=[i])
+
+        futures = [client.submit(gen, i) for i in range(3)]
+
+        meta = gen(0)[:0]
+        df = dd.from_delayed(futures, meta)
+        df.compute()
+
+        del futures
+
+        df.compute()
