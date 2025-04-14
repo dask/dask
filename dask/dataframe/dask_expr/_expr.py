@@ -5,8 +5,9 @@ import functools
 import numbers
 import operator
 import warnings
+import weakref
 from collections import defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from functools import partial
 from typing import Any as AnyType
 
@@ -16,6 +17,7 @@ from pandas.errors import PerformanceWarning
 from tlz import merge_sorted, partition, unique
 
 from dask import _expr as core
+from dask._expr import Expr as BaseExpr
 from dask._expr import FinalizeCompute
 from dask._task_spec import Alias, DataNode, Task, TaskRef, execute_graph
 from dask.array import Array
@@ -3082,14 +3084,7 @@ class PartitionsFiltered(Expr):
 
 
 class _DelayedExpr(Expr):
-    # Wraps a Delayed object to make it an Expr for now. This is hacky and we should
-    # integrate this properly...
-    # TODO
     _parameters = ["obj"]
-
-    def __init__(self, obj, _determ_token=None):
-        self.obj = obj
-        self.operands = [obj]
 
     def __str__(self):
         return f"{type(self).__name__}({str(self.obj)})"
@@ -3113,11 +3108,6 @@ class _DelayedExpr(Expr):
 
 
 class DelayedsExpr(Expr):
-    _parameters = []
-
-    def __init__(self, *delayed_objects, _determ_token=None):
-        self.operands = delayed_objects
-
     def __str__(self):
         return f"{type(self).__name__}({str(self.operands[0])})"
 
@@ -3835,19 +3825,24 @@ class MinType:
         return True
 
 
-def determine_column_projection(expr, parent, dependents, additional_columns=None):
+def determine_column_projection(
+    expr: Expr,
+    parent: Expr,
+    dependents: dict[str, Collection[weakref.ref[BaseExpr]]],
+    additional_columns: list | None = None,
+) -> object:
     if isinstance(parent, Index):
         column_union = []
     else:
         column_union = parent.columns.copy()
-    parents = [x() for x in dependents[expr._name] if x() is not None]
+    parents: list[Expr]
+    parents = [inst for x in dependents[expr._name] if isinstance((inst := x()), Expr)]
 
     seen = set()
     for p in parents:
         if p._name in seen:
             continue
         seen.add(p._name)
-
         column_union.extend(p._projection_columns)
 
     if additional_columns is not None:

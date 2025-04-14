@@ -34,10 +34,12 @@ OptimizerStage: TypeAlias = Literal[
 
 
 def _unpack_collections(o):
+    from dask.delayed import Delayed
+
     if isinstance(o, Expr):
         return o
 
-    if hasattr(o, "expr"):
+    if hasattr(o, "expr") and not isinstance(o, Delayed):
         return o.expr
     else:
         return o
@@ -837,7 +839,7 @@ class SingletonExpr(Expr):
             cls._instances = weakref.WeakValueDictionary()
         inst = super().__new__(cls, *args, _determ_token=_determ_token, **kwargs)
         _name = inst._name
-        if _name in cls._instances:
+        if _name in cls._instances and cls.__init__ == object.__init__:
             return cls._instances[_name]
 
         cls._instances[_name] = inst
