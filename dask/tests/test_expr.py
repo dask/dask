@@ -126,7 +126,7 @@ def test_refcounting_futures():
     # See https://github.com/dask/distributed/issues/9041
     # Didn't reproduce with any of our fixtures
     with distributed.Client(
-        n_workers=2, worker_class=distributed.Worker, dashboard=":0"
+        n_workers=2, worker_class=distributed.Worker, dashboard_address=":0"
     ) as client:
 
         def gen(i):
