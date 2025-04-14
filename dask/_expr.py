@@ -837,7 +837,7 @@ class SingletonExpr(Expr):
             cls._instances = weakref.WeakValueDictionary()
         inst = super().__new__(cls, *args, _determ_token=_determ_token, **kwargs)
         _name = inst._name
-        if _name in cls._instances:
+        if _name in cls._instances and cls.__init__ == object.__init__:
             return cls._instances[_name]
 
         cls._instances[_name] = inst
