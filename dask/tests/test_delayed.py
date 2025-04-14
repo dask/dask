@@ -568,8 +568,8 @@ def test_array_delayed():
 
 
 def test_array_delayed_complex_optimization():
-    # Ensure that collections that if multiple collections are passed to a
-    # Delayed function that they are optimized together
+    # Ensure that when multiple collections are passed to a Delayed function,
+    # they are optimized together
     np = pytest.importorskip("numpy")
     pytest.importorskip("dask.array")
     from dask.array.core import from_func
