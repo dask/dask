@@ -1011,7 +1011,7 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
     expr = collections_to_expr(collections, optimize_graph)
     expr = expr.optimize()
     keys, postpersists = [], []
-    for a, akeys in zip(collections, expr.__dask_keys__()):
+    for a, akeys in zip(collections, expr.__dask_keys__(), strict=True):
         a_keys = list(flatten(akeys))
         rebuild, state = a.__dask_postpersist__()
         keys.extend(a_keys)

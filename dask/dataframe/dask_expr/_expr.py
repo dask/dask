@@ -3811,15 +3811,13 @@ def determine_column_projection(
     parent: Expr,
     dependents: dict[str, Collection[weakref.ref[BaseExpr]]],
     additional_columns: list | None = None,
-):
+) -> object:
     if isinstance(parent, Index):
         column_union = []
     else:
         column_union = parent.columns.copy()
     parents: list[Expr]
-    parents = [
-        x() for x in dependents[expr._name] if isinstance(x(), Expr)  # type: ignore
-    ]
+    parents = [inst for x in dependents[expr._name] if isinstance((inst := x()), Expr)]
 
     seen = set()
     for p in parents:
