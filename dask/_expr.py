@@ -34,10 +34,12 @@ OptimizerStage: TypeAlias = Literal[
 
 
 def _unpack_collections(o):
+    from dask.delayed import Delayed
+
     if isinstance(o, Expr):
         return o
 
-    if hasattr(o, "expr"):
+    if hasattr(o, "expr") and not isinstance(o, Delayed):
         return o.expr
     else:
         return o
@@ -49,7 +51,7 @@ class Expr:
 
     _pickle_functools_cache: bool = True
 
-    operands: list
+    _operands: list
 
     _determ_token: str | None
 
@@ -64,11 +66,15 @@ class Expr:
         inst = object.__new__(cls)
 
         inst._determ_token = _determ_token
-        inst.operands = [_unpack_collections(o) for o in operands]
+        inst._operands = [_unpack_collections(o) for o in operands]
         # This is typically cached. Make sure the cache is populated by calling
         # it once
         inst._name
         return inst
+
+    @property
+    def operands(self):
+        return self._operands
 
     def _tune_down(self):
         return None
