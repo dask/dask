@@ -3053,14 +3053,7 @@ class PartitionsFiltered(Expr):
 
 
 class _DelayedExpr(Expr):
-    # Wraps a Delayed object to make it an Expr for now. This is hacky and we should
-    # integrate this properly...
-    # TODO
     _parameters = ["obj"]
-
-    def __init__(self, obj, _determ_token=None):
-        self.obj = obj
-        self.operands = [obj]
 
     def __str__(self):
         return f"{type(self).__name__}({str(self.obj)})"
@@ -3084,11 +3077,6 @@ class _DelayedExpr(Expr):
 
 
 class DelayedsExpr(Expr):
-    _parameters = []
-
-    def __init__(self, *delayed_objects, _determ_token=None):
-        self.operands = delayed_objects
-
     def __str__(self):
         return f"{type(self).__name__}({str(self.operands[0])})"
 
