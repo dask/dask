@@ -119,8 +119,8 @@ def test_singleton_expr():
 
 @pytest.mark.slow()
 def test_refcounting_futures():
-    dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
     distributed = pytest.importorskip("distributed")
 
     # See https://github.com/dask/distributed/issues/9041
