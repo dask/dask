@@ -13,7 +13,6 @@ import toolz
 
 import dask
 from dask._task_spec import Task, convert_legacy_graph
-from dask.core import flatten
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import ensure_dict, funcname, import_required
@@ -1308,32 +1307,32 @@ class ProhibitReuse(Expr):
     This can be used to break a common subexpression apart.
     """
 
-    _parameters = ["expr", "suffix"]
-    _defaults = {"suffix": None}
+    _parameters = ["expr"]
 
     def __dask_keys__(self):
-        return self.expr.__dask_keys__()
+        return self._modify_keys(self.expr.__dask_keys__())
 
     @staticmethod
     def _identity(obj):
         return obj
 
-    def _layer(self) -> dict:
-        dsk = convert_legacy_graph(self.expr._layer())
-        suffix = self.suffix or uuid.uuid4().hex
+    @functools.cached_property
+    def _suffix(self):
+        return uuid.uuid4().hex
 
-        def _modify_key(k):
-            if isinstance(k, tuple):
-                return (_modify_key(k[0]),) + k[1:]
-            elif isinstance(k, (int, float)):
-                k = str(k)
-            return f"{k}-{suffix}"
+    def _modify_keys(self, k):
+        if isinstance(k, list):
+            return [self._modify_keys(kk) for kk in k]
+        elif isinstance(k, tuple):
+            return (self._modify_keys(k[0]),) + k[1:]
+        elif isinstance(k, (int, float)):
+            k = str(k)
+        return f"{k}-{self._suffix}"
 
-        subs = {
-            old_key: _modify_key(old_key)
-            for old_key in dsk
-            if old_key not in set(flatten(self.__dask_keys__()))
-        }
+    def __dask_graph__(self):
+        dsk = convert_legacy_graph(self.expr.__dask_graph__())
+
+        subs = {old_key: self._modify_keys(old_key) for old_key in dsk}
         dsk2 = {
             new_key: Task(
                 new_key,
@@ -1342,6 +1341,7 @@ class ProhibitReuse(Expr):
             )
             for old_key, new_key in subs.items()
         }
-        # only __dask_keys__ left
         dsk2.update(dsk)
         return dsk2
+
+    _layer = __dask_graph__

@@ -784,13 +784,12 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     args2, collections = unzip(map(unpack_collections, args), 2)
     collections = list(concat(collections))
 
-    if kwargs:
-        dask_kwargs, collections2 = unpack_collections(kwargs)
-        collections.extend(collections2)
-
+    dask_kwargs, collections2 = unpack_collections(kwargs)
+    collections.extend(collections2)
+    if dask_kwargs:
         task = Task(name, _apply2, func, *args2, dask_kwargs=dask_kwargs)
     else:
-        task = Task(name, func, *args2)
+        task = Task(name, func, *args2, **kwargs)
 
     graph = HighLevelGraph.from_collections(
         name, {name: task}, dependencies=collections
