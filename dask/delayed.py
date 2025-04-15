@@ -73,7 +73,7 @@ def _finalize_args_collections(args, collections):
     old_keys = [c.__dask_keys__()[0] for c in collections]
     from dask._task_spec import cull
 
-    collections = ProhibitReuse(_ExprSequence(*collections)).optimize()
+    collections = _ExprSequence(*collections).optimize()
     new_keys = collections.__dask_keys__()
     dsk = convert_legacy_graph(collections.__dask_graph__())
     collections = tuple(Delayed(k[0], cull(dsk, [k[0]])) for k in new_keys)
