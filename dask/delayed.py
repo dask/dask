@@ -32,7 +32,7 @@ from dask.base import (
 from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
-from dask.highlevelgraph import HighLevelGraph
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.typing import Graph, NestedKeys
 from dask.utils import (
     OperatorMethodMixin,
@@ -69,6 +69,10 @@ def _convert_dask_keys(keys: NestedKeys) -> List:
     return List(*new_keys)
 
 
+def _get_partial(key, dct, default):
+    return dct.get(key, default)
+
+
 def _finalize_args_collections(args, collections):
     old_keys = [c.__dask_keys__()[0] for c in collections]
     from dask._task_spec import cull
@@ -76,7 +80,32 @@ def _finalize_args_collections(args, collections):
     collections = _ExprSequence(*collections).optimize()
     new_keys = collections.__dask_keys__()
     dsk = convert_legacy_graph(collections.__dask_graph__())
-    collections = tuple(Delayed(k[0], cull(dsk, [k[0]])) for k in new_keys)
+    annots = collections.__dask_annotations__()
+    outcollections = []
+    for k in new_keys:
+        # Annotations are defined per HLG Layer but after this transformation
+        # these no longer properly exist which is why __dask_annotations__
+        # returns a fully materialized dictionary {annot: {key: value}}
+        # Introducing a tombstone with a callable is the only way I found how we
+        # could revert this transformation (not necessarily efficient but
+        # well...)
+        layer_annotations = {
+            annot: partial(
+                _get_partial, dct=key_val, default=collections._annotations_tombstone()
+            )
+            for annot, key_val in annots.items()
+        }
+        hlg = HighLevelGraph(
+            {
+                k[0]: MaterializedLayer(
+                    cull(dsk, [k[0]]),
+                    annotations=layer_annotations,
+                )
+            },
+            dependencies={k[0]: set()},
+        )
+        outcollections.append(Delayed(k[0], hlg))
+    collections = tuple(outcollections)
     subs = {old: new[0] for old, new in zip(old_keys, new_keys) if old != new}
     args = args.substitute(subs)
     return args, collections
