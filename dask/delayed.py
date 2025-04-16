@@ -83,6 +83,12 @@ def _finalize_args_collections(args, collections):
     annots = collections.__dask_annotations__()
     outcollections = []
     for k in new_keys:
+        # Annotations are defined per HLG Layer but after this transformation
+        # these no longer properly exist which is why __dask_annotations__
+        # returns a fully materialized dictionary {annot: {key: value}}
+        # Introducing a tombstone with a callable is the only way I found how we
+        # could revert this transformation (not necessarily efficient but
+        # well...)
         layer_annotations = {
             annot: partial(
                 _get_partial, dct=key_val, default=collections._annotations_tombstone()
