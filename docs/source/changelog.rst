@@ -16,6 +16,16 @@ Highlights
   scheduler of a distributed cluster (if available)
 - New kwarg `force` for ``DataFrame.shuffle`` which signals the optimizer to not
   drop the shuffle during optimization.
+- (Breaking; kind of) Collections that are passed to dask methods as arguments
+  are now properly optimized. If multiple collections are passed as arguments
+  they will be optimized together. Collections passed this way are prohibited
+  from being being reused, i.e. if the collection is used again in another
+  function call it will be computed again. This pattern is used to avoid
+  pipeline breakers which typically drive memory usage. Avoiding those should
+  reduce memory pressure on the cluster but can cause runtime regressions.
+- (Special case of above point) Collections passed to Delayed objects are now
+  optimized automatically.
+
 
 Breaking changes
 ^^^^^^^^^^^^^^^^

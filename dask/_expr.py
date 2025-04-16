@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Literal
 import toolz
 
 import dask
-from dask._task_spec import Task
+from dask._task_spec import Task, convert_legacy_graph
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import ensure_dict, funcname, import_required
@@ -1268,7 +1268,7 @@ class HLGFinalizeCompute(HLGExpr):
 
     @property
     def _name(self):
-        return f"finalize-{self.deterministic_token}"
+        return f"finalize-{super()._name}"
 
     def __dask_graph__(self):
         # The baseclass __dask_graph__ will not just materialize this layer but
@@ -1299,3 +1299,49 @@ class HLGFinalizeCompute(HLGExpr):
 
     def __dask_keys__(self):
         return [self._name]
+
+
+class ProhibitReuse(Expr):
+    """
+    An expression that guarantees that all keys are suffixes with a unique id.
+    This can be used to break a common subexpression apart.
+    """
+
+    _parameters = ["expr"]
+
+    def __dask_keys__(self):
+        return self._modify_keys(self.expr.__dask_keys__())
+
+    @staticmethod
+    def _identity(obj):
+        return obj
+
+    @functools.cached_property
+    def _suffix(self):
+        return uuid.uuid4().hex
+
+    def _modify_keys(self, k):
+        if isinstance(k, list):
+            return [self._modify_keys(kk) for kk in k]
+        elif isinstance(k, tuple):
+            return (self._modify_keys(k[0]),) + k[1:]
+        elif isinstance(k, (int, float)):
+            k = str(k)
+        return f"{k}-{self._suffix}"
+
+    def __dask_graph__(self):
+        dsk = convert_legacy_graph(self.expr.__dask_graph__())
+
+        subs = {old_key: self._modify_keys(old_key) for old_key in dsk}
+        dsk2 = {
+            new_key: Task(
+                new_key,
+                ProhibitReuse._identity,
+                dsk.pop(old_key).substitute(subs),
+            )
+            for old_key, new_key in subs.items()
+        }
+        dsk2.update(dsk)
+        return dsk2
+
+    _layer = __dask_graph__

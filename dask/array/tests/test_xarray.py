@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from functools import partial
+
 import numpy as np
 import pytest
 
+import dask
 import dask.array as da
 from dask.array.utils import assert_eq
+from dask.utils import tmpdir
 
 xr = pytest.importorskip("xarray")
 
@@ -82,3 +86,42 @@ def test_positional_indexer_multiple_variables():
     graph = result.__dask_graph__()
     assert len({k for k in graph if "shuffle-taker" in k}) == 4
     assert len({k for k in graph if "shuffle-sorter" in k}) == 2
+
+
+@pytest.mark.parametrize("compute", [True, False])
+def test_xarray_blockwise_fusion_store(compute):
+    def custom_scheduler_get(dsk, keys, expected, **kwargs):
+        dsk = dsk.__dask_graph__()
+        assert (
+            len(dsk) == expected
+        ), f"False number of tasks got {len(dsk)} but expected {expected}"
+        return [42 for _ in keys]
+
+    # First test that this mocking stuff works as expecged
+    with pytest.raises(AssertionError, match="False number of tasks"):
+        scheduler = partial(custom_scheduler_get, expected=42)
+        dask.compute(da.ones(10), scheduler=scheduler)
+
+    coord = da.arange(8, chunks=-1)
+    data = da.random.random((8, 8), chunks=-1) + 1
+    x = xr.DataArray(data, coords={"x": coord, "y": coord}, dims=["x", "y"])
+
+    y = ((x + 1) * 2) / 2 - 1
+
+    # Everything fused into one compute task
+    # one finalize Alias
+    expected = 2
+    scheduler = partial(custom_scheduler_get, expected=expected)
+    dask.compute(y, scheduler=scheduler)
+
+    with tmpdir() as dirname:
+        if compute:
+            with dask.config.set(scheduler=scheduler):
+                y.to_zarr(dirname, compute=True)
+        else:
+            # There's a delayed finalize store smashed on top which won't be fused by
+            # default
+            expected += 1
+            scheduler = partial(custom_scheduler_get, expected=expected)
+            stored = y.to_zarr(dirname, compute=False)
+            dask.compute(stored, scheduler=scheduler)

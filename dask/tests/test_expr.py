@@ -5,7 +5,8 @@ import pickle
 
 import pytest
 
-from dask._expr import Expr, SingletonExpr
+from dask._expr import Expr, ProhibitReuse, SingletonExpr, _ExprSequence
+from dask._task_spec import DataNode
 
 
 class MyExpr(Expr):
@@ -141,3 +142,22 @@ def test_refcounting_futures():
         del futures
 
         df.compute()
+
+
+class FooExpr(Expr):
+    def _layer(self) -> dict:
+        return {"foo": DataNode("foo", 42)}
+
+
+def test_prohibit_reuse():
+    once = FooExpr()
+    dsk = _ExprSequence(once, ProhibitReuse(once)).optimize().__dask_graph__()
+
+    assert len(dsk) == 2
+    first = dsk.pop("foo")()
+    key, val = dsk.popitem()
+    assert key.startswith("foo") and key != "foo"
+    # We don't want to chain anything but actually _hide_ the task
+    assert not val.dependencies
+    # Task is wrapped
+    assert val() is first

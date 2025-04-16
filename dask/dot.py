@@ -4,6 +4,7 @@ import os
 import re
 from functools import partial
 
+from dask._task_spec import GraphNode, Task
 from dask.core import get_dependencies, ishashable, istask
 from dask.utils import apply, funcname, import_required, key_split
 
@@ -19,6 +20,10 @@ def task_label(task):
     >>> task_label((add, (add, 1, 2), 3))
     'add(...)'
     """
+    if isinstance(task, GraphNode):
+        if isinstance(task, Task) and task.has_subgraph():
+            return f"{task.key}(...)"
+        return task.key
     func = task[0]
     if func is apply:
         func = task[1]
