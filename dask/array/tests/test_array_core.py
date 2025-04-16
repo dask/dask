@@ -5454,12 +5454,12 @@ def test_map_blocks_large_inputs_delayed():
     b = np.ones(1000000)
 
     c = a.map_blocks(add, b)
-    assert any(b is v for v in c.dask.values())
+    assert any(b is v() for v in c.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
     d = a.map_blocks(lambda x, y: x + y.sum(), y=b)
     assert_eq(d, d)
-    assert any(b is v for v in d.dask.values())
+    assert any(b is v() for v in d.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
 
@@ -5471,12 +5471,12 @@ def test_blockwise_large_inputs_delayed():
     b = np.ones(1000000)
 
     c = da.blockwise(func, "i", a, "i", b, None, dtype=a.dtype)
-    assert any(b is v for v in c.dask.values())
+    assert any(b is v() for v in c.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
     assert_eq(c, c)
 
     d = da.blockwise(lambda x, y: x, "i", a, "i", y=b, dtype=a.dtype)
-    assert any(b is v for v in d.dask.values())
+    assert any(b is v() for v in d.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
     assert_eq(d, d)
 

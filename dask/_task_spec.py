@@ -673,6 +673,9 @@ class Task(GraphNode):
     def data_producer(self) -> bool:
         return self._data_producer
 
+    def has_subgraph(self) -> bool:
+        return self.func == _execute_subgraph
+
     def copy(self):
         return type(self)(
             self.key,
@@ -1119,6 +1122,10 @@ def fuse_linear_task_spec(dsk, keys):
 def cull(
     dsk: dict[KeyType, GraphNode], keys: Iterable[KeyType]
 ) -> dict[KeyType, GraphNode]:
+    if not isinstance(keys, (list, set, tuple)):
+        raise TypeError(
+            f"Expected list, set or tuple for keys, got {type(keys).__name__}"
+        )
     work = set(keys)
     seen: set[KeyType] = set()
     dsk2 = {}

@@ -16,6 +16,7 @@ from tlz import merge
 import dask
 import dask.bag as db
 from dask import compute
+from dask._task_spec import Task
 from dask.base import collections_to_expr
 from dask.delayed import Delayed, delayed, to_task_dask
 from dask.highlevelgraph import HighLevelGraph
@@ -94,7 +95,6 @@ def test_delayed():
 
     a = delayed(1)
     assert a.compute() == 1
-    assert 1 in a.dask.values()
     b = add2(add2(a, 2), 3)
     assert a.key in b.dask
 
@@ -105,6 +105,7 @@ def test_delayed_with_namedtuple():
 
     literal = dask.delayed(3)
     with_class = dask.delayed({"a": ANamedTuple(a=literal)})
+    assert with_class.compute() == {"a": ANamedTuple(a=3)}
 
     def return_nested(obj):
         return obj["a"].a
@@ -274,7 +275,9 @@ def test_method_getattr_call_same_task():
     a = delayed([1, 2, 3])
     o = a.index(1)
     # Don't getattr the method, then call in separate task
-    assert getattr not in {v[0] for v in o.__dask_graph__().values()}
+    tasks = {v.func for v in o.__dask_graph__().values() if isinstance(v, Task)}
+    assert tasks
+    assert getattr not in tasks
 
 
 def test_np_dtype_of_delayed():
@@ -511,7 +514,8 @@ def test_nout():
 def test_nout_with_tasks(x):
     length = len(x)
     d = delayed(x, nout=length)
-    assert len(d) == len(list(d)) == length
+    assert len(d) == length
+    assert len(list(d)) == length
     assert d.compute() == x
 
 
@@ -563,6 +567,64 @@ def test_array_delayed():
     assert (delayed_arr.compute() == arr).all()
 
 
+def test_array_delayed_complex_optimization():
+    # Ensure that when multiple collections are passed to a Delayed function,
+    # they are optimized together
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("dask.array")
+    from dask.array.core import from_func
+    from dask.array.utils import assert_eq
+
+    called = False
+
+    def only_once():
+        nonlocal called
+        if called:
+            raise RuntimeError("Already executed")
+
+        called = True
+        return np.arange(100).reshape((10, 10))
+
+    darr = from_func(only_once, shape=(10, 10), dtype=int)
+    a = darr + 1
+    b = darr + 2
+    val = delayed(sum)([a, b, 1])
+    assert isinstance(val, Delayed)
+    np_arr = np.arange(100).reshape((10, 10))
+    assert_eq(val.compute(), (np_arr + 1) + (np_arr + 2) + 1)
+
+
+def test_array_delayed_complex_optimization_kwargs():
+    # Ensure that collections that if multiple collections are passed to a
+    # Delayed function that they are optimized together
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("dask.array")
+    from dask.array.core import from_func
+    from dask.array.utils import assert_eq
+
+    called = False
+
+    def only_once():
+        nonlocal called
+        if called:
+            raise RuntimeError("Already executed")
+
+        called = True
+        return np.arange(100).reshape((10, 10))
+
+    darr = from_func(only_once, shape=(10, 10), dtype=int)
+    a = darr + 1
+    b = darr + 2
+
+    def sum_kwargs_only(*, a, b, c):
+        return sum([a, b, c])
+
+    val = delayed(sum_kwargs_only)(a=a, b=b, c=1)
+    assert isinstance(val, Delayed)
+    np_arr = np.arange(100).reshape((10, 10))
+    assert_eq(val.compute(), (np_arr + 1) + (np_arr + 2) + 1)
+
+
 def test_array_bag_delayed():
     np = pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
@@ -612,9 +674,7 @@ def test_delayed_method_descriptor():
 def test_delayed_callable():
     f = delayed(add, pure=True)
     v = f(1, 2)
-    assert v.dask == {v.key: (add, 1, 2)}
-
-    assert f.dask == {f.key: add}
+    assert v.compute() == 3
     assert f.compute() == add
 
 
@@ -865,7 +925,7 @@ def test_delayed_fusion():
 
     obj2 = test3(test2(test(10)))
     with dask.config.set({"optimization.fuse.delayed": True}):
-        dsk2 = collections_to_expr([obj]).__dask_graph__()
+        dsk2 = collections_to_expr([obj]).optimize().__dask_graph__()
         result = dask.compute(obj2)
     assert len(dsk2) == 2
     assert dask.compute(obj) == result
