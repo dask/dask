@@ -722,11 +722,23 @@ class HighLevelGraph(Graph):
         hlg: HighLevelGraph
             Culled high level graph
         """
-        from dask.layers import Blockwise
-
         keys_set = set(flatten(keys))
 
-        all_ext_keys = self.get_all_external_keys()
+        from dask.layers import Blockwise
+
+        # Note: All Layer classes still in existence are of
+        #       one of these types (or subclasses)
+        #
+        # - MaterializedLayer
+        # - Blockwise
+        # - ArrayOverlapLayer (which is basically as good as MaterializedLayer)
+
+        if all(isinstance(layer, Blockwise) for layer in self.layers.values()):
+            all_ext_keys = set()
+        else:
+            # MaterializedLayer needs this since we can't be sure they are using
+            # the Task class, i.e. we need this to compute dependencies
+            all_ext_keys = self.get_all_external_keys()
         ret_layers: dict = {}
         ret_key_deps: dict = {}
         for layer_name in reversed(self._toposort_layers()):
@@ -750,20 +762,7 @@ class HighLevelGraph(Graph):
 
                 # Save the culled layer and its key dependencies
                 ret_layers[layer_name] = culled_layer
-                if (
-                    isinstance(layer, Blockwise)
-                    or isinstance(layer, MaterializedLayer)
-                    or (layer.is_materialized() and (len(layer) == len(culled_deps)))
-                ):
-                    # Don't use culled_deps to update ret_key_deps
-                    # unless they are "direct" key dependencies.
-                    #
-                    # Note that `MaterializedLayer` is "safe", because
-                    # its `cull` method will return a complete dict of
-                    # direct dependencies for all keys in its subgraph.
-                    # See: https://github.com/dask/dask/issues/9389
-                    # for performance motivation
-                    ret_key_deps.update(culled_deps)
+                ret_key_deps.update(culled_deps)
 
         # Converting dict_keys to a real set lets Python optimise the set
         # intersection to iterate over the smaller of the two sets.
