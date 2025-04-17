@@ -104,6 +104,11 @@ properties:
     type: object
     properties:
 
+      automatic-rechunk:
+        type: boolean
+        description: |
+          Whether to automatically rechunk arrays. Default is False.
+
       backend:
         type:
         - string
