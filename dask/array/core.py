@@ -4007,12 +4007,16 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     )
 
     dsk = {task.key: task}
+
+    if is_future:
+        dsk[value.key] = value
+        dependencies = []
+    else:
+        dependencies = [value]
     chunks = tuple((d,) for d in shape)
     # TODO: value._key may not be the name of the layer in value.dask
     # This should be fixed after we build full expression graphs
-    graph = HighLevelGraph.from_collections(
-        name, dsk, dependencies=[value] if not is_future else []
-    )
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
