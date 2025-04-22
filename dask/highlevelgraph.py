@@ -765,13 +765,9 @@ class HighLevelGraph(Graph):
                 # Update `keys` with all layer's external key dependencies,
                 # which are all the layer's dependencies (`culled_deps`)
                 # excluding the layer's output keys.
-                for d in culled_deps.values():
+                for k, d in culled_deps.items():
                     keys_set |= d
-
-                # FIXME: keys_set is growing with every loop iteration
-                # by being smart about the dependencies and keeping track of
-                # culled-deps we should be able to reduce it's size once we know
-                # layer keys are no longer referenced... maybe
+                    keys_set.discard(k)
 
                 # Save the culled layer and its key dependencies
                 ret_layers[layer_name] = culled_layer
