@@ -584,6 +584,10 @@ class Blockwise(Layer):
         self.new_axes = new_axes or {}
 
     @property
+    def has_legacy_tasks(self):
+        return False
+
+    @property
     def dims(self):
         """Returns a dictionary mapping between each index specified in
         `self.indices` and the number of output blocks for that indice.
