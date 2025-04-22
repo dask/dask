@@ -150,7 +150,6 @@ class Layer(Graph):
         """
 
         if self.has_legacy_tasks:
-            assert all_hlg_keys, "Cull needs all_hlg_keys to be set"
             if len(keys) == len(self):
                 # Nothing to cull if preserving all existing keys
                 return (
