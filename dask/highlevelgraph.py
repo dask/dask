@@ -765,6 +765,8 @@ class HighLevelGraph(Graph):
             layer = self.layers[layer_name]
             if keys_set:
                 culled_layer, culled_deps = layer.cull(keys_set, all_ext_keys)
+                if not culled_deps:
+                    continue
 
                 # Update `keys` with all layer's external key dependencies,
                 # which are all the layer's dependencies (`culled_deps`)
