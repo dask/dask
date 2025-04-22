@@ -751,27 +751,30 @@ class HighLevelGraph(Graph):
         # - MaterializedLayer
         # - Blockwise
         # - ArrayOverlapLayer (which is basically as good as MaterializedLayer)
-
         if not any(layer.has_legacy_tasks for layer in self.layers.values()):
             all_ext_keys = set()
         else:
+            # FIXME: Technically, we don't need to compute **all** keys but only
+            # those of the current layer and all of its dependencies, i.e. if
+            # there are legacy layers for IO followed by many blockwise layers,
+            # we should still get by without this
             all_ext_keys = self.get_all_external_keys()
+
         ret_layers: dict = {}
-        ret_key_deps: dict = {}
         for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
             if keys_set:
                 culled_layer, culled_deps = layer.cull(keys_set, all_ext_keys)
+
                 # Update `keys` with all layer's external key dependencies,
                 # which are all the layer's dependencies (`culled_deps`)
                 # excluding the layer's output keys.
                 for k, d in culled_deps.items():
                     keys_set |= d
                     keys_set.discard(k)
-
-                # Save the culled layer and its key dependencies
-                ret_layers[layer_name] = culled_layer
-                ret_key_deps.update(culled_deps)
+                layer = culled_layer
+            # Save the culled layer and its key dependencies
+            ret_layers[layer_name] = layer
 
         # Converting dict_keys to a real set lets Python optimise the set
         # intersection to iterate over the smaller of the two sets.
@@ -781,7 +784,7 @@ class HighLevelGraph(Graph):
             for layer_name in ret_layers
         }
 
-        return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
+        return HighLevelGraph(ret_layers, ret_dependencies)
 
     def cull_layers(self, layers: Iterable[str]) -> HighLevelGraph:
         """Return a new HighLevelGraph with only the given layers and their
