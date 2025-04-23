@@ -28,11 +28,12 @@ from tlz import accumulate, concat, first, partition
 from toolz import frequencies
 
 from dask._compatibility import import_optional_dependency
+from dask.core import flatten
 
 xr = import_optional_dependency("xarray", errors="ignore")
 
 from dask import compute, config, core
-from dask._task_spec import List, Task, TaskRef
+from dask._task_spec import Alias, List, Task, TaskRef
 from dask.array import chunk
 from dask.array.chunk import getitem
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -60,6 +61,7 @@ from dask.base import (
     persist,
     tokenize,
 )
+from dask.blockwise import BlockwiseDep
 from dask.blockwise import blockwise as core_blockwise
 from dask.blockwise import broadcast_dimensions
 from dask.context import globalmethod
@@ -68,7 +70,7 @@ from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import ArrayBlockIdDep, ArraySliceDep, ArrayValuesDep
 from dask.sizeof import sizeof
-from dask.typing import Graph, Key, NestedKeys
+from dask.typing import Graph, NestedKeys
 from dask.utils import (
     IndexCallable,
     SerializableLock,
@@ -79,6 +81,7 @@ from dask.utils import (
     derived_from,
     format_bytes,
     funcname,
+    get_scheduler_lock,
     has_keyword,
     is_arraylike,
     is_dataframe_like,
@@ -824,11 +827,15 @@ def map_blocks(
         new_axis = [new_axis]  # TODO: handle new_axis
 
     arrs = [a for a in args if isinstance(a, Array)]
+    argpairs = []
+    for a in args:
+        if isinstance(a, Array):
+            argpairs.append((a, tuple(range(a.ndim))[::-1]))
+        elif isinstance(a, BlockwiseDep):
+            argpairs.append((a, tuple(range(args[0].ndim))[::-1]))
+        else:
+            argpairs.append((a, None))
 
-    argpairs = [
-        (a, tuple(range(a.ndim))[::-1]) if isinstance(a, Array) else (a, None)
-        for a in args
-    ]
     if arrs:
         out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
     else:
@@ -1189,85 +1196,54 @@ def store(
             )
     del regions
 
-    # Optimize all sources together
-    sources_hlg = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
-    sources_layer = Array.__dask_optimize__(
-        sources_hlg, list(core.flatten([e.__dask_keys__() for e in sources]))
-    )
-    sources_name = "store-sources-" + tokenize(sources)
-    layers = {sources_name: sources_layer}
-    dependencies: dict[str, set[str]] = {sources_name: set()}
-
-    # Optimize all targets together
-    targets_keys = []
-    targets_dsks = []
-    for t in targets:
-        if isinstance(t, Delayed):
-            targets_keys.append(t.key)
-            targets_dsks.append(t.__dask_graph__())
-        elif is_dask_collection(t):
-            raise TypeError("Targets must be either Delayed objects or array-likes")
-
-    if targets_dsks:
-        targets_hlg = HighLevelGraph.merge(*targets_dsks)
-        targets_layer = Delayed.__dask_optimize__(targets_hlg, targets_keys)
-        targets_name = "store-targets-" + tokenize(targets_keys)
-        layers[targets_name] = targets_layer
-        dependencies[targets_name] = set()
-
     if load_stored is None:
         load_stored = return_stored and not compute
 
-    map_names = [
-        "store-map-" + tokenize(s, t if isinstance(t, Delayed) else id(t), r)
-        for s, t, r in zip(sources, targets, regions_list)
-    ]
-    map_keys: list[tuple] = []
+    if lock is True:
+        lock = get_scheduler_lock(collection=Array, scheduler=kwargs.get("scheduler"))
 
-    for s, t, n, r in zip(sources, targets, map_names, regions_list):
-        map_layer = insert_to_ooc(
-            keys=s.__dask_keys__(),
-            chunks=s.chunks,
-            out=t.key if isinstance(t, Delayed) else t,
-            name=n,
-            lock=lock,
-            region=r,
-            return_stored=return_stored,
-            load_stored=load_stored,
+    arrays = []
+    for s, t, r in zip(sources, targets, regions_list):
+        slices = ArraySliceDep(s.chunks)
+        arrays.append(
+            s.map_blocks(
+                load_store_chunk,  # type: ignore[arg-type]
+                t,
+                # Note: slices / BlockwiseDep have to be passed by arg, not by kwarg
+                slices,
+                region=r,
+                lock=lock,
+                return_stored=return_stored,
+                load_stored=load_stored,
+                name="store-map",
+                meta=s._meta,
+            )
         )
-        layers[n] = map_layer
-        if isinstance(t, Delayed):
-            dependencies[n] = {sources_name, targets_name}
+
+    if compute:
+        if not return_stored:
+            import dask
+
+            dask.compute(arrays, **kwargs)
+            return None
         else:
-            dependencies[n] = {sources_name}
-        map_keys += map_layer.keys()
-
-    if return_stored:
-        store_dsk = HighLevelGraph(layers, dependencies)
-        load_store_dsk: HighLevelGraph | dict[tuple, Any] = store_dsk
-        if compute:
-            store_dlyds = [Delayed(k, store_dsk, layer=k[0]) for k in map_keys]
-            store_dlyds = persist(*store_dlyds, **kwargs)
-            store_dsk_2 = HighLevelGraph.merge(*[e.dask for e in store_dlyds])
-            load_store_dsk = retrieve_from_ooc(map_keys, store_dsk, store_dsk_2)
-            map_names = ["load-" + n for n in map_names]
-
-        return tuple(
-            Array(load_store_dsk, n, s.chunks, meta=s)
-            for s, n in zip(sources, map_names)
-        )
-
-    elif compute:
-        store_dsk = HighLevelGraph(layers, dependencies)
-        compute_as_if_collection(Array, store_dsk, map_keys, **kwargs)
-        return None
-
-    else:
-        key = "store-" + tokenize(map_names)
-        layers[key] = {key: map_keys}
-        dependencies[key] = set(map_names)
-        store_dsk = HighLevelGraph(layers, dependencies)
-        return Delayed(key, store_dsk)
+            stored_persisted = persist(*arrays, **kwargs)
+            arrays = []
+            for s, r in zip(stored_persisted, regions_list):
+                slices = ArraySliceDep(s.chunks)
+                arrays.append(
+                    s.map_blocks(
+                        load_chunk,  # type: ignore[arg-type]
+                        # Note: slices / BlockwiseDep have to be passed by arg, not by kwarg
+                        slices,
+                        lock=lock,
+                        region=r,
+                        meta=s._meta,
+                    )
+                )
+    if len(arrays) == 1:
+        return arrays[0]
+    return tuple(arrays)
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -1816,12 +1792,7 @@ class Array(DaskMethodsMixin):
 
     @wraps(store)
     def store(self, target, **kwargs):
-        r = store([self], [target], **kwargs)
-
-        if kwargs.get("return_stored", False):
-            r = r[0]
-
-        return r
+        return store([self], [target], **kwargs)
 
     def to_svg(self, size=500):
         """Convert chunks from Dask Array into an SVG Image
@@ -4024,15 +3995,28 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     """
     from dask.delayed import Delayed, delayed
 
-    if not isinstance(value, Delayed) and hasattr(value, "key"):
-        value = delayed(value)
-
+    is_future = False
     name = name or "from-value-" + tokenize(value, shape, dtype, meta)
-    dsk = {(name,) + (0,) * len(shape): value.key}
+    if isinstance(value, TaskRef):
+        is_future = True
+    elif not isinstance(value, Delayed) and hasattr(value, "key"):
+        value = delayed(value)
+    task = Alias(
+        key=(name,) + (0,) * len(shape),
+        target=value.key,
+    )
+
+    dsk = {task.key: task}
+
+    if is_future:
+        dsk[value.key] = value
+        dependencies = []
+    else:
+        dependencies = [value]
     chunks = tuple((d,) for d in shape)
     # TODO: value._key may not be the name of the layer in value.dask
     # This should be fixed after we build full expression graphs
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
@@ -4567,11 +4551,12 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 def load_store_chunk(
     x: Any,
     out: Any,
-    index: slice,
+    index: slice | None,
+    region: slice | None,
     lock: Any,
     return_stored: bool,
     load_stored: bool,
-):
+) -> Any:
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -4606,8 +4591,14 @@ def load_store_chunk(
 
     >>> a = np.ones((5, 6))
     >>> b = np.empty(a.shape)
-    >>> load_store_chunk(a, b, (slice(None), slice(None)), False, False, False)
+    >>> load_store_chunk(a, b, (slice(None), slice(None)), None, False, False, False)
     """
+    if region:
+        # Equivalent to `out[region][index]`
+        if index:
+            index = fuse_slice(region, index)
+        else:
+            index = region
     if lock:
         lock.acquire()
     try:
@@ -4628,119 +4619,19 @@ def load_store_chunk(
             lock.release()
 
 
-def store_chunk(
-    x: ArrayLike, out: ArrayLike, index: slice, lock: Any, return_stored: bool
-):
-    return load_store_chunk(x, out, index, lock, return_stored, False)
-
-
 A = TypeVar("A", bound=ArrayLike)
 
 
-def load_chunk(out: A, index: slice, lock: Any) -> A:
-    return load_store_chunk(None, out, index, lock, True, True)
-
-
-def insert_to_ooc(
-    keys: list,
-    chunks: tuple[tuple[int, ...], ...],
-    out: ArrayLike,
-    name: str,
-    *,
-    lock: Lock | bool = True,
-    region: tuple[slice, ...] | slice | None = None,
-    return_stored: bool = False,
-    load_stored: bool = False,
-) -> dict:
-    """
-    Creates a Dask graph for storing chunks from ``arr`` in ``out``.
-
-    Parameters
-    ----------
-    keys: list
-        Dask keys of the input array
-    chunks: tuple
-        Dask chunks of the input array
-    out: array-like
-        Where to store results to
-    name: str
-        First element of dask keys
-    lock: Lock-like or bool, optional
-        Whether to lock or with what (default is ``True``,
-        which means a :class:`threading.Lock` instance).
-    region: slice-like, optional
-        Where in ``out`` to store ``arr``'s results
-        (default is ``None``, meaning all of ``out``).
-    return_stored: bool, optional
-        Whether to return ``out``
-        (default is ``False``, meaning ``None`` is returned).
-    load_stored: bool, optional
-        Whether to handling loading from ``out`` at the same time.
-        Ignored if ``return_stored`` is not ``True``.
-        (default is ``False``, meaning defer to ``return_stored``).
-
-    Returns
-    -------
-    dask graph of store operation
-
-    Examples
-    --------
-    >>> import dask.array as da
-    >>> d = da.ones((5, 6), chunks=(2, 3))
-    >>> a = np.empty(d.shape)
-    >>> insert_to_ooc(d.__dask_keys__(), d.chunks, a, "store-123")  # doctest: +SKIP
-    """
-
-    if lock is True:
-        lock = Lock()
-
-    slices = slices_from_chunks(chunks)
-    if region:
-        slices = [fuse_slice(region, slc) for slc in slices]
-
-    if return_stored and load_stored:
-        func = load_store_chunk
-        args = (load_stored,)
-    else:
-        func = store_chunk  # type: ignore
-        args = ()  # type: ignore
-
-    dsk = {
-        (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
-        for t, slc in zip(core.flatten(keys), slices)
-    }
-    return dsk
-
-
-def retrieve_from_ooc(
-    keys: Collection[Key], dsk_pre: Graph, dsk_post: Graph
-) -> dict[tuple, Any]:
-    """
-    Creates a Dask graph for loading stored ``keys`` from ``dsk``.
-
-    Parameters
-    ----------
-    keys: Collection
-        A sequence containing Dask graph keys to load
-    dsk_pre: Mapping
-        A Dask graph corresponding to a Dask Array before computation
-    dsk_post: Mapping
-        A Dask graph corresponding to a Dask Array after computation
-
-    Examples
-    --------
-    >>> import dask.array as da
-    >>> d = da.ones((5, 6), chunks=(2, 3))
-    >>> a = np.empty(d.shape)
-    >>> g = insert_to_ooc(d.__dask_keys__(), d.chunks, a, "store-123")
-    >>> retrieve_from_ooc(g.keys(), g, {k: k for k in g.keys()})  # doctest: +SKIP
-    """
-    load_dsk = {
-        ("load-" + k[0],) + k[1:]: (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]  # type: ignore
-        for k in keys
-    }
-
-    return load_dsk
+def load_chunk(out: A, index: slice, lock: Any, region: slice | None) -> A:
+    return load_store_chunk(
+        None,
+        out=out,
+        region=region,
+        index=index,
+        lock=lock,
+        return_stored=True,
+        load_stored=True,
+    )
 
 
 def _as_dtype(a, dtype):
@@ -5546,7 +5437,7 @@ def concatenate3(arrays):
     NDARRAY_ARRAY_FUNCTION = getattr(np.ndarray, "__array_function__", None)
 
     arrays = concrete(arrays)
-    if not arrays:
+    if not arrays or all(el is None for el in flatten(arrays)):
         return np.empty(0)
 
     advanced = max(

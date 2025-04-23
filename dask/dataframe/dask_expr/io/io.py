@@ -8,7 +8,7 @@ import numpy as np
 import pyarrow as pa
 
 from dask import delayed
-from dask._task_spec import DataNode, List, Task
+from dask._task_spec import Alias, DataNode, List, Task
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import apply_and_enforce, is_dataframe_like
@@ -26,7 +26,6 @@ from dask.dataframe.dask_expr._reductions import Len
 from dask.dataframe.dask_expr._util import _BackendData, _convert_to_list
 from dask.dataframe.dispatch import make_meta
 from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
-from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import funcname, is_series_like
 
@@ -54,16 +53,14 @@ class FromGraph(IO):
 
     @functools.cached_property
     def _name(self):
-        return (
-            self.operand("name_prefix") + "-" + _tokenize_deterministic(*self.operands)
-        )
+        return self.operand("name_prefix") + "-" + self.deterministic_token
 
     def _layer(self):
         dsk = dict(self.operand("layer"))
         # The name may not actually match the layers name therefore rewrite this
         # using an alias
-        for part, k in enumerate(self.operand("keys")):
-            dsk[(self._name, part)] = k
+        for new, old in zip(self.__dask_keys__(), self.operand("keys")):
+            dsk[new] = Alias(new, old)
         return dsk
 
 
@@ -398,6 +395,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         "pyarrow_strings_enabled",
         "_partitions",
         "_series",
+        "_pd_length_stats",
     ]
     _defaults = {
         "npartitions": None,
@@ -407,8 +405,9 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         "_series": False,
         "chunksize": None,
         "pyarrow_strings_enabled": True,
+        "_pd_length_stats": None,
     }
-    _pd_length_stats = None
+    _pd_length_stats: tuple | None
     _absorb_projections = True
 
     @functools.cached_property
@@ -538,8 +537,14 @@ class FromPandasDivisions(FromPandas):
         "pyarrow_strings_enabled",
         "_partitions",
         "_series",
+        "_pd_length_stats",
     ]
-    _defaults = {"columns": None, "_partitions": None, "_series": False}
+    _defaults = {
+        "columns": None,
+        "_partitions": None,
+        "_series": False,
+        "_pd_length_stats": None,
+    }
     sort = True
 
     @functools.cached_property
@@ -620,7 +625,6 @@ class FromArray(PartitionsFiltered, BlockwiseIO):
         "columns": None,
         "_partitions": None,
     }
-    _pd_length_stats = None
     _absorb_projections = True
 
     @functools.cached_property

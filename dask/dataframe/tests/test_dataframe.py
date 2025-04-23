@@ -20,7 +20,7 @@ import dask.dataframe as dd
 import dask.dataframe.groupby
 from dask import delayed
 from dask._compatibility import WINDOWS
-from dask.base import collections_to_dsk
+from dask.base import collections_to_expr
 from dask.dataframe import _compat, methods
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300, tm
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -3168,7 +3168,9 @@ def test_cov_corr_stable():
             None,
             marks=pytest.mark.xfail(reason="fails with non-numeric data"),
         ),
-        True,
+        pytest.param(
+            True,
+        ),
         pytest.param(
             False,
             marks=[
@@ -5318,7 +5320,9 @@ def test_from_xarray():
     }
 
     result = a.reindex(**sel_coords).to_dask_dataframe()
-    assert len(collections_to_dsk([result])) < 30  # previously 3000
+    assert (
+        len(collections_to_expr([result]).optimize().__dask_graph__()) < 30
+    )  # previously 3000
 
 
 def test_from_xarray_string_conversion():

@@ -120,7 +120,7 @@ def normalize_dict(d):
         _SEEN[id(d)] = len(_SEEN), d
         try:
             return "dict", _normalize_seq_func(
-                sorted(d.items(), key=lambda kv: hash(kv[0]))
+                sorted(d.items(), key=lambda kv: str(kv[0]))
             )
         finally:
             _SEEN.pop(id(d), None)
@@ -210,9 +210,8 @@ def normalize_object(o):
         return _normalize_pickle(o)
     except Exception:
         _maybe_raise_nondeterministic(
-            f"Object {o!r} cannot be deterministically hashed. See "
-            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
-            "for more information."
+            f"Object {o!r} cannot be deterministically hashed. This likely "
+            "indicates that the object cannot be serialized deterministically."
         )
         return uuid.uuid4().hex
 
@@ -275,10 +274,14 @@ def _normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
+    @normalize_token.register(pd.RangeIndex)
+    def normalize_range_index(x):
+        return type(x), x.start, x.stop, x.step, x.dtype, x.name
+
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
-        return [ind.name, normalize_token(values)]
+        return type(ind), ind.name, normalize_token(values)
 
     @normalize_token.register(pd.MultiIndex)
     def normalize_index(ind):

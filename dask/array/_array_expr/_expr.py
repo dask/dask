@@ -10,18 +10,16 @@ import numpy as np
 import toolz
 from tlz import accumulate
 
-from dask._expr import Expr
-from dask._task_spec import Task, TaskRef
+from dask._expr import FinalizeCompute, SingletonExpr
+from dask._task_spec import List, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
 from dask.layers import ArrayBlockwiseDep
-from dask.tokenize import _tokenize_deterministic
 from dask.utils import cached_cumsum
 
 
-class ArrayExpr(Expr):
-    _cached_keys = None
+class ArrayExpr(SingletonExpr):
 
     def _operands_for_repr(self):
         return []
@@ -76,57 +74,41 @@ class ArrayExpr(Expr):
             raise ValueError(msg)
         return int(sum(self.chunks[0]))
 
-    def __dask_keys__(self):
+    @functools.cached_property
+    def _cached_keys(self):
         out = self.lower_completely()
-        if self._cached_keys is not None:
-            return self._cached_keys
 
         name, chunks, numblocks = out.name, out.chunks, out.numblocks
 
         def keys(*args):
             if not chunks:
-                return [(name,)]
+                return List(TaskRef((name,)))
             ind = len(args)
             if ind + 1 == len(numblocks):
-                result = [(name,) + args + (i,) for i in range(numblocks[ind])]
+                result = List(
+                    *(TaskRef((name,) + args + (i,)) for i in range(numblocks[ind]))
+                )
             else:
-                result = [keys(*(args + (i,))) for i in range(numblocks[ind])]
+                result = List(*(keys(*(args + (i,))) for i in range(numblocks[ind])))
             return result
 
-        self._cached_keys = result = keys()
-        return result
+        return keys()
+
+    def __dask_keys__(self):
+        key_refs = self._cached_keys
+
+        def unwrap(task):
+            if isinstance(task, List):
+                return [unwrap(t) for t in task.args]
+            return task.key
+
+        return unwrap(key_refs)
 
     def __hash__(self):
         return hash(self._name)
 
     def optimize(self):
         return self.simplify().lower_completely()
-
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError as err:
-            if key.startswith("_meta"):
-                # Avoid a recursive loop if/when `self._meta*`
-                # produces an `AttributeError`
-                raise RuntimeError(
-                    f"Failed to generate metadata for {self}. "
-                    "This operation may not be supported by the current backend."
-                )
-
-            # Allow operands to be accessed as attributes
-            # as long as the keys are not already reserved
-            # by existing methods/properties
-            _parameters = type(self)._parameters
-            if key in _parameters:
-                idx = _parameters.index(key)
-                return self.operands[idx]
-
-            raise AttributeError(
-                f"{err}\n\n"
-                "This often means that you are attempting to use an unsupported "
-                f"API function.."
-            )
 
     def rechunk(
         self,
@@ -145,6 +127,9 @@ class ArrayExpr(Expr):
         # Ensure that chunks are compatible
         result.chunks
         return result
+
+    def finalize_compute(self):
+        return FinalizeComputeArray(self)
 
 
 def unify_chunks_expr(*args):
@@ -216,7 +201,7 @@ class Stack(ArrayExpr):
 
     @functools.cached_property
     def _name(self):
-        return "stack-" + _tokenize_deterministic(*self.operands)
+        return "stack-" + self.deterministic_token
 
     def _layer(self) -> dict:
         keys = list(product([self._name], *[range(len(bd)) for bd in self.chunks]))
@@ -265,7 +250,7 @@ class Concatenate(ArrayExpr):
 
     @functools.cached_property
     def _name(self):
-        return "stack-" + _tokenize_deterministic(*self.operands)
+        return "stack-" + self.deterministic_token
 
     def _layer(self) -> dict:
         axis = self.axis
@@ -282,3 +267,22 @@ class Concatenate(ArrayExpr):
         ]
 
         return dict(zip(keys, values))
+
+
+class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
+    _parameters = ["arr"]
+
+    def chunks(self):
+        return (self.arr.shape,)
+
+    def _simplify_down(self):
+        if self.arr.numblocks in ((), (1,)):
+            return self.arr
+        else:
+            from dask.array._array_expr._rechunk import Rechunk
+
+            return Rechunk(
+                self.arr,
+                tuple(-1 for _ in range(self.arr.ndim)),
+                method="tasks",
+            )
