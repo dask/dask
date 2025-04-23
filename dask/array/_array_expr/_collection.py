@@ -663,6 +663,21 @@ class Array(DaskMethodsMixin):
         else:
             return NotImplemented
 
+    def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
+        """Map a function over blocks of the array with some overlap
+
+        Refer to :func:`dask.array.map_overlap` for full documentation.
+
+        See Also
+        --------
+        dask.array.map_overlap : equivalent function
+        """
+        from dask.array._array_expr._overlap import map_overlap
+
+        return map_overlap(
+            func, self, depth=depth, boundary=boundary, trim=trim, **kwargs
+        )
+
 
 def from_graph(layer, _meta, chunks, keys, name_prefix):
     return new_collection(

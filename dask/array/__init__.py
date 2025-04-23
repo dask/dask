@@ -30,6 +30,11 @@ def _array_expr_enabled() -> bool:
     return use_array_expr if use_array_expr is not None else False
 
 
+def array_expr_enabled():
+    # Need a public variant for downstream libraries to check
+    return _array_expr_enabled()
+
+
 __all__ = [
     "bool",
     "complex64",
@@ -57,6 +62,7 @@ __all__ = [
     "ma",
     "overlap",
     "random",
+    "array_expr_enabled",
     "shuffle",
     "atop",
     "blockwise",
@@ -637,8 +643,9 @@ if _array_expr_enabled():
         return inner_func
 
     try:
+        from dask.array._array_expr import Array  # type: ignore
+        from dask.array._array_expr import _overlap as overlap  # type: ignore
         from dask.array._array_expr import (  # type: ignore
-            Array,
             abs,
             absolute,
             add,
@@ -675,6 +682,7 @@ if _array_expr_enabled():
             divmod,
             elemwise,
             empty,
+            empty_like,
             equal,
             exp,
             exp2,
@@ -690,6 +698,8 @@ if _array_expr_enabled():
             frexp,
             from_array,
             frompyfunc,
+            full,
+            full_like,
             greater,
             greater_equal,
             gufunc,
@@ -720,6 +730,7 @@ if _array_expr_enabled():
             logical_or,
             logical_xor,
             map_blocks,
+            map_overlap,
             maximum,
             minimum,
             mod,
@@ -730,6 +741,7 @@ if _array_expr_enabled():
             nextafter,
             not_equal,
             ones,
+            ones_like,
             positive,
             power,
             rad2deg,
@@ -740,6 +752,7 @@ if _array_expr_enabled():
             reciprocal,
             reduction,
             remainder,
+            repeat,
             right_shift,
             rint,
             sign,
@@ -757,6 +770,7 @@ if _array_expr_enabled():
             true_divide,
             trunc,
             zeros,
+            zeros_like,
         )
         from dask.array.reductions import (
             all,
@@ -784,7 +798,6 @@ if _array_expr_enabled():
         lib = raise_not_implemented_error("lib")
         linalg = raise_not_implemented_error("linalg")
         ma = raise_not_implemented_error("ma")
-        overlap = raise_not_implemented_error("overlap")
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
         block = raise_not_implemented_error("block")
@@ -800,22 +813,16 @@ if _array_expr_enabled():
         unify_chunks = raise_not_implemented_error("unify_chunks")
         diag = raise_not_implemented_error("diag")
         diagonal = raise_not_implemented_error("diagonal")
-        empty_like = raise_not_implemented_error("empty_like")
         eye = raise_not_implemented_error("eye")
         fromfunction = raise_not_implemented_error("fromfunction")
-        full_like = raise_not_implemented_error("full_like")
         indices = raise_not_implemented_error("indices")
         meshgrid = raise_not_implemented_error("meshgrid")
-        ones_like = raise_not_implemented_error("ones_like")
         pad = raise_not_implemented_error("pad")
-        repeat = raise_not_implemented_error("repeat")
         tile = raise_not_implemented_error("tile")
         tri = raise_not_implemented_error("tri")
-        zeros_like = raise_not_implemented_error("zeros_like")
         moveaxis = raise_not_implemented_error("moveaxis")
         rollaxis = raise_not_implemented_error("rollaxis")
         optimize = raise_not_implemented_error("optimize")
-        map_overlap = raise_not_implemented_error("map_overlap")
         percentile = raise_not_implemented_error("percentile")
         argmax = raise_not_implemented_error("argmax")
         argmin = raise_not_implemented_error("argmin")
@@ -905,7 +912,6 @@ if _array_expr_enabled():
         where = raise_not_implemented_error("where")
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")
-        full = raise_not_implemented_error("full")
 
         from dask.array.utils import assert_eq
         from dask.base import compute

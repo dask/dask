@@ -480,7 +480,6 @@ def map_blocks(
             None,
             *concat(extra_argpairs),
             *concat(argpairs),
-            name=out.name,
             dtype=out.dtype,
             concatenate=True,
             align_arrays=False,
