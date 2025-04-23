@@ -535,6 +535,4 @@ def test_map_partitions_assign_fusedio(tmpdir):
     df = dd.read_parquet(tmpdir)
     y_pred = df.map_partitions(len)
     df["y_pred"] = y_pred
-    assert_eq(
-        df["y_pred"], pd.Series([1, 1, 1], name="y_pred"), check_index=False
-    )
+    assert_eq(df["y_pred"], pd.Series([1, 1, 1], name="y_pred"), check_index=False)
