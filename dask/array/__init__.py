@@ -30,6 +30,11 @@ def _array_expr_enabled() -> bool:
     return use_array_expr if use_array_expr is not None else False
 
 
+def array_expr_enabled():
+    # Need a public variant for downstream libraries to check
+    return _array_expr_enabled()
+
+
 __all__ = [
     "bool",
     "complex64",
@@ -57,6 +62,7 @@ __all__ = [
     "ma",
     "overlap",
     "random",
+    "array_expr_enabled",
     "shuffle",
     "atop",
     "blockwise",
@@ -637,8 +643,9 @@ if _array_expr_enabled():
         return inner_func
 
     try:
+        from dask.array._array_expr import Array  # type: ignore
+        from dask.array._array_expr import _overlap as overlap  # type: ignore
         from dask.array._array_expr import (  # type: ignore
-            Array,
             arange,
             array,
             asanyarray,
@@ -647,15 +654,22 @@ if _array_expr_enabled():
             concatenate,
             elemwise,
             empty,
+            empty_like,
             from_array,
+            full,
+            full_like,
             linspace,
             map_blocks,
+            map_overlap,
             ones,
+            ones_like,
             random,
             rechunk,
             reduction,
+            repeat,
             stack,
             zeros,
+            zeros_like,
         )
         from dask.array.reductions import (
             all,
@@ -683,7 +697,6 @@ if _array_expr_enabled():
         lib = raise_not_implemented_error("lib")
         linalg = raise_not_implemented_error("linalg")
         ma = raise_not_implemented_error("ma")
-        overlap = raise_not_implemented_error("overlap")
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
         block = raise_not_implemented_error("block")
@@ -699,25 +712,19 @@ if _array_expr_enabled():
         unify_chunks = raise_not_implemented_error("unify_chunks")
         diag = raise_not_implemented_error("diag")
         diagonal = raise_not_implemented_error("diagonal")
-        empty_like = raise_not_implemented_error("empty_like")
         eye = raise_not_implemented_error("eye")
         fromfunction = raise_not_implemented_error("fromfunction")
-        full_like = raise_not_implemented_error("full_like")
         indices = raise_not_implemented_error("indices")
         meshgrid = raise_not_implemented_error("meshgrid")
-        ones_like = raise_not_implemented_error("ones_like")
         pad = raise_not_implemented_error("pad")
-        repeat = raise_not_implemented_error("repeat")
         tile = raise_not_implemented_error("tile")
         tri = raise_not_implemented_error("tri")
-        zeros_like = raise_not_implemented_error("zeros_like")
         apply_gufunc = raise_not_implemented_error("apply_gufunc")
         as_gufunc = raise_not_implemented_error("as_gufunc")
         gufunc = raise_not_implemented_error("gufunc")  # type: ignore
         moveaxis = raise_not_implemented_error("moveaxis")
         rollaxis = raise_not_implemented_error("rollaxis")
         optimize = raise_not_implemented_error("optimize")
-        map_overlap = raise_not_implemented_error("map_overlap")
         percentile = raise_not_implemented_error("percentile")
         argmax = raise_not_implemented_error("argmax")
         argmin = raise_not_implemented_error("argmin")
@@ -905,7 +912,6 @@ if _array_expr_enabled():
         tanh = raise_not_implemented_error("tanh")
         true_divide = raise_not_implemented_error("true_divide")
         trunc = raise_not_implemented_error("trunc")
-        full = raise_not_implemented_error("full")
 
         from dask.array.utils import assert_eq
         from dask.base import compute
