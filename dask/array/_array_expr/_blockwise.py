@@ -226,7 +226,9 @@ class Elemwise(Blockwise):
 
     @cached_property
     def _meta(self):
-        return compute_meta(self.op, self.dtype, *self.elemwise_args, **self.kwargs)
+        return compute_meta(
+            self._info[0], self.dtype, *self.elemwise_args, **self.kwargs
+        )
 
     @property
     def elemwise_args(self):
