@@ -457,39 +457,6 @@ Expr={expr}"""
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
 
-    def compute(self, fuse=True, concatenate=True, **kwargs):
-        """Compute this DataFrame.
-
-        This turns a lazy Dask DataFrame into an in-memory pandas DataFrame.
-        The entire dataset must fit into memory before calling this operation.
-
-        The optimizer runs over the DataFrame before triggering the computation.
-        The optimizer injects a repartition operation that reduces the partition
-        count to 1 to enable better optimization strategies.
-
-        Parameters
-        ----------
-        fuse : bool, default True
-            Whether to fuse the expression tree before computing. Fusing significantly
-            reduces the number of tasks and improves performance. It shouldn't be
-            disabled unless absolutely necessary.
-        concatenate : bool, default True
-            Whether to concatenate all partitions into a single one before computing.
-            Concatenating enables more powerful optimizations but it also incurs additional
-            data transfer cost. Generally, it should be enabled.
-        kwargs
-            Extra keywords to forward to the base compute function.
-
-        See Also
-        --------
-        dask.compute
-        """
-        out = self
-        if not isinstance(out, Scalar) and concatenate:
-            out = out.repartition(npartitions=1)
-        out = out.optimize(fuse=fuse)
-        return DaskMethodsMixin.compute(out, **kwargs)
-
     def analyze(self, filename: str | None = None, format: str | None = None) -> None:
         """Outputs statistics about every node in the expression.
 
@@ -610,13 +577,23 @@ Expr={expr}"""
             return state.__dask_postcompute__()
         return _concat, ()
 
+    @staticmethod
+    def _postpersist(futures, meta, divisions, name):
+        return from_graph(
+            futures,
+            meta,
+            divisions,
+            sorted(futures),
+            name,
+        )
+
     def __dask_postpersist__(self):
-        state = new_collection(self.expr.lower_completely())
-        return from_graph, (
-            state._meta,
-            state.divisions,
-            state.__dask_keys__(),
-            key_split(state._name),
+        return FrameBase._postpersist, (
+            self._meta,
+            self.divisions,
+            # Note: This prefix is wrong since optimization may actually yield a
+            # different one. That's should only be an issue for visualization.
+            key_split(self._name),
         )
 
     def __getattr__(self, key):
@@ -772,12 +749,21 @@ Expr={expr}"""
             except TypeError:
                 pass
             if not any(is_dask_collection(v) for v in values):
-                try:
-                    values = np.fromiter(values, dtype=object)
-                except ValueError:
-                    # Numpy 1.23 supports creating arrays of iterables, while lower
-                    # version 1.21.x and 1.22.x do not
-                    pass
+                # Avoid always passing a numpy array of object dtype
+                inferred_type = pd.api.types.infer_dtype(values, skipna=False)
+                object_like = {
+                    "mixed-integer",
+                    "decimal",
+                    "categorical",
+                    "time",
+                    "period",
+                    "mixed",
+                    "unknown-array",
+                }
+                if inferred_type in object_like:
+                    values = np.fromiter(values, dtype=object, count=len(values))
+                else:
+                    values = np.asarray(values)
 
         return new_collection(
             expr.Isin(
@@ -854,6 +840,7 @@ Expr={expr}"""
         npartitions: int | None = None,
         shuffle_method: str | None = None,
         on_index: bool = False,
+        force: bool = False,
         **options,
     ):
         """Rearrange DataFrame into new partitions
@@ -876,6 +863,9 @@ Expr={expr}"""
         on_index : bool, default False
             Whether to shuffle on the index. Mutually exclusive with 'on'.
             Set this to ``True`` if 'on' is not provided.
+        force : bool, default False
+            This forces the optimizer to keep the shuffle even if the final
+            expression could be further simplified.
         **options : optional
             Algorithm-specific options.
 
@@ -937,7 +927,7 @@ Expr={expr}"""
                     f"p2p requires all column names to be str, found: {unsupported}",
                 )
         # Returned shuffled result
-        return new_collection(
+        res = new_collection(
             RearrangeByColumn(
                 self,
                 on,
@@ -948,6 +938,12 @@ Expr={expr}"""
                 index_shuffle=on_index,
             )
         )
+        if force:
+            # TODO: This forces the optimizer to not remove the shuffle It would
+            # be nice to teach the optimizer directly (e.g. to avoid key
+            # renames, etc.)
+            return res.map_partitions(lambda x: x, meta=res._meta)
+        return res
 
     @derived_from(pd.DataFrame)
     def resample(self, rule, closed=None, label=None):

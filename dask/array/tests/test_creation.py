@@ -5,7 +5,7 @@ import pickle
 import pytest
 
 from dask._task_spec import Alias
-from dask.base import collections_to_dsk
+from dask.base import collections_to_expr
 
 pytest.importorskip("numpy")
 
@@ -295,14 +295,17 @@ def test_arange_dtype_force(dtype):
         (0, 2**63 - 1, 2**63 - 10_000),
         (0.0, 2**63 - 1, 2**63 - 10_000),
         (0.0, -9_131_138_316_486_228_481, -92_233_720_368_547_759),
+        (-72_057_594_037_927_945, -72_057_594_037_927_938, 1.0),
+        (-72_057_594_037_927_945, -72_057_594_037_927_938, 1.5),
     ],
 )
-def test_arange_very_large_args(start, stop, step):
+@pytest.mark.parametrize("chunks", ["auto", 1])
+def test_arange_very_large_args(start, stop, step, chunks):
     """Test args that are very close to 2**63
     https://github.com/dask/dask/issues/11706
     """
     a_np = np.arange(start, stop, step)
-    a_da = da.arange(start, stop, step)
+    a_da = da.arange(start, stop, step, chunks=chunks)
     assert_eq(a_np, a_da)
 
 
@@ -564,26 +567,26 @@ def test_diag_extraction(k):
 def test_creation_data_producers():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
-    dsk = collections_to_dsk([d])
+    dsk = collections_to_expr([d]).__dask_graph__()
     assert all(v.data_producer for v in dsk.values())
 
     # blockwise fusion
     x = d.astype("float64")
-    dsk = collections_to_dsk([x])
+    dsk = collections_to_expr([x]).__dask_graph__()
     assert sum(v.data_producer for v in dsk.values()) == 4
     assert sum(isinstance(v, Alias) for v in dsk.values()) == 4
     assert len(dsk) == 8
 
     # linear fusion
     x = d[slice(0, 6), None].astype("float64")
-    dsk = collections_to_dsk([x])
+    dsk = collections_to_expr([x]).__dask_graph__()
     assert sum(v.data_producer for v in dsk.values()) == 4
     assert sum(isinstance(v, Alias) for v in dsk.values()) == 4
     assert len(dsk) == 8
 
     # no fusion
     x = d[[1, 3, 5, 7, 6, 4, 2, 0]].astype("float64")
-    dsk = collections_to_dsk([x])
+    dsk = collections_to_expr([x]).__dask_graph__()
     assert sum(v.data_producer and "array-" in k[0] for k, v in dsk.items()) == 4
     assert sum(v.data_producer for v in dsk.values()) == 8  # getitem data nodes
     assert len(dsk) == 24
@@ -1054,7 +1057,7 @@ def test_from_array_getitem_fused():
     arr = np.arange(100).reshape(10, 10)
     darr = da.from_array(arr, chunks=(5, 5))
     result = darr[slice(1, 5), :][slice(1, 3), :]
-    dsk = collections_to_dsk([result])
+    dsk = collections_to_expr([result]).__dask_graph__()
     # Ensure that slices are merged properly
     key = [k for k in dsk if "array-getitem" in k[0]][0]
     key_2 = [

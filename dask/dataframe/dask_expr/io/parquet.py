@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
+import pyarrow.dataset
 import pyarrow.dataset as pa_ds
 import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
@@ -71,7 +72,6 @@ def _tokenize_fileinfo(fileinfo):
         fileinfo.path,
         fileinfo.size,
         fileinfo.mtime_ns,
-        fileinfo.size,
     )
 
 
@@ -716,7 +716,7 @@ def _determine_type_mapper(
 
 
 class ReadParquet(PartitionsFiltered, BlockwiseIO):
-    _pq_length_stats = None
+    _pickle_functools_cache = False
     _absorb_projections = True
     _filter_passthrough = False
 
@@ -777,8 +777,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
     def _funcname(self):
         return "read_parquet"
 
-    @property
-    def deterministic_token(self):
+    def __dask_tokenize__(self):
         if not self._determ_token:
             # TODO: Is there an actual need to overwrite this?
             self._determ_token = _tokenize_deterministic(
@@ -1040,14 +1039,15 @@ class ReadParquetPyarrowFS(ReadParquet):
             if all_files[-1].base_name.endswith("_metadata"):
                 metadata_file = all_files.pop()
                 checksum = tokenize(metadata_file)
-                # TODO: dataset kwargs?
                 dataset = pa_ds.parquet_dataset(
                     metadata_file.path,
                     filesystem=self.fs,
                 )
                 dataset_info["using_metadata_file"] = True
-                dataset_info["fragments"] = _frags = list(dataset.get_fragments())
-                dataset_info["file_sizes"] = [None for fi in _frags]
+                dataset_info["fragments"] = [
+                    FragmentWrapper(frag, self.fs) for frag in dataset.get_fragments()
+                ]
+                dataset_info["file_sizes"] = [None] * len(dataset_info["fragments"])
 
         if checksum is None:
             checksum = tokenize(all_files)
@@ -1065,15 +1065,14 @@ class ReadParquetPyarrowFS(ReadParquet):
                 filters=self.filters,
             )
             dataset_info["using_metadata_file"] = False
-            dataset_info["fragments"] = dataset.fragments
+            dataset_info["fragments"] = [
+                FragmentWrapper(frag, self.fs) for frag in dataset.fragments
+            ]
             dataset_info["all_files"] = all_files
 
-        dataset_info["dataset"] = dataset
         dataset_info["schema"] = dataset.schema
         dataset_info["base_meta"] = dataset.schema.empty_table().to_pandas()
-        self.operands[type(self)._parameters.index("_dataset_info_cache")] = (
-            dataset_info
-        )
+        self._dataset_info_cache = dataset_info
         return dataset_info
 
     @cached_property
@@ -1135,14 +1134,16 @@ class ReadParquetPyarrowFS(ReadParquet):
         ReadParquetPyarrowFS.fragments
         """
         if self.filters is not None:
-            if self._dataset_info["using_metadata_file"]:
-                ds = self._dataset_info["dataset"]
-            else:
-                ds = self._dataset_info["dataset"]._dataset
-            return np.array(
-                list(ds.get_fragments(filter=pq.filters_to_expression(self.filters)))
+            filter_expression = pq.filters_to_expression(self.filters)
+            frags = [frag.fragment for frag in self._dataset_info["fragments"]]
+            ds = pyarrow.dataset.FileSystemDataset(
+                frags,
+                self._dataset_info["schema"],
+                format=frags[0].format,
+                filesystem=self.fs,
             )
-        return np.array(self._dataset_info["fragments"])
+            return np.array(list(ds.get_fragments(filter=filter_expression)))
+        return np.array([frag.fragment for frag in self._dataset_info["fragments"]])
 
     @property
     def _fusion_compression_factor(self):
@@ -1274,6 +1275,7 @@ class ReadParquetFSSpec(ReadParquet):
         "_partitions",
         "_series",
         "_dataset_info_cache",
+        "_pq_length_stats",
     ]
     _defaults = {
         "columns": None,
@@ -1294,6 +1296,7 @@ class ReadParquetFSSpec(ReadParquet):
         "_partitions": None,
         "_series": False,
         "_dataset_info_cache": None,
+        "_pq_length_stats": None,
     }
 
     @property
@@ -1405,9 +1408,7 @@ class ReadParquetFSSpec(ReadParquet):
         dataset_info["all_columns"] = all_columns
         dataset_info["calculate_divisions"] = self.calculate_divisions
 
-        self.operands[type(self)._parameters.index("_dataset_info_cache")] = (
-            dataset_info
-        )
+        self._dataset_info_cache = dataset_info
         return dataset_info
 
     def _filtered_task(self, name: Key, index: int) -> Task:
@@ -1474,30 +1475,27 @@ class ReadParquetFSSpec(ReadParquet):
     def _get_lengths(self) -> tuple | None:
         """Return known partition lengths using parquet statistics"""
         if not self.filters:
-            self._update_length_statistics()
-            return tuple(  # type: ignore
+            return tuple(
                 length
-                for i, length in enumerate(self._pq_length_stats)  # type: ignore
+                for i, length in enumerate(self._pq_length_stats)
                 if not self._filtered or i in self._partitions
             )
         return None
 
-    def _update_length_statistics(self):
+    @cached_property
+    def _pq_length_stats(self):
         """Ensure that partition-length statistics are up to date"""
 
-        if not self._pq_length_stats:
-            if self._plan["statistics"]:
-                # Already have statistics from original API call
-                self._pq_length_stats = tuple(
-                    stat["num-rows"]
-                    for i, stat in enumerate(self._plan["statistics"])
-                    if not self._filtered or i in self._partitions
-                )
-            else:
-                # Need to go back and collect statistics
-                self._pq_length_stats = tuple(
-                    stat["num-rows"] for stat in _collect_pq_statistics(self)
-                )
+        if self._plan["statistics"]:
+            # Already have statistics from original API call
+            return tuple(
+                stat["num-rows"]
+                for i, stat in enumerate(self._plan["statistics"])
+                if not self._filtered or i in self._partitions
+            )
+        else:
+            # Need to go back and collect statistics
+            return tuple(stat["num-rows"] for stat in _collect_pq_statistics(self))
 
 
 #
@@ -1986,6 +1984,8 @@ def _aggregate_statistics_to_file(stats):
 def _gather_statistics(frags):
     @dask.delayed
     def _collect_statistics(token_fragment):
+        if isinstance(token_fragment[1], FragmentWrapper):
+            token_fragment[1] = token_fragment[1].fragment
         return token_fragment[0], _extract_stats(token_fragment[1].metadata.to_dict())
 
     return dask.compute(

@@ -57,6 +57,7 @@ class Array(DaskMethodsMixin):
         return from_graph, (
             state._meta,
             state.chunks,
+            # FIXME: This is using keys of the unoptimized graph
             list(flatten(state.__dask_keys__())),
             key_split(state._name),
         )
@@ -72,6 +73,9 @@ class Array(DaskMethodsMixin):
     def __dask_keys__(self):
         out = self.expr.lower_completely()
         return out.__dask_keys__()
+
+    def __dask_tokenize__(self):
+        return "Array", self.expr._name
 
     def compute(self, **kwargs):
         return DaskMethodsMixin.compute(self.optimize(), **kwargs)
