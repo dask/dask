@@ -527,3 +527,12 @@ def test_from_array_partition_pruning():
     result = df.partitions[1]
     expected = arr[100:]
     assert_eq(result, pd.DataFrame(expected, index=list(range(100, 200))))
+
+
+def test_map_partitions_assign_fusedio(tmpdir):
+    data = {"country": ["se", "dk", "no"], "value": [0.1, 0.2, 0.3]}
+    pd.DataFrame(data).to_parquet(tmpdir, partition_cols=["country"])
+    df = dd.read_parquet(tmpdir)
+    y_pred = df.map_partitions(len)
+    df["y_pred"] = y_pred
+    assert_eq(df["y_pred"], pd.Series([1, 1, 1], name="y_pred"), check_index=False)

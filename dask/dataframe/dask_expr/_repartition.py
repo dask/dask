@@ -174,20 +174,23 @@ class RepartitionToFewer(Repartition):
     def _divisions(self):
         return tuple(self.frame.divisions[i] for i in self._partitions_boundaries)
 
+    @staticmethod
+    def _compute_partition_boundaries(n_new_partitions, n_old_partitions):
+        npartitions_ratio = n_old_partitions / n_new_partitions
+        new_partitions_boundaries = [
+            int(new_partition_index * npartitions_ratio)
+            for new_partition_index in range(n_new_partitions + 1)
+        ]
+        return _clean_new_division_boundaries(
+            new_partitions_boundaries, n_old_partitions
+        )
+
     @functools.cached_property
     def _partitions_boundaries(self):
         npartitions = self.new_partitions
         npartitions_input = self.frame.npartitions
         assert npartitions_input > npartitions
-
-        npartitions_ratio = npartitions_input / npartitions
-        new_partitions_boundaries = [
-            int(new_partition_index * npartitions_ratio)
-            for new_partition_index in range(npartitions + 1)
-        ]
-        return _clean_new_division_boundaries(
-            new_partitions_boundaries, self.frame.npartitions
-        )
+        return self._compute_partition_boundaries(npartitions, npartitions_input)
 
     def _layer(self):
         new_partitions_boundaries = self._partitions_boundaries
