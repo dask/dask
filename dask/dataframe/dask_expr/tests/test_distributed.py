@@ -370,6 +370,29 @@ async def test_future_in_map_partitions(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_delayed_in_map_partitions(c, s, a, b):
+    # xgboost uses this pattern
+
+    def test_func(n):
+        import pandas as pd
+
+        return pd.DataFrame({"a": list(range(n))})
+
+    df = from_pandas(pd.DataFrame({"a": [1, 2, 3, 4]}), npartitions=2)
+
+    def _foo(x, y, z):
+        return y + x.sum()
+
+    f = dask.delayed(test_func)(100)
+    z = dask.delayed(test_func)(50)
+    q = map_partitions(_foo, f, df, z=z, meta=df._meta)
+    result = c.compute(q)
+    result = await result
+    expected = pd.DataFrame({"a": [4951, 4952, 4953, 4954]})
+    pd.testing.assert_frame_equal(result, expected)
+
+
+@gen_cluster(client=True)
 async def test_shuffle_consistency_checks(c, s, a, b):
     pdf = pd.DataFrame({"x": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=2)
