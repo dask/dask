@@ -525,6 +525,10 @@ class Expr:
     def _meta(self):
         raise NotImplementedError()
 
+    @classmethod
+    def _annotations_tombstone(cls) -> _AnnotationsTombstone:
+        return _AnnotationsTombstone()
+
     def __dask_annotations__(self):
         return {}
 
@@ -1136,9 +1140,18 @@ class _HLGExprSequence(Expr):
             if layer.annotations:
                 annot = layer.annotations
                 for annot_type, value in annot.items():
-                    annotations_by_type[annot_type].update(
-                        {k: (value(k) if callable(value) else value) for k in layer}
+                    annots = list(
+                        (k, (value(k) if callable(value) else value)) for k in layer
                     )
+                    annotations_by_type[annot_type].update(
+                        {
+                            k: v
+                            for k, v in annots
+                            if not isinstance(v, _AnnotationsTombstone)
+                        }
+                    )
+                    if not annotations_by_type[annot_type]:
+                        del annotations_by_type[annot_type]
         return dict(annotations_by_type)
 
     def __dask_keys__(self) -> list:
@@ -1231,6 +1244,9 @@ class _ExprSequence(Expr):
         if not hlgs:
             return None
         return _HLGExprSequence(*hlgs)
+
+
+class _AnnotationsTombstone: ...
 
 
 class FinalizeCompute(Expr):

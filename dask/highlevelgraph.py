@@ -25,7 +25,7 @@ from dask import config
 from dask._task_spec import GraphNode
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
-from dask.tokenize import normalize_token
+from dask.tokenize import normalize_token, tokenize
 from dask.typing import DaskCollection, Graph, Key
 from dask.utils import ensure_dict, import_required, key_split
 from dask.widgets import get_template
@@ -760,7 +760,10 @@ class HighLevelGraph(Graph):
             all_ext_keys = self.get_all_external_keys()
 
         ret_layers: dict = {}
+        layer_dependencies = {}
+        tok = tokenize(keys_set)
         for layer_name in reversed(self._toposort_layers()):
+            new_layer_name = f"{layer_name}-{tok}"
             layer = self.layers[layer_name]
             if keys_set:
                 culled_layer, culled_deps = layer.cull(keys_set, all_ext_keys)
@@ -775,13 +778,14 @@ class HighLevelGraph(Graph):
                     keys_set.discard(k)
                 layer = culled_layer
             # Save the culled layer and its key dependencies
-            ret_layers[layer_name] = layer
+            ret_layers[new_layer_name] = layer
+            layer_dependencies[new_layer_name] = self.dependencies[layer_name]
 
         # Converting dict_keys to a real set lets Python optimise the set
         # intersection to iterate over the smaller of the two sets.
         ret_layers_keys = set(ret_layers.keys())
         ret_dependencies = {
-            layer_name: self.dependencies[layer_name] & ret_layers_keys
+            layer_name: layer_dependencies[layer_name] & ret_layers_keys
             for layer_name in ret_layers
         }
 

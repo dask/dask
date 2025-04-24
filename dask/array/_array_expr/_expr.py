@@ -136,6 +136,8 @@ def unify_chunks_expr(*args):
     # TODO(expr): This should probably be a dedicated expression
     # This is the implementation that expects the inputs to be expressions, the public facing
     # variant needs to sanitize the inputs
+    if not args:
+        return {}, [], False
     arginds = list(toolz.partition(2, args))
     arrays, inds = zip(*arginds)
     if all(ind is None for ind in inds):
