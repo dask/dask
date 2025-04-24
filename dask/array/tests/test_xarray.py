@@ -125,3 +125,32 @@ def test_xarray_blockwise_fusion_store(compute):
             scheduler = partial(custom_scheduler_get, expected=expected)
             stored = y.to_zarr(dirname, compute=False)
             dask.compute(stored, scheduler=scheduler)
+
+
+@pytest.mark.parametrize("wrap_xarray", [False, True])
+def test_shared_tasks(wrap_xarray):
+    total_calls = 0
+
+    def my_func(a: np.ndarray) -> np.ndarray:
+        nonlocal total_calls
+        total_calls += 1
+        return a
+
+    in1 = da.zeros((5, 5), chunks=2)
+    res = da.map_blocks(
+        my_func, in1, meta=np.array((), dtype=in1.dtype), dtype=in1.dtype
+    )
+    out1 = res + 1
+    out2 = res + 2
+    if wrap_xarray:
+        out1 = xr.DataArray(out1)
+        out2 = xr.DataArray(out2)
+
+    comp_res = dask.compute(out1, out2)
+
+    if wrap_xarray:
+        assert isinstance(comp_res[0], xr.DataArray)
+        assert isinstance(comp_res[0].data, np.ndarray)
+    else:
+        assert isinstance(comp_res[0], np.ndarray)
+    assert total_calls == in1.blocks.size
