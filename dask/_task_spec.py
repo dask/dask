@@ -967,7 +967,7 @@ class Dict(NestedContainer, Mapping):
         yield from self.args[::2]
 
     def __len__(self):
-        return (len(self.args) - 2) // 2
+        return len(self.args) // 2
 
     def __getitem__(self, key):
         for k, v in batched(self.args, 2, strict=True):
