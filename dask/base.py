@@ -491,7 +491,7 @@ def unpack_collections(*args, traverse=True):
             return TaskRef(tok)
 
         tok = uuid.uuid4().hex
-        tsk: DataNode | Task
+        tsk: DataNode | Task  # type: ignore
         if not traverse:
             tsk = DataNode(None, expr)
         else:
@@ -1011,8 +1011,8 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
     expr = collections_to_expr(collections, optimize_graph)
     expr = expr.optimize()
     keys, postpersists = [], []
-    for a in collections:
-        a_keys = list(flatten(a.__dask_keys__()))
+    for a, akeys in zip(collections, expr.__dask_keys__(), strict=True):
+        a_keys = list(flatten(akeys))
         rebuild, state = a.__dask_postpersist__()
         keys.extend(a_keys)
         postpersists.append((rebuild, a_keys, state))

@@ -17,8 +17,9 @@ from dask.array.core import (
     is_scalar_for_elemwise,
     normalize_arg,
 )
-from dask.blockwise import _blockwise_unpack_collections_task_spec
+from dask.array.utils import meta_from_array
 from dask.blockwise import blockwise as core_blockwise
+from dask.delayed import unpack_collections
 from dask.layers import ArrayBlockwiseDep
 from dask.tokenize import _tokenize_deterministic
 from dask.utils import cached_property, funcname
@@ -63,9 +64,13 @@ class Blockwise(ArrayExpr):
     @cached_property
     def _meta(self):
         if self._meta_provided is not None:
-            return self._meta_provided
+            return meta_from_array(
+                self._meta_provided, ndim=self.ndim, dtype=self._meta_provided.dtype
+            )
         else:
-            return compute_meta(self.func, self.dtype, *self.args[::2], **self.kwargs)
+            return compute_meta(
+                self.func, self.operand("dtype"), *self.args[::2], **self.kwargs
+            )
 
     @cached_property
     def chunks(self):
@@ -114,14 +119,21 @@ class Blockwise(ArrayExpr):
 
     @cached_property
     def dtype(self):
-        return self.operand("dtype")
+        return super().dtype
 
-    @property
-    def deterministic_token(self):
+    def __dask_tokenize__(self):
         if not self._determ_token:
             # TODO: Is there an actual need to overwrite this?
             self._determ_token = _tokenize_deterministic(
-                self.func, self.out_ind, self.dtype, *self.args, **self.kwargs
+                self.func,
+                self.out_ind,
+                self.dtype,
+                self.adjust_chunks,
+                self.new_axes,
+                self.align_arrays,
+                self.concatenate,
+                *self.args,
+                **self.kwargs,
             )
         return self._determ_token
 
@@ -148,7 +160,7 @@ class Blockwise(ArrayExpr):
         for arg, ind in arginds:
             if ind is None:
                 arg = normalize_arg(arg)
-                arg, collections = _blockwise_unpack_collections_task_spec(arg)
+                arg, collections = unpack_collections(arg)
                 dependencies.extend(collections)
             else:
                 if (
@@ -172,7 +184,7 @@ class Blockwise(ArrayExpr):
         kwargs2 = {}
         for k, v in self.kwargs.items():
             v = normalize_arg(v)
-            v, collections = _blockwise_unpack_collections_task_spec(v)
+            v, collections = unpack_collections(v)
             dependencies.extend(collections)
             kwargs2[k] = v
 
@@ -214,7 +226,9 @@ class Elemwise(Blockwise):
 
     @cached_property
     def _meta(self):
-        return compute_meta(self.op, self.dtype, *self.elemwise_args, **self.kwargs)
+        return compute_meta(
+            self._info[0], self.dtype, *self.elemwise_args, **self.kwargs
+        )
 
     @property
     def elemwise_args(self):

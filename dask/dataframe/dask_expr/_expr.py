@@ -5,8 +5,9 @@ import functools
 import numbers
 import operator
 import warnings
+import weakref
 from collections import defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from typing import Any as AnyType
 
 import numpy as np
@@ -15,9 +16,11 @@ from pandas.errors import PerformanceWarning
 from tlz import merge_sorted, partition, unique
 
 from dask import _expr as core
+from dask._expr import Expr as BaseExpr
 from dask._expr import FinalizeCompute
 from dask._task_spec import Alias, DataNode, Task, TaskRef, execute_graph
 from dask.array import Array
+from dask.base import collections_to_expr
 from dask.core import flatten
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -49,7 +52,6 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
     valid_divisions,
 )
-from dask.tokenize import normalize_token
 from dask.typing import Key, no_default
 from dask.utils import (
     M,
@@ -65,7 +67,7 @@ from dask.utils import (
 optimize = core.optimize
 
 
-class Expr(core.Expr):
+class Expr(core.SingletonExpr):
     """Primary class for all Expressions
 
     This mostly includes Dask protocols and various Pandas-like method
@@ -3052,14 +3054,7 @@ class PartitionsFiltered(Expr):
 
 
 class _DelayedExpr(Expr):
-    # Wraps a Delayed object to make it an Expr for now. This is hacky and we should
-    # integrate this properly...
-    # TODO
     _parameters = ["obj"]
-
-    def __init__(self, obj, _determ_token=None):
-        self.obj = obj
-        self.operands = [obj]
 
     def __str__(self):
         return f"{type(self).__name__}({str(self.obj)})"
@@ -3083,11 +3078,6 @@ class _DelayedExpr(Expr):
 
 
 class DelayedsExpr(Expr):
-    _parameters = []
-
-    def __init__(self, *delayed_objects, _determ_token=None):
-        self.operands = delayed_objects
-
     def __str__(self):
         return f"{type(self).__name__}({str(self.operands[0])})"
 
@@ -3096,13 +3086,27 @@ class DelayedsExpr(Expr):
         return "delayed-container-" + self.deterministic_token
 
     def _layer(self) -> dict:
-        dask = {}
-        for i, obj in enumerate(self.operands):
-            dc = obj.__dask_optimize__(obj.dask, obj.key).to_dict().copy()
-            dc[(self._name, i)] = dc[obj.key]
-            dc.pop(obj.key)
-            dask.update(dc)
-        return dask
+        from dask.delayed import Delayed
+
+        if isinstance(self.operands[0], TaskRef):
+            tasks = [
+                Alias((self._name, ix), fut.key) for ix, fut in enumerate(self.operands)
+            ]
+            dsk = {t.key: t for t in tasks}
+        elif isinstance(self.operands[0], Delayed):
+            expr = collections_to_expr(self.operands).optimize()
+            keys = expr.__dask_keys__()
+            dsk = expr.__dask_graph__()
+            # Many APIs in dask-expr are not honoring __dask_keys__ but are instead
+            # assuming they can just construc the keys themselves by walking the
+            # partitions. Therefore we'll have to remap the key names and can't just
+            # expose __dask_keys__()
+            for ix, actual_key in enumerate(keys):
+                dsk[(self._name, ix)] = Alias((self._name, ix), actual_key[0])
+        else:
+            raise TypeError("Expected a Delayed or Future object")
+
+        return dsk
 
     def _divisions(self):
         return (None,) * (len(self.operands) + 1)
@@ -3110,11 +3114,6 @@ class DelayedsExpr(Expr):
     @property
     def ndim(self):
         return 0
-
-
-@normalize_token.register(Expr)
-def normalize_expression(expr):
-    return expr._name
 
 
 def is_broadcastable(dfs, s):
@@ -3810,19 +3809,24 @@ class MinType:
         return True
 
 
-def determine_column_projection(expr, parent, dependents, additional_columns=None):
+def determine_column_projection(
+    expr: Expr,
+    parent: Expr,
+    dependents: dict[str, Collection[weakref.ref[BaseExpr]]],
+    additional_columns: list | None = None,
+) -> object:
     if isinstance(parent, Index):
         column_union = []
     else:
         column_union = parent.columns.copy()
-    parents = [x() for x in dependents[expr._name] if x() is not None]
+    parents: list[Expr]
+    parents = [inst for x in dependents[expr._name] if isinstance((inst := x()), Expr)]
 
     seen = set()
     for p in parents:
         if p._name in seen:
             continue
         seen.add(p._name)
-
         column_union.extend(p._projection_columns)
 
     if additional_columns is not None:

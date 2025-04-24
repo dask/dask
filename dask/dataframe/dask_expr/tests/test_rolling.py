@@ -14,7 +14,10 @@ pd = _backend_library()
 @pytest.fixture
 def pdf():
     idx = pd.date_range("2000-01-01", periods=12, freq="min")
-    pdf = pd.DataFrame({"foo": range(len(idx))}, index=idx)
+    pdf = pd.DataFrame(
+        {"foo": range(len(idx)), "bar": idx},
+        index=idx,
+    )
     pdf["bar"] = 1
     yield pdf
 
@@ -34,30 +37,44 @@ def df(pdf, request):
         ("min", ()),
         ("max", ()),
         ("var", ()),
+        ("var", (2,)),  # ddof
         ("std", ()),
+        ("std", (2,)),  # ddof
         ("median", ()),
         ("skew", ()),
         ("quantile", (0.5,)),
         ("kurt", ()),
     ],
 )
+@pytest.mark.parametrize("numeric_only", [True, False])
 @pytest.mark.parametrize("window,min_periods", ((1, None), (3, 2), (3, 3)))
 @pytest.mark.parametrize("center", (True, False))
 @pytest.mark.parametrize("df", (1, 2), indirect=True)
-def test_rolling_apis(df, pdf, window, api, how_args, min_periods, center):
+def test_rolling_apis(
+    df, pdf, window, api, how_args, min_periods, center, numeric_only
+):
     args = (window,)
-    kwargs = dict(min_periods=min_periods, center=center)
-
-    result = getattr(df.rolling(*args, **kwargs), api)(*how_args)
-    expected = getattr(pdf.rolling(*args, **kwargs), api)(*how_args)
+    kwargs = dict(
+        min_periods=min_periods,
+        center=center,
+    )
+    how_kwargs = dict(
+        numeric_only=numeric_only,
+    )
+    result = getattr(df.rolling(*args, **kwargs), api)(*how_args, **how_kwargs)
+    expected = getattr(pdf.rolling(*args, **kwargs), api)(*how_args, **how_kwargs)
     assert_eq(result, expected)
 
-    result = getattr(df.rolling(*args, **kwargs), api)(*how_args)["foo"]
-    expected = getattr(pdf.rolling(*args, **kwargs), api)(*how_args)["foo"]
+    result = getattr(df.rolling(*args, **kwargs), api)(*how_args, **how_kwargs)["foo"]
+    expected = getattr(pdf.rolling(*args, **kwargs), api)(*how_args, **how_kwargs)[
+        "foo"
+    ]
     assert_eq(result, expected)
 
     q = result.simplify()
-    eq = getattr(df["foo"].rolling(*args, **kwargs), api)(*how_args).simplify()
+    eq = getattr(df["foo"].rolling(*args, **kwargs), api)(
+        *how_args, **how_kwargs
+    ).simplify()
     assert q._name == eq._name
 
 

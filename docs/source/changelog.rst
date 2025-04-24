@@ -5,33 +5,90 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
-Next Release
-------------
+.. _v2025.4.0:
+
+2025.4.0
+--------
 
 Highlights
 ^^^^^^^^^^
-- When computing multiple dask Expr backed collections like DataFrames, they are
+- When computing multiple Dask-Expr backed collections like DataFrames, they are
   now optimized together instead of individually.
 - Graph materialization and low level optimization is now being performed on the
-  scheduler of a distributed cluster (if available)
-- New kwarg `force` for ``DataFrame.shuffle`` which signals the optimizer to not
+  scheduler of a distributed cluster (if available).
+- New kwarg ``force`` for ``DataFrame.shuffle`` which signals the optimizer to not
   drop the shuffle during optimization.
+- Collections that are passed to Dask methods as arguments
+  are now properly optimized. If multiple collections are passed as arguments
+  they will be optimized together. Collections passed this way are prohibited
+  from being being reused, i.e. if the collection is used again in another
+  function call it will be computed again. This pattern is used to avoid
+  pipeline breakers which typically drive memory usage. Avoiding those should
+  reduce memory pressure on the cluster but can cause runtime regressions.
+- (Special case of above point) Collections passed to Delayed objects are now
+  optimized automatically.
 
 Breaking changes
 ^^^^^^^^^^^^^^^^
-- Support for custom low level optimizers removed
-- Top level dask.optimize will now always trigger graph materialization.
+- Support for custom low level optimizers removed.
+- Top level ``dask.optimize`` will now always trigger graph materialization.
   Previously this was not always the case. This also causes any low level HLG
   annotations to be dropped.
 - DataFrame and Array compute results are now always concatenated on the
   cluster. Previously, the behavior was dependent on the API used to call
-  compute (dask.compute, DaskCollection.compute or Client.compute).
-- ``dask.base.collections_to_dsk`` has been renamed to `collections_to_expr` and
+  compute (``dask.compute``, ``DaskCollection.compute``, or ``Client.compute``).
+- ``dask.base.collections_to_dsk`` has been renamed to ``collections_to_expr`` and
   no longer returns a ``HighLevelGraph`` or ``dict`` object but instead
   guarantees an ``dask._expr.Expr`` object. Further, it no longer performs low
   level optimization immediately but instead delays until the ``Expr`` instance
   is materialized, i.e. the returned object is no longer a mapping such that
-  converting it to `dict` or iterating over it is not possible any more.
+  converting it to ``dict`` or iterating over it is not possible any more.
+
+.. dropdown:: Additional changes
+
+  - Ensure ``Future`` value is in ``da.from_delayed`` task graph (:pr:`11896`) `Tom Augspurger`_
+  - Fix annotations passed to ``delayed`` (:pr:`11893`) `Florian Jetter`_
+  - Migrate ``delayed`` ``unpack_collections`` (:pr:`11881`) `Florian Jetter`_
+  - Remove ``Pub`` / ``Sub`` references from docs (:pr:`11891`) `James Bourbeau`_
+  - Ensure only classes without custom init are singletons (:pr:`11886`) `Florian Jetter`_
+  - Remove custom initializers for ``delayed`` expressions (:pr:`11888`) `Florian Jetter`_
+  - Fix persisting multiple DFs at the same time (:pr:`11887`) `Florian Jetter`_
+  - Avoid always parsing list inputs to ``DataFrame.isin`` as object type ``numpy`` arrays (:pr:`11869`) `Matthew Roeschke`_
+  - Unskip pandas-dev ``cov`` / ``corr`` tests (:pr:`11873`) `Tom Augspurger`_
+  - HLG ``blockwise`` fix (:pr:`11871`) `Florian Jetter`_
+  - Ensure annotations for HLG objects are properly generated (:pr:`11866`) `Florian Jetter`_
+  - Factor out singleton logic from base ``Expr`` class (:pr:`11868`) `Florian Jetter`_
+  - Ensure HLGs are using dependencies properly in optimization (:pr:`11859`) `Florian Jetter`_
+  - Ensure dictionaries tokenize deterministically (:pr:`11867`) `Florian Jetter`_
+  - Ensure default dask scheduler only compute what's needed (:pr:`11861`) `Florian Jetter`_
+  - Faster tokenization of ``pd.RangeIndex`` (:pr:`11863`) `Florian Jetter`_
+  - Update link to Quansight in community doc (:pr:`11860`) `Pavithra Eswaramoorthy`_
+  - Relax tolerance in ``autocorr`` test (:pr:`11857`) `Tom Augspurger`_
+  - Use ``map_blocks`` in ``array.store`` to avoid materialization and dropping of annotations (:pr:`11844`) `Florian Jetter`_
+  - Ensure ``repartition`` does not trigger memory size computation during lowering (i.e. on the scheduler) (:pr:`11855`) `Florian Jetter`_
+  - Support ``args`` and ``kwargs`` for rolling aggregations (:pr:`11856`) `Florian Jetter`_
+  - Remove nightly ``h5py`` from ``upstream`` CI job (:pr:`11847`) `James Bourbeau`_
+  - Ensure ``HLGExpr`` tokenize uniquely (:pr:`11849`) `Florian Jetter`_
+  - Do not inject median in describe for ``pandas`` 3 (:pr:`11846`) `Florian Jetter`_
+  - Fixed ``Expr.__setattr__`` for subclasses (:pr:`11845`) `Tom Augspurger`_
+  - Wrap HLGs in an ``Expr`` to avoid ``Client`` side materialization (:pr:`11736`) `Florian Jetter`_
+
+  - Improve error when submitting work from a closed client (:pr-distributed:`9049`) `James Bourbeau`_
+  - Return a default value if address resolution fails (:pr-distributed:`9051`) `Sandro`_
+  - Avoid ``deepcopy`` when submitting graph (:pr-distributed:`8633`) `Florian Jetter`_
+  - Dynamically scale heartbeat and ``scheduler_info`` intervals (:pr-distributed:`9046`) `Florian Jetter`_
+  - Speed up process startup time by avoiding importing packages on version check (:pr-distributed:`9048`) `Florian Jetter`_
+  - Reduce size of ``scheduler_info`` (:pr-distributed:`9045`) `Florian Jetter`_
+  - Cache ``WorkerState`` host property (:pr-distributed:`9044`) `Florian Jetter`_
+  - Clear ci env cache (:pr-distributed:`9047`) `Florian Jetter`_
+  - Remove deprecated ``Pub`` / ``Sub`` (:pr-distributed:`9039`) `Florian Jetter`_
+  - Perform explicit culling step only if LLG is submitted (:pr-distributed:`9040`) `Florian Jetter`_
+  - Do not fully materialize global annotations by type (:pr-distributed:`9035`) `Florian Jetter`_
+  - Allow nested ``worker_client`` calls (:pr-distributed:`9038`) `George Sakkis`_
+  - Dump ci cache (:pr-distributed:`9037`) `Florian Jetter`_
+  - Scheduler type annotations (:pr-distributed:`9030`) `Florian Jetter`_
+  - Reduce ``dask.order`` overhead by removing ``stripped_dep`` computation (:pr-distributed:`9031`) `Florian Jetter`_
+  - Use ``Expr`` instead of HLG (:pr-distributed:`9008`) `Florian Jetter`_
 
 
 .. _v2025.3.0:
@@ -9426,3 +9483,4 @@ Other
 .. _`Sergey Kolesnikov`: https://github.com/SCORE1387
 .. _`Taylor Braun-Jones`: https://github.com/nocnokneo
 .. _`Isaac`: https://github.com/icykip
+.. _`Sandro`: https://github.com/penguinpee

@@ -61,11 +61,16 @@ from dask.blockwise import (
     broadcast_dimensions,
     optimize_blockwise,
 )
-from dask.delayed import Delayed, delayed
+from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
 from dask.utils import SerializableLock, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, hlg_layer_topological, inc
+
+try:
+    from distributed import futures_of
+except ModuleNotFoundError:
+    futures_of = lambda *args, **kwargs: []
 
 if da._array_expr_enabled():
     pytest.skip("parametrize using unsupported functions", allow_module_level=True)
@@ -80,6 +85,20 @@ def skip_if_no_sparray():
         skip = Version(scipy.__version__) < Version("1.11")
 
     return pytest.mark.skipif(skip, reason="scipy<1.11 has no sparray")
+
+
+def assert_has_persisted_data(arr):
+    has_persisted_data = False
+    if futures_of(arr):
+        has_persisted_data = True
+    else:
+        for layer in arr.dask.layers.values():
+            if isinstance(layer, MaterializedLayer) and any(
+                map(lambda obj: isinstance(obj, np.ndarray), layer.mapping.values())
+            ):
+                has_persisted_data = True
+                break
+    assert has_persisted_data
 
 
 @pytest.mark.parametrize("inline_array", [True, False])
@@ -2097,10 +2116,10 @@ def test_store_delayed_target():
     # test keeping result
     for st_compute in [False, True]:
         targs.clear()
-
         st = store([a, b], [atd, btd], return_stored=True, compute=st_compute)
         if st_compute:
-            assert all(not any(dask.core.get_deps(e.dask)[0].values()) for e in st)
+            for arr in st:
+                assert_has_persisted_data(arr)
 
         st = dask.compute(*st)
 
@@ -2148,9 +2167,10 @@ def test_store_regions():
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=region, compute=False)
-    assert isinstance(v, Delayed)
+    assert all([isinstance(a, Array) for a in v])
     assert (at == 0).all() and (bt[region] == 0).all()
-    assert all([ev is None for ev in v.compute()])
+    results = dask.compute(*v)
+    assert all([ev.size == 0 for ev in results])
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not (bt == 0).all()
     assert not (at == 2).all() and not (at == 0).all()
@@ -2159,9 +2179,9 @@ def test_store_regions():
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=[region, region], compute=False)
-    assert isinstance(v, Delayed)
     assert (at == 0).all() and (bt[region] == 0).all()
-    assert all([ev is None for ev in v.compute()])
+    results = dask.compute(*v)
+    assert all([ev.size == 0 for ev in results])
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not (bt == 0).all()
     assert not (at == 2).all() and not (at == 0).all()
@@ -2176,7 +2196,8 @@ def test_store_regions():
         assert isinstance(v, tuple)
         assert all([isinstance(e, da.Array) for e in v])
         if st_compute:
-            assert all(not any(dask.core.get_deps(e.dask)[0].values()) for e in v)
+            for arr in v:
+                assert_has_persisted_data(arr)
         else:
             assert (at == 0).all() and (bt[region] == 0).all()
 
@@ -2209,7 +2230,8 @@ def test_store_regions():
         assert isinstance(v, tuple)
         assert all([isinstance(e, da.Array) for e in v])
         if st_compute:
-            assert all(not any(dask.core.get_deps(e.dask)[0].values()) for e in v)
+            for arr in v:
+                assert_has_persisted_data(arr)
         else:
             assert (at == 0).all() and (bt[region] == 0).all()
 
@@ -2237,14 +2259,10 @@ def test_store_compute_false():
     bt = np.zeros(shape=(4, 4))
 
     v = store([a, b], [at, bt], compute=False)
-    assert isinstance(v, Delayed)
-
-    # You need a well-formed HighLevelgraph for e.g. dask.graph_manipulation.bind
-    for layer in v.__dask_layers__():
-        assert layer in v.dask.layers
 
     assert (at == 0).all() and (bt == 0).all()
-    assert all([ev is None for ev in v.compute()])
+    results = dask.compute(*v)
+    assert all([ev.size == 0 for ev in results])
     assert (at == 2).all() and (bt == 3).all()
 
     at = np.zeros(shape=(4, 4))
@@ -2271,7 +2289,8 @@ def test_store_nocompute_regions():
     y = np.zeros((2, 10))
     d1 = da.store(x, y, regions=(0,), compute=False)
     d2 = da.store(x, y, regions=(1,), compute=False)
-    assert d1.key != d2.key
+    for l, r in zip(d1, d2):
+        assert l.name != r.name
 
 
 class ThreadSafetyError(Exception):
@@ -2302,6 +2321,11 @@ class ThreadSafeStore:
         self.concurrent_uses -= 1
 
 
+class BrokenStore:
+    def __setitem__(self, key, value):
+        raise RuntimeError("Broken store")
+
+
 class CounterLock:
     def __init__(self, *args, **kwargs):
         self.lock = Lock(*args, **kwargs)
@@ -2318,29 +2342,28 @@ class CounterLock:
         return self.lock.release(*args, **kwargs)
 
 
+def test_store_locks_failure_lock_released():
+    d = da.ones((10, 10), chunks=(2, 2))
+
+    lock = CounterLock()
+    # Ensure same lock applies over multiple stores
+    with pytest.raises(RuntimeError):
+        store(d, BrokenStore(), lock=lock, scheduler="threads")
+    assert lock.acquire_count == lock.release_count > 0
+
+
 def test_store_locks():
-    _Lock = type(Lock())
     d = da.ones((10, 10), chunks=(2, 2))
     a, b = d + 1, d + 2
 
     at = np.zeros(shape=(10, 10))
     bt = np.zeros(shape=(10, 10))
 
-    lock = Lock()
-    v = store([a, b], [at, bt], compute=False, lock=lock)
-    assert isinstance(v, Delayed)
-    dsk = v.dask
-    locks = {
-        vv
-        for v in dsk.values()
-        for vv in (v.args if isinstance(v, Task) else v)
-        if isinstance(vv, _Lock)
-    }
-    assert locks == {lock}
-
+    lock = CounterLock()
     # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
     v = store([a, b], [at, at], lock=lock, scheduler="threads", num_workers=10)
+    assert lock.acquire_count == lock.release_count == a.npartitions + b.npartitions
     assert v is None
 
     # Don't assume thread safety by default
@@ -2391,15 +2414,12 @@ def test_store_method_return():
                 at, scheduler="threads", compute=compute, return_stored=return_stored
             )
 
-            if return_stored:
-                assert isinstance(r, Array)
-            elif compute:
+            if compute and not return_stored:
                 assert r is None
             else:
-                assert isinstance(r, Delayed)
+                assert isinstance(r, Array)
 
 
-@pytest.mark.xfail(reason="can't lock with multiprocessing")
 def test_store_multiprocessing_lock():
     d = da.ones((10, 10), chunks=(2, 2))
     a = d + 1
@@ -2416,9 +2436,11 @@ def test_store_deterministic_keys(return_stored, delayed_target):
     at = np.zeros(shape=(10, 10))
     if delayed_target:
         at = delayed(at)
-    st1 = a.store(at, return_stored=return_stored, compute=False)
-    st2 = a.store(at, return_stored=return_stored, compute=False)
-    assert st1.dask.keys() == st2.dask.keys()
+    # Note: Disable the lock since every call to store would instantiate a new
+    # SerializebleLock which would mess with the tokens
+    st1 = a.store(at, return_stored=return_stored, compute=False, lock=False)
+    st2 = a.store(at, return_stored=return_stored, compute=False, lock=False)
+    assert set(st1.dask.keys()) == set(st2.dask.keys())
 
 
 def test_to_hdf5():
@@ -3870,6 +3892,21 @@ def test_from_delayed_meta():
     assert isinstance(x._meta, np.ndarray)
 
 
+def test_from_delayed_future():
+    # https://github.com/dask/distributed/issues/9050
+    distributed = pytest.importorskip("distributed")
+    arr = np.zeros((10, 10))
+
+    with distributed.Client(n_workers=1) as client:
+        client.wait_for_workers(1)
+        fut = client.scatter(arr)
+        result = da.from_delayed(fut, shape=arr.shape, meta=arr[:0, :0])
+        assert_eq(result, arr, scheduler=client)
+
+        del fut
+        assert_eq(result, arr, scheduler=client)
+
+
 def test_A_property():
     x = da.ones(5, chunks=(2,))
     assert x.A is x
@@ -5071,7 +5108,7 @@ def test_zarr_nocompute():
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
         out = a.to_zarr(d, compute=False)
-        assert isinstance(out, Delayed)
+        assert isinstance(out, Array)
         dask.compute(out)
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
@@ -5432,12 +5469,12 @@ def test_map_blocks_large_inputs_delayed():
     b = np.ones(1000000)
 
     c = a.map_blocks(add, b)
-    assert any(b is v for v in c.dask.values())
+    assert any(b is v() for v in c.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
     d = a.map_blocks(lambda x, y: x + y.sum(), y=b)
     assert_eq(d, d)
-    assert any(b is v for v in d.dask.values())
+    assert any(b is v() for v in d.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
 
@@ -5449,12 +5486,12 @@ def test_blockwise_large_inputs_delayed():
     b = np.ones(1000000)
 
     c = da.blockwise(func, "i", a, "i", b, None, dtype=a.dtype)
-    assert any(b is v for v in c.dask.values())
+    assert any(b is v() for v in c.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
     assert_eq(c, c)
 
     d = da.blockwise(lambda x, y: x, "i", a, "i", y=b, dtype=a.dtype)
-    assert any(b is v for v in d.dask.values())
+    assert any(b is v() for v in d.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
     assert_eq(d, d)
 
@@ -5849,6 +5886,7 @@ def test_load_store_chunk():
     load_store_chunk(
         x=np.array([1, 2, 3]),
         out=actual,
+        region=None,
         index=slice(2, 5),
         lock=False,
         return_stored=False,
@@ -5859,6 +5897,7 @@ def test_load_store_chunk():
     # index should not be used on empty array
     actual = load_store_chunk(
         x=np.array([]),
+        region=None,
         out=np.array([]),
         index=2,
         lock=False,
@@ -5894,3 +5933,48 @@ def test_setitem_no_dtype_broadcast(idx, val):
     x = da.array([1, 2], dtype=np.int32)
     x[idx] = val
     assert_eq(x, da.array([3, 2], dtype=np.int32))
+
+
+def test_store_sources_unoptimized_nocompute():
+    """Test that two sources can be optimized and share tasks after storing."""
+    total_calls = 0
+
+    def _shared_task(arr1):
+        nonlocal total_calls
+        total_calls += 1
+        return np.stack([arr1 + 1, arr1 + 2])
+
+    start = da.zeros((2, 2), chunks=1)
+    src = da.map_blocks(
+        _shared_task,
+        start,
+        dtype=start.dtype,
+        meta=np.array((), dtype=start.dtype),
+        new_axis=[0],
+        chunks=(2,) + start.chunks,
+    )
+    target1 = np.zeros((2, 2))
+    target2 = np.zeros((2, 2))
+    with dask.config.set(scheduler="single-threaded"):
+        store_res1 = da.store(src[0], target1, compute=False)
+        store_res2 = da.store(src[1], target2, compute=False)
+        da.compute(store_res1, store_res2)
+    assert total_calls == start.blocks.size
+
+
+def test_blockwise_fusion():
+    def custom_scheduler_get(dsk, keys, **kwargs):
+        """Custom scheduler that returns the result of the first key."""
+        dsk = dsk.__dask_graph__()
+        # two sum
+        # one sum agg
+        # one finalize Alias
+        assert len(dsk) == 4, "False number of tasks"
+        return [42 for _ in keys]
+
+    # First test that this mocking stuff works as expecged
+    with pytest.raises(AssertionError, match="False number of tasks"):
+        dask.compute(da.ones(10), scheduler=custom_scheduler_get)
+
+    a = ((da.ones(10, chunks=5) + 1) + 2).sum()
+    dask.compute(a, scheduler=custom_scheduler_get)

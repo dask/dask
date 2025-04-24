@@ -3168,7 +3168,9 @@ def test_cov_corr_stable():
             None,
             marks=pytest.mark.xfail(reason="fails with non-numeric data"),
         ),
-        True,
+        pytest.param(
+            True,
+        ),
         pytest.param(
             False,
             marks=[
