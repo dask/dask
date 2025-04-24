@@ -9,10 +9,11 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 import dask
-from dask.base import tokenize
+from dask.base import collections_to_expr, tokenize
 from dask.blockwise import Blockwise
+from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
-from dask.utils_test import inc
+from dask.utils_test import dec, inc
 
 
 def test_visualize(tmpdir):
@@ -252,11 +253,12 @@ def test_blockwise_cull(flat):
     keys = {(x._name, *select)}
     dsk_cull = dsk.cull(keys)
     for name, layer in dsk_cull.layers.items():
+        old_name = name.rsplit("-", 1)[0]
         if not isinstance(layer, dask.blockwise.Blockwise):
             # The original layer shouldn't be Blockwise if the new one isn't
-            assert not isinstance(dsk.layers[name], dask.blockwise.Blockwise)
+            assert not isinstance(dsk.layers[old_name], dask.blockwise.Blockwise)
             continue
-        assert isinstance(dsk.layers[name], dask.blockwise.Blockwise)
+        assert isinstance(dsk.layers[old_name], dask.blockwise.Blockwise)
         assert not layer.is_materialized()
         out_keys = layer.get_output_keys()
         assert out_keys == {(layer.output, *select)}
@@ -318,3 +320,45 @@ def test_tokenize_hlg():
     c = db.from_sequence(list(range(10)), npartitions=3).max()
     assert tokenize(a.dask) == tokenize(b.dask)
     assert tokenize(a.dask) != tokenize(c.dask)
+
+
+def test_culling_changes_layer_names():
+    """Test that culling changes the layer names in the graph."""
+    dsk = MaterializedLayer({"x": 1, "y": (inc, "x"), "z": (dec, "x")})
+    hg = HighLevelGraph({"a": dsk}, {"a": set()})
+
+    # This construction of Delayed objects is similar to array.to_delayed
+    y = Delayed("y", hg, layer="a")
+    z = Delayed("z", hg, layer="a")
+
+    from dask.delayed import optimize
+
+    # This is roughly what dask.optimize is doing
+    # The exception is that collection_to_dsk takes the Delayed object and
+    # extracts the layer as a low level graph in which case we're loosing the
+    # layer name, i.e. all internal manipulations of the graphs with and without
+    # optimization could be affected but triggering this with user APIs is
+    # almost impossible
+    yopt_hlg = optimize(y._dask, ["y"])
+    assert isinstance(yopt_hlg, HighLevelGraph)
+    layers = yopt_hlg.layers
+    # This test doesn't care about there being a single layer but after
+    # optimization we no longer want to hardcode the delayed layer key
+    assert len(layers) == 1
+    layer_key = next(iter(layers))
+    yopt = Delayed("y", yopt_hlg, layer=layer_key)
+
+    zopt_hlg = optimize(z._dask, ["z"])
+    assert isinstance(zopt_hlg, HighLevelGraph)
+    layers = zopt_hlg.layers
+    # This test doesn't care about there being a single layer but after
+    # optimization we no longer want to hardcode the delayed layer key
+    assert len(layers) == 1
+    layer_key = next(iter(layers))
+    zopt = Delayed("z", zopt_hlg, layer=layer_key)
+
+    # This internally merged the HLG graphs i.e. if layer names are not
+    # deduplicated we will loose keys.
+    expr_opt = collections_to_expr([yopt, zopt]).optimize()
+    dsk_out = expr_opt.__dask_graph__()
+    assert set(dsk_out) == set("xyz")
