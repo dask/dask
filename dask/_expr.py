@@ -1359,7 +1359,7 @@ class ProhibitReuse(Expr):
         try:
             from distributed.shuffle._core import P2PBarrierTask
         except ModuleNotFoundError:
-            P2PBarrierTask = None
+            P2PBarrierTask = type(None)
         dsk = convert_legacy_graph(self.expr.__dask_graph__())
 
         subs = {old_key: self._modify_keys(old_key) for old_key in dsk}
