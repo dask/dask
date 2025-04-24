@@ -933,6 +933,8 @@ def test_delayed_fusion():
 
 def test_p2p_as_delayed():
     pytest.importorskip("distributed")
+    pytest.importorskip("numpy")
+    pytest.importorskip("dask.dataframe")
     from distributed.utils_test import gen_cluster
 
     import dask.dataframe as dd
