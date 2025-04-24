@@ -6175,7 +6175,7 @@ def map_partitions(
         if isinstance(v, Delayed):
             dexpr = _DelayedExpr(v)
             delayed_kwargs.append(dexpr)
-            newkwargs[k] = TaskRef(dexpr._name)
+            newkwargs[k] = TaskRef(dexpr.__dask_keys__()[0])
         else:
             newkwargs[k] = v
     del kwargs
