@@ -253,11 +253,12 @@ def test_blockwise_cull(flat):
     keys = {(x._name, *select)}
     dsk_cull = dsk.cull(keys)
     for name, layer in dsk_cull.layers.items():
+        old_name = name.rsplit("-", 1)[0]
         if not isinstance(layer, dask.blockwise.Blockwise):
             # The original layer shouldn't be Blockwise if the new one isn't
-            assert not isinstance(dsk.layers[name], dask.blockwise.Blockwise)
+            assert not isinstance(dsk.layers[old_name], dask.blockwise.Blockwise)
             continue
-        assert isinstance(dsk.layers[name], dask.blockwise.Blockwise)
+        assert isinstance(dsk.layers[old_name], dask.blockwise.Blockwise)
         assert not layer.is_materialized()
         out_keys = layer.get_output_keys()
         assert out_keys == {(layer.output, *select)}
