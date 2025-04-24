@@ -1345,18 +1345,45 @@ class ProhibitReuse(Expr):
             k = str(k)
         return f"{k}-{self._suffix}"
 
+    def _simplify_down(self):
+        if not isinstance(
+            self.expr,
+            (
+                HLGExpr,
+                HLGFinalizeCompute,
+                _HLGExprSequence,
+            ),
+        ):
+            # FIXME: Shuffling cannot be rewritten since the barrier key is
+            # hardcoded. Skipping this here should do the trick most of the time
+            return self.expr
+
     def __dask_graph__(self):
+        try:
+            from distributed.shuffle._core import P2PBarrierTask
+        except ModuleNotFoundError:
+            P2PBarrierTask = None
         dsk = convert_legacy_graph(self.expr.__dask_graph__())
 
         subs = {old_key: self._modify_keys(old_key) for old_key in dsk}
-        dsk2 = {
-            new_key: Task(
+        dsk2 = {}
+        for old_key, new_key in subs.items():
+            t = dsk[old_key]
+            if isinstance(t, P2PBarrierTask):
+                warnings.warn(
+                    "Cannot block reusing for graphs including a "
+                    "P2PBarrierTask. This may cause unexpected results. "
+                    "This typically happens when converting a dask "
+                    "DataFrame to delayed objects.",
+                    UserWarning,
+                )
+                return dsk
+            dsk2[new_key] = Task(
                 new_key,
                 ProhibitReuse._identity,
-                dsk.pop(old_key).substitute(subs),
+                t.substitute(subs),
             )
-            for old_key, new_key in subs.items()
-        }
+
         dsk2.update(dsk)
         return dsk2
 

@@ -929,3 +929,33 @@ def test_delayed_fusion():
         result = dask.compute(obj2)
     assert len(dsk2) == 2
     assert dask.compute(obj) == result
+
+
+def test_p2p_as_delayed():
+    pytest.importorskip("distributed")
+    from distributed.utils_test import gen_cluster
+
+    import dask.dataframe as dd
+
+    @gen_cluster(client=True)
+    async def _test(c, s, *workers):
+        test_df = dd.from_dict(
+            {
+                "partition": [0, 1, 2, 3, 0, 1, 2, 3],
+                "value": [1, 2, 3, 4, 5, 6, 7, 8],
+            },
+            npartitions=2,
+        )
+        part_df = test_df.shuffle("partition", force=True, shuffle_method="p2p")
+
+        @delayed
+        def delayed_func(x):
+            return x
+
+        delay_df = delayed_func(part_df)
+        dd.utils.assert_eq(
+            await c.gather(c.compute(delay_df)),
+            await c.gather(c.compute(part_df)),
+        )
+
+    _test()
