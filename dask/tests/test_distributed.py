@@ -1074,3 +1074,11 @@ async def test_fusion_barrier_task(c, s, a, b):
     x2 = da.rechunk(x, chunks=new, method="p2p")
     result = await c.compute(x2)
     da.assert_eq(result, a)
+
+
+@gen_cluster(client=True)
+async def test_delayed_future(c, s, a, b):
+    fut = await c.scatter(1)
+    result = dask.delayed(fut)
+    assert result.key == fut.key
+    assert await c.compute(result) == 1

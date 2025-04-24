@@ -620,6 +620,15 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     if not (nout is None or (type(nout) is int and nout >= 0)):
         raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
     if task is obj:
+        try:
+            from distributed import Future
+        except ImportError:
+            pass
+        else:
+            if isinstance(obj, Future):
+                # https://github.com/dask/dask/issues/11908
+                name = name or obj.key
+
         if not name:
             try:
                 prefix = obj.__name__
