@@ -1324,6 +1324,7 @@ class ProhibitReuse(Expr):
     """
 
     _parameters = ["expr"]
+    _ALLOWED_TYPES = [HLGExpr, LLGExpr, HLGFinalizeCompute, _HLGExprSequence]
 
     def __dask_keys__(self):
         return self._modify_keys(self.expr.__dask_keys__())
@@ -1346,16 +1347,12 @@ class ProhibitReuse(Expr):
         return f"{k}-{self._suffix}"
 
     def _simplify_down(self):
+        # FIXME: Shuffling cannot be rewritten since the barrier key is
+        # hardcoded. Skipping this here should do the trick most of the time
         if not isinstance(
             self.expr,
-            (
-                HLGExpr,
-                HLGFinalizeCompute,
-                _HLGExprSequence,
-            ),
+            tuple(self._ALLOWED_TYPES),
         ):
-            # FIXME: Shuffling cannot be rewritten since the barrier key is
-            # hardcoded. Skipping this here should do the trick most of the time
             return self.expr
 
     def __dask_graph__(self):
