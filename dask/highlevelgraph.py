@@ -23,7 +23,7 @@ import dask
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
-from dask.tokenize import normalize_token
+from dask.tokenize import normalize_token, tokenize
 from dask.typing import DaskCollection, Graph, Key
 from dask.utils import ensure_dict, import_required, key_split
 from dask.widgets import get_template
@@ -729,8 +729,10 @@ class HighLevelGraph(Graph):
         all_ext_keys = self.get_all_external_keys()
         ret_layers: dict = {}
         ret_key_deps: dict = {}
+        layer_dependencies = {}
         for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
+            new_layer_name = layer_name
             # Let's cull the layer to produce its part of `keys`.
             # Note: use .intersection rather than & because the RHS is
             # a collections.abc.Set rather than a real set, and using &
@@ -738,6 +740,7 @@ class HighLevelGraph(Graph):
             # if there is no culling can be much bigger than the RHS.
             output_keys = keys_set.intersection(layer.get_output_keys())
             if output_keys:
+                new_layer_name = f"{layer_name}-{tokenize(output_keys)}"
                 culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
                 # Update `keys` with all layer's external key dependencies, which
                 # are all the layer's dependencies (`culled_deps`) excluding
@@ -749,7 +752,8 @@ class HighLevelGraph(Graph):
                 keys_set |= external_deps
 
                 # Save the culled layer and its key dependencies
-                ret_layers[layer_name] = culled_layer
+                ret_layers[new_layer_name] = culled_layer
+                layer_dependencies[new_layer_name] = self.dependencies[layer_name]
                 if (
                     isinstance(layer, Blockwise)
                     or isinstance(layer, MaterializedLayer)
@@ -769,7 +773,7 @@ class HighLevelGraph(Graph):
         # intersection to iterate over the smaller of the two sets.
         ret_layers_keys = set(ret_layers.keys())
         ret_dependencies = {
-            layer_name: self.dependencies[layer_name] & ret_layers_keys
+            layer_name: layer_dependencies[layer_name] & ret_layers_keys
             for layer_name in ret_layers
         }
 
