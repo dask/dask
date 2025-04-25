@@ -620,14 +620,15 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     if not (nout is None or (type(nout) is int and nout >= 0)):
         raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
     if task is obj:
-        try:
-            from distributed import Future
-        except ImportError:
-            pass
-        else:
-            if isinstance(obj, Future):
-                # https://github.com/dask/dask/issues/11908
-                name = name or obj.key
+        # https://github.com/dask/dask/issues/11908
+        # Ensure that delayed(dask.client.Future) works.
+        # This code block executes on 'import dask' so we want to avoid importing
+        # distributed here, which pulls in a lot of imports.
+        # So we'll just check some properties about the object's type
+        t = type(obj)
+
+        if t.__name__ == "Future" and t.__module__.split(".")[0] == "distributed":
+            name = name or obj.key
 
         if not name:
             try:
@@ -825,7 +826,8 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     dask_kwargs, collections2 = unpack_collections(kwargs)
     collections.extend(collections2)
     if dask_kwargs:
-        task = Task(name, _apply2, func, *args2, dask_kwargs=dask_kwargs)
+        # task = Task(name, apply, func, args2, dask_kwargs)
+        task = (apply, func, list(args2), dask_kwargs)
     else:
         task = Task(name, func, *args2, **kwargs)
 
