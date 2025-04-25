@@ -151,13 +151,17 @@ class FooExpr(Expr):
 
 def test_prohibit_reuse():
     once = FooExpr()
-    dsk = _ExprSequence(once, ProhibitReuse(once)).optimize().__dask_graph__()
+    ProhibitReuse._ALLOWED_TYPES.append(FooExpr)
+    try:
+        dsk = _ExprSequence(once, ProhibitReuse(once)).optimize().__dask_graph__()
 
-    assert len(dsk) == 2
-    first = dsk.pop("foo")()
-    key, val = dsk.popitem()
-    assert key.startswith("foo") and key != "foo"
-    # We don't want to chain anything but actually _hide_ the task
-    assert not val.dependencies
-    # Task is wrapped
-    assert val() is first
+        assert len(dsk) == 2
+        first = dsk.pop("foo")()
+        key, val = dsk.popitem()
+        assert key.startswith("foo") and key != "foo"
+        # We don't want to chain anything but actually _hide_ the task
+        assert not val.dependencies
+        # Task is wrapped
+        assert val() is first
+    finally:
+        ProhibitReuse._ALLOWED_TYPES.remove(FooExpr)

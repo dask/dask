@@ -1095,3 +1095,18 @@ def test_substitute_nested():
 @pytest.mark.parametrize("Container", [Dict, List, Set, Tuple])
 def test_nested_containers_empty(Container):
     assert Container(Container.klass())() == Container.klass()
+
+
+class MySubclass(Task):
+    __slots__ = ("custom_kwarg_only",)
+
+    def __init__(self, key, func, /, *args, custom_kwarg_only, **kwargs):
+        self.custom_kwarg_only = custom_kwarg_only
+        super().__init__(key, func, *args, **kwargs)
+
+
+def test_substitute_subclasses():
+    t = MySubclass("key", func, "a", TaskRef("b"), custom_kwarg_only="foo")
+    t2 = t.substitute({"b": "c"})
+    assert t2.custom_kwarg_only == "foo"
+    assert t2({"a": "a", "c": "b"}) == t({"a": "a", "b": "b"})
