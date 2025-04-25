@@ -1064,6 +1064,14 @@ async def test_release_persisted_futures_without_gc(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_delayed_future_with_kwargs(c, s, a, b):
+    fut = await c.scatter(1)
+
+    result = dask.delayed(inc)(x=fut)
+    assert await c.compute(result) == 2
+
+
+@gen_cluster(client=True)
 async def test_fusion_barrier_task(c, s, a, b):
     np = pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")

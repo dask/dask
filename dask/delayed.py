@@ -816,7 +816,8 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     dask_kwargs, collections2 = unpack_collections(kwargs)
     collections.extend(collections2)
     if dask_kwargs:
-        task = Task(name, _apply2, func, *args2, dask_kwargs=dask_kwargs)
+        # task = Task(name, apply, func, args2, dask_kwargs)
+        task = (apply, func, list(args2), dask_kwargs)
     else:
         task = Task(name, func, *args2, **kwargs)
 
