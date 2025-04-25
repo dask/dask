@@ -5,6 +5,22 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2025.4.1:
+
+2025.4.1
+--------
+
+Highlights
+^^^^^^^^^^
+This release contains several graph optimization fixes for issues introduced in the ``2025.4.0`` release.
+
+See :pr:`11906`, :pr:`11898`, :pr:`11903`, and :pr:`11904` by `Florian Jetter`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Implement ``ufuncs`` and ``gufunc`` for array-expr (:pr:`11818`) `Patrick Hoefler`_
+  - Implement ``map_overlap`` for array-expr (:pr:`11822`) `Patrick Hoefler`_
+
 .. _v2025.4.0:
 
 2025.4.0
