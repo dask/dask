@@ -661,7 +661,7 @@ def test_default_imports():
     out = subprocess.check_output([sys.executable, "-c", code])
     modules = set(eval(out.decode()))
     assert "dask" in modules
-    blacklist = [
+    blocklist = [
         "dask.array",
         "dask.dataframe",
         "numpy",
@@ -670,7 +670,7 @@ def test_default_imports():
         "s3fs",
         "distributed",
     ]
-    for mod in blacklist:
+    for mod in blocklist:
         assert mod not in modules
 
 
