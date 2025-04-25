@@ -1076,31 +1076,24 @@ class _HLGExprSequence(Expr):
         from dask.highlevelgraph import HighLevelGraph
 
         groups = toolz.groupby(
-            lambda x: (
-                x.low_level_optimizer if isinstance(x, HLGExpr) else None,
-                x.postcompute,
-            ),
+            lambda x: x.low_level_optimizer if isinstance(x, HLGExpr) else None,
             self.operands,
         )
         exprs = []
         changed = False
-        for (optimizer, postcompute), group in groups.items():
+        for optimizer, group in groups.items():
             if len(group) > 1:
-                changed = True
-                graphs = []
-                for expr in group:
-                    graphs.append(expr.hlg)
+                graphs = [expr.hlg for expr in group]
 
+                changed = True
                 dsk = HighLevelGraph.merge(*graphs)
-                keys = [v.__dask_keys__() for v in group]
-                exprs.append(
-                    _HLGExprGroup(
-                        dsk=dsk,
-                        low_level_optimizer=optimizer,
-                        output_keys=keys,
-                        postcompute=postcompute,
-                    )
+                hlg_group = _HLGExprGroup(
+                    dsk=dsk,
+                    low_level_optimizer=optimizer,
+                    output_keys=[v.__dask_keys__() for v in group],
+                    postcompute=[g.postcompute for g in group],
                 )
+                exprs.append(hlg_group)
             else:
                 exprs.append(group[0])
         if not changed:
@@ -1302,15 +1295,22 @@ class HLGFinalizeCompute(HLGExpr):
         layers = expr.dsk.layers.copy()
         deps = expr.dsk.dependencies.copy()
         keys = expr.__dask_keys__()
-        func, extra_args = expr.postcompute
-        t = Task(self._name, func, _convert_dask_keys(keys), *extra_args)
+        if isinstance(expr.postcompute, list):
+            postcomputes = expr.postcompute
+        else:
+            postcomputes = [expr.postcompute]
+        tasks = [
+            Task(self._name, func, _convert_dask_keys(keys), *extra_args)
+            for func, extra_args in postcomputes
+        ]
         from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 
-        layers[t.key] = MaterializedLayer({t.key: t})
         leafs = set(deps)
         for val in deps.values():
             leafs -= val
-        deps[t.key] = leafs
+        for t in tasks:
+            layers[t.key] = MaterializedLayer({t.key: t})
+            deps[t.key] = leafs
         return HighLevelGraph(layers, dependencies=deps)
 
     def __dask_keys__(self):
@@ -1324,6 +1324,7 @@ class ProhibitReuse(Expr):
     """
 
     _parameters = ["expr"]
+    _ALLOWED_TYPES = [HLGExpr, LLGExpr, HLGFinalizeCompute, _HLGExprSequence]
 
     def __dask_keys__(self):
         return self._modify_keys(self.expr.__dask_keys__())
@@ -1345,18 +1346,41 @@ class ProhibitReuse(Expr):
             k = str(k)
         return f"{k}-{self._suffix}"
 
+    def _simplify_down(self):
+        # FIXME: Shuffling cannot be rewritten since the barrier key is
+        # hardcoded. Skipping this here should do the trick most of the time
+        if not isinstance(
+            self.expr,
+            tuple(self._ALLOWED_TYPES),
+        ):
+            return self.expr
+
     def __dask_graph__(self):
+        try:
+            from distributed.shuffle._core import P2PBarrierTask
+        except ModuleNotFoundError:
+            P2PBarrierTask = type(None)
         dsk = convert_legacy_graph(self.expr.__dask_graph__())
 
         subs = {old_key: self._modify_keys(old_key) for old_key in dsk}
-        dsk2 = {
-            new_key: Task(
+        dsk2 = {}
+        for old_key, new_key in subs.items():
+            t = dsk[old_key]
+            if isinstance(t, P2PBarrierTask):
+                warnings.warn(
+                    "Cannot block reusing for graphs including a "
+                    "P2PBarrierTask. This may cause unexpected results. "
+                    "This typically happens when converting a dask "
+                    "DataFrame to delayed objects.",
+                    UserWarning,
+                )
+                return dsk
+            dsk2[new_key] = Task(
                 new_key,
                 ProhibitReuse._identity,
-                dsk.pop(old_key).substitute(subs),
+                t.substitute(subs),
             )
-            for old_key, new_key in subs.items()
-        }
+
         dsk2.update(dsk)
         return dsk2
 
