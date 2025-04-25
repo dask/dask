@@ -54,6 +54,7 @@ should contain the dependencies of the task.
     t({"a": 1, "b": 2}) == 3
 
 """
+import functools
 import itertools
 import sys
 from collections import defaultdict
@@ -642,7 +643,6 @@ class Task(GraphNode):
         /,
         *args: Any,
         _data_producer: bool = False,
-        _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
         self.key = key
@@ -655,11 +655,12 @@ class Task(GraphNode):
         self.kwargs = {
             k: Alias(v.key) if isinstance(v, TaskRef) else v for k, v in kwargs.items()
         }
-        if _dependencies is None:
-            _dependencies = set()
-            for a in itertools.chain(self.args, self.kwargs.values()):
-                if isinstance(a, GraphNode):
-                    _dependencies.update(a.dependencies)
+        _dependencies: set[KeyType] | None = None
+        for a in itertools.chain(self.args, self.kwargs.values()):
+            if isinstance(a, GraphNode):
+                if _dependencies is None:
+                    _dependencies = set()
+                _dependencies.update(a.dependencies)
         if _dependencies:
             self._dependencies = frozenset(_dependencies)
         else:
@@ -681,7 +682,6 @@ class Task(GraphNode):
             self.key,
             self.func,
             *self.args,
-            _dependencies=self._dependencies,
             **self.kwargs,
         )
 
@@ -784,6 +784,10 @@ class Task(GraphNode):
         subs_filtered = {
             k: v for k, v in subs.items() if k in self.dependencies and k != v
         }
+        extras = _extra_args(type(self))  # type: ignore
+        extra_kwargs = {
+            name: getattr(self, name) for name in extras if name not in {"key", "func"}
+        }
         if subs_filtered:
             new_args = tuple(
                 a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
@@ -797,8 +801,8 @@ class Task(GraphNode):
                 key or self.key,
                 self.func,
                 *new_args,
-                _data_producer=self.data_producer,
                 **new_kwargs,
+                **extra_kwargs,
             )
         elif key is None or key == self.key:
             return self
@@ -808,8 +812,8 @@ class Task(GraphNode):
                 key,
                 self.func,
                 *self.args,
-                _data_producer=self.data_producer,
                 **self.kwargs,
+                **extra_kwargs,
             )
 
 
@@ -822,7 +826,6 @@ class NestedContainer(Task):
         self,
         /,
         *args: Any,
-        _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
         if len(args) == 1 and isinstance(args[0], self.klass):
@@ -832,7 +835,6 @@ class NestedContainer(Task):
             self.to_container,
             *args,
             constructor=self.constructor,
-            _dependencies=_dependencies,
             **kwargs,
         )
 
@@ -902,16 +904,12 @@ class Set(NestedContainer):
 class Dict(NestedContainer):
     klass = dict
 
-    def __init__(
-        self, /, *args: Any, _dependencies: set | frozenset | None = None, **kwargs: Any
-    ):
+    def __init__(self, /, *args: Any, **kwargs: Any):
         if args:
             if len(args) > 1:
                 raise ValueError("Dict can only take one positional argument")
             kwargs = args[0]
-        super().__init__(
-            *(itertools.chain(*kwargs.items())), _dependencies=_dependencies
-        )
+        super().__init__(*(itertools.chain(*kwargs.items())))
 
     def __repr__(self):
         values = ", ".join(f"{k}: {v}" for k, v in batched(self.args, 2, strict=True))
@@ -1140,3 +1138,20 @@ def cull(
         dsk2[k] = v = dsk[k]
         wupdate(v.dependencies)
     return dsk2
+
+
+@functools.cache
+def _extra_args(typ: type) -> set[str]:
+    import inspect
+
+    sig = inspect.signature(typ)
+    extras = set()
+    for name, param in sig.parameters.items():
+        if param.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            continue
+        if name in typ.get_all_slots():  # type: ignore
+            extras.add(name)
+    return extras
