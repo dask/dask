@@ -228,7 +228,7 @@ def unpack_collections(expr, _return_collections=True):
             [v for v in expr.values()], _return_collections=False
         )
         collections = kcollections + valcollections
-        args = Dict({k: v for k, v in zip(keyargs, valargs)})
+        args = Dict([[k, v] for k, v in zip(keyargs, valargs)])
         if not collections and not args.dependencies:
             return expr, ()
         if _return_collections:

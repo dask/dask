@@ -907,10 +907,27 @@ class Dict(NestedContainer, Mapping):
 
     def __init__(self, /, *args: Any, **kwargs: Any):
         if args:
-            if len(args) > 1:
-                raise ValueError("Dict can only take one positional argument")
-            kwargs = args[0]
-        super().__init__(*(itertools.chain(*kwargs.items())))
+            assert not kwargs
+            if len(args) == 1:
+                if isinstance(args[0], dict):
+                    kwargs = args[0]
+                    args = ()
+                elif isinstance(args[0], (list, tuple)):
+                    from dask.core import flatten
+
+                    args = tuple(flatten(args[0]))
+                    if len(args) % 2 != 0:
+                        raise ValueError("Invalid number of arguments provided")
+            else:
+                raise ValueError(
+                    "Invalid number of arguments provided. "
+                    "Either provide a single dict or a list of key-value pairs"
+                )
+        if kwargs:
+            assert not args
+            args = tuple(itertools.chain(*kwargs.items()))
+
+        super().__init__(*args)
 
     def __repr__(self):
         values = ", ".join(f"{k}: {v}" for k, v in batched(self.args, 2, strict=True))
@@ -925,11 +942,13 @@ class Dict(NestedContainer, Mapping):
         if not subs_filtered:
             return self
 
-        new = {}
-        for k, v in batched(self.args, 2, strict=True):
-            v = v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
-            new[k] = v
-        return type(self)(new)
+        new_args = []
+        for arg in self.args:
+            new_arg = (
+                arg.substitute(subs_filtered) if isinstance(arg, GraphNode) else arg
+            )
+            new_args.append(new_arg)
+        return type(self)(new_args)
 
     def __iter__(self):
         yield from self.args[::2]
