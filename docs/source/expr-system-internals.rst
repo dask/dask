@@ -9,7 +9,7 @@ Query planning with Expression system
 
 .. currentmodule:: dask.dataframe
 
-The expression system was originally developed for Dask DataFrames, as implemented in the `dask-expr <https://github.com/dask/dask-expr>`_ project. Early prototypes experimented with `matchpy <https://github.com/HPAC/matchpy>`_, but it was soon replaced with a custom-built system offering simpler and more transparent optimization steps.
+The expression system was originally developed for Dask DataFrames, as implemented in the `dask-expr <https://github.com/dask/dask-expr>`_ project.
 
 Expr objects
 ------------
@@ -21,7 +21,7 @@ Construction
 
 The expression system centers around the Expr class, which represents a computation on a Dask DataFrame. This class is designed for subclassing; each subclass corresponds to a specific computation type (e.g., arithmetic, logical operations, filtering, joins).
 
-Notably, custom initializers (``__init__``) are disallowed * both in the base class and its subclasses. This design decision reflects concerns around performance, as expression objects may be created and recreated frequently, and custom logic in constructors could introduce unnecessary overhead.
+Notably, custom initializers (``__init__``) are disallowed, both in the base class and its subclasses. This design decision reflects concerns around performance, as expression objects may be created and recreated frequently, and custom logic in constructors could introduce unnecessary overhead.
 
 Instead, expression classes use a dataclass-like interface defined by two attributes:
 
@@ -31,16 +31,16 @@ Instead, expression classes use a dataclass-like interface defined by two attrib
 
 Arguments passed to the constructor are stored in the operands attribute, with minimal input validation. Here's an example:
 
-.. code::
+.. code-block:: python
 
     >>> class MyExpr(Expr):
-    >>>     _parameters = ["param1", "param2"]
-    >>>     _defaults = {"param2": None}
+            _parameters = ["param1", "param2"]
+            _defaults = {"param2": None}
 
 
     >>> class MyExpr(Expr):
-    >>>     _parameters = ["param1", "param2"]
-    >>>     _defaults = {"param2": None}
+            _parameters = ["param1", "param2"]
+            _defaults = {"param2": None}
 
     >>> expr = MyExpr(1, 2, 3)
     >>> expr.param1
