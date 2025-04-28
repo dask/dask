@@ -337,7 +337,7 @@ def test_min_max_empty_chunks(dfunc, func):
 @pytest.mark.parametrize("func", ["argmax", "nanargmax"])
 def test_arg_reductions_unknown_chunksize(func):
     x = da.arange(10, chunks=5)
-    x = x[x > 1]
+    x._chunks = tuple((np.nan,) * len(c) for c in x.chunks)
 
     with pytest.raises(ValueError) as info:
         getattr(da, func)(x)
