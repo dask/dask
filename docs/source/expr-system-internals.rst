@@ -37,11 +37,6 @@ Arguments passed to the constructor are stored in the operands attribute, with m
             _parameters = ["param1", "param2"]
             _defaults = {"param2": None}
 
-
-    >>> class MyExpr(Expr):
-            _parameters = ["param1", "param2"]
-            _defaults = {"param2": None}
-
     >>> expr = MyExpr(1, 2, 3)
     >>> expr.param1
     1
