@@ -67,8 +67,6 @@ from dask.typing import Key as KeyType
 from dask.utils import funcname, is_namedtuple_instance
 
 _T = TypeVar("_T")
-_T_GraphNode = TypeVar("_T_GraphNode", bound="GraphNode")
-_T_Iterable = TypeVar("_T_Iterable", bound=Iterable)
 
 
 # Ported from more-itertools
@@ -817,7 +815,7 @@ class Task(GraphNode):
             )
 
 
-class NestedContainer(Task):
+class NestedContainer(Task, Iterable):
     constructor: Callable
     klass: type
     __slots__ = tuple(__annotations__)
@@ -888,6 +886,9 @@ class NestedContainer(Task):
     def to_container(*args, constructor):
         return constructor(args)
 
+    def __iter__(self):
+        yield from self.args
+
 
 class List(NestedContainer):
     constructor = klass = list
@@ -901,7 +902,7 @@ class Set(NestedContainer):
     constructor = klass = set
 
 
-class Dict(NestedContainer):
+class Dict(NestedContainer, Mapping):
     klass = dict
 
     def __init__(self, /, *args: Any, **kwargs: Any):
@@ -929,6 +930,18 @@ class Dict(NestedContainer):
             v = v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
             new[k] = v
         return type(self)(new)
+
+    def __iter__(self):
+        yield from self.args[::2]
+
+    def __getitem__(self, key):
+        for k, v in batched(self.args, 2, strict=True):
+            if k == key:
+                return v
+        raise KeyError(key)
+
+    def __len__(self):
+        return len(self.args) // 2
 
     @staticmethod
     def constructor(args):
