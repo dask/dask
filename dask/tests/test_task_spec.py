@@ -997,6 +997,15 @@ def test_nested_containers():
     assert t == t2
     assert tokenize(t) == tokenize(t2)
 
+    d = Dict(
+        [
+            ["k", Task("key-1", func, "a", TaskRef("b"))],
+            ["v", Task("key-2", func, TaskRef("c"), "d")],
+        ]
+    )
+    assert d.dependencies == {"c", "b"}
+    assert d({"b": "b", "c": "c"}) == {"k": "a-b", "v": "c-d"}
+
 
 def test_block_io_fusion():
 
