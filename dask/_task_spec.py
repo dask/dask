@@ -909,24 +909,22 @@ class Dict(NestedContainer, Mapping):
         if args:
             assert not kwargs
             if len(args) == 1:
-                if isinstance(args[0], dict):
-                    kwargs = args[0]
-                    args = ()
-                elif isinstance(args[0], (list, tuple)):
+                args = args[0]
+                if isinstance(args, dict):  # type: ignore
+                    args = tuple(itertools.chain(*kwargs.items()))  # type: ignore
+                elif isinstance(args, (list, tuple)):
                     if all(
                         len(el) == 2 if isinstance(el, (list, tuple)) else False
-                        for el in args[0]
+                        for el in args
                     ):
-                        args = tuple(itertools.chain(*args[0]))
+                        args = tuple(itertools.chain(*args))
+                else:
+                    raise ValueError("Invalid argument provided")
 
-                    if len(args) % 2 != 0:
-                        raise ValueError("Invalid number of arguments provided")
-            else:
-                raise ValueError(
-                    "Invalid number of arguments provided. "
-                    "Either provide a single dict or a list of key-value pairs"
-                )
-        if kwargs:
+            if len(args) % 2 != 0:
+                raise ValueError("Invalid number of arguments provided")
+
+        elif kwargs:
             assert not args
             args = tuple(itertools.chain(*kwargs.items()))
 
