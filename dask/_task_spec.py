@@ -913,7 +913,10 @@ class Dict(NestedContainer, Mapping):
                     kwargs = args[0]
                     args = ()
                 elif isinstance(args[0], (list, tuple)):
-                    if all(len(el) == 2 for el in args[0]):
+                    if all(
+                        len(el) == 2 if isinstance(el, (list, tuple)) else False
+                        for el in args[0]
+                    ):
                         args = tuple(itertools.chain(*args[0]))
 
                     if len(args) % 2 != 0:
