@@ -911,7 +911,7 @@ class Dict(NestedContainer, Mapping):
             if len(args) == 1:
                 args = args[0]
                 if isinstance(args, dict):  # type: ignore
-                    args = tuple(itertools.chain(*kwargs.items()))  # type: ignore
+                    args = tuple(itertools.chain(*args.items()))  # type: ignore
                 elif isinstance(args, (list, tuple)):
                     if all(
                         len(el) == 2 if isinstance(el, (list, tuple)) else False
