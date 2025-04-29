@@ -16,7 +16,7 @@ if [[ $COVERAGE == 'true' ]]; then
     export XTRATESTARGS="--cov=dask --cov-report=xml --junit-xml pytest.xml $XTRATESTARGS"
 fi
 
-echo "py.test dask --runslow $MARKERS $XTRATESTARGS"
-py.test dask --runslow $MARKERS $XTRATESTARGS
+echo "pytest dask --runslow $MARKERS $XTRATESTARGS"
+pytest dask --runslow $MARKERS $XTRATESTARGS
 
 set +e
