@@ -159,7 +159,7 @@ def unpack_collections(expr, _return_collections=True):
 
     >>> task, collections = unpack_collections({a: 1, b: 2})
     >>> task
-    <Task None dict(List((List((Alias('a'), 1)), List((Alias('b'), 2)))))>
+    Dict(Alias('a'): 1, Alias('b'): 2)
     >>> collections
     (Delayed('a'), Delayed('b'))
     """
