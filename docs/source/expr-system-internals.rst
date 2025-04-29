@@ -7,7 +7,8 @@ Query planning with Expression system
     intended for end-users.
     For a high level user guide, see :doc:`/dataframe-optimizer`.
 
-.. currentmodule:: dask.dataframe
+.. toctree::
+    :maxdepth: 2
 
 The expression system was originally developed for Dask DataFrames, as implemented in the `dask-expr <https://github.com/dask/dask-expr>`_ project.
 
@@ -199,3 +200,7 @@ Key issues:
 * HLG does not encode postcompute behavior (e.g., how to combine partitions).
 
 To bridge this gap, the ``HLGExpr`` class wraps an HLG and implements the full expression interface. Materialization is delayed until the scheduler explicitly calls ``__dask_graph__``, at which point low-level optimization occurs. This ensures materialization and execution stay decoupled.
+
+
+Custom Expressions and Collections
+----------------------------------
