@@ -15,6 +15,7 @@ from dask import base, config, utils
 from dask._expr import FinalizeCompute, ProhibitReuse, _ExprSequence
 from dask._task_spec import (
     DataNode,
+    Dict,
     GraphNode,
     List,
     Task,
@@ -158,7 +159,7 @@ def unpack_collections(expr, _return_collections=True):
 
     >>> task, collections = unpack_collections({a: 1, b: 2})
     >>> task
-    <Task None dict(List((List((Alias('a'), 1)), List((Alias('b'), 2)))))>
+    Dict(Alias('a'): 1, Alias('b'): 2)
     >>> collections
     (Delayed('a'), Delayed('b'))
     """
@@ -208,9 +209,10 @@ def unpack_collections(expr, _return_collections=True):
         )
 
         collections = tuple(toolz.unique(toolz.concat(collections), key=id))
-        if not collections:
-            return expr, ()
+        # The List constructor also checks for futures
         args = List(*args)
+        if not collections and not args.dependencies:
+            return expr, ()
         if _return_collections:
             args, collections = _finalize_args_collections(args, collections)
         # Ensure output type matches input type
@@ -219,20 +221,25 @@ def unpack_collections(expr, _return_collections=True):
         return args, collections
 
     if typ is dict:
-        args, collections = unpack_collections(
-            [[k, v] for k, v in expr.items()], _return_collections=False
+        keyargs, kcollections = unpack_collections(
+            [k for k in expr.keys()], _return_collections=False
         )
-        if not collections:
+        valargs, valcollections = unpack_collections(
+            [v for v in expr.values()], _return_collections=False
+        )
+        collections = kcollections + valcollections
+        args = Dict([[k, v] for k, v in zip(keyargs, valargs)])
+        if not collections and not args.dependencies:
             return expr, ()
         if _return_collections:
             args, collections = _finalize_args_collections(args, collections)
-        return Task(None, dict, args), collections
+        return args, collections
 
     if typ is slice:
         args, collections = unpack_collections(
             [expr.start, expr.stop, expr.step], _return_collections=False
         )
-        if not collections:
+        if not collections and not isinstance(args, GraphNode):
             return expr, ()
 
         if _return_collections:
@@ -248,7 +255,7 @@ def unpack_collections(expr, _return_collections=True):
             ],
             _return_collections=False,
         )
-        if not collections:
+        if not collections and not isinstance(args, GraphNode):
             return expr, ()
 
         if _return_collections:
@@ -620,7 +627,9 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     if not (nout is None or (type(nout) is int and nout >= 0)):
         raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
     if task is obj:
-        if not name:
+        if isinstance(obj, TaskRef):
+            name = obj.key
+        elif not name:
             try:
                 prefix = obj.__name__
             except AttributeError:
@@ -645,10 +654,6 @@ def _swap(method, self, other):
 def right(method):
     """Wrapper to create 'right' version of operator given left version"""
     return partial(_swap, method)
-
-
-def _apply2(func, *args, dask_kwargs):
-    return func(*args, **dask_kwargs)
 
 
 def optimize(dsk, keys, **kwargs):
@@ -815,10 +820,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
 
     dask_kwargs, collections2 = unpack_collections(kwargs)
     collections.extend(collections2)
-    if dask_kwargs:
-        task = Task(name, _apply2, func, *args2, dask_kwargs=dask_kwargs)
-    else:
-        task = Task(name, func, *args2, **kwargs)
+    task = Task(name, func, *args2, **dask_kwargs)
 
     graph = HighLevelGraph.from_collections(
         name, {name: task}, dependencies=collections
@@ -838,9 +840,11 @@ class DelayedLeaf(Delayed):
 
     @property
     def dask(self):
-        return HighLevelGraph.from_collections(
-            self._key, {self._key: DataNode(self._key, self._obj)}, dependencies=()
-        )
+        if isinstance(self._obj, (TaskRef, GraphNode)):
+            dsk = {self._key: self._obj}
+        else:
+            dsk = {self._key: DataNode(self._key, self._obj)}
+        return HighLevelGraph.from_collections(self._key, dsk, dependencies=())
 
     def __call__(self, *args, **kwargs):
         return call_function(
