@@ -67,8 +67,6 @@ from dask.typing import Key as KeyType
 from dask.utils import funcname, is_namedtuple_instance
 
 _T = TypeVar("_T")
-_T_GraphNode = TypeVar("_T_GraphNode", bound="GraphNode")
-_T_Iterable = TypeVar("_T_Iterable", bound=Iterable)
 
 
 # Ported from more-itertools
@@ -817,7 +815,7 @@ class Task(GraphNode):
             )
 
 
-class NestedContainer(Task):
+class NestedContainer(Task, Iterable):
     constructor: Callable
     klass: type
     __slots__ = tuple(__annotations__)
@@ -888,6 +886,9 @@ class NestedContainer(Task):
     def to_container(*args, constructor):
         return constructor(args)
 
+    def __iter__(self):
+        yield from self.args
+
 
 class List(NestedContainer):
     constructor = klass = list
@@ -901,15 +902,33 @@ class Set(NestedContainer):
     constructor = klass = set
 
 
-class Dict(NestedContainer):
+class Dict(NestedContainer, Mapping):
     klass = dict
 
     def __init__(self, /, *args: Any, **kwargs: Any):
         if args:
-            if len(args) > 1:
-                raise ValueError("Dict can only take one positional argument")
-            kwargs = args[0]
-        super().__init__(*(itertools.chain(*kwargs.items())))
+            assert not kwargs
+            if len(args) == 1:
+                args = args[0]
+                if isinstance(args, dict):  # type: ignore
+                    args = tuple(itertools.chain(*args.items()))  # type: ignore
+                elif isinstance(args, (list, tuple)):
+                    if all(
+                        len(el) == 2 if isinstance(el, (list, tuple)) else False
+                        for el in args
+                    ):
+                        args = tuple(itertools.chain(*args))
+                else:
+                    raise ValueError("Invalid argument provided")
+
+            if len(args) % 2 != 0:
+                raise ValueError("Invalid number of arguments provided")
+
+        elif kwargs:
+            assert not args
+            args = tuple(itertools.chain(*kwargs.items()))
+
+        super().__init__(*args)
 
     def __repr__(self):
         values = ", ".join(f"{k}: {v}" for k, v in batched(self.args, 2, strict=True))
@@ -924,11 +943,25 @@ class Dict(NestedContainer):
         if not subs_filtered:
             return self
 
-        new = {}
+        new_args = []
+        for arg in self.args:
+            new_arg = (
+                arg.substitute(subs_filtered) if isinstance(arg, GraphNode) else arg
+            )
+            new_args.append(new_arg)
+        return type(self)(new_args)
+
+    def __iter__(self):
+        yield from self.args[::2]
+
+    def __getitem__(self, key):
         for k, v in batched(self.args, 2, strict=True):
-            v = v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
-            new[k] = v
-        return type(self)(new)
+            if k == key:
+                return v
+        raise KeyError(key)
+
+    def __len__(self):
+        return len(self.args) // 2
 
     @staticmethod
     def constructor(args):
