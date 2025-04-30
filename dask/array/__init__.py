@@ -27,7 +27,7 @@ def _array_expr_enabled() -> bool:
             )
         return ARRAY_EXPR_ENABLED  # type: ignore[return-value]
 
-    return use_array_expr if use_array_expr is not None else False
+    return bool(use_array_expr if use_array_expr is not None else False)
 
 
 def array_expr_enabled():

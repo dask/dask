@@ -227,7 +227,6 @@ def order(
             return rv
 
     def add_to_result(item: Key) -> None:
-        nonlocal crit_path_counter
         # Earlier versions recursed into this method but this could cause
         # recursion depth errors. This is the only reason for the while loop
         next_items = [item]
@@ -269,7 +268,6 @@ def order(
         # is purely cosmetical and used for some visualizations and I haven't
         # settled on how to implement this best so I didn't want to have large
         # indentations that make things harder to read
-        nonlocal _crit_path_counter_offset
 
         def wrapper(*args: Any, **kwargs: Any) -> None:
             nonlocal _crit_path_counter_offset
@@ -668,30 +666,24 @@ def _connecting_to_roots(
         if len(transitive_deps_ids) == 1:
             result[key] = transitive_deps[0]
         else:
-            prev: set | frozenset | None = None
-            new_set = None
-            for tdeps in transitive_deps:
-                if prev is None:
-                    prev = tdeps
-                    continue
-                if tdeps.issubset(prev):
-                    continue
-                if new_set is None:
-                    prev = new_set = set(prev)
-                prev.update(tdeps)
-            if new_set is not None:
+            d = transitive_deps[0]
+            if all(tdeps.issubset(d) for tdeps in transitive_deps[1:]):
+                result[key] = d
+            else:
+                res = set(d)
+                for tdeps in transitive_deps[1:]:
+                    res.update(tdeps)
                 # frozenset is unfortunately triggering a copy. In the event of
                 # a cache hit, this is wasted time but we can't hash the set
                 # otherwise (unless we did it manually) and can therefore not
                 # deduplicate without this copy
-                frozen_res = frozenset(new_set)
+                frozen_res = frozenset(res)
+                del res, tdeps
                 try:
                     result[key] = dedup_mapping[frozen_res]
                 except KeyError:
                     dedup_mapping[frozen_res] = frozen_res
                     result[key] = frozen_res
-            else:
-                result[key] = prev  # type: ignore
     del dedup_mapping
 
     empty_set: frozenset[Key] = frozenset()
