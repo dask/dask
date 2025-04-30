@@ -1735,7 +1735,7 @@ def _collect_pq_statistics(
         groups = defaultdict(list)
         for part in parts:
             for p in [part] if isinstance(part, dict) else part:
-                path = p.get("piece")[0]
+                path = p.get("piece")[0]  # type: ignore[index]
                 groups[path].append(p)
         group_keys = list(groups.keys())
 

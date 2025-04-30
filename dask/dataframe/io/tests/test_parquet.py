@@ -1382,7 +1382,7 @@ def test_filters_categorical(tmpdir, write_engine, read_engine):
         tmpdir,
         index="dummy",
         engine=read_engine,
-        filters=[(("DatePart", "<=", "2018-01-02"))],
+        filters=[("DatePart", "<=", "2018-01-02")],
         calculate_divisions=True,
     )
     assert len(ddftest_read) == 2
@@ -2543,7 +2543,7 @@ def test_filter_nonpartition_columns(
         index=False,
         engine=read_engine,
         calculate_divisions=calculate_divisions,
-        filters=[(("time", "<", 5))],
+        filters=[("time", "<", 5)],
     )
     df_read = ddf_read.compute()
     assert len(df_read) == len(df_read[df_read["time"] < 5])
