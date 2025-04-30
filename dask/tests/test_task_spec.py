@@ -1022,13 +1022,13 @@ def test_dict_class():
     }
     assert len(t) == len(dict(t)) == 2
 
-    def test_as_kwargs(**kwargs):
-        assert kwargs == {
+    def as_kwargs(**kwargs):
+        return kwargs == {
             "k": Task("key-1", func, "a", "b"),
             "v": Task("key-2", func, "c", "d"),
         }
 
-    test_as_kwargs(**t)
+    assert as_kwargs(**t)
 
 
 def test_block_io_fusion():
