@@ -656,12 +656,14 @@ class MapPartitions(Blockwise):
         "parent_meta",
         "token",
         "kwargs",
+        "nargs",
     ]
     _defaults: dict = {
         "kwargs": None,
         "align_dataframes": True,
         "parent_meta": None,
         "token": None,
+        "nargs": 0,
     }
 
     @functools.cached_property
@@ -687,14 +689,20 @@ class MapPartitions(Blockwise):
 
     @functools.cached_property
     def args(self):
-        return [self.frame] + self.operands[len(self._parameters) :]
+        return [self.frame] + self.operands[
+            len(self._parameters) : len(self._parameters) + self.nargs
+        ]
 
     @functools.cached_property
     def _meta(self):
         meta = self.operand("meta")
         return _get_meta_map_partitions(
             self.args,
-            [e for e in self.args if isinstance(e, Expr)],
+            [
+                e
+                for e in self.args
+                if isinstance(e, Expr) and not isinstance(e, _DelayedExpr)
+            ],
             self.func,
             self.kwargs,
             meta,
@@ -725,7 +733,7 @@ class MapPartitions(Blockwise):
 
     def _task(self, name: Key, index: int) -> Task:
         args = [self._blockwise_arg(op, index) for op in self.args]
-        kwargs = (self.kwargs if self.kwargs is not None else {}).copy()
+        kwargs = dict(self.kwargs if self.kwargs is not None else {})
         if self._has_partition_info:
             kwargs["partition_info"] = {
                 "number": index,
@@ -978,6 +986,7 @@ class MapOverlap(MapPartitions):
             None,
             self.token,
             self._kwargs,
+            len(self.args[1:]),
             *self.args[1:],
         )
 
