@@ -2578,7 +2578,7 @@ def random_state_data_python(
 
         random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
         arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
-        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]  # type: ignore
+        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]
 
     except ImportError:
         # Pure python (much slower)

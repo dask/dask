@@ -799,7 +799,7 @@ class Task(GraphNode):
                 key or self.key,
                 self.func,
                 *new_args,
-                **new_kwargs,
+                **new_kwargs,  # type: ignore[arg-type]
                 **extra_kwargs,
             )
         elif key is None or key == self.key:

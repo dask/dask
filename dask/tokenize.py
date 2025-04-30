@@ -64,7 +64,7 @@ def tokenize(
         tokenized, e.g. two identical objects will return different tokens.
         Defaults to the `tokenize.ensure-deterministic` configuration parameter.
     """
-    global _SEEN, _ENSURE_DETERMINISTIC
+    global _SEEN
     with tokenize_lock:
         seen_before, _SEEN = _SEEN, {}
         token = None

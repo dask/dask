@@ -127,7 +127,7 @@ class CreationDispatch(Generic[BackendEntrypointType]):
         """Register dispatchable function"""
 
         def decorator(
-            fn: Callable[BackendFuncParams, BackendFuncReturn]
+            fn: Callable[BackendFuncParams, BackendFuncReturn],
         ) -> Callable[BackendFuncParams, BackendFuncReturn]:
             dispatch_name = name or fn.__name__
             dispatcher = self.dispatch(backend)
