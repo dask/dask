@@ -83,6 +83,7 @@ jobs:
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
+          run-post: ${{ matrix.os != 'windows-latest' }}
 
       - name: Test pandas nightlies (only with dask-expr)
         if: ${{ matrix.extra == 'pandas-nightly' }}
