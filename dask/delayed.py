@@ -840,9 +840,11 @@ class DelayedLeaf(Delayed):
 
     @property
     def dask(self):
-        return HighLevelGraph.from_collections(
-            self._key, {self._key: DataNode(self._key, self._obj)}, dependencies=()
-        )
+        if isinstance(self._obj, (TaskRef, GraphNode)):
+            dsk = {self._key: self._obj}
+        else:
+            dsk = {self._key: DataNode(self._key, self._obj)}
+        return HighLevelGraph.from_collections(self._key, dsk, dependencies=())
 
     def __call__(self, *args, **kwargs):
         return call_function(
