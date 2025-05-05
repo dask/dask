@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import copy
+import functools
 import html
 from collections.abc import (
     Collection,
@@ -21,6 +22,7 @@ import tlz as toolz
 
 import dask
 from dask import config
+from dask._task_spec import GraphNode
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
 from dask.tokenize import normalize_token, tokenize
@@ -91,6 +93,15 @@ class Layer(Graph):
             config.get("collection_annotations", None)
         )
 
+    @functools.cached_property
+    def has_legacy_tasks(self):
+        """Check if the layer has legacy tasks
+
+        Legacy tasks are those that are not in the form of a tuple
+        (function, *args, **kwargs).
+        """
+        return any(not isinstance(v, GraphNode) for v in self.values())
+
     @abc.abstractmethod
     def is_materialized(self) -> bool:
         """Return whether the layer is materialized or not"""
@@ -138,28 +149,37 @@ class Layer(Graph):
             Map of external key dependencies
         """
 
-        if len(keys) == len(self):
-            # Nothing to cull if preserving all existing keys
-            return (
-                self,
-                {k: self.get_dependencies(k, all_hlg_keys) for k in self.keys()},
-            )
+        if self.has_legacy_tasks:
+            if len(keys) == len(self):
+                # Nothing to cull if preserving all existing keys
+                return (
+                    self,
+                    {k: self.get_dependencies(k, all_hlg_keys) for k in self.keys()},
+                )
+            ret_deps = {}
+            seen = set()
+            out = {}
+            work = keys.copy()
+            while work:
+                k = work.pop()
+                if k not in self:
+                    continue
+                out[k] = self[k]
+                ret_deps[k] = self.get_dependencies(k, all_hlg_keys)
+                for d in ret_deps[k]:
+                    if d not in seen:
+                        if d in self:
+                            seen.add(d)
+                            work.add(d)
 
-        ret_deps = {}
-        seen = set()
-        out = {}
-        work = keys.copy()
-        while work:
-            k = work.pop()
-            out[k] = self[k]
-            ret_deps[k] = self.get_dependencies(k, all_hlg_keys)
-            for d in ret_deps[k]:
-                if d not in seen:
-                    if d in self:
-                        seen.add(d)
-                        work.add(d)
+            return MaterializedLayer(out, annotations=self.annotations), ret_deps
+        else:
+            from dask._task_spec import cull
 
-        return MaterializedLayer(out, annotations=self.annotations), ret_deps
+            out = cull(dict(self), keys)
+            return MaterializedLayer(out, annotations=self.annotations), {
+                k: set(v.dependencies) for k, v in out.items()
+            }
 
     def get_dependencies(self, key: Key, all_hlg_keys: Collection[Key]) -> set:
         """Get dependencies of `key` in the layer
@@ -722,52 +742,44 @@ class HighLevelGraph(Graph):
         hlg: HighLevelGraph
             Culled high level graph
         """
-        from dask.layers import Blockwise
-
         keys_set = set(flatten(keys))
 
-        all_ext_keys = self.get_all_external_keys()
-        ret_layers: dict = {}
-        ret_key_deps: dict = {}
-        layer_dependencies = {}
-        for layer_name in reversed(self._toposort_layers()):
-            layer = self.layers[layer_name]
-            new_layer_name = layer_name
-            # Let's cull the layer to produce its part of `keys`.
-            # Note: use .intersection rather than & because the RHS is
-            # a collections.abc.Set rather than a real set, and using &
-            # would take time proportional to the size of the LHS, which
-            # if there is no culling can be much bigger than the RHS.
-            output_keys = keys_set.intersection(layer.get_output_keys())
-            if output_keys:
-                new_layer_name = f"{layer_name}-{tokenize(output_keys)}"
-                culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
-                # Update `keys` with all layer's external key dependencies, which
-                # are all the layer's dependencies (`culled_deps`) excluding
-                # the layer's output keys.
-                external_deps = set()
-                for d in culled_deps.values():
-                    external_deps |= d
-                external_deps -= culled_layer.get_output_keys()
-                keys_set |= external_deps
+        # Note: All Layer classes still in existence are of
+        #       one of these types (or subclasses)
+        #
+        # - MaterializedLayer
+        # - Blockwise
+        # - ArrayOverlapLayer (which is basically as good as MaterializedLayer)
+        if not any(layer.has_legacy_tasks for layer in self.layers.values()):
+            all_ext_keys = set()
+        else:
+            # FIXME: Technically, we don't need to compute **all** keys but only
+            # those of the current layer and all of its dependencies, i.e. if
+            # there are legacy layers for IO followed by many blockwise layers,
+            # we should still get by without this
+            all_ext_keys = self.get_all_external_keys()
 
-                # Save the culled layer and its key dependencies
-                ret_layers[new_layer_name] = culled_layer
-                layer_dependencies[new_layer_name] = self.dependencies[layer_name]
-                if (
-                    isinstance(layer, Blockwise)
-                    or isinstance(layer, MaterializedLayer)
-                    or (layer.is_materialized() and (len(layer) == len(culled_deps)))
-                ):
-                    # Don't use culled_deps to update ret_key_deps
-                    # unless they are "direct" key dependencies.
-                    #
-                    # Note that `MaterializedLayer` is "safe", because
-                    # its `cull` method will return a complete dict of
-                    # direct dependencies for all keys in its subgraph.
-                    # See: https://github.com/dask/dask/issues/9389
-                    # for performance motivation
-                    ret_key_deps.update(culled_deps)
+        ret_layers: dict = {}
+        layer_dependencies = {}
+        tok = tokenize(keys_set)
+        for layer_name in reversed(self._toposort_layers()):
+            new_layer_name = f"{layer_name}-{tok}"
+            layer = self.layers[layer_name]
+            if keys_set:
+                culled_layer, culled_deps = layer.cull(keys_set, all_ext_keys)
+                if not culled_deps:
+                    continue
+
+                # Update `keys` with all layer's external key dependencies,
+                # which are all the layer's dependencies (`culled_deps`)
+                # excluding the layer's output keys.
+                for k, d in culled_deps.items():
+                    keys_set |= d
+                    keys_set.discard(k)
+                layer = culled_layer
+            # Save the culled layer and its key dependencies
+            ret_layers[new_layer_name] = layer
+            layer_dependencies[new_layer_name] = self.dependencies[layer_name]
 
         # Converting dict_keys to a real set lets Python optimise the set
         # intersection to iterate over the smaller of the two sets.
@@ -777,7 +789,7 @@ class HighLevelGraph(Graph):
             for layer_name in ret_layers
         }
 
-        return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
+        return HighLevelGraph(ret_layers, ret_dependencies)
 
     def cull_layers(self, layers: Iterable[str]) -> HighLevelGraph:
         """Return a new HighLevelGraph with only the given layers and their

@@ -584,6 +584,10 @@ class Blockwise(Layer):
         self.new_axes = new_axes or {}
 
     @property
+    def has_legacy_tasks(self):
+        return False
+
+    @property
     def dims(self):
         """Returns a dictionary mapping between each index specified in
         `self.indices` and the number of output blocks for that indice.
@@ -649,7 +653,7 @@ class Blockwise(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
-    def _cull_dependencies(self, all_hlg_keys, output_blocks):
+    def _cull_dependencies(self, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
 
         This method does not require graph materialization.
@@ -671,15 +675,9 @@ class Blockwise(Layer):
 
         # Gather constant dependencies (for all output keys)
         const_deps = set()
-        for arg, ind in self.indices:
+        for arg, _ in self.indices:
             if isinstance(arg, TaskRef):
-                arg = arg.key
-            if ind is None:
-                try:
-                    if arg in all_hlg_keys:
-                        const_deps.add(arg)
-                except TypeError:
-                    pass  # unhashable
+                const_deps.add(arg.key)
 
         # Get dependencies for each output block
         key_deps = {}
@@ -736,7 +734,7 @@ class Blockwise(Layer):
         for key in keys:
             if key[0] == self.output:
                 output_blocks.add(key[1:])
-        culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
+        culled_deps = self._cull_dependencies(output_blocks)
         out_size_iter = (self.dims[i] for i in self.output_indices)
         if prod(out_size_iter) != len(culled_deps):
             culled_layer = self._cull(output_blocks)
