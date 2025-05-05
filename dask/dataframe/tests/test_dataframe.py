@@ -2849,6 +2849,17 @@ def test_to_dask_array(meta, as_frame, lengths):
     assert result.chunks == expected_chunks
 
 
+def test_to_dask_array_single_partition():
+    s = pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4")
+    a = dd.from_pandas(s)
+
+    result = a.to_dask_array(lengths=True)
+    assert isinstance(result, da.Array)
+    expected_chunks = (s.shape,)
+    assert result.chunks == expected_chunks
+    da.assert_eq(s.values, result)
+
+
 def test_apply():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
