@@ -14,3 +14,4 @@ learning more about how Dask works internally.
    caching.rst
    shared.rst
    scheduling-policy.rst
+   expr-system-internals.rst

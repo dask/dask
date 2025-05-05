@@ -3,8 +3,7 @@
 Task Graphs
 ===========
 
-Internally, Dask encodes algorithms in a simple format involving Python dicts,
-tuples, and functions. This graph format can be used in isolation from the
+Internally, Dask encodes algorithms as task graphs which are typically expressed as dictionaries. This graph format can be used in isolation from the
 dask collections. Working directly with dask graphs is rare, though, unless you intend
 to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
 often a better choice. If you are a *core developer*, then you should start here.
@@ -54,10 +53,7 @@ simultaneously.
 Many solutions exist.  This is a common approach in parallel execution
 frameworks.  Often task scheduling logic hides within other larger frameworks
 (e.g. Luigi, Storm, Spark, IPython Parallel, etc.) and so is often reinvented.
-Dask is a specification that encodes full task scheduling with minimal incidental
-complexity using terms common to all Python projects, namely, dicts, tuples,
-and callables.  Ideally this minimum solution is easy to adopt and understand
-by a broad community.
+
 
 Example
 -------
@@ -80,9 +76,9 @@ We encode this as a dictionary in the following way:
 
 .. code-block:: python
 
-   d = {'x': 1,
-        'y': (inc, 'x'),
-        'z': (add, 'y', 10)}
+   d = {'x': DataNode(None, 1),
+        'y': Task('y', inc, TaskRef('x')),
+        'z': Task('z', add, TaskRef('y'), 10)}
 
 Which is represented by the following Dask graph:
 

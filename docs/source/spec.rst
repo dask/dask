@@ -1,73 +1,115 @@
 Specification
 =============
 
-Dask is a specification to encode a graph -- specifically, a directed 
-acyclic graph of tasks with data dependencies -- using ordinary Python data 
+Dask is a specification to encode a graph -- specifically, a directed
+acyclic graph of tasks with data dependencies -- using ordinary Python data
 structures, namely dicts, tuples, functions, and arbitrary Python
-values. 
+values.
 
 
 Definitions
 -----------
 
-A **Dask graph** is a dictionary mapping **keys** to **computations**:
+A **Dask graph** is a dictionary mapping **keys** to **computation**:
 
-.. code-block:: python
+.. tab-set::
 
-   {'x': 1,
-    'y': 2,
-    'z': (add, 'x', 'y'),
-    'w': (sum, ['x', 'y', 'z']),
-    'v': [(sum, ['w', 'z']), 2]}
+    .. tab-item:: Tasks
 
-A **key** is a str, bytes, int, float, or tuple thereof:
+      .. code-block:: python
+
+         {'x': (x := DataNode(None, 1)),
+         'y': (y := DataNode(None, 2)),
+         'z': (z := Task("z", add, x.ref(), y.ref())),
+         'w': (w := Task("w", sum, List(x.ref(), y.ref(), z.ref()))),
+         'v': List(Task(None, sum, List(w.ref(), z.ref())), 2)}
+
+    .. tab-item:: Legacy
+
+      .. code-block:: python
+
+         {'x': 1,
+         'y': 2,
+         'z': (add, 'y', 'x'),
+         'w': (sum, ['x', 'y', 'z']),
+         'v': [(sum, ['w', 'z']), 2]}
+
+A **key** is a str, int, float, or tuple thereof:
 
 .. code-block:: python
 
    'x'
    ('x', 2, 3)
 
-A **task** is a tuple with a callable first element.  Tasks represent atomic
-units of work meant to be run by a single worker.  Example: 
+A **task** is a computation that Dask can perform and is expressed using the :class:`dask.Task` class.  Tasks represent atomic
+units of work meant to be run by a single worker.  Example:
 
 .. code-block:: python
 
-   (add, 'x', 'y')
+   def add(x, y):
+       return x + y
 
-We represent a task as a tuple such that the *first element is a callable
-function* (like ``add``), and the succeeding elements are *arguments* for that
-function. An *argument* may be any valid **computation**.
+   t = Task("t", add, 1, 2)
+   assert t() == 3
+
+   t2 = Task("t2", add, t.ref(), 2)
+   assert t2({"t": 3}) == 5
+
+
+.. note::
+
+   The legacy representation of a task is a tuple with the first element being a
+   callable function.  The rest of the elements are arguments to that function.
+   The legacy representation is deprecated and will be removed in a future
+   version of Dask.  Use the :class:`dask.Task` class instead.
+
 
 A **computation** may be one of the following:
 
-1.  Any **key** present in the Dask graph like ``'x'``
-2.  Any other value like ``1``, to be interpreted literally
-3.  A **task** like ``(inc, 'x')`` (see below)
-4.  A list of **computations**, like ``[1, 'x', (inc, 'x')]``
+1.  An :class:`~dask._task_spec.Alias` pointing to another key in the Dask graph like ``Alias('new', 'x')``
+2.  A literal value as a :class:`~dask._task_spec.DataNode` like ``DataNode(None, 1)``
+3.  A :class:`~dask._task_spec.Task` like ``Task("t", add, 1, 2)``
+4.  A :class:`~dask._task_spec.List` of **computations**, like ``List(1, TaskRef('x'), Task(None, inc, TaskRef("x"))]``
 
 So all of the following are valid **computations**:
 
-.. code-block:: python
+.. tab-set::
 
-   np.array([...])
-   (add, 1, 2)
-   (add, 'x', 2)
-   (add, (inc, 'x'), 2)
-   (sum, [1, 2])
-   (sum, ['x', (inc, 'x')])
-   (np.dot, np.array([...]), np.array([...]))
-   [(sum, ['x', 'y']), 'z']
+    .. tab-item:: Computations
 
-To encode keyword arguments, we recommend the use of ``functools.partial`` or
-``toolz.curry``.
+      .. code-block:: python
+
+         DataNode(None, np.array([...]))
+         Task("t", add, 1, 2)
+         Task("t", add, TaskRef('x'), 2)
+         Task("t", add, Task(None, inc, TaskRef('x')), 2)
+         Task("t", sum, [1, 2])
+         Task("t", sum, [TaskRef('x'), Task(None, inc, TaskRef('x'))])
+         Task("t", np.dot, np.array([...]), np.array([...]))
+         Task("t", sum, List(TaskRef('x'), TaskRef('y')), 'z')
+
+    .. tab-item:: Legacy representation
+
+      .. code-block:: python
+
+         np.array([...])
+         (add, 1, 2)
+         (add, 'x', 2)
+         (add, (inc, 'x'), 2)
+         (sum, [1, 2])
+         (sum, ['x', (inc, 'x')])
+         (np.dot, np.array([...]), np.array([...]))
+         [(sum, ['x', 'y']), 'z']
+
 
 
 What functions should expect
 ----------------------------
 
-In cases like ``(add, 'x', 'y')``, functions like ``add`` receive concrete
-values instead of keys.  A Dask scheduler replaces keys (like ``'x'`` and ``'y'``) with
-their computed values (like ``1``, and ``2``) *before* calling the ``add`` function.
+In cases like ``Task("t", add, TaskRef('x'), 2)``, functions like ``add`` receive concrete values instead of keys.  A Dask scheduler replaces task references (like ``x``) with their computed values (like ``1``) *before* calling the ``add`` function.
+These references can be provided as either literal key references using
+:class:`~dask._task_spec.TaskRef` or if a reference to the task is available, by
+calling :meth:`~dask._task_spec.Task.ref` on the task itself.
 
 
 Entry Point - The ``get`` function
@@ -88,10 +130,10 @@ value.
 
    >>> from operator import add
 
-   >>> dsk = {'x': 1,
-   ...        'y': 2,
-   ...        'z': (add, 'x', 'y'),
-   ...        'w': (sum, ['x', 'y', 'z'])}
+   >>> dsk = {'x': (x := DataNode(None, 1)),
+   ...       'y': (y := DataNode(None, 2)),
+   ...       'z': (z := Task("z", add, x.ref(), y.ref())),
+   ...       'w': (w := Task("w", sum, List(x.ref(), y.ref(), z.ref())))}
 
 .. code-block:: python
 
@@ -123,31 +165,22 @@ Internally ``get`` can be arbitrarily complex, calling out to distributed
 computing, using caches, and so on.
 
 
-Why use tuples
---------------
+Why not tuples?
+---------------
 
-With ``(add, 'x', 'y')``, we wish to encode the result of calling ``add`` on
-the values corresponding to the keys ``'x'`` and ``'y'``.
+The tuples are objectively a more compact representation than the ``Task`` class so why did we choose to introduce this new representation?
 
-We intend the following meaning:
+As a tuple, the task is not self-describing and heavily context dependent. The
+meaning of a tuple like ``(func, "x", "y")`` is depending on the graph it is
+embedded in. The literals ``x`` and ``y`` could be either actual literals that
+should be passed to the function or they could be references to other tasks.
+Therefore, the _interpretation_ of this task has to walk the tuple recursively
+and compare every single encountered element with known keys in the graph.
+Especially for large graphs or deeply nested tuple arguments, this can be a
+performance bottleneck. For APIs that allow users to define their own key names
+this can further cause false positives where intended literals are replaced by
+pre-computed task results.
 
-.. code-block:: python
-
-   add('x', 'y')  # after x and y have been replaced
-
-But this will err because Python executes the function immediately
-before we know values for ``'x'`` and ``'y'``.
-
-We delay the execution by moving the opening parenthesis one term to the left,
-creating a tuple:
-
-.. code::
-
-    Before: add( 'x', 'y')
-    After: (add, 'x', 'y')
-
-This lets us store the desired computation as data that we can analyze using
-other Python code, rather than cause immediate execution.
-
-LISP users will identify this as an s-expression, or as a rudimentary form of
-quoting.
+For the time being, both representation are supported. Legacy style tasks will
+be automatically converted to new style tasks whenever dask encounters them. New
+projects and algorithms are encouraged to use the new style tasks.

@@ -147,6 +147,19 @@ class Expr:
             self._determ_token = _tokenize_deterministic(type(self), *self.operands)
         return self._determ_token
 
+    def __dask_keys__(self):
+        """The keys for this expression
+
+        This is used to determine the keys of the output collection
+        when this expression is computed.
+
+        Returns
+        -------
+        keys: list
+            The keys for this expression
+        """
+        return [(self._name, i) for i in range(self.npartitions)]
+
     @staticmethod
     def _reconstruct(*args):
         typ, *operands, token, cache = args
@@ -224,7 +237,7 @@ class Expr:
         >>> class Add(Expr):
         ...     def _task(self, i):
         ...         return Task(
-        ...            name,
+        ...            self.__dask_keys__()[i],
         ...            operator.add,
         ...            TaskRef((self.left._name, i)),
         ...            TaskRef((self.right._name, i))
@@ -245,15 +258,23 @@ class Expr:
         )
 
     def _layer(self) -> dict:
-        """The graph layer added by this expression
+        """The graph layer added by this expression.
+
+        Simple expressions that apply one task per partition can choose to only
+        implement `Expr._task` instead.
 
         Examples
         --------
         >>> class Add(Expr):
         ...     def _layer(self):
         ...         return {
-        ...             (self._name, i): (operator.add, (self.left._name, i), (self.right._name, i))
-        ...             for i in range(self.npartitions)
+        ...            name: Task(
+        ...                name,
+        ...                operator.add,
+        ...                TaskRef((self.left._name, i)),
+        ...                TaskRef((self.right._name, i))
+        ...            )
+        ...            for i, name in enumerate(self.__dask_keys__())
         ...         }
 
         Returns
@@ -533,7 +554,17 @@ class Expr:
         return {}
 
     def __dask_graph__(self):
-        """Traverse expression tree, collect layers"""
+        """Traverse expression tree, collect layers
+
+        Subclasses generally do not want to override this method unless custom
+        logic is required to treat (e.g. ignore) specific operands during graph
+        generation.
+
+        See also
+        --------
+        Expr._layer
+        Expr._task
+        """
         stack = [self]
         seen = set()
         layers = []
