@@ -1157,6 +1157,8 @@ def cull(
         raise TypeError(
             f"Expected list, set or tuple for keys, got {type(keys).__name__}"
         )
+    if len(keys) == len(dsk):
+        return dsk
     work = set(keys)
     seen: set[KeyType] = set()
     dsk2 = {}
