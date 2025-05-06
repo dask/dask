@@ -42,7 +42,8 @@ def parquet_file(tmpdir):
         pytest.param(
             "arrow",
             marks=pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0"),
-        )
+        ),
+        "fsspec",
     ]
 )
 def filesystem(request):
@@ -609,3 +610,29 @@ def test_read_parquet_index_projection(tmpdir):
     expected = expected.assign(dts=expected.index - expected.tsprv)
 
     assert_eq(result.dts.min(), expected.dts.min())
+
+
+@pytest.mark.filterwarnings(
+    # The stats collection encounters the async client and falls back to a
+    # sync scheduler. Irrelevant for this test.
+    "ignore:.*Client.*asynchronous:UserWarning",
+)
+def test_ensure_plan_computed_during_optimization(tmpdir, filesystem):
+
+    pytest.importorskip("distributed")
+    from distributed.utils_test import gen_cluster
+
+    @gen_cluster(
+        client=True,
+        clean_kwargs={"threads": False},
+        config={"admin.async-client-fallback": "sync"},
+    )
+    async def _test(c, s, *workers):
+        # https://github.com/dask/dask/issues/11932
+
+        df = read_parquet(_make_file(tmpdir), filesystem=filesystem)
+        df = df[df.a == 1]
+        res = await c.compute(df.size)
+        assert res == 5
+
+    _test()
