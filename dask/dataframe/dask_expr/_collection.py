@@ -1404,11 +1404,7 @@ Expr={expr}"""
         A Dask Array
         """
         if lengths is True:
-            lens = self.map_partitions(len).compute()
-            if is_scalar(lens):
-                lengths = (lens,)
-            else:
-                lengths = tuple(lens)
+            lengths = tuple(self.map_partitions(len).compute())
 
         arr = self.values
 
