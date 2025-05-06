@@ -1306,14 +1306,6 @@ class ReadParquetFSSpec(ReadParquet):
             return get_engine(_engine)
         return _engine
 
-    # def _lower(self):
-    #     # Ensure the plan is calculated during optimization and not during
-    #     # materialization
-    #     # Otherwise, we might trigger a statistics collection during
-    #     # materialization which typically happens on the scheduler. However, the
-    #     # scheduler cannot handle this yet
-    #     self._divisions()
-
     def _divisions(self):
         return self._plan["divisions"]
 
