@@ -622,7 +622,11 @@ def test_ensure_plan_computed_during_optimization(tmpdir, filesystem):
     pytest.importorskip("distributed")
     from distributed.utils_test import gen_cluster
 
-    @gen_cluster(client=True, clean_kwargs={"threads": False})
+    @gen_cluster(
+        client=True,
+        clean_kwargs={"threads": False},
+        config={"admin.async-client-fallback": "sync"},
+    )
     async def _test(c, s, *workers):
         # https://github.com/dask/dask/issues/11932
 
