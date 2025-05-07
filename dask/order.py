@@ -195,7 +195,7 @@ def order(
     runnable_hull = set()
     reachable_hull = set()
 
-    runnable = []
+    runnable: list[Key] = []
 
     known_runnable_paths: dict[Key, list[list[Key]]] = {}
     known_runnable_paths_pop = known_runnable_paths.pop
@@ -203,11 +203,7 @@ def order(
     crit_path_counter = 0
     scrit_path: set[Key] = set()
     _crit_path_counter_offset: int | float = 0
-
     _sort_keys_cache: dict[Key, tuple[int, int, int, int, str]] = {}
-
-    leafs_connected_to_loaded_roots: set[Key] = set()
-    processed_roots = set()
 
     def sort_key(x: Key) -> tuple[int, int, int, int, str]:
         try:
@@ -248,7 +244,25 @@ def order(
             if item not in external_keys:
                 i += 1
             if item in root_nodes:
-                processed_roots.add(item)
+                for leaf in leafs_connected[item]:
+                    if leaf in leaf_nodes:
+                        degree = leafs_degree.pop(leaf)
+                        leafs_per_degree[degree].remove(leaf)
+
+                        new_degree = degree - 1
+                        if new_degree > 0:
+                            if new_degree < min_leaf_degree:  # type: ignore # noqa: F823
+                                min_leaf_degree = new_degree
+                            leafs_per_degree[new_degree].add(leaf)
+                            leafs_degree[leaf] = new_degree
+                        elif not leafs_per_degree[degree]:
+                            assert degree == min_leaf_degree
+                            while min_leaf_degree != max_leaf_degree and (
+                                min_leaf_degree not in leafs_per_degree
+                                or not leafs_per_degree[min_leaf_degree]
+                            ):
+                                min_leaf_degree += 1
+
             # Note: This is a `set` and therefore this introduces a certain
             # randomness. However, this randomness should not have any impact on
             # the final result since the `process_runnable` should produce
@@ -396,42 +410,38 @@ def order(
     # writing, the most expensive part of ordering is the prep work (mostly
     # connected roots + sort_key) which can be reused for multiple orderings.
 
-    def get_target(longest_path: bool = False) -> Key:
-        # Some topologies benefit if the node with the most dependencies
-        # is used as first choice, others benefit from the opposite.
-        candidates = leaf_nodes
-        skey: Callable = sort_key
-        if reachable_hull:
-            skey = lambda k: (num_needed[k], sort_key(k))
+    # Degree in this context is the number root nodes that have to be loaded for
+    # this leaf to become accessible. Zero means the leaf is already accessible
+    # in which case it _should_ either already be in result or be accessible vie
+    # process_runnables
+    # When picking a new target, we prefer the leafs with the least number of
+    # roots that need loading.
+    leafs_degree = {}
+    leafs_per_degree = defaultdict(set)
+    min_leaf_degree = len(dsk)
+    max_leaf_degree = len(dsk)
+    for leaf in leaf_nodes - root_nodes:
+        degree = len(roots_connected[leaf])
+        min_leaf_degree = min(min_leaf_degree, degree)
+        max_leaf_degree = max(max_leaf_degree, degree)
+        leafs_degree[leaf] = degree
+        leafs_per_degree[degree].add(leaf)
 
-        all_leafs_accessible = len(leafs_connected_to_loaded_roots) >= len(candidates)
-        if reachable_hull and not all_leafs_accessible:
-            # Avoid this branch if we can already access all leafs. Just pick
-            # one of them without the expensive selection process in this case.
-
-            candidates = reachable_hull & candidates
+    def get_target() -> Key:
+        # If we're already mid run and there is a runnable_hull we'll attempt to
+        # pick the next target in a way that minimizes the number of additional
+        # root nodes that are needed
+        all_leafs_accessible = min_leaf_degree == max_leaf_degree
+        is_trivial_lookup = not reachable_hull or all_leafs_accessible
+        if not is_trivial_lookup:
+            candidates = reachable_hull & leafs_per_degree[min_leaf_degree]
             if not candidates:
-                # We can't reach a leaf node directly, but we still have nodes
-                # with results in memory, these notes can inform our path towards
-                # a new preferred leaf node.
-                for r in processed_roots:
-                    leafs_connected_to_loaded_roots.update(leafs_connected[r])
-                processed_roots.clear()
-
-                leafs_connected_to_loaded_roots.intersection_update(leaf_nodes)
-                candidates = leafs_connected_to_loaded_roots
-            else:
-                leafs_connected_to_loaded_roots.update(candidates)
-
-        elif not reachable_hull:
-            # We reach a new and independent branch, so throw away previous branch
-            leafs_connected_to_loaded_roots.clear()
-
-        if longest_path and (not reachable_hull or all_leafs_accessible):
-            return leaf_nodes_sorted.pop()
+                candidates = leafs_per_degree[min_leaf_degree]
+            # Even without reachable hull overlap this should be relatively
+            # small so one full pass should be fine
+            return min(candidates, key=sort_key)
         else:
-            # FIXME: This can be very expensive
-            return min(candidates, key=skey)
+            return leaf_nodes_sorted.pop()
 
     def use_longest_path() -> bool:
         size = 0
@@ -450,10 +460,10 @@ def order(
 
         return True
 
+    # Some topologies benefit if the node with the most dependencies
+    # is used as first choice, others benefit from the opposite.
     longest_path = use_longest_path()
-    leaf_nodes_sorted = []
-    if longest_path:
-        leaf_nodes_sorted = sorted(leaf_nodes, key=sort_key, reverse=False)
+    leaf_nodes_sorted = sorted(leaf_nodes, key=sort_key, reverse=not longest_path)
 
     # *************************************************************************
     # CORE ALGORITHM STARTS HERE
@@ -553,7 +563,7 @@ def order(
         assert not scrit_path
 
         # A. Build the critical path
-        target = get_target(longest_path=longest_path)
+        target = get_target()
         next_deps = dependencies[target]
         path_append(target)
 
