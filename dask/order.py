@@ -227,6 +227,7 @@ def order(
         # recursion depth errors. This is the only reason for the while loop
         next_items = [item]
         nonlocal i
+        nonlocal min_leaf_degree  # type: ignore[misc]
         while next_items:
             item = next_items.pop()
             runnable_hull.discard(item)
@@ -251,7 +252,7 @@ def order(
 
                         new_degree = degree - 1
                         if new_degree > 0:
-                            if new_degree < min_leaf_degree:  # type: ignore # noqa: F823
+                            if new_degree < min_leaf_degree:
                                 min_leaf_degree = new_degree
                             leafs_per_degree[new_degree].add(leaf)
                             leafs_degree[leaf] = new_degree
