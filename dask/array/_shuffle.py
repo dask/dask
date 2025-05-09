@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import math
 from functools import reduce
 from itertools import count, product
@@ -192,8 +191,6 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         else:
             return chunks, {}
 
-    indexer = copy.deepcopy(indexer)
-
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
     chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
 
@@ -214,9 +211,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
     chunk_boundaries = np.cumsum(chunks[axis])
 
     # Get existing chunk tuple locations
-    chunk_tuples = list(
-        product(*(range(len(c)) for i, c in enumerate(chunks) if i != axis))
-    )
+    chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks) if i != axis))
 
     intermediates = dict()
     merges = dict()
@@ -232,10 +227,11 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         for old_index in np.ndindex(tuple([len(c) for c in chunks]))
     }
 
+    base_token = tokenize(in_name, out_name, indexer)
     for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
+        sorter_key = sorter_name + str(hash(hash(new_chunk_idx) + hash(base_token)))
         new_chunk_taker = np.array(new_chunk_taker)
         sorter = np.argsort(new_chunk_taker).astype(dtype)
-        sorter_key = sorter_name + tokenize(sorter)
         # low level fusion can't deal with arrays on first position
         merges[sorter_key] = DataNode(sorter_key, (1, sorter))
 
@@ -271,7 +267,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
                     if len(source_chunk_nr) == 1:
                         this_slice[axis] = this_slice[axis][np.argsort(sorter)]
 
-                    taker_key = taker_name + tokenize(this_slice)
+                    taker_key = taker_name + tokenize(in_name, out_name, this_slice)
                     # low level fusion can't deal with arrays on first position
                     intermediates[taker_key] = DataNode(
                         taker_key, (1, tuple(this_slice))
