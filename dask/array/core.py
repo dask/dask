@@ -1934,7 +1934,14 @@ class Array(DaskMethodsMixin):
         if isinstance(key, Array):
             from dask.array.routines import where
 
-            if key.shape != self.shape:
+            left_shape = np.array(key.shape)
+            right_shape = np.array(self.shape)
+
+            # We want to treat unknown shape on *either* sides as a match
+            match = left_shape == right_shape
+            match |= np.isnan(left_shape) | np.isnan(right_shape)
+
+            if not match.all():
                 raise IndexError(
                     f"boolean index shape {key.shape} must match indexed array's "
                     f"{self.shape}."
