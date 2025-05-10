@@ -1156,7 +1156,6 @@ def test_positional_indexer_newaxis():
 def test_boolean_mask_with_unknown_shape(
     shapes: tuple[float | int, float | int],
 ) -> None:
-    # Currently failing with a ValueError: operands could not be broadcast together with shapes
     x_shape, mask_shape = shapes
     arr = delayed(np.ones(10))
     x = da.concatenate(
