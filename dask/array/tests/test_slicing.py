@@ -1140,10 +1140,6 @@ def test_positional_indexer_newaxis():
     assert_eq(new, arr.compute()[[True, True, False], np.newaxis])
 
 
-# @pytest.mark.parametrize("x_shape", [10, np.nan])
-# @pytest.mark.parametrize("mask_shape", [10, np.nan])
-
-
 @pytest.mark.parametrize(
     "shapes",
     [
@@ -1158,7 +1154,7 @@ def test_positional_indexer_newaxis():
     ],
 )
 def test_boolean_mask_with_unknown_shape(
-    shapes: tuple[float | int, float | int]
+    shapes: tuple[float | int, float | int],
 ) -> None:
     # Currently failing with a ValueError: operands could not be broadcast together with shapes
     x_shape, mask_shape = shapes
