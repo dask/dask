@@ -354,7 +354,10 @@ class TaskRef:
             return False
         return self.key == value.key
 
-    def substitute(self, subs: dict) -> TaskRef | GraphNode:
+    def __reduce__(self):
+        return TaskRef, (self.key,)
+
+    def substitute(self, subs: dict, key: KeyType | None = None) -> TaskRef | GraphNode:
         if self.key in subs:
             val = subs[self.key]
             if isinstance(val, GraphNode):
@@ -533,7 +536,7 @@ class Alias(GraphNode):
             val = subs.get(self.target, self.target)
             if sub_key == self.key and val == self.target:
                 return self
-            if isinstance(val, GraphNode):
+            if isinstance(val, (GraphNode, TaskRef)):
                 return val.substitute({}, key=key)
             if key is None and isinstance(sub_key, GraphNode):
                 raise RuntimeError(
@@ -610,18 +613,10 @@ class DataNode(GraphNode):
         return iter(self.value)
 
 
-def _call_recursively(obj, values):
-    if isinstance(obj, GraphNode):
-        return obj(values)
-    elif isinstance(obj, dict):
-        return {k: _call_recursively(v, values) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple, frozenset, set)):
-        return type(obj)(_call_recursively(v, values) for v in obj)
-    return obj
-
-
 def _get_dependencies(obj: object) -> set | frozenset:
-    if isinstance(obj, GraphNode):
+    if isinstance(obj, TaskRef):
+        return {obj.key}
+    elif isinstance(obj, GraphNode):
         return obj.dependencies
     elif isinstance(obj, dict):
         if not obj:
@@ -886,7 +881,11 @@ class NestedContainer(Task, Iterable):
             return self
         return type(self)(
             *(
-                a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
+                (
+                    a.substitute(subs_filtered)
+                    if isinstance(a, (GraphNode, TaskRef))
+                    else a
+                )
                 for a in self.args
             )
         )
@@ -966,7 +965,9 @@ class Dict(NestedContainer, Mapping):
         new_args = []
         for arg in self.args:
             new_arg = (
-                arg.substitute(subs_filtered) if isinstance(arg, GraphNode) else arg
+                arg.substitute(subs_filtered)
+                if isinstance(arg, (GraphNode, TaskRef))
+                else arg
             )
             new_args.append(new_arg)
         return type(self)(new_args)
