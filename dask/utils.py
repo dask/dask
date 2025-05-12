@@ -742,6 +742,8 @@ class Dispatch:
     def dispatch(self, cls):
         """Return the function implementation for the given ``cls``"""
         lk = self._lookup
+        if cls in lk:
+            return lk[cls]
         for cls2 in cls.__mro__:
             # Is a lazy registration function present?
             toplevel, _, _ = cls2.__module__.partition(".")
@@ -752,7 +754,10 @@ class Dispatch:
             else:
                 register()
                 self._lazy.pop(toplevel, None)
-                return self.dispatch(cls)  # recurse
+                meth = self.dispatch(cls)  # recurse
+                lk[cls] = meth
+                lk[cls2] = meth
+                return meth
             try:
                 impl = lk[cls2]
             except KeyError:
