@@ -354,6 +354,17 @@ class TaskRef:
             return False
         return self.key == value.key
 
+    def substitute(self, subs: dict) -> TaskRef | GraphNode:
+        if self.key in subs:
+            val = subs[self.key]
+            if isinstance(val, GraphNode):
+                return val.substitute({}, key=self.key)
+            elif isinstance(val, TaskRef):
+                return val
+            else:
+                return TaskRef(val)
+        return self
+
 
 class GraphNode:
     key: KeyType
@@ -647,18 +658,20 @@ class Task(GraphNode):
         self.func = func
         if isinstance(func, Task):
             raise TypeError("Cannot nest tasks")
-        self.args = tuple(
-            Alias(obj.key) if isinstance(obj, TaskRef) else obj for obj in args
-        )
-        self.kwargs = {
-            k: Alias(v.key) if isinstance(v, TaskRef) else v for k, v in kwargs.items()
-        }
+
+        self.args = args
+        self.kwargs = kwargs
         _dependencies: set[KeyType] | None = None
-        for a in itertools.chain(self.args, self.kwargs.values()):
-            if isinstance(a, GraphNode):
-                if _dependencies is None:
-                    _dependencies = set()
-                _dependencies.update(a.dependencies)
+        for o in (self.args, self.kwargs.values()):
+            for a in o:
+                if isinstance(a, TaskRef):
+                    if _dependencies is None:
+                        _dependencies = set()
+                    _dependencies.add(a.key)
+                elif isinstance(a, GraphNode) and a.dependencies:
+                    if _dependencies is None:
+                        _dependencies = set()
+                    _dependencies.update(a.dependencies)
         if _dependencies:
             self._dependencies = frozenset(_dependencies)
         else:
@@ -739,19 +752,18 @@ class Task(GraphNode):
 
     def __call__(self, values=()):
         self._verify_values(values)
-        new_argspec = tuple(
-            a({k: values[k] for k in a.dependencies}) if isinstance(a, GraphNode) else a
-            for a in self.args
-        )
+
+        def _eval(a):
+            if isinstance(a, GraphNode):
+                return a({k: values[k] for k in a.dependencies})
+            elif isinstance(a, TaskRef):
+                return values[a.key]
+            else:
+                return a
+
+        new_argspec = tuple(map(_eval, self.args))
         if self.kwargs:
-            kwargs = {
-                k: (
-                    kw({k: values[k] for k in kw.dependencies})
-                    if isinstance(kw, GraphNode)
-                    else kw
-                )
-                for k, kw in self.kwargs.items()
-            }
+            kwargs = {k: _eval(kw) for k, kw in self.kwargs.items()}
             return self.func(*new_argspec, **kwargs)
         return self.func(*new_argspec)
 
@@ -788,11 +800,19 @@ class Task(GraphNode):
         }
         if subs_filtered:
             new_args = tuple(
-                a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
+                (
+                    a.substitute(subs_filtered)
+                    if isinstance(a, (GraphNode, TaskRef))
+                    else a
+                )
                 for a in self.args
             )
             new_kwargs = {
-                k: v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
+                k: (
+                    v.substitute(subs_filtered)
+                    if isinstance(v, (GraphNode, TaskRef))
+                    else v
+                )
                 for k, v in self.kwargs.items()
             }
             return type(self)(
