@@ -16,7 +16,7 @@ from dask._task_spec import Alias, DataNode, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import _deprecated, cached_cumsum, is_arraylike
+from dask.utils import _deprecated, cached_cumsum, disable_gc, is_arraylike
 
 colon = slice(None, None, None)
 
@@ -97,6 +97,7 @@ def sanitize_index(ind):
         raise TypeError("Invalid index type", type(ind), ind)
 
 
+@disable_gc()
 def slice_array(out_name, in_name, blockdims, index):
     """
     Main function for array slicing

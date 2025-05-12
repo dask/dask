@@ -657,15 +657,16 @@ class Task(GraphNode):
         self.args = args
         self.kwargs = kwargs
         _dependencies: set[KeyType] | None = None
-        for o in (self.args, self.kwargs.values()):
-            for a in o:
-                if isinstance(a, TaskRef):
-                    if _dependencies is None:
-                        _dependencies = set()
+        for a in itertools.chain(args, kwargs.values()):
+            if isinstance(a, TaskRef):
+                if _dependencies is None:
+                    _dependencies = {a.key}
+                else:
                     _dependencies.add(a.key)
-                elif isinstance(a, GraphNode) and a.dependencies:
-                    if _dependencies is None:
-                        _dependencies = set()
+            elif isinstance(a, GraphNode) and a.dependencies:
+                if _dependencies is None:
+                    _dependencies = set(a.dependencies)
+                else:
                     _dependencies.update(a.dependencies)
         if _dependencies:
             self._dependencies = frozenset(_dependencies)

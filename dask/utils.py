@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import codecs
 import functools
+import gc
 import inspect
 import os
 import re
@@ -12,7 +13,7 @@ import types
 import uuid
 import warnings
 from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Set
-from contextlib import contextmanager, nullcontext, suppress
+from contextlib import ContextDecorator, contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
 from functools import wraps
@@ -2304,3 +2305,20 @@ def unzip(ls, nout):
     if not out:
         out = [()] * nout
     return out
+
+
+class disable_gc(ContextDecorator):
+    """Context manager to disable garbage collection."""
+
+    def __init__(self, collect=False):
+        self.collect = collect
+        self._gc_enabled = gc.isenabled()
+
+    def __enter__(self):
+        gc.disable()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self._gc_enabled:
+            gc.enable()
+        return False
