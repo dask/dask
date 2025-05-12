@@ -211,7 +211,9 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
     chunk_boundaries = np.cumsum(chunks[axis])
 
     # Get existing chunk tuple locations
-    chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks) if i != axis))
+    chunk_tuples = list(
+        product(*(range(len(c)) for i, c in enumerate(chunks) if i != axis))
+    )
 
     intermediates = dict()
     merges = dict()
