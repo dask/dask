@@ -153,7 +153,7 @@ def unpack_collections(expr, _return_collections=True):
     >>> b = delayed(2, 'b')
     >>> task, collections = unpack_collections([a, b, 3])
     >>> task
-    List((Alias('a'), Alias('b'), 3))
+    List((TaskRef('a'), TaskRef('b'), 3))
     >>> collections
     (Delayed('a'), Delayed('b'))
 
