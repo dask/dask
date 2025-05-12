@@ -204,7 +204,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
         for k, v in dsk.items():
             if k[0] == out_name:
                 k2 = (out_name,) + expand(k[1:], 0)
-                if isinstance(v.args[1], Alias):
+                if isinstance(v.args[1], TaskRef):
                     # positional indexing with newaxis
                     indexer = expand_orig(dsk[v.args[1].key].value[1], None)
                     tok = "shuffle-taker-" + tokenize(indexer)

@@ -228,12 +228,10 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         old_index: (in_name,) + old_index
         for old_index in np.ndindex(tuple([len(c) for c in chunks]))
     }
-
-    base_token = tokenize(in_name, out_name, indexer)
     for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
-        sorter_key = sorter_name + str(hash(hash(new_chunk_idx) + hash(base_token)))
         new_chunk_taker = np.array(new_chunk_taker)
         sorter = np.argsort(new_chunk_taker).astype(dtype)
+        sorter_key = sorter_name + tokenize(sorter)
         # low level fusion can't deal with arrays on first position
         merges[sorter_key] = DataNode(sorter_key, (1, sorter))
 

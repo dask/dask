@@ -14,6 +14,7 @@ import dask.array as da
 from dask import config
 from dask.array.chunk import getitem
 from dask.array.slicing import (
+    SlicingNoop,
     _sanitize_index_element,
     _slice_1d,
     make_block_sorted_slices,
@@ -184,7 +185,7 @@ def test_slice_array_1d():
         ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 2)), (slice(0, 25, 2),)),
         ("y", 3): Task(("y", 3), getitem, TaskRef(("x", 3)), (slice(1, 25, 2),)),
     }
-    result, chunks = slice_array("y", "x", [[25] * 4], [slice(24, None, 2)], 8)
+    result, chunks = slice_array("y", "x", [[25] * 4], [slice(24, None, 2)])
 
     assert expected == result
 
@@ -195,7 +196,7 @@ def test_slice_array_1d():
         ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 3)), (slice(1, 25, 2),)),
     }
 
-    result, chunks = slice_array("y", "x", [[25] * 4], [slice(26, None, 2)], 8)
+    result, chunks = slice_array("y", "x", [[25] * 4], [slice(26, None, 2)])
     assert expected == result
 
     # x[24::2]
@@ -205,7 +206,7 @@ def test_slice_array_1d():
         ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 2)), (slice(0, 25, 2),)),
         ("y", 3): Task(("y", 3), getitem, TaskRef(("x", 3)), (slice(1, 25, 2),)),
     }
-    result, chunks = slice_array("y", "x", [(25,) * 4], (slice(24, None, 2),), 8)
+    result, chunks = slice_array("y", "x", [(25,) * 4], (slice(24, None, 2),))
 
     assert expected == result
 
@@ -216,7 +217,7 @@ def test_slice_array_1d():
         ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 3)), (slice(1, 25, 2),)),
     }
 
-    result, chunks = slice_array("y", "x", [(25,) * 4], (slice(26, None, 2),), 8)
+    result, chunks = slice_array("y", "x", [(25,) * 4], (slice(26, None, 2),))
     assert expected == result
 
 
@@ -242,7 +243,6 @@ def test_slice_array_2d():
         "x",
         [[20], [20, 20, 5]],
         [slice(13, None, 2), slice(10, None, 1)],
-        itemsize=8,
     )
 
     assert expected == result
@@ -254,39 +254,28 @@ def test_slice_array_2d():
         ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 0, 2)), (5, slice(None))),
     }
 
-    result, chunks = slice_array(
-        "y", "x", ([20], [20, 20, 5]), [5, slice(10, None, 1)], 8
-    )
+    result, chunks = slice_array("y", "x", ([20], [20, 20, 5]), [5, slice(10, None, 1)])
 
     assert expected == result
 
 
 def test_slice_optimizations():
     # bar[:]
-    expected = {("foo", 0): Alias(("foo", 0), ("bar", 0))}
-    result, chunks = slice_array("foo", "bar", [[100]], (slice(None, None, None),), 8)
-    assert expected == result
+    with pytest.raises(SlicingNoop):
+        slice_array("foo", "bar", [[100]], (slice(None, None, None),))
 
     # bar[:,:,:]
-    expected = {
-        ("foo", 0): Alias(("foo", 0), ("bar", 0)),
-        ("foo", 1): Alias(("foo", 1), ("bar", 1)),
-        ("foo", 2): Alias(("foo", 2), ("bar", 2)),
-    }
-    result, chunks = slice_array(
-        "foo",
-        "bar",
-        [(100, 1000, 10000)],
-        (slice(None, None, None), slice(None, None, None), slice(None, None, None)),
-        itemsize=8,
-    )
-    assert expected == result
+    with pytest.raises(SlicingNoop):
+        slice_array(
+            "foo",
+            "bar",
+            [(100, 1000, 10000)],
+            (slice(None, None, None), slice(None, None, None), slice(None, None, None)),
+        )
 
 
 def test_slicing_with_singleton_indices():
-    result, chunks = slice_array(
-        "y", "x", ([5, 5], [5, 5]), (slice(0, 5), 8), itemsize=8
-    )
+    result, chunks = slice_array("y", "x", ([5, 5], [5, 5]), (slice(0, 5), 8))
 
     expected = {
         ("y", 0): Task(
@@ -303,7 +292,6 @@ def test_slicing_with_newaxis():
         "x",
         ([5, 5], [5, 5]),
         (slice(0, 3), None, slice(None, None, None)),
-        itemsize=8,
     )
 
     expected = {
@@ -339,26 +327,20 @@ def test_take_sorted():
     chunks, dsk = take("y-y", "x", [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
     assert len(dsk) == 6
     assert chunks == ((4,),)
-
-    chunks, dsk = take("y", "x", [(20, 20, 20, 20)], np.arange(0, 80), axis=0)
-    assert len(dsk) == 4
-    assert chunks == ((20, 20, 20, 20),)
+    with pytest.raises(SlicingNoop):
+        take("y", "x", [(20, 20, 20, 20)], np.arange(0, 80), axis=0)
 
 
 def test_slicing_chunks():
-    result, chunks = slice_array(
-        "y", "x", ([5, 5], [5, 5]), (1, np.array([2, 0, 3])), itemsize=8
-    )
+    result, chunks = slice_array("y", "x", ([5, 5], [5, 5]), (1, np.array([2, 0, 3])))
     assert chunks == ((3,),)
 
     result, chunks = slice_array(
-        "y", "x", ([5, 5], [5, 5]), (slice(0, 7), np.array([2, 0, 3])), itemsize=8
+        "y", "x", ([5, 5], [5, 5]), (slice(0, 7), np.array([2, 0, 3]))
     )
     assert chunks == ((5, 2), (3,))
 
-    result, chunks = slice_array(
-        "y", "x", ([5, 5], [5, 5]), (slice(0, 7), 1), itemsize=8
-    )
+    result, chunks = slice_array("y", "x", ([5, 5], [5, 5]), (slice(0, 7), 1))
     assert chunks == ((5, 2),)
 
 
@@ -368,14 +350,12 @@ def test_slicing_with_numpy_arrays():
         "x",
         ((3, 3, 3, 1), (3, 3, 3, 1)),
         (np.array([1, 2, 9]), slice(None, None, None)),
-        itemsize=8,
     )
     b, bd2 = slice_array(
         "y-y",
         "x",
         ((3, 3, 3, 1), (3, 3, 3, 1)),
         (np.array([1, 2, 9]), slice(None, None, None)),
-        itemsize=8,
     )
 
     assert bd1 == bd2
@@ -384,7 +364,7 @@ def test_slicing_with_numpy_arrays():
     i = [False, True, True, False, False, False, False, False, False, True]
     index = (i, slice(None, None, None))
     index = normalize_index(index, (10, 10))
-    c, bd3 = slice_array("y-y", "x", ((3, 3, 3, 1), (3, 3, 3, 1)), index, itemsize=8)
+    c, bd3 = slice_array("y-y", "x", ((3, 3, 3, 1), (3, 3, 3, 1)), index)
     assert bd1 == bd3
     np.testing.assert_equal(a, c)
 
@@ -574,7 +554,7 @@ def test_sanitize_index():
 def test_uneven_blockdims():
     blockdims = ((31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30), (100,))
     index = (slice(240, 270), slice(None))
-    dsk_out, bd_out = slice_array("in", "out", blockdims, index, itemsize=8)
+    dsk_out, bd_out = slice_array("in", "out", blockdims, index)
     sol = {
         ("in", 0, 0): Task(
             ("in", 0, 0),
@@ -594,7 +574,7 @@ def test_uneven_blockdims():
 
     blockdims = ((31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30),) * 2
     index = (slice(240, 270), slice(180, 230))
-    dsk_out, bd_out = slice_array("in", "out", blockdims, index, itemsize=8)
+    dsk_out, bd_out = slice_array("in", "out", blockdims, index)
     sol = {
         ("in", 0, 0): Task(
             ("in", 0, 0),
