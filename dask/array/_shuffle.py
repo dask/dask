@@ -10,7 +10,7 @@ from typing import Literal
 import numpy as np
 
 from dask import config
-from dask._task_spec import DataNode, List, Task, TaskRef
+from dask._task_spec import DataNode, GraphNode, List, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.array.core import Array, unknown_chunk_message
 from dask.array.dispatch import concatenate_lookup, take_lookup
@@ -18,7 +18,12 @@ from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 
 
-def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"] = "auto"):
+def shuffle(
+    x: Array,
+    indexer: list[list[int]],
+    axis: int,
+    chunks: Literal["auto"] | dict[int, tuple[int, ...]] = "auto",
+) -> Array:
     """
     Reorders one dimensions of a Dask Array based on an indexer.
 
@@ -39,12 +44,16 @@ def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"] = "a
         each group will end up in exactly one chunk.
     axis: int
         The axis to shuffle along.
-    chunks: "auto"
+    chunks: tuple[tuple[int, ...], ...] | "auto"
         Hint on how to rechunk if single groups are becoming too large. The default is
         to split chunks along the other dimensions evenly to keep the chunksize
         consistent. The rechunking is done in a way that ensures that non all-to-all
         network communication is necessary, chunks are only split and not combined with
         other chunks.
+
+        If chunks are provided explicitly, the dimensions that aren't shuffled are
+        rechunked to the given size. The chunks along the shuffled dimension are
+        determined automatically.
 
     Examples
     --------
@@ -78,13 +87,16 @@ def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"] = "a
         )
     assert isinstance(axis, int), "axis must be an integer"
     _validate_indexer(x.chunks, indexer, axis)
+    original_chunks = x.chunks
 
     x = _rechunk_other_dimensions(x, max(map(len, indexer)), axis, chunks)
 
     token = tokenize(x, indexer, axis)
     out_name = f"shuffle-{token}"
 
-    chunks, layer = _shuffle(x.chunks, indexer, axis, x.name, out_name, token)
+    chunks, layer = _shuffle(
+        x.chunks, indexer, axis, x.name, out_name, token, chunks, original_chunks
+    )
     if len(layer) == 0:
         return Array(x.dask, x.name, x.chunks, meta=x)
 
@@ -141,9 +153,25 @@ def _calculate_new_chunksizes(
 
 
 def _rechunk_other_dimensions(
-    x: Array, longest_group: int, axis: int, chunks: Literal["auto"]
+    x: Array,
+    longest_group: int,
+    axis: int,
+    chunks: Literal["auto"] | dict[int, tuple[int, ...]] = "auto",
 ) -> Array:
-    assert chunks == "auto", "Only auto is supported for now"
+    if chunks != "auto":
+        assert all(
+            isinstance(c, tuple) for c in chunks.values()
+        ), "chunks must be given as tuples"
+        assert (
+            axis not in chunks
+        ), "chunks along shuffled axis are determined automatically"
+        assert (
+            len(chunks) == len(x.chunks) - 1
+        ), "chunks for all axis except shuffled axis are required"
+        chunks_list = list(chunks.values())
+        chunks_list.insert(axis, x.chunks[axis])
+        return x.rechunk(tuple(chunks_list))
+
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
 
     if longest_group <= max(x.chunks[axis]) * chunksize_tolerance:
@@ -179,7 +207,16 @@ def _validate_indexer(chunks, indexer, axis):
         )
 
 
-def _shuffle(chunks, indexer, axis, in_name, out_name, token):
+def _shuffle(
+    chunks,
+    indexer,
+    axis,
+    in_name,
+    out_name,
+    token,
+    old_chunks: Literal["auto"] | dict[int, tuple[int, ...]] = "auto",
+    previous_chunks=None,
+):
     _validate_indexer(chunks, indexer, axis)
 
     if len(indexer) == len(chunks[axis]):
@@ -194,22 +231,31 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     indexer = copy.deepcopy(indexer)
 
+    factor = 1
+    if old_chunks != "auto":
+        factor = math.prod(
+            [max(c) for i, c in enumerate(previous_chunks) if i != axis]
+        ) / math.prod(list(map(max, old_chunks.values())))
+
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
-    chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
+    chunk_size_limit = int(
+        sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance * factor
+    )
 
     # Figure out how many groups we can put into one chunk
-    current_chunk, new_chunks = [], []
+    current_chunk: list[int] = []
+    new_chunks = []
     for idx in indexer:
         if len(current_chunk) + len(idx) > chunk_size_limit and len(current_chunk) > 0:
-            new_chunks.append(current_chunk)
+            new_chunks.append(np.array(current_chunk))
             current_chunk = idx.copy()
         else:
             current_chunk.extend(idx)
             if len(current_chunk) > chunk_size_limit / chunksize_tolerance:
-                new_chunks.append(current_chunk)
+                new_chunks.append(np.array(current_chunk))
                 current_chunk = []
     if len(current_chunk) > 0:
-        new_chunks.append(current_chunk)
+        new_chunks.append(np.array(current_chunk))
 
     chunk_boundaries = np.cumsum(chunks[axis])
 
@@ -218,8 +264,8 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         product(*(range(len(c)) for i, c in enumerate(chunks) if i != axis))
     )
 
-    intermediates = dict()
-    merges = dict()
+    intermediates: dict[str | tuple[str, int], GraphNode] = dict()
+    merges: dict[str | tuple[str, int], GraphNode] = dict()
     dtype = np.min_scalar_type(max(max(chunks[axis]), chunk_size_limit))
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
@@ -233,7 +279,6 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
     }
 
     for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
-        new_chunk_taker = np.array(new_chunk_taker)
         sorter = np.argsort(new_chunk_taker).astype(dtype)
         sorter_key = sorter_name + tokenize(sorter)
         # low level fusion can't deal with arrays on first position
@@ -247,7 +292,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         taker_boundary = taker_boundary.tolist()
         taker_boundary.append(len(new_chunk_taker))
 
-        taker_cache = {}
+        taker_cache: dict[int, str] = {}
         for chunk_tuple in chunk_tuples:
             merge_keys = []
 
