@@ -911,23 +911,23 @@ def test_take_avoids_large_chunks():
         index = np.array([0, 1] + [2] * 101 + [3])
         chunks2, dsk = take("a", "b", chunks, index)
         assert chunks2 == ((1,) * 104, (500,), (500,))
-        assert len(dsk) == 106
+        assert len(dsk) == 105
 
         index = np.array([0] * 101 + [1, 2, 3])
         chunks2, dsk = take("a", "b", chunks, index)
         assert chunks2 == ((1,) * 104, (500,), (500,))
-        assert len(dsk) == 106
+        assert len(dsk) == 105
 
         index = np.array([0, 1, 2] + [3] * 101)
         chunks2, dsk = take("a", "b", chunks, index)
         assert chunks2 == ((1,) * 104, (500,), (500,))
-        assert len(dsk) == 106
+        assert len(dsk) == 105
 
         chunks = ((500,), (1, 1, 1, 1), (500,))
         index = np.array([0, 1, 2] + [3] * 101)
         chunks2, dsk = take("a", "b", chunks, index, axis=1)
         assert chunks2 == ((500,), (1,) * 104, (500,))
-        assert len(dsk) == 106
+        assert len(dsk) == 105
 
 
 def test_take_uses_config():
