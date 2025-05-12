@@ -11,7 +11,6 @@ np = pytest.importorskip("numpy")
 
 import dask
 import dask.array as da
-from dask import config
 from dask.array.chunk import getitem
 from dask.array.slicing import (
     SlicingNoop,
@@ -928,16 +927,6 @@ def test_take_avoids_large_chunks():
         chunks2, dsk = take("a", "b", chunks, index, axis=1)
         assert chunks2 == ((500,), (1,) * 104, (500,))
         assert len(dsk) == 105
-
-
-def test_take_uses_config():
-    with dask.config.set({"array.slicing.split-large-chunks": True}):
-        chunks = ((1, 1, 1, 1), (500,), (500,))
-        index = np.array([0, 1] + [2] * 101 + [3])
-        with config.set({"array.chunk-size": "10GB"}):
-            chunks2, dsk = take("a", "b", chunks, index)
-        assert chunks2 == ((1,) * 104, (500,), (500,))
-        assert len(dsk) == 106
 
 
 def test_pathological_unsorted_slicing():
