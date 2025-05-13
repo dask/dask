@@ -271,10 +271,10 @@ def blockwise(
     ...         numblocks={'x': (2, 2)}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0, 0): <Task ('z', 0, 0) inc(Alias(('x', 0, 0)))>,
-    ('z', 0, 1): <Task ('z', 0, 1) inc(Alias(('x', 0, 1)))>,
-    ('z', 1, 0): <Task ('z', 1, 0) inc(Alias(('x', 1, 0)))>,
-    ('z', 1, 1): <Task ('z', 1, 1) inc(Alias(('x', 1, 1)))>}
+    {('z', 0, 0): <Task ('z', 0, 0) inc(TaskRef(('x', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) inc(TaskRef(('x', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) inc(TaskRef(('x', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) inc(TaskRef(('x', 1, 1)))>}
 
     Simple operation on two datasets x and y
 
@@ -289,10 +289,10 @@ def blockwise(
     ...         numblocks={'x': (2, 2), 'y': (2, 2)}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0, 0): <Task ('z', 0, 0) add(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
-    ('z', 0, 1): <Task ('z', 0, 1) add(Alias(('x', 0, 1)), Alias(('y', 0, 1)))>,
-    ('z', 1, 0): <Task ('z', 1, 0) add(Alias(('x', 1, 0)), Alias(('y', 1, 0)))>,
-    ('z', 1, 1): <Task ('z', 1, 1) add(Alias(('x', 1, 1)), Alias(('y', 1, 1)))>}
+    {('z', 0, 0): <Task ('z', 0, 0) add(TaskRef(('x', 0, 0)), TaskRef(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) add(TaskRef(('x', 0, 1)), TaskRef(('y', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) add(TaskRef(('x', 1, 0)), TaskRef(('y', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) add(TaskRef(('x', 1, 1)), TaskRef(('y', 1, 1)))>}
 
     Operation that flips one of the datasets
 
@@ -307,10 +307,10 @@ def blockwise(
     ...         numblocks={'x': (2, 2), 'y': (2, 2)}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0, 0): <Task ('z', 0, 0) addT(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
-    ('z', 0, 1): <Task ('z', 0, 1) addT(Alias(('x', 0, 1)), Alias(('y', 1, 0)))>,
-    ('z', 1, 0): <Task ('z', 1, 0) addT(Alias(('x', 1, 0)), Alias(('y', 0, 1)))>,
-    ('z', 1, 1): <Task ('z', 1, 1) addT(Alias(('x', 1, 1)), Alias(('y', 1, 1)))>}
+    {('z', 0, 0): <Task ('z', 0, 0) addT(TaskRef(('x', 0, 0)), TaskRef(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) addT(TaskRef(('x', 0, 1)), TaskRef(('y', 1, 0)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) addT(TaskRef(('x', 1, 0)), TaskRef(('y', 0, 1)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) addT(TaskRef(('x', 1, 1)), TaskRef(('y', 1, 1)))>}
 
     Dot product with contraction over ``j`` index.  Yields list arguments
 
@@ -326,24 +326,25 @@ def blockwise(
     ... )  # doctest: +SKIP
     {('z', 0,  0):
         <Task ('z', 0, 0) dotmany(
-        List((Alias(('x', 0, 0)), Alias(('x', 0, 1)))),
-        List((Alias(('y', 0, 0)), Alias(('y', 1, 0)))))
+            List((TaskRef(('x', 0, 0)), TaskRef(('x', 0, 1)))),
+            List((TaskRef(('y', 0, 0)), TaskRef(('y', 1, 0)))))
         >,
     ('z', 0,  1):
         <Task ('z', 0, 1) dotmany(
-        List((Alias(('x', 0, 0)), Alias(('x', 0, 1)))),
-        List((Alias(('y', 0, 1)), Alias(('y', 1, 1)))))
+            List((TaskRef(('x', 0, 0)), TaskRef(('x', 0, 1)))),
+            List((TaskRef(('y', 0, 1)), TaskRef(('y', 1, 1)))))
         >,
     ('z', 1,  0):
         <Task ('z', 1, 0) dotmany(
-        List((Alias(('x', 1, 0)), Alias(('x', 1, 1)))),
-        List((Alias(('y', 0, 0)), Alias(('y', 1, 0)))))
+            List((TaskRef(('x', 1, 0)), TaskRef(('x', 1, 1)))),
+            List((TaskRef(('y', 0, 0)), TaskRef(('y', 1, 0)))
+        )
         >,
-    ('z', 1,  1):
+    ('z', 1, 1):
         <Task ('z', 1, 1) dotmany(
-        List((Alias(('x', 1, 0)), Alias(('x', 1, 1)))),
-        List((Alias(('y', 0, 1)), Alias(('y', 1, 1)))))
-        >
+            List((TaskRef(('x', 1, 0)), TaskRef(('x', 1, 1)))),
+            List((TaskRef(('y', 0, 1)), TaskRef(('y', 1, 1)))
+        )
     }
 
     Pass ``concatenate=True`` to concatenate arrays ahead of time.
@@ -363,10 +364,10 @@ def blockwise(
     ...     )
     ... )  # doctest: +SKIP
     {
-    ('z', 0, 0): <Task ('z', 0, 0) add(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
-    ('z', 0, 1): <Task ('z', 0, 1) add(Alias(('x', 0, 1)), Alias(('y', 0, 1)))>,
-    ('z', 1, 0): <Task ('z', 1, 0) add(Alias(('x', 0, 0)), Alias(('y', 1, 0)))>,
-    ('z', 1, 1): <Task ('z', 1, 1) add(Alias(('x', 0, 1)), Alias(('y', 1, 1)))>
+    ('z', 0, 0): <Task ('z', 0, 0) add(TaskRef(('x', 0, 0)), TaskRef(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) add(TaskRef(('x', 0, 1)), TaskRef(('y', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) add(TaskRef(('x', 0, 0)), TaskRef(('y', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) add(TaskRef(('x', 0, 1)), TaskRef(('y', 1, 1)))>
     }
 
     Include literals by indexing with ``None``
@@ -380,8 +381,8 @@ def blockwise(
     ...         numblocks={'x': (2, )}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0): <Task ('z', 0) add(Alias(('x', 0)), DataNode(100))>,
-    ('z', 1): <Task ('z', 1) add(Alias(('x', 1)), DataNode(100))>}
+    {('z', 0): <Task ('z', 0) add(TaskRef(('x', 0)), DataNode(100))>,
+    ('z', 1): <Task ('z', 1) add(TaskRef(('x', 1)), DataNode(100))>}
 
     If the broadcasted value is a delayed object or other dask collection, the
     key has to be wrapped appropriately as an Alias object.
@@ -398,8 +399,8 @@ def blockwise(
     ...         numblocks={'x': (2, )}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0): <Task ('z', 0) add(Alias(('x', 0)), Alias('dinc'))>,
-    ('z', 1): <Task ('z', 1) add(Alias(('x', 1)), Alias('dinc'))>}
+    {('z', 0): <Task ('z', 0) add(TaskRef(('x', 0)), Alias('dinc'))>,
+    ('z', 1): <Task ('z', 1) add(TaskRef(('x', 1)), Alias('dinc'))>}
 
     See Also
     --------

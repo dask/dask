@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import codecs
 import functools
+import gc
 import inspect
 import os
 import re
@@ -12,7 +13,7 @@ import types
 import uuid
 import warnings
 from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Set
-from contextlib import contextmanager, nullcontext, suppress
+from contextlib import ContextDecorator, contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
 from functools import wraps
@@ -742,6 +743,8 @@ class Dispatch:
     def dispatch(self, cls):
         """Return the function implementation for the given ``cls``"""
         lk = self._lookup
+        if cls in lk:
+            return lk[cls]
         for cls2 in cls.__mro__:
             # Is a lazy registration function present?
             toplevel, _, _ = cls2.__module__.partition(".")
@@ -752,7 +755,10 @@ class Dispatch:
             else:
                 register()
                 self._lazy.pop(toplevel, None)
-                return self.dispatch(cls)  # recurse
+                meth = self.dispatch(cls)  # recurse
+                lk[cls] = meth
+                lk[cls2] = meth
+                return meth
             try:
                 impl = lk[cls2]
             except KeyError:
@@ -2299,3 +2305,20 @@ def unzip(ls, nout):
     if not out:
         out = [()] * nout
     return out
+
+
+class disable_gc(ContextDecorator):
+    """Context manager to disable garbage collection."""
+
+    def __init__(self, collect=False):
+        self.collect = collect
+        self._gc_enabled = gc.isenabled()
+
+    def __enter__(self):
+        gc.disable()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self._gc_enabled:
+            gc.enable()
+        return False

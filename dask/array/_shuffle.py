@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import math
 from functools import reduce
 from itertools import count, product
@@ -192,8 +191,6 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         else:
             return chunks, {}
 
-    indexer = copy.deepcopy(indexer)
-
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
     chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
 
@@ -231,13 +228,10 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         old_index: (in_name,) + old_index
         for old_index in np.ndindex(tuple([len(c) for c in chunks]))
     }
-
     for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
         new_chunk_taker = np.array(new_chunk_taker)
         sorter = np.argsort(new_chunk_taker).astype(dtype)
-        sorter_key = sorter_name + tokenize(sorter)
-        # low level fusion can't deal with arrays on first position
-        merges[sorter_key] = DataNode(sorter_key, (1, sorter))
+        sorter_key = None
 
         sorted_array = new_chunk_taker[sorter]
         source_chunk_nr, taker_boundary = np.unique(
@@ -286,6 +280,10 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
             merge_suffix = convert_key(chunk_tuple, new_chunk_idx, axis)
             out_name_merge = (out_name,) + merge_suffix
             if len(merge_keys) > 1:
+                if sorter_key is None:
+                    sorter_key = sorter_name + tokenize(sorter)
+                    # low level fusion can't deal with arrays on first position
+                    merges[sorter_key] = DataNode(sorter_key, (1, sorter))
                 merges[out_name_merge] = Task(
                     out_name_merge,
                     concatenate_arrays,
