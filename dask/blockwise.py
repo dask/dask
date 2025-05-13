@@ -364,10 +364,10 @@ def blockwise(
     ...     )
     ... )  # doctest: +SKIP
     {
-    ('z', 0, 0): <Task ('z', 0, 0) add(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
-    ('z', 0, 1): <Task ('z', 0, 1) add(Alias(('x', 0, 1)), Alias(('y', 0, 1)))>,
-    ('z', 1, 0): <Task ('z', 1, 0) add(Alias(('x', 0, 0)), Alias(('y', 1, 0)))>,
-    ('z', 1, 1): <Task ('z', 1, 1) add(Alias(('x', 0, 1)), Alias(('y', 1, 1)))>
+    ('z', 0, 0): <Task ('z', 0, 0) add(TaskRef(('x', 0, 0)), TaskRef(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) add(TaskRef(('x', 0, 1)), TaskRef(('y', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) add(TaskRef(('x', 0, 0)), TaskRef(('y', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) add(TaskRef(('x', 0, 1)), TaskRef(('y', 1, 1)))>
     }
 
     Include literals by indexing with ``None``
@@ -381,8 +381,8 @@ def blockwise(
     ...         numblocks={'x': (2, )}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0): <Task ('z', 0) add(Alias(('x', 0)), DataNode(100))>,
-    ('z', 1): <Task ('z', 1) add(Alias(('x', 1)), DataNode(100))>}
+    {('z', 0): <Task ('z', 0) add(TaskRef(('x', 0)), DataNode(100))>,
+    ('z', 1): <Task ('z', 1) add(TaskRef(('x', 1)), DataNode(100))>}
 
     If the broadcasted value is a delayed object or other dask collection, the
     key has to be wrapped appropriately as an Alias object.
@@ -399,8 +399,8 @@ def blockwise(
     ...         numblocks={'x': (2, )}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0): <Task ('z', 0) add(Alias(('x', 0)), Alias('dinc'))>,
-    ('z', 1): <Task ('z', 1) add(Alias(('x', 1)), Alias('dinc'))>}
+    {('z', 0): <Task ('z', 0) add(TaskRef(('x', 0)), Alias('dinc'))>,
+    ('z', 1): <Task ('z', 1) add(TaskRef(('x', 1)), Alias('dinc'))>}
 
     See Also
     --------

@@ -139,10 +139,10 @@ def slice_array(out_name, in_name, blockdims, index):
     --------
     >>> from pprint import pprint
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
-    ...                              (slice(10, 35),), 8)
+    ...                              (slice(10, 35),))
     >>> pprint(dsk)  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    {('y', 0): <Task ('y', 0) getitem(Alias(('x', 0)), (slice(10, 20, 1),))>,
-     ('y', 1): <Task ('y', 1) getitem(Alias(('x', 1)), (slice(0, 15, 1),))>}
+    {('y', 0): <Task ('y', 0) getitem(TaskRef(('x', 0)), (slice(10, 20, 1),))>,
+     ('y', 1): <Task ('y', 1) getitem(TaskRef(('x', 1)), (slice(0, 15, 1),))>}
     >>> blockdims
     ((10, 15),)
 
