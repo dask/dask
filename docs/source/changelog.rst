@@ -11,8 +11,37 @@ Changelog
 2025.5.0
 --------
 
-- Fixed Array setitem when both the array and the indexer have unknown shape (:issue:`11753`) `Tom Augspurger`_
+Highlights
+^^^^^^^^^^
+- Fixed Array ``setitem`` when both the array and the indexer have unknown shape.
+  See :pr:`11753` from `Tom Augspurger`_ for more details.
+- Fixed several ``delayed`` graph handling issues introduced in the 2025.4.0 release.
+  See :pr:`11917`, :pr:`11907`, and :pr-distributed:`9071` from `Florian Jetter`_ for more details.
 
+.. dropdown:: Additional changes
+
+  - Speed up slicing graph generation (:pr:`11945`) `Florian Jetter`_
+  - Optimize dask order for worst case of ``get_target`` (:pr:`11935`) `Florian Jetter`_
+  - Raise on local executor if tasks are missing dependency (:pr:`11944`) `Florian Jetter`_
+  - Fix ``to_dask_array`` for single partition (:pr:`11931`) `James Bourbeau`_
+  - Ensure parquet plan is fully cached during optimization (:pr:`11933`) `Florian Jetter`_
+  - Better documentation for expression system (:pr:`11915`) `Florian Jetter`_
+  - Simplify (and speed up) culling (:pr:`11899`) `Florian Jetter`_
+  - Update pre-commit (:pr:`11926`) `Florian Jetter`_
+  - Don't run post ``setup-miniconda`` step in CI (:pr:`11925`) `James Bourbeau`_
+  - Try to pin pip for readthedocs (:pr:`11923`) `Florian Jetter`_
+  - Fix windows CI (:pr:`11919`) `Florian Jetter`_
+
+  - Use stable ``crick`` for py310 (:pr-distributed:`9072`) `Florian Jetter`_
+  - Remove internal dependencies mapping in ``update_graph`` (:pr-distributed:`9036`) `Florian Jetter`_
+  - Partially forgotten dependencies (:pr-distributed:`9068`) `Florian Jetter`_
+  - Replace ``filesystem-spec`` in CI environment with ``fsspec`` (:pr-distributed:`9069`) `James Bourbeau`_
+  - Ensure actors set erred state properly in case of worker failure (:pr-distributed:`9067`) `Florian Jetter`_
+  - Refactor timeouts in start cluster (:pr-distributed:`9062`) `Florian Jetter`_
+  - Fix workers / threads / memory displayed in client repr (:pr-distributed:`9066`) `James Bourbeau`_
+  - Pin pip for readthedocs (:pr-distributed:`9063`) `Florian Jetter`_
+  - Skip TLS functional tests (:pr-distributed:`9061`) `Florian Jetter`_
+  - Ensure client submit does not serialize unnecessarily (:pr-distributed:`9057`) `Florian Jetter`_
 
 
 .. _v2025.4.1:
