@@ -265,7 +265,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
                     if len(source_chunk_nr) == 1:
                         this_slice[axis] = this_slice[axis][np.argsort(sorter)]
 
-                    taker_key = taker_name + tokenize(in_name, out_name, this_slice)
+                    taker_key = taker_name + tokenize(this_slice)
                     # low level fusion can't deal with arrays on first position
                     intermediates[taker_key] = DataNode(
                         taker_key, (1, tuple(this_slice))
