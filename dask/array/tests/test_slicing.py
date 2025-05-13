@@ -6,6 +6,7 @@ import warnings
 import pytest
 
 from dask._task_spec import Alias, Task, TaskRef
+from dask.delayed import delayed
 
 np = pytest.importorskip("numpy")
 
@@ -1137,3 +1138,39 @@ def test_positional_indexer_newaxis():
     arr = da.array([0, 1, 2])
     new = arr[[True, True, False], np.newaxis]
     assert_eq(new, arr.compute()[[True, True, False], np.newaxis])
+
+
+@pytest.mark.parametrize(
+    "shapes",
+    [
+        (10, 10),
+        (np.nan, np.nan),
+        pytest.param(
+            (10, np.nan), marks=pytest.mark.xfail(reason="Not implemented", strict=True)
+        ),
+        pytest.param(
+            (np.nan, 10), marks=pytest.mark.xfail(reason="Not implemented", strict=True)
+        ),
+    ],
+)
+def test_boolean_mask_with_unknown_shape(
+    shapes: tuple[float | int, float | int],
+) -> None:
+    x_shape, mask_shape = shapes
+    arr = delayed(np.ones(10))
+    x = da.concatenate(
+        [
+            da.from_delayed(arr, shape=(x_shape,), dtype=float),
+            da.from_delayed(arr, shape=(x_shape,), dtype=float),
+        ]
+    )
+    mask = da.concatenate(
+        [
+            da.from_delayed(arr, shape=(mask_shape,), dtype=bool),
+            da.from_delayed(arr, shape=(mask_shape,), dtype=bool),
+        ]
+    )
+    x[mask] = 2
+
+    expected = np.full(20, 2.0)
+    assert_eq(x, expected)

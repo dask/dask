@@ -5,6 +5,16 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+
+.. _v2025.5.0:
+
+2025.5.0
+--------
+
+- Fixed Array setitem when both the array and the indexer have unknown shape (:issue:`11753`) `Tom Augspurger`_
+
+
+
 .. _v2025.4.1:
 
 2025.4.1
