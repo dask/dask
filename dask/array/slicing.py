@@ -325,31 +325,40 @@ def slice_slices_and_integers(
     sorted_block_slices = [sorted(i.items()) for i in block_slices]
 
     # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
-    in_names = list(product([in_name], *[pluck(0, s) for s in sorted_block_slices]))
+    in_names = product([in_name], *[pluck(0, s) for s in sorted_block_slices])
 
     # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
-    out_names = list(
-        product(
-            [out_name],
-            *[
-                range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
-                for d, i in zip(block_slices, index)
-                if not isinstance(i, Integral)
-            ],
-        )
+    out_names = product(
+        [out_name],
+        *[
+            range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
+            for d, i in zip(block_slices, index)
+            if not isinstance(i, Integral)
+        ],
     )
 
-    all_slices = list(product(*[pluck(1, s) for s in sorted_block_slices]))
-
-    dsk_out = {
-        out_name: (
-            Task(out_name, getitem, TaskRef(in_name), slices)
-            if not allow_getitem_optimization
-            or not all(sl == slice(None, None, None) for sl in slices)
-            else Alias(out_name, in_name)
+    all_slices = product(*[pluck(1, s) for s in sorted_block_slices])
+    if not allow_getitem_optimization:
+        dsk_out = {
+            out_name: (Task(out_name, getitem, TaskRef(in_name), slices))
+            for out_name, in_name, slices in zip(out_names, in_names, all_slices)
+        }
+    else:
+        all_slices = list(all_slices)
+        empty_slice = slice(None, None, None)
+        not_all_empty_slices = list(
+            not all(sl == empty_slice for sl in slices) for slices in all_slices
         )
-        for out_name, in_name, slices in zip(out_names, in_names, all_slices)
-    }
+        dsk_out = {
+            out_name: (
+                Task(out_name, getitem, TaskRef(in_name), slices)
+                if all_empty_slices
+                else Alias(out_name, in_name)
+            )
+            for out_name, in_name, all_empty_slices, slices in zip(
+                out_names, in_names, not_all_empty_slices, all_slices
+            )
+        }
 
     new_blockdims = [
         new_blockdim(d, db, i)
