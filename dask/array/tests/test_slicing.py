@@ -259,6 +259,13 @@ def test_slice_array_2d():
     assert expected == result
 
 
+def test_mixed_index():
+    da_array = da.ones((1, 1, 31, 40))
+    new = da_array[(np.array([0]), 0, slice(None), slice(None))]
+    assert isinstance(new, da.Array)
+    assert_eq(new, da_array[0])
+
+
 def test_slice_optimizations():
     # bar[:]
     with pytest.raises(SlicingNoop):
