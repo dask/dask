@@ -592,7 +592,7 @@ def take(outname, inname, chunks, index, axis=0):
         if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
             # TODO: This should be a real no-op, but the call stack is
             # too deep to do this efficiently for now
-            chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
+            chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks)))
             graph = {
                 (outname,) + c: Alias((outname,) + c, (inname,) + c)
                 for c in chunk_tuples
