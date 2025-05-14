@@ -337,26 +337,32 @@ def slice_slices_and_integers(
         ],
     )
 
-    all_slices = product(*[pluck(1, s) for s in sorted_block_slices])
+    all_slices = product(*(pluck(1, s) for s in sorted_block_slices))
     if not allow_getitem_optimization:
         dsk_out = {
             out_name: (Task(out_name, getitem, TaskRef(in_name), slices))
             for out_name, in_name, slices in zip(out_names, in_names, all_slices)
         }
     else:
-        all_slices = list(all_slices)
         empty_slice = slice(None, None, None)
-        not_all_empty_slices = list(
-            not all(sl == empty_slice for sl in slices) for slices in all_slices
+
+        all_empty_slices = map(
+            all,
+            product(
+                *(
+                    (sp == empty_slice for sp in pluck(1, s))
+                    for s in sorted_block_slices
+                )
+            ),
         )
         dsk_out = {
             out_name: (
                 Task(out_name, getitem, TaskRef(in_name), slices)
-                if all_empty_slices
+                if not all_empty
                 else Alias(out_name, in_name)
             )
-            for out_name, in_name, all_empty_slices, slices in zip(
-                out_names, in_names, not_all_empty_slices, all_slices
+            for out_name, in_name, all_empty, slices in zip(
+                out_names, in_names, all_empty_slices, all_slices
             )
         }
 
