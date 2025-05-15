@@ -818,7 +818,7 @@ def map_blocks(
         )
         name = token
 
-    token = f"{name or funcname(func)}"
+    name = f"{name or funcname(func)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -892,7 +892,7 @@ def map_blocks(
             *concat(argpairs),
             expected_ndim=len(out_ind),
             _func=func,
-            token=token,
+            name=name,
             new_axes=new_axes,
             dtype=dtype,
             concatenate=True,
@@ -906,7 +906,7 @@ def map_blocks(
             func,
             out_ind,
             *concat(argpairs),
-            token=token,
+            name=name,
             new_axes=new_axes,
             dtype=dtype,
             concatenate=True,
