@@ -259,6 +259,13 @@ def test_slice_array_2d():
     assert expected == result
 
 
+def test_mixed_index():
+    da_array = da.ones((1, 1, 31, 40))
+    new = da_array[(np.array([0]), 0, slice(None), slice(None))]
+    assert isinstance(new, da.Array)
+    assert_eq(new, da_array[0])
+
+
 def test_slice_optimizations():
     # bar[:]
     with pytest.raises(SlicingNoop):
@@ -327,8 +334,9 @@ def test_take_sorted():
     chunks, dsk = take("y-y", "x", [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
     assert len(dsk) == 6
     assert chunks == ((4,),)
-    with pytest.raises(SlicingNoop):
-        take("y", "x", [(20, 20, 20, 20)], np.arange(0, 80), axis=0)
+    chunks, dsk = take("y", "x", [(20, 20, 20, 20)], np.arange(0, 80), axis=0)
+    assert len(dsk) == 4
+    assert chunks == ((20, 20, 20, 20),)
 
 
 def test_slicing_chunks():

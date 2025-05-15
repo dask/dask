@@ -154,3 +154,13 @@ def test_shared_tasks(wrap_xarray):
     else:
         assert isinstance(comp_res[0], np.ndarray)
     assert total_calls == in1.blocks.size
+
+
+def test_slicing():
+    ds = xr.Dataset(
+        {"z": (("t", "p", "y", "x"), np.ones((1, 1, 31, 40)))},
+    )
+    ds = ds.chunk()
+    subset = ds.isel(t=[0], p=0).z[:, ::10, ::10][:, ::-1, :]
+    subset2 = ds.isel(t=[0]).isel(p=0).z[:, ::10, ::10][:, ::-1, :]
+    assert_eq(subset.data, subset2.data)
