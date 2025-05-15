@@ -334,8 +334,9 @@ def test_take_sorted():
     chunks, dsk = take("y-y", "x", [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
     assert len(dsk) == 6
     assert chunks == ((4,),)
-    with pytest.raises(SlicingNoop):
-        take("y", "x", [(20, 20, 20, 20)], np.arange(0, 80), axis=0)
+    chunks, dsk = take("y", "x", [(20, 20, 20, 20)], np.arange(0, 80), axis=0)
+    assert len(dsk) == 4
+    assert chunks == ((20, 20, 20, 20),)
 
 
 def test_slicing_chunks():
