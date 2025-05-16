@@ -809,16 +809,9 @@ def map_blocks(
             "   or:   da.map_blocks(function, x, y, z)"
         )
         raise TypeError(msg % type(func).__name__)
-    if token:
-        warnings.warn(
-            "The `token=` keyword to `map_blocks` has been moved to `name=`. "
-            "Please use `name=` instead as the `token=` keyword will be removed "
-            "in a future release.",
-            category=FutureWarning,
-        )
-        name = token
 
-    name = f"{name or funcname(func)}"
+    name = name
+    token = f"{token or funcname(func)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -893,6 +886,7 @@ def map_blocks(
             expected_ndim=len(out_ind),
             _func=func,
             name=name,
+            token=token,
             new_axes=new_axes,
             dtype=dtype,
             concatenate=True,
@@ -907,6 +901,7 @@ def map_blocks(
             out_ind,
             *concat(argpairs),
             name=name,
+            token=token,
             new_axes=new_axes,
             dtype=dtype,
             concatenate=True,
@@ -1215,7 +1210,7 @@ def store(
                 lock=lock,
                 return_stored=return_stored,
                 load_stored=load_stored,
-                name="store-map",
+                token="store-map",
                 meta=s._meta,
             )
         )

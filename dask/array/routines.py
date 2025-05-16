@@ -526,7 +526,7 @@ def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs)
     # Adds other axes as needed.
     result = arr.map_blocks(
         _inner_apply_along_axis,
-        name=funcname(func1d) + "-along-axis",
+        token=funcname(func1d) + "-along-axis",
         dtype=dtype,
         chunks=(arr.chunks[:axis] + shape + arr.chunks[axis + 1 :]),
         drop_axis=axis,
@@ -2212,7 +2212,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
         x,
         *condlist,
         dtype=x.dtype,
-        name="piecewise",
+        token="piecewise",
         funclist=funclist,
         func_args=args,
         func_kw=kw,

@@ -1559,10 +1559,10 @@ def test_map_blocks():
     assert d.chunks == e.chunks
     assert_eq(e, x + 1)
 
-    e = d.map_blocks(inc, name="increment")
+    e = d.map_blocks(inc, token="increment")
     assert e.name.startswith("increment-")
 
-    assert d.map_blocks(inc, name="foo").name != d.map_blocks(dec, name="foo").name
+    assert d.map_blocks(inc, token="foo").name != d.map_blocks(dec, token="foo").name
 
     d = from_array(x, chunks=(10, 10))
     e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5), dtype=d.dtype)
@@ -3944,12 +3944,6 @@ def test_elemwise_name():
 
 def test_map_blocks_name():
     assert da.ones(5, chunks=2).map_blocks(inc).name.startswith("inc-")
-
-
-def test_map_blocks_token_deprecated():
-    with pytest.warns(FutureWarning, match="use `name=` instead"):
-        x = da.ones(5, chunks=2).map_blocks(inc, token="foo")
-    assert x.name.startswith("foo-")
 
 
 def test_from_array_names():
