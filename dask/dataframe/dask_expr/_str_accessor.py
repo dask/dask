@@ -183,10 +183,24 @@ class SplitMap(FunctionMap):
     def _meta(self):
         delimiter = " " if self.pat is None else self.pat
         meta = meta_nonempty(self.frame._meta)
+        sample_dtype = self.frame._meta.dtypes
         meta = self.frame._meta._constructor(
             [delimiter.join(["a"] * (self.n + 1))],
             index=meta.iloc[:1].index,
+            dtype=sample_dtype if not self.expand else None,
         )
-        return make_meta(
-            getattr(meta.str, self.attr)(n=self.n, expand=self.expand, pat=self.pat)
-        )
+        meta = getattr(meta.str, self.attr)(n=self.n, expand=self.expand, pat=self.pat)
+        
+        if self.expand:
+            for col in meta.columns:
+                meta[col] = meta[col].astype(sample_dtype)
+                
+        return make_meta(meta)
+        
+    
+    
+    
+    
+    
+    
+    
