@@ -190,17 +190,9 @@ class SplitMap(FunctionMap):
             dtype=sample_dtype if not self.expand else None,
         )
         meta = getattr(meta.str, self.attr)(n=self.n, expand=self.expand, pat=self.pat)
-        
+
         if self.expand:
             for col in meta.columns:
                 meta[col] = meta[col].astype(sample_dtype)
-                
+
         return make_meta(meta)
-        
-    
-    
-    
-    
-    
-    
-    

@@ -157,5 +157,3 @@ def test_partition():
     result = df[1]
     expected = pd.DataFrame.from_dict({"A": ["A|B", "C|D"]})["A"].str.partition("|")[1]
     assert_eq(result, expected)
-    
-
