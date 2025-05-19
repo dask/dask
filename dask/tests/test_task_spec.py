@@ -499,6 +499,32 @@ def test_parse_graph_namedtuple_legacy(typ, args, kwargs):
     assert new_dsk["foo"]() == typ(*args, **kwargs)
 
 
+@pytest.mark.parametrize(
+    "typ, args, kwargs",
+    [
+        (PlainNamedTuple, ["some-data"], {}),
+        (NewArgsNamedTuple, ["some", "data", "more"], {}),
+        (NewArgsExNamedTuple, ["some", "data", "more"], {"another": "data"}),
+    ],
+)
+def test_parse_namedtuple(typ, args, kwargs):
+    def func(x):
+        return x
+
+    obj = typ(*args, **kwargs)
+    t = Task("foo", func, parse_input(obj))
+
+    assert t() == obj
+
+    # The other test tuple do weird things to their input
+    if typ is PlainNamedTuple:
+        args = tuple([TaskRef("b")] + list(args)[1:])
+        obj = typ(*args, **kwargs)
+        t = Task("foo", func, parse_input(obj))
+        assert t.dependencies == {"b"}
+        assert t({"b": "foo"}) == typ(*tuple(["foo"] + list(args)[1:]), **kwargs)
+
+
 def test_pickle_literals():
     np = pytest.importorskip("numpy")
     obj = DataNode("foo", np.transpose)
