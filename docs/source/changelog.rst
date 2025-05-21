@@ -6,6 +6,24 @@ Changelog
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
 
+.. _v2025.5.1:
+
+2025.5.1
+--------
+
+Highlights
+^^^^^^^^^^
+Fixed Dask Array slicing regression introduced in the 2025.5.0 release.
+See :pr:`11947` from `Florian Jetter`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Speed up slicing graph generation (:pr:`11945`) `Florian Jetter`_
+  - Revert "Don't handle tuple in ``task_spec.parse_input``" (:pr:`11953`) `Florian Jetter`_
+  - Optimize slicing graph generation (:pr:`11946`) `Florian Jetter`_
+  - Fix ``xarray`` slicing regression (:pr:`11947`) `Florian Jetter`_
+  - Don't handle tuple in ``task_spec.parse_input`` (:pr:`11948`) `Florian Jetter`_
+
 .. _v2025.5.0:
 
 2025.5.0
