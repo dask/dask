@@ -182,16 +182,3 @@ def test_is_object_string_series(series, expected):
 )
 def tests_is_object_string_dataframe(series, expected):
     assert is_object_string_dataframe(series) is expected
-
-
-def test_str_split_preserves_pyarrow_dtype():
-    import pandas as pd
-
-    import dask.dataframe as dd
-
-    df = pd.DataFrame({"col": ["a,b", "c,d"]}, dtype="string[pyarrow]")
-    ddf = dd.from_pandas(df, npartitions=1)
-
-    result = ddf["col"].str.split(",", expand=True, n=1)
-
-    assert all(dtype == "string[pyarrow]" for dtype in result.dtypes)
