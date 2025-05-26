@@ -20,7 +20,7 @@ from dask._expr import Expr as BaseExpr
 from dask._expr import FinalizeCompute
 from dask._task_spec import Alias, DataNode, Task, TaskRef, execute_graph
 from dask.array import Array
-from dask.base import collections_to_expr
+from dask.base import collections_to_expr, tokenize
 from dask.core import flatten
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -1005,7 +1005,7 @@ class CreateOverlappingPartitions(Expr):
     def _layer(self) -> dict:
         dsk, prevs, nexts = {}, [], []  # type: ignore
 
-        name_prepend = "overlap-prepend" + self.frame._name + f"{self.before}_{self.after}"
+        name_prepend = "overlap-prepend" + self.frame._name + tokenize(self.before, self.after)
         if self.before:
             prevs.append(None)
             if isinstance(self.before, numbers.Integral):
