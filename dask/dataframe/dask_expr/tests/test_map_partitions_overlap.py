@@ -5,6 +5,7 @@ import datetime
 import numpy as np
 import pytest
 
+import dask
 from dask.dataframe.dask_expr import from_pandas, map_overlap, map_partitions
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
 
@@ -349,3 +350,38 @@ def test_token_given(df, pdf):
     result = df.map_partitions(my_func)
     assert result._name.split("-")[0] == "my_func"
     assert_eq(result, pdf + 1)
+
+
+@pytest.mark.parametrize(
+    "overlap_setup",
+    [
+        (2, 0),
+        (0, 2),
+    ],
+)
+def test_map_overlap_independent_operations_on_same_input(df, pdf, overlap_setup):
+    def count(part):
+        return_value = part.copy()
+        return_value['count'] = len(return_value)
+        return return_value
+
+    before, after = overlap_setup
+    
+    df_2 = map_overlap(count, df, before, after)
+    df_4 = map_overlap(count, df, before * 2, after * 2)
+    
+    pdf_2, pdf_4 = dask.compute(df_2, df_4)
+
+    partition_size = len(pdf) // df.npartitions
+    
+    overlap = max(before, after)
+    no_overlap_length = (partition_size, partition_size)
+    overlap_length = (partition_size + overlap, partition_size + overlap * 2)
+    
+    for idx, (division, next_division) in enumerate(zip(df.divisions, df.divisions[1:])):
+        if before != 0:
+            expected_counts = overlap_length if idx > 0 else no_overlap_length
+        else:
+            expected_counts = overlap_length if idx < (partition_size - 1) else no_overlap_length
+        assert (pdf_2[division:next_division]['count'] == expected_counts[0]).all()
+        assert (pdf_4[division:next_division]['count'] == expected_counts[1]).all()
