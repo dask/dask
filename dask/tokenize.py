@@ -233,16 +233,26 @@ def _normalize_pure_object(o: object) -> tuple[str, int]:
 def _normalize_pickle(o: object) -> tuple:
     buffers: list[pickle.PickleBuffer] = []
     pik: int | None = None
-    pik2: int
+    pik2: int | None = None
     for _ in range(3):
         buffers.clear()
         try:
-            out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
-            cloudpickle.loads(out, buffers=buffers)
+            out = pickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+            if b"__main__" in out:
+                # Use `cloudpickle` for objects defined in `__main__`
+                buffers.clear()
+                out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+            pickle.loads(out, buffers=buffers)
             pik2 = hash_buffer_hex(out)
         except Exception:
-            break
-        if pik == pik2:
+            buffers.clear()
+            try:
+                out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+                pickle.loads(out, buffers=buffers)
+                pik2 = hash_buffer_hex(out)
+            except Exception:
+                break
+        if pik and pik2 and pik == pik2:
             break
         pik = pik2
     else:
