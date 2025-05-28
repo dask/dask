@@ -234,25 +234,19 @@ def _normalize_pickle(o: object) -> tuple:
     buffers: list[pickle.PickleBuffer] = []
     pik: int | None = None
     pik2: int
-    success = False
-    for mod in [pickle, cloudpickle]:
-        if success:
+    for _ in range(3):
+        buffers.clear()
+        try:
+            out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+            cloudpickle.loads(out, buffers=buffers)
+            pik2 = hash_buffer_hex(out)
+        except Exception:
             break
-        for _ in range(3):
-            buffers.clear()
-            try:
-                out = mod.dumps(o, protocol=5, buffer_callback=buffers.append)
-                mod.loads(out, buffers=buffers)
-                pik2 = hash_buffer_hex(out)
-            except Exception:
-                break
-            if pik == pik2:
-                success = True
-                break
-            pik = pik2
-        else:
-            _maybe_raise_nondeterministic("Failed to tokenize deterministically")
+        if pik == pik2:
             break
+        pik = pik2
+    else:
+        _maybe_raise_nondeterministic("Failed to tokenize deterministically")
     if pik is None:
         _maybe_raise_nondeterministic("Failed to tokenize deterministically")
         pik = int(uuid.uuid4())
