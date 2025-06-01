@@ -1,3 +1,7 @@
+# Dask Array initialization module.
+# Módulo de inicialización de Dask Array.
+# Exports the main public API for dask.array.
+# Exporta la API pública principal de dask.array.
 from __future__ import annotations
 
 import importlib
@@ -8,6 +12,8 @@ ARRAY_EXPR_ENABLED: bool | None = None
 
 
 def _array_expr_enabled() -> bool:
+    # Checks if the array expression optimization is enabled.
+    # Verifica si la optimización de expresiones de array está habilitada.
     import dask
 
     global ARRAY_EXPR_ENABLED
@@ -915,6 +921,8 @@ if _array_expr_enabled():
 
         from dask.array.utils import assert_eq
         from dask.base import compute
+        from .kron import kron
+
 
     except ImportError:
         import dask.array as da  # type: ignore
