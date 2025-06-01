@@ -1,8 +1,12 @@
 # dask/array/kron.py
 
+from __future__ import annotations
+
 import numpy as np
+
 import dask.array as da
 from dask.array.blockwise import blockwise
+
 
 def kron(x, y):
     """
@@ -45,12 +49,14 @@ def kron(x, y):
     # np.kron(x_block, y_block) with shape ((i1-i0)*(k1-k0), (j1-j0)*(l1-l0))
     # np.kron(x_block, y_block) de forma ((i1-i0)*(k1-k0), (j1-j0)*(l1-l0))
     return blockwise(
-        np.kron,                # function to apply per block / función por bloque
-        "ab",                   # output axes / ejes de salida
-        x, "ij",                # x has axes i,j / x tiene ejes i,j
-        y, "kl",                # y has axes k,l / y tiene ejes k,l
+        np.kron,  # function to apply per block / función por bloque
+        "ab",  # output axes / ejes de salida
+        x,
+        "ij",  # x has axes i,j / x tiene ejes i,j
+        y,
+        "kl",  # y has axes k,l / y tiene ejes k,l
         dtype=dtype,
-        concatenate=True,       # concatenate resulting blocks / concatena bloques
+        concatenate=True,  # concatenate resulting blocks / concatena bloques
         new_axes={
             "a": x.shape[0] * y.shape[0],  # total size of axis a / tamaño total eje a
             "b": x.shape[1] * y.shape[1],  # total size of axis b / tamaño total eje b
