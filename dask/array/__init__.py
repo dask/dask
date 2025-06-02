@@ -919,9 +919,9 @@ if _array_expr_enabled():
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")
 
+        from dask.array.kron import kron
         from dask.array.utils import assert_eq
         from dask.base import compute
-        from dask.array.kron import kron
 
 
     except ImportError:

@@ -1,8 +1,12 @@
 # dask/array/kron.py
 
+from __future__ import annotations
+
 import numpy as np
+
 import dask.array as da
 from dask.array.blockwise import blockwise
+
 
 def kron(x, y):
     """

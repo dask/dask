@@ -1,9 +1,13 @@
 #test_kron.py
+from __future__ import annotations
+
 import numpy as np
-import dask.array as da
 import pytest
+
+import dask.array as da
 from dask.array.kron import kron
 from dask.array.utils import assert_eq
+
 
 def test_kron_1d():
     """
