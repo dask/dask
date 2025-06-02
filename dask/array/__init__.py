@@ -921,7 +921,7 @@ if _array_expr_enabled():
 
         from dask.array.utils import assert_eq
         from dask.base import compute
-        from .kron import kron
+        from dask.array.kron import kron
 
 
     except ImportError:
