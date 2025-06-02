@@ -3895,7 +3895,7 @@ class DataFrame(FrameBase):
 
     """
     Note:
-        This method uses approximate algorithms (e.g., for percentiles) 
+        This method uses approximate algorithms (e.g., for percentiles)
         to enable scalable distributed computation.
         Results may differ slightly from those obtained using pandas.describe().
     """
@@ -4556,7 +4556,7 @@ class Series(FrameBase):
 
     """
     Note:
-        This method uses approximate algorithms (e.g., for percentiles) 
+        This method uses approximate algorithms (e.g., for percentiles)
         to enable scalable distributed computation.
         Results may differ slightly from those obtained using pandas.describe().
     """
