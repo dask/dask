@@ -3893,6 +3893,12 @@ class DataFrame(FrameBase):
             axis=axis, method=method, numeric_only=numeric_only
         ).rename(None)
 
+    """
+    Note:
+        This method uses approximate algorithms (e.g., for percentiles) 
+        to enable scalable distributed computation.
+        Results may differ slightly from those obtained using pandas.describe().
+    """
     @derived_from(pd.DataFrame)
     def describe(
         self,
@@ -4548,6 +4554,12 @@ class Series(FrameBase):
             raise TypeError("lag must be an integer")
         return self.corr(self if lag == 0 else self.shift(lag), split_every=split_every)
 
+    """
+    Note:
+        This method uses approximate algorithms (e.g., for percentiles) 
+        to enable scalable distributed computation.
+        Results may differ slightly from those obtained using pandas.describe().
+    """
     @derived_from(pd.Series)
     def describe(
         self,
