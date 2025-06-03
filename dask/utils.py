@@ -747,7 +747,10 @@ class Dispatch:
             return lk[cls]
         for cls2 in cls.__mro__:
             # Is a lazy registration function present?
-            toplevel, _, _ = cls2.__module__.partition(".")
+            try:
+                toplevel, _, _ = cls2.__module__.partition(".")
+            except Exception:
+                continue
             try:
                 register = self._lazy[toplevel]
             except KeyError:
