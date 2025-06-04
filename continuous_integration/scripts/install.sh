@@ -19,12 +19,12 @@ if [[ ${UPSTREAM_DEV} ]]; then
     python -m pip install \
         --upgrade \
         locket \
-        git+https://github.com/dask/s3fs \
-        git+https://github.com/intake/filesystem_spec \
+        git+https://github.com/fsspec/s3fs \
         git+https://github.com/dask/partd \
         git+https://github.com/dask/zict \
         git+https://github.com/dask/distributed \
         git+https://github.com/zarr-developers/zarr-python
+    python -m pip install --upgrade git+https://github.com/fsspec/filesystem_spec
     # TODO: Add nightly `h5py` back once https://github.com/h5py/h5py/issues/2563 is resolved
     # mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image h5py numbagg
     mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image numbagg
