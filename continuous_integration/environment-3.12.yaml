@@ -76,6 +76,4 @@ dependencies:
   - matplotlib  # visualize test
   - pip
   - pip:
-    # TODO: Revert before merging
-    - git+https://github.com/jrbourbeau/distributed.git@_always_use_pickle_for
-    # - git+https://github.com/dask/distributed
+    - git+https://github.com/dask/distributed
