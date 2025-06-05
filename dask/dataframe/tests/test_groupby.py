@@ -3172,14 +3172,20 @@ def test_groupby_numeric_only_true(func):
 
 @pytest.mark.parametrize("func", ["cov", "corr"])
 def test_groupby_numeric_only_false_cov_corr(func):
+
     df = pd.DataFrame(
         {
             "float": [1.0, 2.0, 3.0, 4.0, 5, 6.0, 7.0, 8.0],
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
-            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, 8]),
             "A": 1,
         }
     )
+
+    if not PANDAS_GE_300:
+        # pandas 3.x doesn't support cov of datetime
+        # https://github.com/pandas-dev/pandas/pull/60898
+        df["timedelta"] = pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, 8])
+
     ddf = dd.from_pandas(df, npartitions=2)
     dd_result = getattr(ddf.groupby("A"), func)(numeric_only=False)
     pd_result = getattr(df.groupby("A"), func)(numeric_only=False)
