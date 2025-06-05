@@ -1205,6 +1205,18 @@ def test_tokenize_functions_main():
         return y + 1
 
     assert tokenize(inc2) != tokenize(inc)
+
+    # Test that redefining a function changes the token
+    def func(x):
+        return x + 1
+
+    result = tokenize(func)
+
+    def func(x):
+        return x + 2
+
+    result2 = tokenize(func)
+    assert result != result2
     """
     proc = subprocess.run([sys.executable, "-c", textwrap.dedent(script)])
     proc.check_returncode()
