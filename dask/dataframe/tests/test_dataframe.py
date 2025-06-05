@@ -3193,7 +3193,6 @@ def test_cov_corr_stable():
 def test_cov_corr_mixed(numeric_only):
     size = 1000
     d = {
-        "dates": pd.date_range("2015-01-01", periods=size, freq="1min"),
         "unique_id": np.arange(0, size),
         "ints": np.random.randint(0, size, size=size),
         "floats": np.random.randn(size),
@@ -3205,6 +3204,11 @@ def test_cov_corr_mixed(numeric_only):
         "categorical_binary": np.random.choice(["a", "b"], size=size),
         "categorical_nans": np.random.choice(["a", "b", "c"], size=size),
     }
+
+    if not PANDAS_GE_300:
+        # pandas 3.x doesn't support cov of datetime
+        d["dates"] = pd.date_range("2015-01-01", periods=size, freq="1min")
+
     df = pd.DataFrame(d)
     df["hardbools"] = df["bools"] == 1
     df["categorical_nans"] = df["categorical_nans"].replace("c", np.nan)
