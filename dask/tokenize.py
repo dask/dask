@@ -233,26 +233,30 @@ def _normalize_pure_object(o: object) -> tuple[str, int]:
 def _normalize_pickle(o: object) -> tuple:
     buffers: list[pickle.PickleBuffer] = []
     pik: int | None = None
-    pik2: int
-    success = False
-    for mod in [pickle, cloudpickle]:
-        if success:
-            break
-        for _ in range(3):
+    pik2: int | None = None
+    for _ in range(3):
+        buffers.clear()
+        try:
+            out = pickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+            if b"__main__" in out:
+                # Use `cloudpickle` for objects defined in `__main__`
+                buffers.clear()
+                out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+            pickle.loads(out, buffers=buffers)
+            pik2 = hash_buffer_hex(out)
+        except Exception:
             buffers.clear()
             try:
-                out = mod.dumps(o, protocol=5, buffer_callback=buffers.append)
-                mod.loads(out, buffers=buffers)
+                out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+                pickle.loads(out, buffers=buffers)
                 pik2 = hash_buffer_hex(out)
             except Exception:
                 break
-            if pik == pik2:
-                success = True
-                break
-            pik = pik2
-        else:
-            _maybe_raise_nondeterministic("Failed to tokenize deterministically")
+        if pik and pik2 and pik == pik2:
             break
+        pik = pik2
+    else:
+        _maybe_raise_nondeterministic("Failed to tokenize deterministically")
     if pik is None:
         _maybe_raise_nondeterministic("Failed to tokenize deterministically")
         pik = int(uuid.uuid4())
