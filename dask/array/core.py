@@ -4885,7 +4885,16 @@ def broadcast_shapes(*shapes):
     return tuple(reversed(out))
 
 
-def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
+def elemwise(
+    op,
+    *args,
+    out=None,
+    where=True,
+    dtype=None,
+    dtype_infer_op=None,
+    name=None,
+    **kwargs,
+):
     """Apply an elementwise ufunc-like function blockwise across arguments.
 
     Like numpy ufuncs, broadcasting rules are respected.
@@ -4910,6 +4919,8 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         for more information.
     dtype : dtype, optional
         If provided, overrides the output array dtype.
+    dtype_infer_op: callable, optional
+        If provided, it's used to infer the output array dtype instead of op function unless explicit dtype is provided.
     name : str, optional
         A unique key name to use when building the backing dask graph. If not
         provided, one will be automatically generated based on the input
@@ -4973,7 +4984,11 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
             for a in args
         ]
         try:
-            dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
+            if dtype_infer_op is None:
+                dtype_infer_op = op
+            dtype = apply_infer_dtype(
+                dtype_infer_op, vals, {}, "elemwise", suggest_dtype=False
+            )
         except Exception:
             return NotImplemented
         need_enforce_dtype = any(
