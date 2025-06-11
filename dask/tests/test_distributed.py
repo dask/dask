@@ -289,7 +289,6 @@ def test_to_hdf_distributed(c):
         ),
     ],
 )
-@pytest.mark.xfail_with_pyarrow_strings
 def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
