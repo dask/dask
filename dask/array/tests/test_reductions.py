@@ -966,6 +966,24 @@ def test_quantile(rechunk, q, axis):
     )
 
 
+@pytest.mark.parametrize("func", [da.quantile, da.nanquantile, da.nanpercentile])
+def test_quantile_func_family_with_axis_none(func):
+
+    # Check that these functions raise a NotImplementedError
+    # when axis=None and more than one chunk is present
+    # along at least one dimension
+    darr = da.ones((3, 3), chunks=(2, 2))
+    with pytest.raises(
+        NotImplementedError, match="The full algorithm is difficult to do in parallel"
+    ):
+        func(darr, 0.5, axis=None)
+
+    # Check that the functions behave as expected
+    # when axis=None and the array is a single chunk
+    darr = da.from_array([-1, 0, 1])
+    assert_eq(func(darr, 0.0, axis=None), -1.0)
+
+
 def test_nanquantile_all_nan():
     shape = 10, 15, 20, 15
     arr = np.random.randn(*shape)

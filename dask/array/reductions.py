@@ -1564,7 +1564,7 @@ def quantile(
     and then calling ``numpy.quantile`` function across the remaining dimensions
     """
     if axis is None:
-        if any(n_blocks > 1 for n_blocks in a.numblocks):
+        if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
             raise NotImplementedError(
                 "The da.quantile function only works along an axis.  "
                 "The full algorithm is difficult to do in parallel"
@@ -1715,7 +1715,7 @@ def nanquantile(
     and then calling ``numpy.nanquantile`` function across the remaining dimensions
     """
     if axis is None:
-        if any(n_blocks > 1 for n_blocks in a.numblocks):
+        if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
             raise NotImplementedError(
                 "The da.nanquantile function only works along an axis.  "
                 "The full algorithm is difficult to do in parallel"
