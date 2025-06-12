@@ -966,6 +966,23 @@ def test_quantile(rechunk, q, axis):
     )
 
 
+@pytest.mark.parametrize(
+    "func",
+    [
+        da.quantile,
+        da.percentile,
+        da.nanquantile,
+        da.nanpercentile
+    ]
+    )
+def test_quantile_func_family_with_axis_none(func):
+    # Check that these functions raise a
+    # NotImplementedError when axis=None
+    darr = da.ones((3, 3), chunks=(2, 2))
+    with pytest.raises(NotImplementedError):
+        func(darr, 0.5, axis=None)
+
+
 def test_nanquantile_all_nan():
     shape = 10, 15, 20, 15
     arr = np.random.randn(*shape)
