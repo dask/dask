@@ -96,10 +96,11 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-try:
-    ARRAY_TEMPLATE = get_template("array.html.j2")
-except ImportError:
-    ARRAY_TEMPLATE = None
+
+@lru_cache(maxsize=1)
+def _array_template():
+    return get_template("array.html.j2")
+
 
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
@@ -1650,7 +1651,7 @@ class Array(DaskMethodsMixin):
             nbytes = "unknown"
             cbytes = "unknown"
 
-        return ARRAY_TEMPLATE.render(
+        return _array_template().render(
             array=self,
             grid=grid,
             nbytes=nbytes,
