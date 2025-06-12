@@ -967,14 +967,8 @@ def test_quantile(rechunk, q, axis):
 
 
 @pytest.mark.parametrize(
-    "func",
-    [
-        da.quantile,
-        da.percentile,
-        da.nanquantile,
-        da.nanpercentile
-    ]
-    )
+    "func", [da.quantile, da.percentile, da.nanquantile, da.nanpercentile]
+)
 def test_quantile_func_family_with_axis_none(func):
     # Check that these functions raise a
     # NotImplementedError when axis=None
