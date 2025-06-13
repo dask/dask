@@ -96,11 +96,10 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-
-@lru_cache(maxsize=1)
-def _array_template():
-    return get_template("array.html.j2")
-
+try:
+    ARRAY_TEMPLATE = get_template("array.html.j2")
+except ImportError:
+    ARRAY_TEMPLATE = None
 
 T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
@@ -1636,6 +1635,11 @@ class Array(DaskMethodsMixin):
         )
 
     def _repr_html_(self):
+        if ARRAY_TEMPLATE is None:
+            # if the jinja template is not available, (e.g. because jinja2 is not installed)
+            # fall back to the textual representation
+            return repr(self)
+
         try:
             grid = self.to_svg(size=config.get("array.svg.size", 120))
         except NotImplementedError:
@@ -1651,7 +1655,7 @@ class Array(DaskMethodsMixin):
             nbytes = "unknown"
             cbytes = "unknown"
 
-        return _array_template().render(
+        ARRAY_TEMPLATE.render(
             array=self,
             grid=grid,
             nbytes=nbytes,
