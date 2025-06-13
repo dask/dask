@@ -1655,7 +1655,7 @@ class Array(DaskMethodsMixin):
             nbytes = "unknown"
             cbytes = "unknown"
 
-        ARRAY_TEMPLATE.render(
+        return ARRAY_TEMPLATE.render(
             array=self,
             grid=grid,
             nbytes=nbytes,
