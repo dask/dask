@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 import pytest
 
@@ -9,6 +11,13 @@ from dask.array.utils import assert_eq
 pytest.importorskip("scipy", minversion="1.11")
 
 from scipy.integrate import simpson as sp_simps
+
+if "even" not in inspect.signature(sp_simps).parameters:
+    pytest.skip(
+        "SciPy ≥1.14 removed `even=` from scipy.integrate.simpson; "
+        "skip tests that rely on it.",
+        allow_module_level=True,
+    )
 
 
 def _close(dask_val, true_val):

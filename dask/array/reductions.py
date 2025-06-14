@@ -221,24 +221,29 @@ def simpson(y, *, x=None, dx=1.0, axis=-1, even="avg"):
 
         if even == "avg":
             if uniform:
-                core1 = simpson(_slice(y, 0, n - 1), dx=dx, axis=axis)
-                tail1 = trapz(_slice(y, n - 2, n), dx=dx, axis=axis)
-                first = core1 + tail1
-
-                head2 = trapz(_slice(y, 0, 2), dx=dx, axis=axis)
-                core2 = simpson(_slice(y, 1, n), dx=dx, axis=axis)
-                last = head2 + core2
-
-                return 0.5 * (first + last)
+                core = simpson(_slice(y, 0, n - 3), dx=dx, axis=axis)
+                f0, f1, f2, f3 = _slice(y, n - 4, n)
+                tail = (3.0 * dx / 8.0) * (f0 + 3 * f1 + 3 * f2 + f3)
+                return core + tail
 
             left = simpson(_slice(y, 0, n - 1), x=_slice(x, 0, n - 1), dx=dx, axis=axis)
             right = simpson(_slice(y, 1, n), x=_slice(x, 1, n), dx=dx, axis=axis)
             return 0.5 * (left + right)
 
         if even == "first":
+            if uniform:
+                core = simpson(_slice(y, 0, n - 1), dx=dx, axis=axis)
+                tail = trapz(_slice(y, n - 2, n), dx=dx, axis=axis)
+                return core + tail
+
             core = simpson(_slice(y, 0, n - 1), x=_slice(x, 0, n - 1), dx=dx, axis=axis)
             tail = trapz(_slice(y, n - 2, n), x=_slice(x, n - 2, n), dx=dx, axis=axis)
             return core + tail
+
+        if uniform:
+            head = trapz(_slice(y, 0, 2), dx=dx, axis=axis)
+            core = simpson(_slice(y, 1, n), dx=dx, axis=axis)
+            return head + core
 
         head = trapz(_slice(y, 0, 2), x=_slice(x, 0, 2), dx=dx, axis=axis)
         core = simpson(_slice(y, 1, n), x=_slice(x, 1, n), dx=dx, axis=axis)
