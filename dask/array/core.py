@@ -1635,6 +1635,11 @@ class Array(DaskMethodsMixin):
         )
 
     def _repr_html_(self):
+        if ARRAY_TEMPLATE is None:
+            # if the jinja template is not available, (e.g. because jinja2 is not installed)
+            # fall back to the textual representation
+            return repr(self)
+
         try:
             grid = self.to_svg(size=config.get("array.svg.size", 120))
         except NotImplementedError:
