@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 import os
 from collections.abc import Hashable, Iterable, Mapping, Sequence
-from dataclasses import fields, is_dataclass, replace
 from itertools import product
 from math import prod
 from typing import Any
@@ -11,11 +10,9 @@ from typing import Any
 import tlz as toolz
 
 import dask
-from dask import base, utils
-from dask._task_spec import Dict, GraphNode, List, Task, TaskRef, parse_input
+from dask._task_spec import GraphNode, List, Task, TaskRef, parse_input
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, ishashable, keys_in_tasks, reverse_dict
-from dask.delayed import Delayed, finalize
 from dask.highlevelgraph import HighLevelGraph, Layer
 from dask.optimization import fuse
 from dask.typing import Key
@@ -274,10 +271,10 @@ def blockwise(
     ...         numblocks={'x': (2, 2)}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0, 0): <Task ('z', 0, 0) inc(Alias(('x', 0, 0)))>,
-    ('z', 0, 1): <Task ('z', 0, 1) inc(Alias(('x', 0, 1)))>,
-    ('z', 1, 0): <Task ('z', 1, 0) inc(Alias(('x', 1, 0)))>,
-    ('z', 1, 1): <Task ('z', 1, 1) inc(Alias(('x', 1, 1)))>}
+    {('z', 0, 0): <Task ('z', 0, 0) inc(TaskRef(('x', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) inc(TaskRef(('x', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) inc(TaskRef(('x', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) inc(TaskRef(('x', 1, 1)))>}
 
     Simple operation on two datasets x and y
 
@@ -292,10 +289,10 @@ def blockwise(
     ...         numblocks={'x': (2, 2), 'y': (2, 2)}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0, 0): <Task ('z', 0, 0) add(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
-    ('z', 0, 1): <Task ('z', 0, 1) add(Alias(('x', 0, 1)), Alias(('y', 0, 1)))>,
-    ('z', 1, 0): <Task ('z', 1, 0) add(Alias(('x', 1, 0)), Alias(('y', 1, 0)))>,
-    ('z', 1, 1): <Task ('z', 1, 1) add(Alias(('x', 1, 1)), Alias(('y', 1, 1)))>}
+    {('z', 0, 0): <Task ('z', 0, 0) add(TaskRef(('x', 0, 0)), TaskRef(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) add(TaskRef(('x', 0, 1)), TaskRef(('y', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) add(TaskRef(('x', 1, 0)), TaskRef(('y', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) add(TaskRef(('x', 1, 1)), TaskRef(('y', 1, 1)))>}
 
     Operation that flips one of the datasets
 
@@ -310,10 +307,10 @@ def blockwise(
     ...         numblocks={'x': (2, 2), 'y': (2, 2)}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0, 0): <Task ('z', 0, 0) addT(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
-    ('z', 0, 1): <Task ('z', 0, 1) addT(Alias(('x', 0, 1)), Alias(('y', 1, 0)))>,
-    ('z', 1, 0): <Task ('z', 1, 0) addT(Alias(('x', 1, 0)), Alias(('y', 0, 1)))>,
-    ('z', 1, 1): <Task ('z', 1, 1) addT(Alias(('x', 1, 1)), Alias(('y', 1, 1)))>}
+    {('z', 0, 0): <Task ('z', 0, 0) addT(TaskRef(('x', 0, 0)), TaskRef(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) addT(TaskRef(('x', 0, 1)), TaskRef(('y', 1, 0)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) addT(TaskRef(('x', 1, 0)), TaskRef(('y', 0, 1)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) addT(TaskRef(('x', 1, 1)), TaskRef(('y', 1, 1)))>}
 
     Dot product with contraction over ``j`` index.  Yields list arguments
 
@@ -329,24 +326,25 @@ def blockwise(
     ... )  # doctest: +SKIP
     {('z', 0,  0):
         <Task ('z', 0, 0) dotmany(
-        List((Alias(('x', 0, 0)), Alias(('x', 0, 1)))),
-        List((Alias(('y', 0, 0)), Alias(('y', 1, 0)))))
+            List((TaskRef(('x', 0, 0)), TaskRef(('x', 0, 1)))),
+            List((TaskRef(('y', 0, 0)), TaskRef(('y', 1, 0)))))
         >,
     ('z', 0,  1):
         <Task ('z', 0, 1) dotmany(
-        List((Alias(('x', 0, 0)), Alias(('x', 0, 1)))),
-        List((Alias(('y', 0, 1)), Alias(('y', 1, 1)))))
+            List((TaskRef(('x', 0, 0)), TaskRef(('x', 0, 1)))),
+            List((TaskRef(('y', 0, 1)), TaskRef(('y', 1, 1)))))
         >,
     ('z', 1,  0):
         <Task ('z', 1, 0) dotmany(
-        List((Alias(('x', 1, 0)), Alias(('x', 1, 1)))),
-        List((Alias(('y', 0, 0)), Alias(('y', 1, 0)))))
+            List((TaskRef(('x', 1, 0)), TaskRef(('x', 1, 1)))),
+            List((TaskRef(('y', 0, 0)), TaskRef(('y', 1, 0)))
+        )
         >,
-    ('z', 1,  1):
+    ('z', 1, 1):
         <Task ('z', 1, 1) dotmany(
-        List((Alias(('x', 1, 0)), Alias(('x', 1, 1)))),
-        List((Alias(('y', 0, 1)), Alias(('y', 1, 1)))))
-        >
+            List((TaskRef(('x', 1, 0)), TaskRef(('x', 1, 1)))),
+            List((TaskRef(('y', 0, 1)), TaskRef(('y', 1, 1)))
+        )
     }
 
     Pass ``concatenate=True`` to concatenate arrays ahead of time.
@@ -366,10 +364,10 @@ def blockwise(
     ...     )
     ... )  # doctest: +SKIP
     {
-    ('z', 0, 0): <Task ('z', 0, 0) add(Alias(('x', 0, 0)), Alias(('y', 0, 0)))>,
-    ('z', 0, 1): <Task ('z', 0, 1) add(Alias(('x', 0, 1)), Alias(('y', 0, 1)))>,
-    ('z', 1, 0): <Task ('z', 1, 0) add(Alias(('x', 0, 0)), Alias(('y', 1, 0)))>,
-    ('z', 1, 1): <Task ('z', 1, 1) add(Alias(('x', 0, 1)), Alias(('y', 1, 1)))>
+    ('z', 0, 0): <Task ('z', 0, 0) add(TaskRef(('x', 0, 0)), TaskRef(('y', 0, 0)))>,
+    ('z', 0, 1): <Task ('z', 0, 1) add(TaskRef(('x', 0, 1)), TaskRef(('y', 0, 1)))>,
+    ('z', 1, 0): <Task ('z', 1, 0) add(TaskRef(('x', 0, 0)), TaskRef(('y', 1, 0)))>,
+    ('z', 1, 1): <Task ('z', 1, 1) add(TaskRef(('x', 0, 1)), TaskRef(('y', 1, 1)))>
     }
 
     Include literals by indexing with ``None``
@@ -383,8 +381,8 @@ def blockwise(
     ...         numblocks={'x': (2, )}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0): <Task ('z', 0) add(Alias(('x', 0)), DataNode(100))>,
-    ('z', 1): <Task ('z', 1) add(Alias(('x', 1)), DataNode(100))>}
+    {('z', 0): <Task ('z', 0) add(TaskRef(('x', 0)), DataNode(100))>,
+    ('z', 1): <Task ('z', 1) add(TaskRef(('x', 1)), DataNode(100))>}
 
     If the broadcasted value is a delayed object or other dask collection, the
     key has to be wrapped appropriately as an Alias object.
@@ -401,8 +399,8 @@ def blockwise(
     ...         numblocks={'x': (2, )}
     ...     )
     ... )  # doctest: +NORMALIZE_WHITESPACE
-    {('z', 0): <Task ('z', 0) add(Alias(('x', 0)), Alias('dinc'))>,
-    ('z', 1): <Task ('z', 1) add(Alias(('x', 1)), Alias('dinc'))>}
+    {('z', 0): <Task ('z', 0) add(TaskRef(('x', 0)), Alias('dinc'))>,
+    ('z', 1): <Task ('z', 1) add(TaskRef(('x', 1)), Alias('dinc'))>}
 
     See Also
     --------
@@ -587,6 +585,10 @@ class Blockwise(Layer):
         self.new_axes = new_axes or {}
 
     @property
+    def has_legacy_tasks(self):
+        return False
+
+    @property
     def dims(self):
         """Returns a dictionary mapping between each index specified in
         `self.indices` and the number of output blocks for that indice.
@@ -652,7 +654,7 @@ class Blockwise(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
-    def _cull_dependencies(self, all_hlg_keys, output_blocks):
+    def _cull_dependencies(self, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
 
         This method does not require graph materialization.
@@ -674,15 +676,9 @@ class Blockwise(Layer):
 
         # Gather constant dependencies (for all output keys)
         const_deps = set()
-        for arg, ind in self.indices:
+        for arg, _ in self.indices:
             if isinstance(arg, TaskRef):
-                arg = arg.key
-            if ind is None:
-                try:
-                    if arg in all_hlg_keys:
-                        const_deps.add(arg)
-                except TypeError:
-                    pass  # unhashable
+                const_deps.add(arg.key)
 
         # Get dependencies for each output block
         key_deps = {}
@@ -739,7 +735,7 @@ class Blockwise(Layer):
         for key in keys:
             if key[0] == self.output:
                 output_blocks.add(key[1:])
-        culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
+        culled_deps = self._cull_dependencies(output_blocks)
         out_size_iter = (self.dims[i] for i in self.output_indices)
         if prod(out_size_iter) != len(culled_deps):
             culled_layer = self._cull(output_blocks)
@@ -1574,97 +1570,3 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
             dependencies[name] = set()
 
     return HighLevelGraph(layers, dependencies)
-
-
-def _blockwise_unpack_collections_task_spec(expr):
-    # FIXME This is a copy of the delayed.unpack_collections function with the
-    # addition of the TaskSpec class. Eventually this should all be consolidated
-    # but to reduce the number of changes we'll vendor this here
-    # FIXME: There is also a dask.base version of unpack_collections that looks
-    # similar but is different. At the very least the names should be fixed
-    if isinstance(expr, Delayed):
-        return TaskRef(expr._key), (expr,)
-
-    if base.is_dask_collection(expr):
-        if hasattr(expr, "optimize"):
-            # Optimize dask-expr collections
-            expr = expr.optimize()
-
-        finalized = finalize(expr)
-        return TaskRef(finalized._key), (finalized,)
-
-    if type(expr) is type(iter(list())):
-        expr = list(expr)
-    elif type(expr) is type(iter(tuple())):
-        expr = tuple(expr)
-    elif type(expr) is type(iter(set())):
-        expr = set(expr)
-
-    typ = type(expr)
-
-    if typ in (list, tuple, set):
-        args, collections = utils.unzip(
-            (_blockwise_unpack_collections_task_spec(e) for e in expr), 2
-        )
-        collections = tuple(toolz.unique(toolz.concat(collections), key=id))
-        if not collections:
-            return expr, ()
-        args = List(*args)
-        # Ensure output type matches input type
-        if typ is not list:
-            args = Task(None, typ, args)
-        return args, collections
-
-    if typ is dict:
-        args, collections = _blockwise_unpack_collections_task_spec(
-            [[k, v] for k, v in expr.items()]
-        )
-        if not collections:
-            return expr, ()
-        return Dict(args), collections
-
-    if typ is slice:
-        args, collections = _blockwise_unpack_collections_task_spec(
-            [expr.start, expr.stop, expr.step]
-        )
-        if not collections:
-            return expr, ()
-        return Task(None, slice, *args), collections
-
-    if is_dataclass(expr):
-        args, collections = _blockwise_unpack_collections_task_spec(
-            [
-                [f.name, getattr(expr, f.name)]
-                for f in fields(expr)
-                if hasattr(expr, f.name)  # if init=False, field might not exist
-            ]
-        )
-        if not collections:
-            return expr, ()
-        try:
-            _fields = {
-                f.name: getattr(expr, f.name)
-                for f in fields(expr)
-                if hasattr(expr, f.name)
-            }
-            replace(expr, **_fields)
-        except (TypeError, ValueError) as e:
-            if isinstance(e, ValueError) or "is declared with init=False" in str(e):
-                raise ValueError(
-                    f"Failed to unpack {typ} instance. "
-                    "Note that using fields with `init=False` are not supported."
-                ) from e
-            else:
-                raise TypeError(
-                    f"Failed to unpack {typ} instance. "
-                    "Note that using a custom __init__ is not supported."
-                ) from e
-        return Task(None, typ, **dict(args)), collections
-
-    if utils.is_namedtuple_instance(expr):
-        args, collections = _blockwise_unpack_collections_task_spec([v for v in expr])
-        if not collections:
-            return expr, ()
-        return Task(None, typ, *args), collections
-
-    return expr, ()

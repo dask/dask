@@ -28,6 +28,7 @@ import dask.dataframe.methods as methods
 from dask import compute, get_annotations
 from dask._collections import new_collection
 from dask._expr import OptimizerStage
+from dask._task_spec import Dict, TaskRef
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
@@ -65,6 +66,7 @@ from dask.dataframe.dask_expr._expr import (
     ToDatetime,
     ToNumeric,
     ToTimedelta,
+    _DelayedExpr,
     no_default,
 )
 from dask.dataframe.dask_expr._merge import JoinRecursive, Merge
@@ -1409,7 +1411,7 @@ Expr={expr}"""
         A Dask Array
         """
         if lengths is True:
-            lengths = tuple(self.map_partitions(len, enforce_metadata=False).compute())
+            lengths = tuple(self.map_partitions(len).compute())
 
         arr = self.values
 
@@ -6179,6 +6181,18 @@ def map_partitions(
         # will need to call `Repartition` on operands that are not
         # aligned with `self.expr`.
         raise NotImplementedError()
+    args = [_DelayedExpr(a) if isinstance(a, Delayed) else a for a in args]
+    newkwargs = {}
+    delayed_kwargs = []
+    for k, v in kwargs.items():
+        if isinstance(v, Delayed):
+            dexpr = _DelayedExpr(v)
+            delayed_kwargs.append(dexpr)
+            newkwargs[k] = TaskRef(dexpr.__dask_keys__()[0])
+        else:
+            newkwargs[k] = v
+    del kwargs
+
     new_expr = expr.MapPartitions(
         args[0],
         func,
@@ -6189,9 +6203,11 @@ def map_partitions(
         align_dataframes,
         parent_meta,
         required_columns,
-        kwargs.pop("token", None),
-        kwargs,
+        newkwargs.pop("token", None),
+        Dict(newkwargs),
+        len(args) - 1,
         *args[1:],
+        *delayed_kwargs,
     )
     return new_collection(new_expr)
 

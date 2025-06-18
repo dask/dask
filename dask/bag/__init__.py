@@ -20,7 +20,10 @@ __all__ = [
 
 try:
     from dask.bag.avro import read_avro
-    from dask.bag.core import Bag, Item
+    from dask.bag.core import (
+        Bag,
+        Item,
+    )
     from dask.bag.core import bag_map as map
     from dask.bag.core import bag_range as range
     from dask.bag.core import bag_zip as zip

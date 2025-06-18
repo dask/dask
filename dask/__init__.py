@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dask import config, datasets
+from dask._expr import Expr, HLGExpr, LLGExpr, SingletonExpr
 from dask._version import get_versions
 from dask.base import (
     annotate,

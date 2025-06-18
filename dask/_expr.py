@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Literal
 import toolz
 
 import dask
-from dask._task_spec import Task
+from dask._task_spec import Task, convert_legacy_graph
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import ensure_dict, funcname, import_required
@@ -147,6 +147,19 @@ class Expr:
             self._determ_token = _tokenize_deterministic(type(self), *self.operands)
         return self._determ_token
 
+    def __dask_keys__(self):
+        """The keys for this expression
+
+        This is used to determine the keys of the output collection
+        when this expression is computed.
+
+        Returns
+        -------
+        keys: list
+            The keys for this expression
+        """
+        return [(self._name, i) for i in range(self.npartitions)]
+
     @staticmethod
     def _reconstruct(*args):
         typ, *operands, token, cache = args
@@ -224,7 +237,7 @@ class Expr:
         >>> class Add(Expr):
         ...     def _task(self, i):
         ...         return Task(
-        ...            name,
+        ...            self.__dask_keys__()[i],
         ...            operator.add,
         ...            TaskRef((self.left._name, i)),
         ...            TaskRef((self.right._name, i))
@@ -245,15 +258,23 @@ class Expr:
         )
 
     def _layer(self) -> dict:
-        """The graph layer added by this expression
+        """The graph layer added by this expression.
+
+        Simple expressions that apply one task per partition can choose to only
+        implement `Expr._task` instead.
 
         Examples
         --------
         >>> class Add(Expr):
         ...     def _layer(self):
         ...         return {
-        ...             (self._name, i): (operator.add, (self.left._name, i), (self.right._name, i))
-        ...             for i in range(self.npartitions)
+        ...            name: Task(
+        ...                name,
+        ...                operator.add,
+        ...                TaskRef((self.left._name, i)),
+        ...                TaskRef((self.right._name, i))
+        ...            )
+        ...            for i, name in enumerate(self.__dask_keys__())
         ...         }
 
         Returns
@@ -525,11 +546,25 @@ class Expr:
     def _meta(self):
         raise NotImplementedError()
 
+    @classmethod
+    def _annotations_tombstone(cls) -> _AnnotationsTombstone:
+        return _AnnotationsTombstone()
+
     def __dask_annotations__(self):
         return {}
 
     def __dask_graph__(self):
-        """Traverse expression tree, collect layers"""
+        """Traverse expression tree, collect layers
+
+        Subclasses generally do not want to override this method unless custom
+        logic is required to treat (e.g. ignore) specific operands during graph
+        generation.
+
+        See also
+        --------
+        Expr._layer
+        Expr._task
+        """
         stack = [self]
         seen = set()
         layers = []
@@ -1072,31 +1107,24 @@ class _HLGExprSequence(Expr):
         from dask.highlevelgraph import HighLevelGraph
 
         groups = toolz.groupby(
-            lambda x: (
-                x.low_level_optimizer if isinstance(x, HLGExpr) else None,
-                x.postcompute,
-            ),
+            lambda x: x.low_level_optimizer if isinstance(x, HLGExpr) else None,
             self.operands,
         )
         exprs = []
         changed = False
-        for (optimizer, postcompute), group in groups.items():
+        for optimizer, group in groups.items():
             if len(group) > 1:
-                changed = True
-                graphs = []
-                for expr in group:
-                    graphs.append(expr.hlg)
+                graphs = [expr.hlg for expr in group]
 
+                changed = True
                 dsk = HighLevelGraph.merge(*graphs)
-                keys = [v.__dask_keys__() for v in group]
-                exprs.append(
-                    _HLGExprGroup(
-                        dsk=dsk,
-                        low_level_optimizer=optimizer,
-                        output_keys=keys,
-                        postcompute=postcompute,
-                    )
+                hlg_group = _HLGExprGroup(
+                    dsk=dsk,
+                    low_level_optimizer=optimizer,
+                    output_keys=[v.__dask_keys__() for v in group],
+                    postcompute=[g.postcompute for g in group],
                 )
+                exprs.append(hlg_group)
             else:
                 exprs.append(group[0])
         if not changed:
@@ -1136,9 +1164,18 @@ class _HLGExprSequence(Expr):
             if layer.annotations:
                 annot = layer.annotations
                 for annot_type, value in annot.items():
-                    annotations_by_type[annot_type].update(
-                        {k: (value(k) if callable(value) else value) for k in layer}
+                    annots = list(
+                        (k, (value(k) if callable(value) else value)) for k in layer
                     )
+                    annotations_by_type[annot_type].update(
+                        {
+                            k: v
+                            for k, v in annots
+                            if not isinstance(v, _AnnotationsTombstone)
+                        }
+                    )
+                    if not annotations_by_type[annot_type]:
+                        del annotations_by_type[annot_type]
         return dict(annotations_by_type)
 
     def __dask_keys__(self) -> list:
@@ -1233,6 +1270,9 @@ class _ExprSequence(Expr):
         return _HLGExprSequence(*hlgs)
 
 
+class _AnnotationsTombstone: ...
+
+
 class FinalizeCompute(Expr):
     _parameters = ["expr"]
 
@@ -1268,7 +1308,7 @@ class HLGFinalizeCompute(HLGExpr):
 
     @property
     def _name(self):
-        return f"finalize-{self.deterministic_token}"
+        return f"finalize-{super()._name}"
 
     def __dask_graph__(self):
         # The baseclass __dask_graph__ will not just materialize this layer but
@@ -1286,16 +1326,93 @@ class HLGFinalizeCompute(HLGExpr):
         layers = expr.dsk.layers.copy()
         deps = expr.dsk.dependencies.copy()
         keys = expr.__dask_keys__()
-        func, extra_args = expr.postcompute
-        t = Task(self._name, func, _convert_dask_keys(keys), *extra_args)
+        if isinstance(expr.postcompute, list):
+            postcomputes = expr.postcompute
+        else:
+            postcomputes = [expr.postcompute]
+        tasks = [
+            Task(self._name, func, _convert_dask_keys(keys), *extra_args)
+            for func, extra_args in postcomputes
+        ]
         from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 
-        layers[t.key] = MaterializedLayer({t.key: t})
         leafs = set(deps)
         for val in deps.values():
             leafs -= val
-        deps[t.key] = leafs
+        for t in tasks:
+            layers[t.key] = MaterializedLayer({t.key: t})
+            deps[t.key] = leafs
         return HighLevelGraph(layers, dependencies=deps)
 
     def __dask_keys__(self):
         return [self._name]
+
+
+class ProhibitReuse(Expr):
+    """
+    An expression that guarantees that all keys are suffixes with a unique id.
+    This can be used to break a common subexpression apart.
+    """
+
+    _parameters = ["expr"]
+    _ALLOWED_TYPES = [HLGExpr, LLGExpr, HLGFinalizeCompute, _HLGExprSequence]
+
+    def __dask_keys__(self):
+        return self._modify_keys(self.expr.__dask_keys__())
+
+    @staticmethod
+    def _identity(obj):
+        return obj
+
+    @functools.cached_property
+    def _suffix(self):
+        return uuid.uuid4().hex
+
+    def _modify_keys(self, k):
+        if isinstance(k, list):
+            return [self._modify_keys(kk) for kk in k]
+        elif isinstance(k, tuple):
+            return (self._modify_keys(k[0]),) + k[1:]
+        elif isinstance(k, (int, float)):
+            k = str(k)
+        return f"{k}-{self._suffix}"
+
+    def _simplify_down(self):
+        # FIXME: Shuffling cannot be rewritten since the barrier key is
+        # hardcoded. Skipping this here should do the trick most of the time
+        if not isinstance(
+            self.expr,
+            tuple(self._ALLOWED_TYPES),
+        ):
+            return self.expr
+
+    def __dask_graph__(self):
+        try:
+            from distributed.shuffle._core import P2PBarrierTask
+        except ModuleNotFoundError:
+            P2PBarrierTask = type(None)
+        dsk = convert_legacy_graph(self.expr.__dask_graph__())
+
+        subs = {old_key: self._modify_keys(old_key) for old_key in dsk}
+        dsk2 = {}
+        for old_key, new_key in subs.items():
+            t = dsk[old_key]
+            if isinstance(t, P2PBarrierTask):
+                warnings.warn(
+                    "Cannot block reusing for graphs including a "
+                    "P2PBarrierTask. This may cause unexpected results. "
+                    "This typically happens when converting a dask "
+                    "DataFrame to delayed objects.",
+                    UserWarning,
+                )
+                return dsk
+            dsk2[new_key] = Task(
+                new_key,
+                ProhibitReuse._identity,
+                t.substitute(subs),
+            )
+
+        dsk2.update(dsk)
+        return dsk2
+
+    _layer = __dask_graph__

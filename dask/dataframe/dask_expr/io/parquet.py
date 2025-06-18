@@ -1408,6 +1408,41 @@ class ReadParquetFSSpec(ReadParquet):
         dataset_info["all_columns"] = all_columns
         dataset_info["calculate_divisions"] = self.calculate_divisions
 
+        dataset_token = tokenize(dataset_info)
+        if dataset_token not in _cached_plan:
+            parts, stats, common_kwargs = self.engine._construct_collection_plan(
+                dataset_info
+            )
+
+            # Make sure parts and stats are aligned
+            parts, stats = _align_statistics(parts, stats)
+
+            # Use statistics to aggregate partitions
+            parts, stats = _aggregate_row_groups(parts, stats, dataset_info)
+
+            # Drop filtered partitions (aligns with `dask.dataframe` behavior)
+            if self.filters and stats:
+                parts, stats = apply_filters(parts, stats, self.filters)
+
+            # Use statistics to calculate divisions
+            divisions = _calculate_divisions(stats, dataset_info, len(parts))
+
+            empty = False
+            if len(divisions) < 2:
+                # empty dataframe - just use meta
+                divisions = (None, None)
+                parts = [meta]
+                empty = True
+
+            _control_cached_plan(dataset_token)
+            _cached_plan[dataset_token] = {
+                "empty": empty,
+                "parts": parts,
+                "statistics": stats,
+                "divisions": divisions,
+                "common_kwargs": common_kwargs,
+            }
+        dataset_info["plan"] = _cached_plan[dataset_token]
         self._dataset_info_cache = dataset_info
         return dataset_info
 
@@ -1433,44 +1468,9 @@ class ReadParquetFSSpec(ReadParquet):
             self._plan["common_kwargs"],
         )
 
-    @cached_property
+    @property
     def _plan(self):
-        dataset_info = self._dataset_info
-        dataset_token = tokenize(dataset_info)
-        if dataset_token not in _cached_plan:
-            parts, stats, common_kwargs = self.engine._construct_collection_plan(
-                dataset_info
-            )
-
-            # Make sure parts and stats are aligned
-            parts, stats = _align_statistics(parts, stats)
-
-            # Use statistics to aggregate partitions
-            parts, stats = _aggregate_row_groups(parts, stats, dataset_info)
-
-            # Drop filtered partitions (aligns with `dask.dataframe` behavior)
-            if self.filters and stats:
-                parts, stats = apply_filters(parts, stats, self.filters)
-
-            # Use statistics to calculate divisions
-            divisions = _calculate_divisions(stats, dataset_info, len(parts))
-
-            empty = False
-            if len(divisions) < 2:
-                # empty dataframe - just use meta
-                divisions = (None, None)
-                parts = [self._meta]
-                empty = True
-
-            _control_cached_plan(dataset_token)
-            _cached_plan[dataset_token] = {
-                "empty": empty,
-                "parts": parts,
-                "statistics": stats,
-                "divisions": divisions,
-                "common_kwargs": common_kwargs,
-            }
-        return _cached_plan[dataset_token]
+        return self._dataset_info["plan"]
 
     def _get_lengths(self) -> tuple | None:
         """Return known partition lengths using parquet statistics"""
@@ -1735,7 +1735,7 @@ def _collect_pq_statistics(
         groups = defaultdict(list)
         for part in parts:
             for p in [part] if isinstance(part, dict) else part:
-                path = p.get("piece")[0]
+                path = p.get("piece")[0]  # type: ignore[index]
                 groups[path].append(p)
         group_keys = list(groups.keys())
 

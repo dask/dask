@@ -33,7 +33,7 @@ from dask.core import flatten
 xr = import_optional_dependency("xarray", errors="ignore")
 
 from dask import compute, config, core
-from dask._task_spec import List, Task, TaskRef
+from dask._task_spec import Alias, List, Task, TaskRef
 from dask.array import chunk
 from dask.array.chunk import getitem
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -45,7 +45,7 @@ from dask.array.dispatch import (  # noqa: F401
     tensordot_lookup,
 )
 from dask.array.numpy_compat import NUMPY_GE_200, _Recurser
-from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
+from dask.array.slicing import SlicingNoop, replace_ellipsis, setitem_array, slice_array
 from dask.array.utils import (
     asanyarray_safe,
     asarray_safe,
@@ -1635,6 +1635,11 @@ class Array(DaskMethodsMixin):
         )
 
     def _repr_html_(self):
+        if ARRAY_TEMPLATE is None:
+            # if the jinja template is not available, (e.g. because jinja2 is not installed)
+            # fall back to the textual representation
+            return repr(self)
+
         try:
             grid = self.to_svg(size=config.get("array.svg.size", 120))
         except NotImplementedError:
@@ -1934,7 +1939,14 @@ class Array(DaskMethodsMixin):
         if isinstance(key, Array):
             from dask.array.routines import where
 
-            if key.shape != self.shape:
+            left_shape = np.array(key.shape)
+            right_shape = np.array(self.shape)
+
+            # We want to treat unknown shape on *either* sides as a match
+            match = left_shape == right_shape
+            match |= np.isnan(left_shape) | np.isnan(right_shape)
+
+            if not match.all():
                 raise IndexError(
                     f"boolean index shape {key.shape} must match indexed array's "
                     f"{self.shape}."
@@ -2028,7 +2040,10 @@ class Array(DaskMethodsMixin):
             return self
 
         out = "getitem-" + tokenize(self, index2)
-        dsk, chunks = slice_array(out, self.name, self.chunks, index2, self.itemsize)
+        try:
+            dsk, chunks = slice_array(out, self.name, self.chunks, index2)
+        except SlicingNoop:
+            return self
 
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
 
@@ -3995,15 +4010,28 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     """
     from dask.delayed import Delayed, delayed
 
-    if not isinstance(value, Delayed) and hasattr(value, "key"):
-        value = delayed(value)
-
+    is_future = False
     name = name or "from-value-" + tokenize(value, shape, dtype, meta)
-    dsk = {(name,) + (0,) * len(shape): value.key}
+    if isinstance(value, TaskRef):
+        is_future = True
+    elif not isinstance(value, Delayed) and hasattr(value, "key"):
+        value = delayed(value)
+    task = Alias(
+        key=(name,) + (0,) * len(shape),
+        target=value.key,
+    )
+
+    dsk = {task.key: task}
+
+    if is_future:
+        dsk[value.key] = value
+        dependencies = []
+    else:
+        dependencies = [value]
     chunks = tuple((d,) for d in shape)
     # TODO: value._key may not be the name of the layer in value.dask
     # This should be fixed after we build full expression graphs
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 

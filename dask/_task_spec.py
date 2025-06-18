@@ -54,6 +54,7 @@ should contain the dependencies of the task.
     t({"a": 1, "b": 2}) == 3
 
 """
+import functools
 import itertools
 import sys
 from collections import defaultdict
@@ -66,8 +67,6 @@ from dask.typing import Key as KeyType
 from dask.utils import funcname, is_namedtuple_instance
 
 _T = TypeVar("_T")
-_T_GraphNode = TypeVar("_T_GraphNode", bound="GraphNode")
-_T_Iterable = TypeVar("_T_Iterable", bound=Iterable)
 
 
 # Ported from more-itertools
@@ -355,6 +354,20 @@ class TaskRef:
             return False
         return self.key == value.key
 
+    def __reduce__(self):
+        return TaskRef, (self.key,)
+
+    def substitute(self, subs: dict, key: KeyType | None = None) -> TaskRef | GraphNode:
+        if self.key in subs:
+            val = subs[self.key]
+            if isinstance(val, GraphNode):
+                return val.substitute({}, key=self.key)
+            elif isinstance(val, TaskRef):
+                return val
+            else:
+                return TaskRef(val)
+        return self
+
 
 class GraphNode:
     key: KeyType
@@ -523,7 +536,7 @@ class Alias(GraphNode):
             val = subs.get(self.target, self.target)
             if sub_key == self.key and val == self.target:
                 return self
-            if isinstance(val, GraphNode):
+            if isinstance(val, (GraphNode, TaskRef)):
                 return val.substitute({}, key=key)
             if key is None and isinstance(sub_key, GraphNode):
                 raise RuntimeError(
@@ -600,18 +613,10 @@ class DataNode(GraphNode):
         return iter(self.value)
 
 
-def _call_recursively(obj, values):
-    if isinstance(obj, GraphNode):
-        return obj(values)
-    elif isinstance(obj, dict):
-        return {k: _call_recursively(v, values) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple, frozenset, set)):
-        return type(obj)(_call_recursively(v, values) for v in obj)
-    return obj
-
-
 def _get_dependencies(obj: object) -> set | frozenset:
-    if isinstance(obj, GraphNode):
+    if isinstance(obj, TaskRef):
+        return {obj.key}
+    elif isinstance(obj, GraphNode):
         return obj.dependencies
     elif isinstance(obj, dict):
         if not obj:
@@ -642,23 +647,26 @@ class Task(GraphNode):
         /,
         *args: Any,
         _data_producer: bool = False,
-        _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
         self.key = key
         self.func = func
         if isinstance(func, Task):
             raise TypeError("Cannot nest tasks")
-        self.args = tuple(
-            Alias(obj.key) if isinstance(obj, TaskRef) else obj for obj in args
-        )
-        self.kwargs = {
-            k: Alias(v.key) if isinstance(v, TaskRef) else v for k, v in kwargs.items()
-        }
-        if _dependencies is None:
-            _dependencies = set()
-            for a in itertools.chain(self.args, self.kwargs.values()):
-                if isinstance(a, GraphNode):
+
+        self.args = args
+        self.kwargs = kwargs
+        _dependencies: set[KeyType] | None = None
+        for a in itertools.chain(args, kwargs.values()):
+            if isinstance(a, TaskRef):
+                if _dependencies is None:
+                    _dependencies = {a.key}
+                else:
+                    _dependencies.add(a.key)
+            elif isinstance(a, GraphNode) and a.dependencies:
+                if _dependencies is None:
+                    _dependencies = set(a.dependencies)
+                else:
                     _dependencies.update(a.dependencies)
         if _dependencies:
             self._dependencies = frozenset(_dependencies)
@@ -673,12 +681,14 @@ class Task(GraphNode):
     def data_producer(self) -> bool:
         return self._data_producer
 
+    def has_subgraph(self) -> bool:
+        return self.func == _execute_subgraph
+
     def copy(self):
         return type(self)(
             self.key,
             self.func,
             *self.args,
-            _dependencies=self._dependencies,
             **self.kwargs,
         )
 
@@ -738,19 +748,18 @@ class Task(GraphNode):
 
     def __call__(self, values=()):
         self._verify_values(values)
-        new_argspec = tuple(
-            a({k: values[k] for k in a.dependencies}) if isinstance(a, GraphNode) else a
-            for a in self.args
-        )
+
+        def _eval(a):
+            if isinstance(a, GraphNode):
+                return a({k: values[k] for k in a.dependencies})
+            elif isinstance(a, TaskRef):
+                return values[a.key]
+            else:
+                return a
+
+        new_argspec = tuple(map(_eval, self.args))
         if self.kwargs:
-            kwargs = {
-                k: (
-                    kw({k: values[k] for k in kw.dependencies})
-                    if isinstance(kw, GraphNode)
-                    else kw
-                )
-                for k, kw in self.kwargs.items()
-            }
+            kwargs = {k: _eval(kw) for k, kw in self.kwargs.items()}
             return self.func(*new_argspec, **kwargs)
         return self.func(*new_argspec)
 
@@ -781,21 +790,33 @@ class Task(GraphNode):
         subs_filtered = {
             k: v for k, v in subs.items() if k in self.dependencies and k != v
         }
+        extras = _extra_args(type(self))  # type: ignore
+        extra_kwargs = {
+            name: getattr(self, name) for name in extras if name not in {"key", "func"}
+        }
         if subs_filtered:
             new_args = tuple(
-                a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
+                (
+                    a.substitute(subs_filtered)
+                    if isinstance(a, (GraphNode, TaskRef))
+                    else a
+                )
                 for a in self.args
             )
             new_kwargs = {
-                k: v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
+                k: (
+                    v.substitute(subs_filtered)
+                    if isinstance(v, (GraphNode, TaskRef))
+                    else v
+                )
                 for k, v in self.kwargs.items()
             }
             return type(self)(
                 key or self.key,
                 self.func,
                 *new_args,
-                _data_producer=self.data_producer,
-                **new_kwargs,
+                **new_kwargs,  # type: ignore[arg-type]
+                **extra_kwargs,
             )
         elif key is None or key == self.key:
             return self
@@ -805,12 +826,12 @@ class Task(GraphNode):
                 key,
                 self.func,
                 *self.args,
-                _data_producer=self.data_producer,
                 **self.kwargs,
+                **extra_kwargs,
             )
 
 
-class NestedContainer(Task):
+class NestedContainer(Task, Iterable):
     constructor: Callable
     klass: type
     __slots__ = tuple(__annotations__)
@@ -819,7 +840,6 @@ class NestedContainer(Task):
         self,
         /,
         *args: Any,
-        _dependencies: set | frozenset | None = None,
         **kwargs: Any,
     ):
         if len(args) == 1 and isinstance(args[0], self.klass):
@@ -829,7 +849,6 @@ class NestedContainer(Task):
             self.to_container,
             *args,
             constructor=self.constructor,
-            _dependencies=_dependencies,
             **kwargs,
         )
 
@@ -863,7 +882,11 @@ class NestedContainer(Task):
             return self
         return type(self)(
             *(
-                a.substitute(subs_filtered) if isinstance(a, GraphNode) else a
+                (
+                    a.substitute(subs_filtered)
+                    if isinstance(a, (GraphNode, TaskRef))
+                    else a
+                )
                 for a in self.args
             )
         )
@@ -883,6 +906,9 @@ class NestedContainer(Task):
     def to_container(*args, constructor):
         return constructor(args)
 
+    def __iter__(self):
+        yield from self.args
+
 
 class List(NestedContainer):
     constructor = klass = list
@@ -896,19 +922,33 @@ class Set(NestedContainer):
     constructor = klass = set
 
 
-class Dict(NestedContainer):
+class Dict(NestedContainer, Mapping):
     klass = dict
 
-    def __init__(
-        self, /, *args: Any, _dependencies: set | frozenset | None = None, **kwargs: Any
-    ):
+    def __init__(self, /, *args: Any, **kwargs: Any):
         if args:
-            if len(args) > 1:
-                raise ValueError("Dict can only take one positional argument")
-            kwargs = args[0]
-        super().__init__(
-            *(itertools.chain(*kwargs.items())), _dependencies=_dependencies
-        )
+            assert not kwargs
+            if len(args) == 1:
+                args = args[0]
+                if isinstance(args, dict):  # type: ignore
+                    args = tuple(itertools.chain(*args.items()))  # type: ignore
+                elif isinstance(args, (list, tuple)):
+                    if all(
+                        len(el) == 2 if isinstance(el, (list, tuple)) else False
+                        for el in args
+                    ):
+                        args = tuple(itertools.chain(*args))
+                else:
+                    raise ValueError("Invalid argument provided")
+
+            if len(args) % 2 != 0:
+                raise ValueError("Invalid number of arguments provided")
+
+        elif kwargs:
+            assert not args
+            args = tuple(itertools.chain(*kwargs.items()))
+
+        super().__init__(*args)
 
     def __repr__(self):
         values = ", ".join(f"{k}: {v}" for k, v in batched(self.args, 2, strict=True))
@@ -923,11 +963,27 @@ class Dict(NestedContainer):
         if not subs_filtered:
             return self
 
-        new = {}
+        new_args = []
+        for arg in self.args:
+            new_arg = (
+                arg.substitute(subs_filtered)
+                if isinstance(arg, (GraphNode, TaskRef))
+                else arg
+            )
+            new_args.append(new_arg)
+        return type(self)(new_args)
+
+    def __iter__(self):
+        yield from self.args[::2]
+
+    def __len__(self):
+        return len(self.args) // 2
+
+    def __getitem__(self, key):
         for k, v in batched(self.args, 2, strict=True):
-            v = v.substitute(subs_filtered) if isinstance(v, GraphNode) else v
-            new[k] = v
-        return type(self)(new)
+            if k == key:
+                return v
+        raise KeyError(key)
 
     @staticmethod
     def constructor(args):
@@ -1119,6 +1175,12 @@ def fuse_linear_task_spec(dsk, keys):
 def cull(
     dsk: dict[KeyType, GraphNode], keys: Iterable[KeyType]
 ) -> dict[KeyType, GraphNode]:
+    if not isinstance(keys, (list, set, tuple)):
+        raise TypeError(
+            f"Expected list, set or tuple for keys, got {type(keys).__name__}"
+        )
+    if len(keys) == len(dsk):
+        return dsk
     work = set(keys)
     seen: set[KeyType] = set()
     dsk2 = {}
@@ -1133,3 +1195,20 @@ def cull(
         dsk2[k] = v = dsk[k]
         wupdate(v.dependencies)
     return dsk2
+
+
+@functools.cache
+def _extra_args(typ: type) -> set[str]:
+    import inspect
+
+    sig = inspect.signature(typ)
+    extras = set()
+    for name, param in sig.parameters.items():
+        if param.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            continue
+        if name in typ.get_all_slots():  # type: ignore
+            extras.add(name)
+    return extras

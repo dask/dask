@@ -16,7 +16,7 @@ from dask._task_spec import Alias, DataNode, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import _deprecated, cached_cumsum, is_arraylike
+from dask.utils import _deprecated, cached_cumsum, disable_gc, is_arraylike
 
 colon = slice(None, None, None)
 
@@ -97,7 +97,8 @@ def sanitize_index(ind):
         raise TypeError("Invalid index type", type(ind), ind)
 
 
-def slice_array(out_name, in_name, blockdims, index, itemsize):
+@disable_gc()
+def slice_array(out_name, in_name, blockdims, index):
     """
     Main function for array slicing
 
@@ -118,8 +119,6 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
       This is the dask variable output name
     blockshape - iterable of integers
     index - iterable of integers, slices, lists, or None
-    itemsize : int
-        The number of bytes required for each element of the array.
 
     Returns
     -------
@@ -140,10 +139,10 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
     --------
     >>> from pprint import pprint
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
-    ...                              (slice(10, 35),), 8)
+    ...                              (slice(10, 35),))
     >>> pprint(dsk)  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    {('y', 0): <Task ('y', 0) getitem(Alias(('x', 0)), (slice(10, 20, 1),))>,
-     ('y', 1): <Task ('y', 1) getitem(Alias(('x', 1)), (slice(0, 15, 1),))>}
+    {('y', 0): <Task ('y', 0) getitem(TaskRef(('x', 0)), (slice(10, 20, 1),))>,
+     ('y', 1): <Task ('y', 1) getitem(TaskRef(('x', 1)), (slice(0, 15, 1),))>}
     >>> blockdims
     ((10, 15),)
 
@@ -162,11 +161,7 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
     if all(
         isinstance(index, slice) and index == slice(None, None, None) for index in index
     ):
-        suffixes = product(*[range(len(bd)) for bd in blockdims])
-        dsk = {
-            (out_name,) + s: Alias((out_name,) + s, (in_name,) + s) for s in suffixes
-        }
-        return dsk, blockdims
+        raise SlicingNoop()
 
     # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
     not_none_count = sum(i is not None for i in index)
@@ -209,7 +204,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
         for k, v in dsk.items():
             if k[0] == out_name:
                 k2 = (out_name,) + expand(k[1:], 0)
-                if isinstance(v.args[1], Alias):
+                if isinstance(v.args[1], TaskRef):
                     # positional indexing with newaxis
                     indexer = expand_orig(dsk[v.args[1].key].value[1], None)
                     tok = "shuffle-taker-" + tokenize(indexer)
@@ -330,31 +325,46 @@ def slice_slices_and_integers(
     sorted_block_slices = [sorted(i.items()) for i in block_slices]
 
     # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
-    in_names = list(product([in_name], *[pluck(0, s) for s in sorted_block_slices]))
+    in_names = product([in_name], *[pluck(0, s) for s in sorted_block_slices])
 
     # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
-    out_names = list(
-        product(
-            [out_name],
-            *[
-                range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
-                for d, i in zip(block_slices, index)
-                if not isinstance(i, Integral)
-            ],
-        )
+    out_names = product(
+        [out_name],
+        *[
+            range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
+            for d, i in zip(block_slices, index)
+            if not isinstance(i, Integral)
+        ],
     )
 
-    all_slices = list(product(*[pluck(1, s) for s in sorted_block_slices]))
+    all_slices = product(*(pluck(1, s) for s in sorted_block_slices))
+    if not allow_getitem_optimization:
+        dsk_out = {
+            out_name: (Task(out_name, getitem, TaskRef(in_name), slices))
+            for out_name, in_name, slices in zip(out_names, in_names, all_slices)
+        }
+    else:
+        empty_slice = slice(None, None, None)
 
-    dsk_out = {
-        out_name: (
-            Task(out_name, getitem, TaskRef(in_name), slices)
-            if not allow_getitem_optimization
-            or not all(sl == slice(None, None, None) for sl in slices)
-            else Alias(out_name, in_name)
+        all_empty_slices = map(
+            all,
+            product(
+                *(
+                    (sp == empty_slice for sp in pluck(1, s))
+                    for s in sorted_block_slices
+                )
+            ),
         )
-        for out_name, in_name, slices in zip(out_names, in_names, all_slices)
-    }
+        dsk_out = {
+            out_name: (
+                Task(out_name, getitem, TaskRef(in_name), slices)
+                if not all_empty
+                else Alias(out_name, in_name)
+            )
+            for out_name, in_name, all_empty, slices in zip(
+                out_names, in_names, all_empty_slices, all_slices
+            )
+        }
 
     new_blockdims = [
         new_blockdim(d, db, i)
@@ -563,6 +573,12 @@ def issorted(seq):
     return np.all(seq[:-1] <= seq[1:])
 
 
+class SlicingNoop(Exception):
+    """This indicates that a slicing operation is a no-op. The caller has to handle this"""
+
+    pass
+
+
 def take(outname, inname, chunks, index, axis=0):
     """Index array with an iterable of index
 
@@ -581,9 +597,6 @@ def take(outname, inname, chunks, index, axis=0):
     >>> chunks
     ((4,),)
 
-    When any indexed blocks would otherwise grow larger than
-    dask.config.array.chunk-size, we will split them to avoid
-    growing chunksizes.
     """
 
     if not np.isnan(chunks[axis]).any():
@@ -594,7 +607,7 @@ def take(outname, inname, chunks, index, axis=0):
         if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
             # TODO: This should be a real no-op, but the call stack is
             # too deep to do this efficiently for now
-            chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
+            chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks)))
             graph = {
                 (outname,) + c: Alias((outname,) + c, (inname,) + c)
                 for c in chunk_tuples
@@ -619,7 +632,7 @@ def take(outname, inname, chunks, index, axis=0):
         slices = [slice(None)] * len(chunks)
         slices[axis] = list(index)
         slices = tuple(slices)
-        chunk_tuples = list(product(*(range(len(c)) for i, c in enumerate(chunks))))
+        chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks)))
         dsk = {
             (outname,)
             + ct: Task((outname,) + ct, getitem, TaskRef((inname,) + ct), slices)

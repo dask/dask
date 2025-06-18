@@ -3892,6 +3892,21 @@ def test_from_delayed_meta():
     assert isinstance(x._meta, np.ndarray)
 
 
+def test_from_delayed_future():
+    # https://github.com/dask/distributed/issues/9050
+    distributed = pytest.importorskip("distributed")
+    arr = np.zeros((10, 10))
+
+    with distributed.Client(n_workers=1) as client:
+        client.wait_for_workers(1)
+        fut = client.scatter(arr)
+        result = da.from_delayed(fut, shape=arr.shape, meta=arr[:0, :0])
+        assert_eq(result, arr, scheduler=client)
+
+        del fut
+        assert_eq(result, arr, scheduler=client)
+
+
 def test_A_property():
     x = da.ones(5, chunks=(2,))
     assert x.A is x
@@ -5454,12 +5469,12 @@ def test_map_blocks_large_inputs_delayed():
     b = np.ones(1000000)
 
     c = a.map_blocks(add, b)
-    assert any(b is v for v in c.dask.values())
+    assert any(b is v() for v in c.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
     d = a.map_blocks(lambda x, y: x + y.sum(), y=b)
     assert_eq(d, d)
-    assert any(b is v for v in d.dask.values())
+    assert any(b is v() for v in d.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
 
@@ -5471,12 +5486,12 @@ def test_blockwise_large_inputs_delayed():
     b = np.ones(1000000)
 
     c = da.blockwise(func, "i", a, "i", b, None, dtype=a.dtype)
-    assert any(b is v for v in c.dask.values())
+    assert any(b is v() for v in c.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
     assert_eq(c, c)
 
     d = da.blockwise(lambda x, y: x, "i", a, "i", y=b, dtype=a.dtype)
-    assert any(b is v for v in d.dask.values())
+    assert any(b is v() for v in d.dask.values() if isinstance(v, DataNode))
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
     assert_eq(d, d)
 

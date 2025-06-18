@@ -2849,6 +2849,17 @@ def test_to_dask_array(meta, as_frame, lengths):
     assert result.chunks == expected_chunks
 
 
+def test_to_dask_array_single_partition():
+    s = pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4")
+    a = dd.from_pandas(s)
+
+    result = a.to_dask_array(lengths=True)
+    assert isinstance(result, da.Array)
+    expected_chunks = (s.shape,)
+    assert result.chunks == expected_chunks
+    da.assert_eq(s.values, result)
+
+
 def test_apply():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3182,7 +3193,6 @@ def test_cov_corr_stable():
 def test_cov_corr_mixed(numeric_only):
     size = 1000
     d = {
-        "dates": pd.date_range("2015-01-01", periods=size, freq="1min"),
         "unique_id": np.arange(0, size),
         "ints": np.random.randint(0, size, size=size),
         "floats": np.random.randn(size),
@@ -3194,6 +3204,11 @@ def test_cov_corr_mixed(numeric_only):
         "categorical_binary": np.random.choice(["a", "b"], size=size),
         "categorical_nans": np.random.choice(["a", "b", "c"], size=size),
     }
+
+    if not PANDAS_GE_300:
+        # pandas 3.x doesn't support cov of datetime
+        d["dates"] = pd.date_range("2015-01-01", periods=size, freq="1min")
+
     df = pd.DataFrame(d)
     df["hardbools"] = df["bools"] == 1
     df["categorical_nans"] = df["categorical_nans"].replace("c", np.nan)
@@ -3647,7 +3662,7 @@ def test_inplace_operators():
     "idx",
     [
         np.arange(100),
-        sorted(np.random.random(size=100)),
+        sorted(np.random.random(size=100)),  # type: ignore[type-var]
         pd.date_range("20150101", periods=100),
     ],
 )

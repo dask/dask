@@ -27,7 +27,12 @@ def _array_expr_enabled() -> bool:
             )
         return ARRAY_EXPR_ENABLED  # type: ignore[return-value]
 
-    return use_array_expr if use_array_expr is not None else False
+    return bool(use_array_expr if use_array_expr is not None else False)
+
+
+def array_expr_enabled():
+    # Need a public variant for downstream libraries to check
+    return _array_expr_enabled()
 
 
 __all__ = [
@@ -57,6 +62,7 @@ __all__ = [
     "ma",
     "overlap",
     "random",
+    "array_expr_enabled",
     "shuffle",
     "atop",
     "blockwise",
@@ -637,25 +643,134 @@ if _array_expr_enabled():
         return inner_func
 
     try:
+        from dask.array._array_expr import Array  # type: ignore
+        from dask.array._array_expr import _overlap as overlap  # type: ignore
         from dask.array._array_expr import (  # type: ignore
-            Array,
+            abs,
+            absolute,
+            add,
+            angle,
+            apply_gufunc,
             arange,
+            arccos,
+            arccosh,
+            arcsin,
+            arcsinh,
+            arctan,
+            arctan2,
+            arctanh,
             array,
+            as_gufunc,
             asanyarray,
             asarray,
+            bitwise_and,
+            bitwise_not,
+            bitwise_or,
+            bitwise_xor,
             blockwise,
+            cbrt,
+            ceil,
+            clip,
             concatenate,
+            conj,
+            copysign,
+            cos,
+            cosh,
+            deg2rad,
+            degrees,
+            divide,
+            divmod,
             elemwise,
             empty,
+            empty_like,
+            equal,
+            exp,
+            exp2,
+            expm1,
+            fabs,
+            fix,
+            float_power,
+            floor,
+            floor_divide,
+            fmax,
+            fmin,
+            fmod,
+            frexp,
             from_array,
+            frompyfunc,
+            full,
+            full_like,
+            greater,
+            greater_equal,
+            gufunc,
+            hypot,
+            i0,
+            imag,
+            invert,
+            iscomplex,
+            isfinite,
+            isinf,
+            isnan,
+            isneginf,
+            isposinf,
+            isreal,
+            ldexp,
+            left_shift,
+            less,
+            less_equal,
             linspace,
+            log,
+            log1p,
+            log2,
+            log10,
+            logaddexp,
+            logaddexp2,
+            logical_and,
+            logical_not,
+            logical_or,
+            logical_xor,
             map_blocks,
+            map_overlap,
+            maximum,
+            minimum,
+            mod,
+            modf,
+            multiply,
+            nan_to_num,
+            negative,
+            nextafter,
+            not_equal,
             ones,
+            ones_like,
+            positive,
+            power,
+            rad2deg,
+            radians,
             random,
+            real,
             rechunk,
+            reciprocal,
             reduction,
+            remainder,
+            repeat,
+            right_shift,
+            rint,
+            sign,
+            signbit,
+            sin,
+            sinc,
+            sinh,
+            spacing,
+            sqrt,
+            square,
             stack,
+            subtract,
+            tan,
+            tanh,
+            true_divide,
+            trunc,
             zeros,
+            zeros_like,
         )
         from dask.array.reductions import (
             all,
@@ -683,7 +798,6 @@ if _array_expr_enabled():
         lib = raise_not_implemented_error("lib")
         linalg = raise_not_implemented_error("linalg")
         ma = raise_not_implemented_error("ma")
-        overlap = raise_not_implemented_error("overlap")
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
         block = raise_not_implemented_error("block")
@@ -699,25 +813,16 @@ if _array_expr_enabled():
         unify_chunks = raise_not_implemented_error("unify_chunks")
         diag = raise_not_implemented_error("diag")
         diagonal = raise_not_implemented_error("diagonal")
-        empty_like = raise_not_implemented_error("empty_like")
         eye = raise_not_implemented_error("eye")
         fromfunction = raise_not_implemented_error("fromfunction")
-        full_like = raise_not_implemented_error("full_like")
         indices = raise_not_implemented_error("indices")
         meshgrid = raise_not_implemented_error("meshgrid")
-        ones_like = raise_not_implemented_error("ones_like")
         pad = raise_not_implemented_error("pad")
-        repeat = raise_not_implemented_error("repeat")
         tile = raise_not_implemented_error("tile")
         tri = raise_not_implemented_error("tri")
-        zeros_like = raise_not_implemented_error("zeros_like")
-        apply_gufunc = raise_not_implemented_error("apply_gufunc")
-        as_gufunc = raise_not_implemented_error("as_gufunc")
-        gufunc = raise_not_implemented_error("gufunc")  # type: ignore
         moveaxis = raise_not_implemented_error("moveaxis")
         rollaxis = raise_not_implemented_error("rollaxis")
         optimize = raise_not_implemented_error("optimize")
-        map_overlap = raise_not_implemented_error("map_overlap")
         percentile = raise_not_implemented_error("percentile")
         argmax = raise_not_implemented_error("argmax")
         argmin = raise_not_implemented_error("argmin")
@@ -807,105 +912,6 @@ if _array_expr_enabled():
         where = raise_not_implemented_error("where")
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")
-        abs = raise_not_implemented_error("abs")
-        absolute = raise_not_implemented_error("absolute")
-        add = raise_not_implemented_error("add")
-        angle = raise_not_implemented_error("angle")
-        arccos = raise_not_implemented_error("arccos")
-        arccosh = raise_not_implemented_error("arccosh")
-        arcsin = raise_not_implemented_error("arcsin")
-        arcsinh = raise_not_implemented_error("arcsinh")
-        arctan = raise_not_implemented_error("arctan")
-        arctan2 = raise_not_implemented_error("arctan2")
-        arctanh = raise_not_implemented_error("arctanh")
-        bitwise_and = raise_not_implemented_error("bitwise_and")
-        bitwise_not = raise_not_implemented_error("bitwise_not")
-        bitwise_or = raise_not_implemented_error("bitwise_or")
-        bitwise_xor = raise_not_implemented_error("bitwise_xor")
-        cbrt = raise_not_implemented_error("cbrt")
-        ceil = raise_not_implemented_error("ceil")
-        clip = raise_not_implemented_error("clip")
-        conj = raise_not_implemented_error("conj")
-        copysign = raise_not_implemented_error("copysign")
-        cos = raise_not_implemented_error("cos")
-        cosh = raise_not_implemented_error("cosh")
-        deg2rad = raise_not_implemented_error("deg2rad")
-        degrees = raise_not_implemented_error("degrees")
-        divide = raise_not_implemented_error("divide")
-        divmod = raise_not_implemented_error("divmod")
-        equal = raise_not_implemented_error("equal")
-        exp = raise_not_implemented_error("exp")
-        exp2 = raise_not_implemented_error("exp2")
-        expm1 = raise_not_implemented_error("expm1")
-        fabs = raise_not_implemented_error("fabs")
-        fix = raise_not_implemented_error("fix")
-        float_power = raise_not_implemented_error("float_power")
-        floor = raise_not_implemented_error("floor")
-        floor_divide = raise_not_implemented_error("floor_divide")
-        fmax = raise_not_implemented_error("fmax")
-        fmin = raise_not_implemented_error("fmin")
-        fmod = raise_not_implemented_error("fmod")
-        frexp = raise_not_implemented_error("frexp")
-        frompyfunc = raise_not_implemented_error("frompyfunc")
-        greater = raise_not_implemented_error("greater")
-        greater_equal = raise_not_implemented_error("greater_equal")
-        hypot = raise_not_implemented_error("hypot")
-        i0 = raise_not_implemented_error("i0")
-        imag = raise_not_implemented_error("imag")
-        invert = raise_not_implemented_error("invert")
-        iscomplex = raise_not_implemented_error("iscomplex")
-        isfinite = raise_not_implemented_error("isfinite")
-        isinf = raise_not_implemented_error("isinf")
-        isnan = raise_not_implemented_error("isnan")
-        isneginf = raise_not_implemented_error("isneginf")
-        isposinf = raise_not_implemented_error("isposinf")
-        isreal = raise_not_implemented_error("isreal")
-        ldexp = raise_not_implemented_error("ldexp")
-        left_shift = raise_not_implemented_error("left_shift")
-        less = raise_not_implemented_error("less")
-        less_equal = raise_not_implemented_error("less_equal")
-        log = raise_not_implemented_error("log")
-        log1p = raise_not_implemented_error("log1p")
-        log2 = raise_not_implemented_error("log2")
-        log10 = raise_not_implemented_error("log10")
-        logaddexp = raise_not_implemented_error("logaddexp")
-        logaddexp2 = raise_not_implemented_error("logaddexp2")
-        logical_and = raise_not_implemented_error("logical_and")
-        logical_not = raise_not_implemented_error("logical_not")
-        logical_or = raise_not_implemented_error("logical_or")
-        logical_xor = raise_not_implemented_error("logical_xor")
-        maximum = raise_not_implemented_error("maximum")
-        minimum = raise_not_implemented_error("minimum")
-        mod = raise_not_implemented_error("mod")
-        modf = raise_not_implemented_error("modf")
-        multiply = raise_not_implemented_error("multiply")
-        nan_to_num = raise_not_implemented_error("nan_to_num")
-        negative = raise_not_implemented_error("negative")
-        nextafter = raise_not_implemented_error("nextafter")
-        not_equal = raise_not_implemented_error("not_equal")
-        positive = raise_not_implemented_error("positive")
-        power = raise_not_implemented_error("power")
-        rad2deg = raise_not_implemented_error("rad2deg")
-        radians = raise_not_implemented_error("radians")
-        real = raise_not_implemented_error("real")
-        reciprocal = raise_not_implemented_error("reciprocal")
-        remainder = raise_not_implemented_error("remainder")
-        right_shift = raise_not_implemented_error("right_shift")
-        rint = raise_not_implemented_error("rint")
-        sign = raise_not_implemented_error("sign")
-        signbit = raise_not_implemented_error("signbit")
-        sin = raise_not_implemented_error("sin")
-        sinc = raise_not_implemented_error("sinc")
-        sinh = raise_not_implemented_error("sinh")
-        spacing = raise_not_implemented_error("spacing")
-        sqrt = raise_not_implemented_error("sqrt")
-        square = raise_not_implemented_error("square")
-        subtract = raise_not_implemented_error("subtract")
-        tan = raise_not_implemented_error("tan")
-        tanh = raise_not_implemented_error("tanh")
-        true_divide = raise_not_implemented_error("true_divide")
-        trunc = raise_not_implemented_error("trunc")
-        full = raise_not_implemented_error("full")
 
         from dask.array.utils import assert_eq
         from dask.base import compute

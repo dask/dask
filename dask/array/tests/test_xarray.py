@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from functools import partial
+
 import numpy as np
 import pytest
 
+import dask
 import dask.array as da
 from dask.array.utils import assert_eq
+from dask.utils import tmpdir
 
 xr = pytest.importorskip("xarray")
 
@@ -82,3 +86,81 @@ def test_positional_indexer_multiple_variables():
     graph = result.__dask_graph__()
     assert len({k for k in graph if "shuffle-taker" in k}) == 4
     assert len({k for k in graph if "shuffle-sorter" in k}) == 2
+
+
+@pytest.mark.parametrize("compute", [True, False])
+def test_xarray_blockwise_fusion_store(compute):
+    def custom_scheduler_get(dsk, keys, expected, **kwargs):
+        dsk = dsk.__dask_graph__()
+        assert (
+            len(dsk) == expected
+        ), f"False number of tasks got {len(dsk)} but expected {expected}"
+        return [42 for _ in keys]
+
+    # First test that this mocking stuff works as expecged
+    with pytest.raises(AssertionError, match="False number of tasks"):
+        scheduler = partial(custom_scheduler_get, expected=42)
+        dask.compute(da.ones(10), scheduler=scheduler)
+
+    coord = da.arange(8, chunks=-1)
+    data = da.random.random((8, 8), chunks=-1) + 1
+    x = xr.DataArray(data, coords={"x": coord, "y": coord}, dims=["x", "y"])
+
+    y = ((x + 1) * 2) / 2 - 1
+
+    # Everything fused into one compute task
+    # one finalize Alias
+    expected = 2
+    scheduler = partial(custom_scheduler_get, expected=expected)
+    dask.compute(y, scheduler=scheduler)
+
+    with tmpdir() as dirname:
+        if compute:
+            with dask.config.set(scheduler=scheduler):
+                y.to_zarr(dirname, compute=True)
+        else:
+            # There's a delayed finalize store smashed on top which won't be fused by
+            # default
+            expected += 1
+            scheduler = partial(custom_scheduler_get, expected=expected)
+            stored = y.to_zarr(dirname, compute=False)
+            dask.compute(stored, scheduler=scheduler)
+
+
+@pytest.mark.parametrize("wrap_xarray", [False, True])
+def test_shared_tasks(wrap_xarray):
+    total_calls = 0
+
+    def my_func(a: np.ndarray) -> np.ndarray:
+        nonlocal total_calls
+        total_calls += 1
+        return a
+
+    in1 = da.zeros((5, 5), chunks=2)
+    res = da.map_blocks(
+        my_func, in1, meta=np.array((), dtype=in1.dtype), dtype=in1.dtype
+    )
+    out1 = res + 1
+    out2 = res + 2
+    if wrap_xarray:
+        out1 = xr.DataArray(out1)
+        out2 = xr.DataArray(out2)
+
+    comp_res = dask.compute(out1, out2)
+
+    if wrap_xarray:
+        assert isinstance(comp_res[0], xr.DataArray)
+        assert isinstance(comp_res[0].data, np.ndarray)
+    else:
+        assert isinstance(comp_res[0], np.ndarray)
+    assert total_calls == in1.blocks.size
+
+
+def test_slicing():
+    ds = xr.Dataset(
+        {"z": (("t", "p", "y", "x"), np.ones((1, 1, 31, 40)))},
+    )
+    ds = ds.chunk()
+    subset = ds.isel(t=[0], p=0).z[:, ::10, ::10][:, ::-1, :]
+    subset2 = ds.isel(t=[0]).isel(p=0).z[:, ::10, ::10][:, ::-1, :]
+    assert_eq(subset.data, subset2.data)

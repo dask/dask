@@ -1392,6 +1392,7 @@ class GroupByCumulative(Expr, GroupByBase):
             None,
             None,
             {"chunk": self.chunk, "columns": columns, **dropna, **self.numeric_only},
+            len(self.by),
             *self.by,
         )
         cum_raw = frame
@@ -1422,6 +1423,7 @@ class GroupByCumulative(Expr, GroupByBase):
             None,
             None,
             {"chunk": M.last, "columns": columns, **dropna},
+            len(by),
             *by,
         )
         return GroupByCumulativeFinalizer(

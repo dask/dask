@@ -350,8 +350,9 @@ def test_merge_combine_similar_squash_merges(add_repartition):
     )
 
 
+@pytest.mark.parametrize("kind", ["future", "delayed"])
 @gen_cluster(client=True)
-async def test_future_in_map_partitions(c, s, a, b):
+async def test_future_in_map_partitions(c, s, a, b, kind):
     # xgboost uses this pattern
 
     def test_func(n):
@@ -361,11 +362,22 @@ async def test_future_in_map_partitions(c, s, a, b):
 
     df = from_pandas(pd.DataFrame({"a": [1, 2, 3, 4]}), npartitions=2)
 
-    f = c.submit(test_func, 100)
-    q = map_partitions(lambda x, y: y + x.sum(), f, df, meta=df._meta)
+    if kind == "future":
+        f = c.submit(test_func, 100)
+        z = c.submit(test_func, 10)
+    elif kind == "delayed":
+        f = dask.delayed(test_func)(100)
+        z = dask.delayed(test_func)(10)
+    else:
+        raise ValueError("kind must be 'future' or 'delayed'")
+
+    def _foo(x, y, z):
+        return x.sum() + y + z.sum()
+
+    q = map_partitions(_foo, f, df, z=z, meta=df._meta)
     result = c.compute(q)
     result = await result
-    expected = pd.DataFrame({"a": [4951, 4952, 4953, 4954]})
+    expected = pd.DataFrame({"a": [4996, 4997, 4998, 4999]})
     pd.testing.assert_frame_equal(result, expected)
 
 

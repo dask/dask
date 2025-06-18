@@ -8,10 +8,21 @@ from collections.abc import Sequence
 from dataclasses import fields, is_dataclass, replace
 from functools import partial
 
-from tlz import concat, curry, merge, unique
+import toolz
+from tlz import concat, curry, merge
 
-from dask import config
-from dask._expr import FinalizeCompute
+from dask import base, config, utils
+from dask._expr import FinalizeCompute, ProhibitReuse, _ExprSequence
+from dask._task_spec import (
+    DataNode,
+    Dict,
+    GraphNode,
+    List,
+    Task,
+    TaskRef,
+    convert_legacy_graph,
+    fuse_linear_task_spec,
+)
 from dask.base import (
     DaskMethodsMixin,
     collections_to_expr,
@@ -22,8 +33,7 @@ from dask.base import (
 from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
-from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import fuse
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.typing import Graph, NestedKeys
 from dask.utils import (
     OperatorMethodMixin,
@@ -45,19 +55,81 @@ def finalize(collection):
     assert is_dask_collection(collection)
 
     name = "finalize-" + tokenize(collection)
-    keys = collection.__dask_keys__()
-    finalize, args = collection.__dask_postcompute__()
-    layer = {name: (finalize, keys) + args}
-    graph = HighLevelGraph.from_collections(name, layer, dependencies=[collection])
-    return Delayed(name, graph)
+    expr = collections_to_expr(collection).finalize_compute()
+    return Delayed(name, expr)
 
 
-def unpack_collections(expr):
+def _convert_dask_keys(keys: NestedKeys) -> List:
+    assert isinstance(keys, list)
+    new_keys: list[List | TaskRef] = []
+    for key in keys:
+        if isinstance(key, list):
+            new_keys.append(_convert_dask_keys(key))
+        else:
+            new_keys.append(TaskRef(key))
+    return List(*new_keys)
+
+
+def _get_partial(key, dct, default):
+    return dct.get(key, default)
+
+
+def _finalize_args_collections(args, collections):
+    old_keys = [c.__dask_keys__()[0] for c in collections]
+    from dask._task_spec import cull
+
+    collections = _ExprSequence(*collections).optimize()
+    new_keys = collections.__dask_keys__()
+    dsk = convert_legacy_graph(collections.__dask_graph__())
+    annots = collections.__dask_annotations__()
+    outcollections = []
+    for k in new_keys:
+        # Annotations are defined per HLG Layer but after this transformation
+        # these no longer properly exist which is why __dask_annotations__
+        # returns a fully materialized dictionary {annot: {key: value}}
+        # Introducing a tombstone with a callable is the only way I found how we
+        # could revert this transformation (not necessarily efficient but
+        # well...)
+        layer_annotations = {
+            annot: partial(
+                _get_partial, dct=key_val, default=collections._annotations_tombstone()
+            )
+            for annot, key_val in annots.items()
+        }
+        hlg = HighLevelGraph(
+            {
+                k[0]: MaterializedLayer(
+                    cull(dsk, [k[0]]),
+                    annotations=layer_annotations,
+                )
+            },
+            dependencies={k[0]: set()},
+        )
+        outcollections.append(Delayed(k[0], hlg))
+    collections = tuple(outcollections)
+    subs = {old: new[0] for old, new in zip(old_keys, new_keys) if old != new}
+    args = args.substitute(subs)
+    return args, collections
+
+
+def unpack_collections(expr, _return_collections=True):
     """Normalize a python object and merge all sub-graphs.
 
     - Replace ``Delayed`` with their keys
     - Convert literals to things the schedulers can handle
-    - Extract dask graphs from all enclosed values
+    - Extract dask graphs from all enclosed values.
+
+    Note, that the returned _task_ is not necessarily runnable and the caller is
+    responsible to deal with the output types accordingly.
+
+    The task is one of
+    - `TaskRef` as a pointer to the collection returned in collections. This is
+      not callable and should not be a top-level member of a dask task graph.
+    - A runnable task (i.e. subclass `GraphNode`) which can be embedded
+      directly into a task graph. This indicates that a dask collection was
+      encountered on a deeper nesting level and this runnable task restores the
+      input nesting with the computed dask collection replaced.
+    - The unaltered object as provided if no dask collections are found.
 
     Parameters
     ----------
@@ -65,9 +137,13 @@ def unpack_collections(expr):
         The object to be normalized. This function knows how to handle
         dask collections, as well as most builtin python types.
 
+    _optimize_collections: bool, optional
+        Internal use only!
+
+
     Returns
     -------
-    task : normalized task to be run
+    task : object
     collections : a tuple of collections
 
     Examples
@@ -77,27 +153,46 @@ def unpack_collections(expr):
     >>> b = delayed(2, 'b')
     >>> task, collections = unpack_collections([a, b, 3])
     >>> task
-    ['a', 'b', 3]
+    List((TaskRef('a'), TaskRef('b'), 3))
     >>> collections
     (Delayed('a'), Delayed('b'))
 
     >>> task, collections = unpack_collections({a: 1, b: 2})
     >>> task
-    (<class 'dict'>, [['a', 1], ['b', 2]])
+    Dict(a: 1, b: 2)
     >>> collections
     (Delayed('a'), Delayed('b'))
     """
-    # FIXME: See blockwise._unpack_collections for a TaskSpec version
     if isinstance(expr, Delayed):
-        return expr._key, (expr,)
+        if _return_collections:
+            return TaskRef(expr._key), (expr,)
+        else:
+            expr = collections_to_expr(expr).finalize_compute()
+            (name,) = expr.__dask_keys__()
+            return TaskRef(name), (expr,)
 
-    if is_dask_collection(expr):
-        if hasattr(expr, "optimize"):
-            # Optimize dask-expr collections
-            expr = expr.optimize()
+    # FIXME: Make this not trigger materialization
+    # Currently this is checking with hasattr for __dask_graph__ which triggers
+    # a materialization
+    if base.is_dask_collection(expr):
+        if _return_collections:
+            expr2 = ProhibitReuse(collections_to_expr(expr).finalize_compute())
+            finalized = expr2.optimize()
+            # FIXME: Make this also go away
+            dsk = finalized.__dask_graph__()
+            keys = list(flatten(finalized.__dask_keys__()))
+            if len(keys) > 1:
+                # `finalize_compute` _should_ guarantee that we only have one key
+                raise RuntimeError(
+                    "Cannot unpack dask collections which don't finalize to a "
+                    f"single key. Got {type(expr)} with {keys=}",
+                )
 
-        finalized = finalize(expr)
-        return finalized._key, (finalized,)
+            return unpack_collections(Delayed(keys[0], dsk))
+        else:
+            expr = collections_to_expr(expr).finalize_compute()
+            (name,) = expr.__dask_keys__()
+            return TaskRef(name), (expr,)
 
     if type(expr) is type(iter(list())):
         expr = list(expr)
@@ -109,21 +204,47 @@ def unpack_collections(expr):
     typ = type(expr)
 
     if typ in (list, tuple, set):
-        args, collections = unzip((unpack_collections(e) for e in expr), 2)
-        args = list(args)
-        collections = tuple(unique(concat(collections), key=id))
+        args, collections = utils.unzip(
+            (unpack_collections(e, _return_collections=False) for e in expr), 2
+        )
+
+        collections = tuple(toolz.unique(toolz.concat(collections), key=id))
+        # The List constructor also checks for futures
+        args = List(*args)
+        if not collections and not args.dependencies:
+            return expr, ()
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
         # Ensure output type matches input type
         if typ is not list:
-            args = (typ, args)
+            args = Task(None, typ, args)
         return args, collections
 
     if typ is dict:
-        args, collections = unpack_collections([[k, v] for k, v in expr.items()])
-        return (dict, args), collections
+        keyargs, kcollections = unpack_collections(
+            [k for k in expr.keys()], _return_collections=False
+        )
+        valargs, valcollections = unpack_collections(
+            [v for v in expr.values()], _return_collections=False
+        )
+        collections = kcollections + valcollections
+        args = Dict([[k, v] for k, v in zip(keyargs, valargs)])
+        if not collections and not args.dependencies:
+            return expr, ()
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
+        return args, collections
 
     if typ is slice:
-        args, collections = unpack_collections([expr.start, expr.stop, expr.step])
-        return (slice, *args), collections
+        args, collections = unpack_collections(
+            [expr.start, expr.stop, expr.step], _return_collections=False
+        )
+        if not collections and not isinstance(args, GraphNode):
+            return expr, ()
+
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
+        return Task(None, apply, slice, args), collections
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
@@ -131,10 +252,14 @@ def unpack_collections(expr):
                 [f.name, getattr(expr, f.name)]
                 for f in fields(expr)
                 if hasattr(expr, f.name)  # if init=False, field might not exist
-            ]
+            ],
+            _return_collections=False,
         )
-        if not collections:
+        if not collections and not isinstance(args, GraphNode):
             return expr, ()
+
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
         try:
             _fields = {
                 f.name: getattr(expr, f.name)
@@ -153,13 +278,23 @@ def unpack_collections(expr):
                     f"Failed to unpack {typ} instance. "
                     "Note that using a custom __init__ is not supported."
                 ) from e
-        return (apply, typ, (), (dict, args)), collections
+        return Task(None, apply, typ, (), Task(None, dict, args)), collections
 
-    if is_namedtuple_instance(expr):
-        args, collections = unpack_collections([v for v in expr])
-        return (typ, *args), collections
+    if utils.is_namedtuple_instance(expr):
+        args, collections = unpack_collections(
+            tuple(v for v in expr), _return_collections=False
+        )
+        if not collections:
+            return expr, ()
+        if _return_collections:
+            args, collections = _finalize_args_collections(args, collections)
+        return Task(None, _reconstruct_namedtuple, typ, args), collections
 
     return expr, ()
+
+
+def _reconstruct_namedtuple(typ, fields):
+    return typ(*fields)
 
 
 def to_task_dask(expr):
@@ -492,7 +627,9 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     if not (nout is None or (type(nout) is int and nout >= 0)):
         raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
     if task is obj:
-        if not name:
+        if isinstance(obj, TaskRef):
+            name = obj.key
+        elif not name:
             try:
                 prefix = obj.__name__
             except AttributeError:
@@ -504,6 +641,8 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         if not name:
             name = f"{type(obj).__name__}-{tokenize(task, pure=pure)}"
         layer = {name: task}
+        if isinstance(task, GraphNode):
+            task.key = name
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
         return Delayed(name, graph, nout)
 
@@ -517,24 +656,13 @@ def right(method):
     return partial(_swap, method)
 
 
-def _fuse_delayed(dsk, keys, **kwargs):
-    dependencies = dsk.get_all_dependencies()
-    dsk = ensure_dict(dsk)
-
-    dsk, _ = fuse(
-        dsk,
-        keys,
-        dependencies=dependencies,
-    )
-    return dsk
-
-
 def optimize(dsk, keys, **kwargs):
     if not isinstance(keys, (list, set)):
         keys = [keys]
 
     if config.get("optimization.fuse.delayed"):
-        dsk = _fuse_delayed(dsk, keys, **kwargs)
+        dsk = ensure_dict(dsk)
+        dsk = fuse_linear_task_spec(dsk, keys, **kwargs)
 
     if not isinstance(dsk, HighLevelGraph):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
@@ -690,12 +818,9 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     args2, collections = unzip(map(unpack_collections, args), 2)
     collections = list(concat(collections))
 
-    if kwargs:
-        dask_kwargs, collections2 = unpack_collections(kwargs)
-        collections.extend(collections2)
-        task = (apply, func, list(args2), dask_kwargs)
-    else:
-        task = (func,) + args2
+    dask_kwargs, collections2 = unpack_collections(kwargs)
+    collections.extend(collections2)
+    task = Task(name, func, *args2, **dask_kwargs)
 
     graph = HighLevelGraph.from_collections(
         name, {name: task}, dependencies=collections
@@ -708,16 +833,18 @@ class DelayedLeaf(Delayed):
     __slots__ = ("_obj", "_pure", "_nout")
 
     def __init__(self, obj, key, pure=None, nout=None):
-        super().__init__(key, None)
+        super().__init__(key, None, length=nout)
         self._obj = obj
         self._pure = pure
         self._nout = nout
 
     @property
     def dask(self):
-        return HighLevelGraph.from_collections(
-            self._key, {self._key: self._obj}, dependencies=()
-        )
+        if isinstance(self._obj, (TaskRef, GraphNode)):
+            dsk = {self._key: self._obj}
+        else:
+            dsk = {self._key: DataNode(self._key, self._obj)}
+        return HighLevelGraph.from_collections(self._key, dsk, dependencies=())
 
     def __call__(self, *args, **kwargs):
         return call_function(

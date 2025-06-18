@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import dask
-from dask._task_spec import Task
+from dask._task_spec import Task, TaskRef
 from dask.local import finish_task, get_sync, sortkey, start_state_from_dask
 from dask.order import order
 from dask.utils_test import GetFunctionTestMixin, add, inc
@@ -213,3 +213,10 @@ def test_ensure_calculate_only_whats_needed():
     ]
     dsk = {t.key: t for t in tasks}
     assert get_sync(dsk, "y") == 2
+
+
+def test_detect_malformed_graph():
+    dsk = {"y": Task("y", lambda x: x, TaskRef("x"))}
+    with pytest.raises(ValueError, match="Missing dependency"):
+        get_sync(dsk, "y")
+    assert get_sync(dsk, "y", cache={"x": 1}) == 1
