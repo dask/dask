@@ -2063,9 +2063,17 @@ def variadic_choose(a, *choices):
     return np.choose(a, choices)
 
 
+def variadic_choose_clip(a, *choices):
+    """
+    Default mode 'raise' might raise an error during dtype inference.
+    https://github.com/dask/dask/issues/11980
+    """
+    return np.choose(a, choices, mode="clip")
+
+
 @derived_from(np)
 def choose(a, choices):
-    return elemwise(variadic_choose, a, *choices)
+    return elemwise(variadic_choose, a, *choices, dtype_infer_op=variadic_choose_clip)
 
 
 def _isnonzero_vec(v):
