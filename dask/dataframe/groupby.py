@@ -113,7 +113,21 @@ def _groupby_slice_apply(
     g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
-    return g.apply(func, *args, **kwargs)
+    
+    # Check if we should use parallel group processing
+    import threading
+    current_thread = threading.current_thread()
+    use_threaded_groups = (
+        current_thread.name.startswith('ThreadPoolExecutor') or
+        hasattr(current_thread, '_target')
+    )
+    
+    if use_threaded_groups:
+        # Process groups in parallel when using threaded scheduler
+        return _groupby_apply_parallel(g, func, *args, **kwargs)
+    else:
+        # Use pandas default sequential processing
+        return g.apply(func, *args, **kwargs)
 
 
 def _groupby_slice_transform(
@@ -1254,3 +1268,70 @@ def _head_chunk(series_gb, **kwargs):
 def _head_aggregate(series_gb, **kwargs):
     levels = kwargs.pop("index_levels")
     return series_gb.head(**kwargs).droplevel(list(range(levels)))
+
+
+def _groupby_apply_parallel(groupby_obj, func, *args, **kwargs):
+    """
+    Apply a function to groups in parallel when using threaded scheduler.
+    
+    This function processes pandas groupby groups in parallel using a 
+    ThreadPoolExecutor when the threaded scheduler is being used, providing
+    better performance for GIL-releasing functions.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    import pandas as pd
+    
+    # Get list of groups
+    groups_list = list(groupby_obj)
+    
+    if len(groups_list) <= 1:
+        # Not worth parallelizing for single group
+        return groupby_obj.apply(func, *args, **kwargs)
+    
+    def apply_to_group(group_data):
+        name, group = group_data
+        # Set the group name for compatibility with user functions
+        # Use setattr to avoid pandas warning about new attribute names
+        if hasattr(group, '_group_name'):
+            group._group_name = name
+        else:
+            # For backwards compatibility, try to set .name but suppress warnings
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                try:
+                    group.name = name
+                except (AttributeError, UserWarning):
+                    pass
+        return func(group, *args, **kwargs)
+    
+    # Use a reasonable number of threads for group processing
+    max_workers = min(4, len(groups_list))
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        results = list(executor.map(apply_to_group, groups_list))
+    
+    # Reconstruct the result in the same format as pandas groupby.apply
+    if not results:
+        # Empty result - fall back to pandas
+        return groupby_obj.apply(func, *args, **kwargs)
+    
+    first_result = results[0]
+    
+    if isinstance(first_result, pd.Series):
+        # Combine Series results
+        return pd.concat(results)
+    elif pd.api.types.is_scalar(first_result):
+        # Scalar results - create a Series with group names as index
+        index = [name for name, _ in groups_list]
+        return pd.Series(results, index=index)
+    elif isinstance(first_result, pd.DataFrame):
+        # DataFrame results
+        return pd.concat(results)
+    else:
+        # Other types - try to concatenate or fall back
+        try:
+            return pd.concat(results)
+        except (TypeError, ValueError):
+            # Fall back to pandas default behavior
+            return groupby_obj.apply(func, *args, **kwargs)
