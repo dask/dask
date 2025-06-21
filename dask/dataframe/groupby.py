@@ -1290,23 +1290,30 @@ def _groupby_apply_parallel(groupby_obj, func, *args, **kwargs):
     
     def apply_to_group(group_data):
         name, group = group_data
-        # Set the group name for compatibility with user functions
-        # Use setattr to avoid pandas warning about new attribute names
-        if hasattr(group, '_group_name'):
-            group._group_name = name
-        else:
-            # For backwards compatibility, try to set .name but suppress warnings
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                try:
-                    group.name = name
-                except (AttributeError, UserWarning):
-                    pass
+        # Create a wrapper that provides group.name without modifying the original DataFrame
+        class GroupWrapper:
+            def __init__(self, df, group_name):
+                self._df = df
+                self.name = group_name
+                
+            def __getattr__(self, item):
+                return getattr(self._df, item)
+                
+            def __getitem__(self, item):
+                return self._df[item]
+                
+            def __len__(self):
+                return len(self._df)
+                
+            def __iter__(self):
+                return iter(self._df)
+        
+        wrapped_group = GroupWrapper(group, name)
+        
         # Filter out pandas-specific kwargs that user functions shouldn't receive
         user_kwargs = {k: v for k, v in kwargs.items() 
                       if k not in ('include_groups', 'dropna', 'observed', 'group_keys')}
-        return func(group, *args, **user_kwargs)
+        return func(wrapped_group, *args, **user_kwargs)
     
     # Use a reasonable number of threads for group processing
     max_workers = min(4, len(groups_list))
