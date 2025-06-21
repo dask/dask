@@ -1303,7 +1303,10 @@ def _groupby_apply_parallel(groupby_obj, func, *args, **kwargs):
                     group.name = name
                 except (AttributeError, UserWarning):
                     pass
-        return func(group, *args, **kwargs)
+        # Filter out pandas-specific kwargs that user functions shouldn't receive
+        user_kwargs = {k: v for k, v in kwargs.items() 
+                      if k not in ('include_groups', 'dropna', 'observed', 'group_keys')}
+        return func(group, *args, **user_kwargs)
     
     # Use a reasonable number of threads for group processing
     max_workers = min(4, len(groups_list))
