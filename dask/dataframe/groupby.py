@@ -1288,32 +1288,61 @@ def _groupby_apply_parallel(groupby_obj, func, *args, **kwargs):
         # Not worth parallelizing for single group
         return groupby_obj.apply(func, *args, **kwargs)
     
+    # For simple built-in aggregation functions or certain patterns,
+    # fall back to pandas to avoid any compatibility issues
+    if (func in (len, sum, min, max) or 
+        (hasattr(func, '__name__') and func.__name__ in ('len', 'sum', 'min', 'max', 'mean', 'std', 'var', 'count')) or
+        # Skip parallelization for lambda functions that just call simple methods
+        (hasattr(func, '__code__') and hasattr(func.__code__, 'co_code') and
+         any(method_name in str(func.__code__.co_names) for method_name in ['sum', 'mean', 'std', 'var', 'min', 'max', 'count']))):
+        return groupby_obj.apply(func, *args, **kwargs)
+    
     def apply_to_group(group_data):
         name, group = group_data
-        # Create a wrapper that provides group.name without modifying the original DataFrame
-        class GroupWrapper:
+        # Filter out pandas-specific kwargs that user functions shouldn't receive
+        user_kwargs = {k: v for k, v in kwargs.items() 
+                      if k not in ('include_groups', 'dropna', 'observed', 'group_keys')}
+        
+        # Create a proxy that adds group.name when accessed
+        class GroupProxy:
             def __init__(self, df, group_name):
-                self._df = df
-                self.name = group_name
+                object.__setattr__(self, '_df', df)
+                object.__setattr__(self, '_name', group_name)
                 
-            def __getattr__(self, item):
-                return getattr(self._df, item)
+            def __getattr__(self, attr):
+                if attr == 'name':
+                    return self._name
+                return getattr(self._df, attr)
                 
-            def __getitem__(self, item):
-                return self._df[item]
-                
+            def __getitem__(self, key):
+                return self._df[key]
+            
+            def __setattr__(self, attr, value):
+                if attr in ('_df', '_name'):
+                    object.__setattr__(self, attr, value)
+                else:
+                    setattr(self._df, attr, value)
+                    
             def __len__(self):
                 return len(self._df)
                 
             def __iter__(self):
                 return iter(self._df)
+                
+            def __repr__(self):
+                return repr(self._df)
+                
+            def __str__(self):
+                return str(self._df)
         
-        wrapped_group = GroupWrapper(group, name)
+        # Use proxy for all functions except built-in safe ones
+        # This ensures group.name is available when functions need it
+        if func in (len, sum, min, max):
+            group_to_use = group
+        else:
+            group_to_use = GroupProxy(group, name)
         
-        # Filter out pandas-specific kwargs that user functions shouldn't receive
-        user_kwargs = {k: v for k, v in kwargs.items() 
-                      if k not in ('include_groups', 'dropna', 'observed', 'group_keys')}
-        return func(wrapped_group, *args, **user_kwargs)
+        return func(group_to_use, *args, **user_kwargs)
     
     # Use a reasonable number of threads for group processing
     max_workers = min(4, len(groups_list))
