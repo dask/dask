@@ -604,7 +604,7 @@ def take(outname, inname, chunks, index, axis=0):
         from dask.array.utils import asarray_safe
 
         # verify if this is a full arange (the equivalent of `slice(None)`)
-        full_length = np.sum(chunks[axis])
+        full_length = sum(chunks[axis])
         is_sequential = np.all(np.diff(index) == 1)
         if len(index) == full_length and is_sequential and index[0] == 0:
             # TODO: This should be a real no-op, but the call stack is
@@ -616,7 +616,7 @@ def take(outname, inname, chunks, index, axis=0):
             }
             return tuple(chunks), graph
 
-        average_chunk_size = int(sum(chunks[axis]) / len(chunks[axis]))
+        average_chunk_size = int(full_length / len(chunks[axis]))
 
         indexer = []
         index = asarray_safe(index, like=index)
