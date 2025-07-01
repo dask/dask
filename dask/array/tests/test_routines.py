@@ -1598,6 +1598,16 @@ def test_take():
     assert same_keys(da.take(a, [3, 4, 5], axis=-1), da.take(a, [3, 4, 5], axis=-1))
 
 
+def test_take_large():
+    a = da.arange(1_000_000_000_000, chunks=(200_000_000,))
+    x = np.arange(20)
+
+    assert_eq(da.take(a, x, axis=0), x)
+
+    x = np.arange(50, 300)
+    assert_eq(da.take(a, x, axis=0), x)
+
+
 def test_take_dask_from_numpy():
     x = np.arange(5).astype("f8")
     y = da.from_array(np.array([1, 2, 3, 3, 2, 1]), chunks=3)
