@@ -1600,11 +1600,11 @@ def test_take():
 
 def test_take_large():
     a = da.arange(1_000_000_000_000, chunks=(200_000_000,), dtype="int64")
-    x = np.arange(20)
 
+    x = np.arange(20, dtype="int64")
     assert_eq(da.take(a, x, axis=0), x)
 
-    x = np.arange(50, 300)
+    x = np.arange(50, 300, dtype="int64")
     assert_eq(da.take(a, x, axis=0), x)
 
 
