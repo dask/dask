@@ -601,10 +601,12 @@ def take(outname, inname, chunks, index, axis=0):
 
     if not np.isnan(chunks[axis]).any():
         from dask.array._shuffle import _shuffle
-        from dask.array.utils import arange_safe, asarray_safe
+        from dask.array.utils import asarray_safe
 
-        arange = arange_safe(np.sum(chunks[axis]), like=index)
-        if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
+        # verify if this is a full arange (the equivalent of `slice(None)`)
+        full_length = np.sum(chunks[axis])
+        is_sequential = np.all(np.diff(index) == 1)
+        if len(index) == full_length and is_sequential and index[0] == 0:
             # TODO: This should be a real no-op, but the call stack is
             # too deep to do this efficiently for now
             chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks)))
