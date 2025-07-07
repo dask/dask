@@ -889,7 +889,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         num_row_groups: avg
         serialized_size: avg
         columns: list
-            A list of all colum statistics where individual fields are also
+            A list of all column statistics where individual fields are also
             averaged.
 
 
@@ -1012,7 +1012,7 @@ class ReadParquetPyarrowFS(ReadParquet):
             # At this point we will post a listbucket request which includes the
             # same data as a HEAD request. The information included here (see
             # pyarrow FileInfo) are size, type, path and modified since
-            # timestamps This isn't free but realtively cheap (200-300ms or less
+            # timestamps This isn't free but relatively cheap (200-300ms or less
             # for ~1k files)
             all_files = []
             for path in path_normalized:
@@ -1583,7 +1583,7 @@ class _DNF:
     """Manage filters in Disjunctive Normal Form (DNF)"""
 
     class _Or(frozenset):
-        """Fozen set of disjunctions"""
+        """Frozen set of disjunctions"""
 
         def to_list_tuple(self) -> list:
             # DNF "or" is List[List[Tuple]]

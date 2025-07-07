@@ -413,7 +413,7 @@ def order(
 
     # Degree in this context is the number root nodes that have to be loaded for
     # this leaf to become accessible. Zero means the leaf is already accessible
-    # in which case it _should_ either already be in result or be accessible vie
+    # in which case it _should_ either already be in result or be accessible via
     # process_runnables
     # When picking a new target, we prefer the leafs with the least number of
     # roots that need loading.
