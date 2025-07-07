@@ -6,7 +6,7 @@ def test_basic():
         import dask_ml  # noqa: F401
     except ImportError:
         try:
-            from dask.ml.model_selection import GridSearchCV  # noqa: F401
+            from dask.ml.model_selection import GridSearchCV
         except ImportError as e:
             assert "conda install dask-ml" in str(e)
         else:

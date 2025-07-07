@@ -259,7 +259,7 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
         id = get_id()
         result = dumps((result, id))
         failed = False
-    except BaseException as e:  # noqa: B036
+    except BaseException as e:
         result = pack_exception(e, dumps)
         failed = True
     return key, result, failed
@@ -578,7 +578,7 @@ class SynchronousExecutor(Executor):
         fut = Future()
         try:
             fut.set_result(fn(*args, **kwargs))
-        except BaseException as e:  # noqa: B036
+        except BaseException as e:
             fut.set_exception(e)
         return fut
 
