@@ -242,7 +242,7 @@ def skew(a, axis=0, bias=True, nan_policy="propagate"):
             "`nan_policy` other than 'propagate' have not been implemented."
         )
 
-    n = a.shape[axis]  # noqa; for bias
+    n = a.shape[axis]  # noqa: F841  # for bias
     m2 = moment(a, 2, axis)
     m3 = moment(a, 3, axis)
     zero = m2 == 0
@@ -298,7 +298,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
         raise NotImplementedError(
             "`nan_policy` other than 'propagate' have not been implemented."
         )
-    n = a.shape[axis]  # noqa; for bias
+    n = a.shape[axis]  # noqa: F841  # for bias
     m2 = moment(a, 2, axis)
     m4 = moment(a, 4, axis)
     zero = m2 == 0
