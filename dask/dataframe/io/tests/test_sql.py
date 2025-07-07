@@ -516,7 +516,7 @@ def test_to_sql(npartitions, parallel):
         ddf.set_index("name").to_sql("test", uri)
         with pytest.raises(
             TypeError,
-            match='Provided index column is of type "object".  If divisions is not provided the index column type must be numeric or datetime.',  # noqa: E501
+            match='Provided index column is of type "object".  If divisions is not provided the index column type must be numeric or datetime.',
         ):
             read_sql_table("test", uri, "name")
 
