@@ -2896,7 +2896,7 @@ def test_from_array_ndarray_onechunk(x):
     dx = da.from_array(x, chunks=-1)
     assert_eq(x, dx)
     assert len(dx.dask) == 1
-    assert not dx.dask[(dx.name,) + (0,) * dx.ndim] is x
+    assert dx.dask[(dx.name,) + (0,) * dx.ndim] is not x
     assert_eq(dx.dask[(dx.name,) + (0,) * dx.ndim], x)
 
 
@@ -3024,7 +3024,7 @@ def test_from_array_inline():
 
     a = np.array([1, 2, 3]).view(MyArray)
     dsk = dict(da.from_array(a, name="my-array", inline_array=False).dask)
-    assert not dsk["original-my-array"] is a
+    assert dsk["original-my-array"] is not a
     assert_eq(dsk["original-my-array"], a)
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
