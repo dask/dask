@@ -304,7 +304,7 @@ class Expr:
         expr:
             output expression
         changed:
-            whether or not any change occured
+            whether or not any change occurred
         """
         if self._name in rewritten:
             return rewritten[self._name]
@@ -463,7 +463,7 @@ class Expr:
         return
 
     def lower_once(self, lowered: dict):
-        # Check for a chached result
+        # Check for a cached result
         try:
             return lowered[self._name]
         except KeyError:

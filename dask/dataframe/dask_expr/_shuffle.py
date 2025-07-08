@@ -189,7 +189,7 @@ class Shuffle(ShuffleBase):
     ignore_index: bool
         Whether to ignore the index during this shuffle operation.
     method: str or Callable
-        Label or callback funcition to convert a shuffle operation
+        Label or callback function to convert a shuffle operation
         to its necessary components.
     options: dict
         Algorithm-specific options.

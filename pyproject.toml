@@ -181,7 +181,7 @@ module = [
 disallow_untyped_defs = true
 
 [tool.codespell]
-ignore-words-list = "coo,nd,medias"
+ignore-words-list = "coo,dout,excpt,fo,medias,nd,nin,notin,ser"
 skip = "docs/source/changelog.rst"
 
 [tool.coverage.run]

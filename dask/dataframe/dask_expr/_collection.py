@@ -1330,7 +1330,7 @@ Expr={expr}"""
         should be specified. A ``ValueError`` will be raised when that is
         not the case.
 
-        Also note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Also note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -3429,7 +3429,7 @@ class DataFrame(FrameBase):
                        '2021-01-05', '2021-01-06', '2021-01-07'],
                       dtype='datetime64[ns]', freq='D')
 
-        Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -4719,7 +4719,7 @@ class Index(Series):
         Note that this method clears any known divisions.
 
         If your mapping function is monotonically increasing then use `is_monotonic`
-        to apply the maping function to the old divisions and assign the new
+        to apply the mapping function to the old divisions and assign the new
         divisions to the output.
 
         """

@@ -86,7 +86,7 @@ def from_delayed(
     .. warning::
         ``from_delayed`` should only be used if the objects that create
         the data are complex and cannot be easily represented as a single
-        function in an embarassingly parallel fashion.
+        function in an embarrassingly parallel fashion.
 
         ``from_map`` is recommended if the query can be expressed as a single
         function like:
@@ -96,7 +96,7 @@ def from_delayed(
 
         ddf = dd.from_map(read_xml, paths)
 
-        ``from_delayed`` might be depreacted in the future.
+        ``from_delayed`` might be deprecated in the future.
 
     Parameters
     ----------

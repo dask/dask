@@ -99,7 +99,7 @@ def _calculate_new_chunksizes(
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
     maximum_chunk = max(maximum_chunk, 1)
 
-    # iterate until we distributed the increase in chunksize accross all dimensions
+    # iterate until we distributed the increase in chunksize across all dimensions
     # or every non-shuffle dimension is all 1
     while changeable_dimensions:
         n_changeable_dimensions = len(changeable_dimensions)
