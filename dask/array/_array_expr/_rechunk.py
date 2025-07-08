@@ -152,7 +152,7 @@ def _compute_rechunk(old_name, old_chunks, chunks, level, name):
         split_name = name.replace("rechunk-merge-", "rechunk-split-")
     split_name_suffixes = itertools.count()
 
-    # Pre-allocate old block references, to allow re-use and reduce the
+    # Pre-allocate old block references, to allow reuse and reduce the
     # graph's memory footprint a bit.
     old_blocks = np.empty([len(c) for c in old_chunks], dtype="O")
     for index in np.ndindex(old_blocks.shape):
