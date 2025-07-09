@@ -133,13 +133,12 @@ def trim_internal(x, axes, boundary=None):
                 else:
                     d = d - overlap * 2
 
+            elif isinstance(overlap, tuple):
+                d = d - overlap[0] if j != 0 else d
+                d = d - overlap[1] if j != len(bd) - 1 else d
             else:
-                if isinstance(overlap, tuple):
-                    d = d - overlap[0] if j != 0 else d
-                    d = d - overlap[1] if j != len(bd) - 1 else d
-                else:
-                    d = d - overlap if j != 0 else d
-                    d = d - overlap if j != len(bd) - 1 else d
+                d = d - overlap if j != 0 else d
+                d = d - overlap if j != len(bd) - 1 else d
 
             ilist.append(d)
         olist.append(tuple(ilist))
