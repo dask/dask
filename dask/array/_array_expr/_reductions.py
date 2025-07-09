@@ -19,7 +19,7 @@ from dask.tokenize import _tokenize_deterministic
 from dask.utils import cached_property, funcname, getargspec, is_series_like
 
 
-# TODO(expr): This needs somethign like what we have in DataFrame land with ACA
+# TODO(expr): This needs something like what we have in DataFrame land with ACA
 # Way too many expressions that we are calling directly that should come from a
 # lower step.
 def reduction(

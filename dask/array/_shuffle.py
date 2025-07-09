@@ -99,7 +99,7 @@ def _calculate_new_chunksizes(
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
     maximum_chunk = max(maximum_chunk, 1)
 
-    # iterate until we distributed the increase in chunksize accross all dimensions
+    # iterate until we distributed the increase in chunksize across all dimensions
     # or every non-shuffle dimension is all 1
     while changeable_dimensions:
         n_changeable_dimensions = len(changeable_dimensions)
@@ -217,7 +217,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     intermediates = dict()
     merges = dict()
-    dtype = np.min_scalar_type(max(max(chunks[axis]), chunk_size_limit))
+    dtype = np.min_scalar_type(max(*chunks[axis], chunk_size_limit))
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()

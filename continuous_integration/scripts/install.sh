@@ -13,7 +13,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     mamba uninstall --force pyarrow pyarrow-core
     python -m pip install --no-deps \
-        --extra-index-url https://pypi.fury.io/arrow-nightlies/ \
+        --extra-index-url https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         --prefer-binary --pre pyarrow
 
     python -m pip install \

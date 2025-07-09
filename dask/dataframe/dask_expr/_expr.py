@@ -463,7 +463,7 @@ class Expr(core.SingletonExpr):
 
         This property specifies if a column or a set of columns have a unique
         partition mapping that was defined by a shuffle operation. The mapping
-        is created by hasing the values and the separating them onto partitions.
+        is created by hashing the values and the separating them onto partitions.
         It is important that this property is only propagated if the values
         in those columns did not change in this expression. The property is
         only populated if the mapping was created by the ``partitioning_index``
@@ -474,7 +474,7 @@ class Expr(core.SingletonExpr):
         operations, where we need these values to be in matching partitions.
 
         This is also the reason why set_index or sort_values can't set the
-        property, they fullfil a weaker condition than what this property enforcey.
+        property, they fulfill a weaker condition than what this property enforces.
 
         Normally, this set contains one tuple of either one or multiple columns.
         It can contain 2, when the operation shuffles multiple columns of the
@@ -1353,7 +1353,7 @@ class RenameFrame(Elemwise):
         for elem in self.frame.unique_partition_mapping_columns_from_shuffle:
             if isinstance(elem, tuple):
                 subset = self.frame._meta[list(elem)].rename(columns=columns)
-                result.add(tuple(list(subset.columns)))
+                result.add(tuple(subset.columns))
             else:
                 # scalar
                 subset = self.frame._meta[[elem]]
@@ -2430,9 +2430,7 @@ class ResetIndex(Elemwise):
                     return type(self)(self.frame, True, self.name)
                 return
             result = plain_column_projection(self, parent, dependents)
-            if result is not None and not set(result.columns) == set(
-                result.frame.columns
-            ):
+            if result is not None and set(result.columns) != set(result.frame.columns):
                 result = result.substitute_parameters({"drop": True})
             return result
 
@@ -3138,7 +3136,7 @@ class DelayedsExpr(Expr):
             keys = expr.__dask_keys__()
             dsk = expr.__dask_graph__()
             # Many APIs in dask-expr are not honoring __dask_keys__ but are instead
-            # assuming they can just construc the keys themselves by walking the
+            # assuming they can just construct the keys themselves by walking the
             # partitions. Therefore we'll have to remap the key names and can't just
             # expose __dask_keys__()
             for ix, actual_key in enumerate(keys):
@@ -3216,7 +3214,7 @@ def are_co_aligned(*exprs):
     return len(unique_ancestors) <= 1
 
 
-## Utilites for Expr fusion
+## Utilities for Expr fusion
 
 
 def is_valid_blockwise_op(expr):
@@ -3563,9 +3561,7 @@ class MaybeAlignPartitions(Expr):
 def _are_dtypes_shuffle_compatible(dtypes):
     if len(dtypes) == 1:
         return True
-    if all(pd.api.types.is_numeric_dtype(d) for d in dtypes):
-        return True
-    return False
+    return all(pd.api.types.is_numeric_dtype(d) for d in dtypes)
 
 
 class CombineFirstAlign(MaybeAlignPartitions):
@@ -3914,7 +3910,7 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
     if isinstance(column_union, list):
         column_union = [col for col in expr.frame.columns if col in column_union]
     elif column_union not in expr.frame.columns:
-        # we are accesing the index
+        # we are accessing the index
         column_union = []
 
     if column_union == expr.frame.columns or not column_union and expr.ndim < 2:
