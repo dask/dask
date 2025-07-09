@@ -563,9 +563,7 @@ class Alias(GraphNode):
             return False
         if self.key != value.key:
             return False
-        if self.target != value.target:
-            return False
-        return True
+        return self.target == value.target
 
 
 class DataNode(GraphNode):

@@ -3532,9 +3532,7 @@ class MaybeAlignPartitions(Expr):
 def _are_dtypes_shuffle_compatible(dtypes):
     if len(dtypes) == 1:
         return True
-    if all(pd.api.types.is_numeric_dtype(d) for d in dtypes):
-        return True
-    return False
+    return all(pd.api.types.is_numeric_dtype(d) for d in dtypes)
 
 
 class CombineFirstAlign(MaybeAlignPartitions):
