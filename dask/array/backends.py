@@ -285,7 +285,7 @@ def _numel(x, coerce_np_ndarray: bool, **kwargs):
     """
     shape = x.shape
     keepdims = kwargs.get("keepdims", False)
-    axis = kwargs.get("axis", None)
+    axis = kwargs.get("axis")
     dtype = kwargs.get("dtype", np.float64)
 
     if axis is None:
