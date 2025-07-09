@@ -767,7 +767,7 @@ class MapPartitions(Blockwise):
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection) and self.required_columns is not None:
-            if (missing := set(self.required_columns) - set(self.frame.columns)):
+            if missing := set(self.required_columns) - set(self.frame.columns):
                 raise KeyError(
                     f"Some elements of `required_columns` are missing: {missing}"
                 )
