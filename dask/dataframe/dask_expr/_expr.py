@@ -2399,9 +2399,7 @@ class ResetIndex(Elemwise):
                     return type(self)(self.frame, True, self.name)
                 return
             result = plain_column_projection(self, parent, dependents)
-            if result is not None and not set(result.columns) == set(
-                result.frame.columns
-            ):
+            if result is not None and set(result.columns) != set(result.frame.columns):
                 result = result.substitute_parameters({"drop": True})
             return result
 
