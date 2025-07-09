@@ -3523,7 +3523,7 @@ class DataFrame(FrameBase):
         by: str | list[str],
         npartitions: int | None = None,
         ascending: bool | list[bool] = True,
-        na_position: Literal["first"] | Literal["last"] = "last",
+        na_position: Literal["first", "last"] = "last",
         partition_size: float = 128e6,
         sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
         sort_function_kwargs: Mapping[str, Any] | None = None,
