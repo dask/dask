@@ -457,7 +457,7 @@ def overlap(x, depth, boundary, *, allow_rechunk=True):
         )  # this is a no-op if x.chunks == new_chunks
 
     else:
-        original_chunks_too_small = any([min(c) < d for d, c in zip(depths, x.chunks)])
+        original_chunks_too_small = any(min(c) < d for d, c in zip(depths, x.chunks))
         if original_chunks_too_small:
             raise ValueError(
                 "Overlap depth is larger than smallest chunksize.\n"
@@ -725,7 +725,7 @@ def map_overlap(
         args = [new_collection(a) for a in args]
 
     # Escape to map_blocks if depth is zero (a more efficient computation)
-    if all([all(depth_val == 0 for depth_val in d.values()) for d in depth]):
+    if all(all(depth_val == 0 for depth_val in d.values()) for d in depth):
         return map_blocks(func, *args, **kwargs)
 
     for i, x in enumerate(args):

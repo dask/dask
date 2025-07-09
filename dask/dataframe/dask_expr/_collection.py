@@ -3451,7 +3451,7 @@ class DataFrame(FrameBase):
         if isinstance(other, list) and len(other) == 1:
             other = other[0]
         if isinstance(other, list):
-            if any([isinstance(c, FrameBase) for c in other]):
+            if any(isinstance(c, FrameBase) for c in other):
                 raise TypeError("List[FrameBase] not supported by set_index")
             else:
                 raise NotImplementedError(
