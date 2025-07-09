@@ -177,8 +177,11 @@ class Expr:
                 if isinstance(v, functools.cached_property) and k in self.__dict__:
                     cache[k] = getattr(self, k)
 
-        return Expr._reconstruct, tuple(
-            [type(self), *self.operands, self.deterministic_token, cache]
+        return Expr._reconstruct, (
+            type(self),
+            *self.operands,
+            self.deterministic_token,
+            cache,
         )
 
     def _depth(self, cache=None):

@@ -357,7 +357,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     din = len(x.shape)
     dout = len(shape)
     if not merge_chunks and din > dout:
-        x = x.rechunk({i: 1 for i in range(din - dout)})
+        x = x.rechunk(dict.fromkeys(range(din - dout), 1))
 
     inchunks, outchunks, _, _ = reshape_rechunk(x.shape, shape, x.chunks)
     x2 = x.rechunk(inchunks)

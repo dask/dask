@@ -1362,10 +1362,8 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     # range= these are unsupported.
     dc_bins = is_dask_collection(bins)
     if isinstance(bins, (list, tuple)):
-        dc_bins = dc_bins or any([is_dask_collection(b) for b in bins])
-    dc_range = (
-        any([is_dask_collection(r) for r in range]) if range is not None else False
-    )
+        dc_bins = dc_bins or any(is_dask_collection(b) for b in bins)
+    dc_range = any(is_dask_collection(r) for r in range) if range is not None else False
     if dc_bins or dc_range:
         raise NotImplementedError(
             "Passing dask collections to bins=... or range=... is not supported."

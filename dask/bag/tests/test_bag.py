@@ -220,8 +220,8 @@ def test_remove():
 
 
 def test_iter():
-    assert sorted(list(b)) == sorted(L)
-    assert sorted(list(b.map(inc))) == sorted(list(range(1, 6)) * 3)
+    assert sorted(b) == sorted(L)
+    assert sorted(b.map(inc)) == sorted(list(range(1, 6)) * 3)
 
 
 @pytest.mark.parametrize("func", [str, repr])

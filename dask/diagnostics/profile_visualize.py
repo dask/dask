@@ -52,7 +52,7 @@ def get_colors(palette, funcs):
     unique_funcs = sorted(unique(funcs))
     n_funcs = len(unique_funcs)
     palette_lookup = palettes.all_palettes[palette]
-    keys = list(sorted(palette_lookup.keys()))
+    keys = sorted(palette_lookup.keys())
     index = keys[min(bisect_left(keys, n_funcs), len(keys) - 1)]
     palette = palette_lookup[index]
     # Some bokeh palettes repeat colors, we want just the unique set

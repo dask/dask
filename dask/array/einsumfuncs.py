@@ -275,7 +275,7 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
         tuple(outputs) + tuple(contract_inds),
         *(a for ap in zip(ops, inputs) for a in ap),
         # blockwise parameters
-        adjust_chunks={ind: 1 for ind in contract_inds},
+        adjust_chunks=dict.fromkeys(contract_inds, 1),
         dtype=dtype,
         # np.einsum parameters
         subscripts=subscripts,

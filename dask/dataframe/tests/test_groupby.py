@@ -1156,7 +1156,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func, split_out):
         if agg_func in ("cov", "corr"):
             # there are sorting issues between pandas and chunk cov w/dask
             df = call(pdf.groupby(grouper(pdf), sort=sort), agg_func).sort_index()
-            cols = sorted(list(df.columns))
+            cols = sorted(df.columns)
             df = df[cols]
             dddf = call(
                 ddf.groupby(grouper(ddf), sort=sort),
@@ -1165,7 +1165,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func, split_out):
                 split_every=2,
             ).compute()
             dddf = dddf.sort_index()
-            cols = sorted(list(dddf.columns))
+            cols = sorted(dddf.columns)
             dddf = dddf[cols]
             assert_eq(df, dddf)
         else:

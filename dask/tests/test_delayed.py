@@ -891,7 +891,7 @@ def test_annotations_survive_optimization():
     assert d.dask.layers["b"].annotations == {"foo": "bar"}
     optimized = collections_to_expr([d]).optimize()
     assert optimized.__dask_annotations__() == {
-        "foo": {k: "bar" for k in optimized.__dask_graph__()}
+        "foo": dict.fromkeys(optimized.__dask_graph__(), "bar")
     }
 
 

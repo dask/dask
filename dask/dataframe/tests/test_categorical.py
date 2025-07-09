@@ -320,17 +320,17 @@ def test_categorical_set_index(shuffle_method):
         b = a.set_index("y", npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ["a"]
-        assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
+        assert sorted(d2.index.compute()) == ["b", "b", "c"]
 
         b = a.set_index(a.y, npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ["a"]
-        assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
+        assert sorted(d2.index.compute()) == ["b", "b", "c"]
 
         b = a.set_index("y", divisions=["a", "b", "c"], npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ["a"]
-        assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
+        assert sorted(d2.index.compute()) == ["b", "b", "c"]
 
 
 @pytest.mark.parametrize("ncategories", [1, 3, 6])

@@ -1322,7 +1322,7 @@ class RenameFrame(Elemwise):
         for elem in self.frame.unique_partition_mapping_columns_from_shuffle:
             if isinstance(elem, tuple):
                 subset = self.frame._meta[list(elem)].rename(columns=columns)
-                result.add(tuple(list(subset.columns)))
+                result.add(tuple(subset.columns))
             else:
                 # scalar
                 subset = self.frame._meta[[elem]]
