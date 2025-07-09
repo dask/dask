@@ -391,16 +391,14 @@ def order(
                                                 pruned_branches.append(path)
                                                 break
                                             add_to_result(k)
+                        elif (
+                            len(dependencies[current]) > 1 and num_needed[current] <= 1
+                        ):
+                            for k in path:
+                                add_to_result(k)
                         else:
-                            if (
-                                len(dependencies[current]) > 1
-                                and num_needed[current] <= 1
-                            ):
-                                for k in path:
-                                    add_to_result(k)
-                            else:
-                                known_runnable_paths[current] = [path]
-                                runnable_hull.discard(current)
+                            known_runnable_paths[current] = [path]
+                            runnable_hull.discard(current)
                         break
 
     # Pick strategy
