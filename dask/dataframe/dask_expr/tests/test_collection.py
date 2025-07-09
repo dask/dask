@@ -155,7 +155,7 @@ def test_column_projection_map_partitions(required_columns):
     df = df.map_partitions(myfunc, meta=myfunc(pdf), required_columns=required_columns)
     if required_columns and "foo" in required_columns:
         with pytest.raises(KeyError, match="foo"):
-            df.simplify()
+            df["x"].simplify()
     else:
         assert_eq(df["x"], myfunc(pdf)["x"])
         if required_columns:
