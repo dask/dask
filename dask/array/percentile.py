@@ -127,7 +127,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
 
     if "interpolation" in kwargs:
         warnings.warn(
-            "The `interpolation=` argument to percentile was renamed to " "`method= ` ",
+            "The `interpolation=` argument to percentile was renamed to `method= ` ",
             FutureWarning,
         )
         method = kwargs.pop("interpolation")
