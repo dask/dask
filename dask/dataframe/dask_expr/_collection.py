@@ -3040,7 +3040,7 @@ class DataFrame(FrameBase):
             out = self.assign(**{k: value[c] for k, c in zip(key, value.columns)})
 
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
-            out = self.assign(**{k: value for k in list(key)})
+            out = self.assign(**dict.fromkeys(list(key), value))
         elif (
             is_dataframe_like(key)
             or is_series_like(key)

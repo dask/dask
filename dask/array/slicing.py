@@ -463,7 +463,7 @@ def _slice_1d(dim_shape, lengths, index):
     assert isinstance(index, slice)
 
     if index == colon:
-        return {k: colon for k in range(len(lengths))}
+        return dict.fromkeys(range(len(lengths)), colon)
 
     step = index.step or 1
     if step > 0:

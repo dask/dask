@@ -293,9 +293,9 @@ def boundaries(x, depth=None, kind=None):
     constant
     """
     if not isinstance(kind, dict):
-        kind = {i: kind for i in range(x.ndim)}
+        kind = dict.fromkeys(range(x.ndim), kind)
     if not isinstance(depth, dict):
-        depth = {i: depth for i in range(x.ndim)}
+        depth = dict.fromkeys(range(x.ndim), depth)
 
     for i in range(x.ndim):
         d = depth.get(i, 0)
