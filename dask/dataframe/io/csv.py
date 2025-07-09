@@ -316,7 +316,7 @@ def _read_csv(
         path_info = (
             colname,
             path,
-            sorted(list(head[colname].cat.categories)),
+            sorted(head[colname].cat.categories),
         )
     else:
         path_info = None

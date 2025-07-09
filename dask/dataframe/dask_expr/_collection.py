@@ -3040,7 +3040,7 @@ class DataFrame(FrameBase):
             out = self.assign(**{k: value[c] for k, c in zip(key, value.columns)})
 
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
-            out = self.assign(**{k: value for k in list(key)})
+            out = self.assign(**dict.fromkeys(list(key), value))
         elif (
             is_dataframe_like(key)
             or is_series_like(key)
@@ -3451,7 +3451,7 @@ class DataFrame(FrameBase):
         if isinstance(other, list) and len(other) == 1:
             other = other[0]
         if isinstance(other, list):
-            if any([isinstance(c, FrameBase) for c in other]):
+            if any(isinstance(c, FrameBase) for c in other):
                 raise TypeError("List[FrameBase] not supported by set_index")
             else:
                 raise NotImplementedError(
