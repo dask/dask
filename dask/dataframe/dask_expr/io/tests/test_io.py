@@ -40,7 +40,7 @@ def _make_file(dir, format="parquet", df=None):
     elif format == "parquet":
         df.to_parquet(fn)
     else:
-        ValueError(f"{format} not a supported format")
+        raise ValueError(f"{format} not a supported format")
     return fn
 
 
