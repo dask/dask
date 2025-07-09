@@ -577,14 +577,12 @@ def assert_eq(
         )
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b, exact=check_dtype, **kwargs)
+    elif a == b:
+        return True
+    elif np.isnan(a):
+        assert np.isnan(b)
     else:
-        if a == b:
-            return True
-        else:
-            if np.isnan(a):
-                assert np.isnan(b)
-            else:
-                assert np.allclose(a, b)
+        assert np.allclose(a, b)
     return True
 
 
@@ -650,17 +648,16 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
         a = ddf._meta.dtype
         b = res.dtype
         assert eq_dtypes(a, b)
-    else:
-        if hasattr(ddf._meta, "dtype"):
-            a = ddf._meta.dtype
-            if not hasattr(res, "dtype"):
-                assert np.isscalar(res)
-                b = np.dtype(type(res))
-            else:
-                b = res.dtype
-            assert eq_dtypes(a, b)
+    elif hasattr(ddf._meta, "dtype"):
+        a = ddf._meta.dtype
+        if not hasattr(res, "dtype"):
+            assert np.isscalar(res)
+            b = np.dtype(type(res))
         else:
-            assert type(ddf._meta) == type(res)
+            b = res.dtype
+        assert eq_dtypes(a, b)
+    else:
+        assert type(ddf._meta) == type(res)
 
 
 def assert_max_deps(x, n, eq=True):
