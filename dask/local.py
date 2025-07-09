@@ -344,7 +344,7 @@ def default_get_id():
 
 
 def default_pack_exception(e, dumps):
-    raise
+    raise e
 
 
 def reraise(exc, tb=None):
