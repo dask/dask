@@ -24,7 +24,6 @@ from tlz import first
 
 import dask.array as da
 import dask.dataframe.dask_expr._backends  # noqa: F401
-import dask.dataframe.methods as methods
 from dask import compute, get_annotations
 from dask._collections import new_collection
 from dask._expr import OptimizerStage
@@ -32,6 +31,7 @@ from dask._task_spec import Dict, TaskRef
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
+from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from dask.dataframe.accessor import CachedAccessor
 from dask.dataframe.core import (
