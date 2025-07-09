@@ -706,10 +706,7 @@ def valid_divisions(divisions):
         if isinstance(x, Number) and math.isnan(x):
             return False
 
-    if divisions[-2] > divisions[-1]:
-        return False
-
-    return True
+    return divisions[-2] <= divisions[-1]
 
 
 def drop_by_shallow_copy(df, columns, errors="raise"):

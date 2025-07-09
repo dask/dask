@@ -63,7 +63,7 @@ def _groupby_raise_unaligned(df, convert_by_to_list=True, **kwargs):
     unaligned key is generally a bad idea, we just error loudly in dask.
 
     For more information see pandas GH issue #15244 and Dask GH issue #1876."""
-    by = kwargs.get("by", None)
+    by = kwargs.get("by")
     if by is not None and not _is_aligned(df, by):
         msg = (
             "Grouping by an unaligned column is unsafe and unsupported.\n"
