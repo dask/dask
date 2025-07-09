@@ -953,7 +953,7 @@ def svd(a, coerce_signs=True):
         # Short-and-fat case
         else:
             vt, s, ut = tsqr(a.T, compute_svd=True)
-            u, s, v = ut.T, s, vt.T
+            u, v = ut.T, vt.T
             truncate = a.shape[0] > a.shape[1]
         # Only when necessary, remove extra singular vectors if array
         # has shape that contradicts chunking, e.g. the array is a

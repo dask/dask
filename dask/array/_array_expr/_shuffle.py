@@ -112,7 +112,7 @@ class Shuffle(ArrayExpr):
 
         intermediates: dict = dict()
         merges: dict = dict()
-        dtype = np.min_scalar_type(max(max(chunks[axis]), self._chunk_size_limit))
+        dtype = np.min_scalar_type(max(*chunks[axis], self._chunk_size_limit))
         split_name = f"shuffle-split-{self.deterministic_token}"
         slices = [slice(None)] * len(chunks)
         split_name_suffixes = count()

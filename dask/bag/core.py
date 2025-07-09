@@ -1197,9 +1197,7 @@ class Bag(DaskMethodsMixin):
         elif isinstance(other, Delayed):
             dsk.update(other.dask)
             other = other._key
-        elif isinstance(other, Iterable):
-            other = other
-        else:
+        elif not isinstance(other, Iterable):
             msg = (
                 "Joined argument must be single-partition Bag, "
                 " delayed object, or Iterable, got %s" % type(other).__name
