@@ -902,7 +902,7 @@ Expr={expr}"""
         else:
             if pd.api.types.is_list_like(on) and not is_dask_collection(on):
                 on = list(on)
-            elif isinstance(on, str) or isinstance(on, int):
+            elif isinstance(on, (str, int)):
                 on = [on]
             elif on_index:
                 on = []  # type: ignore

@@ -1541,7 +1541,7 @@ class ArrowDatasetEngine(Engine):
                                     if isinstance(cmax, datetime)
                                     else cmax
                                 )
-                                last = cmax_last.get(name, None)
+                                last = cmax_last.get(name)
                                 if not (
                                     filters
                                     or (blocksize and split_row_groups is True)

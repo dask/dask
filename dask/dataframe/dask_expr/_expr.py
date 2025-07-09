@@ -2399,9 +2399,7 @@ class ResetIndex(Elemwise):
                     return type(self)(self.frame, True, self.name)
                 return
             result = plain_column_projection(self, parent, dependents)
-            if result is not None and not set(result.columns) == set(
-                result.frame.columns
-            ):
+            if result is not None and set(result.columns) != set(result.frame.columns):
                 result = result.substitute_parameters({"drop": True})
             return result
 
@@ -3532,9 +3530,7 @@ class MaybeAlignPartitions(Expr):
 def _are_dtypes_shuffle_compatible(dtypes):
     if len(dtypes) == 1:
         return True
-    if all(pd.api.types.is_numeric_dtype(d) for d in dtypes):
-        return True
-    return False
+    return all(pd.api.types.is_numeric_dtype(d) for d in dtypes)
 
 
 class CombineFirstAlign(MaybeAlignPartitions):

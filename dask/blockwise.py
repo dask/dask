@@ -1220,12 +1220,9 @@ def _can_fuse_annotations(a: dict | None, b: dict | None) -> bool:
         return False
 
     fusable = {"retries", "priority", "resources", "workers", "allow_other_workers"}
-    if (not a or all(k in fusable for k in a)) and (
+    return (not a or all(k in fusable for k in a)) and (
         not b or all(k in fusable for k in b)
-    ):
-        return True
-
-    return False
+    )
 
 
 def _fuse_annotations(*args: dict) -> dict:

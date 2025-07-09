@@ -185,10 +185,7 @@ class _MultiContainer(Container):
         self.container = container
 
     def __contains__(self, o: object) -> bool:
-        for c in self.container:
-            if o in c:
-                return True
-        return False
+        return any(o in c for c in self.container)
 
 
 SubgraphType = None
@@ -563,9 +560,7 @@ class Alias(GraphNode):
             return False
         if self.key != value.key:
             return False
-        if self.target != value.target:
-            return False
-        return True
+        return self.target == value.target
 
 
 class DataNode(GraphNode):

@@ -462,8 +462,8 @@ def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs)
     sqrt = np.sqrt(partition)
 
     if not is_df_like:
-        result = pd.to_timedelta(sqrt, unit=kwargs.get("unit", None))
-        if kwargs.get("unit", None) is not None:
+        result = pd.to_timedelta(sqrt, unit=kwargs.get("unit"))
+        if kwargs.get("unit") is not None:
             result = result.as_unit(kwargs["unit"])
         return result
 
@@ -472,7 +472,7 @@ def _sqrt_and_convert_to_timedelta(partition, axis, dtype=None, *args, **kwargs)
     if len(time_cols) > 0:
         sqrt = sqrt.astype(object)
 
-    units = kwargs.get("units", None)
+    units = kwargs.get("units")
     if units is None:
         units = [None] * len(time_cols)
     for time_col, matching_val, unit in zip(time_cols, matching_vals, units):

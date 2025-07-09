@@ -54,9 +54,7 @@ def istask(x):
     from dask._task_spec import DataNode, GraphNode
 
     if isinstance(x, GraphNode):
-        if isinstance(x, DataNode):
-            return False
-        return True
+        return not isinstance(x, DataNode)
     return type(x) is tuple and x and callable(x[0])
 
 

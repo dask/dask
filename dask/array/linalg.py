@@ -994,7 +994,7 @@ def lu(a):
     xdim, ydim = a.shape
     if xdim != ydim:
         raise ValueError("Input must be a square matrix to perform lu decomposition")
-    if not len(set(a.chunks[0] + a.chunks[1])) == 1:
+    if len(set(a.chunks[0] + a.chunks[1])) != 1:
         msg = (
             "All chunks must be a square matrix to perform lu decomposition. "
             "Use .rechunk method to change the size of chunks."
@@ -1326,7 +1326,7 @@ def _cholesky(a):
         raise ValueError(
             "Input must be a square matrix to perform cholesky decomposition"
         )
-    if not len(set(a.chunks[0] + a.chunks[1])) == 1:
+    if len(set(a.chunks[0] + a.chunks[1])) != 1:
         msg = (
             "All chunks must be a square matrix to perform cholesky decomposition. "
             "Use .rechunk method to change the size of chunks."

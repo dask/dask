@@ -181,7 +181,7 @@ def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
             parsed["shape"],
             parsed["dtype"],
             parsed["chunks"],
-            kwargs.get("meta", None),
+            kwargs.get("meta"),
             kwargs,
         )
     )
@@ -465,7 +465,7 @@ def full(shape, fill_value, *args, **kwargs):
         raise ValueError(
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
-    if kwargs.get("dtype", None) is None:
+    if kwargs.get("dtype") is None:
         if hasattr(fill_value, "dtype"):
             kwargs["dtype"] = fill_value.dtype
         else:

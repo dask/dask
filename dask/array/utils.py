@@ -60,7 +60,7 @@ def meta_from_array(x, ndim=None, dtype=None):
     if isinstance(x, type):
         x = x(shape=(0,) * (ndim or 0), dtype=dtype)
 
-    if isinstance(x, list) or isinstance(x, tuple):
+    if isinstance(x, (list, tuple)):
         ndims = [
             (
                 0

@@ -148,7 +148,7 @@ def from_delayed(
         ]
 
     for item in dfs:
-        if not (isinstance(item, Delayed) or isinstance(item, TaskRef)):
+        if not (isinstance(item, (Delayed, TaskRef))):
             raise TypeError("Expected Delayed object, got %s" % type(item).__name__)
 
     from dask.dataframe.dask_expr._collection import new_collection

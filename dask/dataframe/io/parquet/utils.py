@@ -671,7 +671,7 @@ def _process_open_file_options(
         # (probably because the file system is local)
         precache_options = {}
     if "open_file_func" not in open_file_options:
-        if precache_options.get("method", None) == "parquet":
+        if precache_options.get("method") == "parquet":
             open_file_options["cache_type"] = open_file_options.get(
                 "cache_type", "parts"
             )

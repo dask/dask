@@ -198,7 +198,7 @@ class Concat(Expr):
                 else:
                     cast_dfs.append(df)
             elif is_series_like(df) and is_series_like(self._meta):
-                if not df.dtype == self._meta.dtype and not isinstance(
+                if df.dtype != self._meta.dtype and not isinstance(
                     df.dtype, pd.CategoricalDtype
                 ):
                     cast_dfs.append(AsType(df, dtypes=self._meta.dtype))

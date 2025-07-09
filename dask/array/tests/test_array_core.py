@@ -5730,12 +5730,12 @@ def test_chunk_assignment_invalidates_cached_properties():
     y = x.copy()
     # change chunks directly, which should change all of the tested properties
     y._chunks = ((2, 2), (0, 0, 0, 0))
-    assert not x.ndim == y.ndim
-    assert not x.shape == y.shape
-    assert not x.size == y.size
-    assert not x.numblocks == y.numblocks
-    assert not x.npartitions == y.npartitions
-    assert not x.__dask_keys__() == y.__dask_keys__()
+    assert x.ndim != y.ndim
+    assert x.shape != y.shape
+    assert x.size != y.size
+    assert x.numblocks != y.numblocks
+    assert x.npartitions != y.npartitions
+    assert x.__dask_keys__() != y.__dask_keys__()
     assert not np.array_equal(x._key_array, y._key_array)
 
 
