@@ -951,7 +951,7 @@ Expr={expr}"""
     def resample(self, rule, closed=None, label=None):
         from dask.dataframe.tseries.resample import Resampler
 
-        return Resampler(self, rule, **{"closed": closed, "label": label})
+        return Resampler(self, rule, closed=closed, label=label)
 
     def rolling(self, window, **kwargs):
         """Provides rolling transformations.

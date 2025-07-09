@@ -345,7 +345,7 @@ def partial_reduce(
         return Array(graph, name, out_chunks, dtype=dtype)
     else:
         with contextlib.suppress(AttributeError), warnings.catch_warnings():
-            if name.startswith("var") or name.startswith("moment"):
+            if name.startswith(("var", "moment")):
                 warnings.simplefilter("ignore", ComplexWarning)
             meta = meta.astype(dtype)
         return Array(graph, name, out_chunks, meta=meta)
