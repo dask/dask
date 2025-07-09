@@ -389,7 +389,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
 
 
 def check_matching_columns(meta, actual):
-    import dask.dataframe.methods as methods
+    from dask.dataframe import methods
 
     # Need nan_to_num otherwise nan comparison gives False
     if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
@@ -493,7 +493,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
 
 
 def _maybe_sort(a, check_index: bool):
-    import dask.dataframe.methods as methods
+    from dask.dataframe import methods
 
     # sort by value, then index
     try:
