@@ -994,6 +994,7 @@ Expr={expr}"""
         clear_divisions=False,
         align_dataframes=False,
         parent_meta=None,
+        required_columns=None,
         **kwargs,
     ):
         """Apply a Python function to each partition
@@ -1021,6 +1022,11 @@ Expr={expr}"""
         clear_divisions : bool, default False
             Whether divisions should be cleared. If True, `transform_divisions`
             will be ignored.
+        required_columns : list or None, default None
+            List of columns that ``func`` requires for execution. These columns
+            must belong to the first DataFrame argument (in ``args``). If None
+            is specified (the default), the query optimizer will assume that
+            all input columns are required.
         $META
 
         Examples
@@ -1118,6 +1124,7 @@ Expr={expr}"""
             clear_divisions=clear_divisions,
             align_dataframes=align_dataframes,
             parent_meta=parent_meta,
+            required_columns=required_columns,
             **kwargs,
         )
 
@@ -6126,6 +6133,7 @@ def map_partitions(
     clear_divisions=False,
     align_dataframes=False,
     parent_meta=None,
+    required_columns=None,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -6158,6 +6166,11 @@ def map_partitions(
         If False, all inputs must have either the same number of partitions
         or a single partition. Single-partition inputs will be broadcast to
         every partition of multi-partition inputs.
+    required_columns : list or None, default None
+        List of columns that ``func`` requires for execution. These columns
+        must belong to the first DataFrame argument (in ``args``). If None
+        is specified (the default), the query optimizer will assume that
+        all input columns are required.
     $META
     """
     if align_dataframes:
@@ -6189,6 +6202,7 @@ def map_partitions(
         clear_divisions,
         align_dataframes,
         parent_meta,
+        required_columns,
         newkwargs.pop("token", None),
         Dict(newkwargs),
         len(args) - 1,
