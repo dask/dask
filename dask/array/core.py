@@ -6042,7 +6042,7 @@ class BlockView:
         hlg = HighLevelGraph.from_collections(name, graph, dependencies=[self._array])
         return Array(hlg, name, chunks, meta=self._array)
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, BlockView):
             return self._array is other._array
         else:

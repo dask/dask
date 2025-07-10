@@ -241,7 +241,7 @@ def _df_to_bag(df, index=False, format="tuple"):
         elif format == "dict":
             if index:
                 return [
-                    {**{"index": idx}, **values}
+                    {"index": idx, **values}
                     for values, idx in zip(df.to_dict("records"), df.index)
                 ]
             else:

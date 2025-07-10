@@ -185,10 +185,7 @@ class _MultiContainer(Container):
         self.container = container
 
     def __contains__(self, o: object) -> bool:
-        for c in self.container:
-            if o in c:
-                return True
-        return False
+        return any(o in c for c in self.container)
 
 
 SubgraphType = None
@@ -303,7 +300,7 @@ def resolve_aliases(dsk: dict, keys: set, dependents: dict) -> dict:
             # 1. The target key is not in the keys set. The keys set is what the
             #    user is requesting and by collapsing we'd no longer be able to
             #    return that result.
-            # 2. The target key is in fact part of dsk. If it isnt' this could
+            # 2. The target key is in fact part of dsk. If it isn't this could
             #    point to a persisted dependency and we cannot collapse it.
             # 3. The target key has only one dependent which is the key we're
             #    currently looking at. This means that there is a one to one
@@ -462,7 +459,7 @@ class GraphNode:
 
         See also
         --------
-        GraphNode.substitute : Easer substitution of dependencies
+        GraphNode.substitute : Easier substitution of dependencies
         """
         if any(t.key is None for t in tasks):
             raise ValueError("Cannot fuse tasks with missing keys")
@@ -563,9 +560,7 @@ class Alias(GraphNode):
             return False
         if self.key != value.key:
             return False
-        if self.target != value.target:
-            return False
-        return True
+        return self.target == value.target
 
 
 class DataNode(GraphNode):
@@ -1055,7 +1050,7 @@ def execute_graph(
 ) -> MutableMapping[KeyType, object]:
     """Execute a given graph.
 
-    The graph is exceuted in topological order as defined by dask.order until
+    The graph is executed in topological order as defined by dask.order until
     all leaf nodes, i.e. nodes without any dependents, are reached. The returned
     dictionary contains the results of the leaf nodes.
 

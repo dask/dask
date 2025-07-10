@@ -1554,9 +1554,7 @@ class GroupBy:
         self.dropna = dropna
         self.group_keys = group_keys
         self.by = (
-            [by]
-            if np.isscalar(by) or isinstance(by, Expr) or isinstance(by, Callable)
-            else list(by)
+            [by] if np.isscalar(by) or isinstance(by, (Expr, Callable)) else list(by)
         )
         # surface pandas errors
         self._meta = self.obj._meta.groupby(

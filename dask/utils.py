@@ -1189,7 +1189,7 @@ def asciitable(columns, rows):
     """
     rows = [tuple(str(i) for i in r) for r in rows]
     columns = tuple(str(i) for i in columns)
-    widths = tuple(max(max(map(len, x)), len(c)) for x, c in zip(zip(*rows), columns))
+    widths = tuple(max(*map(len, x), len(c)) for x, c in zip(zip(*rows), columns))
     row_template = ("|" + (" %%-%ds |" * len(columns))) % widths
     header = row_template % tuple(columns)
     bar = "+%s+" % "+".join("-" * (w + 2) for w in widths)
@@ -1759,8 +1759,8 @@ def format_time_ago(n: datetime) -> str:
         "minutes": lambda diff: diff.seconds % 3600 / 60,
     }
     diff = datetime.now() - n
-    for unit in units:
-        dur = int(units[unit](diff))
+    for unit, func in units.items():
+        dur = int(func(diff))
         if dur > 0:
             if dur == 1:  # De-pluralize
                 unit = unit[:-1]

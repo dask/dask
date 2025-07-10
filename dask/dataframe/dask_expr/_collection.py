@@ -902,7 +902,7 @@ Expr={expr}"""
         else:
             if pd.api.types.is_list_like(on) and not is_dask_collection(on):
                 on = list(on)
-            elif isinstance(on, str) or isinstance(on, int):
+            elif isinstance(on, (str, int)):
                 on = [on]
             elif on_index:
                 on = []  # type: ignore
@@ -951,7 +951,7 @@ Expr={expr}"""
     def resample(self, rule, closed=None, label=None):
         from dask.dataframe.tseries.resample import Resampler
 
-        return Resampler(self, rule, **{"closed": closed, "label": label})
+        return Resampler(self, rule, closed=closed, label=label)
 
     def rolling(self, window, **kwargs):
         """Provides rolling transformations.
@@ -1330,7 +1330,7 @@ Expr={expr}"""
         should be specified. A ``ValueError`` will be raised when that is
         not the case.
 
-        Also note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Also note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -3040,7 +3040,7 @@ class DataFrame(FrameBase):
             out = self.assign(**{k: value[c] for k, c in zip(key, value.columns)})
 
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
-            out = self.assign(**{k: value for k in list(key)})
+            out = self.assign(**dict.fromkeys(list(key), value))
         elif (
             is_dataframe_like(key)
             or is_series_like(key)
@@ -3429,7 +3429,7 @@ class DataFrame(FrameBase):
                        '2021-01-05', '2021-01-06', '2021-01-07'],
                       dtype='datetime64[ns]', freq='D')
 
-        Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -3451,7 +3451,7 @@ class DataFrame(FrameBase):
         if isinstance(other, list) and len(other) == 1:
             other = other[0]
         if isinstance(other, list):
-            if any([isinstance(c, FrameBase) for c in other]):
+            if any(isinstance(c, FrameBase) for c in other):
                 raise TypeError("List[FrameBase] not supported by set_index")
             else:
                 raise NotImplementedError(
@@ -3523,7 +3523,7 @@ class DataFrame(FrameBase):
         by: str | list[str],
         npartitions: int | None = None,
         ascending: bool | list[bool] = True,
-        na_position: Literal["first"] | Literal["last"] = "last",
+        na_position: Literal["first", "last"] = "last",
         partition_size: float = 128e6,
         sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
         sort_function_kwargs: Mapping[str, Any] | None = None,
@@ -4719,7 +4719,7 @@ class Index(Series):
         Note that this method clears any known divisions.
 
         If your mapping function is monotonically increasing then use `is_monotonic`
-        to apply the maping function to the old divisions and assign the new
+        to apply the mapping function to the old divisions and assign the new
         divisions to the output.
 
         """

@@ -553,7 +553,7 @@ def test_apply_gufunc_axis_keepdims(axis):
     a = np.random.default_rng().standard_normal((10, 5))
     da_ = da.from_array(a, chunks=2)
 
-    m = np.median(a, axis=-1 if not axis else axis, keepdims=True)
+    m = np.median(a, axis=axis or -1, keepdims=True)
     dm = apply_gufunc(
         mymedian, "(i)->()", da_, axis=axis, keepdims=True, allow_rechunk=True
     )

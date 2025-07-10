@@ -2317,7 +2317,7 @@ def test_xarray_rechunk_map_reduce_cohorts(use_longest_path):
         # ensure that we run through longes path True and False
         keys = [("open-dataset", i, 0, 0) for i in range(20, 35)]
         dsk.update({("dummy", 0): (f, keys)})
-        dsk.update({k: (f,) for k in keys})
+        dsk.update(dict.fromkeys(keys, (f,)))
 
     o = order(dsk)
 

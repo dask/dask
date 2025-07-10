@@ -953,7 +953,7 @@ def svd(a, coerce_signs=True):
         # Short-and-fat case
         else:
             vt, s, ut = tsqr(a.T, compute_svd=True)
-            u, s, v = ut.T, s, vt.T
+            u, v = ut.T, vt.T
             truncate = a.shape[0] > a.shape[1]
         # Only when necessary, remove extra singular vectors if array
         # has shape that contradicts chunking, e.g. the array is a
@@ -994,7 +994,7 @@ def lu(a):
     xdim, ydim = a.shape
     if xdim != ydim:
         raise ValueError("Input must be a square matrix to perform lu decomposition")
-    if not len(set(a.chunks[0] + a.chunks[1])) == 1:
+    if len(set(a.chunks[0] + a.chunks[1])) != 1:
         msg = (
             "All chunks must be a square matrix to perform lu decomposition. "
             "Use .rechunk method to change the size of chunks."
@@ -1326,7 +1326,7 @@ def _cholesky(a):
         raise ValueError(
             "Input must be a square matrix to perform cholesky decomposition"
         )
-    if not len(set(a.chunks[0] + a.chunks[1])) == 1:
+    if len(set(a.chunks[0] + a.chunks[1])) != 1:
         msg = (
             "All chunks must be a square matrix to perform cholesky decomposition. "
             "Use .rechunk method to change the size of chunks."
