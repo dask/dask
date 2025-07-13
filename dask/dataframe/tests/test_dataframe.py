@@ -3662,7 +3662,7 @@ def test_inplace_operators():
     "idx",
     [
         np.arange(100),
-        sorted(np.random.random(size=100)),
+        sorted(np.random.random(size=100).tolist()),
         pd.date_range("20150101", periods=100),
     ],
 )
