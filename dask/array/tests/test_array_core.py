@@ -2896,7 +2896,7 @@ def test_from_array_ndarray_onechunk(x):
     dx = da.from_array(x, chunks=-1)
     assert_eq(x, dx)
     assert len(dx.dask) == 1
-    assert not dx.dask[(dx.name,) + (0,) * dx.ndim] is x
+    assert dx.dask[(dx.name,) + (0,) * dx.ndim] is not x
     assert_eq(dx.dask[(dx.name,) + (0,) * dx.ndim], x)
 
 
@@ -3024,7 +3024,7 @@ def test_from_array_inline():
 
     a = np.array([1, 2, 3]).view(MyArray)
     dsk = dict(da.from_array(a, name="my-array", inline_array=False).dask)
-    assert not dsk["original-my-array"] is a
+    assert dsk["original-my-array"] is not a
     assert_eq(dsk["original-my-array"], a)
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
@@ -5730,12 +5730,12 @@ def test_chunk_assignment_invalidates_cached_properties():
     y = x.copy()
     # change chunks directly, which should change all of the tested properties
     y._chunks = ((2, 2), (0, 0, 0, 0))
-    assert not x.ndim == y.ndim
-    assert not x.shape == y.shape
-    assert not x.size == y.size
-    assert not x.numblocks == y.numblocks
-    assert not x.npartitions == y.npartitions
-    assert not x.__dask_keys__() == y.__dask_keys__()
+    assert x.ndim != y.ndim
+    assert x.shape != y.shape
+    assert x.size != y.size
+    assert x.numblocks != y.numblocks
+    assert x.npartitions != y.npartitions
+    assert x.__dask_keys__() != y.__dask_keys__()
     assert not np.array_equal(x._key_array, y._key_array)
 
 

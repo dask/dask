@@ -10,7 +10,7 @@ from dask._compatibility import importlib_metadata
 
 @pytest.mark.xfail(reason="https://github.com/dask/dask/issues/9735", strict=False)
 @pytest.mark.skipif(
-    not os.environ.get("UPSTREAM_DEV", False),
+    not os.environ.get("UPSTREAM_DEV"),
     reason="Only check for dev packages in `upstream` CI build",
 )
 def test_upstream_packages_installed():

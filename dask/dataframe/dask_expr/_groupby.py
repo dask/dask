@@ -1390,6 +1390,7 @@ class GroupByCumulative(Expr, GroupByBase):
             True,
             None,
             None,
+            None,
             {"chunk": self.chunk, "columns": columns, **dropna, **self.numeric_only},
             len(self.by),
             *self.by,
@@ -1418,6 +1419,7 @@ class GroupByCumulative(Expr, GroupByBase):
             True,
             False,
             True,
+            None,
             None,
             None,
             {"chunk": M.last, "columns": columns, **dropna},
@@ -1554,9 +1556,7 @@ class GroupBy:
         self.dropna = dropna
         self.group_keys = group_keys
         self.by = (
-            [by]
-            if np.isscalar(by) or isinstance(by, Expr) or isinstance(by, Callable)
-            else list(by)
+            [by] if np.isscalar(by) or isinstance(by, (Expr, Callable)) else list(by)
         )
         # surface pandas errors
         self._meta = self.obj._meta.groupby(

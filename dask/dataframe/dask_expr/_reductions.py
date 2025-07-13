@@ -220,7 +220,7 @@ class ShuffleReduce(Expr):
         unmap_columns = {v: k for k, v in map_columns.items()}
         if map_columns:
             chunked = RenameFrame(chunked, map_columns)
-            split_by = [c if c not in map_columns else map_columns[c] for c in split_by]
+            split_by = [map_columns.get(c, c) for c in split_by]
 
         # Sort or shuffle
         split_every = getattr(self, "split_every", 0) or chunked.npartitions
