@@ -10,6 +10,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Iterator, Sequence
 from functools import partial, reduce, wraps
 from random import Random
+from typing import cast
 from urllib.request import urlopen
 
 import tlz as toolz
@@ -2576,7 +2577,8 @@ def random_state_data_python(
 
         random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
         arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
-        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]
+        raw_list = cast(list[list[int]], arr.tolist())
+        return [(3, tuple(row) + (624,), None) for row in raw_list]
 
     except ImportError:
         # Pure python (much slower)
