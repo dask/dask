@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import sys
 import warnings
 from functools import reduce
 from typing import Any
@@ -61,7 +62,7 @@ def config_get(key=None):
         data = reduce(lambda d, k: d[k], key.split("."), dask.config.config)
     except (KeyError, TypeError):
         click.echo(click.style(f"Section not found: {key}", fg="red"), err=True)
-        exit(1)
+        sys.exit(1)
 
     if isinstance(data, (list, dict)):
         click.echo_via_pager(yaml.dump(data))
