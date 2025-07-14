@@ -6,6 +6,49 @@ Changelog
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
 
+.. _v2025.7.0:
+
+2025.7.0
+--------
+
+Highlights
+^^^^^^^^^^
+- Account for ``__main__`` in ``pickle`` normalization (:pr:`11970`) `James Bourbeau`_
+- Enable column projection in ``MapPartitions`` (:pr:`11875`) `Richard (Rick) Zamora`_
+- Add config option for ``direct-to-workers`` (:pr-distributed:`9097`) `James Bourbeau`_
+
+.. dropdown:: Additional changes
+
+  - CI: update actions location (:pr:`12019`) `Brigitta Sipőcz`_
+  - Apply ``ruff/flake8-comprehensions`` rules (C4) (:pr:`12004`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/flake8-pie`` rules (PIE) (:pr:`12006`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/Pylint Error`` rules (PLE) (:pr:`12013`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/Pylint Convention`` rules (PLC) (:pr:`12012`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/flake8-pyi`` rules (PYI) (:pr:`12007`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/flake8-simplify`` rules (SIM) (:pr:`12008`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/Pylint`` Warning rules (PLW) (:pr:`12011`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/flake8-implicit-str-concat`` rules (ISC) (:pr:`12005`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/pycodestyle`` rule E714 (:pr:`12000`) `Dimitri Papadopoulos Orfanos`_
+  - Fix typos found by ``codespell`` (:pr:`12001`) `Dimitri Papadopoulos Orfanos`_
+  - Update PyPI URL for official nightly ``pyarrow`` repository (:pr:`11996`) `Raúl Cumplido`_
+  - Fall-back to textual repr in case ``jinja2`` is not installed (:pr:`11987`) `Lukas Bindreiter`_
+  - Prevent ``builtins.any`` from being shadowed in ``dask.array.reductions`` (:pr:`11988`) `Marvin Albert`_
+  - Bump ``conda-incubator/setup-miniconda`` from 3.1.1 to 3.2.0 (:pr:`11982`)
+  - Skip groupby cov test for pandas 3.x (:pr:`11977`) `Tom Augspurger`_
+  - Fix ``upstream`` CI installation (:pr:`11976`) `James Bourbeau`_
+  - Make module name logic more resilient in ``Dispatch`` (:pr:`11974`) `James Bourbeau`_
+
+  - Ensure ``memray`` profiler runs on all workers (:pr-distributed:`9095`) `James Bourbeau`_
+  - Update ``def`` to ``class`` typo in actors docs (:pr-distributed:`9091`) `Peter Fackeldey`_
+  - Bump ``conda-incubator/setup-miniconda`` from 3.1.1 to 3.2.0 (:pr-distributed:`9090`)
+  - Update persist in tests for async clients (:pr-distributed:`9089`) `Tom Augspurger`_
+  - Fix ``pyarrow`` ``FileInfo`` import (:pr-distributed:`9078`) `James Bourbeau`_
+  - Make module name logic more resilient in ``_always_use_pickle_for`` (:pr-distributed:`9086`) `James Bourbeau`_
+  - Temporarily pin ``pytest`` in CI to avoid coverage error  (:pr-distributed:`9088`) `James Bourbeau`_
+  - Remove ``s3fs`` from testing CI environment (:pr-distributed:`9087`) `James Bourbeau`_
+  - Reuse ``Comm`` objects in ``Scheduler.broadcast`` (:pr-distributed:`9083`) `Tom Augspurger`_
+  - Fix ``test_resubmit_nondeterministic_task_different_deps`` (:pr-distributed:`9085`) `James Bourbeau`_
+
 .. _v2025.5.1:
 
 2025.5.1
@@ -9557,3 +9600,8 @@ Other
 .. _`Taylor Braun-Jones`: https://github.com/nocnokneo
 .. _`Isaac`: https://github.com/icykip
 .. _`Sandro`: https://github.com/penguinpee
+.. _`Brigitta Sipőcz`: https://github.com/bsipocz
+.. _`Raúl Cumplido`: https://github.com/raulcd
+.. _`Lukas Bindreiter`: https://github.com/lukasbindreiter
+.. _`Marvin Albert`: https://github.com/m-albert
+.. _`Peter Fackeldey`: https://github.com/pfackeldey
