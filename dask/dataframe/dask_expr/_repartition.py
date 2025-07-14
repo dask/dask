@@ -459,7 +459,7 @@ class RepartitionSize(Repartition):
 
     def _lower(self):
         # populate cache
-        self._mem_usage  # noqa
+        self._mem_usage
         return super()._lower()
 
     def _layer(self) -> dict:
