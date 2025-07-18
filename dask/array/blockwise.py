@@ -62,6 +62,12 @@ def blockwise(
         arrays such that they are compatible for block function mapping. If
         this is false, then an error will be thrown if arrays do not already
         have the same number of blocks in each dimension.
+    name: str
+        A uniquely identifying name, similar to :func:`dask.array.from_array`.
+        If not provided, a unique identifier will be generated
+        (potentially using the `token` argument)
+    token: str
+        A prefixing string to the unique name generated internally.
 
     Examples
     --------
