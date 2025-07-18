@@ -810,7 +810,6 @@ def map_blocks(
         )
         raise TypeError(msg % type(func).__name__)
 
-    name = name
     token = f"{token or funcname(func)}"
     new_axes = {}
 
