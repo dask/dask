@@ -143,6 +143,25 @@ def test_column_projection_modify_list(df, pdf):
     assert_eq(result, pdf[["x"]])
 
 
+@pytest.mark.parametrize("required_columns", [None, ["z"], ["z", "foo"]])
+def test_column_projection_map_partitions(required_columns):
+
+    pdf = pd.DataFrame({"x": [1] * 5, "y": [2] * 5, "z": range(5)})
+    df = from_pandas(pdf, npartitions=2)
+
+    def myfunc(x):
+        return x.assign(zz=x["z"] + 1)
+
+    df = df.map_partitions(myfunc, meta=myfunc(pdf), required_columns=required_columns)
+    if required_columns and "foo" in required_columns:
+        with pytest.raises(KeyError, match="foo"):
+            df["x"].simplify()
+    else:
+        assert_eq(df["x"], myfunc(pdf)["x"])
+        if required_columns:
+            assert set(df["x"].simplify().frame.frame.columns) == {"x", "z"}
+
+
 def test_setitem(pdf, df):
     pdf = pdf.copy()
     pdf["z"] = pdf.x + pdf.y
