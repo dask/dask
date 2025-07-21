@@ -1239,7 +1239,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
 
         result = result.map_blocks(
             wrapped_pad_func,
-            name="pad",
+            token="pad",
             dtype=result.dtype,
             pad_func=mode,
             iaxis_pad_width=pad_width[d],
