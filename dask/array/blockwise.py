@@ -67,7 +67,7 @@ def blockwise(
         If not provided, a unique identifier will be generated
         (potentially using the `token` argument)
     token: str
-        A prefixing string to the unique name generated internally.
+        The prefix to use for the output Array's name when ``name`` is not specified.
 
     Examples
     --------
