@@ -1452,7 +1452,8 @@ def test_dataframe_quantile(method, expected, numeric_only):
         numeric_only_kwarg = {"numeric_only": numeric_only}
 
     if numeric_only is False or numeric_only is None:
-        with pytest.raises(TypeError):
+        # TypeError for pandas<3, ArrowNotImplementedError for pandas>=3
+        with pytest.raises((TypeError, ArrowNotImplementedError)):
             df.quantile(**numeric_only_kwarg)
         with pytest.raises(
             (TypeError, ArrowNotImplementedError, ValueError),
