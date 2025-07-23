@@ -581,6 +581,37 @@ def group_split_pandas(df, c, k, ignore_index=False):
     return ShuffleGroupResult(zip(range(k), parts))
 
 
+def _union_categoricals_wrapper(
+    dfs: list[pd.CategoricalIndex] | list[pd.Series], **kwargs
+) -> pd.Categorical:
+    """
+    A wrapper around pandas' union_categoricals that handles some dtype issues.
+
+    union_categoricals requires that the dtype of each array's categories match.
+    So you can't union ``Categorical(['a', 'b'])`` and ``Categorical([1, 2])``
+    since the dtype (str vs. int) doesn't match.
+
+    *Somewhere* in Dask, we're possibly creating an empty ``Categorical``
+    with a dtype of ``object``. In pandas 2.x, we could union that with string
+    categories since they both used object dtype. But pandas 3.x uses string
+    dtype for categories.
+
+    This wrapper handles that by creating a new ``Categorical`` with the
+    correct dtype.
+    """
+    categories_dtypes = {cat.dtype.categories.dtype.name for cat in dfs}
+    if "object" in categories_dtypes and "str" in categories_dtypes:
+        # TODO: don't drop name?
+        dfs = [
+            type(cat)(pd.Categorical(pd.Index([], dtype="str")), name=cat.name)
+            if cat.dtype.categories.dtype.name == "object" and len(cat) == 0
+            else cat
+            for cat in dfs
+        ]
+
+    return union_categoricals(dfs, **kwargs)
+
+
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def concat_pandas(
     dfs,
@@ -603,7 +634,8 @@ def concat_pandas(
                 if not isinstance(dfs[i], pd.CategoricalIndex):
                     dfs[i] = dfs[i].astype("category")
             return pd.CategoricalIndex(
-                union_categoricals(dfs, ignore_order=ignore_order), name=dfs[0].name
+                _union_categoricals_wrapper(dfs, ignore_order=ignore_order),
+                name=dfs[0].name,
             )
         elif isinstance(dfs[0], pd.MultiIndex):
             first, rest = dfs[0], dfs[1:]
@@ -698,7 +730,7 @@ def concat_pandas(
                             codes, sample.cat.categories, sample.cat.ordered
                         )
                         parts.append(data)
-                out[col] = union_categoricals(parts, ignore_order=ignore_order)
+                out[col] = _union_categoricals_wrapper(parts, ignore_order=ignore_order)
                 # Pandas resets index type on assignment if frame is empty
                 # https://github.com/pandas-dev/pandas/issues/17101
                 if not len(temp_ind):
