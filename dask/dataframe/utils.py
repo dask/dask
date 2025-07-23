@@ -277,8 +277,10 @@ _simple_fake_mapping: dict[str, Any] = {
     "U": np.str_("foo"),
 }
 
+_object = object()
+
 if PANDAS_GE_300:
-    _simple_fake_mapping["O"] = object()
+    _simple_fake_mapping["O"] = _object
 else:
     _simple_fake_mapping["O"] = "foo"
 

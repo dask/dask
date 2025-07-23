@@ -246,8 +246,10 @@ def test_meta_duplicated():
     df = pd.DataFrame(columns=["A", "A", "B"])
     res = meta_nonempty(df)
 
+    o = dd.utils._object
+
     exp = pd.DataFrame(
-        [["foo", "foo", "foo"], ["foo", "foo", "foo"]],
+        [[o, o, o], [o, o, o]],
         index=meta_nonempty(df.index),
         columns=["A", "A", "B"],
     )
