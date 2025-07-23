@@ -1272,7 +1272,11 @@ def test_pyarrow_schema_mismatch_error(tmpdir):
     msg = str(rec.value)
     assert "Failed to convert partition to expected pyarrow schema" in msg
     assert "y: double" in str(rec.value)
-    assert "y: string" in str(rec.value)
+
+    if PANDAS_GE_300:
+        assert "y: large_string" in str(rec.value)
+    else:
+        assert "y: string" in str(rec.value)
 
 
 @PYARROW_MARK
@@ -2691,8 +2695,8 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
         assert_eq(result, expect, check_index=False)
     else:
         # For now, partial overlap between partition columns and
-        # real columns is not allowed for pyarrow
-        with pytest.raises(ValueError):
+        # real columns is not allowed for
+        with pytest.raises((ValueError, pa.ArrowTypeError)):
             dd.read_parquet(path, engine=engine)
 
 
