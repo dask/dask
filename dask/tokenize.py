@@ -395,10 +395,21 @@ def register_pyarrow():
 
     @normalize_token.register(pa.Array)
     def normalize_chunked_array(arr):
+        buffers = arr.buffers()
+        # pyarrow does something clever when (de)serializing an array that has
+        # an empty validity map: The buffers for the deserialized array will
+        # have `None` instead of the empty validity map.
+        #
+        # We'll replicate that behavior here to ensure we get consistent
+        # tokenization.
+        buffers = arr.buffers()
+        if len(buffers) and buffers[0] is not None and arr.null_count == 0:
+            buffers[0] = None
+
         return (
             "pa.Array",
             normalize_token(arr.type),
-            normalize_token(arr.buffers()),
+            normalize_token(buffers),
         )
 
     @normalize_token.register(pa.Buffer)
