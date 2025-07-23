@@ -17,7 +17,7 @@ from packaging.version import Version
 import dask
 import dask.dataframe as dd
 import dask.multiprocessing
-from dask.dataframe._compat import PANDAS_GE_202, PANDAS_GE_300
+from dask.dataframe._compat import PANDAS_GE_202, PANDAS_GE_300, PYARROW_GE_2101
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 from dask.utils import natural_sort_key
@@ -2668,9 +2668,22 @@ def test_arrow_to_pandas(tmpdir, engine):
     assert got.A.dtype == got.compute().A.dtype
 
 
+PYARROW_LARGE_STRING_XFAIL = pytest.mark.xfail(
+    condition=not PYARROW_GE_2101,
+    reason="https://github.com/apache/arrow/issues/47177",
+    strict=True,
+)
+
+
 @pytest.mark.parametrize(
     "write_cols",
-    [["part", "col"], ["part", "kind", "col"]],
+    [
+        ["part", "col"],
+        pytest.param(
+            ["part", "kind", "col"],
+            marks=PYARROW_LARGE_STRING_XFAIL,
+        ),
+    ],
 )
 def test_partitioned_column_overlap(tmpdir, engine, write_cols):
     tmpdir.mkdir("part=a")
@@ -2703,7 +2716,13 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
 @PYARROW_MARK
 @pytest.mark.parametrize(
     "write_cols",
-    [["col"], ["part", "col"]],
+    [
+        ["col"],
+        pytest.param(
+            ["part", "col"],
+            marks=PYARROW_LARGE_STRING_XFAIL,
+        ),
+    ],
 )
 def test_partitioned_no_pandas_metadata(tmpdir, engine, write_cols):
     # See: https://github.com/dask/dask/issues/8087
@@ -2738,6 +2757,7 @@ def test_partitioned_no_pandas_metadata(tmpdir, engine, write_cols):
 
 
 @PYARROW_MARK
+@PYARROW_LARGE_STRING_XFAIL
 def test_pyarrow_directory_partitioning(tmpdir):
     # Manually construct directory-partitioned dataset
     path1 = tmpdir.mkdir("a")
