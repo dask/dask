@@ -15,7 +15,7 @@ import dask
 import dask.array as da
 from dask._compatibility import WINDOWS
 from dask.array.numpy_compat import NUMPY_GE_200
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.dask_expr import (
     DataFrame,
     Series,
@@ -872,6 +872,7 @@ def test_to_datetime():
         to_datetime(1490195805)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_to_numeric(pdf, df):
     import dask.array as da
 
@@ -1635,10 +1636,14 @@ def test_values():
 
     df = from_pandas(pdf, 2)
 
-    if pyarrow_strings_enabled():
+    if pyarrow_strings_enabled() or PANDAS_GE_300:
         with pytest.warns(UserWarning, match="extension dtypes"):
             assert_eq(df.values, pdf.values)
-            assert_eq(df.x.values, pdf.x.values)
+            values = df.x.values
+            if not PANDAS_GE_300:
+                # https://github.com/dask/dask/issues/2713
+                # dask lacks an extension array type.
+                assert_eq(values, pdf.x.values)
     else:
         assert_eq(df.values, pdf.values)
         assert_eq(df.x.values, pdf.x.values)
