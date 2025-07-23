@@ -22,7 +22,6 @@ from tlz import compose, curry, partial
 import dask
 from dask._compatibility import PY_VERSION
 from dask.core import flatten, literal
-from dask.dataframe._compat import PANDAS_GE_300
 from dask.tokenize import TokenizationError, normalize_token, tokenize
 from dask.utils import tmpfile
 from dask.utils_test import import_or_none
@@ -79,13 +78,6 @@ def check_tokenize(*args, **kwargs):
         # Skip: different interpreter determinism
 
     return before
-
-
-@pytest.mark.skipif(not PANDAS_GE_300, reason="requires pandas>=3.0.0")
-def test_tokenize_arrow_string_array_numpy_semantics():
-    arr = pd.Series(["a", "b", "c"], dtype="category").cat.categories.array
-    # assert isinstance(arr, pd.core.arrays.string_arrow.ArrowStringArray)  # TODO: public API
-    check_tokenize(arr)
 
 
 def test_check_tokenize():
@@ -587,8 +579,13 @@ def test_tokenize_pandas():
 def test_tokenize_pandas_invalid_unicode():
     # see https://github.com/dask/dask/issues/2713
     df = pd.DataFrame(
-        {"x\ud83d": [1, 2, 3], "y\ud83d": ["4", "asd\ud83d", None]}, index=[1, 2, 3]
+        {
+            "x": [1, 2, 3],
+            "y": pd.Series(["4", "asd\ud83d", None], dtype="object"),
+        },
+        index=[1, 2, 3],
     )
+    df.columns = pd.Index(["x\ud83d", "y\ud83d"], dtype="object")
     check_tokenize(df)
 
 
