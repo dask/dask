@@ -4055,7 +4055,11 @@ def test_values():
         ctx = pytest.warns(UserWarning, match="object dtype")
     with ctx:
         result = ddf.x.values
-    assert_eq(df.x.values, result)
+
+    if not PANDAS_GE_300:
+        # Dask currently lacks an extension type.
+        # https://github.com/dask/dask/issues/5001
+        assert_eq(df.x.values, result)
     assert_eq(df.y.values, ddf.y.values)
     assert_eq(df.index.values, ddf.index.values)
 
