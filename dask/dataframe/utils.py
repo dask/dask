@@ -8,7 +8,7 @@ import traceback
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from numbers import Number
-from typing import TypeVar, overload
+from typing import Any, TypeVar, overload
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,7 @@ from pandas.api.types import is_dtype_equal
 import dask
 from dask.base import is_dask_collection
 from dask.core import get_deps
-from dask.dataframe._compat import tm  # noqa: F401
+from dask.dataframe._compat import PANDAS_GE_300, tm  # noqa: F401
 from dask.dataframe.dispatch import (  # noqa : F401
     is_categorical_dtype_dispatch,
     make_meta,
@@ -267,7 +267,7 @@ def _empty_series(name, dtype, index=None):
     return pd.Series([], dtype=dtype, name=name, index=index)
 
 
-_simple_fake_mapping = {
+_simple_fake_mapping: dict[str, Any] = {
     "b": np.bool_(True),
     "V": np.void(b" "),
     "M": np.datetime64("1970-01-01"),
@@ -275,8 +275,12 @@ _simple_fake_mapping = {
     "S": np.str_("foo"),
     "a": np.str_("foo"),
     "U": np.str_("foo"),
-    "O": "foo",
 }
+
+if PANDAS_GE_300:
+    _simple_fake_mapping["O"] = object()
+else:
+    _simple_fake_mapping["O"] = "foo"
 
 
 def _scalar_from_dtype(dtype):

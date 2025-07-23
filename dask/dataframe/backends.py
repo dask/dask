@@ -5,6 +5,7 @@ from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
+import pyarrow.compute
 from pandas.api.types import is_scalar, union_categoricals
 
 from dask.array import Array
@@ -189,6 +190,21 @@ def _(x):
 @make_meta_dispatch.register((pd.Series, pd.DataFrame))
 def _(x, index=None):
     out = x.iloc[:0].copy(deep=True)
+
+    # https://github.com/pandas-dev/pandas/issues/61930
+    # pandas shallow copies arrow-backed extension arrays.
+    # Use pyarrow.compute.take to get a new array that doesn't
+    # share any memory with the original array.
+
+    for k, v in out.items():
+        if isinstance(v.array, pd.arrays.ArrowExtensionArray):
+            values = pyarrow.compute.take(
+                pyarrow.array(v.array), pyarrow.array([], type="int32")
+            )
+            out[k] = v._constructor(
+                pd.array(values, dtype=v.array.dtype), index=v.index, name=v.name
+            )
+
     # index isn't copied by default in pandas, even if deep=true
     out.index = out.index.copy(deep=True)
     return out
