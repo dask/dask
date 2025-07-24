@@ -400,7 +400,7 @@ def register_pyarrow():
         # )
 
     @normalize_token.register(pa.Array)
-    def normalize_chunked_array(arr):
+    def normalize_array(arr):
         buffers = arr.buffers()
         # pyarrow does something clever when (de)serializing an array that has
         # an empty validity map: The buffers for the deserialized array will
@@ -419,7 +419,7 @@ def register_pyarrow():
         )
 
     @normalize_token.register(pa.Buffer)
-    def normalize_chunked_array(buf):
+    def normalize_buffer(buf):
         return ("pa.Buffer", hash_buffer_hex(buf))
 
 

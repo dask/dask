@@ -601,11 +601,12 @@ def _union_categoricals_wrapper(
     """
     categories_dtypes = {cat.dtype.categories.dtype.name for cat in dfs}
     if "object" in categories_dtypes and "str" in categories_dtypes:
-        # TODO: don't drop name?
         dfs = [
-            type(cat)(pd.Categorical(pd.Index([], dtype="str")), name=cat.name)
-            if cat.dtype.categories.dtype.name == "object" and len(cat) == 0
-            else cat
+            (
+                type(cat)(pd.Categorical(pd.Index([], dtype="str")), name=cat.name)
+                if cat.dtype.categories.dtype.name == "object" and len(cat) == 0
+                else cat
+            )
             for cat in dfs
         ]
 

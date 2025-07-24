@@ -538,11 +538,6 @@ def test_set_index_head_nlargest(df, pdf):
     # df.set_index([df.x, df.y]).head(3)
 
 
-# def test_set_index_map_strings():
-#     ddf = from_pandas(pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}), npartitions=2)
-#     result = ddf.set_index(ddf["x"].map(str.upper, meta="str"))
-
-
 @pytest.mark.skipif(
     not pyarrow_strings_enabled() or not PANDAS_GE_220,
     reason="doesn't work without arrow",
