@@ -246,7 +246,10 @@ def test_meta_duplicated():
     df = pd.DataFrame(columns=["A", "A", "B"])
     res = meta_nonempty(df)
 
-    o = dd.utils._object
+    if PANDAS_GE_300:
+        o = dd.utils._object
+    else:
+        o = "foo"
 
     exp = pd.DataFrame(
         [[o, o, o], [o, o, o]],
