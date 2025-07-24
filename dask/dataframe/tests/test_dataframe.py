@@ -3567,10 +3567,11 @@ def test_index_nulls(null_value):
     # an object column with only some nulls fails
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
-        with pytest.warns(UserWarning, match="meta"):
-            ddf.set_index(
-                ddf["non_numeric"].map({"foo": "foo", "bar": null_value})
-            ).compute()
+        ddf.set_index(
+            ddf["non_numeric"].map(
+                {"foo": "foo", "bar": null_value}, meta=ddf["non_numeric"]._meta
+            )
+        ).compute()
 
 
 def test_set_index_with_index():
