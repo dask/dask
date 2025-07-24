@@ -538,6 +538,11 @@ def test_set_index_head_nlargest(df, pdf):
     # df.set_index([df.x, df.y]).head(3)
 
 
+# def test_set_index_map_strings():
+#     ddf = from_pandas(pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}), npartitions=2)
+#     result = ddf.set_index(ddf["x"].map(str.upper, meta="str"))
+
+
 @pytest.mark.skipif(
     not pyarrow_strings_enabled() or not PANDAS_GE_220,
     reason="doesn't work without arrow",
@@ -584,10 +589,11 @@ def test_index_nulls(null_value):
     )
     ddf = from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
-        with pytest.warns(UserWarning):
-            ddf.set_index(
-                ddf["non_numeric"].map({"foo": "foo", "bar": null_value})
-            ).compute()
+        ddf.set_index(
+            ddf["non_numeric"].map(
+                {"foo": "foo", "bar": null_value}, meta=ddf["non_numeric"]._meta
+            )
+        ).compute()
 
 
 @pytest.mark.parametrize("freq", ["16h", "-16h"])
