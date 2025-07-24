@@ -2669,7 +2669,7 @@ def test_arrow_to_pandas(tmpdir, engine):
 
 
 PYARROW_LARGE_STRING_XFAIL = pytest.mark.xfail(
-    condition=not PYARROW_GE_2101,
+    condition=PANDAS_GE_300 and not PYARROW_GE_2101,
     reason="https://github.com/apache/arrow/issues/47177",
     strict=True,
 )
