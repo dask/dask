@@ -570,8 +570,14 @@ def test_tokenize_pandas():
     a = pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", "a"]})
     b = pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", "a"]})
     a["z"] = a.y.astype("category")
+
+    # tokenize is currently sensitive to fragmentation of the pyarrow Array
+    # backing the columns. Create a new one to work around this.
+    a.columns = pd.Index(["x", "y", "z"])
     assert check_tokenize(a) != check_tokenize(b)
     b["z"] = a.y.astype("category")
+
+    b.columns = pd.Index(["x", "y", "z"])
     assert check_tokenize(a) == check_tokenize(b)
 
 

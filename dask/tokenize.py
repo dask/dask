@@ -387,17 +387,11 @@ def register_pyarrow():
 
     @normalize_token.register(pa.ChunkedArray)
     def normalize_chunked_array(arr):
-        # So, pyarrow chooses to consolidate chunks
-        # when pickling. To get deterministic tokenization, we need to
-        # do the same thing...
-        # I really don't want to do that this. This is a potentially
-        # expensive operation.
-        return ("pa.ChunkedArray", normalize_token(arr.combine_chunks()))
-        # return (
-        #     "pa.ChunkedArray",
-        #     normalize_token(arr.type),
-        #     normalize_token(arr.chunks),
-        # )
+        return (
+            "pa.ChunkedArray",
+            normalize_token(arr.type),
+            normalize_token(arr.chunks),
+        )
 
     @normalize_token.register(pa.Array)
     def normalize_array(arr):
