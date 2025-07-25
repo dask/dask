@@ -581,6 +581,7 @@ def test_tokenize_pandas():
     assert check_tokenize(a) == check_tokenize(b)
 
 
+@pytest.mark.skipif("not pd")
 def test_tokenize_pandas_fragmented_index():
     s = pd.concat([pd.Series(1, index=["a", "b"]), pd.Series(2, index=["c", "d"])])
     check_tokenize(s)
