@@ -55,6 +55,10 @@ def test_make_meta():
             df_pointer = df[col].values.__array_interface__["data"][0]
         assert meta_pointer != df_pointer
 
+        meta_index_pointer = meta.index.values.__array_interface__["data"][0]
+        df_index_pointer = df.index.values.__array_interface__["data"][0]
+        assert meta_index_pointer != df_index_pointer
+
     # Pandas series
     meta = make_meta(df.a)
     assert len(meta) == 0
