@@ -285,6 +285,15 @@ def register_pandas():
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
+
+        if isinstance(values, pd.arrays.ArrowExtensionArray):
+            import pyarrow as pa
+
+            # these are sensitive to fragmentation of the backing Arrow array.
+            # Because common operations like DataFrame.getitem and DataFrame.setitem
+            # result in fragmented Arrow arrays, we'll consolidate them here.
+            values = pa.chunked_array([values._pa_array]).combine_chunks()
+
         return type(ind), ind.name, normalize_token(values)
 
     @normalize_token.register(pd.MultiIndex)
