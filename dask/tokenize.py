@@ -278,6 +278,8 @@ def _normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
+    from dask.dataframe._compat import PANDAS_GE_210
+
     @normalize_token.register(pd.RangeIndex)
     def normalize_range_index(x):
         return type(x), x.start, x.stop, x.step, x.dtype, x.name
@@ -292,7 +294,12 @@ def register_pandas():
             # these are sensitive to fragmentation of the backing Arrow array.
             # Because common operations like DataFrame.getitem and DataFrame.setitem
             # result in fragmented Arrow arrays, we'll consolidate them here.
-            values = pa.chunked_array([values._pa_array]).combine_chunks()
+
+            if PANDAS_GE_210:
+                # avoid combining chunks by using chunked_array
+                values = pa.chunked_array([values._pa_array]).combine_chunks()
+            else:
+                values = pa.array(values)
 
         return type(ind), ind.name, normalize_token(values)
 
