@@ -511,12 +511,17 @@ def test_to_sql(npartitions, parallel):
         result = read_sql_table("test", uri, "age")
         assert_eq(df_by_age, result)
 
+    if PANDAS_GE_300:
+        string_dtype = "str"
+    else:
+        string_dtype = "object"
+
     # Index column can't have "object" dtype if no partitions are provided
     with tmp_db_uri() as uri:
         ddf.set_index("name").to_sql("test", uri)
         with pytest.raises(
             TypeError,
-            match='Provided index column is of type "object".  If divisions is not provided the index column type must be numeric or datetime.',  # noqa: E501
+            match=f'Provided index column is of type "{string_dtype}".  If divisions is not provided the index column type must be numeric or datetime.',  # noqa: E501
         ):
             read_sql_table("test", uri, "name")
 
