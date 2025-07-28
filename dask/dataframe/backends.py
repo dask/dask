@@ -6,6 +6,7 @@ from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute
 from pandas.api.types import is_scalar, union_categoricals
 
 from dask.array import Array
@@ -198,7 +199,9 @@ def _(x, index=None):
 
     for k, v in out.items():
         if isinstance(v.array, pd.arrays.ArrowExtensionArray):
-            values = pa.chunked_array([v.array]).combine_chunks()
+            values = pyarrow.compute.take(
+                pyarrow.array(v.array), pyarrow.array([], type="int32")
+            )
             out[k] = v._constructor(
                 pd.array(values, dtype=v.array.dtype), index=v.index, name=v.name
             )
@@ -240,7 +243,6 @@ def get_pyarrow_table_from_pandas(obj, **kwargs):
 @from_pyarrow_table_dispatch.register((pd.DataFrame,))
 def get_pandas_dataframe_from_pyarrow(meta, table, **kwargs):
     # `kwargs` must be supported by `pyarrow.Table.to_pandas`
-    import pyarrow as pa
 
     def default_types_mapper(pyarrow_dtype: pa.DataType) -> object:
         # Avoid converting strings from `string[pyarrow]` to
