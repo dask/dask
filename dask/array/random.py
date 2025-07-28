@@ -791,9 +791,6 @@ def _rng_from_bitgen(bitgen):
 
 
 def _shuffle(bit_generator, x, axis=0):
-    state_data = bit_generator.state
-    bit_generator = type(bit_generator)()
-    bit_generator.state = state_data
     state = _rng_from_bitgen(bit_generator)
     return state.shuffle(x, axis=axis)
 

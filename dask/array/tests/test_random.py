@@ -403,6 +403,14 @@ def test_permutation(generator_class):
     r2 = b.permutation(x)
     assert_eq(r1, r2)
 
+    # Ensure subsequent `permutation` calls return a different result
+    # See https://github.com/dask/dask/issues/12029
+    r3 = a.permutation(x)
+    r4 = b.permutation(x)
+    assert_eq(r3, r4)
+    with pytest.raises(AssertionError):
+        assert_eq(r1, r3)
+
     x = generator_class().permutation(100)
     assert x.shape == (100,)
 
