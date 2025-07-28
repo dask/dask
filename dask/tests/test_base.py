@@ -478,7 +478,9 @@ def test_compute_dataframe_valid_unicode_in_bytes():
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe_invalid_unicode():
     # see https://github.com/dask/dask/issues/2713
-    df = pd.DataFrame(data=np.random.random((3, 1)), columns=["\ud83d"])
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)), columns=pd.Index(["\ud83d"], dtype="object")
+    )
     dd.from_pandas(df, npartitions=4)
 
 

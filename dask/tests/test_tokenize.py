@@ -570,17 +570,34 @@ def test_tokenize_pandas():
     a = pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", "a"]})
     b = pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", "a"]})
     a["z"] = a.y.astype("category")
+
+    # tokenize is currently sensitive to fragmentation of the pyarrow Array
+    # backing the columns. Create a new one to work around this.
+    a.columns = pd.Index(["x", "y", "z"])
     assert check_tokenize(a) != check_tokenize(b)
     b["z"] = a.y.astype("category")
+
+    b.columns = pd.Index(["x", "y", "z"])
     assert check_tokenize(a) == check_tokenize(b)
+
+
+@pytest.mark.skipif("not pd")
+def test_tokenize_pandas_fragmented_index():
+    s = pd.concat([pd.Series(1, index=["a", "b"]), pd.Series(2, index=["c", "d"])])
+    check_tokenize(s)
 
 
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_invalid_unicode():
     # see https://github.com/dask/dask/issues/2713
     df = pd.DataFrame(
-        {"x\ud83d": [1, 2, 3], "y\ud83d": ["4", "asd\ud83d", None]}, index=[1, 2, 3]
+        {
+            "x": [1, 2, 3],
+            "y": pd.Series(["4", "asd\ud83d", None], dtype="object"),
+        },
+        index=[1, 2, 3],
     )
+    df.columns = pd.Index(["x\ud83d", "y\ud83d"], dtype="object")
     check_tokenize(df)
 
 

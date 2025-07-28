@@ -5,6 +5,7 @@ import copy
 import pytest
 
 import dask
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.dask_expr import from_pandas, repartition
 from dask.dataframe.dask_expr.tests._util import _backend_library
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
@@ -126,12 +127,18 @@ def test_from_pandas_string_option():
     assert df.compute().index.dtype == dtype
     assert_eq(df, pdf)
 
+    if PANDAS_GE_300:
+        dtype = "string"
+    else:
+        dtype = "object"
+
     with dask.config.set({"dataframe.convert-string": False}):
         df = from_pandas(pdf, npartitions=2)
-        assert df.dtypes["y"] == "object"
-        assert df.index.dtype == "object"
-        assert df.compute().dtypes["y"] == "object"
-        assert df.compute().index.dtype == "object"
+
+        assert df.dtypes["y"] == dtype
+        assert df.index.dtype == dtype
+        assert df.compute().dtypes["y"] == dtype
+        assert df.compute().index.dtype == dtype
         assert_eq(df, pdf)
 
 

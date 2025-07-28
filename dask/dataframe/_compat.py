@@ -26,6 +26,7 @@ PANDAS_GE_300 = PANDAS_VERSION.major >= 3
 
 PYARROW_VERSION = Version(pa.__version__)
 PYARROW_GE_1500 = PYARROW_VERSION.release >= (15, 0, 0)
+PYARROW_GE_2101 = PYARROW_VERSION.release >= (21, 0, 1)
 
 import pandas.testing as tm
 

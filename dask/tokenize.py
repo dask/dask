@@ -278,6 +278,8 @@ def _normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
+    from dask.dataframe._compat import PANDAS_GE_210
+
     @normalize_token.register(pd.RangeIndex)
     def normalize_range_index(x):
         return type(x), x.start, x.stop, x.step, x.dtype, x.name
@@ -285,6 +287,20 @@ def register_pandas():
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
+
+        if isinstance(values, pd.arrays.ArrowExtensionArray):
+            import pyarrow as pa
+
+            # these are sensitive to fragmentation of the backing Arrow array.
+            # Because common operations like DataFrame.getitem and DataFrame.setitem
+            # result in fragmented Arrow arrays, we'll consolidate them here.
+
+            if PANDAS_GE_210:
+                # avoid combining chunks by using chunked_array
+                values = pa.chunked_array([values._pa_array]).combine_chunks()
+            else:
+                values = pa.array(values)
+
         return type(ind), ind.name, normalize_token(values)
 
     @normalize_token.register(pd.MultiIndex)
@@ -394,15 +410,26 @@ def register_pyarrow():
         )
 
     @normalize_token.register(pa.Array)
-    def normalize_chunked_array(arr):
+    def normalize_array(arr):
+        buffers = arr.buffers()
+        # pyarrow does something clever when (de)serializing an array that has
+        # an empty validity map: The buffers for the deserialized array will
+        # have `None` instead of the empty validity map.
+        #
+        # We'll replicate that behavior here to ensure we get consistent
+        # tokenization.
+        buffers = arr.buffers()
+        if len(buffers) and buffers[0] is not None and arr.null_count == 0:
+            buffers[0] = None
+
         return (
             "pa.Array",
             normalize_token(arr.type),
-            normalize_token(arr.buffers()),
+            normalize_token(buffers),
         )
 
     @normalize_token.register(pa.Buffer)
-    def normalize_chunked_array(buf):
+    def normalize_buffer(buf):
         return ("pa.Buffer", hash_buffer_hex(buf))
 
 
