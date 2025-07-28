@@ -17,7 +17,7 @@ from packaging.version import Version
 import dask
 import dask.dataframe as dd
 import dask.multiprocessing
-from dask.dataframe._compat import PANDAS_GE_202, PANDAS_GE_300, PYARROW_GE_2101
+from dask.dataframe._compat import PANDAS_GE_202, PANDAS_GE_300
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 from dask.utils import natural_sort_key
@@ -2669,7 +2669,7 @@ def test_arrow_to_pandas(tmpdir, engine):
 
 
 PYARROW_LARGE_STRING_XFAIL = pytest.mark.xfail(
-    condition=PANDAS_GE_300 and not PYARROW_GE_2101,
+    condition=PANDAS_GE_300,
     reason="https://github.com/apache/arrow/issues/47177",
     strict=True,
 )
