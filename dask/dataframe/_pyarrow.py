@@ -5,7 +5,7 @@ from functools import partial
 import pandas as pd
 
 from dask._compatibility import import_optional_dependency
-from dask.dataframe._compat import PANDAS_GE_300
+from dask.dataframe._compat import PANDAS_GE_201, PANDAS_GE_300
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
 pa = import_optional_dependency("pyarrow")
@@ -21,7 +21,7 @@ def is_pyarrow_string_dtype(dtype):
         pd.StringDtype("pyarrow"),
         pd.ArrowDtype(pa.string()),
     )
-    if PANDAS_GE_300 or pd.get_option("future.infer_string"):
+    if PANDAS_GE_300 or PANDAS_GE_201 and pd.get_option("future.infer_string"):
         string_dtypes = (
             *string_dtypes,
             # str - default in pandas >= 3.0
