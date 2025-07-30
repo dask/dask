@@ -1910,6 +1910,57 @@ class Array(DaskMethodsMixin):
         return self._scalarfunc(operator.index)
 
     def __setitem__(self, key, value):
+
+        # Structured field assignment, e.g., arr['f'] = ...
+        if isinstance(key, str):
+            if not self.dtype.fields or key not in self.dtype.fields:
+                raise ValueError(
+                    f"Field {key!r} not in structured dtype {self.dtype!r}"
+                )
+
+            def assign_field(block, val, field):
+                block = block.copy()
+                block[field] = val
+                return block
+
+            out = f"setitem-field-{key}-" + tokenize(self, value)
+            chunks = self.chunks
+
+            if is_dask_collection(value):
+                if value.shape != self.shape:
+                    raise ValueError(
+                        f"Shape mismatch: Cannot assign value of shape {value.shape} "
+                        f"to structured array of shape {self.shape}"
+                    )
+                value = value.rechunk(chunks)
+
+                dsk = {}
+                for ix in np.ndindex(*self.numblocks):
+                    dsk[(out, *ix)] = (
+                        assign_field,
+                        (self.name, *ix),
+                        (value.name, *ix),
+                        key,
+                    )
+
+                dependencies = [self, value]
+            else:
+                dsk = {
+                    (out, *ix): (assign_field, (self.name, *ix), value, key)
+                    for ix in np.ndindex(*self.numblocks)
+                }
+                dependencies = [self]
+
+            meta = self._meta.copy()
+            graph = HighLevelGraph.from_collections(out, dsk, dependencies=dependencies)
+            y = Array(graph, out, chunks=chunks, dtype=self.dtype, meta=meta)
+
+            self._meta = y._meta
+            self.dask = y.dask
+            self._name = y.name
+            self._chunks = y._chunks
+            return
+
         if value is np.ma.masked:
             value = np.ma.masked_all((), dtype=self.dtype)
 
