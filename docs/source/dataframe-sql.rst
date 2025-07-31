@@ -113,7 +113,7 @@ recreated into a fresh engine on the workers.
 Similarly, we cannot accommodate chunked queries
 which rely on the internal state of a database cursor; nor LIMIT/OFFSET
 queries, which are not guaranteed to be repeatable, and involve scanning
-the whole query on th server (which is very inefficient).
+the whole query on the server (which is very inefficient).
 
 **If** your data is small enough not to require Dask's out-of-core and/or
 distributed capabilities, then you are probably better to use Pandas or SQLAlchemy
