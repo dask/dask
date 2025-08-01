@@ -605,8 +605,7 @@ def take(outname, inname, chunks, index, axis=0):
 
         # verify if this is a full arange (the equivalent of `slice(None)`)
         full_length = sum(chunks[axis])
-        is_sequential = np.all(np.diff(index) == 1)
-        if len(index) == full_length and is_sequential and index[0] == 0:
+        if len(index) == full_length and index[0] == 0 and np.all(np.diff(index) == 1):
             # TODO: This should be a real no-op, but the call stack is
             # too deep to do this efficiently for now
             chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks)))
