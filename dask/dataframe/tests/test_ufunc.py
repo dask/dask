@@ -117,7 +117,7 @@ def test_ufunc(pandas_input, ufunc):
         assert_eq(dafunc(dask_input), npfunc(pandas_input))
 
     # Index
-    if pandas_input.index.dtype in [object, str]:
+    if pandas_input.index.dtype.name in ["object", "str"]:
         return
     if ufunc in ("logical_not", "signbit", "isnan", "isinf", "isfinite"):
         return
