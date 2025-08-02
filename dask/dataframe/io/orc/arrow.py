@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pyarrow as pa
-import pyarrow.orc as orc
+from pyarrow import orc
 
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
