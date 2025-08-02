@@ -18,9 +18,9 @@ def test_upstream_packages_installed():
     # `continuous_integration/scripts/install.sh`
 
     # FIXME: This test isn't sensitive to projects that use git tags
-    # to determine versions (e.g. versioneer) when installed
-    # directly from GitHub as the latest `main` branch can sometimes
-    # be pointing to a released version of the project.
+    # to determine versions when installed directly from GitHub as
+    # the latest `main` branch can sometimes be pointing to a released
+    # version of the project.
     packages = [
         "bokeh",
         # "dask",
