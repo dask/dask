@@ -2084,7 +2084,7 @@ def setitem(x, v, indices):
     >>> y is x
     True
     """
-    if not v.size:
+    if not math.prod(v.shape):
         return x
 
     # Normalize integer array indices
