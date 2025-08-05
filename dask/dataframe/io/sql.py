@@ -92,7 +92,15 @@ def read_sql_query(
         )
     if index_col is None:
         raise ValueError("Must specify index column to partition on")
-    if not isinstance(index_col, (str, sa.Column, sa.sql.elements.ColumnClause)):
+    if not isinstance(
+        index_col,
+        (
+            str,
+            sa.Column,
+            sa.sql.elements.ColumnClause,
+            sa.orm.attributes.InstrumentedAttribute,
+        ),
+    ):
         raise ValueError(
             "'index_col' must be of type str or sa.Column, not " + str(type(index_col))
         )
@@ -109,11 +117,12 @@ def read_sql_query(
     engine_kwargs = {} if engine_kwargs is None else engine_kwargs
     engine = sa.create_engine(con, **engine_kwargs)
 
-    index = (
-        sa.Column(index_col)
-        if isinstance(index_col, str)
-        else sa.Column(index_col.name, index_col.type)
-    )
+    if isinstance(index_col, str):
+        index = sa.Column(index_col)
+    elif isinstance(index_col, (sa.Column, sa.orm.attributes.InstrumentedAttribute)):
+        index = index_col
+    else:
+        index = sa.Column(index_col.name, index_col.type)
 
     kwargs["index_col"] = index.name
 
@@ -178,9 +187,10 @@ def read_sql_query(
     for i, (lower, upper) in enumerate(zip(lowers, uppers)):
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         q = sql.where(sa.sql.and_(index >= lower, cond))
+        serialized_query = str(q.compile(compile_kwargs={"literal_binds": True}))
         parts.append(
             delayed(_read_sql_chunk)(
-                q, con, meta, engine_kwargs=engine_kwargs, **kwargs
+                serialized_query, con, meta, engine_kwargs=engine_kwargs, **kwargs
             )
         )
 
