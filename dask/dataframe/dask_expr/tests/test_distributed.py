@@ -13,7 +13,7 @@ distributed = pytest.importorskip("distributed")
 
 from distributed import Client, LocalCluster
 from distributed.shuffle._core import id_from_key
-from distributed.utils_test import gen_cluster  # noqa F401
+from distributed.utils_test import gen_cluster
 
 import dask.dataframe as dd
 
