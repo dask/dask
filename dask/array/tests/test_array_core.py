@@ -5977,3 +5977,52 @@ def test_blockwise_fusion():
 
     a = ((da.ones(10, chunks=5) + 1) + 2).sum()
     dask.compute(a, scheduler=custom_scheduler_get)
+
+
+def test_structured_field_assignment_works():
+    import numpy as np
+
+    import dask.array as da
+
+    # Case 1: Scalar assignment to one field
+    dt = np.dtype([("f", "f8"), ("i", "i4")])
+    darr = da.zeros(6, dtype=dt, chunks=3)
+    darr["f"] = 1.5
+    result = darr.compute()
+    assert np.all(result["f"] == 1.5)
+    assert np.all(result["i"] == 0)
+
+    # Case 2: Scalar assignment to other field
+    darr["i"] = 42
+    result = darr.compute()
+    assert np.all(result["f"] == 1.5)
+    assert np.all(result["i"] == 42)
+
+    # Case 3: Assign array to a field (chunked correctly)
+    darr["f"] = da.from_array(np.arange(6, dtype="f8"), chunks=3)
+    result = darr.compute()
+    assert np.all(result["f"] == np.arange(6, dtype="f8"))
+
+    # Case 4: Assign zeros to a field
+    darr["i"] = da.zeros(6, dtype="i4", chunks=3)
+    result = darr.compute()
+    assert np.all(result["i"] == 0)
+
+    # Case 5: Multiple fields with different dtypes
+    dt2 = np.dtype([("a", "i8"), ("b", "f4")])
+    darr2 = da.zeros(8, dtype=dt2, chunks=(2,))
+    darr2["a"] = da.from_array(np.arange(8, dtype="i8"), chunks=(2,))
+    darr2["b"] = 3.14
+    result = darr2.compute()
+    assert np.all(result["a"] == np.arange(8))
+    assert np.allclose(result["b"], 3.14)
+
+    # Case 6: Assign NaN to float field
+    darr2["b"] = np.nan
+    result = darr2.compute()
+    assert np.all(np.isnan(result["b"]))
+
+    # Case 7: Assign different values per chunk
+    darr2["a"] = da.from_array([100, 200, 300, 400, 500, 600, 700, 800], chunks=(2,))
+    result = darr2.compute()
+    assert np.all(result["a"] == [100, 200, 300, 400, 500, 600, 700, 800])
