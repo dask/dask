@@ -346,9 +346,9 @@ def test_enforce_columns(reader, blocks):
     blocks = [blocks[0], [blocks[1][0].replace(b"a", b"A"), blocks[1][1]]]
     head = reader(BytesIO(blocks[0][0]), header=0)
     header = blocks[0][0].split(b"\n")[0] + b"\n"
+    dfs = text_blocks_to_pandas(reader, blocks, header, head, {}, enforce=True)
     with pytest.raises(ValueError):
-        dfs = text_blocks_to_pandas(reader, blocks, header, head, {}, enforce=True)
-        dask.compute(*dfs, scheduler="sync")
+        dask.compute(dfs, scheduler="sync")
 
 
 #############################
