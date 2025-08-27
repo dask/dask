@@ -10,6 +10,9 @@ import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
+if PANDAS_GE_300:
+    from pandas.errors import Pandas4Warning
+
 
 def resample(df, freq, how="mean", **kwargs):
     return getattr(df.resample(freq, **kwargs), how)()
@@ -225,7 +228,7 @@ def test_rule_deprecated():
     ds = dd.from_pandas(s, npartitions=2)
 
     if PANDAS_GE_300:
-        ctx = pytest.warns(FutureWarning, match="'d' is deprecated")
+        ctx = pytest.warns(Pandas4Warning, match="'d' is deprecated")
     else:
         ctx = contextlib.nullcontext()
 

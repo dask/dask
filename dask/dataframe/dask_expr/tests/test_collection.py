@@ -2461,14 +2461,25 @@ def test_scalar_to_series():
 
 
 @pytest.mark.parametrize("data_freq, divs1", [("B", False), ("D", True), ("h", True)])
-def test_shift_with_freq_datetime(pdf, data_freq, divs1):
+@pytest.mark.parametrize(
+    "freq_divs2", [("s", True), ("W", False), (pd.Timedelta(10, unit="h"), True)]
+)
+@pytest.mark.parametrize("as_series", [True, False])
+def test_shift_with_freq_datetime(pdf, data_freq, divs1, freq_divs2, as_series):
     pdf.index = pd.date_range(start="2020-01-01", periods=len(pdf), freq=data_freq)
     df = from_pandas(pdf, npartitions=4)
-    for freq, divs2 in [("s", True), ("W", False), (pd.Timedelta(10, unit="h"), True)]:
-        for d, p in [(df, pdf), (df.x, pdf.x)]:
-            res = d.shift(2, freq=freq)
-            assert_eq(res, p.shift(2, freq=freq))
-            assert res.known_divisions == divs2
+
+    freq, divs2 = freq_divs2
+    if as_series:
+        pd_obj = pdf["x"]
+        dask_obj = df["x"]
+    else:
+        pd_obj = pdf
+        dask_obj = df
+
+    res = dask_obj.shift(2, freq=freq)
+    assert_eq(res, pd_obj.shift(2, freq=freq))
+    assert res.known_divisions == divs2
 
     res = df.index.shift(2)
     assert_eq(res, df.index.shift(2))

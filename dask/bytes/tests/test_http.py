@@ -195,6 +195,7 @@ def test_parquet(engine):
     reruns=10, reruns_delay=5, reason="https://github.com/dask/dask/issues/3696"
 )
 @pytest.mark.network
+@pytest.mark.skip(reason="Flaky test.")
 def test_bag():
     # This test pulls from different hosts
     urls = [
