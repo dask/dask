@@ -132,11 +132,12 @@ class Shuffle(ArrayExpr):
             merges[sorter_key] = DataNode(sorter_key, (1, sorter))
 
             sorted_array = new_chunk_taker[sorter]
-            source_chunk_nr, taker_boundary = np.unique(
-                np.searchsorted(chunk_boundaries, sorted_array, side="right"),
-                return_index=True,
+            search_result = np.searchsorted(
+                chunk_boundaries, sorted_array, side="right"
             )
-            taker_boundary = taker_boundary.tolist()
+            source_chunk_nr = np.unique(search_result, return_index=False)
+            _, taker_boundary_raw = np.unique(search_result, return_index=True)
+            taker_boundary: list[int] = taker_boundary_raw.tolist()
             taker_boundary.append(len(new_chunk_taker))
 
             taker_cache: dict = {}
