@@ -311,6 +311,8 @@ __all__ = [
     "sign",
     "signbit",
     "sin",
+    "simps",
+    "simpson",
     "sinc",
     "sinh",
     "spacing",
@@ -319,6 +321,7 @@ __all__ = [
     "subtract",
     "tan",
     "tanh",
+    "trapz",
     "true_divide",
     "trunc",
     "assert_eq",
@@ -430,10 +433,13 @@ try:
         prod,
         quantile,
         reduction,
+        simps,
+        simpson,
         std,
         sum,
         topk,
         trace,
+        trapz,
         var,
     )
     from dask.array.reshape import reshape, reshape_blockwise
@@ -788,8 +794,11 @@ if _array_expr_enabled():
             nanvar,
             prod,
             reduction,
+            simps,
+            simpson,
             std,
             sum,
+            trapz,
             var,
         )
 
