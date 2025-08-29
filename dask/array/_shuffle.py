@@ -208,7 +208,8 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
     if len(current_chunk) > 0:
         new_chunks.append(current_chunk)
 
-    chunk_boundaries = np.cumsum(chunks[axis])
+    # force 64 bit to avoid potential integer overflows on win32 and numpy<2
+    chunk_boundaries = np.cumsum(np.array(chunks[axis], dtype="uint64"))
 
     # Get existing chunk tuple locations
     chunk_tuples = list(
