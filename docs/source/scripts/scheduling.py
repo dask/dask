@@ -76,9 +76,9 @@ f, (left, right) = plt.subplots(
     nrows=1, ncols=2, sharex=True, figsize=(12, 5), squeeze=True
 )
 
-for get in trivial_results:
-    left.loglog(x * 5, trivial_results[get], label=get.__module__)
-    right.loglog(x * 5, trivial_results[get] / x, label=get.__module__)
+for get, result in trivial_results.items():
+    left.loglog(x * 5, result, label=get.__module__)
+    right.loglog(x * 5, result / x, label=get.__module__)
 
 left.set_title("Cost for Entire graph")
 right.set_title("Cost per task")
@@ -114,9 +114,9 @@ f, (left, right) = plt.subplots(
     nrows=1, ncols=2, sharex=True, figsize=(12, 5), squeeze=True
 )
 
-for get in crosstalk_results:
-    left.plot(x, crosstalk_results[get], label=get.__module__)
-    right.semilogy(x, crosstalk_results[get] / 5000.0 / x, label=get.__module__)
+for get, result in crosstalk_results.items():
+    left.plot(x, result, label=get.__module__)
+    right.semilogy(x, result / 5000.0 / x, label=get.__module__)
 
 left.set_title("Cost for Entire graph")
 right.set_title("Cost per edge")

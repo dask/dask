@@ -63,7 +63,7 @@ def _groupby_raise_unaligned(df, convert_by_to_list=True, **kwargs):
     unaligned key is generally a bad idea, we just error loudly in dask.
 
     For more information see pandas GH issue #15244 and Dask GH issue #1876."""
-    by = kwargs.get("by", None)
+    by = kwargs.get("by")
     if by is not None and not _is_aligned(df, by):
         msg = (
             "Grouping by an unaligned column is unsafe and unsupported.\n"
@@ -496,19 +496,12 @@ def _cov_chunk(df, *by, numeric_only=no_default):
 
 
 def _cov_agg(_t, levels, ddof, std=False, sort=False):
-    sums = []
-    muls = []
-    counts = []
-
     # sometime we get a series back from concat combiner
     t = list(_t)
 
-    cols = t[0][0].columns
-    for x, mul, n, col_mapping in t:
-        sums.append(x)
-        muls.append(mul)
-        counts.append(n)
-        col_mapping = col_mapping
+    sums, muls, counts, col_mappings = zip(*t)
+    cols = sums[0].columns
+    col_mapping = col_mappings[-1]
 
     total_sums = concat(sums).groupby(level=levels, sort=sort).sum()
     total_muls = concat(muls).groupby(level=levels, sort=sort).sum()

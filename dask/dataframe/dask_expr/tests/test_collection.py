@@ -15,7 +15,7 @@ import dask
 import dask.array as da
 from dask._compatibility import WINDOWS
 from dask.array.numpy_compat import NUMPY_GE_200
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.dask_expr import (
     DataFrame,
     Series,
@@ -141,6 +141,25 @@ def test_column_projection_modify_list(df, pdf):
     result = df[cols]
     cols.append("bla")
     assert_eq(result, pdf[["x"]])
+
+
+@pytest.mark.parametrize("required_columns", [None, ["z"], ["z", "foo"]])
+def test_column_projection_map_partitions(required_columns):
+
+    pdf = pd.DataFrame({"x": [1] * 5, "y": [2] * 5, "z": range(5)})
+    df = from_pandas(pdf, npartitions=2)
+
+    def myfunc(x):
+        return x.assign(zz=x["z"] + 1)
+
+    df = df.map_partitions(myfunc, meta=myfunc(pdf), required_columns=required_columns)
+    if required_columns and "foo" in required_columns:
+        with pytest.raises(KeyError, match="foo"):
+            df["x"].simplify()
+    else:
+        assert_eq(df["x"], myfunc(pdf)["x"])
+        if required_columns:
+            assert set(df["x"].simplify().frame.frame.columns) == {"x", "z"}
 
 
 def test_setitem(pdf, df):
@@ -853,6 +872,7 @@ def test_to_datetime():
         to_datetime(1490195805)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_to_numeric(pdf, df):
     import dask.array as da
 
@@ -1616,10 +1636,14 @@ def test_values():
 
     df = from_pandas(pdf, 2)
 
-    if pyarrow_strings_enabled():
+    if pyarrow_strings_enabled() or PANDAS_GE_300:
         with pytest.warns(UserWarning, match="extension dtypes"):
             assert_eq(df.values, pdf.values)
-            assert_eq(df.x.values, pdf.x.values)
+            values = df.x.values
+            if not PANDAS_GE_300:
+                # https://github.com/dask/dask/issues/2713
+                # dask lacks an extension array type.
+                assert_eq(values, pdf.x.values)
     else:
         assert_eq(df.values, pdf.values)
         assert_eq(df.x.values, pdf.x.values)
@@ -2437,14 +2461,25 @@ def test_scalar_to_series():
 
 
 @pytest.mark.parametrize("data_freq, divs1", [("B", False), ("D", True), ("h", True)])
-def test_shift_with_freq_datetime(pdf, data_freq, divs1):
+@pytest.mark.parametrize(
+    "freq_divs2", [("s", True), ("W", False), (pd.Timedelta(10, unit="h"), True)]
+)
+@pytest.mark.parametrize("as_series", [True, False])
+def test_shift_with_freq_datetime(pdf, data_freq, divs1, freq_divs2, as_series):
     pdf.index = pd.date_range(start="2020-01-01", periods=len(pdf), freq=data_freq)
     df = from_pandas(pdf, npartitions=4)
-    for freq, divs2 in [("s", True), ("W", False), (pd.Timedelta(10, unit="h"), True)]:
-        for d, p in [(df, pdf), (df.x, pdf.x)]:
-            res = d.shift(2, freq=freq)
-            assert_eq(res, p.shift(2, freq=freq))
-            assert res.known_divisions == divs2
+
+    freq, divs2 = freq_divs2
+    if as_series:
+        pd_obj = pdf["x"]
+        dask_obj = df["x"]
+    else:
+        pd_obj = pdf
+        dask_obj = df
+
+    res = dask_obj.shift(2, freq=freq)
+    assert_eq(res, pd_obj.shift(2, freq=freq))
+    assert res.known_divisions == divs2
 
     res = df.index.shift(2)
     assert_eq(res, df.index.shift(2))

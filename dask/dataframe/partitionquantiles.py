@@ -374,7 +374,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         left = np.searchsorted(q_weights, q_target, side="left")
         right = np.searchsorted(q_weights, q_target, side="right") - 1
         # stay inbounds
-        np.maximum(right, 0, right)
+        np.maximum(right, 0, out=right)
         lower = np.minimum(left, right)
         trimmed = trimmed_vals[lower]
 

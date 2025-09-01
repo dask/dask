@@ -187,7 +187,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None, keys=None):
         dependencies[key]
         task = dsk.get(key, None)
         if task is None:
-            if dependents[key] and not cache.get(key, None):
+            if dependents[key] and not cache.get(key):
                 raise ValueError(
                     "Missing dependency {} for dependents {}".format(
                         key, dependents[key]
@@ -344,7 +344,7 @@ def default_get_id():
 
 
 def default_pack_exception(e, dumps):
-    raise
+    raise e
 
 
 def reraise(exc, tb=None):

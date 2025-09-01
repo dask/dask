@@ -809,16 +809,8 @@ def map_blocks(
             "   or:   da.map_blocks(function, x, y, z)"
         )
         raise TypeError(msg % type(func).__name__)
-    if token:
-        warnings.warn(
-            "The `token=` keyword to `map_blocks` has been moved to `name=`. "
-            "Please use `name=` instead as the `token=` keyword will be removed "
-            "in a future release.",
-            category=FutureWarning,
-        )
-        name = token
 
-    token = f"{name or funcname(func)}"
+    token = f"{token or funcname(func)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -892,6 +884,7 @@ def map_blocks(
             *concat(argpairs),
             expected_ndim=len(out_ind),
             _func=func,
+            name=name,
             token=token,
             new_axes=new_axes,
             dtype=dtype,
@@ -906,6 +899,7 @@ def map_blocks(
             func,
             out_ind,
             *concat(argpairs),
+            name=name,
             token=token,
             new_axes=new_axes,
             dtype=dtype,
@@ -1215,7 +1209,7 @@ def store(
                 lock=lock,
                 return_stored=return_stored,
                 load_stored=load_stored,
-                name="store-map",
+                token="store-map",
                 meta=s._meta,
             )
         )
@@ -1635,6 +1629,11 @@ class Array(DaskMethodsMixin):
         )
 
     def _repr_html_(self):
+        if ARRAY_TEMPLATE is None:
+            # if the jinja template is not available, (e.g. because jinja2 is not installed)
+            # fall back to the textual representation
+            return repr(self)
+
         try:
             grid = self.to_svg(size=config.get("array.svg.size", 120))
         except NotImplementedError:
@@ -6042,7 +6041,7 @@ class BlockView:
         hlg = HighLevelGraph.from_collections(name, graph, dependencies=[self._array])
         return Array(hlg, name, chunks, meta=self._array)
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, BlockView):
             return self._array is other._array
         else:

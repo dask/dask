@@ -1197,9 +1197,7 @@ class Bag(DaskMethodsMixin):
         elif isinstance(other, Delayed):
             dsk.update(other.dask)
             other = other._key
-        elif isinstance(other, Iterable):
-            other = other
-        else:
+        elif not isinstance(other, Iterable):
             msg = (
                 "Joined argument must be single-partition Bag, "
                 " delayed object, or Iterable, got %s" % type(other).__name
@@ -2578,7 +2576,7 @@ def random_state_data_python(
 
         random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
         arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
-        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]
+        return [(3, tuple(row) + (624,), None) for row in np.atleast_2d(arr).tolist()]
 
     except ImportError:
         # Pure python (much slower)
