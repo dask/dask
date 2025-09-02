@@ -18,6 +18,10 @@ def resample(df, freq, how="mean", **kwargs):
     return getattr(df.resample(freq, **kwargs), how)()
 
 
+# XFAIL_PANDAS_3_RESAMPLE = pytest.mark.xfail(
+#     PANDAS_GE_300, reason="Pandas 3 resample is buggy"
+# )
+
 ME = "ME" if PANDAS_GE_220 else "M"
 
 
@@ -35,6 +39,10 @@ ME = "ME" if PANDAS_GE_220 else "M"
     ),
 )
 def test_series_resample(obj, method, npartitions, freq, closed, label):
+    if PANDAS_GE_300 and freq == "D" and closed == "right":
+        # Temporary xfail until the upstream issue is resolved
+        pytest.xfail("https://github.com/pandas-dev/pandas/issues/62200")
+
     index = pd.date_range("1-1-2000", "2-15-2000", freq="h")
     index = index.union(pd.date_range("4-15-2000", "5-15-2000", freq="h"))
     if obj == "series":
