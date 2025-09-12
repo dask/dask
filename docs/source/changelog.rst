@@ -5,6 +5,34 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2025.9.0:
+
+2025.9.0
+--------
+
+Highlights
+^^^^^^^^^^
+- pandas 3.x compatibility (:pr:`12025`) `Tom Augspurger`_
+- Remove protocol="ucx" support in favor of distributed-ucxx (:pr-distributed:`9105`) `Peter Andreas Entschev`_
+
+.. dropdown:: Additional changes
+
+  - Fix `0` scalar setting for `scipy.sparse` (:pr:`12027`) `Ilan Gold`_
+  - Workaround failing upstream-dev tests (:pr:`12061`) `Tom Augspurger`_
+  - avoid instantiating a potentially very large arange in `take` (:pr:`11998`) `Justus Magin`_
+  - MAINT: address NumPy deprecation in `np.minimum` (:pr:`12059`) `Marco Edward Gorelli`_
+  - CI fixes (:pr:`12058`) `Tom Augspurger`_
+  - MAINT: Address NumPy DeprecationWarning (:pr:`12056`) `Marco Edward Gorelli`_
+  - Fix ``test_enforce_columns`` on Python 3.14 (:pr:`12047`) `Elliott Sales de Andrade`_
+  - Fix "th" --> "the" typo in DataFrame SQL docs (:pr:`12038`) `Peter A. Jonsson`_
+  - Advance rng state in permutation (:pr:`12031`) `James Bourbeau`_
+  - Fix ``pyarrow`` chunked array conversion (:pr:`12034`) `James Bourbeau`_
+  - Fix ``xfail`` condition for ``pyarrow`` ``large_string`` issue (:pr:`12032`) `James Bourbeau`_
+  - pandas 3.x compatibility (:pr:`12025`) `Tom Augspurger`_
+  - Fix `name` not propagated correctly in `map_blocks` (:pr:`11952`) `Ilan Gold`_
+
+  - Clean tuples dict keys from workers_info in /api/v1/retire_workers. (:pr-distributed:`8996`) `Florian Courtial`_
+  - Remove protocol="ucx" support in favor of distributed-ucxx (:pr-distributed:`9105`) `Peter Andreas Entschev`_
 
 .. _v2025.7.0:
 
@@ -9605,3 +9633,6 @@ Other
 .. _`Lukas Bindreiter`: https://github.com/lukasbindreiter
 .. _`Marvin Albert`: https://github.com/m-albert
 .. _`Peter Fackeldey`: https://github.com/pfackeldey
+.. _`Marco Edward Gorelli`: https://github.com/MarcoGorelli
+.. _`Peter A. Jonsson`: https://github.com/pjonsson
+.. _`Florian Courtial`: https://github.com/fcourtial
