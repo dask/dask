@@ -90,7 +90,13 @@ def _groupby_raise_unaligned(df, convert_by_to_list=True, **kwargs):
         # We want multiple keys
         if isinstance(by, str):
             by = [by]
-        kwargs.update(by=list(by))
+        by = list(by)
+        if len(by) == 1:
+            # https://github.com/pandas-dev/pandas/commit/e191a06002176917f6f5dd90d0bb995565865654
+            # pandas is changing the output of .groups with length-1 lists,
+            # so just avoid that.
+            by = by[0]
+        kwargs.update(by=by)
     with check_observed_deprecation():
         return df.groupby(**kwargs)
 
@@ -1202,16 +1208,12 @@ def _unique_aggregate(series_gb, name=None):
 
 
 def _value_counts(x, **kwargs):
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", "`groups` by one element list returns", FutureWarning
-        )
-        if not x.groups or all(
-            pd.isna(key) for key in flatten(x.groups.keys(), container=tuple)
-        ):
-            return pd.Series(dtype=int)
-        else:
-            return x.value_counts(**kwargs)
+    if not x.groups or all(
+        pd.isna(key) for key in flatten(x.groups.keys(), container=tuple)
+    ):
+        return pd.Series(dtype=int)
+    else:
+        return x.value_counts(**kwargs)
 
 
 def _value_counts_aggregate(series_gb):
