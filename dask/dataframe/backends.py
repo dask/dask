@@ -5,8 +5,6 @@ from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
-import pyarrow.compute
 from pandas.api.types import is_scalar, union_categoricals
 
 from dask.array import Array
@@ -45,6 +43,18 @@ from dask.dataframe.utils import (
 )
 from dask.sizeof import SimpleSizeof, sizeof
 from dask.utils import is_arraylike, is_series_like, typename
+
+# https://github.com/dask/dask/issues/12072
+# pyarrow is a required dependency of dask.dataframe However, dask-array
+# workloads can hit this via optimize. So we need to be careful to
+# not import pyarrow unconditionally here.
+try:
+    import pyarrow as pa
+    import pyarrow.compute
+except ImportError:
+    HAS_PYARROW = False
+else:
+    HAS_PYARROW = True
 
 
 class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
@@ -227,16 +237,12 @@ except ImportError:
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))
 def get_pyarrow_schema_pandas(obj, preserve_index=None):
-    import pyarrow as pa
-
     return pa.Schema.from_pandas(obj, preserve_index=preserve_index)
 
 
 @to_pyarrow_table_dispatch.register((pd.DataFrame,))
 def get_pyarrow_table_from_pandas(obj, **kwargs):
     # `kwargs` must be supported by `pyarrow.Table.to_pandas`
-    import pyarrow as pa
-
     return pa.Table.from_pandas(obj, **kwargs)
 
 
