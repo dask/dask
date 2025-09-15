@@ -1559,10 +1559,10 @@ def test_map_blocks():
     assert d.chunks == e.chunks
     assert_eq(e, x + 1)
 
-    e = d.map_blocks(inc, name="increment")
+    e = d.map_blocks(inc, token="increment")
     assert e.name.startswith("increment-")
 
-    assert d.map_blocks(inc, name="foo").name != d.map_blocks(dec, name="foo").name
+    assert d.map_blocks(inc, token="foo").name != d.map_blocks(dec, token="foo").name
 
     d = from_array(x, chunks=(10, 10))
     e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5), dtype=d.dtype)
@@ -2896,7 +2896,7 @@ def test_from_array_ndarray_onechunk(x):
     dx = da.from_array(x, chunks=-1)
     assert_eq(x, dx)
     assert len(dx.dask) == 1
-    assert not dx.dask[(dx.name,) + (0,) * dx.ndim] is x
+    assert dx.dask[(dx.name,) + (0,) * dx.ndim] is not x
     assert_eq(dx.dask[(dx.name,) + (0,) * dx.ndim], x)
 
 
@@ -3024,7 +3024,7 @@ def test_from_array_inline():
 
     a = np.array([1, 2, 3]).view(MyArray)
     dsk = dict(da.from_array(a, name="my-array", inline_array=False).dask)
-    assert not dsk["original-my-array"] is a
+    assert dsk["original-my-array"] is not a
     assert_eq(dsk["original-my-array"], a)
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
@@ -3699,6 +3699,11 @@ def test_map_blocks_with_invalid_drop_axis():
             )
 
 
+def test_map_blocks_custom_name():
+    res = da.map_blocks(lambda _: np.arange(4), chunks=(4,), name="foo", dtype=np.int64)
+    assert res.name == "foo", res.name
+
+
 def test_map_blocks_with_changed_dimension_and_broadcast_chunks():
     # https://github.com/dask/dask/issues/4299
     a = da.from_array([1, 2, 3], 3)
@@ -3939,12 +3944,6 @@ def test_elemwise_name():
 
 def test_map_blocks_name():
     assert da.ones(5, chunks=2).map_blocks(inc).name.startswith("inc-")
-
-
-def test_map_blocks_token_deprecated():
-    with pytest.warns(FutureWarning, match="use `name=` instead"):
-        x = da.ones(5, chunks=2).map_blocks(inc, token="foo")
-    assert x.name.startswith("foo-")
 
 
 def test_from_array_names():
@@ -5358,6 +5357,25 @@ def test_dask_array_holds_scipy_sparse_containers(container):
     assert (zz == xx.T).all()
 
 
+@pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
+@pytest.mark.parametrize(
+    "container", [pytest.param("array", marks=skip_if_no_sparray()), "matrix"]
+)
+def test_dask_array_setitem_singleton_sparse(container):
+    pytest.importorskip("scipy.sparse")
+    import scipy.sparse
+
+    cls = scipy.sparse.csr_matrix if container == "matrix" else scipy.sparse.csr_array
+
+    x = cls(scipy.sparse.eye(100))
+    x_dask = da.from_array(x)
+    x[slice(10), slice(10)] = 0
+    x_dask[slice(10), slice(10)] = 0
+    np.testing.assert_almost_equal(
+        x_dask.compute(scheduler="single-threaded").toarray(), x.toarray()
+    )
+
+
 @pytest.mark.parametrize(
     "index",
     [
@@ -5730,12 +5748,12 @@ def test_chunk_assignment_invalidates_cached_properties():
     y = x.copy()
     # change chunks directly, which should change all of the tested properties
     y._chunks = ((2, 2), (0, 0, 0, 0))
-    assert not x.ndim == y.ndim
-    assert not x.shape == y.shape
-    assert not x.size == y.size
-    assert not x.numblocks == y.numblocks
-    assert not x.npartitions == y.npartitions
-    assert not x.__dask_keys__() == y.__dask_keys__()
+    assert x.ndim != y.ndim
+    assert x.shape != y.shape
+    assert x.size != y.size
+    assert x.numblocks != y.numblocks
+    assert x.npartitions != y.npartitions
+    assert x.__dask_keys__() != y.__dask_keys__()
     assert not np.array_equal(x._key_array, y._key_array)
 
 

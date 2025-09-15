@@ -44,6 +44,18 @@ from dask.dataframe.utils import (
 from dask.sizeof import SimpleSizeof, sizeof
 from dask.utils import is_arraylike, is_series_like, typename
 
+# https://github.com/dask/dask/issues/12072
+# pyarrow is a required dependency of dask.dataframe However, dask-array
+# workloads can hit this via optimize. So we need to be careful to
+# not import pyarrow unconditionally here.
+try:
+    import pyarrow as pa
+    import pyarrow.compute
+except ImportError:
+    HAS_PYARROW = False
+else:
+    HAS_PYARROW = True
+
 
 class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
     """Dask-DataFrame version of ``DaskBackendEntrypoint``
@@ -189,6 +201,21 @@ def _(x):
 @make_meta_dispatch.register((pd.Series, pd.DataFrame))
 def _(x, index=None):
     out = x.iloc[:0].copy(deep=True)
+
+    # https://github.com/pandas-dev/pandas/issues/61930
+    # pandas shallow copies arrow-backed extension arrays.
+    # Use pyarrow.compute.take to get a new array that doesn't
+    # share any memory with the original array.
+
+    for k, v in out.items():
+        if isinstance(v.array, pd.arrays.ArrowExtensionArray):
+            values = pyarrow.compute.take(
+                pyarrow.array(v.array), pyarrow.array([], type="int32")
+            )
+            out[k] = v._constructor(
+                pd.array(values, dtype=v.array.dtype), index=v.index, name=v.name
+            )
+
     # index isn't copied by default in pandas, even if deep=true
     out.index = out.index.copy(deep=True)
     return out
@@ -210,23 +237,18 @@ except ImportError:
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))
 def get_pyarrow_schema_pandas(obj, preserve_index=None):
-    import pyarrow as pa
-
     return pa.Schema.from_pandas(obj, preserve_index=preserve_index)
 
 
 @to_pyarrow_table_dispatch.register((pd.DataFrame,))
 def get_pyarrow_table_from_pandas(obj, **kwargs):
     # `kwargs` must be supported by `pyarrow.Table.to_pandas`
-    import pyarrow as pa
-
     return pa.Table.from_pandas(obj, **kwargs)
 
 
 @from_pyarrow_table_dispatch.register((pd.DataFrame,))
 def get_pandas_dataframe_from_pyarrow(meta, table, **kwargs):
     # `kwargs` must be supported by `pyarrow.Table.to_pandas`
-    import pyarrow as pa
 
     def default_types_mapper(pyarrow_dtype: pa.DataType) -> object:
         # Avoid converting strings from `string[pyarrow]` to
@@ -443,12 +465,10 @@ def _nonempty_series(s, idx=None):
         data = pd.array([entry, entry], dtype=dtype)
     elif isinstance(dtype, pd.CategoricalDtype):
         if len(s.cat.categories):
-            data = [s.cat.categories[0]] * 2
-            cats = s.cat.categories
+            codes = [0, 0]
         else:
-            data = _nonempty_index(s.cat.categories)
-            cats = s.cat.categories[:0]
-        data = pd.Categorical(data, categories=cats, ordered=s.cat.ordered)
+            codes = [-1, -1]
+        data = pd.Categorical.from_codes(codes, dtype=s.dtype)
     elif is_integer_na_dtype(dtype):
         data = pd.array([1, None], dtype=dtype)
     elif is_float_na_dtype(dtype):
@@ -565,6 +585,38 @@ def group_split_pandas(df, c, k, ignore_index=False):
     return ShuffleGroupResult(zip(range(k), parts))
 
 
+def _union_categoricals_wrapper(
+    dfs: list[pd.CategoricalIndex] | list[pd.Series], **kwargs
+) -> pd.Categorical:
+    """
+    A wrapper around pandas' union_categoricals that handles some dtype issues.
+
+    union_categoricals requires that the dtype of each array's categories match.
+    So you can't union ``Categorical(['a', 'b'])`` and ``Categorical([1, 2])``
+    since the dtype (str vs. int) doesn't match.
+
+    *Somewhere* in Dask, we're possibly creating an empty ``Categorical``
+    with a dtype of ``object``. In pandas 2.x, we could union that with string
+    categories since they both used object dtype. But pandas 3.x uses string
+    dtype for categories.
+
+    This wrapper handles that by creating a new ``Categorical`` with the
+    correct dtype.
+    """
+    categories_dtypes = {cat.dtype.categories.dtype.name for cat in dfs}
+    if "object" in categories_dtypes and "str" in categories_dtypes:
+        dfs = [
+            (
+                type(cat)(pd.Categorical(pd.Index([], dtype="str")), name=cat.name)
+                if cat.dtype.categories.dtype.name == "object" and len(cat) == 0
+                else cat
+            )
+            for cat in dfs
+        ]
+
+    return union_categoricals(dfs, **kwargs)
+
+
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def concat_pandas(
     dfs,
@@ -587,7 +639,8 @@ def concat_pandas(
                 if not isinstance(dfs[i], pd.CategoricalIndex):
                     dfs[i] = dfs[i].astype("category")
             return pd.CategoricalIndex(
-                union_categoricals(dfs, ignore_order=ignore_order), name=dfs[0].name
+                _union_categoricals_wrapper(dfs, ignore_order=ignore_order),
+                name=dfs[0].name,
             )
         elif isinstance(dfs[0], pd.MultiIndex):
             first, rest = dfs[0], dfs[1:]
@@ -682,7 +735,7 @@ def concat_pandas(
                             codes, sample.cat.categories, sample.cat.ordered
                         )
                         parts.append(data)
-                out[col] = union_categoricals(parts, ignore_order=ignore_order)
+                out[col] = _union_categoricals_wrapper(parts, ignore_order=ignore_order)
                 # Pandas resets index type on assignment if frame is empty
                 # https://github.com/pandas-dev/pandas/issues/17101
                 if not len(temp_ind):

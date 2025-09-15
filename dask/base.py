@@ -873,7 +873,7 @@ def visualize_dsk(
         else:
             values = o
         if maxval is None:
-            maxval = max(1, max(values.values()))
+            maxval = max(1, *values.values())
         colors = {
             k: _colorize(tuple(map(int, cmap(v / maxval, bytes=True))))
             for k, v in values.items()

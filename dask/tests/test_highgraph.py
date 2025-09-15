@@ -335,7 +335,7 @@ def test_culling_changes_layer_names():
 
     # This is roughly what dask.optimize is doing
     # The exception is that collection_to_dsk takes the Delayed object and
-    # extracts the layer as a low level graph in which case we're loosing the
+    # extracts the layer as a low level graph in which case we're losing the
     # layer name, i.e. all internal manipulations of the graphs with and without
     # optimization could be affected but triggering this with user APIs is
     # almost impossible

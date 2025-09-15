@@ -93,13 +93,13 @@ def merge_chunk(
 
             if col in lhs:
                 left = lhs[col]
-            elif col == kwargs.get("right_on", None) and left_index:
+            elif col == kwargs.get("right_on") and left_index:
                 if isinstance(lhs.index.dtype, pd.CategoricalDtype):
                     left = lhs.index
 
             if col in rhs:
                 right = rhs[col]
-            elif col == kwargs.get("left_on", None) and right_index:
+            elif col == kwargs.get("left_on") and right_index:
                 if isinstance(rhs.index.dtype, pd.CategoricalDtype):
                     right = rhs.index
 
@@ -120,7 +120,7 @@ def merge_chunk(
                 else:
                     rhs = rhs.assign(**{col: right.astype(dtype)})
 
-    if len(args) and args[0] == "leftsemi" or kwargs.get("how", None) == "leftsemi":
+    if len(args) and args[0] == "leftsemi" or kwargs.get("how") == "leftsemi":
         if isinstance(rhs, (pd.DataFrame, pd.Series)):
             # otherwise it's cudf
             rhs = rhs.drop_duplicates()

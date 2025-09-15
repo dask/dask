@@ -60,7 +60,7 @@ def meta_from_array(x, ndim=None, dtype=None):
     if isinstance(x, type):
         x = x(shape=(0,) * (ndim or 0), dtype=dtype)
 
-    if isinstance(x, list) or isinstance(x, tuple):
+    if isinstance(x, (list, tuple)):
         ndims = [
             (
                 0
@@ -459,6 +459,8 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if type(like).__module__.startswith("scipy.sparse"):
         # e.g. scipy.sparse.csr_matrix
         kwargs.pop("order", None)
+        if np.isscalar(a):
+            a = np.array([a])
         return type(like)(a, **kwargs)
 
     # Unknown namespace with no __array_function__ support.

@@ -147,21 +147,21 @@ def mean_aggregate(s, n):
 
 
 def wrap_var_reduction(array_var, index):
-    if isinstance(array_var, np.ndarray) or isinstance(array_var, list):
+    if isinstance(array_var, (np.ndarray, list)):
         return pd.Series(array_var, index=index)
 
     return array_var
 
 
 def wrap_skew_reduction(array_skew, index):
-    if isinstance(array_skew, np.ndarray) or isinstance(array_skew, list):
+    if isinstance(array_skew, (np.ndarray, list)):
         return pd.Series(array_skew, index=index)
 
     return array_skew
 
 
 def wrap_kurtosis_reduction(array_kurtosis, index):
-    if isinstance(array_kurtosis, np.ndarray) or isinstance(array_kurtosis, list):
+    if isinstance(array_kurtosis, (np.ndarray, list)):
         return pd.Series(array_kurtosis, index=index)
 
     return array_kurtosis
