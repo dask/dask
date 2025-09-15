@@ -459,12 +459,10 @@ def _nonempty_series(s, idx=None):
         data = pd.array([entry, entry], dtype=dtype)
     elif isinstance(dtype, pd.CategoricalDtype):
         if len(s.cat.categories):
-            data = [s.cat.categories[0]] * 2
-            cats = s.cat.categories
+            codes = [0, 0]
         else:
-            data = _nonempty_index(s.cat.categories)
-            cats = s.cat.categories[:0]
-        data = pd.Categorical(data, categories=cats, ordered=s.cat.ordered)
+            codes = [-1, -1]
+        data = pd.Categorical.from_codes(codes, dtype=s.dtype)
     elif is_integer_na_dtype(dtype):
         data = pd.array([1, None], dtype=dtype)
     elif is_float_na_dtype(dtype):
