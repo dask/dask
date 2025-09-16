@@ -21,7 +21,7 @@ from dask._expr import Expr as BaseExpr
 from dask._expr import FinalizeCompute
 from dask._task_spec import Alias, DataNode, Task, TaskRef, execute_graph
 from dask.array import Array
-from dask.base import collections_to_expr, tokenize
+from dask.base import collections_to_expr
 from dask.core import flatten
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
