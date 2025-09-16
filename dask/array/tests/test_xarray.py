@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from functools import partial
 
 import numpy as np
@@ -164,3 +165,32 @@ def test_slicing():
     subset = ds.isel(t=[0], p=0).z[:, ::10, ::10][:, ::-1, :]
     subset2 = ds.isel(t=[0]).isel(p=0).z[:, ::10, ::10][:, ::-1, :]
     assert_eq(subset.data, subset2.data)
+
+
+@pytest.mark.filterwarnings("ignore:Passing an object to dask.array")
+def test_tokenize_without_pyarrow() -> None:
+    # https://github.com/dask/dask/issues/12072
+    import subprocess
+    import textwrap
+
+    code = textwrap.dedent(
+        """\
+        import sys
+        sys.modules["pyarrow"] = None
+        import xarray as xr
+        import dask.array as da
+        import numpy as np
+        import dask
+
+        y = xr.DataArray(
+            data=da.zeros((1)),
+            dims=('y',),
+            coords={'y': np.arange(1)},
+            name='foo'
+        ).to_dataset()
+        y['foo'] = y.foo.dims, y.foo.data + 1
+        dask.optimize(y)
+        """
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True)
+    assert out.stderr == b""

@@ -278,7 +278,8 @@ def _normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
-    from dask.dataframe._compat import PANDAS_GE_210
+    # use dask._pandas_compat to avoid importing dask.dataframe here
+    from dask._pandas_compat import PANDAS_GE_210
 
     @normalize_token.register(pd.RangeIndex)
     def normalize_range_index(x):
