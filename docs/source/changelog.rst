@@ -5,6 +5,23 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2025.9.1:
+
+2025.9.1
+--------
+
+Highlights
+^^^^^^^^^^
+- Avoid unconditional pyarrow dependency in dataframe.backends (:pr:`12075`) `Tom Augspurger`_
+- pandas 3.x compatibility for `.groups` (:pr:`12071`) `Tom Augspurger`_
+
+.. dropdown:: Additional changes
+
+  - Avoid unconditional pyarrow dependency in dataframe.backends (:pr:`12075`) `Tom Augspurger`_
+  - pandas 3.x compatibility for `.groups` (:pr:`12071`) `Tom Augspurger`_
+  - Expose details about worker start timeout in the exception message (:pr-distributed:`9092`) `Taylor Braun-Jones`_
+  - pynvml => nvidia-ml-py in CI (:pr-distributed:`9111`) `Jacob Tomlinson`_
+
 .. _v2025.9.0:
 
 2025.9.0
