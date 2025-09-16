@@ -376,10 +376,10 @@ def test_map_overlap_independent_operations_on_same_input(df, pdf, overlap_setup
     overlap = max(before, after)
 
     expected_count_2 = pd.Series(
-        partition_size, index=pdf.index, dtype=int, name="count"
+        partition_size, index=pdf.index, dtype=np.int64, name="count"
     )
     expected_count_4 = pd.Series(
-        partition_size, index=pdf.index, dtype=int, name="count"
+        partition_size, index=pdf.index, dtype=np.int64, name="count"
     )
 
     x, y = (partition_size, len(pdf)) if before != 0 else (0, -partition_size)
