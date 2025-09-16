@@ -17,7 +17,7 @@ NUMPY_GE_210 = _np_version.release >= (2, 1)
 
 
 if NUMPY_GE_200:
-    from numpy.exceptions import AxisError, ComplexWarning  # noqa: F401
+    from numpy.exceptions import AxisError, ComplexWarning
     from numpy.lib.array_utils import normalize_axis_index, normalize_axis_tuple
 else:
     from numpy import (  # type: ignore[no-redef, attr-defined] # noqa: F401
