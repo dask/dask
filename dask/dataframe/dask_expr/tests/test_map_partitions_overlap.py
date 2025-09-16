@@ -5,6 +5,7 @@ import datetime
 import numpy as np
 import pytest
 
+import dask
 from dask.dataframe.dask_expr import from_pandas, map_overlap, map_partitions
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
 
@@ -349,3 +350,42 @@ def test_token_given(df, pdf):
     result = df.map_partitions(my_func)
     assert result._name.split("-")[0] == "my_func"
     assert_eq(result, pdf + 1)
+
+
+@pytest.mark.parametrize(
+    "overlap_setup",
+    [
+        (2, 0),
+        (0, 2),
+    ],
+)
+def test_map_overlap_independent_operations_on_same_input(df, pdf, overlap_setup):
+    def count(part):
+        return_value = part.copy()
+        return_value["count"] = len(return_value)
+        return return_value
+
+    before, after = overlap_setup
+
+    df_2 = map_overlap(count, df, before, after)
+    df_4 = map_overlap(count, df, before * 2, after * 2)
+
+    pdf_2, pdf_4 = dask.compute(df_2, df_4)
+
+    partition_size = len(pdf) // df.npartitions
+    overlap = max(before, after)
+
+    expected_count_2 = pd.Series(
+        partition_size, index=pdf.index, dtype=np.int64, name="count"
+    )
+    expected_count_4 = pd.Series(
+        partition_size, index=pdf.index, dtype=np.int64, name="count"
+    )
+
+    x, y = (partition_size, len(pdf)) if before != 0 else (0, -partition_size)
+
+    expected_count_2.iloc[x:y] = partition_size + overlap
+    expected_count_4.iloc[x:y] = partition_size + overlap * 2
+
+    pd.testing.assert_series_equal(expected_count_2, pdf_2["count"])
+    pd.testing.assert_series_equal(expected_count_4, pdf_4["count"])
