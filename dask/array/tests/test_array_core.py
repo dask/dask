@@ -5361,11 +5361,16 @@ def test_dask_array_holds_scipy_sparse_containers(container):
 @pytest.mark.parametrize(
     "container", [pytest.param("array", marks=skip_if_no_sparray()), "matrix"]
 )
-def test_dask_array_setitem_singleton_sparse(container):
+@pytest.mark.parametrize("format", ["csr", "csc"])
+def test_dask_array_setitem_singleton_sparse(container, format):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    cls = scipy.sparse.csr_matrix if container == "matrix" else scipy.sparse.csr_array
+    cls = (
+        getattr(scipy.sparse, f"{format}_matrix")
+        if container == "matrix"
+        else getattr(scipy.sparse, f"{format}_array")
+    )
 
     x = cls(scipy.sparse.eye(100))
     x_dask = da.from_array(x)
