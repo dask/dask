@@ -375,13 +375,17 @@ def test_map_overlap_independent_operations_on_same_input(df, pdf, overlap_setup
     partition_size = len(pdf) // df.npartitions
     overlap = max(before, after)
 
-    expected_count_2 = pd.Series(partition_size, index=pdf.index, dtype=int, name='count')
-    expected_count_4 = pd.Series(partition_size, index=pdf.index, dtype=int, name='count')
+    expected_count_2 = pd.Series(
+        partition_size, index=pdf.index, dtype=int, name="count"
+    )
+    expected_count_4 = pd.Series(
+        partition_size, index=pdf.index, dtype=int, name="count"
+    )
 
     x, y = (partition_size, len(pdf)) if before != 0 else (0, -partition_size)
 
     expected_count_2.iloc[x:y] = partition_size + overlap
     expected_count_4.iloc[x:y] = partition_size + overlap * 2
 
-    pd.testing.assert_series_equal(expected_count_2, pdf_2['count'])
-    pd.testing.assert_series_equal(expected_count_4, pdf_4['count'])
+    pd.testing.assert_series_equal(expected_count_2, pdf_2["count"])
+    pd.testing.assert_series_equal(expected_count_4, pdf_4["count"])
