@@ -373,19 +373,15 @@ def test_map_overlap_independent_operations_on_same_input(df, pdf, overlap_setup
     pdf_2, pdf_4 = dask.compute(df_2, df_4)
 
     partition_size = len(pdf) // df.npartitions
-
     overlap = max(before, after)
-    no_overlap_length = (partition_size, partition_size)
-    overlap_length = (partition_size + overlap, partition_size + overlap * 2)
 
-    for idx, (division, next_division) in enumerate(
-        zip(df.divisions, df.divisions[1:])
-    ):
-        if before != 0:
-            expected_counts = overlap_length if idx > 0 else no_overlap_length
-        else:
-            expected_counts = (
-                overlap_length if idx < (partition_size - 1) else no_overlap_length
-            )
-        assert (pdf_2[division:next_division]["count"] == expected_counts[0]).all()
-        assert (pdf_4[division:next_division]["count"] == expected_counts[1]).all()
+    expected_count_2 = pd.Series(partition_size, index=pdf.index, dtype=int, name='count')
+    expected_count_4 = pd.Series(partition_size, index=pdf.index, dtype=int, name='count')
+
+    x, y = (partition_size, len(pdf)) if before != 0 else (0, -partition_size)
+
+    expected_count_2.iloc[x:y] = partition_size + overlap
+    expected_count_4.iloc[x:y] = partition_size + overlap * 2
+
+    pd.testing.assert_series_equal(expected_count_2, pdf_2['count'])
+    pd.testing.assert_series_equal(expected_count_4, pdf_4['count'])
