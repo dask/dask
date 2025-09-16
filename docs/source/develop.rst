@@ -133,8 +133,9 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.9 to 3.12.
-Name changes are handled by the :file:`dask/compatibility.py` file.
+Dask roughly follows `NEP 29 <https://numpy.org/neps/nep-0029-deprecation_policy.html>`_
+for supported Python versions. See :file:`dask/pyproject.toml` for the
+current set of supported Python versions.
 
 .. _develop-test:
 
