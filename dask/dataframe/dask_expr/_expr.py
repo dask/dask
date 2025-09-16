@@ -1041,7 +1041,7 @@ class CreateOverlappingPartitions(Expr):
     def _layer(self) -> dict:
         dsk, prevs, nexts = {}, [], []  # type: ignore
 
-        name_prepend = "overlap-prepend" + tokenize(self.frame._name, self.before)
+        name_prepend = "overlap-prepend-" + self._name
         if self.before:
             prevs.append(None)
             if isinstance(self.before, numbers.Integral):
@@ -1092,7 +1092,7 @@ class CreateOverlappingPartitions(Expr):
         else:
             prevs.extend([None] * self.frame.npartitions)  # type: ignore
 
-        name_append = "overlap-append" + tokenize(self.frame._name, self.after)
+        name_append = "overlap-append-" + self._name
         if self.after:
             if isinstance(self.after, numbers.Integral):
                 after = self.after
