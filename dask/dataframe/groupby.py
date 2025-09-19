@@ -63,7 +63,7 @@ def _groupby_raise_unaligned(df, convert_by_to_list=True, **kwargs):
     unaligned key is generally a bad idea, we just error loudly in dask.
 
     For more information see pandas GH issue #15244 and Dask GH issue #1876."""
-    by = kwargs.get("by", None)
+    by = kwargs.get("by")
     if by is not None and not _is_aligned(df, by):
         msg = (
             "Grouping by an unaligned column is unsafe and unsupported.\n"
@@ -90,7 +90,13 @@ def _groupby_raise_unaligned(df, convert_by_to_list=True, **kwargs):
         # We want multiple keys
         if isinstance(by, str):
             by = [by]
-        kwargs.update(by=list(by))
+        by = list(by)
+        if len(by) == 1:
+            # https://github.com/pandas-dev/pandas/commit/e191a06002176917f6f5dd90d0bb995565865654
+            # pandas is changing the output of .groups with length-1 lists,
+            # so just avoid that.
+            by = by[0]
+        kwargs.update(by=by)
     with check_observed_deprecation():
         return df.groupby(**kwargs)
 
@@ -496,19 +502,12 @@ def _cov_chunk(df, *by, numeric_only=no_default):
 
 
 def _cov_agg(_t, levels, ddof, std=False, sort=False):
-    sums = []
-    muls = []
-    counts = []
-
     # sometime we get a series back from concat combiner
     t = list(_t)
 
-    cols = t[0][0].columns
-    for x, mul, n, col_mapping in t:
-        sums.append(x)
-        muls.append(mul)
-        counts.append(n)
-        col_mapping = col_mapping
+    sums, muls, counts, col_mappings = zip(*t)
+    cols = sums[0].columns
+    col_mapping = col_mappings[-1]
 
     total_sums = concat(sums).groupby(level=levels, sort=sort).sum()
     total_muls = concat(muls).groupby(level=levels, sort=sort).sum()
@@ -1209,16 +1208,12 @@ def _unique_aggregate(series_gb, name=None):
 
 
 def _value_counts(x, **kwargs):
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", "`groups` by one element list returns", FutureWarning
-        )
-        if not x.groups or all(
-            pd.isna(key) for key in flatten(x.groups.keys(), container=tuple)
-        ):
-            return pd.Series(dtype=int)
-        else:
-            return x.value_counts(**kwargs)
+    if not x.groups or all(
+        pd.isna(key) for key in flatten(x.groups.keys(), container=tuple)
+    ):
+        return pd.Series(dtype=int)
+    else:
+        return x.value_counts(**kwargs)
 
 
 def _value_counts_aggregate(series_gb):

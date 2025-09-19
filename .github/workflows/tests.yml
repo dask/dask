@@ -63,7 +63,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4.1.5
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # Needed by codecov.io
 
@@ -75,7 +75,7 @@ jobs:
           java-version: "11"
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.1.1
+        uses: conda-incubator/setup-miniconda@v3.2.0
         with:
           miniforge-version: latest
           use-mamba: true
@@ -83,6 +83,7 @@ jobs:
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
+          run-post: ${{ matrix.os != 'windows-latest' }}
 
       - name: Test pandas nightlies (only with dask-expr)
         if: ${{ matrix.extra == 'pandas-nightly' }}

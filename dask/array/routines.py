@@ -9,6 +9,7 @@ from numbers import Integral, Real
 import numpy as np
 from tlz import concat, interleave, sliding_window
 
+from dask._task_spec import Task, TaskRef
 from dask.array import chunk
 from dask.array.core import (
     Array,
@@ -525,7 +526,7 @@ def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs)
     # Adds other axes as needed.
     result = arr.map_blocks(
         _inner_apply_along_axis,
-        name=funcname(func1d) + "-along-axis",
+        token=funcname(func1d) + "-along-axis",
         dtype=dtype,
         chunks=(arr.chunks[:axis] + shape + arr.chunks[axis + 1 :]),
         drop_axis=axis,
@@ -849,23 +850,13 @@ def searchsorted(a, v, side="left", sorter=None):
     return out
 
 
-# TODO: dask linspace doesn't support delayed values
-def _linspace_from_delayed(start, stop, num=50):
-    linspace_name = "linspace-" + tokenize(start, stop, num)
-    (start_ref, stop_ref, num_ref), deps = unpack_collections([start, stop, num])
-    if len(deps) == 0:
-        return np.linspace(start, stop, num=num)
-
-    linspace_dsk = {(linspace_name, 0): (np.linspace, start_ref, stop_ref, num_ref)}
-    linspace_graph = HighLevelGraph.from_collections(
-        linspace_name, linspace_dsk, dependencies=deps
-    )
-
-    chunks = ((np.nan,),) if is_dask_collection(num) else ((num,),)
-    return Array(linspace_graph, linspace_name, chunks, dtype=float)
+def _linspace(bins_range):
+    bins, (start, stop) = bins_range
+    return np.linspace(start, stop, num=bins + 1)
 
 
-def _block_hist(x, bins, range=None, weights=None):
+def _block_hist(x, bins_range, weights=None):
+    bins, range = bins_range
     return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
 
 
@@ -1006,10 +997,27 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     token = tokenize(a, bins, range, weights, density)
     name = "histogram-sum-" + token
 
+    bins_range, deps = unpack_collections([bins, range])
+
     if scalar_bins:
-        bins = _linspace_from_delayed(range[0], range[1], bins + 1)
-        # ^ NOTE `range[1]` is safe because of the above check, and the initial check
-        # that range must not be None if `scalar_bins`
+        assert range is not None
+        assert bins is not None
+        if len(deps) == 0:
+            bins = np.linspace(range[0], range[1], num=bins + 1)
+        else:
+            linspace_name = "linspace-" + tokenize(bins_range)
+
+            linspace_dsk = {
+                (linspace_name, 0): Task((linspace_name, 0), _linspace, bins_range)
+            }
+            linspace_graph = HighLevelGraph.from_collections(
+                linspace_name, linspace_dsk, dependencies=deps
+            )
+            if is_dask_collection(bins):
+                chunks = ((np.nan,),)
+            else:
+                chunks = ((bins + 1,),)
+            bins = Array(linspace_graph, linspace_name, chunks, dtype=float)
     else:
         if not isinstance(bins, (Array, np.ndarray)):
             bins = asarray(bins)
@@ -1018,12 +1026,10 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                 f"bins must be a 1-dimensional array or sequence, got shape {bins.shape}"
             )
 
-    (bins_ref, range_ref), deps = unpack_collections([bins, range])
-
     # Map the histogram to all bins, forming a 2D array of histograms, stacked for each chunk
     if weights is None:
         dsk = {
-            (name, i, 0): (_block_hist, k, bins_ref, range_ref)
+            (name, i, 0): Task((name, i, 0), _block_hist, TaskRef(k), bins_range)
             for i, k in enumerate(flatten(a.__dask_keys__()))
         }
         dtype = np.histogram([])[0].dtype
@@ -1031,7 +1037,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, 0): (_block_hist, k, bins_ref, range_ref, w)
+            (name, i, 0): Task(
+                (name, i, 0), _block_hist, TaskRef(k), bins_range, TaskRef(w)
+            )
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
@@ -1354,10 +1362,8 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     # range= these are unsupported.
     dc_bins = is_dask_collection(bins)
     if isinstance(bins, (list, tuple)):
-        dc_bins = dc_bins or any([is_dask_collection(b) for b in bins])
-    dc_range = (
-        any([is_dask_collection(r) for r in range]) if range is not None else False
-    )
+        dc_bins = dc_bins or any(is_dask_collection(b) for b in bins)
+    dc_range = any(is_dask_collection(r) for r in range) if range is not None else False
     if dc_bins or dc_range:
         raise NotImplementedError(
             "Passing dask collections to bins=... or range=... is not supported."
@@ -2204,7 +2210,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
         x,
         *condlist,
         dtype=x.dtype,
-        name="piecewise",
+        token="piecewise",
         funclist=funclist,
         func_args=args,
         func_kw=kw,

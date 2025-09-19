@@ -110,15 +110,16 @@ See the function ``inline_functions`` for more information.
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from concurrent.futures import Executor, Future
 from functools import partial
 from queue import Empty, Queue
 
 from dask import config
-from dask._task_spec import DataNode, DependenciesMapping, convert_legacy_graph
+from dask._task_spec import DataNode, convert_legacy_graph
 from dask.callbacks import local_callbacks, unpack_callbacks
-from dask.core import flatten, get_dependencies, reverse_dict
+from dask.core import flatten, get_dependencies
 from dask.order import order
 from dask.typing import Key
 
@@ -140,7 +141,7 @@ else:
         return q.get()
 
 
-def start_state_from_dask(dsk, cache=None, sortkey=None):
+def start_state_from_dask(dsk, cache=None, sortkey=None, keys=None):
     """Start state from a dask
 
     Examples
@@ -166,35 +167,63 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
         cache = config.get("cache", None)
     if cache is None:
         cache = dict()
-
+    if keys is None:
+        keys = list(set(dsk) - set(cache))
     dsk = convert_legacy_graph(dsk, all_keys=set(dsk) | set(cache))
-    data_keys = set()
-    for k, v in dsk.items():
-        if isinstance(v, DataNode):
-            cache[k] = v()
-            data_keys.add(k)
+    stack = list(keys)
+    dependencies = defaultdict(set)
+    dependents = defaultdict(set)
+    waiting = defaultdict(set)
+    waiting_data = defaultdict(set)
+    ready_set = set()
+    seen = set()
+    while stack:
+        key = stack.pop()
+        if key in seen:
+            continue
+        seen.add(key)
+        dependents[key]
+        waiting_data[key]
+        dependencies[key]
+        task = dsk.get(key, None)
+        if task is None:
+            if dependents[key] and not cache.get(key):
+                raise ValueError(
+                    "Missing dependency {} for dependents {}".format(
+                        key, dependents[key]
+                    )
+                )
+            continue
+        elif isinstance(task, DataNode):
+            cache[key] = task()
+            dependencies[key]
+            for d in dependents[key]:
+                if d in waiting:
+                    waiting[d].remove(key)
+                    if not waiting[d]:
+                        del waiting[d]
+                        ready_set.add(d)
+                else:
+                    ready_set.add(d)
+        else:
+            _wait = task.dependencies - set(cache)
+            if not _wait:
+                ready_set.add(key)
+            else:
+                waiting[key] = set(_wait)
+            for dep in task.dependencies:
+                dependencies[key].add(dep)
+                dependents[dep].add(key)
+                waiting_data[dep].add(key)
+                stack.append(dep)
 
-    dsk2 = dsk.copy()
-    dsk2.update(cache)
-
-    dependencies = DependenciesMapping(dsk)
-    waiting = {k: set(v) for k, v in dependencies.items() if k not in data_keys}
-
-    dependents = reverse_dict(dependencies)
-    for a in cache:
-        for b in dependents.get(a, ()):
-            waiting[b].remove(a)
-    waiting_data = {k: v.copy() for k, v in dependents.items() if v}
-
-    ready_set = {k for k, v in waiting.items() if not v}
     ready = sorted(ready_set, key=sortkey, reverse=True)
-    waiting = {k: v for k, v in waiting.items() if v}
 
     state = {
-        "dependencies": dependencies,
-        "dependents": dependents,
-        "waiting": waiting,
-        "waiting_data": waiting_data,
+        "dependencies": dict(dependencies),
+        "dependents": dict(dependents),
+        "waiting": dict(waiting),
+        "waiting_data": dict(waiting_data),
         "cache": cache,
         "ready": ready,
         "running": set(),
@@ -315,7 +344,7 @@ def default_get_id():
 
 
 def default_pack_exception(e, dumps):
-    raise
+    raise e
 
 
 def reraise(exc, tb=None):
@@ -444,7 +473,9 @@ def get_async(
 
             keyorder = order(dsk)
 
-            state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
+            state = start_state_from_dask(
+                dsk, keys=results, cache=cache, sortkey=keyorder.get
+            )
 
             for _, start_state, _, _, _ in callbacks:
                 if start_state:
@@ -480,7 +511,7 @@ def get_async(
 
                     # Prep args to send
                     data = {
-                        dep: state["cache"][dep] for dep in get_dependencies(dsk, key)
+                        dep: state["cache"][dep] for dep in state["dependencies"][key]
                     }
                     args.append(
                         (

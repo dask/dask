@@ -1156,7 +1156,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func, split_out):
         if agg_func in ("cov", "corr"):
             # there are sorting issues between pandas and chunk cov w/dask
             df = call(pdf.groupby(grouper(pdf), sort=sort), agg_func).sort_index()
-            cols = sorted(list(df.columns))
+            cols = sorted(df.columns)
             df = df[cols]
             dddf = call(
                 ddf.groupby(grouper(ddf), sort=sort),
@@ -1165,7 +1165,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func, split_out):
                 split_every=2,
             ).compute()
             dddf = dddf.sort_index()
-            cols = sorted(list(dddf.columns))
+            cols = sorted(dddf.columns)
             dddf = dddf[cols]
             assert_eq(df, dddf)
         else:
@@ -3172,14 +3172,20 @@ def test_groupby_numeric_only_true(func):
 
 @pytest.mark.parametrize("func", ["cov", "corr"])
 def test_groupby_numeric_only_false_cov_corr(func):
+
     df = pd.DataFrame(
         {
             "float": [1.0, 2.0, 3.0, 4.0, 5, 6.0, 7.0, 8.0],
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
-            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, 8]),
             "A": 1,
         }
     )
+
+    if not PANDAS_GE_300:
+        # pandas 3.x doesn't support cov of datetime
+        # https://github.com/pandas-dev/pandas/pull/60898
+        df["timedelta"] = pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, 8])
+
     ddf = dd.from_pandas(df, npartitions=2)
     dd_result = getattr(ddf.groupby("A"), func)(numeric_only=False)
     pd_result = getattr(df.groupby("A"), func)(numeric_only=False)

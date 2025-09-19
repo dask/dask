@@ -5,33 +5,251 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
-Next Release
-------------
+.. _v2025.9.1:
+
+2025.9.1
+--------
 
 Highlights
 ^^^^^^^^^^
-- When computing multiple dask Expr backed collections like DataFrames, they are
+- Avoid unconditional pyarrow dependency in dataframe.backends (:pr:`12075`) `Tom Augspurger`_
+- pandas 3.x compatibility for `.groups` (:pr:`12071`) `Tom Augspurger`_
+
+.. dropdown:: Additional changes
+
+  - Avoid unconditional pyarrow dependency in dataframe.backends (:pr:`12075`) `Tom Augspurger`_
+  - pandas 3.x compatibility for `.groups` (:pr:`12071`) `Tom Augspurger`_
+  - Expose details about worker start timeout in the exception message (:pr-distributed:`9092`) `Taylor Braun-Jones`_
+  - pynvml => nvidia-ml-py in CI (:pr-distributed:`9111`) `Jacob Tomlinson`_
+
+.. _v2025.9.0:
+
+2025.9.0
+--------
+
+Highlights
+^^^^^^^^^^
+- pandas 3.x compatibility (:pr:`12025`) `Tom Augspurger`_
+- Remove protocol="ucx" support in favor of distributed-ucxx (:pr-distributed:`9105`) `Peter Andreas Entschev`_
+
+.. dropdown:: Additional changes
+
+  - Fix `0` scalar setting for `scipy.sparse` (:pr:`12027`) `Ilan Gold`_
+  - Workaround failing upstream-dev tests (:pr:`12061`) `Tom Augspurger`_
+  - avoid instantiating a potentially very large arange in `take` (:pr:`11998`) `Justus Magin`_
+  - MAINT: address NumPy deprecation in `np.minimum` (:pr:`12059`) `Marco Edward Gorelli`_
+  - CI fixes (:pr:`12058`) `Tom Augspurger`_
+  - MAINT: Address NumPy DeprecationWarning (:pr:`12056`) `Marco Edward Gorelli`_
+  - Fix ``test_enforce_columns`` on Python 3.14 (:pr:`12047`) `Elliott Sales de Andrade`_
+  - Fix "th" --> "the" typo in DataFrame SQL docs (:pr:`12038`) `Peter A. Jonsson`_
+  - Advance rng state in permutation (:pr:`12031`) `James Bourbeau`_
+  - Fix ``pyarrow`` chunked array conversion (:pr:`12034`) `James Bourbeau`_
+  - Fix ``xfail`` condition for ``pyarrow`` ``large_string`` issue (:pr:`12032`) `James Bourbeau`_
+  - pandas 3.x compatibility (:pr:`12025`) `Tom Augspurger`_
+  - Fix `name` not propagated correctly in `map_blocks` (:pr:`11952`) `Ilan Gold`_
+
+  - Clean tuples dict keys from workers_info in /api/v1/retire_workers. (:pr-distributed:`8996`) `Florian Courtial`_
+  - Remove protocol="ucx" support in favor of distributed-ucxx (:pr-distributed:`9105`) `Peter Andreas Entschev`_
+
+.. _v2025.7.0:
+
+2025.7.0
+--------
+
+Highlights
+^^^^^^^^^^
+- Account for ``__main__`` in ``pickle`` normalization (:pr:`11970`) `James Bourbeau`_
+- Enable column projection in ``MapPartitions`` (:pr:`11875`) `Richard (Rick) Zamora`_
+- Add config option for ``direct-to-workers`` (:pr-distributed:`9097`) `James Bourbeau`_
+
+.. dropdown:: Additional changes
+
+  - CI: update actions location (:pr:`12019`) `Brigitta Sipőcz`_
+  - Apply ``ruff/flake8-comprehensions`` rules (C4) (:pr:`12004`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/flake8-pie`` rules (PIE) (:pr:`12006`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/Pylint Error`` rules (PLE) (:pr:`12013`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/Pylint Convention`` rules (PLC) (:pr:`12012`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/flake8-pyi`` rules (PYI) (:pr:`12007`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/flake8-simplify`` rules (SIM) (:pr:`12008`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/Pylint`` Warning rules (PLW) (:pr:`12011`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/flake8-implicit-str-concat`` rules (ISC) (:pr:`12005`) `Dimitri Papadopoulos Orfanos`_
+  - Apply ``ruff/pycodestyle`` rule E714 (:pr:`12000`) `Dimitri Papadopoulos Orfanos`_
+  - Fix typos found by ``codespell`` (:pr:`12001`) `Dimitri Papadopoulos Orfanos`_
+  - Update PyPI URL for official nightly ``pyarrow`` repository (:pr:`11996`) `Raúl Cumplido`_
+  - Fall-back to textual repr in case ``jinja2`` is not installed (:pr:`11987`) `Lukas Bindreiter`_
+  - Prevent ``builtins.any`` from being shadowed in ``dask.array.reductions`` (:pr:`11988`) `Marvin Albert`_
+  - Bump ``conda-incubator/setup-miniconda`` from 3.1.1 to 3.2.0 (:pr:`11982`)
+  - Skip groupby cov test for pandas 3.x (:pr:`11977`) `Tom Augspurger`_
+  - Fix ``upstream`` CI installation (:pr:`11976`) `James Bourbeau`_
+  - Make module name logic more resilient in ``Dispatch`` (:pr:`11974`) `James Bourbeau`_
+
+  - Ensure ``memray`` profiler runs on all workers (:pr-distributed:`9095`) `James Bourbeau`_
+  - Update ``def`` to ``class`` typo in actors docs (:pr-distributed:`9091`) `Peter Fackeldey`_
+  - Bump ``conda-incubator/setup-miniconda`` from 3.1.1 to 3.2.0 (:pr-distributed:`9090`)
+  - Update persist in tests for async clients (:pr-distributed:`9089`) `Tom Augspurger`_
+  - Fix ``pyarrow`` ``FileInfo`` import (:pr-distributed:`9078`) `James Bourbeau`_
+  - Make module name logic more resilient in ``_always_use_pickle_for`` (:pr-distributed:`9086`) `James Bourbeau`_
+  - Temporarily pin ``pytest`` in CI to avoid coverage error  (:pr-distributed:`9088`) `James Bourbeau`_
+  - Remove ``s3fs`` from testing CI environment (:pr-distributed:`9087`) `James Bourbeau`_
+  - Reuse ``Comm`` objects in ``Scheduler.broadcast`` (:pr-distributed:`9083`) `Tom Augspurger`_
+  - Fix ``test_resubmit_nondeterministic_task_different_deps`` (:pr-distributed:`9085`) `James Bourbeau`_
+
+.. _v2025.5.1:
+
+2025.5.1
+--------
+
+Highlights
+^^^^^^^^^^
+Fixed Dask Array slicing regression introduced in the 2025.5.0 release.
+See :pr:`11947` from `Florian Jetter`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Speed up slicing graph generation (:pr:`11945`) `Florian Jetter`_
+  - Revert "Don't handle tuple in ``task_spec.parse_input``" (:pr:`11953`) `Florian Jetter`_
+  - Optimize slicing graph generation (:pr:`11946`) `Florian Jetter`_
+  - Fix ``xarray`` slicing regression (:pr:`11947`) `Florian Jetter`_
+  - Don't handle tuple in ``task_spec.parse_input`` (:pr:`11948`) `Florian Jetter`_
+
+.. _v2025.5.0:
+
+2025.5.0
+--------
+
+Highlights
+^^^^^^^^^^
+- Fixed Array ``setitem`` when both the array and the indexer have unknown shape.
+  See :pr:`11753` from `Tom Augspurger`_ for more details.
+- Fixed several ``delayed`` graph handling issues introduced in the 2025.4.0 release.
+  See :pr:`11917`, :pr:`11907`, and :pr-distributed:`9071` from `Florian Jetter`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Speed up slicing graph generation (:pr:`11945`) `Florian Jetter`_
+  - Optimize dask order for worst case of ``get_target`` (:pr:`11935`) `Florian Jetter`_
+  - Raise on local executor if tasks are missing dependency (:pr:`11944`) `Florian Jetter`_
+  - Fix ``to_dask_array`` for single partition (:pr:`11931`) `James Bourbeau`_
+  - Ensure parquet plan is fully cached during optimization (:pr:`11933`) `Florian Jetter`_
+  - Better documentation for expression system (:pr:`11915`) `Florian Jetter`_
+  - Simplify (and speed up) culling (:pr:`11899`) `Florian Jetter`_
+  - Update pre-commit (:pr:`11926`) `Florian Jetter`_
+  - Don't run post ``setup-miniconda`` step in CI (:pr:`11925`) `James Bourbeau`_
+  - Try to pin pip for readthedocs (:pr:`11923`) `Florian Jetter`_
+  - Fix windows CI (:pr:`11919`) `Florian Jetter`_
+
+  - Use stable ``crick`` for py310 (:pr-distributed:`9072`) `Florian Jetter`_
+  - Remove internal dependencies mapping in ``update_graph`` (:pr-distributed:`9036`) `Florian Jetter`_
+  - Partially forgotten dependencies (:pr-distributed:`9068`) `Florian Jetter`_
+  - Replace ``filesystem-spec`` in CI environment with ``fsspec`` (:pr-distributed:`9069`) `James Bourbeau`_
+  - Ensure actors set erred state properly in case of worker failure (:pr-distributed:`9067`) `Florian Jetter`_
+  - Refactor timeouts in start cluster (:pr-distributed:`9062`) `Florian Jetter`_
+  - Fix workers / threads / memory displayed in client repr (:pr-distributed:`9066`) `James Bourbeau`_
+  - Pin pip for readthedocs (:pr-distributed:`9063`) `Florian Jetter`_
+  - Skip TLS functional tests (:pr-distributed:`9061`) `Florian Jetter`_
+  - Ensure client submit does not serialize unnecessarily (:pr-distributed:`9057`) `Florian Jetter`_
+
+
+.. _v2025.4.1:
+
+2025.4.1
+--------
+
+Highlights
+^^^^^^^^^^
+This release contains several graph optimization fixes for issues introduced in the ``2025.4.0`` release.
+
+See :pr:`11906`, :pr:`11898`, :pr:`11903`, and :pr:`11904` by `Florian Jetter`_ for more details.
+
+.. dropdown:: Additional changes
+
+  - Implement ``ufuncs`` and ``gufunc`` for array-expr (:pr:`11818`) `Patrick Hoefler`_
+  - Implement ``map_overlap`` for array-expr (:pr:`11822`) `Patrick Hoefler`_
+
+.. _v2025.4.0:
+
+2025.4.0
+--------
+
+Highlights
+^^^^^^^^^^
+- When computing multiple Dask-Expr backed collections like DataFrames, they are
   now optimized together instead of individually.
 - Graph materialization and low level optimization is now being performed on the
-  scheduler of a distributed cluster (if available)
-- New kwarg `force` for ``DataFrame.shuffle`` which signals the optimizer to not
+  scheduler of a distributed cluster (if available).
+- New kwarg ``force`` for ``DataFrame.shuffle`` which signals the optimizer to not
   drop the shuffle during optimization.
+- Collections that are passed to Dask methods as arguments
+  are now properly optimized. If multiple collections are passed as arguments
+  they will be optimized together. Collections passed this way are prohibited
+  from being being reused, i.e. if the collection is used again in another
+  function call it will be computed again. This pattern is used to avoid
+  pipeline breakers which typically drive memory usage. Avoiding those should
+  reduce memory pressure on the cluster but can cause runtime regressions.
+- (Special case of above point) Collections passed to Delayed objects are now
+  optimized automatically.
 
 Breaking changes
 ^^^^^^^^^^^^^^^^
-- Support for custom low level optimizers removed
-- Top level dask.optimize will now always trigger graph materialization.
+- Support for custom low level optimizers removed.
+- Top level ``dask.optimize`` will now always trigger graph materialization.
   Previously this was not always the case. This also causes any low level HLG
   annotations to be dropped.
 - DataFrame and Array compute results are now always concatenated on the
   cluster. Previously, the behavior was dependent on the API used to call
-  compute (dask.compute, DaskCollection.compute or Client.compute).
-- ``dask.base.collections_to_dsk`` has been renamed to `collections_to_expr` and
+  compute (``dask.compute``, ``DaskCollection.compute``, or ``Client.compute``).
+- ``dask.base.collections_to_dsk`` has been renamed to ``collections_to_expr`` and
   no longer returns a ``HighLevelGraph`` or ``dict`` object but instead
   guarantees an ``dask._expr.Expr`` object. Further, it no longer performs low
   level optimization immediately but instead delays until the ``Expr`` instance
   is materialized, i.e. the returned object is no longer a mapping such that
-  converting it to `dict` or iterating over it is not possible any more.
+  converting it to ``dict`` or iterating over it is not possible any more.
+
+.. dropdown:: Additional changes
+
+  - Ensure ``Future`` value is in ``da.from_delayed`` task graph (:pr:`11896`) `Tom Augspurger`_
+  - Fix annotations passed to ``delayed`` (:pr:`11893`) `Florian Jetter`_
+  - Migrate ``delayed`` ``unpack_collections`` (:pr:`11881`) `Florian Jetter`_
+  - Remove ``Pub`` / ``Sub`` references from docs (:pr:`11891`) `James Bourbeau`_
+  - Ensure only classes without custom init are singletons (:pr:`11886`) `Florian Jetter`_
+  - Remove custom initializers for ``delayed`` expressions (:pr:`11888`) `Florian Jetter`_
+  - Fix persisting multiple DFs at the same time (:pr:`11887`) `Florian Jetter`_
+  - Avoid always parsing list inputs to ``DataFrame.isin`` as object type ``numpy`` arrays (:pr:`11869`) `Matthew Roeschke`_
+  - Unskip pandas-dev ``cov`` / ``corr`` tests (:pr:`11873`) `Tom Augspurger`_
+  - HLG ``blockwise`` fix (:pr:`11871`) `Florian Jetter`_
+  - Ensure annotations for HLG objects are properly generated (:pr:`11866`) `Florian Jetter`_
+  - Factor out singleton logic from base ``Expr`` class (:pr:`11868`) `Florian Jetter`_
+  - Ensure HLGs are using dependencies properly in optimization (:pr:`11859`) `Florian Jetter`_
+  - Ensure dictionaries tokenize deterministically (:pr:`11867`) `Florian Jetter`_
+  - Ensure default dask scheduler only compute what's needed (:pr:`11861`) `Florian Jetter`_
+  - Faster tokenization of ``pd.RangeIndex`` (:pr:`11863`) `Florian Jetter`_
+  - Update link to Quansight in community doc (:pr:`11860`) `Pavithra Eswaramoorthy`_
+  - Relax tolerance in ``autocorr`` test (:pr:`11857`) `Tom Augspurger`_
+  - Use ``map_blocks`` in ``array.store`` to avoid materialization and dropping of annotations (:pr:`11844`) `Florian Jetter`_
+  - Ensure ``repartition`` does not trigger memory size computation during lowering (i.e. on the scheduler) (:pr:`11855`) `Florian Jetter`_
+  - Support ``args`` and ``kwargs`` for rolling aggregations (:pr:`11856`) `Florian Jetter`_
+  - Remove nightly ``h5py`` from ``upstream`` CI job (:pr:`11847`) `James Bourbeau`_
+  - Ensure ``HLGExpr`` tokenize uniquely (:pr:`11849`) `Florian Jetter`_
+  - Do not inject median in describe for ``pandas`` 3 (:pr:`11846`) `Florian Jetter`_
+  - Fixed ``Expr.__setattr__`` for subclasses (:pr:`11845`) `Tom Augspurger`_
+  - Wrap HLGs in an ``Expr`` to avoid ``Client`` side materialization (:pr:`11736`) `Florian Jetter`_
+
+  - Improve error when submitting work from a closed client (:pr-distributed:`9049`) `James Bourbeau`_
+  - Return a default value if address resolution fails (:pr-distributed:`9051`) `Sandro`_
+  - Avoid ``deepcopy`` when submitting graph (:pr-distributed:`8633`) `Florian Jetter`_
+  - Dynamically scale heartbeat and ``scheduler_info`` intervals (:pr-distributed:`9046`) `Florian Jetter`_
+  - Speed up process startup time by avoiding importing packages on version check (:pr-distributed:`9048`) `Florian Jetter`_
+  - Reduce size of ``scheduler_info`` (:pr-distributed:`9045`) `Florian Jetter`_
+  - Cache ``WorkerState`` host property (:pr-distributed:`9044`) `Florian Jetter`_
+  - Clear ci env cache (:pr-distributed:`9047`) `Florian Jetter`_
+  - Remove deprecated ``Pub`` / ``Sub`` (:pr-distributed:`9039`) `Florian Jetter`_
+  - Perform explicit culling step only if LLG is submitted (:pr-distributed:`9040`) `Florian Jetter`_
+  - Do not fully materialize global annotations by type (:pr-distributed:`9035`) `Florian Jetter`_
+  - Allow nested ``worker_client`` calls (:pr-distributed:`9038`) `George Sakkis`_
+  - Dump ci cache (:pr-distributed:`9037`) `Florian Jetter`_
+  - Scheduler type annotations (:pr-distributed:`9030`) `Florian Jetter`_
+  - Reduce ``dask.order`` overhead by removing ``stripped_dep`` computation (:pr-distributed:`9031`) `Florian Jetter`_
+  - Use ``Expr`` instead of HLG (:pr-distributed:`9008`) `Florian Jetter`_
 
 
 .. _v2025.3.0:
@@ -9426,3 +9644,12 @@ Other
 .. _`Sergey Kolesnikov`: https://github.com/SCORE1387
 .. _`Taylor Braun-Jones`: https://github.com/nocnokneo
 .. _`Isaac`: https://github.com/icykip
+.. _`Sandro`: https://github.com/penguinpee
+.. _`Brigitta Sipőcz`: https://github.com/bsipocz
+.. _`Raúl Cumplido`: https://github.com/raulcd
+.. _`Lukas Bindreiter`: https://github.com/lukasbindreiter
+.. _`Marvin Albert`: https://github.com/m-albert
+.. _`Peter Fackeldey`: https://github.com/pfackeldey
+.. _`Marco Edward Gorelli`: https://github.com/MarcoGorelli
+.. _`Peter A. Jonsson`: https://github.com/pjonsson
+.. _`Florian Courtial`: https://github.com/fcourtial

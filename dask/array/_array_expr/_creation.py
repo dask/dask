@@ -2,19 +2,24 @@ from __future__ import annotations
 
 import functools
 from functools import partial
+from numbers import Integral
 
 import numpy as np
+from tlz import sliding_window
 
 from dask._collections import new_collection
 from dask._task_spec import Task
+from dask.array._array_expr._collection import asarray, concatenate
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array.chunk import arange as _arange
 from dask.array.chunk import linspace as _linspace
 from dask.array.core import normalize_chunks
+from dask.array.creation import _get_like_function_shapes_chunks
 from dask.array.utils import meta_from_array
 from dask.array.wrap import _parse_wrap_args, broadcast_trick
 from dask.blockwise import blockwise as core_blockwise
 from dask.layers import ArrayChunkShapeDep
+from dask.utils import cached_cumsum, derived_from
 
 
 class Arange(ArrayExpr):
@@ -125,7 +130,9 @@ class BroadcastTrick(ArrayExpr):
 
     def _layer(self) -> dict:
         func = broadcast_trick(self.func)
-        func = partial(func, meta=self._meta, dtype=self.dtype, **self.kwargs)
+        k = self.kwargs.copy()
+        k.pop("meta", None)
+        func = partial(func, meta=self._meta, dtype=self.dtype, **k)
         out_ind = dep_ind = tuple(range(len(self.shape)))
         return core_blockwise(
             func,
@@ -149,6 +156,10 @@ class Empty(BroadcastTrick):
     func = staticmethod(np.empty_like)
 
 
+class Full(BroadcastTrick):
+    func = staticmethod(np.full_like)
+
+
 def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
     """
     Transform np creation function into blocked version
@@ -170,7 +181,7 @@ def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
             parsed["shape"],
             parsed["dtype"],
             parsed["chunks"],
-            kwargs.get("meta", None),
+            kwargs.get("meta"),
             kwargs,
         )
     )
@@ -183,6 +194,7 @@ def wrap(func, **kwargs):
 ones = wrap(wrap_func_shape_as_first_arg, klass=Ones, dtype="f8")
 zeros = wrap(wrap_func_shape_as_first_arg, klass=Zeros, dtype="f8")
 empty = wrap(wrap_func_shape_as_first_arg, klass=Empty, dtype="f8")
+_full = wrap(wrap_func_shape_as_first_arg, klass=Full, dtype="f8")
 
 
 def arange(start=0, stop=None, step=1, *, chunks="auto", like=None, dtype=None):
@@ -272,3 +284,300 @@ def linspace(
         return result, result.expr.step
     else:
         return result
+
+
+def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
+    """
+    Return a new array with the same shape and type as a given array.
+
+    Parameters
+    ----------
+    a : array_like
+        The shape and data-type of `a` define these same attributes of the
+        returned array.
+    dtype : data-type, optional
+        Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
+    chunks : sequence of ints
+        The number of samples on each block. Note that the last block will have
+        fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
+
+    Returns
+    -------
+    out : ndarray
+        Array of uninitialized (arbitrary) data with the same
+        shape and type as `a`.
+
+    See Also
+    --------
+    ones_like : Return an array of ones with shape and type of input.
+    zeros_like : Return an array of zeros with shape and type of input.
+    empty : Return a new uninitialized array.
+    ones : Return a new array setting values to one.
+    zeros : Return a new array setting values to zero.
+
+    Notes
+    -----
+    This function does *not* initialize the returned array; to do that use
+    `zeros_like` or `ones_like` instead.  It may be marginally faster than
+    the functions that do set the array values.
+    """
+
+    a = asarray(a, name=False)
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular empty function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.empty_like, dtype=(dtype or a.dtype)))
+
+    return empty(
+        shape,
+        dtype=(dtype or a.dtype),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
+    )
+
+
+def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
+    """
+    Return an array of ones with the same shape and type as a given array.
+
+    Parameters
+    ----------
+    a : array_like
+        The shape and data-type of `a` define these same attributes of
+        the returned array.
+    dtype : data-type, optional
+        Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
+    chunks : sequence of ints
+        The number of samples on each block. Note that the last block will have
+        fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
+
+    Returns
+    -------
+    out : ndarray
+        Array of ones with the same shape and type as `a`.
+
+    See Also
+    --------
+    zeros_like : Return an array of zeros with shape and type of input.
+    empty_like : Return an empty array with shape and type of input.
+    zeros : Return a new array setting values to zero.
+    ones : Return a new array setting values to one.
+    empty : Return a new uninitialized array.
+    """
+
+    a = asarray(a, name=False)
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular ones function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.ones_like, dtype=(dtype or a.dtype)))
+
+    return ones(
+        shape,
+        dtype=(dtype or a.dtype),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
+    )
+
+
+def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
+    """
+    Return an array of zeros with the same shape and type as a given array.
+
+    Parameters
+    ----------
+    a : array_like
+        The shape and data-type of `a` define these same attributes of
+        the returned array.
+    dtype : data-type, optional
+        Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
+    chunks : sequence of ints
+        The number of samples on each block. Note that the last block will have
+        fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
+
+    Returns
+    -------
+    out : ndarray
+        Array of zeros with the same shape and type as `a`.
+
+    See Also
+    --------
+    ones_like : Return an array of ones with shape and type of input.
+    empty_like : Return an empty array with shape and type of input.
+    zeros : Return a new array setting values to zero.
+    ones : Return a new array setting values to one.
+    empty : Return a new uninitialized array.
+    """
+
+    a = asarray(a, name=False)
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular zeros function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.zeros_like, dtype=(dtype or a.dtype)))
+
+    return zeros(
+        shape,
+        dtype=(dtype or a.dtype),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
+    )
+
+
+def full(shape, fill_value, *args, **kwargs):
+    # np.isscalar has somewhat strange behavior:
+    # https://docs.scipy.org/doc/numpy/reference/generated/numpy.isscalar.html
+    if np.ndim(fill_value) != 0:
+        raise ValueError(
+            f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
+        )
+    if kwargs.get("dtype") is None:
+        if hasattr(fill_value, "dtype"):
+            kwargs["dtype"] = fill_value.dtype
+        else:
+            kwargs["dtype"] = type(fill_value)
+    return _full(*args, shape=shape, fill_value=fill_value, **kwargs)
+
+
+def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shape=None):
+    """
+    Return a full array with the same shape and type as a given array.
+
+    Parameters
+    ----------
+    a : array_like
+        The shape and data-type of `a` define these same attributes of
+        the returned array.
+    fill_value : scalar
+        Fill value.
+    dtype : data-type, optional
+        Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
+    chunks : sequence of ints
+        The number of samples on each block. Note that the last block will have
+        fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
+
+    Returns
+    -------
+    out : ndarray
+        Array of `fill_value` with the same shape and type as `a`.
+
+    See Also
+    --------
+    zeros_like : Return an array of zeros with shape and type of input.
+    ones_like : Return an array of ones with shape and type of input.
+    empty_like : Return an empty array with shape and type of input.
+    zeros : Return a new array setting values to zero.
+    ones : Return a new array setting values to one.
+    empty : Return a new uninitialized array.
+    full : Fill a new array.
+    """
+
+    a = asarray(a, name=False)
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular full function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.full_like, dtype=(dtype or a.dtype)), fill_value)
+
+    return full(
+        shape,
+        fill_value,
+        dtype=(dtype or a.dtype),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
+    )
+
+
+@derived_from(np)
+def repeat(a, repeats, axis=None):
+    if axis is None:
+        if a.ndim == 1:
+            axis = 0
+        else:
+            raise NotImplementedError("Must supply an integer axis value")
+
+    if not isinstance(repeats, Integral):
+        raise NotImplementedError("Only integer valued repeats supported")
+
+    if -a.ndim <= axis < 0:
+        axis += a.ndim
+    elif not 0 <= axis <= a.ndim - 1:
+        raise ValueError("axis(=%d) out of bounds" % axis)
+
+    if repeats == 0:
+        return a[tuple(slice(None) if d != axis else slice(0) for d in range(a.ndim))]
+    elif repeats == 1:
+        return a
+
+    cchunks = cached_cumsum(a.chunks[axis], initial_zero=True)
+    slices = []
+    for c_start, c_stop in sliding_window(2, cchunks):
+        ls = np.linspace(c_start, c_stop, repeats).round(0)
+        for ls_start, ls_stop in sliding_window(2, ls):
+            if ls_start != ls_stop:
+                slices.append(slice(ls_start, ls_stop))
+
+    all_slice = slice(None, None, None)
+    slices = [
+        (all_slice,) * axis + (s,) + (all_slice,) * (a.ndim - axis - 1) for s in slices
+    ]
+
+    slabs = [a[slc] for slc in slices]
+
+    out = []
+    for slab in slabs:
+        chunks = list(slab.chunks)
+        assert len(chunks[axis]) == 1
+        chunks[axis] = (chunks[axis][0] * repeats,)
+        chunks = tuple(chunks)
+        result = slab.map_blocks(
+            np.repeat, repeats, axis=axis, chunks=chunks, dtype=slab.dtype
+        )
+        out.append(result)
+
+    return concatenate(out, axis=axis)

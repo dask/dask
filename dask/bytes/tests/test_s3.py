@@ -249,7 +249,7 @@ def test_open_files_write(s3, s3so):
         "s3://" + test_bucket_name + "/more/test/accounts.*", **s3so
     )
     results = compute(*concat(values))
-    assert set(list(files.values())) == set(results)
+    assert set(files.values()) == set(results)
 
 
 def test_read_bytes(s3, s3so):

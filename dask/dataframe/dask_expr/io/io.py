@@ -23,6 +23,7 @@ from dask.dataframe.dask_expr._expr import (
     no_default,
 )
 from dask.dataframe.dask_expr._reductions import Len
+from dask.dataframe.dask_expr._repartition import Repartition, RepartitionToFewer
 from dask.dataframe.dask_expr._util import _BackendData, _convert_to_list
 from dask.dataframe.dispatch import make_meta
 from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
@@ -96,7 +97,17 @@ class BlockwiseIO(Blockwise, IO):
             return
         if isinstance(parent, FusedIO):
             return
-        return parent.substitute(self, FusedIO(self))
+        fused = FusedIO(self)
+        if isinstance(parent, Blockwise):
+            nparts = fused.npartitions
+            for arg in parent.dependencies():
+                if arg is self:
+                    continue
+                if not parent._broadcast_dep(arg):
+                    parent = parent.substitute(
+                        arg, Repartition(arg, new_partitions=nparts)
+                    )
+        return parent.substitute(self, fused)
 
 
 class FusedIO(BlockwiseIO):
@@ -137,15 +148,25 @@ class FusedIO(BlockwiseIO):
             _data_producer=True,
         )
 
-    @functools.cached_property
+    @property
     def _fusion_buckets(self):
         partitions = self.operand("_expr")._partitions
         npartitions = len(partitions)
 
-        step = math.ceil(1 / self.operand("_expr")._fusion_compression_factor)
-        step = min(step, math.ceil(math.sqrt(npartitions)), 100)
+        bucket_size = math.ceil(1 / self.operand("_expr")._fusion_compression_factor)
+        bucket_size = min(bucket_size, math.ceil(math.sqrt(npartitions)), 100)
 
-        buckets = [partitions[i : i + step] for i in range(0, npartitions, step)]
+        new_npartitions = math.ceil(npartitions / bucket_size)
+        # Keep this aligned with RepartitionToFewer such that binops (e.g.
+        # Assign) are always properly aligned
+        partition_boundaries = RepartitionToFewer._compute_partition_boundaries(
+            new_npartitions, npartitions
+        )
+
+        buckets = [
+            partitions[start:end]
+            for (start, end) in zip(partition_boundaries, partition_boundaries[1:])
+        ]
         return buckets
 
     def _tune_up(self, parent):
@@ -453,7 +474,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
             data = self.frame._data
             nrows = len(data)
             if nrows == 0:
-                npartitions = 1 if not npartitions else npartitions
+                npartitions = npartitions or 1
                 locations = [0] * (npartitions + 1)
                 divisions = (None,) * len(locations)
             elif sort or self.frame._data.index.is_monotonic_increasing:

@@ -316,7 +316,7 @@ def _read_csv(
         path_info = (
             colname,
             path,
-            sorted(list(head[colname].cat.categories)),
+            sorted(head[colname].cat.categories),
         )
     else:
         path_info = None
@@ -458,7 +458,7 @@ def read_pandas(
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
             raise ValueError(f"{kw} not supported for dd.{reader_name}")
-    if kwargs.get("nrows", None):
+    if kwargs.get("nrows"):
         raise ValueError(
             "The 'nrows' keyword is not supported by "
             "`dd.{0}`. To achieve the same behavior, it's "
@@ -548,7 +548,7 @@ def read_pandas(
     # Get header row, and check that sample is long enough. If the file
     # contains a header row, we need at least 2 nonempty rows + the number of
     # rows to skip.
-    names = kwargs.get("names", None)
+    names = kwargs.get("names")
     header = kwargs.get("header", "infer" if names is None else None)
     kwargs["header"] = header
     need = 1 if header is None else 2

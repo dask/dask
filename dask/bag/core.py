@@ -57,10 +57,10 @@ from dask.base import (
     replace_name_in_key,
     tokenize,
 )
-from dask.blockwise import _blockwise_unpack_collections_task_spec, blockwise
+from dask.blockwise import blockwise
 from dask.context import globalmethod
 from dask.core import flatten, istask, quote
-from dask.delayed import Delayed
+from dask.delayed import Delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.sizeof import sizeof
 from dask.typing import Graph, NestedKeys, no_default
@@ -1197,9 +1197,7 @@ class Bag(DaskMethodsMixin):
         elif isinstance(other, Delayed):
             dsk.update(other.dask)
             other = other._key
-        elif isinstance(other, Iterable):
-            other = other
-        else:
+        elif not isinstance(other, Iterable):
             msg = (
                 "Joined argument must be single-partition Bag, "
                 " delayed object, or Iterable, got %s" % type(other).__name
@@ -1906,17 +1904,25 @@ def from_delayed(values):
 
     if isinstance(values, Delayed):
         values = [values]
-    values = [
-        delayed(v) if not isinstance(v, Delayed) and hasattr(v, "key") else v
-        for v in values
-    ]
+    futures = [v for v in values if isinstance(v, TaskRef)]
+    if all_futures := (len(futures) == len(values)):
+        # All futures. Fast path
+        values = futures
+    else:
+        # Every Delayed generates a Layer, i.e. this path is much more expensive
+        # if there are many input values.
+        values = [
+            delayed(v) if not isinstance(v, (Delayed,)) and hasattr(v, "key") else v
+            for v in values
+        ]
 
     name = "bag-from-delayed-" + tokenize(*values)
-    names = [(name, i) for i in range(len(values))]
-    values2 = [(reify, v.key) for v in values]
-    dsk = dict(zip(names, values2))
+    tasks = [Task((name, i), reify, TaskRef(v.key)) for i, v in enumerate(values)]
+    dsk = {t.key: t for t in tasks}
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=values)
+    graph = HighLevelGraph.from_collections(
+        name, dsk, dependencies=values if not all_futures else ()
+    )
     return Bag(graph, name, len(values))
 
 
@@ -2095,7 +2101,7 @@ def unpack_scalar_dask_kwargs(kwargs):
     kwargs2 = {}
     dependencies = []
     for k, v in kwargs.items():
-        vv, collections = _blockwise_unpack_collections_task_spec(v)
+        vv, collections = unpack_collections(v)
         if not collections:
             kwargs2[k] = v
         else:
@@ -2268,7 +2274,7 @@ def map_partitions(func, *args, **kwargs):
             bags.append(a)
             args2.append(a)
         else:
-            a, collections = _blockwise_unpack_collections_task_spec(a)
+            a, collections = unpack_collections(a)
             args2.append(a)
             dependencies.extend(collections)
 
@@ -2570,7 +2576,7 @@ def random_state_data_python(
 
         random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
         arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
-        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]  # type: ignore
+        return [(3, tuple(row) + (624,), None) for row in np.atleast_2d(arr).tolist()]
 
     except ImportError:
         # Pure python (much slower)

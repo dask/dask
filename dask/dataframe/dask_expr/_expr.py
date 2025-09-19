@@ -5,8 +5,10 @@ import functools
 import numbers
 import operator
 import warnings
+import weakref
 from collections import defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
+from functools import partial
 from typing import Any as AnyType
 
 import numpy as np
@@ -15,9 +17,11 @@ from pandas.errors import PerformanceWarning
 from tlz import merge_sorted, partition, unique
 
 from dask import _expr as core
+from dask._expr import Expr as BaseExpr
 from dask._expr import FinalizeCompute
 from dask._task_spec import Alias, DataNode, Task, TaskRef, execute_graph
 from dask.array import Array
+from dask.base import collections_to_expr
 from dask.core import flatten
 from dask.dataframe import methods
 from dask.dataframe._pyarrow import to_pyarrow_string
@@ -64,7 +68,7 @@ from dask.utils import (
 optimize = core.optimize
 
 
-class Expr(core.Expr):
+class Expr(core.SingletonExpr):
     """Primary class for all Expressions
 
     This mostly includes Dask protocols and various Pandas-like method
@@ -459,7 +463,7 @@ class Expr(core.Expr):
 
         This property specifies if a column or a set of columns have a unique
         partition mapping that was defined by a shuffle operation. The mapping
-        is created by hasing the values and the separating them onto partitions.
+        is created by hashing the values and the separating them onto partitions.
         It is important that this property is only propagated if the values
         in those columns did not change in this expression. The property is
         only populated if the mapping was created by the ``partitioning_index``
@@ -470,7 +474,7 @@ class Expr(core.Expr):
         operations, where we need these values to be in matching partitions.
 
         This is also the reason why set_index or sort_values can't set the
-        property, they fullfil a weaker condition than what this property enforcey.
+        property, they fulfill a weaker condition than what this property enforces.
 
         Normally, this set contains one tuple of either one or multiple columns.
         It can contain 2, when the operation shuffles multiple columns of the
@@ -651,14 +655,18 @@ class MapPartitions(Blockwise):
         "clear_divisions",
         "align_dataframes",
         "parent_meta",
+        "required_columns",
         "token",
         "kwargs",
+        "nargs",
     ]
     _defaults: dict = {
         "kwargs": None,
         "align_dataframes": True,
         "parent_meta": None,
+        "required_columns": None,
         "token": None,
+        "nargs": 0,
     }
 
     @functools.cached_property
@@ -684,14 +692,20 @@ class MapPartitions(Blockwise):
 
     @functools.cached_property
     def args(self):
-        return [self.frame] + self.operands[len(self._parameters) :]
+        return [self.frame] + self.operands[
+            len(self._parameters) : len(self._parameters) + self.nargs
+        ]
 
     @functools.cached_property
     def _meta(self):
         meta = self.operand("meta")
         return _get_meta_map_partitions(
             self.args,
-            [e for e in self.args if isinstance(e, Expr)],
+            [
+                e
+                for e in self.args
+                if isinstance(e, Expr) and not isinstance(e, _DelayedExpr)
+            ],
             self.func,
             self.kwargs,
             meta,
@@ -722,7 +736,7 @@ class MapPartitions(Blockwise):
 
     def _task(self, name: Key, index: int) -> Task:
         args = [self._blockwise_arg(op, index) for op in self.args]
-        kwargs = (self.kwargs if self.kwargs is not None else {}).copy()
+        kwargs = dict(self.kwargs if self.kwargs is not None else {})
         if self._has_partition_info:
             kwargs["partition_info"] = {
                 "number": index,
@@ -743,6 +757,38 @@ class MapPartitions(Blockwise):
                 self.func,
                 *args,
                 **kwargs,
+            )
+
+    @staticmethod
+    def projected_operation(mapped_func, post_projection, *args, **kwargs):
+        # Apply a mapped function and then project columns.
+        # Used by `_simplify_up` to apply column projection.
+        return mapped_func(*args, **kwargs)[post_projection]
+
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Projection) and self.required_columns is not None:
+            if missing := set(self.required_columns) - set(self.frame.columns):
+                raise KeyError(
+                    f"Some elements of `required_columns` are missing: {missing}"
+                )
+
+            columns = determine_column_projection(
+                self, parent, dependents, additional_columns=self.required_columns
+            )
+            columns = [col for col in self.frame.columns if col in columns]
+
+            if columns == self.frame.columns:
+                # Don't add unnecessary Projections
+                return
+
+            return type(parent)(
+                type(self)(
+                    self.frame[columns],
+                    partial(self.projected_operation, self.func, parent.columns),
+                    self.meta[parent.columns],
+                    *self.operands[3:],
+                ),
+                *parent.operands[1:],
             )
 
 
@@ -973,8 +1019,10 @@ class MapOverlap(MapPartitions):
             self.clear_divisions,
             self.align_dataframes,
             None,
+            None,
             self.token,
             self._kwargs,
+            len(self.args[1:]),
             *self.args[1:],
         )
 
@@ -993,7 +1041,7 @@ class CreateOverlappingPartitions(Expr):
     def _layer(self) -> dict:
         dsk, prevs, nexts = {}, [], []  # type: ignore
 
-        name_prepend = "overlap-prepend" + self.frame._name
+        name_prepend = "overlap-prepend-" + self._name
         if self.before:
             prevs.append(None)
             if isinstance(self.before, numbers.Integral):
@@ -1044,7 +1092,7 @@ class CreateOverlappingPartitions(Expr):
         else:
             prevs.extend([None] * self.frame.npartitions)  # type: ignore
 
-        name_append = "overlap-append" + self.frame._name
+        name_append = "overlap-append-" + self._name
         if self.after:
             if isinstance(self.after, numbers.Integral):
                 after = self.after
@@ -1310,7 +1358,7 @@ class RenameFrame(Elemwise):
         for elem in self.frame.unique_partition_mapping_columns_from_shuffle:
             if isinstance(elem, tuple):
                 subset = self.frame._meta[list(elem)].rename(columns=columns)
-                result.add(tuple(list(subset.columns)))
+                result.add(tuple(subset.columns))
             else:
                 # scalar
                 subset = self.frame._meta[[elem]]
@@ -2387,9 +2435,7 @@ class ResetIndex(Elemwise):
                     return type(self)(self.frame, True, self.name)
                 return
             result = plain_column_projection(self, parent, dependents)
-            if result is not None and not set(result.columns) == set(
-                result.frame.columns
-            ):
+            if result is not None and set(result.columns) != set(result.frame.columns):
                 result = result.substitute_parameters({"drop": True})
             return result
 
@@ -3051,14 +3097,7 @@ class PartitionsFiltered(Expr):
 
 
 class _DelayedExpr(Expr):
-    # Wraps a Delayed object to make it an Expr for now. This is hacky and we should
-    # integrate this properly...
-    # TODO
     _parameters = ["obj"]
-
-    def __init__(self, obj, _determ_token=None):
-        self.obj = obj
-        self.operands = [obj]
 
     def __str__(self):
         return f"{type(self).__name__}({str(self.obj)})"
@@ -3082,11 +3121,6 @@ class _DelayedExpr(Expr):
 
 
 class DelayedsExpr(Expr):
-    _parameters = []
-
-    def __init__(self, *delayed_objects, _determ_token=None):
-        self.operands = delayed_objects
-
     def __str__(self):
         return f"{type(self).__name__}({str(self.operands[0])})"
 
@@ -3095,13 +3129,27 @@ class DelayedsExpr(Expr):
         return "delayed-container-" + self.deterministic_token
 
     def _layer(self) -> dict:
-        dask = {}
-        for i, obj in enumerate(self.operands):
-            dc = obj.__dask_optimize__(obj.dask, obj.key).to_dict().copy()
-            dc[(self._name, i)] = dc[obj.key]
-            dc.pop(obj.key)
-            dask.update(dc)
-        return dask
+        from dask.delayed import Delayed
+
+        if isinstance(self.operands[0], TaskRef):
+            tasks = [
+                Alias((self._name, ix), fut.key) for ix, fut in enumerate(self.operands)
+            ]
+            dsk = {t.key: t for t in tasks}
+        elif isinstance(self.operands[0], Delayed):
+            expr = collections_to_expr(self.operands).optimize()
+            keys = expr.__dask_keys__()
+            dsk = expr.__dask_graph__()
+            # Many APIs in dask-expr are not honoring __dask_keys__ but are instead
+            # assuming they can just construct the keys themselves by walking the
+            # partitions. Therefore we'll have to remap the key names and can't just
+            # expose __dask_keys__()
+            for ix, actual_key in enumerate(keys):
+                dsk[(self._name, ix)] = Alias((self._name, ix), actual_key[0])
+        else:
+            raise TypeError("Expected a Delayed or Future object")
+
+        return dsk
 
     def _divisions(self):
         return (None,) * (len(self.operands) + 1)
@@ -3171,7 +3219,7 @@ def are_co_aligned(*exprs):
     return len(unique_ancestors) <= 1
 
 
-## Utilites for Expr fusion
+## Utilities for Expr fusion
 
 
 def is_valid_blockwise_op(expr):
@@ -3518,9 +3566,7 @@ class MaybeAlignPartitions(Expr):
 def _are_dtypes_shuffle_compatible(dtypes):
     if len(dtypes) == 1:
         return True
-    if all(pd.api.types.is_numeric_dtype(d) for d in dtypes):
-        return True
-    return False
+    return all(pd.api.types.is_numeric_dtype(d) for d in dtypes)
 
 
 class CombineFirstAlign(MaybeAlignPartitions):
@@ -3804,19 +3850,24 @@ class MinType:
         return True
 
 
-def determine_column_projection(expr, parent, dependents, additional_columns=None):
+def determine_column_projection(
+    expr: Expr,
+    parent: Expr,
+    dependents: dict[str, Collection[weakref.ref[BaseExpr]]],
+    additional_columns: list | None = None,
+) -> object:
     if isinstance(parent, Index):
         column_union = []
     else:
         column_union = parent.columns.copy()
-    parents = [x() for x in dependents[expr._name] if x() is not None]
+    parents: list[Expr]
+    parents = [inst for x in dependents[expr._name] if isinstance((inst := x()), Expr)]
 
     seen = set()
     for p in parents:
         if p._name in seen:
             continue
         seen.add(p._name)
-
         column_union.extend(p._projection_columns)
 
     if additional_columns is not None:
@@ -3864,7 +3915,7 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
     if isinstance(column_union, list):
         column_union = [col for col in expr.frame.columns if col in column_union]
     elif column_union not in expr.frame.columns:
-        # we are accesing the index
+        # we are accessing the index
         column_union = []
 
     if column_union == expr.frame.columns or not column_union and expr.ndim < 2:

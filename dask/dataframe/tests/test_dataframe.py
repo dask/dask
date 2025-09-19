@@ -1452,7 +1452,8 @@ def test_dataframe_quantile(method, expected, numeric_only):
         numeric_only_kwarg = {"numeric_only": numeric_only}
 
     if numeric_only is False or numeric_only is None:
-        with pytest.raises(TypeError):
+        # TypeError for pandas<3, ArrowNotImplementedError for pandas>=3
+        with pytest.raises((TypeError, ArrowNotImplementedError)):
             df.quantile(**numeric_only_kwarg)
         with pytest.raises(
             (TypeError, ArrowNotImplementedError, ValueError),
@@ -2849,6 +2850,17 @@ def test_to_dask_array(meta, as_frame, lengths):
     assert result.chunks == expected_chunks
 
 
+def test_to_dask_array_single_partition():
+    s = pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4")
+    a = dd.from_pandas(s)
+
+    result = a.to_dask_array(lengths=True)
+    assert isinstance(result, da.Array)
+    expected_chunks = (s.shape,)
+    assert result.chunks == expected_chunks
+    da.assert_eq(s.values, result)
+
+
 def test_apply():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3168,7 +3180,9 @@ def test_cov_corr_stable():
             None,
             marks=pytest.mark.xfail(reason="fails with non-numeric data"),
         ),
-        True,
+        pytest.param(
+            True,
+        ),
         pytest.param(
             False,
             marks=[
@@ -3180,7 +3194,6 @@ def test_cov_corr_stable():
 def test_cov_corr_mixed(numeric_only):
     size = 1000
     d = {
-        "dates": pd.date_range("2015-01-01", periods=size, freq="1min"),
         "unique_id": np.arange(0, size),
         "ints": np.random.randint(0, size, size=size),
         "floats": np.random.randn(size),
@@ -3192,6 +3205,11 @@ def test_cov_corr_mixed(numeric_only):
         "categorical_binary": np.random.choice(["a", "b"], size=size),
         "categorical_nans": np.random.choice(["a", "b", "c"], size=size),
     }
+
+    if not PANDAS_GE_300:
+        # pandas 3.x doesn't support cov of datetime
+        d["dates"] = pd.date_range("2015-01-01", periods=size, freq="1min")
+
     df = pd.DataFrame(d)
     df["hardbools"] = df["bools"] == 1
     df["categorical_nans"] = df["categorical_nans"].replace("c", np.nan)
@@ -3549,10 +3567,11 @@ def test_index_nulls(null_value):
     # an object column with only some nulls fails
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
-        with pytest.warns(UserWarning, match="meta"):
-            ddf.set_index(
-                ddf["non_numeric"].map({"foo": "foo", "bar": null_value})
-            ).compute()
+        ddf.set_index(
+            ddf["non_numeric"].map(
+                {"foo": "foo", "bar": null_value}, meta=ddf["non_numeric"]._meta
+            )
+        ).compute()
 
 
 def test_set_index_with_index():
@@ -3645,7 +3664,7 @@ def test_inplace_operators():
     "idx",
     [
         np.arange(100),
-        sorted(np.random.random(size=100)),
+        sorted(np.random.random(size=100)),  # type: ignore[type-var]
         pd.date_range("20150101", periods=100),
     ],
 )
@@ -4037,7 +4056,11 @@ def test_values():
         ctx = pytest.warns(UserWarning, match="object dtype")
     with ctx:
         result = ddf.x.values
-    assert_eq(df.x.values, result)
+
+    if not PANDAS_GE_300:
+        # Dask currently lacks an extension type.
+        # https://github.com/dask/dask/issues/5001
+        assert_eq(df.x.values, result)
     assert_eq(df.y.values, ddf.y.values)
     assert_eq(df.index.values, ddf.index.values)
 

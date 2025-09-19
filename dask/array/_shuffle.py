@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import math
 from functools import reduce
 from itertools import count, product
@@ -100,7 +99,7 @@ def _calculate_new_chunksizes(
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
     maximum_chunk = max(maximum_chunk, 1)
 
-    # iterate until we distributed the increase in chunksize accross all dimensions
+    # iterate until we distributed the increase in chunksize across all dimensions
     # or every non-shuffle dimension is all 1
     while changeable_dimensions:
         n_changeable_dimensions = len(changeable_dimensions)
@@ -192,8 +191,6 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         else:
             return chunks, {}
 
-    indexer = copy.deepcopy(indexer)
-
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
     chunk_size_limit = int(sum(chunks[axis]) / len(chunks[axis]) * chunksize_tolerance)
 
@@ -211,7 +208,8 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
     if len(current_chunk) > 0:
         new_chunks.append(current_chunk)
 
-    chunk_boundaries = np.cumsum(chunks[axis])
+    # force 64 bit to avoid potential integer overflows on win32 and numpy<2
+    chunk_boundaries = np.cumsum(np.array(chunks[axis], dtype="uint64"))
 
     # Get existing chunk tuple locations
     chunk_tuples = list(
@@ -220,7 +218,7 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     intermediates = dict()
     merges = dict()
-    dtype = np.min_scalar_type(max(max(chunks[axis]), chunk_size_limit))
+    dtype = np.min_scalar_type(max(*chunks[axis], chunk_size_limit))
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()
@@ -231,13 +229,10 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         old_index: (in_name,) + old_index
         for old_index in np.ndindex(tuple([len(c) for c in chunks]))
     }
-
     for new_chunk_idx, new_chunk_taker in enumerate(new_chunks):
         new_chunk_taker = np.array(new_chunk_taker)
         sorter = np.argsort(new_chunk_taker).astype(dtype)
-        sorter_key = sorter_name + tokenize(sorter)
-        # low level fusion can't deal with arrays on first position
-        merges[sorter_key] = DataNode(sorter_key, (1, sorter))
+        sorter_key = None
 
         sorted_array = new_chunk_taker[sorter]
         source_chunk_nr, taker_boundary = np.unique(
@@ -286,6 +281,10 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
             merge_suffix = convert_key(chunk_tuple, new_chunk_idx, axis)
             out_name_merge = (out_name,) + merge_suffix
             if len(merge_keys) > 1:
+                if sorter_key is None:
+                    sorter_key = sorter_name + tokenize(sorter)
+                    # low level fusion can't deal with arrays on first position
+                    merges[sorter_key] = DataNode(sorter_key, (1, sorter))
                 merges[out_name_merge] = Task(
                     out_name_merge,
                     concatenate_arrays,

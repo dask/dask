@@ -289,7 +289,6 @@ def test_to_hdf_distributed(c):
         ),
     ],
 )
-@pytest.mark.xfail_with_pyarrow_strings
 def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
@@ -1064,6 +1063,14 @@ async def test_release_persisted_futures_without_gc(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_delayed_future_with_kwargs(c, s, a, b):
+    fut = await c.scatter(1)
+
+    result = dask.delayed(inc)(x=fut)
+    assert await c.compute(result) == 2
+
+
+@gen_cluster(client=True)
 async def test_fusion_barrier_task(c, s, a, b):
     np = pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
@@ -1074,3 +1081,12 @@ async def test_fusion_barrier_task(c, s, a, b):
     x2 = da.rechunk(x, chunks=new, method="p2p")
     result = await c.compute(x2)
     da.assert_eq(result, a)
+
+
+@gen_cluster(client=True)
+async def test_delayed_future(c, s, a, b):
+    fut = await c.scatter(1)
+    result = dask.delayed(fut)
+    res = await c.compute(result)
+    assert res == 1
+    assert result.key == fut.key

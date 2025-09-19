@@ -142,7 +142,7 @@ def _pq_pyarrow(tmpdir):
     dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
         str(tmpdir)
     )
-    filters = [(("a", "<=", 2))]
+    filters = [("a", "<=", 2)]
 
     ddf1 = dd.read_parquet(str(tmpdir), filters=filters)
     return ddf1

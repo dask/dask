@@ -28,6 +28,7 @@ import dask.dataframe.methods as methods
 from dask import compute, get_annotations
 from dask._collections import new_collection
 from dask._expr import OptimizerStage
+from dask._task_spec import Dict, TaskRef
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
@@ -65,6 +66,7 @@ from dask.dataframe.dask_expr._expr import (
     ToDatetime,
     ToNumeric,
     ToTimedelta,
+    _DelayedExpr,
     no_default,
 )
 from dask.dataframe.dask_expr._merge import JoinRecursive, Merge
@@ -749,12 +751,21 @@ Expr={expr}"""
             except TypeError:
                 pass
             if not any(is_dask_collection(v) for v in values):
-                try:
-                    values = np.fromiter(values, dtype=object)
-                except ValueError:
-                    # Numpy 1.23 supports creating arrays of iterables, while lower
-                    # version 1.21.x and 1.22.x do not
-                    pass
+                # Avoid always passing a numpy array of object dtype
+                inferred_type = pd.api.types.infer_dtype(values, skipna=False)
+                object_like = {
+                    "mixed-integer",
+                    "decimal",
+                    "categorical",
+                    "time",
+                    "period",
+                    "mixed",
+                    "unknown-array",
+                }
+                if inferred_type in object_like:
+                    values = np.fromiter(values, dtype=object, count=len(values))
+                else:
+                    values = np.asarray(values)
 
         return new_collection(
             expr.Isin(
@@ -891,7 +902,7 @@ Expr={expr}"""
         else:
             if pd.api.types.is_list_like(on) and not is_dask_collection(on):
                 on = list(on)
-            elif isinstance(on, str) or isinstance(on, int):
+            elif isinstance(on, (str, int)):
                 on = [on]
             elif on_index:
                 on = []  # type: ignore
@@ -940,7 +951,7 @@ Expr={expr}"""
     def resample(self, rule, closed=None, label=None):
         from dask.dataframe.tseries.resample import Resampler
 
-        return Resampler(self, rule, **{"closed": closed, "label": label})
+        return Resampler(self, rule, closed=closed, label=label)
 
     def rolling(self, window, **kwargs):
         """Provides rolling transformations.
@@ -983,6 +994,7 @@ Expr={expr}"""
         clear_divisions=False,
         align_dataframes=False,
         parent_meta=None,
+        required_columns=None,
         **kwargs,
     ):
         """Apply a Python function to each partition
@@ -1010,6 +1022,11 @@ Expr={expr}"""
         clear_divisions : bool, default False
             Whether divisions should be cleared. If True, `transform_divisions`
             will be ignored.
+        required_columns : list or None, default None
+            List of columns that ``func`` requires for execution. These columns
+            must belong to the first DataFrame argument (in ``args``). If None
+            is specified (the default), the query optimizer will assume that
+            all input columns are required.
         $META
 
         Examples
@@ -1107,6 +1124,7 @@ Expr={expr}"""
             clear_divisions=clear_divisions,
             align_dataframes=align_dataframes,
             parent_meta=parent_meta,
+            required_columns=required_columns,
             **kwargs,
         )
 
@@ -1319,7 +1337,7 @@ Expr={expr}"""
         should be specified. A ``ValueError`` will be raised when that is
         not the case.
 
-        Also note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Also note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -1393,7 +1411,7 @@ Expr={expr}"""
         A Dask Array
         """
         if lengths is True:
-            lengths = tuple(self.map_partitions(len, enforce_metadata=False).compute())
+            lengths = tuple(self.map_partitions(len).compute())
 
         arr = self.values
 
@@ -3029,7 +3047,7 @@ class DataFrame(FrameBase):
             out = self.assign(**{k: value[c] for k, c in zip(key, value.columns)})
 
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
-            out = self.assign(**{k: value for k in list(key)})
+            out = self.assign(**dict.fromkeys(list(key), value))
         elif (
             is_dataframe_like(key)
             or is_series_like(key)
@@ -3418,7 +3436,7 @@ class DataFrame(FrameBase):
                        '2021-01-05', '2021-01-06', '2021-01-07'],
                       dtype='datetime64[ns]', freq='D')
 
-        Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        Note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
         lower bound of the first partition, the second item is the lower bound of the
         second partition and the upper bound of the first partition, and so on.
@@ -3440,7 +3458,7 @@ class DataFrame(FrameBase):
         if isinstance(other, list) and len(other) == 1:
             other = other[0]
         if isinstance(other, list):
-            if any([isinstance(c, FrameBase) for c in other]):
+            if any(isinstance(c, FrameBase) for c in other):
                 raise TypeError("List[FrameBase] not supported by set_index")
             else:
                 raise NotImplementedError(
@@ -3512,7 +3530,7 @@ class DataFrame(FrameBase):
         by: str | list[str],
         npartitions: int | None = None,
         ascending: bool | list[bool] = True,
-        na_position: Literal["first"] | Literal["last"] = "last",
+        na_position: Literal["first", "last"] = "last",
         partition_size: float = 128e6,
         sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
         sort_function_kwargs: Mapping[str, Any] | None = None,
@@ -4708,7 +4726,7 @@ class Index(Series):
         Note that this method clears any known divisions.
 
         If your mapping function is monotonically increasing then use `is_monotonic`
-        to apply the maping function to the old divisions and assign the new
+        to apply the mapping function to the old divisions and assign the new
         divisions to the output.
 
         """
@@ -6115,6 +6133,7 @@ def map_partitions(
     clear_divisions=False,
     align_dataframes=False,
     parent_meta=None,
+    required_columns=None,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -6147,6 +6166,11 @@ def map_partitions(
         If False, all inputs must have either the same number of partitions
         or a single partition. Single-partition inputs will be broadcast to
         every partition of multi-partition inputs.
+    required_columns : list or None, default None
+        List of columns that ``func`` requires for execution. These columns
+        must belong to the first DataFrame argument (in ``args``). If None
+        is specified (the default), the query optimizer will assume that
+        all input columns are required.
     $META
     """
     if align_dataframes:
@@ -6157,6 +6181,18 @@ def map_partitions(
         # will need to call `Repartition` on operands that are not
         # aligned with `self.expr`.
         raise NotImplementedError()
+    args = [_DelayedExpr(a) if isinstance(a, Delayed) else a for a in args]
+    newkwargs = {}
+    delayed_kwargs = []
+    for k, v in kwargs.items():
+        if isinstance(v, Delayed):
+            dexpr = _DelayedExpr(v)
+            delayed_kwargs.append(dexpr)
+            newkwargs[k] = TaskRef(dexpr.__dask_keys__()[0])
+        else:
+            newkwargs[k] = v
+    del kwargs
+
     new_expr = expr.MapPartitions(
         args[0],
         func,
@@ -6166,9 +6202,12 @@ def map_partitions(
         clear_divisions,
         align_dataframes,
         parent_meta,
-        kwargs.pop("token", None),
-        kwargs,
+        required_columns,
+        newkwargs.pop("token", None),
+        Dict(newkwargs),
+        len(args) - 1,
         *args[1:],
+        *delayed_kwargs,
     )
     return new_collection(new_expr)
 

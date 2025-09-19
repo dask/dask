@@ -10,6 +10,7 @@ import warnings
 import numpy as np
 from tlz import concat, frequencies
 
+from dask._task_spec import convert_legacy_graph
 from dask.array.numpy_compat import AxisError
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -59,7 +60,7 @@ def meta_from_array(x, ndim=None, dtype=None):
     if isinstance(x, type):
         x = x(shape=(0,) * (ndim or 0), dtype=dtype)
 
-    if isinstance(x, list) or isinstance(x, tuple):
+    if isinstance(x, (list, tuple)):
         ndims = [
             (
                 0
@@ -213,8 +214,10 @@ def _check_dsk(dsk):
     key_collisions = set()
     # Allow redundant keys if the values are equivalent
     collisions = set()
+    all_keys = set(dsk)
+    layers = [convert_legacy_graph(layer, all_keys) for layer in dsk.layers.values()]
     for k in non_one.keys():
-        for layer in dsk.layers.values():
+        for layer in layers:
             try:
                 key_collisions.add(tokenize(layer[k]))
             except KeyError:
@@ -456,6 +459,8 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if type(like).__module__.startswith("scipy.sparse"):
         # e.g. scipy.sparse.csr_matrix
         kwargs.pop("order", None)
+        if np.isscalar(a):
+            a = np.array([[a]])
         return type(like)(a, **kwargs)
 
     # Unknown namespace with no __array_function__ support.

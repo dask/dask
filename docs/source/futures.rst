@@ -473,8 +473,6 @@ Coordination Primitives
    Lock
    Event
    Semaphore
-   Pub
-   Sub
 
 .. note: These are advanced features and are rarely necessary in the common case.
 
@@ -483,7 +481,7 @@ with each other in ways beyond normal task scheduling with futures.  In these
 cases Dask provides additional primitives to help in complex situations.
 
 Dask provides distributed versions of coordination primitives like locks, events,
-queues, global variables, and pub-sub systems that, where appropriate, match
+queues, and global variables that, where appropriate, match
 their in-memory counterparts.  These can be used to control access to external
 resources, track progress of ongoing computations, or share data in
 side-channels between many workers, clients, and tasks sensibly.
@@ -570,8 +568,6 @@ futures.  These futures may point to much larger pieces of data safely:
    # Or use futures for metadata
    >>> q.put({'status': 'OK', 'stage=': 1234})
 
-If you're looking to move large amounts of data between workers, then you might
-also want to consider the Pub/Sub system described a few sections below.
 
 Global Variables
 ~~~~~~~~~~~~~~~~
@@ -736,18 +732,6 @@ database.
    futures = client.map(access_limited, range(10), sem=sem)
    client.gather(futures)
    sem.close()
-
-
-Publish-Subscribe
-~~~~~~~~~~~~~~~~~
-
-.. autosummary::
-   Pub
-   Sub
-
-Dask implements the `Publish Subscribe pattern <https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern>`_,
-providing an additional channel of communication between ongoing tasks.
-
 
 Actors
 ------
@@ -976,10 +960,4 @@ API
    :members:
 
 .. autoclass:: Semaphore
-   :members:
-
-.. autoclass:: Pub
-   :members:
-
-.. autoclass:: Sub
    :members:

@@ -1272,7 +1272,11 @@ def test_pyarrow_schema_mismatch_error(tmpdir):
     msg = str(rec.value)
     assert "Failed to convert partition to expected pyarrow schema" in msg
     assert "y: double" in str(rec.value)
-    assert "y: string" in str(rec.value)
+
+    if PANDAS_GE_300:
+        assert "y: large_string" in str(rec.value)
+    else:
+        assert "y: string" in str(rec.value)
 
 
 @PYARROW_MARK
@@ -1382,7 +1386,7 @@ def test_filters_categorical(tmpdir, write_engine, read_engine):
         tmpdir,
         index="dummy",
         engine=read_engine,
-        filters=[(("DatePart", "<=", "2018-01-02"))],
+        filters=[("DatePart", "<=", "2018-01-02")],
         calculate_divisions=True,
     )
     assert len(ddftest_read) == 2
@@ -2543,7 +2547,7 @@ def test_filter_nonpartition_columns(
         index=False,
         engine=read_engine,
         calculate_divisions=calculate_divisions,
-        filters=[(("time", "<", 5))],
+        filters=[("time", "<", 5)],
     )
     df_read = ddf_read.compute()
     assert len(df_read) == len(df_read[df_read["time"] < 5])
@@ -2664,9 +2668,22 @@ def test_arrow_to_pandas(tmpdir, engine):
     assert got.A.dtype == got.compute().A.dtype
 
 
+PYARROW_LARGE_STRING_XFAIL = pytest.mark.xfail(
+    condition=PANDAS_GE_300,
+    reason="https://github.com/apache/arrow/issues/47177",
+    strict=True,
+)
+
+
 @pytest.mark.parametrize(
     "write_cols",
-    [["part", "col"], ["part", "kind", "col"]],
+    [
+        ["part", "col"],
+        pytest.param(
+            ["part", "kind", "col"],
+            marks=PYARROW_LARGE_STRING_XFAIL,
+        ),
+    ],
 )
 def test_partitioned_column_overlap(tmpdir, engine, write_cols):
     tmpdir.mkdir("part=a")
@@ -2691,15 +2708,21 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
         assert_eq(result, expect, check_index=False)
     else:
         # For now, partial overlap between partition columns and
-        # real columns is not allowed for pyarrow
-        with pytest.raises(ValueError):
+        # real columns is not allowed for
+        with pytest.raises((ValueError, pa.ArrowTypeError)):
             dd.read_parquet(path, engine=engine)
 
 
 @PYARROW_MARK
 @pytest.mark.parametrize(
     "write_cols",
-    [["col"], ["part", "col"]],
+    [
+        ["col"],
+        pytest.param(
+            ["part", "col"],
+            marks=PYARROW_LARGE_STRING_XFAIL,
+        ),
+    ],
 )
 def test_partitioned_no_pandas_metadata(tmpdir, engine, write_cols):
     # See: https://github.com/dask/dask/issues/8087
@@ -2734,6 +2757,7 @@ def test_partitioned_no_pandas_metadata(tmpdir, engine, write_cols):
 
 
 @PYARROW_MARK
+@PYARROW_LARGE_STRING_XFAIL
 def test_pyarrow_directory_partitioning(tmpdir):
     # Manually construct directory-partitioned dataset
     path1 = tmpdir.mkdir("a")

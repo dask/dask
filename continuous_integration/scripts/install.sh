@@ -13,28 +13,29 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     mamba uninstall --force pyarrow pyarrow-core
     python -m pip install --no-deps \
-        --extra-index-url https://pypi.fury.io/arrow-nightlies/ \
+        --extra-index-url https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         --prefer-binary --pre pyarrow
 
     python -m pip install \
         --upgrade \
         locket \
-        git+https://github.com/dask/s3fs \
-        git+https://github.com/intake/filesystem_spec \
+        git+https://github.com/fsspec/s3fs \
         git+https://github.com/dask/partd \
         git+https://github.com/dask/zict \
         git+https://github.com/dask/distributed \
         git+https://github.com/zarr-developers/zarr-python
-    # TODO: Add nightly `h5py` back once https://github.com/h5py/h5py/issues/2563 is resolved
-    # mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image h5py numbagg
+    # NOTE: Dev version of `fsspec` needs to be installed after the dev version of
+    # `s3fs` to avoid dependency conflicts
+    python -m pip install --upgrade git+https://github.com/fsspec/filesystem_spec
+    # TODO: Add nightly `scikit-image` back once it's available
     mamba uninstall --force numpy pandas scipy numexpr numba sparse scikit-image numbagg
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         numpy \
         pandas \
         scipy \
-        scikit-image
-        # h5py
+        h5py
+        # scikit-image
 
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog

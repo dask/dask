@@ -5,14 +5,8 @@ import pytest
 from numpy.testing import assert_equal
 
 import dask.array as da
-from dask.array.core import Array
-from dask.array.gufunc import (
-    _parse_gufunc_signature,
-    _validate_normalize_axes,
-    apply_gufunc,
-    as_gufunc,
-    gufunc,
-)
+from dask.array import Array, apply_gufunc, as_gufunc, gufunc
+from dask.array.gufunc import _parse_gufunc_signature, _validate_normalize_axes
 from dask.array.utils import assert_eq
 
 
@@ -559,7 +553,7 @@ def test_apply_gufunc_axis_keepdims(axis):
     a = np.random.default_rng().standard_normal((10, 5))
     da_ = da.from_array(a, chunks=2)
 
-    m = np.median(a, axis=-1 if not axis else axis, keepdims=True)
+    m = np.median(a, axis=axis or -1, keepdims=True)
     dm = apply_gufunc(
         mymedian, "(i)->()", da_, axis=axis, keepdims=True, allow_rechunk=True
     )
@@ -617,6 +611,9 @@ def test_apply_gufunc_axes_two_kept_coredims():
     assert c.compute().shape == (10, 20, 30, 40)
 
 
+@pytest.mark.xfail(  # type: ignore
+    da._array_expr_enabled(), reason="numba doesn't tokenize deterministically"
+)
 def test_apply_gufunc_via_numba_01():
     numba = pytest.importorskip("numba")
 
@@ -637,6 +634,9 @@ def test_apply_gufunc_via_numba_01():
     assert_eq(x, y)
 
 
+@pytest.mark.xfail(  # type: ignore
+    da._array_expr_enabled(), reason="numba doesn't tokenize deterministically"
+)
 def test_apply_gufunc_via_numba_02():
     numba = pytest.importorskip("numba")
 
@@ -683,6 +683,7 @@ def test_apply_gufunc_with_meta():
     assert_eq(expected[1], result[1])
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="Create our Own Scalar Class")  # type: ignore
 def test_as_gufunc_with_meta():
     stack = da.ones((1, 50, 60), chunks=(1, -1, -1))
     expected = (stack, stack.max())

@@ -560,10 +560,10 @@ def test_run_smaller_sections(abcde):
     }
     o = order(dsk)
     assert_topological_sort(dsk, o)
-    assert max(diagnostics(dsk)[1]) <= 4  # optimum is 3
-    # This is a mildly ambiguous example
+    # The actual order is a bit ambiguous but the optimal pressure is well
+    # defined, see also
     # https://github.com/dask/dask/pull/10535/files#r1337528255
-    assert (o[aa] < o[a] and o[dd] < o[a]) or (o[b] < o[e] and o[b] < o[cc])
+    assert max(diagnostics(dsk)[1]) == 3
 
 
 def test_local_parents_of_reduction(abcde):
@@ -2317,7 +2317,7 @@ def test_xarray_rechunk_map_reduce_cohorts(use_longest_path):
         # ensure that we run through longes path True and False
         keys = [("open-dataset", i, 0, 0) for i in range(20, 35)]
         dsk.update({("dummy", 0): (f, keys)})
-        dsk.update({k: (f,) for k in keys})
+        dsk.update(dict.fromkeys(keys, (f,)))
 
     o = order(dsk)
 

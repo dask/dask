@@ -127,7 +127,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
 
     if "interpolation" in kwargs:
         warnings.warn(
-            "The `interpolation=` argument to percentile was renamed to " "`method= ` ",
+            "The `interpolation=` argument to percentile was renamed to `method= ` ",
             FutureWarning,
         )
         method = kwargs.pop("interpolation")
@@ -294,7 +294,7 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
     else:
         left = np.searchsorted(combined_q, desired_q, side="left")
         right = np.searchsorted(combined_q, desired_q, side="right") - 1
-        np.minimum(left, len(combined_vals) - 1, left)  # don't exceed max index
+        np.minimum(left, len(combined_vals) - 1, out=left)  # don't exceed max index
         lower = np.minimum(left, right)
         upper = np.maximum(left, right)
         if method == "lower":

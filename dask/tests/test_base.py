@@ -478,7 +478,9 @@ def test_compute_dataframe_valid_unicode_in_bytes():
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe_invalid_unicode():
     # see https://github.com/dask/dask/issues/2713
-    df = pd.DataFrame(data=np.random.random((3, 1)), columns=["\ud83d"])
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)), columns=pd.Index(["\ud83d"], dtype="object")
+    )
     dd.from_pandas(df, npartitions=4)
 
 
@@ -819,7 +821,10 @@ def test_optimize_globals():
     x = da.ones(10, chunks=(5,))
 
     def optimize_double(dsk, keys):
-        return {k: (mul, 2, v) for k, v in dsk.items()}
+        return {
+            k: (mul, 2, v) if not key_split(k).startswith("finalize") else v
+            for k, v in dsk.items()
+        }
 
     from dask.array.utils import assert_eq
 

@@ -64,7 +64,7 @@ def tokenize(
         tokenized, e.g. two identical objects will return different tokens.
         Defaults to the `tokenize.ensure-deterministic` configuration parameter.
     """
-    global _SEEN, _ENSURE_DETERMINISTIC
+    global _SEEN
     with tokenize_lock:
         seen_before, _SEEN = _SEEN, {}
         token = None
@@ -120,7 +120,7 @@ def normalize_dict(d):
         _SEEN[id(d)] = len(_SEEN), d
         try:
             return "dict", _normalize_seq_func(
-                sorted(d.items(), key=lambda kv: hash(kv[0]))
+                sorted(d.items(), key=lambda kv: str(kv[0]))
             )
         finally:
             _SEEN.pop(id(d), None)
@@ -233,26 +233,30 @@ def _normalize_pure_object(o: object) -> tuple[str, int]:
 def _normalize_pickle(o: object) -> tuple:
     buffers: list[pickle.PickleBuffer] = []
     pik: int | None = None
-    pik2: int
-    success = False
-    for mod in [pickle, cloudpickle]:
-        if success:
-            break
-        for _ in range(3):
+    pik2: int | None = None
+    for _ in range(3):
+        buffers.clear()
+        try:
+            out = pickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+            if b"__main__" in out:
+                # Use `cloudpickle` for objects defined in `__main__`
+                buffers.clear()
+                out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+            pickle.loads(out, buffers=buffers)
+            pik2 = hash_buffer_hex(out)
+        except Exception:
             buffers.clear()
             try:
-                out = mod.dumps(o, protocol=5, buffer_callback=buffers.append)
-                mod.loads(out, buffers=buffers)
+                out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
+                pickle.loads(out, buffers=buffers)
                 pik2 = hash_buffer_hex(out)
             except Exception:
                 break
-            if pik == pik2:
-                success = True
-                break
-            pik = pik2
-        else:
-            _maybe_raise_nondeterministic("Failed to tokenize deterministically")
+        if pik and pik2 and pik == pik2:
             break
+        pik = pik2
+    else:
+        _maybe_raise_nondeterministic("Failed to tokenize deterministically")
     if pik is None:
         _maybe_raise_nondeterministic("Failed to tokenize deterministically")
         pik = int(uuid.uuid4())
@@ -274,10 +278,31 @@ def _normalize_dataclass(obj):
 def register_pandas():
     import pandas as pd
 
+    # use dask._pandas_compat to avoid importing dask.dataframe here
+    from dask._pandas_compat import PANDAS_GE_210
+
+    @normalize_token.register(pd.RangeIndex)
+    def normalize_range_index(x):
+        return type(x), x.start, x.stop, x.step, x.dtype, x.name
+
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
-        return [ind.name, normalize_token(values)]
+
+        if isinstance(values, pd.arrays.ArrowExtensionArray):
+            import pyarrow as pa
+
+            # these are sensitive to fragmentation of the backing Arrow array.
+            # Because common operations like DataFrame.getitem and DataFrame.setitem
+            # result in fragmented Arrow arrays, we'll consolidate them here.
+
+            if PANDAS_GE_210:
+                # avoid combining chunks by using chunked_array
+                values = pa.chunked_array([values._pa_array]).combine_chunks()
+            else:
+                values = pa.array(values)
+
+        return type(ind), ind.name, normalize_token(values)
 
     @normalize_token.register(pd.MultiIndex)
     def normalize_index(ind):
@@ -386,15 +411,26 @@ def register_pyarrow():
         )
 
     @normalize_token.register(pa.Array)
-    def normalize_chunked_array(arr):
+    def normalize_array(arr):
+        buffers = arr.buffers()
+        # pyarrow does something clever when (de)serializing an array that has
+        # an empty validity map: The buffers for the deserialized array will
+        # have `None` instead of the empty validity map.
+        #
+        # We'll replicate that behavior here to ensure we get consistent
+        # tokenization.
+        buffers = arr.buffers()
+        if len(buffers) and buffers[0] is not None and arr.null_count == 0:
+            buffers[0] = None
+
         return (
             "pa.Array",
             normalize_token(arr.type),
-            normalize_token(arr.buffers()),
+            normalize_token(buffers),
         )
 
     @normalize_token.register(pa.Buffer)
-    def normalize_chunked_array(buf):
+    def normalize_buffer(buf):
         return ("pa.Buffer", hash_buffer_hex(buf))
 
 

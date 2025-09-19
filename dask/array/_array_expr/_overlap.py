@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import warnings
 from functools import reduce
 from numbers import Integral, Number
@@ -9,18 +10,17 @@ import numpy as np
 from tlz import concat, get, partial
 from tlz.curried import map
 
-from dask._compatibility import import_optional_dependency
+from dask._collections import new_collection
 from dask.array import chunk
+from dask.array._array_expr._collection import Array, concatenate
+from dask.array._array_expr._creation import empty_like, full_like, repeat
+from dask.array._array_expr._expr import ArrayExpr, unify_chunks_expr
+from dask.array._array_expr._map_blocks import map_blocks
 from dask.array._shuffle import _calculate_new_chunksizes
-from dask.array.core import Array, broadcast_to, concatenate, map_blocks, unify_chunks
-from dask.array.creation import arange, empty_like, full_like, repeat
 from dask.array.numpy_compat import normalize_axis_tuple
-from dask.array.reductions import cumreduction
-from dask.array.routines import notnull, where
-from dask.base import tokenize
-from dask.highlevelgraph import HighLevelGraph
+from dask.array.utils import meta_from_array
 from dask.layers import ArrayOverlapLayer
-from dask.utils import derived_from
+from dask.utils import derived_from, ensure_dict
 
 
 def _overlap_internal_chunks(original_chunks, axes):
@@ -61,20 +61,34 @@ def overlap_internal(x, axes):
     The axes input informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
-    token = tokenize(x, axes)
-    name = "overlap-" + token
+    return new_collection(MapOverlap(x, axes))
 
-    graph = ArrayOverlapLayer(
-        name=x.name,
-        axes=axes,
-        chunks=x.chunks,
-        numblocks=x.numblocks,
-        token=token,
-    )
-    graph = HighLevelGraph.from_collections(name, graph, dependencies=[x])
-    chunks = _overlap_internal_chunks(x.chunks, axes)
 
-    return Array(graph, name, chunks, meta=x)
+class MapOverlap(ArrayExpr):
+    _parameters = ["array", "axes"]
+
+    @functools.cached_property
+    def _meta(self):
+        return meta_from_array(self.array)
+
+    @functools.cached_property
+    def chunks(self):
+        return tuple(map(tuple, _overlap_internal_chunks(self.array.chunks, self.axes)))
+
+    @functools.cached_property
+    def _name(self) -> str:
+        return f"overlap-{super()._name}"
+
+    def _layer(self) -> dict:
+        x = self.array
+        graph = ArrayOverlapLayer(
+            name=x.name,
+            axes=self.axes,
+            chunks=x.chunks,
+            numblocks=x.numblocks,
+            token="-".join(self._name.split("-")[1:]),
+        )
+        return ensure_dict(graph)
 
 
 def trim_overlap(x, depth, boundary=None):
@@ -706,7 +720,9 @@ def map_overlap(
     if align_arrays:
         # Reverse unification order to allow block broadcasting
         inds = [list(reversed(range(x.ndim))) for x in args]
-        _, args = unify_chunks(*list(concat(zip(args, inds))), warn=False)
+        args = [a.expr for a in args]
+        _, args, _ = unify_chunks_expr(*list(concat(zip(args, inds))))
+        args = [new_collection(a) for a in args]
 
     # Escape to map_blocks if depth is zero (a more efficient computation)
     if all(all(depth_val == 0 for depth_val in d.values()) for d in depth):
@@ -894,54 +910,3 @@ def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
         window_shape=window_shape,
         axis=axis,
     )
-
-
-def push(array, n, axis):
-    """
-    Dask-version of bottleneck.push
-
-    .. note::
-
-        Requires bottleneck to be installed.
-    """
-    import_optional_dependency("bottleneck", min_version="1.3.7")
-
-    if n is not None and 0 < n < array.shape[axis] - 1:
-        arr = broadcast_to(
-            arange(
-                array.shape[axis], chunks=array.chunks[axis], dtype=array.dtype
-            ).reshape(
-                tuple(size if i == axis else 1 for i, size in enumerate(array.shape))
-            ),
-            array.shape,
-            array.chunks,
-        )
-        valid_arange = where(notnull(array), arr, np.nan)
-        valid_limits = (arr - push(valid_arange, None, axis)) <= n
-        # omit the forward fill that violate the limit
-        return where(valid_limits, push(array, None, axis), np.nan)
-
-    # The method parameter makes that the tests for python 3.7 fails.
-    return cumreduction(
-        func=_push,
-        binop=_fill_with_last_one,
-        ident=np.nan,
-        x=array,
-        axis=axis,
-        dtype=array.dtype,
-    )
-
-
-def _fill_with_last_one(a, b):
-    # cumreduction apply the push func over all the blocks first so, the only missing part is filling
-    # the missing values using the last data of the previous chunk
-    return np.where(~np.isnan(b), b, a)
-
-
-def _push(array, n: int | None = None, axis: int = -1):
-    # work around for bottleneck 178
-    limit = n if n is not None else array.shape[axis]
-
-    import bottleneck as bn
-
-    return bn.push(array, limit, axis)
