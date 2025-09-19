@@ -16,7 +16,7 @@ np = pytest.importorskip("numpy")
 
 import dask.array as da
 from dask.array.numpy_compat import NUMPY_GE_200, AxisError
-from dask.array.utils import assert_eq, same_keys
+from dask.array.utils import allclose, assert_eq, same_keys
 
 if da._array_expr_enabled():
     pytest.skip("parametrize using unsupported functions", allow_module_level=True)
@@ -1237,6 +1237,36 @@ def test_cov():
         da.cov(d, ddof=1.5)
 
 
+def test_cov_fweights():
+    x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
+    res1 = da.array([[1.0, -1.0], [-1.0, 1.0]])
+    x2 = da.array([0.0, 1.0, 2.0], ndmin=2)
+    frequencies = da.array([1, 4, 1])
+    x2_repeats = da.array([[0.0], [1.0], [1.0], [1.0], [1.0], [2.0]]).T
+    res2 = da.array([[0.4, -0.4], [-0.4, 0.4]])
+    unit_frequencies = np.ones(3, dtype=np.int_)
+
+    assert allclose(da.cov(x2, fweights=frequencies), da.cov(x2_repeats))
+    assert allclose(da.cov(x1, fweights=frequencies), res2)
+    assert allclose(da.cov(x1, fweights=unit_frequencies), res1)
+
+    nonint = frequencies + 0.5
+    with pytest.raises(TypeError):
+        da.cov(x1, fweights=nonint)
+
+    f = da.ones((2, 3), dtype=np.int_)
+    with pytest.raises(RuntimeError):
+        da.cov(x1, fweights=f)
+
+    f = da.ones(2, dtype=np.int_)
+    with pytest.raises(RuntimeError):
+        da.cov(x1, fweights=f)
+
+    f = -1 * np.ones(3, dtype=np.int_)
+    with pytest.raises(ValueError):
+        da.cov(x1, fweights=f)
+
+
 def test_corrcoef():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(4, 4))
@@ -1250,6 +1280,12 @@ def test_corrcoef():
 
     assert_eq(da.corrcoef(d, e), np.corrcoef(x, y))
     assert_eq(da.corrcoef(e, d), np.corrcoef(y, x))
+
+    d = da.array([[1, 2]])
+    x = np.array([[1, 2]])
+
+    with pytest.warns(RuntimeWarning):
+        assert_eq(da.corrcoef(d, rowvar=False), np.corrcoef(x, rowvar=False))
 
 
 def test_round():
