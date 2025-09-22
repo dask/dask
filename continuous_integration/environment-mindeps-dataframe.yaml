@@ -14,8 +14,8 @@ dependencies:
   - toolz=1.0.0
   # optional dependencies pulled in by pip install dask[dataframe]
   - numpy=2.2
-  - pandas=2.0
-  - pyarrow=14.0.1
+  - pandas=2.2
+  - pyarrow=18.1.0
   # test dependencies
   - pre-commit
   - pytest

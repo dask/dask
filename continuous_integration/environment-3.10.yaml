@@ -25,8 +25,8 @@ dependencies:
   - moto<5
   # Optional dependencies
   - mimesis
-  - numpy=1.24
-  - pandas=2.1
+  - numpy>=2.2
+  - pandas
   - numba
   - flask
   - h5py
@@ -35,13 +35,13 @@ dependencies:
   # `tiledb-py=0.17.5` lead to strange seg faults in CI.
   # We should unpin when possible.
   # https://github.com/dask/dask/pull/9569
-  - tiledb-py<0.17.4
-  - pyspark
-  - tiledb
+  # - tiledb-py<0.17.4
+  # - pyspark
+  # - tiledb
   - xarray
   - numexpr>=2.8  # Something is pinning it to 2.7
   - sqlalchemy
-  - pyarrow=14.0.1
+  - pyarrow=18.1.0
   - coverage
   - jsonschema
   # other -- IO
