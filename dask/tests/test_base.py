@@ -470,6 +470,17 @@ def test_compute_array_dataframe():
 
 
 @pytest.mark.skipif("not dd")
+def test_compute_delayed_dataframe():
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    df = dd.from_pandas(pdf, npartitions=1)
+    dl = delayed(lambda x: None)(pdf)
+    with pytest.warns(UserWarning, match="mixed.*materialize"):
+        df_out, dl_out = compute(df, dl)
+    assert dl_out is None
+    dd.utils.assert_eq(df_out, pdf)
+
+
+@pytest.mark.skipif("not dd")
 def test_compute_dataframe_valid_unicode_in_bytes():
     df = pd.DataFrame(data=np.random.random((3, 1)), columns=["ö".encode()])
     dd.from_pandas(df, npartitions=4)
