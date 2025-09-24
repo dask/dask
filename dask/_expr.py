@@ -1238,27 +1238,30 @@ class _ExprSequence(Expr):
 
         issue_warning = False
         hlgs = []
-        for op in self.operands:
-            if isinstance(op, (HLGExpr, HLGFinalizeCompute)):
-                hlgs.append(op)
-            elif isinstance(op, dict):
-                hlgs.append(
-                    HLGExpr(
-                        dsk=HighLevelGraph.from_collections(
-                            str(id(op)), op, dependencies=()
+        if any(
+            isinstance(op, (HLGExpr, HLGFinalizeCompute, dict)) for op in self.operands
+        ):
+            for op in self.operands:
+                if isinstance(op, (HLGExpr, HLGFinalizeCompute)):
+                    hlgs.append(op)
+                elif isinstance(op, dict):
+                    hlgs.append(
+                        HLGExpr(
+                            dsk=HighLevelGraph.from_collections(
+                                str(id(op)), op, dependencies=()
+                            )
                         )
                     )
-                )
-            elif hlgs:
-                issue_warning = True
-                opt = op.optimize()
-                hlgs.append(
-                    HLGExpr(
-                        dsk=HighLevelGraph.from_collections(
-                            opt._name, opt.__dask_graph__(), dependencies=()
+                else:
+                    issue_warning = True
+                    opt = op.optimize()
+                    hlgs.append(
+                        HLGExpr(
+                            dsk=HighLevelGraph.from_collections(
+                                opt._name, opt.__dask_graph__(), dependencies=()
+                            )
                         )
                     )
-                )
         if issue_warning:
             warnings.warn(
                 "Computing mixed collections that are backed by "
