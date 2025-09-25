@@ -25,7 +25,7 @@ dependencies:
   - moto<5
   # Optional dependencies
   - mimesis
-  - numpy>=2.2
+  - numpy>=2.0
   - pandas
   - numba
   - flask

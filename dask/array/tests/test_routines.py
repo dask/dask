@@ -15,7 +15,7 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.numpy_compat import NUMPY_GE_200, AxisError
+from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_220, AxisError
 from dask.array.utils import allclose, assert_eq, same_keys
 
 if da._array_expr_enabled():
@@ -1237,6 +1237,9 @@ def test_cov():
         da.cov(d, ddof=1.5)
 
 
+@pytest.mark.skipif(
+    not NUMPY_GE_220, reason="fweights is not an kwarg prior to numpy 2.2"
+)
 def test_cov_fweights():
     x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
     res1 = da.array([[1.0, -1.0], [-1.0, 1.0]])
@@ -1284,7 +1287,10 @@ def test_corrcoef():
     d = da.array([[1, 2]])
     x = np.array([[1, 2]])
 
-    with pytest.warns(RuntimeWarning):
+    if NUMPY_GE_220:
+        with pytest.warns(RuntimeWarning):
+            assert_eq(da.corrcoef(d, rowvar=False), np.corrcoef(x, rowvar=False))
+    else:
         assert_eq(da.corrcoef(d, rowvar=False), np.corrcoef(x, rowvar=False))
 
 

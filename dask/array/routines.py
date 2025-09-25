@@ -30,7 +30,7 @@ from dask.array.core import (
 )
 from dask.array.creation import arange, diag, empty, indices, tri
 from dask.array.einsumfuncs import einsum  # noqa
-from dask.array.numpy_compat import NUMPY_GE_200
+from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_220
 from dask.array.reductions import reduction
 from dask.array.ufunc import multiply, sqrt, true_divide
 from dask.array.utils import (
@@ -1521,8 +1521,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     return n, [asarray(entry) for entry in edges]
 
 
-@derived_from(np)
-def cov(
+def cov_new(
     m,
     y=None,
     rowvar=True,
@@ -1533,6 +1532,8 @@ def cov(
     *,
     dtype=None,
 ):
+    # cov implementation as of NumPy v2.2
+
     # This was copied almost verbatim from np.cov
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
@@ -1626,9 +1627,86 @@ def cov(
     return c.squeeze()
 
 
+def cov_old(m, y=None, rowvar=1, bias=0, ddof=None):
+    # cov implementation prior to NumPy v2.2
+
+    # This was copied almost verbatim from np.cov
+    # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
+    # or NUMPY_LICENSE.txt within this directory
+    if ddof is not None and ddof != int(ddof):
+        raise ValueError("ddof must be integer")
+
+    # Handles complex arrays too
+    m = asarray(m)
+    if y is None:
+        dtype = np.result_type(m, np.float64)
+    else:
+        y = asarray(y)
+        dtype = np.result_type(m, y, np.float64)
+    X = array(m, ndmin=2, dtype=dtype)
+
+    if X.shape[0] == 1:
+        rowvar = 1
+    if rowvar:
+        N = X.shape[1]
+        axis = 0
+    else:
+        N = X.shape[0]
+        axis = 1
+
+    # check ddof
+    if ddof is None:
+        if bias == 0:
+            ddof = 1
+        else:
+            ddof = 0
+    fact = float(N - ddof)
+    if fact <= 0:
+        warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
+        fact = 0.0
+
+    if y is not None:
+        y = array(y, ndmin=2, dtype=dtype)
+        X = concatenate((X, y), axis)
+
+    X = X - X.mean(axis=1 - axis, keepdims=True)
+    if not rowvar:
+        return (dot(X.T, X.conj()) / fact).squeeze()
+    else:
+        return (dot(X, X.T.conj()) / fact).squeeze()
+
+
+@derived_from(np)
+def cov(
+    m,
+    y=None,
+    rowvar=True,
+    bias=False,
+    ddof=None,
+    fweights=None,
+    aweights=None,
+    *,
+    dtype=None,
+):
+    if NUMPY_GE_220:
+        return cov_new(
+            m,
+            y,
+            rowvar=rowvar,
+            bias=bias,
+            ddof=ddof,
+            fweights=fweights,
+            aweights=aweights,
+            dtype=dtype,
+        )
+    else:
+        return cov_old(m, y, rowvar=rowvar, bias=bias, ddof=ddof)
+
+
 @derived_from(np)
 def corrcoef(x, y=None, rowvar=1):
     c = cov(x, y, rowvar)
+
     if c.shape == ():
         return c / c
     d = diag(c)
