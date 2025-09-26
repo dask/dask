@@ -23,7 +23,7 @@ dependencies:
   - moto<5
   # Optional dependencies
   - mimesis
-  - numpy>=2.0  # only tested here
+  - numpy>=2.2  # only tested here
   - pandas
   #- numba  # not available for py 13
   - flask

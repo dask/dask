@@ -1270,6 +1270,69 @@ def test_cov_fweights():
         da.cov(x1, fweights=f)
 
 
+@pytest.mark.skipif(
+    not NUMPY_GE_220, reason="aweights is not an kwarg prior to numpy 2.2"
+)
+def test_cov_aweights():
+    x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
+    res1 = da.array([[1.0, -1.0], [-1.0, 1.0]])
+
+    # Test basic functionality with aweights
+    aweights = da.array([0.5, 2.0, 0.5])  # Analytical weights
+    unit_aweights = np.ones(3, dtype=np.float64)
+
+    # With unit weights, should match unweighted result
+    assert allclose(da.cov(x1, aweights=unit_aweights), res1)
+
+    # Test that aweights affects the covariance calculation
+    weighted_result = da.cov(x1, aweights=aweights)
+    unweighted_result = da.cov(x1)
+    # Results should be different when using non-unit weights
+    assert not allclose(weighted_result, unweighted_result)
+
+    # Test with different weight patterns
+    equal_weights = da.array([1.0, 1.0, 1.0])
+    assert allclose(da.cov(x1, aweights=equal_weights), da.cov(x1))
+
+    # Test error conditions
+    # Negative weights should raise ValueError
+    negative_weights = da.array([-0.5, 1.0, 1.0])
+    with pytest.raises(ValueError):
+        da.cov(x1, aweights=negative_weights)
+
+    # Multidimensional aweights should raise RuntimeError
+    multidim_weights = da.ones((2, 3), dtype=np.float64)
+    with pytest.raises(RuntimeError):
+        da.cov(x1, aweights=multidim_weights)
+
+    # Wrong length aweights should raise RuntimeError
+    wrong_length_weights = da.ones(2, dtype=np.float64)
+    with pytest.raises(RuntimeError):
+        da.cov(x1, aweights=wrong_length_weights)
+
+
+@pytest.mark.skipif(
+    not NUMPY_GE_220, reason="fweights and aweights are not kwargs prior to numpy 2.2"
+)
+def test_cov_fweights_aweights_combined():
+    x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
+
+    # Test combining both frequency and analytical weights
+    fweights = da.array([1, 2, 1])  # Frequency weights (integers)
+    aweights = da.array([0.5, 1.0, 2.0])  # Analytical weights (floats)
+
+    # Should work without error when both are provided
+    result = da.cov(x1, fweights=fweights, aweights=aweights)
+    assert result.shape == (2, 2)
+
+    # Result should be different from using either weight alone
+    result_f_only = da.cov(x1, fweights=fweights)
+    result_a_only = da.cov(x1, aweights=aweights)
+
+    assert not allclose(result, result_f_only)
+    assert not allclose(result, result_a_only)
+
+
 def test_corrcoef():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(4, 4))

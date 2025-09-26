@@ -1521,161 +1521,6 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     return n, [asarray(entry) for entry in edges]
 
 
-def cov_new(
-    m,
-    y=None,
-    rowvar=True,
-    bias=False,
-    ddof=None,
-    fweights=None,
-    aweights=None,
-    *,
-    dtype=None,
-):
-    # cov implementation as of NumPy v2.2
-
-    # This was copied almost verbatim from np.cov
-    # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
-    # or NUMPY_LICENSE.txt within this directory
-    if ddof is not None and ddof != int(ddof):
-        raise ValueError("ddof must be integer")
-
-    # Handles complex arrays too
-    m = asarray(m)
-    if m.ndim > 2:
-        raise ValueError("m has more than 2 dimensions")
-
-    if y is not None:
-        y = asarray(y)
-        if y.ndim > 2:
-            raise ValueError("y has more than 2 dimensions")
-
-    if y is None:
-        dtype = result_type(m, np.float64)
-    else:
-        dtype = result_type(m, y, np.float64)
-
-    X = array(m, ndmin=2, dtype=dtype)
-
-    if not rowvar and m.ndim != 1:
-        X = X.T
-    if X.shape[0] == 0:
-        return array([]).reshape(0, 0)
-    if y is not None:
-        y = array(y, ndmin=2, dtype=dtype)
-        if not rowvar and y.shape[0] != 1:
-            y = y.T
-        X = concatenate((X, y), axis=0)
-
-    # check ddof
-    if ddof is None:
-        if bias == 0:
-            ddof = 1
-        else:
-            ddof = 0
-
-    # Get the product of frequencies and weights
-    w = None
-    if fweights is not None:
-        fweights = asarray(fweights, dtype=float)
-        if not (fweights == around(fweights)).all():
-            raise TypeError("fweights must be integer")
-        if fweights.ndim > 1:
-            raise RuntimeError("cannot handle multidimensional fweights")
-        if fweights.shape[0] != X.shape[1]:
-            raise RuntimeError("incompatible numbers of samples and fweights")
-        if (fweights < 0).any():
-            raise ValueError("fweights cannot be negative")
-        w = fweights
-    if aweights is not None:
-        aweights = asarray(aweights, dtype=float)
-        if aweights.ndim > 1:
-            raise RuntimeError("cannot handle multidimensional aweights")
-        if aweights.shape[0] != X.shape[1]:
-            raise RuntimeError("incompatible numbers of samples and aweights")
-        if any(aweights < 0):
-            raise ValueError("aweights cannot be negative")
-        if w is None:
-            w = aweights
-        else:
-            w *= aweights
-
-    avg, w_sum = average(X, axis=1, weights=w, returned=True)
-    w_sum = w_sum[0]
-
-    # Determine the normalization
-    if w is None:
-        fact = X.shape[1] - ddof
-    elif ddof == 0:
-        fact = w_sum
-    elif aweights is None:
-        fact = w_sum - ddof
-    else:
-        fact = w_sum - ddof * sum(w * aweights) / w_sum
-
-    if fact <= 0:
-        warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
-        fact = 0.0
-
-    X -= avg[:, None]
-    if w is None:
-        X_T = X.T
-    else:
-        X_T = (X * w).T
-    c = dot(X, X_T.conj())
-    c *= true_divide(1, fact)
-    return c.squeeze()
-
-
-def cov_old(m, y=None, rowvar=1, bias=0, ddof=None):
-    # cov implementation prior to NumPy v2.2
-
-    # This was copied almost verbatim from np.cov
-    # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
-    # or NUMPY_LICENSE.txt within this directory
-    if ddof is not None and ddof != int(ddof):
-        raise ValueError("ddof must be integer")
-
-    # Handles complex arrays too
-    m = asarray(m)
-    if y is None:
-        dtype = np.result_type(m, np.float64)
-    else:
-        y = asarray(y)
-        dtype = np.result_type(m, y, np.float64)
-    X = array(m, ndmin=2, dtype=dtype)
-
-    if X.shape[0] == 1:
-        rowvar = 1
-    if rowvar:
-        N = X.shape[1]
-        axis = 0
-    else:
-        N = X.shape[0]
-        axis = 1
-
-    # check ddof
-    if ddof is None:
-        if bias == 0:
-            ddof = 1
-        else:
-            ddof = 0
-    fact = float(N - ddof)
-    if fact <= 0:
-        warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
-        fact = 0.0
-
-    if y is not None:
-        y = array(y, ndmin=2, dtype=dtype)
-        X = concatenate((X, y), axis)
-
-    X = X - X.mean(axis=1 - axis, keepdims=True)
-    if not rowvar:
-        return (dot(X.T, X.conj()) / fact).squeeze()
-    else:
-        return (dot(X, X.T.conj()) / fact).squeeze()
-
-
 @derived_from(np)
 def cov(
     m,
@@ -1688,19 +1533,133 @@ def cov(
     *,
     dtype=None,
 ):
-    if NUMPY_GE_220:
-        return cov_new(
-            m,
-            y,
-            rowvar=rowvar,
-            bias=bias,
-            ddof=ddof,
-            fweights=fweights,
-            aweights=aweights,
-            dtype=dtype,
+    # This was copied almost verbatim from np.cov
+    # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
+    # or NUMPY_LICENSE.txt within this directory
+    if ddof is not None and ddof != int(ddof):
+        raise ValueError("ddof must be integer")
+
+    # Handles complex arrays too
+    m = asarray(m)
+
+    # Common dtype determination
+    if y is None:
+        dtype = (
+            result_type(m, np.float64)
+            if NUMPY_GE_220
+            else np.result_type(m, np.float64)
         )
     else:
-        return cov_old(m, y, rowvar=rowvar, bias=bias, ddof=ddof)
+        y = asarray(y)
+        dtype = (
+            result_type(m, y, np.float64)
+            if NUMPY_GE_220
+            else np.result_type(m, y, np.float64)
+        )
+
+    # Version-specific dimensionality checks
+    if NUMPY_GE_220:
+        if m.ndim > 2:
+            raise ValueError("m has more than 2 dimensions")
+        if y is not None and y.ndim > 2:
+            raise ValueError("y has more than 2 dimensions")
+
+    # Common X array creation
+    X = array(m, ndmin=2, dtype=dtype)
+
+    # Common ddof calculation
+    if ddof is None:
+        ddof = 1 if bias == 0 else 0
+
+    if NUMPY_GE_220:
+        # Implementation for NumPy v2.2 and later with weights support
+        if not rowvar and m.ndim != 1:
+            X = X.T
+        if X.shape[0] == 0:
+            return array([]).reshape(0, 0)
+        if y is not None:
+            y = array(y, ndmin=2, dtype=dtype)
+            if not rowvar and y.shape[0] != 1:
+                y = y.T
+            X = concatenate((X, y), axis=0)
+
+        # Get the product of frequencies and weights
+        w = None
+        if fweights is not None:
+            fweights = asarray(fweights, dtype=float)
+            if not (fweights == around(fweights)).all():
+                raise TypeError("fweights must be integer")
+            if fweights.ndim > 1:
+                raise RuntimeError("cannot handle multidimensional fweights")
+            if fweights.shape[0] != X.shape[1]:
+                raise RuntimeError("incompatible numbers of samples and fweights")
+            if (fweights < 0).any():
+                raise ValueError("fweights cannot be negative")
+            w = fweights
+        if aweights is not None:
+            aweights = asarray(aweights, dtype=float)
+            if aweights.ndim > 1:
+                raise RuntimeError("cannot handle multidimensional aweights")
+            if aweights.shape[0] != X.shape[1]:
+                raise RuntimeError("incompatible numbers of samples and aweights")
+            if any(aweights < 0):
+                raise ValueError("aweights cannot be negative")
+            if w is None:
+                w = aweights
+            else:
+                w *= aweights
+
+        avg, w_sum = average(X, axis=1, weights=w, returned=True)
+        w_sum = w_sum[0]
+
+        # Determine the normalization
+        if w is None:
+            fact = X.shape[1] - ddof
+        elif ddof == 0:
+            fact = w_sum
+        elif aweights is None:
+            fact = w_sum - ddof
+        else:
+            fact = w_sum - ddof * sum(w * aweights) / w_sum
+
+        if fact <= 0:
+            warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
+            fact = 0.0
+
+        X -= avg[:, None]
+        if w is None:
+            X_T = X.T
+        else:
+            X_T = (X * w).T
+        c = dot(X, X_T.conj())
+        c *= true_divide(1, fact)
+        return c.squeeze()
+
+    else:
+        # Implementation for NumPy prior to v2.2 (no weights support)
+        if X.shape[0] == 1:
+            rowvar = 1
+        if rowvar:
+            N = X.shape[1]
+            axis = 0
+        else:
+            N = X.shape[0]
+            axis = 1
+
+        fact = float(N - ddof)
+        if fact <= 0:
+            warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
+            fact = 0.0
+
+        if y is not None:
+            y = array(y, ndmin=2, dtype=dtype)
+            X = concatenate((X, y), axis)
+
+        X = X - X.mean(axis=1 - axis, keepdims=True)
+        if not rowvar:
+            return (dot(X.T, X.conj()) / fact).squeeze()
+        else:
+            return (dot(X, X.T.conj()) / fact).squeeze()
 
 
 @derived_from(np)
