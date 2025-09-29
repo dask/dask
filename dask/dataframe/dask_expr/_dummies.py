@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-import dask.dataframe.methods as methods
+from dask.dataframe import methods
 from dask.dataframe.dask_expr._collection import DataFrame, Series, new_collection
 from dask.dataframe.dask_expr._expr import Blockwise
 from dask.dataframe.utils import has_known_categories
@@ -138,9 +138,8 @@ def get_dummies(
             if (data.dtypes == "string").any():
                 raise NotImplementedError(not_cat_msg)
             columns = data._meta.select_dtypes(include=["category"]).columns
-        else:
-            if not all(methods.is_categorical_dtype(data[c]) for c in columns):
-                raise NotImplementedError(not_cat_msg)
+        elif not all(methods.is_categorical_dtype(data[c]) for c in columns):
+            raise NotImplementedError(not_cat_msg)
 
         if not all(has_known_categories(data[c]) for c in columns):
             raise NotImplementedError(unknown_cat_msg)
