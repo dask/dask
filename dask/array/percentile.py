@@ -3,7 +3,6 @@ from __future__ import annotations
 import warnings
 from collections.abc import Iterator
 from functools import wraps
-from numbers import Number
 
 import numpy as np
 from tlz import merge
@@ -159,7 +158,8 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
 
             name = "percentile_tdigest_chunk-" + token
             dsk = {
-                (name, i): (_tdigest_chunk, key) for i, key in enumerate(a.__dask_keys__())
+                (name, i): (_tdigest_chunk, key)
+                for i, key in enumerate(a.__dask_keys__())
             }
 
             name2 = "percentile_tdigest-" + token
@@ -171,7 +171,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
             from dask.array.dispatch import percentile_lookup
 
             # Add 0 and 100 during calculation for more robust behavior (hopefully)
-            calc_q = np.concatenate(([0], [q] if q.ndim==0 else q, [100]))
+            calc_q = np.concatenate(([0], [q] if q.ndim == 0 else q, [100]))
             name = "percentile_chunk-" + token
             dsk = {
                 (name, i): (percentile_lookup, key, calc_q, method)
@@ -190,10 +190,11 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
             }
         dsk = merge(dsk, dsk2)
         graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
-        return Array(graph, name2, chunks=((len(q) if q.ndim!=0 else 1,),), meta=meta)
+        return Array(graph, name2, chunks=((len(q) if q.ndim != 0 else 1,),), meta=meta)
 
     elif a.ndim > 1:
         from dask.array.reductions import quantile
+
         q = np.true_divide(q, a.dtype.type(100) if a.dtype.kind == "f" else 100)
         return quantile(a, q, method=method, **kwargs)
     else:
@@ -240,7 +241,7 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
         vals, Ns = zip(*vals)
     Ns = list(Ns)
 
-    L = list(zip(*((q, val, N) for q, val, N in zip(qs, vals, Ns) if N) ))
+    L = list(zip(*((q, val, N) for q, val, N in zip(qs, vals, Ns) if N)))
     if not L:
         if raise_on_nan:
             raise ValueError("No non-trivial arrays found")
