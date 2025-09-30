@@ -104,7 +104,7 @@ def test_percentiles_with_scaler_percentile(internal_method, q):
     d = da.ones((16,), chunks=(4,))
     assert_eq(
         da.percentile(d, q, internal_method=internal_method),
-        np.array([1], dtype=d.dtype),
+        np.array(1, dtype=d.dtype),
     )
 
 

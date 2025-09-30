@@ -3,6 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Iterator
 from functools import wraps
+from numbers import Number
 
 import numpy as np
 from tlz import merge
@@ -131,6 +132,10 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
                 f"percentile() got an unexpected keyword argument {kwargs.keys()}"
             )
 
+        q_is_number = False
+        if isinstance(q, Number):
+            q_is_number = True
+            q = [q]
         q = array_safe(q, like=meta_from_array(a))
         token = tokenize(a, q, method)
 
@@ -158,8 +163,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
 
             name = "percentile_tdigest_chunk-" + token
             dsk = {
-                (name, i): (_tdigest_chunk, key)
-                for i, key in enumerate(a.__dask_keys__())
+                (name, i): (_tdigest_chunk, key) for i, key in enumerate(a.__dask_keys__())
             }
 
             name2 = "percentile_tdigest-" + token
@@ -171,7 +175,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
             from dask.array.dispatch import percentile_lookup
 
             # Add 0 and 100 during calculation for more robust behavior (hopefully)
-            calc_q = np.concatenate(([0], [q] if q.ndim == 0 else q, [100]))
+            calc_q = np.concatenate(([0], q, [100]))
             name = "percentile_chunk-" + token
             dsk = {
                 (name, i): (percentile_lookup, key, calc_q, method)
@@ -190,11 +194,11 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
             }
         dsk = merge(dsk, dsk2)
         graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
-        return Array(graph, name2, chunks=((len(q) if q.ndim != 0 else 1,),), meta=meta)
+        arr = Array(graph, name2, chunks=((len(q),),), meta=meta)
+        return arr.reshape(()) if q_is_number else arr
 
     elif a.ndim > 1:
         from dask.array.reductions import quantile
-
         q = np.true_divide(q, a.dtype.type(100) if a.dtype.kind == "f" else 100)
         return quantile(a, q, method=method, **kwargs)
     else:
