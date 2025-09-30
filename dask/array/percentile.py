@@ -132,8 +132,6 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
                 f"percentile() got an unexpected keyword argument {kwargs.keys()}"
             )
 
-        if isinstance(q, Number):
-            q = [q]
         q = array_safe(q, like=meta_from_array(a))
         token = tokenize(a, q, method)
 
@@ -173,7 +171,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
             from dask.array.dispatch import percentile_lookup
 
             # Add 0 and 100 during calculation for more robust behavior (hopefully)
-            calc_q = np.concatenate(([0], q, [100]))
+            calc_q = np.concatenate(([0], [q] if q.ndim==0 else q, [100]))
             name = "percentile_chunk-" + token
             dsk = {
                 (name, i): (percentile_lookup, key, calc_q, method)
@@ -192,7 +190,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
             }
         dsk = merge(dsk, dsk2)
         graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
-        return Array(graph, name2, chunks=((len(q),),), meta=meta)
+        return Array(graph, name2, chunks=((len(q) if q.ndim!=0 else 1,),), meta=meta)
 
     elif a.ndim > 1:
         from dask.array.reductions import quantile
