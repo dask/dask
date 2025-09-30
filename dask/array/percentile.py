@@ -163,7 +163,8 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
 
             name = "percentile_tdigest_chunk-" + token
             dsk = {
-                (name, i): (_tdigest_chunk, key) for i, key in enumerate(a.__dask_keys__())
+                (name, i): (_tdigest_chunk, key)
+                for i, key in enumerate(a.__dask_keys__())
             }
 
             name2 = "percentile_tdigest-" + token
@@ -199,6 +200,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
 
     elif a.ndim > 1:
         from dask.array.reductions import quantile
+
         q = np.true_divide(q, a.dtype.type(100) if a.dtype.kind == "f" else 100)
         return quantile(a, q, method=method, **kwargs)
     else:
