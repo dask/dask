@@ -542,7 +542,7 @@ def moment_agg(
             inner_term = np.abs(divide(totals, ns) - mu)
         else:
             inner_term = divide(totals, ns, dtype=dtype) - mu
-
+    inner_term = np.where(ns==0, 0, inner_term)
     M = _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs)
 
     denominator = n.sum(axis=axis, **kwargs) - ddof
@@ -676,12 +676,12 @@ def nanvar(
             numel=nannumel,
             implicit_complex_dtype=implicit_complex_dtype,
         ),
-        partial(moment_agg, sum=np.nansum, ddof=ddof),
+        partial(moment_agg, sum=np.sum, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
         dtype=dt,
         split_every=split_every,
-        combine=partial(moment_combine, sum=np.nansum),
+        combine=partial(moment_combine, sum=np.sum),
         out=out,
         concatenate=False,
     )
