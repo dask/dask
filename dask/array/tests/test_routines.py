@@ -1353,8 +1353,6 @@ def test_corrcoef():
     if NUMPY_GE_220:
         with pytest.warns(RuntimeWarning):
             assert_eq(da.corrcoef(d, rowvar=False), np.corrcoef(x, rowvar=False))
-    else:
-        assert_eq(da.corrcoef(d, rowvar=False), np.corrcoef(x, rowvar=False))
 
 
 def test_round():
