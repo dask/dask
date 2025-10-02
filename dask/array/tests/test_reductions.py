@@ -156,8 +156,8 @@ def test_reductions_1D_nans(x, dtype):
         reduction_1d_test(da.nansum, a, np.nansum, x)
         reduction_1d_test(da.nanprod, a, np.nanprod, x)
         reduction_1d_test(da.nanmean, a, np.nanmean, x, False)
-        reduction_1d_test(da.nanvar, a, np.nanvar, x, False, False)
-        reduction_1d_test(da.nanstd, a, np.nanstd, x, False, False)
+        reduction_1d_test(da.nanvar, a, np.nanvar, x, False)
+        reduction_1d_test(da.nanstd, a, np.nanstd, x, False)
         reduction_1d_test(da.nanmin, a, np.nanmin, x, False)
         reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
 

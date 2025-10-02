@@ -681,7 +681,7 @@ def nanvar(
         keepdims=keepdims,
         dtype=dt,
         split_every=split_every,
-        combine=partial(moment_combine, sum=np.sum),
+        combine=partial(moment_combine, sum=np.nansum),
         out=out,
         concatenate=False,
     )
