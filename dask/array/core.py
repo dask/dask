@@ -478,7 +478,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     # make sure that every arg is an evaluated array
     args = [
         (
-            np.ones_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+            np.zeros_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
             if is_arraylike(x)
             else x
         )
@@ -4971,10 +4971,7 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
             )
             for a in args
         ]
-        try:
-            dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
-        except Exception:
-            return NotImplemented
+        dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
         need_enforce_dtype = any(
             not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
         )

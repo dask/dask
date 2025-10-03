@@ -1815,6 +1815,13 @@ def test_choose():
     assert_eq(index_dask.choose([0, d]), index_numpy.choose([0, x]))
     assert_eq(index_dask.choose([-d, d]), index_numpy.choose([-x, x]))
 
+    indices_np = np.array([0, 0, 0, 0])
+    choices_np = (np.array([10.0, 20.0, 30.0, 40.0]),)
+    indices_da = da.from_array(indices_np, chunks=(2,))
+    choices_da = da.from_array(choices_np, chunks=(1, 2))
+
+    assert_eq(np.choose(indices_np, choices_np), da.choose(indices_da, choices_da))
+
 
 def test_piecewise():
     rng = np.random.default_rng(1337)
