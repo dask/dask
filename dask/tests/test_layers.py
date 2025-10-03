@@ -10,7 +10,7 @@ import sys
 from operator import getitem
 
 from distributed import Client, SchedulerPlugin
-from distributed.utils_test import cluster, loop  # noqa F401
+from distributed.utils_test import cluster, loop  # noqa: F401
 
 from dask.layers import ArrayChunkShapeDep, ArraySliceDep, fractional_slice
 
