@@ -1568,18 +1568,17 @@ def cov(
             y = y.T
         X = concatenate((X, y), axis=0)
 
-    # Get the product of frequencies and weights
+    # Unlike NumPy, these checks don't include:
+    #    - if fweights are all integers
+    #    - if either fweights or aweights are all non-negative
+    # These checks potientially expensive for distributed arrays.
     w = None
     if fweights is not None:
         fweights = asarray(fweights, dtype=float)
-        if not (fweights == around(fweights)).all():
-            raise TypeError("fweights must be integer")
         if fweights.ndim > 1:
             raise RuntimeError("cannot handle multidimensional fweights")
         if fweights.shape[0] != X.shape[1]:
             raise RuntimeError("incompatible numbers of samples and fweights")
-        if (fweights < 0).any():
-            raise ValueError("fweights cannot be negative")
         w = fweights
     if aweights is not None:
         aweights = asarray(aweights, dtype=float)
@@ -1587,8 +1586,6 @@ def cov(
             raise RuntimeError("cannot handle multidimensional aweights")
         if aweights.shape[0] != X.shape[1]:
             raise RuntimeError("incompatible numbers of samples and aweights")
-        if any(aweights < 0):
-            raise ValueError("aweights cannot be negative")
         if w is None:
             w = aweights
         else:
