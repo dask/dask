@@ -84,6 +84,9 @@ def read_sql_query(
     """
     import sqlalchemy as sa
 
+    if isinstance(sql, str):
+        raise ValueError("`sql` must be a SQLAlchemy Selectable, not a string")
+
     if not isinstance(con, str):
         raise TypeError(
             "'con' must be of type str, not "
