@@ -144,6 +144,24 @@ def test_reductions_1D(dtype):
     reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
 
 
+@pytest.mark.parametrize("dtype", ["f4", "c8"])
+@pytest.mark.parametrize(
+    "x", [np.array([np.inf, np.nan, -np.inf, 2]), np.array([np.nan, np.nan, 3, 2])]
+)
+def test_reductions_1D_nans(x, dtype):
+    x = x.astype(dtype)
+    a = da.from_array(x, chunks=(1,))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        reduction_1d_test(da.nansum, a, np.nansum, x)
+        reduction_1d_test(da.nanprod, a, np.nanprod, x)
+        reduction_1d_test(da.nanmean, a, np.nanmean, x, False)
+        reduction_1d_test(da.nanvar, a, np.nanvar, x, False)
+        reduction_1d_test(da.nanstd, a, np.nanstd, x, False)
+        reduction_1d_test(da.nanmin, a, np.nanmin, x, False)
+        reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
+
+
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
     assert_eq(da_func(darr), np_func(narr))
     assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
@@ -383,8 +401,8 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.any, a, np.any, x, False, False)
     reduction_2d_test(da.all, a, np.all, x, False, False)
 
-    reduction_2d_test(da.nansum, a, np.nansum, x, False, False)
-    reduction_2d_test(da.nanprod, a, np.nanprod, x, False, False)
+    reduction_2d_test(da.nansum, a, np.nansum, x)
+    reduction_2d_test(da.nanprod, a, np.nanprod, x)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)

@@ -447,6 +447,11 @@ def test_query_with_meta(db):
     assert_eq(out, df[["name", "age"]], check_dtype=sys.platform != "win32")
 
 
+def test_read_sql_query_string_raises_error(db):
+    with pytest.raises(ValueError):
+        read_sql_query("SELECT * FROM test", db, npartitions=2, index_col="number")
+
+
 def test_no_character_index_without_divisions(db):
     # attempt to read the sql table with a character index and no divisions
     with pytest.raises(TypeError):

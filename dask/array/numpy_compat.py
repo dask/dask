@@ -14,6 +14,7 @@ _np_version = Version(np.__version__)
 NUMPY_GE_125 = _np_version.release >= (1, 25)
 NUMPY_GE_200 = _np_version.release >= (2, 0)
 NUMPY_GE_210 = _np_version.release >= (2, 1)
+NUMPY_GE_220 = _np_version.release >= (2, 2)
 
 
 if NUMPY_GE_200:
