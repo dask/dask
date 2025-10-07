@@ -17,6 +17,7 @@ import os
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
+import pathlib
 
 import sphinx_autosummary_accessors
 
@@ -123,7 +124,7 @@ html_theme = "dask_sphinx_theme"
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-html_theme_options = {"logo_only": True}
+html_theme_options = {}
 
 # Add any paths that contain custom themes here, relative to this directory.
 # html_theme_path = []
@@ -315,10 +316,10 @@ epub_copyright = "2014-2018, Anaconda, Inc. and contributors"
 # epub_tocdup = True
 
 extlinks = {
-    "issue": ("https://github.com/dask/dask/issues/%s", "dask#"),
-    "pr": ("https://github.com/dask/dask/pull/%s", "dask#"),
-    "pr-distributed": ("https://github.com/dask/distributed/pull/%s", "distributed#"),
-    "pr-expr": ("https://github.com/dask/dask-expr/pull/%s", "dask-expr#"),
+    "issue": ("https://github.com/dask/dask/issues/%s", "dask#%s"),
+    "pr": ("https://github.com/dask/dask/pull/%s", "dask#%s"),
+    "pr-distributed": ("https://github.com/dask/distributed/pull/%s", "distributed#%s"),
+    "pr-expr": ("https://github.com/dask/dask-expr/pull/%s", "dask-expr#%s"),
 }
 
 #  --Options for sphinx extensions -----------------------------------------------
@@ -484,10 +485,9 @@ def copy_legacy_redirects(app, docname):
             # add ../ to old nested paths
             new = f"{'../' * html_src_path.count('/')}{new}"
             page = redirect_template.format(new=new)
-            target_path = app.outdir + "/" + html_src_path
-            os.makedirs(os.path.dirname(target_path), exist_ok=True)
-            with open(target_path, "w") as f:
-                f.write(page)
+            target_path = pathlib.Path(app.outdir) / html_src_path
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(page)
 
 
 def setup(app):
