@@ -111,7 +111,6 @@ def test_percentiles_with_scaler_percentile(internal_method, q, x):
     # See #3020
     d = da.from_array(x, chunks=(4,))
 
-    # TODO: change to assert approx equal
     assert_eq(
         da.percentile(d, q, internal_method=internal_method),
         np.percentile(x, q),
