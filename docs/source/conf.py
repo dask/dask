@@ -13,11 +13,11 @@
 from __future__ import annotations
 
 import os
+import pathlib
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
-import pathlib
 
 import sphinx_autosummary_accessors
 
@@ -120,11 +120,6 @@ exclude_patterns: list[str] = []
 # -- Options for HTML output ---------------------------------------------------
 
 html_theme = "dask_sphinx_theme"
-
-# Theme options are theme-specific and customize the look and feel of a theme
-# further.  For a list of options available for each theme, see the
-# documentation.
-html_theme_options = {}
 
 # Add any paths that contain custom themes here, relative to this directory.
 # html_theme_path = []
