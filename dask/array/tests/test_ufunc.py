@@ -557,7 +557,7 @@ def test_ufunc_where_no_out():
     d_left = da.from_array(left, chunks=2)
     d_right = da.from_array(right, chunks=2)
 
-    expected = np.add(left, right, where=where)
+    expected = np.add(left, right, where=where, out=None)
     result = da.add(d_left, d_right, where=d_where)
 
     # If no `out` is provided, numpy leaves elements that don't match `where`
