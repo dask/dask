@@ -111,8 +111,12 @@ def import_optional_dependency(
         f"Use pip or conda to install {install_name}."
     )
     try:
+        # NOTE: Use `importlib_metadata.distribution` check to differentiate
+        # between something that's importable (e.g. a directory named `xarray`)
+        # and the library we want to check for (i.e. the `xarray`` library)
+        importlib_metadata.distribution(name)
         module = importlib.import_module(name)
-    except ImportError as err:
+    except (importlib_metadata.PackageNotFoundError, ImportError) as err:
         if errors == "raise":
             raise ImportError(msg) from err
         return None
