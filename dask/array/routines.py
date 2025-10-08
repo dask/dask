@@ -29,7 +29,7 @@ from dask.array.core import (
     tensordot_lookup,
 )
 from dask.array.creation import arange, diag, empty, indices, tri
-from dask.array.einsumfuncs import einsum  # noqa
+from dask.array.einsumfuncs import einsum  # noqa: F401
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reductions import reduction
 from dask.array.ufunc import multiply, sqrt, true_divide
@@ -2086,7 +2086,7 @@ def _asarray_isnull(values):
 def isnull(values):
     """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
-    import pandas as pd  # noqa
+    import pandas as pd  # noqa: F401
 
     return elemwise(_asarray_isnull, values, dtype="bool")
 

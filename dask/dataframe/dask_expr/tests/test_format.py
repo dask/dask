@@ -1,4 +1,3 @@
-# flake8: noqa: W291
 from __future__ import annotations
 
 from textwrap import dedent
@@ -78,7 +77,7 @@ def test_to_string():
       <td>...</td>
     </tr>
   </tbody>
-</table>"""  # noqa E222, E702
+</table>"""
     footer = f"Dask Name: frompandas, {maybe_pluralize(1, 'expression')}"
     exp = f"""<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
