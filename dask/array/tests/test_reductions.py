@@ -12,7 +12,7 @@ np = pytest.importorskip("numpy")
 import itertools
 
 import dask.array as da
-import dask.config as config
+from dask import config
 from dask.array.numpy_compat import ComplexWarning
 from dask.array.utils import assert_eq, same_keys
 from dask.core import get_deps
