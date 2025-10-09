@@ -58,20 +58,24 @@ class Concat(Expr):
     @functools.cached_property
     def _meta(self):
         # ignore DataFrame without columns to avoid dtype upcasting
-        return make_meta(
-            methods.concat(
-                [
-                    meta_nonempty(df._meta)
-                    for df in self._frames
-                    if df.ndim < 2 or len(df._meta.columns) > 0
-                ],
-                join=self.join,
-                filter_warning=False,
-                axis=self.axis,
-                ignore_order=self.ignore_order,
-                **self._kwargs,
+        filtered = [
+            meta_nonempty(df._meta)
+            for df in self._frames
+            if df.ndim < 2 or len(df._meta.columns) > 0
+        ]
+        if len(filtered) == 0:
+            return make_meta(meta_nonempty(self._frames[0]._meta))
+        else:
+            return make_meta(
+                methods.concat(
+                    filtered,
+                    join=self.join,
+                    filter_warning=False,
+                    axis=self.axis,
+                    ignore_order=self.ignore_order,
+                    **self._kwargs,
+                )
             )
-        )
 
     def _divisions(self):
         dfs = self._frames
