@@ -86,6 +86,12 @@ def test_concat_one_no_columns(df, pdf):
     assert_eq(result, expected)
 
 
+def test_concat_multiple_no_columns(df, pdf):
+    result = concat([df[[]], df[[]]])
+    expected = pd.concat([pdf[[]], pdf[[]]])
+    assert_eq(result, expected)
+
+
 def test_concat_simplify(pdf, df):
     pdf2 = pdf.copy()
     pdf2["z"] = 1
