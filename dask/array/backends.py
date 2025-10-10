@@ -138,6 +138,7 @@ def register_cupy():
     percentile_lookup.register(cupy.ndarray, percentile)
     numel_lookup.register(cupy.ndarray, _numel_arraylike)
     nannumel_lookup.register(cupy.ndarray, _nannumel)
+    empty_lookup.register(cupy.ndarray, cupy.empty)
 
     @to_numpy_dispatch.register(cupy.ndarray)
     def cupy_to_numpy(data, **kwargs):
