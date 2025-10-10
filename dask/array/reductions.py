@@ -1216,7 +1216,7 @@ def cumreduction(
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 
-    m = x.astype(dtype).map_blocks(func, axis=axis, dtype=dtype)
+    m = x.map_blocks(partial(func, dtype=dtype), axis=axis, dtype=dtype)
 
     name = f"{func.__name__}-{tokenize(func, axis, binop, ident, x, dtype)}"
     n = x.numblocks[axis]
