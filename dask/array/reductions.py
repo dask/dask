@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import inspect
 import math
 import operator
 import warnings
@@ -1216,7 +1217,10 @@ def cumreduction(
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 
-    m = x.map_blocks(func, axis=axis, dtype=dtype)
+    if "dtype" in inspect.signature(func).parameters:
+        m = x.map_blocks(partial(func, dtype=dtype), axis=axis, dtype=dtype)
+    else:
+        m = x.map_blocks(func, axis=axis, dtype=dtype)
 
     name = f"{func.__name__}-{tokenize(func, axis, binop, ident, x, dtype)}"
     n = x.numblocks[axis]
