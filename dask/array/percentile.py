@@ -9,6 +9,7 @@ import numpy as np
 from tlz import merge
 
 from dask.array.core import Array
+from dask.array.dispatch import empty_lookup, percentile_lookup
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from
@@ -173,10 +174,14 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
 
         # Otherwise use the custom percentile algorithm
         else:
-            from dask.array.dispatch import percentile_lookup
-
             # Add 0 and 100 during calculation for more robust behavior (hopefully)
-            calc_q = np.concatenate(([0], q, [100]))
+            zero = empty_lookup.dispatch(type(q))(1, dtype=q.dtype)
+            zero[:] = 0
+
+            hundred = empty_lookup.dispatch(type(q))(1, dtype=q.dtype)
+            hundred[:] = 100
+
+            calc_q = np.concatenate((zero, q, hundred))
             name = "percentile_chunk-" + token
             dsk = {
                 (name, i): (percentile_lookup, key, calc_q, method)
@@ -271,11 +276,11 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
 
     # transform qs and Ns into number of observations between percentiles
     total_len = sum(len(q) for q in qs)
-    counts = np.empty(total_len, dtype=finalq.dtype)
+    counts = empty_lookup.dispatch(type(finalq))(total_len, dtype=finalq.dtype)
     start = 0
     for q, N in zip(qs, Ns):
         length = len(q)
-        count = np.empty_like(finalq, shape=length)
+        count = empty_lookup.dispatch(type(finalq))(length, dtype=finalq.dtype)
         count[1:] = np.diff(array_safe(q, like=q[0]))
         count[0] = q[0]
         count *= N

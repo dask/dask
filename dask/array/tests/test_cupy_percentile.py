@@ -10,6 +10,10 @@ from dask.array.utils import assert_eq, same_keys
 
 cupy = pytest.importorskip("cupy")
 
+import dask.array.backends
+
+dask.array.backends.register_cupy()
+
 
 def test_percentile():
     d = da.from_array(cupy.ones((16,)), chunks=(4,))
@@ -60,7 +64,7 @@ def test_percentiles_with_scaler_percentile(q):
     result = da.percentile(d, q, method="midpoint")
     assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
-    assert_eq(result, np.array([1], dtype=d.dtype), check_type=False)
+    assert_eq(result, np.array(1, dtype=d.dtype), check_type=False)
 
 
 def test_percentiles_with_unknown_chunk_sizes():
