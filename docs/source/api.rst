@@ -53,6 +53,8 @@ real-time or advanced operation.
 This more advanced API is available in the `Dask distributed documentation
 <https://distributed.dask.org/en/latest/api.html>`_
 
+.. currentmodule:: dask
+
 .. autofunction:: annotate
 .. autofunction:: get_annotations
 .. autofunction:: compute
