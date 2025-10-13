@@ -1,6 +1,6 @@
 numpydoc
 sphinx>=8.0.0
-git+https://github.com/dask/dask-sphinx-theme.git@dst-4
+dask-sphinx-theme>=4.0.0
 sphinx-click
 sphinx-copybutton
 sphinx-remove-toctrees
