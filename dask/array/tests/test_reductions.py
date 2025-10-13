@@ -648,6 +648,22 @@ def test_array_cumreduction_axis(func, use_nan, axis, method):
     assert_eq(a_r, d_r)
 
 
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
+@pytest.mark.parametrize("method", ["sequential", "blelloch"])
+@pytest.mark.parametrize("target_dtype", [None, int, float])
+def test_array_cumreduction_dtype(func, method, target_dtype):
+    np_func = getattr(np, func)
+    da_func = getattr(da, func)
+
+    a = np.linspace(0, 1, num=10, dtype=float)
+    d = da.from_array(a)
+
+    a_r = np_func(a, axis=0, dtype=target_dtype)
+    d_r = da_func(d, method=method, axis=0, dtype=target_dtype)
+
+    assert_eq(a_r, d_r)
+
+
 @pytest.mark.parametrize("func", [np.cumsum, np.cumprod])
 def test_array_cumreduction_out(func):
     x = da.ones((10, 10), chunks=(4, 4))
