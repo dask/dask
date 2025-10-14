@@ -5,6 +5,41 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2025.10.0:
+
+2025.10.0
+---------
+
+Highlights
+^^^^^^^^^^
+- Several Dask Array bug fixes including :pr:`12097`, :pr:`12089`, :pr:`12088`, and :pr:`12090`.
+
+.. dropdown:: Additional changes
+
+  - Use updated docs theme (:pr:`12093`) `Jacob Tomlinson`_
+  - Fix: ``dask.array.cumprod`` does not deal with ``dtype`` (:pr:`12097`) `Tony Ding`_
+  - CuPy compatibility for percentile (:pr:`12098`) `Tom Augspurger`_
+  - Avoid using ``methods.concat`` on empty lists (:pr:`12096`) `Tony Ding`_
+  - Add distribution check for optional dependencies (:pr:`12087`) `James Bourbeau`_
+  - Fix percentile inconsistencies (:pr:`12088`) `Oisin-M`_
+  - Fix warning in ``test_ufunc_where_no_out`` (:pr:`12094`) `Tom Augspurger`_
+  - Fix/choose trivial case (:pr:`12090`) `Oisin-M`_
+  - Add input validation on ``dask.dataframe.read_sql_query()`` (:pr:`12091`) `Jacob Tomlinson`_
+  - Numpy 2.2 updates for ``cov`` function with tests (:pr:`12079`) `Mike McCarty`_
+  - Fix ``nanvar`` (:pr:`12089`) `Oisin-M`_
+  - Document manually triggering the conda-forge bots (:pr:`12083`) `Jacob Tomlinson`_
+  - Fix mixed HLG/Expr handling in ``_ExprSequence._simplify_down`` (:pr:`12081`) `Richard (Rick) Zamora`_
+  - Add ``dask.tokenize`` to API docs (:pr:`12080`) `Username46786`_
+  - ``CreateOverlappingPartitions``: Add before and after to prepend name (:pr:`11965`) `Fabien Aulaire`_
+  - Fix ``scipy.sparce.csc_matrix`` scalar declaration in ``_array_like_safe`` (:pr:`12078`) `Ilan Gold`_
+
+  - Update docs theme and remove docs env pins (:pr-distributed:`9125`) `Jacob Tomlinson`_
+  - Add worker name as prefix to ``ThreadPoolExecutor`` name (:pr-distributed:`9120`) `Maneesh Sutar`_
+  - Skip hanging SSH tests on Windows (:pr-distributed:`9115`) `Jacob Tomlinson`_
+  - Fix macOS CI failure during job startup (:pr-distributed:`9113`) `Jacob Tomlinson`_
+  - Prevent task stream dashboard showing 1970 date (:pr-distributed:`9109`) `Guillaume Eynard-Bontemps`_
+
+
 .. _v2025.9.1:
 
 2025.9.1
@@ -9653,3 +9688,7 @@ Other
 .. _`Marco Edward Gorelli`: https://github.com/MarcoGorelli
 .. _`Peter A. Jonsson`: https://github.com/pjonsson
 .. _`Florian Courtial`: https://github.com/fcourtial
+.. _`Tony Ding`: https://github.com/tonyyuyiding
+.. _`Oisin-M`: https://github.com/Oisin-M
+.. _`Username46786`: https://github.com/Username46786
+.. _`Maneesh Sutar`: https://github.com/maneesh29s
