@@ -1026,8 +1026,7 @@ class GroupByApply(Expr, GroupByBase):
             self.operand("kwargs"),
             grp_func,
             # Make sure the meta argument isn't a collection.
-            # Blockwise._divisions may treat it as an
-            # additional Expr dependency.
+            # Blockwise may treat it as an Expr dependency.
             # See: https://github.com/dask/dask/issues/11990
             self._meta,
             *by,
