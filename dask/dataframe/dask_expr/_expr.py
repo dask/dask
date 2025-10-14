@@ -593,7 +593,11 @@ class Blockwise(Expr):
         dependencies = self.dependencies()
         for arg in dependencies:
             if not self._broadcast_dep(arg):
-                assert arg.divisions == dependencies[0].divisions
+                assert arg.divisions == dependencies[0].divisions, (
+                    "Mismatched divisions between multiple Blockwise dependencies. "
+                    f"Expected {dependencies[0].divisions}. Got {arg.divisions}. "
+                    "This may happen when a collection is passed to `meta=`."
+                )
         return dependencies[0].divisions
 
     @functools.cached_property

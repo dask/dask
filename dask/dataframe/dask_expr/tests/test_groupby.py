@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections import OrderedDict
 from functools import partial
+from tkinter.constants import FALSE
 
 import numpy as np
 import pytest
@@ -1069,4 +1070,22 @@ def test_groupby_getitem_apply_group_keys():
     df = from_pandas(pdf, npartitions=4)
     result = df.groupby("A", group_keys=False).B.apply(lambda x: x, meta=("B", int))
     expected = pdf.groupby("A", group_keys=False).B.apply(lambda x: x)
+    assert_eq(result, expected)
+
+
+def test_groupby_apply_meta_collection():
+    pdf = pd.DataFrame(
+        {
+            "A": [0, 1] * 4,
+            "B": [1, 2, 3, 4] * 2,
+            "C": [1] * 8,
+        }
+    )
+
+    def _filter(x: pd.DataFrame) -> pd.DataFrame:
+        return x[x["B"] == 2]
+
+    df = from_pandas(pdf, npartitions=4)
+    result = df.groupby("A", group_keys=False)[["C", "B"]].apply(_filter, meta=df[["C", "B"]])
+    expected = pdf.groupby("A", group_keys=False)[["C", "B"]].apply(_filter)
     assert_eq(result, expected)
