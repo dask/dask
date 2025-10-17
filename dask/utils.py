@@ -2325,3 +2325,44 @@ class disable_gc(ContextDecorator):
         if self._gc_enabled:
             gc.enable()
         return False
+
+
+def is_empty(obj):
+    """
+    Duck-typed check for “emptiness” of an object.
+
+    Works for standard sequences (lists, tuples, etc.), NumPy arrays,
+    and sparse-like objects (e.g., SciPy sparse arrays).
+
+    The function checks:
+        1. If the object supports len(), returns True if len(obj) == 0.
+        2. If the object has a `.nnz` attribute (number of non-zero elements),
+           returns True if `.nnz == 0`.
+        3. If the object has a `.shape` attribute, returns True if any
+           dimension is zero.
+        4. Otherwise, returns False (assumes non-empty).
+
+    Parameters
+    ----------
+    obj : any
+        The object to check for emptiness.
+
+    Returns
+    -------
+    bool
+        True if the object is considered empty, False otherwise.
+    """
+    # Check standard sequences
+    try:
+        return len(obj) == 0
+    except TypeError:
+        pass
+
+    # Sparse-like objects
+    if hasattr(obj, "nnz"):
+        return obj.nnz == 0
+    if hasattr(obj, "shape"):
+        return 0 in obj.shape
+
+    # Fallback: assume non-empty
+    return False

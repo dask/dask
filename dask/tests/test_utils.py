@@ -31,6 +31,7 @@ from dask.utils import (
     getargspec,
     has_keyword,
     is_arraylike,
+    is_empty,
     itemgetter,
     iter_chunks,
     memory_repr,
@@ -948,3 +949,71 @@ def test_get_meta_library_gpu():
     assert get_meta_library(cp.ndarray([])) == get_meta_library(
         da.from_array([]).to_backend("cupy")
     )
+
+
+def test_is_empty_list_and_tuple():
+    assert is_empty([]) is True
+    assert is_empty([1]) is False
+    assert is_empty(()) is True
+    assert is_empty((1,)) is False
+
+
+def test_is_empty_numpy_array():
+    np = pytest.importorskip("numpy")
+
+    assert is_empty(np.array([])) is True
+    assert is_empty(np.array([1, 2])) is False
+    # len() == 3 → not empty even though one dimension is 0
+    assert is_empty(np.empty((3, 0))) is False
+
+
+def test_is_empty_fake_sparse_like_object():
+    """Simulate sparse arrays via fake .nnz and .shape attributes."""
+
+    class FakeSparse:
+        def __init__(self, nnz, shape):
+            self.nnz = nnz
+            self.shape = shape
+
+    assert is_empty(FakeSparse(0, (10, 10))) is True  # nnz == 0 → True
+    assert is_empty(FakeSparse(5, (10, 10))) is False  # nnz != 0 → False
+    assert (
+        is_empty(FakeSparse(10, (0, 5))) is False
+    )  # nnz != 0 → False (never checks shape)
+
+
+def test_is_empty_object_with_nnz_only():
+    class FakeSparse:
+        def __init__(self, nnz):
+            self.nnz = nnz
+
+    assert is_empty(FakeSparse(0)) is True
+    assert is_empty(FakeSparse(3)) is False
+
+
+def test_is_empty_object_with_shape_only():
+    class FakeShape:
+        def __init__(self, shape):
+            self.shape = shape
+
+    assert is_empty(FakeShape((0, 5))) is True
+    assert is_empty(FakeShape((3, 5))) is False
+
+
+def test_is_empty_fallback_object():
+    class Dummy:
+        pass
+
+    assert is_empty(Dummy()) is False
+
+
+def test_is_empty_typeerror_in_len():
+    """Force TypeError in len() to trigger nnz/shape logic."""
+
+    class FakeObj:
+        def __len__(self):
+            raise TypeError
+
+        nnz = 0
+
+    assert is_empty(FakeObj()) is True
