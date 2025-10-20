@@ -3660,6 +3660,13 @@ def from_array(
         asarray = not hasattr(x, "__array_function__")
 
     previous_chunks = getattr(x, "chunks", None)
+    
+    # As of Zarr 3.x, arrays can have a shards attribute. If present, 
+    # this defines the smallest array region that is safe to write, and 
+    # thus this is a better default than the chunks attribute.
+    # We check for chunks AND shards to be somewhat specific to Zarr arrays
+    if hasattr(x, "chunks") and hasattr(x, "shards") and chunks == "auto":
+        chunks = getattr(x, "shards", "auto")
 
     chunks = normalize_chunks(
         chunks, x.shape, dtype=x.dtype, previous_chunks=previous_chunks
