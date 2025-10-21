@@ -5107,7 +5107,9 @@ def test_zarr_shards(tmpdir):
     Test that da.from_array chooses chunks based on
     the shard shape of a sharded Zarr array instead of the chunk shape
     """
-    zarr = pytest.importorskip("zarr")
+    zarr = pytest.importorskip(
+        "zarr", minversion="3", reason="Zarr 3 or higher needed for sharding"
+    )
     shape = (12,)
     z_chunks = (4,)
     z_shards = (8,)
