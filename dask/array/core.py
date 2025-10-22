@@ -5675,15 +5675,15 @@ def _vindex(x, *indexes):
 
     return x
 
-
 def _vindex_array(x, dict_indexes):
-    """Point wise indexing with only NumPy Arrays."""
+    """Fancy indexing with only NumPy Arrays."""
 
     token = tokenize(x, dict_indexes)
     try:
         broadcast_shape = np.broadcast_shapes(
             *(arr.shape for arr in dict_indexes.values())
         )
+
     except ValueError as e:
         # note: error message exactly matches numpy
         shapes_str = " ".join(str(a.shape) for a in dict_indexes.values())
@@ -5703,7 +5703,7 @@ def _vindex_array(x, dict_indexes):
         np.array(cached_cumsum(c, initial_zero=True))
         for c in _subset_to_indexed_axes(x.chunks)
     )
-    axis = _get_axis(tuple(i if i in axes else None for i in range(x.ndim)))
+    # axis = _get_axis(tuple(i if i in axes else None for i in range(x.ndim)))
     out_name = "vindex-merge-" + token
 
     # Now compute indices of each output element within each input block
@@ -5722,9 +5722,8 @@ def _vindex_array(x, dict_indexes):
         else:
             inblock_idxs.append(a)
 
-    inblock_idxs = np.broadcast_arrays(*inblock_idxs)
-
     chunks = [c for i, c in enumerate(x.chunks) if i not in axes]
+
     # determine number of points in one single output block.
     # Use the input chunk size to determine this.
     max_chunk_point_dimensions = reduce(
@@ -5743,95 +5742,152 @@ def _vindex_array(x, dict_indexes):
     )
     chunks = tuple(chunks)
 
-    if npoints > 0:
-        other_blocks = product(
-            *[
-                range(len(c)) if i not in axes else [None]
-                for i, c in enumerate(x.chunks)
-            ]
-        )
+    unis = []
+    for block_idxs_dim in block_idxs:
+        N = block_idxs_dim.shape[0]
+        arr = block_idxs_dim.reshape(N, -1)
+        uni = [np.unique(arr[i]) for i in range(N)]
+        unis.append(uni)
 
-        full_slices = [
-            slice(None, None) if i not in axes else None for i in range(x.ndim)
-        ]
+    def cartesian_product_linewise(line):
+        return np.array(tuple(product(*line)))
 
-        # The output is constructed as a new dimension and then reshaped
-        # So the index of the output point is simply an `arange`
-        outinds = np.arange(npoints).reshape(broadcast_shape)
-        # Which output block is the point going to, and what is the index within that block?
-        outblocks, outblock_idx = np.divmod(outinds, max_chunk_point_dimensions)
+    # Represents for each observation, which chunk should be opened
+    chunk_idxs = [cartesian_product_linewise(row) for row in zip(*unis)]
 
-        # Now we try to be clever. We need to construct a graph where
-        # if input chunk (0,0) contributes to output chunks 0 and 2 then
-        # (0,0) => (0, 0, 0) and (2, 0, 0).
-        # The following is a groupby over output key by using ravel_multi_index to convert
-        # the (output_block, *input_block) tuple to a unique code.
-        ravel_shape = (n_chunks + 1, *_subset_to_indexed_axes(x.numblocks))
-        keys = np.ravel_multi_index([outblocks, *block_idxs], ravel_shape)
-        # by sorting the data that needs to be inserted in the graph here,
-        # we can slice in the hot loop below instead of using fancy indexing which will
-        # always copy inside the hot loop.
-        sortidx = np.argsort(keys, axis=None)
-        sorted_keys = keys.flat[sortidx]  # flattens
-        sorted_inblock_idxs = [_.flat[sortidx] for _ in inblock_idxs]
-        sorted_outblock_idx = outblock_idx.flat[sortidx]
-        dtype = np.min_scalar_type(max_chunk_point_dimensions)
-        sorted_outblock_idx = sorted_outblock_idx.astype(dtype, copy=False)
-        # Determine the start and end of each unique key. We will loop over this
-        flag = np.concatenate([[True], sorted_keys[1:] != sorted_keys[:-1], [True]])
-        (key_bounds,) = flag.nonzero()
+    # --- Prepare working structures ---
+    # Each observation may require opening one or more input chunks.
+    # Les parties représente les valeurs d'une observation au sein d'un chunk
+    input_blocks = (
+        []
+    )  # For each part, the source chunk to open (coordinates in the chunk grid)
+    obs_ids = []  # Observation ID corresponding to this part
+    input_slices = []  # For each part, the slice to extract from the source chunk
+    output_slices = []  # For each part, the slice to write in the output chunk
+    reshape_defs = (
+        []
+    )  # For each part, the reshape dimensions to apply to index before extraction.
 
-        name = "vindex-slice-" + token
-        vindex_merge_name = "vindex-merge-" + token
-        dsk = {}
-        for okey in other_blocks:
-            merge_inputs = defaultdict(list)
-            merge_indexer = defaultdict(list)
-            for i, (start, stop) in enumerate(
-                zip(key_bounds[:-1], key_bounds[1:], strict=True)
-            ):
-                slicer = slice(start, stop)
-                key = sorted_keys[start]
-                outblock, *input_blocks = np.unravel_index(key, ravel_shape)
-                inblock = [_[slicer] for _ in sorted_inblock_idxs]
-                k = keyname(name, i, okey)
-                dsk[k] = Task(
-                    k,
-                    _vindex_slice_and_transpose,
-                    TaskRef((x.name,) + interleave_none(okey, input_blocks)),
-                    interleave_none(full_slices, inblock),
-                    axis,
+    # --- Loop over observations ---
+    for obs_id, (block_coords, block_indices, candidate_chunks) in enumerate(
+        zip(zip(*block_idxs), zip(*inblock_idxs), chunk_idxs)
+    ):
+        # For each candidate chunk associated with this observation
+        for chunk_coords in candidate_chunks:
+            chunk_coords = tuple(chunk_coords)
+
+            # Per-chunk, per-dimension temporary storage
+            reshape_per_dim = []  # reshape definitions per dimension for this chunk
+            input_slices_per_dim = []  # input slices per dimension for this chunk
+            output_slices_per_dim = []  # output slices per dimension for this chunk
+
+            obs_ids.append(obs_id)
+
+            # --- Loop over dimensions ---
+            for dim, coord in enumerate(chunk_coords):
+                # Start with a default reshape vector of 1's for all dimensions
+                reshape = [1] * len(chunk_coords)
+
+                # Input indices in the chunk (where block_indices match coord)
+                mask = block_coords[dim] == coord
+                idx_in_chunk = block_indices[dim][mask]
+
+                # Output indices (location in the output chunk)
+                size = block_coords[dim].size
+                dtype = np.min_scalar_type(size)
+                idx_in_output = np.arange(size, dtype=dtype).reshape(
+                    block_coords[dim].shape
+                )[mask]
+
+                # Update reshape definition for this dimension
+                reshape[dim] = len(idx_in_chunk)
+                reshape_per_dim.append(reshape)
+
+                # Build slices (assume step = 1)
+                input_slices_per_dim.append(
+                    (int(idx_in_chunk[0]), int(idx_in_chunk[-1] + 1), None)
                 )
-                merge_inputs[outblock].append(TaskRef(keyname(name, i, okey)))
-                merge_indexer[outblock].append(sorted_outblock_idx[slicer])
-
-            for i in merge_inputs.keys():
-                k = keyname(vindex_merge_name, i, okey)
-                dsk[k] = Task(
-                    k,
-                    _vindex_merge,
-                    merge_indexer[i],
-                    List(merge_inputs[i]),
+                output_slices_per_dim.append(
+                    (int(idx_in_output[0]), int(idx_in_output[-1] + 1), None)
                 )
 
-        result_1d = Array(
-            HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),
-            out_name,
-            chunks,
-            x.dtype,
-            meta=x._meta,
-        )
-        return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
+            # Save results for this chunk
+            input_blocks.append(tuple(int(c) for c in chunk_coords))
+            input_slices.append(tuple(input_slices_per_dim))
+            output_slices.append(tuple(output_slices_per_dim))
+            reshape_defs.append(tuple(reshape_per_dim))
 
-    # output has a zero dimension, just create a new zero-shape array with the
-    # same dtype
-    from dask.array.wrap import empty
+    # --- Build task names ---
+    slice_task_name = "vindex-slice-" + token
+    merge_task_name = "vindex-merge-" + token
+    dsk = {}
 
-    result_1d = empty(
-        tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype, name=out_name
+    # Single output chunk coordinates (one output chunk for now)
+    out_block_coords = (0,) * len(broadcast_shape)
+
+    # --- Group parts by input chunk ---
+    grouped = defaultdict(
+        lambda: {
+            "in_slices": [],
+            "out_slices": [],
+            "obs_ids": [],
+            "reshape_defs": [],
+        }
     )
-    return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
+    for in_blk, in_sl, out_sl, obs_id, resh in zip(
+        input_blocks, input_slices, output_slices, obs_ids, reshape_defs
+    ):
+        grouped[in_blk]["in_slices"].append(in_sl)
+        grouped[in_blk]["out_slices"].append(out_sl)
+        grouped[in_blk]["obs_ids"].append(obs_id)
+        grouped[in_blk]["reshape_defs"].append(resh)
+
+    # --- Create _vindex_slice tasks ---
+    merge_slices = defaultdict(list)
+    merge_values = defaultdict(list)
+    merge_obs_ids = defaultdict(list)
+    merge_reshape_defs = defaultdict(list)
+
+    for task_idx, (in_blk, data) in enumerate(grouped.items()):
+        task_key = (slice_task_name, task_idx)
+
+        dsk[task_key] = Task(
+            task_key,
+            _vindex_slice,
+            TaskRef((x.name,) + in_blk),  # source chunk
+            data["in_slices"],  # slice definitions
+            data["reshape_defs"],  # reshape definitions
+        )
+
+        merge_slices[out_block_coords].append(data["out_slices"])
+        merge_values[out_block_coords].append(TaskRef(task_key))
+        merge_obs_ids[out_block_coords].append(data["obs_ids"])
+        merge_reshape_defs[out_block_coords].append(data["reshape_defs"])
+
+    # --- Create _vindex_merge tasks ---
+    for blk_coords in merge_values.keys():
+        task_key = (merge_task_name,) + blk_coords
+
+        dsk[task_key] = Task(
+            task_key,
+            _vindex_merge,
+            broadcast_shape,
+            List(merge_slices[blk_coords]),
+            List(merge_values[blk_coords]),
+            List(merge_obs_ids[blk_coords]),
+            List(merge_reshape_defs[blk_coords]),
+        )
+
+    array = Array(
+        HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),
+        out_name,
+        chunks=tuple((i,) for i in broadcast_shape),
+        dtype=x.dtype,
+        meta=x._meta,
+    )
+
+    return array
 
 def _get_axis(indexes):
     """Get axis along which point-wise slicing results lie
@@ -5853,47 +5909,89 @@ def _get_axis(indexes):
     return x2.shape.index(1)
 
 
-def _vindex_slice_and_transpose(block, points, axis):
-    """Pull out point-wise slices from block and rotate block so that
-    points are on the first dimension"""
-    points = [p if isinstance(p, slice) else list(p) for p in points]
-    block = block[tuple(points)]
-    axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
-    return block.transpose(axes)
+def _vindex_slice(block, slice_group, reshape_group):
+    """
+    Extract slices from a block according to slice and reshape definitions.
+
+    Parameters
+    ----------
+    block : np.ndarray
+        The data block to slice.
+    slice_group : list[list[tuple[int, int, Optional[int]]]]
+        Slice definitions, where each slice is a tuple (start, stop, step).
+    reshape_group : list[list[tuple[int, ...]]]
+        Reshape definitions corresponding to each slice.
+
+    Returns
+    -------
+    list[np.ndarray]
+        Extracted sub-arrays from the block.
+    """
+    if len(slice_group) != len(reshape_group):
+        raise ValueError(
+            f"Mismatched lengths: got {len(slice_group)} slice groups "
+            f"but {len(reshape_group)} reshape groups."
+        )
+
+    results = []
+    for slice_defs, reshape_defs in zip(slice_group, reshape_group):
+        index_arrays = [
+            np.arange(start, stop, step or 1).reshape(shape)
+            for (start, stop, step), shape in zip(slice_defs, reshape_defs)
+        ]
+        results.append(block[tuple(index_arrays)])
+
+    return results
 
 
-def _vindex_merge(locations, values):
+def _vindex_merge(
+    output_shape, slices_groups, values_groups, obs_index_groups, reshape_groups
+):
+    """
+    Merge values from different blocks into a single NumPy array,
+    according to provided slices and reshape information.
+
+    Parameters
+    ----------
+    output_shape : tuple[int]
+        Shape of the final merged array.
+    slices_groups : list[list[tuple[int, int, int]]]
+        List of groups of slice definitions for each observation.
+    values_groups : list[list[np.ndarray]]
+        List of groups of arrays corresponding to slices.
+    obs_index_groups : list[list[int]]
+        Indices of the observations in the final output.
+    reshape_groups : list[list[tuple[int]]]
+        Shapes used to reshape the index arrays.
+
+    Returns
+    -------
+    np.ndarray
+        A NumPy array of shape `output_shape` with merged values.
     """
 
-    >>> locations = [0], [2, 1]
-    >>> values = [np.array([[1, 2, 3]]),
-    ...           np.array([[10, 20, 30], [40, 50, 60]])]
+    # Allocate final result array
+    first_dtype = values_groups[0][0].dtype
+    merged_array = np.empty(output_shape, dtype=first_dtype)
 
-    >>> _vindex_merge(locations, values)
-    array([[ 1,  2,  3],
-           [40, 50, 60],
-           [10, 20, 30]])
-    """
-    locations = list(map(list, locations))
-    values = list(values)
+    # Iterate over groups of slices/values/indices/reshapes
+    for slice_group, value_group, obs_group, reshape_group in zip(
+        slices_groups, values_groups, obs_index_groups, reshape_groups
+    ):
+        # Each group corresponds to one chunk
+        for slice_defs, value, obs_index, reshape_defs in zip(
+            slice_group, value_group, obs_group, reshape_group
+        ):
+            # Build index arrays for this slice
+            index_arrays = [
+                np.arange(start, stop, step or 1).reshape(shape)
+                for (start, stop, step), shape in zip(slice_defs, reshape_defs)
+            ]
 
-    n = sum(map(len, locations))
+            # Place the values in the appropriate position of the merged array
+            merged_array[obs_index][tuple(index_arrays)] = value
 
-    shape = list(values[0].shape)
-    shape[0] = n
-    shape = tuple(shape)
-
-    dtype = values[0].dtype
-
-    x = np.empty_like(values[0], dtype=dtype, shape=shape)
-
-    ind = [slice(None, None) for i in range(x.ndim)]
-    for loc, val in zip(locations, values):
-        ind[0] = loc
-        x[tuple(ind)] = val
-
-    return x
-
+    return merged_array
 
 def to_npy_stack(dirname, x, axis=0):
     """Write dask array to a stack of .npy files
