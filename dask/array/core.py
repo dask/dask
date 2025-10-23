@@ -3879,12 +3879,16 @@ def to_zarr(
                 )
 
         if region is None:
-            arr = arr.rechunk(z.chunks)
+            # Get the appropriate write granularity (shard shape if sharding, else chunk shape)
+            write_chunks = _get_zarr_write_chunks(z)
+            arr = arr.rechunk(write_chunks)
             regions = None
         else:
             from dask.array.slicing import new_blockdim, normalize_index
 
-            old_chunks = normalize_chunks(z.chunks, z.shape)
+            # For regions, use the appropriate write granularity
+            write_chunks = _get_zarr_write_chunks(z)
+            old_chunks = normalize_chunks(write_chunks, z.shape)
             index = normalize_index(region, z.shape)
             chunks = tuple(
                 tuple(new_blockdim(s, c, r))
@@ -3940,6 +3944,30 @@ def to_zarr(
         **kwargs,
     )
     return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
+
+
+def _get_zarr_write_chunks(zarr_array) -> tuple[int, ...]:
+    """Get the appropriate chunk shape for writing to a Zarr array.
+
+    For Zarr v3 arrays with sharding, returns the shard shape.
+    For arrays without sharding, returns the chunk shape.
+    For Zarr v2 arrays, returns the chunk shape.
+
+    Parameters
+    ----------
+    zarr_array : zarr.Array
+        The target zarr array
+
+    Returns
+    -------
+    tuple
+        The chunk shape to use for rechunking the dask array
+    """
+    # Zarr V3 array with shards
+    if hasattr(zarr_array, "shards") and zarr_array.shards is not None:
+        return zarr_array.shards
+    # Zarr V3 array without shards, or Zarr V2 array
+    return zarr_array.chunks
 
 
 def _check_regular_chunks(chunkset):
