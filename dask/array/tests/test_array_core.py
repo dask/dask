@@ -5,6 +5,7 @@ import copy
 import pathlib
 import re
 import xml.etree.ElementTree
+from typing import Literal
 
 import pytest
 
@@ -5102,44 +5103,63 @@ def test_regular_chunks(data):
     assert _check_regular_chunks(chunkset) == expected
 
 
-def test_zarr_chunk_shards_mismatch_warns():
+@pytest.mark.parametrize("region_spec", [None, "all", "half"])
+def test_zarr_to_zarr_shards(region_spec: None | Literal["all", "half"]):
     """
     Test that calling to_zarr with a dask array with chunks that do not match the
-    shard shape of the zarr array automatically rechunks to the shard shape to ensure
-    safe writes.
+    shard shape of the zarr array automatically rechunks to a multiple of the
+    shard shape to ensure safe writes.
+
+    This test is parametrized over different regions, because the rechunking logic in
+    to_zarr contains an branch depending on whether a region parameter was specified.
     """
     zarr = pytest.importorskip("zarr", minversion="3.0.0")
-    import numpy as np
 
-    shape = (24,)
-    dask_chunks = (10,)  # Not aligned with shard boundaries
-    zarr_chunk_shape = (4,)  # Inner chunk shape
-    zarr_shard_shape = (12,)  # Shard contains 3 chunks of size 4
+    shape = (100,)
+    dask_chunks = (10,)
+    zarr_chunk_shape = (1,)
+    zarr_shard_shape = (2,)
 
     # Create a dask array with chunks that don't align with shards
     arr = da.arange(shape[0], chunks=dask_chunks)
 
+    # the region parameter we will pass into to_zarr
+    region: tuple[slice, ...] | None
+
+    # The region of the zarr array we will write into
+    sel: tuple[slice, ...]
+
+    if region_spec is None:
+        sel = (slice(None),)
+        region = None
+    elif region_spec == "all":
+        sel = (slice(None),)
+        region = sel
+    else:
+        sel = (slice(shape[0] // 2),)
+        region = sel
+        # crop the source data
+        arr = arr[sel]
+
     # Create a sharded zarr array
     # In Zarr v3: chunks = inner chunk shape, shards = shard shape
     z = zarr.create_array(
-        store={},  # Use in-memory store
+        store={},
         shape=shape,
         chunks=zarr_chunk_shape,
         shards=zarr_shard_shape,
         dtype=arr.dtype,
     )
 
-    # to_zarr should automatically rechunk to shard boundaries
-    result = arr.to_zarr(z, compute=False)
+    # to_zarr should automatically rechunk to a multiple of the shard shape
+    result = arr.to_zarr(z, region=region, compute=False)
 
     # Verify the array was rechunked to the shard shape
-    assert result.chunks == (
-        (zarr_shard_shape[0], zarr_shard_shape[0]),
-    ), f"Expected chunks {((zarr_shard_shape[0], zarr_shard_shape[0]),)}, got {result.chunks}"
+    assert all(c % s == 0 for c, s in zip(result.chunksize, zarr_shard_shape))
 
     # Verify data correctness
     result.compute()
-    assert_eq(z[:], np.arange(shape[0]))
+    assert_eq(z[sel], arr.compute())
 
 
 def test_zarr_nocompute():
