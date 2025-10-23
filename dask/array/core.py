@@ -3877,33 +3877,24 @@ def to_zarr(
                     "Cannot store into in memory Zarr Array using "
                     "the distributed scheduler."
                 )
-
+        zarr_write_chunks = _get_zarr_write_chunks(z)
+        dask_write_chunks = normalize_chunks(
+            chunks="auto",
+            shape=z.shape,
+            dtype=z.dtype,
+            previous_chunks=zarr_write_chunks,
+        )
         if region is None:
             # Get the appropriate write granularity (shard shape if sharding, else chunk shape)
-            zarr_write_chunks = _get_zarr_write_chunks(z)
-            dask_write_chunks = normalize_chunks(
-                chunks="auto",
-                shape=z.shape,
-                dtype=z.dtype,
-                previous_chunks=zarr_write_chunks,
-            )
             arr = arr.rechunk(dask_write_chunks)
             regions = None
         else:
             from dask.array.slicing import new_blockdim, normalize_index
 
-            # For regions, use the appropriate write granularity
-            write_chunks = _get_zarr_write_chunks(z)
-            old_chunks = normalize_chunks(
-                chunks="auto",
-                shape=z.shape,
-                dtype=z.dtype,
-                previous_chunks=write_chunks,
-            )
             index = normalize_index(region, z.shape)
             chunks = tuple(
                 tuple(new_blockdim(s, c, r))
-                for s, c, r in zip(z.shape, old_chunks, index)
+                for s, c, r in zip(z.shape, dask_write_chunks, index)
             )
             arr = arr.rechunk(chunks)
             regions = [region]
