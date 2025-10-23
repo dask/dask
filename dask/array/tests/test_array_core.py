@@ -5102,7 +5102,7 @@ def test_regular_chunks(data):
     assert _check_regular_chunks(chunkset) == expected
 
 
-def test_zarr_shards(tmpdir):
+def test_from_array_respects_zarr_shards():
     """
     Test that da.from_array chooses chunks based on
     the shard shape of a sharded Zarr array instead of the chunk shape
@@ -5110,15 +5110,16 @@ def test_zarr_shards(tmpdir):
     zarr = pytest.importorskip(
         "zarr", minversion="3", reason="Zarr 3 or higher needed for sharding"
     )
-    shape = (12,)
-    z_chunks = (4,)
-    z_shards = (8,)
+    shape = (1000,) * 3
+    z_chunks = (101,) * 3
+    z_shards = (404,) * 3
     z = zarr.create_array(
         {}, shape=shape, chunks=z_chunks, shards=z_shards, dtype="uint8"
     )
 
     dz = da.from_array(z)
-    assert dz.chunksize == z_shards
+    # Check that all elements of nominal chunksize are divisible by the respective shard shape
+    assert all(c % s == 0 for c, s in zip(dz.chunksize, z.shards))
 
 
 def test_zarr_chunk_shards_mismatch_warns():
