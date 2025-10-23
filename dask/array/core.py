@@ -3891,6 +3891,9 @@ def to_zarr(
             if len(dw) >= 1:
                 nominal_dask_chunk_size = dw[0]
                 if not nominal_dask_chunk_size % zw == 0:
+                    safe_chunk_size = np.prod(zarr_write_chunks) * max(
+                        1, z.dtype.itemsize
+                    )
                     msg = (
                         f"The input Dask array will be rechunked along axis {ax} with chunk size "
                         f"{nominal_dask_chunk_size}, but a chunk size divisible by {zw} is "
@@ -3899,8 +3902,8 @@ def to_zarr(
                         '"array.chunk-size" configuration parameter to at least the size in'
                         " bytes of a single on-disk "
                         f"chunk of the Zarr array, which in this case is "
-                        f"{np.prod(zarr_write_chunks) * max(1, z.dtype.itemsize)} bytes. "
-                        'E.g., dask.config.set({"array.chunk-size": 48})'
+                        f"{safe_chunk_size} bytes. "
+                        f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
                     )
                     raise PerformanceWarning(msg)
                     break
