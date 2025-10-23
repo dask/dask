@@ -33,8 +33,6 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
         if lock:
             lock.release()
 
-    return None
-
 
 def to_hdf(
     df,
