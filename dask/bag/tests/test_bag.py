@@ -1780,10 +1780,36 @@ def test_empty_safe_apply_with_fake_sparse():
 
 def test_empty_safe_apply_numpy():
     np = pytest.importorskip("numpy")
-    from dask.bag.core import empty_safe_apply, no_result
 
     def f(x):
         return "ok"
 
     assert empty_safe_apply(f, np.array([]), is_last=False) is no_result
     assert empty_safe_apply(f, np.array([1, 2]), is_last=False) == "ok"
+
+
+@pytest.mark.parametrize("sparse_type", ["csr", "csc", "coo"])
+def test_empty_safe_apply_with_scipy_sparse(sparse_type):
+    """Check behavior with real SciPy sparse matrices."""
+    np = pytest.importorskip("numpy")
+    sp = pytest.importorskip("scipy.sparse")
+
+    def f(x):
+        return "ok"
+
+    sparse_constructor = {
+        "csr": sp.csr_matrix,
+        "csc": sp.csc_matrix,
+        "coo": sp.coo_matrix,
+    }[sparse_type]
+
+    # Empty sparse matrix (no stored elements)
+    empty_mat = sparse_constructor((0, 0))
+    assert empty_safe_apply(f, empty_mat, is_last=False) is no_result
+
+    # Non-empty sparse matrix
+    data = np.array([1, 2, 3])
+    row = np.array([0, 1, 2])
+    col = np.array([0, 1, 2])
+    non_empty = sp.coo_matrix((data, (row, col)), shape=(3, 3)).asformat(sparse_type)
+    assert empty_safe_apply(f, non_empty, is_last=False) == "ok"
