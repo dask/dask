@@ -3884,6 +3884,26 @@ def to_zarr(
             dtype=z.dtype,
             previous_chunks=zarr_write_chunks,
         )
+
+        for ax, (dw, zw) in enumerate(
+            zip(dask_write_chunks, zarr_write_chunks, strict=False)
+        ):
+            if len(dw) >= 1:
+                nominal_dask_chunk_size = dw[0]
+                if not nominal_dask_chunk_size % zw == 0:
+                    msg = (
+                        f"The input Dask array will be rechunked along axis {ax} with chunk size "
+                        f"{nominal_dask_chunk_size}, but a chunk size divisible by {zw} is "
+                        f"required for Dask to write safely to the Zarr array {z}. "
+                        "To avoid risk of data loss when writing to this Zarr array, set the "
+                        '"array.chunk-size" configuration parameter to at least the size in'
+                        " bytes of a single on-disk "
+                        f"chunk of the Zarr array, which in this case is "
+                        f"{np.prod(zarr_write_chunks) * max(1, z.dtype.itemsize)} bytes. "
+                        'E.g., dask.config.set({"array.chunk-size": 48})'
+                    )
+                    raise PerformanceWarning(msg)
+                    break
         if region is None:
             # Get the appropriate write granularity (shard shape if sharding, else chunk shape)
             arr = arr.rechunk(dask_write_chunks)

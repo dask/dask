@@ -32,6 +32,7 @@ from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
     BlockView,
+    PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
     broadcast_shapes,
@@ -5160,6 +5161,36 @@ def test_zarr_to_zarr_shards(region_spec: None | Literal["all", "half"]):
     # Verify data correctness
     result.compute()
     assert_eq(z[sel], arr.compute())
+
+
+def test_zarr_risky_shards_warns():
+    """
+    Test that we see a performance warning when dask chooses a chunk size that will cause data loss
+    for zarr arrays.
+    """
+    zarr = pytest.importorskip("zarr", minversion="3.0.0")
+
+    shape = (100,)
+    dask_chunks = (10,)
+    zarr_chunk_shape = (3,)
+    zarr_shard_shape = (6,)
+
+    arr = da.arange(shape[0], chunks=dask_chunks)
+
+    z = zarr.create_array(
+        store={},
+        shape=shape,
+        chunks=zarr_chunk_shape,
+        shards=zarr_shard_shape,
+        dtype=arr.dtype,
+    )
+
+    with dask.config.set({"array.chunk-size": 1}):
+        with pytest.raises(
+            PerformanceWarning,
+            match="The input Dask array will be rechunked along axis",
+        ):
+            arr.to_zarr(z)
 
 
 def test_zarr_nocompute():
