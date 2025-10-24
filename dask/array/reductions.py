@@ -1567,6 +1567,17 @@ def quantile(
     This works by automatically chunking the reduced axes to a single chunk if necessary
     and then calling ``numpy.quantile`` function across the remaining dimensions
     """
+    if interpolation is not None:
+        warnings.warn(
+            "The `interpolation` argument to quantile was renamed to `method`.",
+            FutureWarning,
+            stacklevel=2,
+        )
+
+        if method != "linear":
+            raise TypeError("Cannot pass interpolation and method keywords!")
+
+        method = interpolation
     if axis is None:
         if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
             raise NotImplementedError(
@@ -1594,7 +1605,6 @@ def quantile(
         np.quantile,
         q=q,
         method=method,
-        interpolation=interpolation,
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
