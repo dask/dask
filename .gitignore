@@ -26,3 +26,4 @@ hdfs-initialized-indicator
 .env
 .history
 env.yaml
+uv.lock
