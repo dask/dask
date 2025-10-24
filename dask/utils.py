@@ -2360,9 +2360,15 @@ def is_empty(obj):
 
     # Sparse-like objects
     if hasattr(obj, "nnz"):
-        return obj.nnz == 0
+        try:
+            return obj.nnz == 0
+        except Exception:
+            pass
     if hasattr(obj, "shape"):
-        return 0 in obj.shape
+        try:
+            return 0 in obj.shape
+        except Exception:
+            pass
 
     # Fallback: assume non-empty
     return False

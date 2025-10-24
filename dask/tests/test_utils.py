@@ -1017,3 +1017,12 @@ def test_is_empty_typeerror_in_len():
         nnz = 0
 
     assert is_empty(FakeObj()) is True
+
+
+def test_is_empty_handles_invalid_nnz_and_shape():
+    class Weird:
+        nnz = "not comparable"
+        shape = "not iterable"
+
+    # The function should handle these gracefully and return False
+    assert is_empty(Weird()) is False
