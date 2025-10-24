@@ -3886,7 +3886,7 @@ def to_zarr(
         )
 
         for ax, (dw, zw) in enumerate(
-            zip(dask_write_chunks, zarr_write_chunks, strict=False)
+            zip(dask_write_chunks, zarr_write_chunks, strict=True)
         ):
             if len(dw) >= 1:
                 nominal_dask_chunk_size = dw[0]
