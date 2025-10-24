@@ -1,18 +1,21 @@
 [build-system]
-requires = ["setuptools>=62.6", "versioneer[toml]==0.29"]
+requires = ["setuptools>=77.0.3", "versioneer[toml]==0.29"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dask"
 description = "Parallel PyData with Task Scheduling"
 maintainers = [{name = "Matthew Rocklin", email = "mrocklin@gmail.com"}]
-license = {text = "BSD-3-Clause"}
+license = "BSD-3-Clause"
+license-files = [
+    "LICENSE.txt",
+    "dask/array/NUMPY_LICENSE.txt",
+]
 keywords = ["task-scheduling parallel numpy pandas pydata"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -87,10 +90,6 @@ dask = "dask.__main__:main"
 [tool.setuptools]
 include-package-data = true
 zip-safe = false
-license-files = [
-    "LICENSE.txt",
-    "dask/array/NUMPY_LICENSE.txt",
-]
 
 [tool.setuptools.packages]
 find = {namespaces = false}
