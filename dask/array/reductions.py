@@ -1639,12 +1639,11 @@ def _custom_quantile(
     q,
     axis=None,
     method="linear",
-    interpolation=None,
     keepdims=False,
     **kwargs,
 ):
     if (
-        not {method, interpolation}.issubset({"linear", None})
+        method != "linear"
         or len(axis) != 1
         or axis[0] != len(a.shape) - 1
         or len(a.shape) == 1
@@ -1657,7 +1656,6 @@ def _custom_quantile(
             q,
             axis=axis,
             method=method,
-            interpolation=interpolation,
             keepdims=keepdims,
             **kwargs,
         )
@@ -1728,6 +1726,18 @@ def nanquantile(
     This works by automatically chunking the reduced axes to a single chunk
     and then calling ``numpy.nanquantile`` function across the remaining dimensions
     """
+    if interpolation is not None:
+        warnings.warn(
+            "The `interpolation` argument to nanquantile was renamed to `method`.",
+            FutureWarning,
+            stacklevel=2,
+        )
+
+        if method != "linear":
+            raise TypeError("Cannot pass interpolation and method keywords!")
+
+        method = interpolation
+
     if axis is None:
         if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
             raise NotImplementedError(
@@ -1761,7 +1771,6 @@ def nanquantile(
         kwargs = {
             "q": q,
             "method": method,
-            "interpolation": interpolation,
             "keepdims": keepdims,
         }
         if NUMPY_GE_200:
