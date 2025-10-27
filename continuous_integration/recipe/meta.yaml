@@ -23,7 +23,7 @@ requirements:
     - python >=3.10
     - pip
     - versioneer =0.29
-    - setuptools >=62.6
+    - setuptools >=77.0.3
     - tomli # [py<311]
 
   run:
