@@ -134,7 +134,7 @@ jobs:
           always() &&
           (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure') &&
           matrix.array-expr == 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.os }}-${{ matrix.environment }}-${{ matrix.extra }}
           path: |
@@ -149,7 +149,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Event File
           path: ${{ github.event_path }}
