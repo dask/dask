@@ -1217,7 +1217,12 @@ def cumreduction(
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 
-    if "dtype" in inspect.signature(func).parameters:
+    try:
+        func_params = inspect.signature(func).parameters
+    except ValueError:
+        func_params = None
+
+    if func_params and "dtype" in func_params:
         m = x.map_blocks(partial(func, dtype=dtype), axis=axis, dtype=dtype)
     else:
         m = x.map_blocks(func, axis=axis, dtype=dtype)
