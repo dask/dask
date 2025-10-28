@@ -116,10 +116,11 @@ ignore = [
     "E721",   # Use `is` and `is not` for type comparisons, or `isinstance()` for isinstance checks
     "E731",   # Do not assign a `lambda` expression, use a `def`
     "E741",   # Ambiguous variable name: `l`
-    "UP007",  # FIXME: extensive changes will be applied in a dedicated upcoming PR
-    "UP031",  # FIXME: extensive changes will be applied in a dedicated upcoming PR
-    "UP032",  # FIXME: extensive changes will be applied in a dedicated upcoming PR
-    "UP033",  # FIXME: extensive changes will be applied in a dedicated upcoming PR
+    # The following rules will make extensive changes, we will adopt these gradually in the future
+    "UP007",  # Update Union type annotations to use the | operator
+    "UP031",  # Replace printf style string formatting with f-strings
+    "UP032",  # Replace .format() style string formatting with f-strings
+    "UP033",  # Use functools.cache instead of functools.lru_cache
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
