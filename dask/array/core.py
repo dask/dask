@@ -3889,22 +3889,47 @@ def to_zarr(
                     "Cannot store into in memory Zarr Array using "
                     "the distributed scheduler."
                 )
+        zarr_write_chunks = _get_zarr_write_chunks(z)
+        dask_write_chunks = normalize_chunks(
+            chunks="auto",
+            shape=z.shape,
+            dtype=z.dtype,
+            previous_chunks=zarr_write_chunks,
+        )
 
+        for ax, (dw, zw) in enumerate(
+            zip(dask_write_chunks, zarr_write_chunks, strict=True)
+        ):
+            if len(dw) >= 1:
+                nominal_dask_chunk_size = dw[0]
+                if not nominal_dask_chunk_size % zw == 0:
+                    safe_chunk_size = np.prod(zarr_write_chunks) * max(
+                        1, z.dtype.itemsize
+                    )
+                    msg = (
+                        f"The input Dask array will be rechunked along axis {ax} with chunk size "
+                        f"{nominal_dask_chunk_size}, but a chunk size divisible by {zw} is "
+                        f"required for Dask to write safely to the Zarr array {z}. "
+                        "To avoid risk of data loss when writing to this Zarr array, set the "
+                        '"array.chunk-size" configuration parameter to at least the size in'
+                        " bytes of a single on-disk "
+                        f"chunk (or shard) of the Zarr array, which in this case is "
+                        f"{safe_chunk_size} bytes. "
+                        f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
+                    )
+                    raise PerformanceWarning(msg)
+                    break
         if region is None:
             # Get the appropriate write granularity (shard shape if sharding, else chunk shape)
-            write_chunks = _get_zarr_write_chunks(z)
-            arr = arr.rechunk(write_chunks)
+            arr = arr.rechunk(dask_write_chunks)
             regions = None
         else:
             from dask.array.slicing import new_blockdim, normalize_index
 
-            # For regions, use the appropriate write granularity
-            write_chunks = _get_zarr_write_chunks(z)
-            old_chunks = normalize_chunks(write_chunks, z.shape)
             index = normalize_index(region, z.shape)
             chunks = tuple(
                 tuple(new_blockdim(s, c, r))
-                for s, c, r in zip(z.shape, old_chunks, index)
+                for s, c, r in zip(z.shape, dask_write_chunks, index)
             )
             arr = arr.rechunk(chunks)
             regions = [region]
