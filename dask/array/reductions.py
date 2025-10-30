@@ -1223,6 +1223,7 @@ def cumreduction(
         use_dtype = "dtype" in func_params
     except ValueError:
         try:
+            # np.ufunc.accumulate doesn't have a signature, but it does accept dtype
             if isinstance(func.__self__, np.ufunc) and func.__name__ == "accumulate":
                 use_dtype = True
         except AttributeError:
