@@ -1217,7 +1217,18 @@ def cumreduction(
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 
-    if "dtype" in inspect.signature(func).parameters:
+    use_dtype = False
+    try:
+        func_params = inspect.signature(func).parameters
+        use_dtype = "dtype" in func_params
+    except ValueError:
+        try:
+            if isinstance(func.__self__, np.ufunc) and func.__name__ == "accumulate":
+                use_dtype = True
+        except AttributeError:
+            pass
+
+    if use_dtype:
         m = x.map_blocks(partial(func, dtype=dtype), axis=axis, dtype=dtype)
     else:
         m = x.map_blocks(func, axis=axis, dtype=dtype)
