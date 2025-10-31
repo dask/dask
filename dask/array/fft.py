@@ -185,9 +185,8 @@ def fft_wrap(fft_func, kind=None, dtype=None, allow_fftpack=False):
                     axes = tuple(range(len(s)))
             else:
                 axes = (-1,)
-        else:
-            if len(set(axes)) < len(axes):
-                raise ValueError("Duplicate axes not allowed.")
+        elif len(set(axes)) < len(axes):
+            raise ValueError("Duplicate axes not allowed.")
 
         _dtype = dtype
         if _dtype is None:
