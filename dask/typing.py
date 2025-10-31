@@ -25,7 +25,7 @@ CollType_co = TypeVar("CollType_co", bound="DaskCollection", covariant=True)
 PostComputeCallable = Callable
 
 
-Key: TypeAlias = Union[str, int, float, tuple["Key", ...]]
+Key: TypeAlias = str | int | float | tuple["Key", ...]
 # FIXME: This type is a little misleading. Low level graphs are often
 # MutableMappings but HLGs are not
 Graph: TypeAlias = Mapping[Key, Any]

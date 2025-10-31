@@ -19,7 +19,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Literal, TypeVar, Union, cast
+from typing import Any, Literal, TypeVar, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -101,7 +101,7 @@ try:
 except ImportError:
     ARRAY_TEMPLATE = None
 
-T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
+T_IntOrNaN = int | float  # Should be int | Literal[np.nan]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
