@@ -18,7 +18,7 @@ import dask
 from dask.base import is_dask_collection
 from dask.core import get_deps
 from dask.dataframe._compat import PANDAS_GE_300, tm  # noqa: F401
-from dask.dataframe.dispatch import (  # noqa : F401
+from dask.dataframe.dispatch import (  # noqa: F401
     is_categorical_dtype_dispatch,
     make_meta,
     make_meta_obj,

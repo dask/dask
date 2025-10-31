@@ -1843,9 +1843,7 @@ def _divisions_from_statistics(aggregated_stats, index_name):
             col_ix = ix
             break
     else:
-        raise ValueError(
-            f"Index column {index_name} not found in statistics"  # noqa: E713
-        )
+        raise ValueError(f"Index column {index_name} not found in statistics")
     last_max = None
     minmax = []
     for file_stats in aggregated_stats:
