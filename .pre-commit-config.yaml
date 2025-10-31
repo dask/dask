@@ -7,13 +7,7 @@ repos:
     rev: v0.14.2
     hooks:
       - id: ruff-check
-  - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 25.11.0
-    hooks:
-      - id: black
-        language_version: python3
-        args:
-          - --target-version=py310
+      - id: ruff-format
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:

@@ -93,9 +93,6 @@ find = {namespaces = false}
 [tool.setuptools.package-data]
 dask = ["py.typed"]
 
-[tool.ruff]
-line-length = 120
-
 [tool.ruff.lint]
 # By default, Ruff enables Flake8's F rules, along with a subset of the
 # E rules, omitting any stylistic rules that overlap with the use of a
