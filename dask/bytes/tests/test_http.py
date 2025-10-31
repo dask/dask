@@ -179,7 +179,7 @@ def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
     pa = pytest.importorskip(engine)
-    if Version(pa.__version__) == Version("22.0.0"):
+    if Version(pa.__version__) >= Version("22.0.0"):
         pytest.skip(reason="https://github.com/apache/arrow/issues/47981")
 
     df = dd.read_parquet(
