@@ -61,9 +61,9 @@ except TypeError:
 
     ma_divide = np.ma.core._DomainedBinaryOperation(
         divide,
-        np.ma.core._DomainSafeDivide(),
+        np.ma.core._DomainSafeDivide(),  # type: ignore
         0,
-        1,  # type: ignore
+        1,
     )
 
 
