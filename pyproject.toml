@@ -1,5 +1,11 @@
 [build-system]
+<<<<<<< HEAD
 requires = ["setuptools>=77.0.3", "versioneer[toml]==0.29"]
+||||||| parent of 21ad73996 (versioneer → setuptools_scm)
+requires = ["setuptools>=62.6", "versioneer[toml]==0.29"]
+=======
+requires = ["setuptools>=62.6", "setuptools_scm[toml]>=6.0"]
+>>>>>>> 21ad73996 (versioneer → setuptools_scm)
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -87,9 +93,6 @@ cupy = "dask.array.cupy_entry_point:CupyBackendEntrypoint"
 [project.scripts]
 dask = "dask.__main__:main"
 
-[tool.setuptools.packages]
-find = {namespaces = false}
-
 [tool.setuptools.package-data]
 dask = ["py.typed"]
 
@@ -139,13 +142,8 @@ known_first_party = ["dask"]
 known_distributed = ["distributed"]
 add_imports = ["from __future__ import annotations"]
 
-[tool.versioneer]
-VCS = "git"
-style = "pep440"
-versionfile_source = "dask/_version.py"
-versionfile_build = "dask/_version.py"
-tag_prefix = ""
-parentdir_prefix = "dask-"
+[tool.setuptools_scm]
+write_to = "dask/_version.py"
 
 [tool.pytest.ini_options]
 markers = [
