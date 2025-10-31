@@ -6,7 +6,7 @@ import pytest
 
 distributed = pytest.importorskip("distributed")
 
-from distributed.utils_test import *  # noqa F401, F403
+from distributed.utils_test import *  # noqa: F401, F403
 from distributed.utils_test import gen_cluster
 
 import dask.dataframe as dd

@@ -9,17 +9,15 @@ repos:
     hooks:
       - id: absolufy-imports
         name: absolufy-imports
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.2
+    hooks:
+      - id: ruff-check
   - repo: https://github.com/pycqa/isort
     rev: 6.0.1
     hooks:
       - id: isort
         language_version: python3
-  - repo: https://github.com/asottile/pyupgrade
-    rev: v3.19.1
-    hooks:
-      - id: pyupgrade
-        args:
-          - --py310-plus
   - repo: https://github.com/psf/black
     rev: 25.1.0
     hooks:
@@ -27,15 +25,6 @@ repos:
         language_version: python3
         args:
           - --target-version=py310
-  - repo: https://github.com/pycqa/flake8
-    rev: 7.2.0
-    hooks:
-      - id: flake8
-        language_version: python3
-        additional_dependencies:
-          # NOTE: autoupdate does not pick up flake8-bugbear since it is a transitive
-          #  dependency. Make sure to update flake8-bugbear manually on a regular basis.
-          - flake8-bugbear==24.8.19
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:

@@ -2521,7 +2521,7 @@ def test_groupby_grouper_dispatch(key):
     cudf = pytest.importorskip("cudf")
 
     # not directly used but must be imported
-    pytest.importorskip("dask_cudf")  # noqa: F841
+    pytest.importorskip("dask_cudf")
 
     pdf = pd.DataFrame(
         {
@@ -2555,7 +2555,7 @@ def test_groupby_apply_cudf(group_keys):
     # implied shuffle works for the `cudf` backend
 
     # Make sure test is skipped without dask_cudf
-    pytest.importorskip("dask_cudf")  # noqa: F841
+    pytest.importorskip("dask_cudf")
     cudf = pytest.importorskip("cudf")
 
     df = pd.DataFrame({"a": [1, 2, 3, 1, 2, 3], "b": [4, 5, 6, 7, 8, 9]})

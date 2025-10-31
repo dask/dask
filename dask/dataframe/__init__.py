@@ -14,7 +14,7 @@ def _dask_expr_enabled() -> bool:
 _dask_expr_enabled()
 
 
-import dask.array._array_expr._backends  # Import this to register array dispatch # noqa: F401
+import dask.array._array_expr._backends  # Import this to register array dispatch
 
 # Ensure that dtypes are registered
 import dask.dataframe._dtypes

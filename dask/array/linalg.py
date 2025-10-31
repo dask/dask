@@ -1256,7 +1256,7 @@ def solve(a, b, sym_pos=None, assume_a="gen"):
         b = p.T.dot(b)
     else:
         raise ValueError(
-            f"{assume_a = } is not a recognized matrix structure, "  # noqa: E251
+            f"{assume_a = } is not a recognized matrix structure, "
             "valid structures in Dask are 'pos' and 'gen'."
         )
 

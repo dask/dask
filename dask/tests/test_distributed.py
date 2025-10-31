@@ -14,9 +14,9 @@ from operator import add
 from packaging.version import Version
 
 from distributed import Client, SchedulerPlugin, futures_of, wait
-from distributed.utils_test import cleanup  # noqa F401
-from distributed.utils_test import client as c  # noqa F401
-from distributed.utils_test import (  # noqa F401
+from distributed.utils_test import cleanup  # noqa: F401
+from distributed.utils_test import client as c  # noqa: F401
+from distributed.utils_test import (  # noqa: F401
     cluster,
     cluster_fixture,
     gen_cluster,
@@ -259,7 +259,7 @@ async def test_local_get_with_distributed_active(c, s, a, b):
     await asyncio.sleep(0.01)
     assert not s.tasks  # scheduler hasn't done anything
 
-    x = delayed(inc)(2).persist(scheduler="sync")  # noqa F841
+    x = delayed(inc)(2).persist(scheduler="sync")  # noqa: F841
     await asyncio.sleep(0.01)
     assert not s.tasks  # scheduler hasn't done anything
 

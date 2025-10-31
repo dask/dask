@@ -1,5 +1,3 @@
-# flake8: noqa
-
 from __future__ import annotations
 
 _import_error_message = (
@@ -10,7 +8,7 @@ _import_error_message = (
 )
 
 try:
-    from distributed import *
+    from distributed import *  # noqa: F403
 except ImportError as e:
     if e.msg == "No module named 'distributed'":
         raise ImportError(_import_error_message) from e
