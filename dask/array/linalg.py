@@ -920,9 +920,9 @@ def svd(a, coerce_signs=True):
     nb = a.numblocks
     if a.ndim != 2:
         raise ValueError(
-            "Array must be 2D.\n"
-            "Input shape: {}\n"
-            "Input ndim: {}\n".format(a.shape, a.ndim)
+            "Array must be 2D.\nInput shape: {}\nInput ndim: {}\n".format(
+                a.shape, a.ndim
+            )
         )
     if nb[0] > 1 and nb[1] > 1:
         raise NotImplementedError(
@@ -1132,10 +1132,7 @@ def solve_triangular(a, b, lower=False):
         if a.shape[1] != b.shape[0]:
             raise ValueError("a.shape[1] and b.shape[0] must be equal")
         if a.chunks[1] != b.chunks[0]:
-            msg = (
-                "a.chunks[1] and b.chunks[0] must be equal. "
-                "Use .rechunk method to change the size of chunks."
-            )
+            msg = "a.chunks[1] and b.chunks[0] must be equal. Use .rechunk method to change the size of chunks."
             raise ValueError(msg)
     else:
         raise ValueError("b must be 1 or 2 dimensional")
@@ -1256,8 +1253,7 @@ def solve(a, b, sym_pos=None, assume_a="gen"):
         b = p.T.dot(b)
     else:
         raise ValueError(
-            f"{assume_a = } is not a recognized matrix structure, "
-            "valid structures in Dask are 'pos' and 'gen'."
+            f"{assume_a = } is not a recognized matrix structure, valid structures in Dask are 'pos' and 'gen'."
         )
 
     uy = solve_triangular(l, b, lower=True)

@@ -173,9 +173,8 @@ async def test_merge_p2p_shuffle_reused_dataframe_with_different_parameters(c, s
     out = (
         ddf1.merge(ddf2, left_on="a", right_on="x", shuffle_method="p2p")
         # Vary the number of output partitions for the shuffles of dd2
-        .repartition(npartitions=20).merge(
-            ddf2, left_on="b", right_on="x", shuffle_method="p2p"
-        )
+        .repartition(npartitions=20)
+        .merge(ddf2, left_on="b", right_on="x", shuffle_method="p2p")
     )
     # Generate unique shuffle IDs if the input frame is the same but
     # parameters differ. Reusing shuffles in merges is dangerous because of the

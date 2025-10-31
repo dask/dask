@@ -618,7 +618,6 @@ def test_read_parquet_index_projection(tmpdir):
     "ignore:.*Client.*asynchronous:UserWarning",
 )
 def test_ensure_plan_computed_during_optimization(tmpdir, filesystem):
-
     pytest.importorskip("distributed")
     from distributed.utils_test import gen_cluster
 

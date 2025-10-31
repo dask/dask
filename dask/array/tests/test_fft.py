@@ -27,7 +27,6 @@ all_nd_funcnames = [
 ]
 
 if not da._array_expr_enabled():
-
     nparr = np.arange(100).reshape(10, 10)
     darr = da.from_array(nparr, chunks=(1, 10))
     darr2 = da.from_array(nparr, chunks=(10, 1))

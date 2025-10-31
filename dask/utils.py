@@ -249,17 +249,11 @@ def _deprecated_kwarg(
                     )
                 else:
                     new_arg_value = old_arg_value
-                    msg = (
-                        f"the {repr(old_arg_name)} keyword is deprecated, "
-                        f"use {repr(new_arg_name)} instead."
-                    )
+                    msg = f"the {repr(old_arg_name)} keyword is deprecated, use {repr(new_arg_name)} instead."
 
                 warnings.warn(msg + comment_, FutureWarning, stacklevel=stacklevel)
                 if kwargs.get(new_arg_name) is not None:
-                    msg = (
-                        f"Can only specify {repr(old_arg_name)} "
-                        f"or {repr(new_arg_name)}, not both."
-                    )
+                    msg = f"Can only specify {repr(old_arg_name)} or {repr(new_arg_name)}, not both."
                     raise TypeError(msg)
                 kwargs[new_arg_name] = new_arg_value
             return func(*args, **kwargs)

@@ -852,9 +852,7 @@ class Expr:
                 return self.operands[idx]
 
             raise AttributeError(
-                f"{err}\n\n"
-                "This often means that you are attempting to use an unsupported "
-                f"API function.."
+                f"{err}\n\nThis often means that you are attempting to use an unsupported API function.."
             )
 
 
@@ -1001,7 +999,6 @@ class HLGExpr(Expr):
         # Delayed objects still ship with low level graphs as `dask` when going
         # through optimize / persist
         if not isinstance(dsk, HighLevelGraph):
-
             dsk = HighLevelGraph.from_collections(
                 str(id(collection)), dsk, dependencies=()
             )
@@ -1088,7 +1085,6 @@ class _HLGExprGroup(HLGExpr):
 
 
 class _HLGExprSequence(Expr):
-
     def __getitem__(self, other):
         return self.operands[other]
 
@@ -1300,7 +1296,6 @@ def _convert_dask_keys(keys):
 
 
 class HLGFinalizeCompute(HLGExpr):
-
     def _simplify_down(self):
         if not self.postcompute:
             return self.dsk

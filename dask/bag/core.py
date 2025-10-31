@@ -1189,10 +1189,7 @@ class Bag(DaskMethodsMixin):
                 other = other.__dask_keys__()[0]
                 dsk["join-%s-other" % name] = (list, other)
             else:
-                msg = (
-                    "Multi-bag joins are not implemented. "
-                    "We recommend Dask dataframe if appropriate"
-                )
+                msg = "Multi-bag joins are not implemented. We recommend Dask dataframe if appropriate"
                 raise NotImplementedError(msg)
         elif isinstance(other, Delayed):
             dsk.update(other.dask)
@@ -1441,8 +1438,9 @@ class Bag(DaskMethodsMixin):
             npartitions = self.npartitions
         if npartitions > self.npartitions:
             raise ValueError(
-                "only {} partitions, take "
-                "received {}".format(self.npartitions, npartitions)
+                "only {} partitions, take received {}".format(
+                    self.npartitions, npartitions
+                )
             )
 
         token = tokenize(self, k, npartitions)

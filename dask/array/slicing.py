@@ -635,8 +635,9 @@ def take(outname, inname, chunks, index, axis=0):
         slices = tuple(slices)
         chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks)))
         dsk = {
-            (outname,)
-            + ct: Task((outname,) + ct, getitem, TaskRef((inname,) + ct), slices)
+            (outname,) + ct: Task(
+                (outname,) + ct, getitem, TaskRef((inname,) + ct), slices
+            )
             for ct in chunk_tuples
         }
         return chunks, dsk
@@ -918,8 +919,7 @@ def check_index(axis, ind, dimension):
         if ind.dtype == bool:
             if ind.size != dimension:
                 raise IndexError(
-                    f"Boolean array with size {ind.size} is not long enough "
-                    f"for axis {axis} with size {dimension}"
+                    f"Boolean array with size {ind.size} is not long enough for axis {axis} with size {dimension}"
                 )
         elif (ind >= dimension).any() or (ind < -dimension).any():
             raise IndexError(
@@ -981,8 +981,7 @@ def slice_with_int_dask_array(x, index):
                 out_index.append(slice(None))
             else:
                 raise NotImplementedError(
-                    "Slicing with dask.array of ints only permitted when "
-                    "the indexer has zero or one dimensions"
+                    "Slicing with dask.array of ints only permitted when the indexer has zero or one dimensions"
                 )
         else:
             out_index.append(idx)
@@ -1003,8 +1002,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     if np.isnan(x.chunks[axis]).any():
         raise NotImplementedError(
-            "Slicing an array with unknown chunks with "
-            "a dask.array of ints is not supported"
+            "Slicing an array with unknown chunks with a dask.array of ints is not supported"
         )
 
     # Calculate the offset at which each chunk starts along axis
@@ -1306,14 +1304,12 @@ def parse_assignment_indices(indices, shape):
     for index in indices:
         if index is True or index is False:
             raise NotImplementedError(
-                "dask does not yet implement assignment to a scalar "
-                f"boolean index: {index!r}"
+                f"dask does not yet implement assignment to a scalar boolean index: {index!r}"
             )
 
         if (is_arraylike(index) or is_dask_collection(index)) and not index.ndim:
             raise NotImplementedError(
-                "dask does not yet implement assignment to a scalar "
-                f"numpy or dask array index: {index!r}"
+                f"dask does not yet implement assignment to a scalar numpy or dask array index: {index!r}"
             )
 
     # Initialize output variables
@@ -1393,8 +1389,7 @@ def parse_assignment_indices(indices, shape):
 
             if index.ndim != 1:
                 raise IndexError(
-                    f"Incorrect shape ({index.shape}) of integer "
-                    f"indices for dimension with size {size}"
+                    f"Incorrect shape ({index.shape}) of integer indices for dimension with size {size}"
                 )
 
             index_size = index.size
@@ -1787,8 +1782,7 @@ def setitem_array(out_name, array, indices, value):
         # All of the extra leading dimensions must have size 1
         if value_shape[:value_offset] != (1,) * value_offset:
             raise ValueError(
-                "could not broadcast input array from shape"
-                f"{value_shape} into shape {tuple(implied_shape)}"
+                f"could not broadcast input array from shape{value_shape} into shape {tuple(implied_shape)}"
             )
 
     base_value_indices = []

@@ -184,8 +184,7 @@ def _load_config_file(path: str) -> dict | None:
         return None
     except Exception as exc:
         raise ValueError(
-            f"A dask config file at {path!r} is malformed, original error "
-            f"message:\n\n{exc}"
+            f"A dask config file at {path!r} is malformed, original error message:\n\n{exc}"
         ) from None
     if config is not None and not isinstance(config, dict):
         raise ValueError(
@@ -785,8 +784,7 @@ def check_deprecations(
         new = deprecations[old]
         if new:
             warnings.warn(
-                f"Dask configuration key {key!r} has been deprecated; "
-                f"please use {new!r} instead",
+                f"Dask configuration key {key!r} has been deprecated; please use {new!r} instead",
                 FutureWarning,
             )
             return new

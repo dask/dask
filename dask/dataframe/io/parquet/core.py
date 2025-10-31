@@ -605,8 +605,9 @@ def set_index_columns(meta, index, columns, auto_index_allowed):
                 )
             else:
                 raise ValueError(
-                    "Specified index and column arguments must not intersect.\n"
-                    "index: {} | column: {}".format(index, columns)
+                    "Specified index and column arguments must not intersect.\nindex: {} | column: {}".format(
+                        index, columns
+                    )
                 )
 
     return meta[list(columns)], index, columns

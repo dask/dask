@@ -295,9 +295,7 @@ def test_xarray_not_in_memory():
             arr,
             dims=["coord"],
             coords={"coord": ind},
-        ).rename(
-            "foo"
-        ).to_dataset().to_zarr(path)
+        ).rename("foo").to_dataset().to_zarr(path)
         dataset = xr.open_zarr(path, chunks={"foo": 10})
         assert not dataset.foo._in_memory
         assert sizeof(ind) < sizeof(dataset) < sizeof(arr) + sizeof(ind)

@@ -354,8 +354,7 @@ def meta_nonempty_object(x):
         return _nonempty_scalar(x)
     else:
         raise TypeError(
-            "Expected Pandas-like Index, Series, DataFrame, or scalar, "
-            f"got {typename(type(x))}"
+            f"Expected Pandas-like Index, Series, DataFrame, or scalar, got {typename(type(x))}"
         )
 
 

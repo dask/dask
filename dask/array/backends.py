@@ -182,8 +182,8 @@ def register_cupyx():
             return hstack(L)
         else:
             msg = (
-                "Can only concatenate cupy sparse matrices for axis in "
-                "{0, 1}.  Got %s" % axis
+                "Can only concatenate cupy sparse matrices for axis in {0, 1}.  Got %s"
+                % axis
             )
             raise ValueError(msg)
 
@@ -223,8 +223,8 @@ def register_scipy_sparse():
             return scipy.sparse.hstack(L)
         else:
             msg = (
-                "Can only concatenate scipy sparse matrices for axis in "
-                "{0, 1}.  Got %s" % axis
+                "Can only concatenate scipy sparse matrices for axis in {0, 1}.  Got %s"
+                % axis
             )
             raise ValueError(msg)
 

@@ -55,8 +55,7 @@ def from_tiledb(uri, attribute=None, chunks=None, storage_options=None, **kwargs
     if not attribute:
         if tdb.schema.nattr > 1:
             raise TypeError(
-                "keyword 'attribute' must be provided"
-                "when loading a multi-attribute TileDB array"
+                "keyword 'attribute' must be providedwhen loading a multi-attribute TileDB array"
             )
         else:
             attribute = tdb.schema.attr(0).name
@@ -138,8 +137,7 @@ def to_tiledb(
 
     if not core._check_regular_chunks(darray.chunks):
         raise ValueError(
-            "Attempt to save array to TileDB with irregular "
-            "chunking, please call `arr.rechunk(...)` first."
+            "Attempt to save array to TileDB with irregular chunking, please call `arr.rechunk(...)` first."
         )
 
     if isinstance(uri, str):
@@ -157,8 +155,7 @@ def to_tiledb(
             )
     else:
         raise ValueError(
-            "'uri' must be string pointing to supported TileDB store location "
-            "or an open, writable TileDB array."
+            "'uri' must be string pointing to supported TileDB store location or an open, writable TileDB array."
         )
 
     if not (tdb.isopen and tdb.iswritable):

@@ -1104,8 +1104,7 @@ def _ensure_not_async(client):
             return get_scheduler(scheduler=fallback)
         else:
             raise RuntimeError(
-                "Attempting to use an asynchronous "
-                "Client in a synchronous context of `dask.compute`"
+                "Attempting to use an asynchronous Client in a synchronous context of `dask.compute`"
             )
     return client.get
 

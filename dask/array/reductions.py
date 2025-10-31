@@ -1485,8 +1485,7 @@ def median(a, axis=None, keepdims=False, out=None):
     """
     if axis is None:
         raise NotImplementedError(
-            "The da.median function only works along an axis.  "
-            "The full algorithm is difficult to do in parallel"
+            "The da.median function only works along an axis.  The full algorithm is difficult to do in parallel"
         )
 
     if not isinstance(axis, Iterable):
@@ -1594,8 +1593,7 @@ def quantile(
     if axis is None:
         if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
             raise NotImplementedError(
-                "The da.quantile function only works along an axis.  "
-                "The full algorithm is difficult to do in parallel"
+                "The da.quantile function only works along an axis.  The full algorithm is difficult to do in parallel"
             )
         else:
             axis = tuple(range(len(a.shape)))

@@ -179,8 +179,7 @@ class Concat(Expr):
 
             else:
                 raise ValueError(
-                    "Unable to concatenate DataFrame with unknown "
-                    "division specifying axis=1"
+                    "Unable to concatenate DataFrame with unknown division specifying axis=1"
                 )
 
         cast_dfs = []
@@ -291,7 +290,6 @@ class Concat(Expr):
 
 
 class StackPartition(Concat):
-
     def _layer(self):
         dsk, i = {}, 0
         kwargs = self._kwargs.copy()

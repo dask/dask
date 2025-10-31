@@ -426,9 +426,8 @@ def meta_warning(df, method="apply"):
     )
     if meta_str:
         msg += (
-            "\n"
-            f"  Before: .{method}(func)\n"
-            f"  After:  .{method}(func, meta=%s)\n" % str(meta_str)
+            f"\n  Before: .{method}(func)\n  After:  .{method}(func, meta=%s)\n"
+            % str(meta_str)
         )
     return msg
 

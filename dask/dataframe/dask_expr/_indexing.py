@@ -41,10 +41,7 @@ class Indexer:
 
 class ILocIndexer(Indexer):
     def __getitem__(self, key):
-        msg = (
-            "'DataFrame.iloc' only supports selecting columns. "
-            "It must be used like 'df.iloc[:, column_indexer]'."
-        )
+        msg = "'DataFrame.iloc' only supports selecting columns. It must be used like 'df.iloc[:, column_indexer]'."
         if not isinstance(key, tuple):
             raise NotImplementedError(msg)
 
@@ -118,10 +115,7 @@ class LocIndexer(Indexer):
             ):
                 # applying map_partitions to each partition
                 # results in duplicated NaN rows
-                msg = (
-                    "Cannot index with list against unknown division. "
-                    "Try setting divisions using ``ddf.set_index``"
-                )
+                msg = "Cannot index with list against unknown division. Try setting divisions using ``ddf.set_index``"
                 raise KeyError(msg)
             elif not isinstance(iindexer, slice):
                 iindexer = slice(iindexer, iindexer)

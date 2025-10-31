@@ -202,8 +202,7 @@ def _open_input_files(
         cache_type = kwargs.pop("cache_type", "parts")
         if cache_type != "parts":
             raise ValueError(
-                f"'parts' `cache_type` required for 'parquet' precaching,"
-                f" got {cache_type}."
+                f"'parts' `cache_type` required for 'parquet' precaching, got {cache_type}."
             )
         return [
             _set_context(

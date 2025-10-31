@@ -200,8 +200,7 @@ def read_json(
         raise ValueError('Line-delimited JSON is only available with orient="records".')
     if blocksize and (orient != "records" or not lines):
         raise ValueError(
-            "JSON file chunking only allowed for JSON-lines"
-            "input (orient='records', lines=True)."
+            "JSON file chunking only allowed for JSON-linesinput (orient='records', lines=True)."
         )
     storage_options = storage_options or {}
     if include_path_column is True:

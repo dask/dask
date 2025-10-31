@@ -492,8 +492,9 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
         tb = "".join(traceback.format_tb(exc_traceback))
         suggest = (
             (
-                "Please specify the dtype explicitly using the "
-                "`{dtype}` kwarg.\n\n".format(dtype=suggest_dtype)
+                "Please specify the dtype explicitly using the `{dtype}` kwarg.\n\n".format(
+                    dtype=suggest_dtype
+                )
             )
             if suggest_dtype
             else ""
@@ -847,8 +848,7 @@ def map_blocks(
         ndim_out = len(out_ind)
         if any(i < -ndim_out or i >= ndim_out for i in drop_axis):
             raise ValueError(
-                f"drop_axis out of range (drop_axis={drop_axis}, "
-                f"but output is {ndim_out}d)."
+                f"drop_axis out of range (drop_axis={drop_axis}, but output is {ndim_out}d)."
             )
         drop_axis = [i % ndim_out for i in drop_axis]
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
@@ -1035,8 +1035,7 @@ def apply_and_enforce(*args, **kwargs):
     if getattr(out, "ndim", 0) != expected_ndim:
         out_ndim = getattr(out, "ndim", 0)
         raise ValueError(
-            f"Dimension mismatch: expected output of {func} "
-            f"to have dims = {expected_ndim}.  Got {out_ndim} instead."
+            f"Dimension mismatch: expected output of {func} to have dims = {expected_ndim}.  Got {out_ndim} instead."
         )
     return out
 
@@ -1562,10 +1561,7 @@ class Array(DaskMethodsMixin):
         if not self.chunks:
             raise TypeError("len() of unsized object")
         if np.isnan(self.chunks[0]).any():
-            msg = (
-                "Cannot call len() on object with unknown chunk size."
-                f"{unknown_chunk_message}"
-            )
+            msg = f"Cannot call len() on object with unknown chunk size.{unknown_chunk_message}"
             raise ValueError(msg)
         return int(sum(self.chunks[0]))
 
@@ -1709,14 +1705,12 @@ class Array(DaskMethodsMixin):
     def __array__(self, dtype=None, copy=None, **kwargs):
         if kwargs:
             warnings.warn(
-                f"Extra keyword arguments {kwargs} are ignored and won't be "
-                "accepted in the future",
+                f"Extra keyword arguments {kwargs} are ignored and won't be accepted in the future",
                 FutureWarning,
             )
         if copy is False:
             warnings.warn(
-                "Can't acquire a memory view of a Dask array. "
-                "This will raise in the future.",
+                "Can't acquire a memory view of a Dask array. This will raise in the future.",
                 FutureWarning,
             )
 
@@ -1881,8 +1875,7 @@ class Array(DaskMethodsMixin):
     def __bool__(self):
         if self.size > 1:
             raise ValueError(
-                f"The truth value of a {self.__class__.__name__} is ambiguous. "
-                "Use a.any() or a.all()."
+                f"The truth value of a {self.__class__.__name__} is ambiguous. Use a.any() or a.all()."
             )
         else:
             return bool(self.compute())
@@ -1942,8 +1935,7 @@ class Array(DaskMethodsMixin):
 
             if not match.all():
                 raise IndexError(
-                    f"boolean index shape {key.shape} must match indexed array's "
-                    f"{self.shape}."
+                    f"boolean index shape {key.shape} must match indexed array's {self.shape}."
                 )
 
             # If value has ndim > 0, they must be broadcastable to self.shape[idx].
@@ -2052,8 +2044,9 @@ class Array(DaskMethodsMixin):
             key = (key,)
         if any(k is None for k in key):
             raise IndexError(
-                "vindex does not support indexing with None (np.newaxis), "
-                "got {}".format(key)
+                "vindex does not support indexing with None (np.newaxis), got {}".format(
+                    key
+                )
             )
         if all(isinstance(k, slice) for k in key):
             if all(
@@ -2341,8 +2334,7 @@ class Array(DaskMethodsMixin):
             return self
         elif not np.can_cast(self.dtype, dtype, casting=casting):
             raise TypeError(
-                f"Cannot cast array from {self.dtype!r} to {dtype!r} "
-                f"according to the rule {casting!r}"
+                f"Cannot cast array from {self.dtype!r} to {dtype!r} according to the rule {casting!r}"
             )
         return self.map_blocks(chunk.astype, dtype=dtype, astype_dtype=dtype, **kwargs)
 
@@ -3181,8 +3173,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     if shape and len(chunks) != len(shape):
         raise ValueError(
-            "Chunks and shape must be of the same length/dimension. "
-            "Got chunks=%s, shape=%s" % (chunks, shape)
+            "Chunks and shape must be of the same length/dimension. Got chunks=%s, shape=%s"
+            % (chunks, shape)
         )
     if -1 in chunks or None in chunks:
         chunks = tuple(s if c == -1 or c is None else c for c, s in zip(chunks, shape))
@@ -3196,8 +3188,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 limit = parsed
             elif parsed != limit:
                 raise ValueError(
-                    "Only one consistent value of limit or chunk is allowed."
-                    "Used %s != %s" % (parsed, limit)
+                    "Only one consistent value of limit or chunk is allowed.Used %s != %s"
+                    % (parsed, limit)
                 )
     # Substitute byte limits with 'auto' now that limit is set.
     chunks = tuple("auto" if isinstance(c, str) and c != "auto" else c for c in chunks)
@@ -3213,8 +3205,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     for c in chunks:
         if not c:
             raise ValueError(
-                "Empty tuples are not allowed in chunks. Express "
-                "zero length dimensions with 0(s) in chunks"
+                "Empty tuples are not allowed in chunks. Express zero length dimensions with 0(s) in chunks"
             )
 
     if not allints and shape is not None:
@@ -3223,8 +3214,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
             for c, s in zip(map(sum, chunks), shape)
         ):
             raise ValueError(
-                "Chunks do not add up to shape. "
-                "Got chunks=%s, shape=%s" % (chunks, shape)
+                "Chunks do not add up to shape. Got chunks=%s, shape=%s"
+                % (chunks, shape)
             )
     if allints or isinstance(sum(sum(_) for _ in chunks), int):
         # Fastpath for when we already know chunks contains only integers
@@ -3309,8 +3300,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
     if dtype.hasobject:
         raise NotImplementedError(
-            "Can not use auto rechunking with object dtype. "
-            "We are unable to estimate the size in bytes of object data"
+            "Can not use auto rechunking with object dtype. We are unable to estimate the size in bytes of object data"
         )
 
     for x in tuple(chunks) + tuple(shape):
@@ -3321,8 +3311,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             and np.isnan(x).any()
         ):
             raise ValueError(
-                "Can not perform automatic rechunking with unknown "
-                "(nan) chunk sizes.%s" % unknown_chunk_message
+                "Can not perform automatic rechunking with unknown (nan) chunk sizes.%s"
+                % unknown_chunk_message
             )
 
     limit = max(1, limit)
@@ -3866,8 +3856,8 @@ def to_zarr(
 
     if np.isnan(arr.shape).any():
         raise ValueError(
-            "Saving a dask array with unknown chunk sizes is not "
-            "currently supported by Zarr.%s" % unknown_chunk_message
+            "Saving a dask array with unknown chunk sizes is not currently supported by Zarr.%s"
+            % unknown_chunk_message
         )
 
     if _zarr_v3():
@@ -3886,8 +3876,7 @@ def to_zarr(
                 pass
             else:
                 raise RuntimeError(
-                    "Cannot store into in memory Zarr Array using "
-                    "the distributed scheduler."
+                    "Cannot store into in memory Zarr Array using the distributed scheduler."
                 )
         zarr_write_chunks = _get_zarr_write_chunks(z)
         dask_write_chunks = normalize_chunks(
@@ -3948,8 +3937,7 @@ def to_zarr(
 
     if not _check_regular_chunks(arr.chunks):
         raise ValueError(
-            "Attempt to save array to zarr with irregular "
-            "chunking, please call `arr.rechunk(...)` first."
+            "Attempt to save array to zarr with irregular chunking, please call `arr.rechunk(...)` first."
         )
 
     storage_options = storage_options or {}
@@ -4157,9 +4145,8 @@ def common_blockdim(blockdims):
 
     if np.isnan(sum(map(sum, blockdims))):
         raise ValueError(
-            "Arrays' chunk sizes (%s) are unknown.\n\n"
-            "A possible solution:\n"
-            "  x.compute_chunk_sizes()" % blockdims
+            "Arrays' chunk sizes (%s) are unknown.\n\nA possible solution:\n  x.compute_chunk_sizes()"
+            % blockdims
         )
 
     if len(set(map(sum, non_trivial_dims))) > 1:
@@ -4281,7 +4268,9 @@ def unify_chunks(*args, **kwargs):
                 (
                     chunkss[j]
                     if a.shape[n] > 1
-                    else a.shape[n] if not np.isnan(sum(chunkss[j])) else None
+                    else a.shape[n]
+                    if not np.isnan(sum(chunkss[j]))
+                    else None
                 )
                 for n, j in enumerate(i)
             )
@@ -4556,10 +4545,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     if axis < 0:
         axis = ndim + axis
     if axis >= ndim:
-        msg = (
-            "Axis must be less than than number of dimensions"
-            "\nData has %d dimensions, but got axis=%d"
-        )
+        msg = "Axis must be less than than number of dimensions\nData has %d dimensions, but got axis=%d"
         raise ValueError(msg % (ndim, axis))
 
     n = len(seq2)
@@ -4942,8 +4928,9 @@ def broadcast_shapes(*shapes):
             dim = 0 if 0 in sizes else np.max(sizes).item()
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError(
-                "operands could not be broadcast together with "
-                "shapes {}".format(" ".join(map(str, shapes)))
+                "operands could not be broadcast together with shapes {}".format(
+                    " ".join(map(str, shapes))
+                )
             )
         out.append(dim)
     return tuple(reversed(out))
@@ -4991,8 +4978,7 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     """
     if kwargs:
         raise TypeError(
-            f"{op.__name__} does not take the following keyword arguments "
-            f"{sorted(kwargs)}"
+            f"{op.__name__} does not take the following keyword arguments {sorted(kwargs)}"
         )
 
     out = _elemwise_normalize_out(out)
@@ -5098,8 +5084,7 @@ def _elemwise_normalize_out(out):
             out = None
     if not (out is None or isinstance(out, Array)):
         raise NotImplementedError(
-            f"The out parameter is not fully supported."
-            f" Received type {type(out).__name__}, expected Dask Array"
+            f"The out parameter is not fully supported. Received type {type(out).__name__}, expected Dask Array"
         )
     return out
 
@@ -5701,8 +5686,8 @@ def _vindex(x, *indexes):
                 raise IndexError("vindex does not support indexing with boolean arrays")
             if ((ind >= size) | (ind < -size)).any():
                 raise IndexError(
-                    "vindex key has entries out of bounds for "
-                    "indexing along axis %s of size %s: %r" % (i, size, ind)
+                    "vindex key has entries out of bounds for indexing along axis %s of size %s: %r"
+                    % (i, size, ind)
                 )
             ind %= size
             array_indexes[i] = ind
@@ -5725,8 +5710,8 @@ def _vindex_array(x, dict_indexes):
         # note: error message exactly matches numpy
         shapes_str = " ".join(str(a.shape) for a in dict_indexes.values())
         raise IndexError(
-            "shape mismatch: indexing arrays could not be "
-            "broadcast together with shapes " + shapes_str
+            "shape mismatch: indexing arrays could not be broadcast together with shapes "
+            + shapes_str
         ) from e
     npoints = math.prod(broadcast_shape)
     axes = [i for i in range(x.ndim) if i in dict_indexes]

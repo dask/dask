@@ -270,13 +270,11 @@ def unpack_collections(expr, _return_collections=True):
         except (TypeError, ValueError) as e:
             if isinstance(e, ValueError) or "is declared with init=False" in str(e):
                 raise ValueError(
-                    f"Failed to unpack {typ} instance. "
-                    "Note that using fields with `init=False` are not supported."
+                    f"Failed to unpack {typ} instance. Note that using fields with `init=False` are not supported."
                 ) from e
             else:
                 raise TypeError(
-                    f"Failed to unpack {typ} instance. "
-                    "Note that using a custom __init__ is not supported."
+                    f"Failed to unpack {typ} instance. Note that using a custom __init__ is not supported."
                 ) from e
         return Task(None, apply, typ, (), Task(None, dict, args)), collections
 
@@ -333,8 +331,7 @@ def to_task_dask(expr):
     {'a': 1, 'b': 2}
     """
     warnings.warn(
-        "The dask.delayed.to_dask_dask function has been "
-        "Deprecated in favor of unpack_collections",
+        "The dask.delayed.to_dask_dask function has been Deprecated in favor of unpack_collections",
         stacklevel=2,
     )
 
@@ -748,8 +745,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
             # added to warn users in case of spelling error
             # for more details: https://github.com/dask/dask/issues/5721
             warnings.warn(
-                "dask.delayed objects have no `visualise` method. "
-                "Perhaps you meant `visualize`?"
+                "dask.delayed objects have no `visualise` method. Perhaps you meant `visualize`?"
             )
 
         return DelayedAttr(self, attr)

@@ -20,11 +20,7 @@ def test_config_get_no_key():
     runner = CliRunner()
     result = runner.invoke(dask.cli.config_get)
     assert result.exit_code == 2
-    expected = (
-        "Usage: get [OPTIONS] KEY\n"
-        "Try 'get --help' for help.\n\n"
-        "Error: Missing argument 'KEY'.\n"
-    )
+    expected = "Usage: get [OPTIONS] KEY\nTry 'get --help' for help.\n\nError: Missing argument 'KEY'.\n"
     assert result.output == expected
 
 
@@ -137,11 +133,7 @@ def test_config_find(tmp_conf_dir):
     conf3.write_text(yaml.dump({"foo": {"bar": 1}}))  # shouldn't show up
 
     result = runner.invoke(dask.cli.config_find, ["fizz.buzz"], catch_exceptions=False)
-    expected = (
-        "Found [fizz.buzz] in the following files:\n"
-        f"{conf1}  [fizz.buzz=1]\n"
-        f"{conf2}  [fizz.buzz=2]\n"
-    )
+    expected = f"Found [fizz.buzz] in the following files:\n{conf1}  [fizz.buzz=1]\n{conf2}  [fizz.buzz=2]\n"
     assert result.output == expected
 
 

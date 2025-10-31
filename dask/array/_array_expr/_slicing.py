@@ -71,8 +71,7 @@ def slice_with_int_dask_array(x, index):
                 out_index.append(slice(None))
             else:
                 raise NotImplementedError(
-                    "Slicing with dask.array of ints only permitted when "
-                    "the indexer has zero or one dimensions"
+                    "Slicing with dask.array of ints only permitted when the indexer has zero or one dimensions"
                 )
         else:
             out_index.append(idx)
@@ -161,8 +160,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
 
     if np.isnan(x.chunks[axis]).any():
         raise NotImplementedError(
-            "Slicing an array with unknown chunks with "
-            "a dask.array of ints is not supported"
+            "Slicing an array with unknown chunks with a dask.array of ints is not supported"
         )
     x_axes = tuple(range(x.ndim))
     idx_axes = (x.ndim,)  # arbitrary index not already in x_axes
@@ -481,8 +479,7 @@ class TakeUnknownOneChunk(Slice):
             product(*(range(len(c)) for i, c in enumerate(self.array.chunks)))
         )
         dsk = {
-            (self._name,)
-            + ct: Task(
+            (self._name,) + ct: Task(
                 (self._name,) + ct, getitem, TaskRef((self.array.name,) + ct), sl
             )
             for ct in chunk_tuples

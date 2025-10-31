@@ -110,7 +110,6 @@ if scipy_installed and hasattr(sp, "sparray"):  # type: ignore[misc]
 
 @get_collection_type.register(object)
 def get_collection_type_object(_):
-
     return create_scalar_collection
 
 

@@ -326,8 +326,7 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
             rv = combined_vals[index]
         else:
             raise ValueError(
-                "interpolation method can only be 'linear', 'lower', "
-                "'higher', 'midpoint', or 'nearest'"
+                "interpolation method can only be 'linear', 'lower', 'higher', 'midpoint', or 'nearest'"
             )
     return rv
 
