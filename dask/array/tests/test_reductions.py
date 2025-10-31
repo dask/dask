@@ -664,6 +664,24 @@ def test_array_cumreduction_dtype(func, method, target_dtype):
     assert_eq(a_r, d_r)
 
 
+@pytest.mark.parametrize("ufunc", ["add", "multiply", "maximum"])
+@pytest.mark.parametrize("target_dtype", [None, int, float])
+def test_array_cumreduction_ufunc(ufunc, target_dtype):
+    ufunc_obj = getattr(np, ufunc)
+    accumulate = ufunc_obj.accumulate
+    identity = ufunc_obj.identity
+
+    a = np.linspace(0, 1, num=10, dtype=float)
+    d = da.from_array(a)
+
+    cumreduction = da.reductions.cumreduction
+
+    a_r = accumulate(a, dtype=target_dtype)
+    d_r = cumreduction(accumulate, ufunc_obj, identity, d, dtype=target_dtype)
+
+    assert_eq(a_r, d_r)
+
+
 @pytest.mark.parametrize("func", [np.cumsum, np.cumprod])
 def test_array_cumreduction_out(func):
     x = da.ones((10, 10), chunks=(4, 4))
@@ -1002,7 +1020,6 @@ def test_quantile(rechunk, q, axis):
 
 @pytest.mark.parametrize("func", [da.quantile, da.nanquantile, da.nanpercentile])
 def test_quantile_func_family_with_axis_none(func):
-
     # Check that these functions raise a NotImplementedError
     # when axis=None and more than one chunk is present
     # along at least one dimension
