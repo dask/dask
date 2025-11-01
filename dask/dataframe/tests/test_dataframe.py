@@ -1983,7 +1983,6 @@ def test_series_round():
 
 
 def test_repartition():
-
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
     )
@@ -4102,10 +4101,7 @@ def test_copy():
     assert_eq(b, df)
     assert_eq(c, df)
 
-    deep_err = (
-        "The `deep` value must be False. This is strictly a shallow copy "
-        "of the underlying computational graph."
-    )
+    deep_err = "The `deep` value must be False. This is strictly a shallow copy of the underlying computational graph."
     for deep in [True, None, ""]:
         with pytest.raises(ValueError, match=deep_err):
             a.copy(deep=deep)

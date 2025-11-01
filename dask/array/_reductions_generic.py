@@ -163,8 +163,7 @@ def reduction(
             wgt = broadcast_to(wgt, x.shape)
         except ValueError:
             raise ValueError(
-                f"Weights with shape {wgt.shape} are not broadcastable "
-                f"to x with shape {x.shape}"
+                f"Weights with shape {wgt.shape} are not broadcastable to x with shape {x.shape}"
             )
 
         args += (wgt, inds)

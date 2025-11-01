@@ -160,8 +160,7 @@ class ShuffleBase(Expr):
 
     def _layer(self):
         raise NotImplementedError(
-            f"{self} is abstract! Please call `simplify`"
-            f"before generating a task graph."
+            f"{self} is abstract! Please call `simplify`before generating a task graph."
         )
 
     @functools.cached_property

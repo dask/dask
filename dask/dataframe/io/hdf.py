@@ -183,8 +183,7 @@ def to_hdf(
         formatted_names = [name_function(i) for i in range(df.npartitions)]
         if formatted_names != sorted(formatted_names):
             warn(
-                "To preserve order between partitions name_function "
-                "must preserve the order of its input"
+                "To preserve order between partitions name_function must preserve the order of its input"
             )
 
     # If user did not specify scheduler and write is sequential default to the
@@ -403,8 +402,7 @@ def read_hdf(
         raise ValueError("Chunksize must be a positive integer")
     if (start != 0 or stop is not None) and sorted_index:
         raise ValueError(
-            "When assuming pre-partitioned data, data must be "
-            "read in its entirety using the same chunksizes"
+            "When assuming pre-partitioned data, data must be read in its entirety using the same chunksizes"
         )
 
     # Build metadata
@@ -485,8 +483,9 @@ def _one_path_one_key(path, key, start, stop, chunksize):
 
     if start >= stop:
         raise ValueError(
-            "Start row number ({}) is above or equal to stop "
-            "row number ({})".format(start, stop)
+            "Start row number ({}) is above or equal to stop row number ({})".format(
+                start, stop
+            )
         )
 
     return [
@@ -533,8 +532,9 @@ def _get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
                 stops.append(storer.nrows)
             elif stop > storer.nrows:
                 raise ValueError(
-                    "Stop keyword exceeds dataset number "
-                    "of rows ({})".format(storer.nrows)
+                    "Stop keyword exceeds dataset number of rows ({})".format(
+                        storer.nrows
+                    )
                 )
             else:
                 stops.append(stop)

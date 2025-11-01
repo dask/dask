@@ -171,8 +171,7 @@ def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
 
     if isinstance(shape, ArrayExpr):
         raise TypeError(
-            "Dask array input not supported. "
-            "Please use tuple, list, or a 1D numpy array instead."
+            "Dask array input not supported. Please use tuple, list, or a 1D numpy array instead."
         )
 
     parsed = _parse_wrap_args(klass.func, args, kwargs, shape)

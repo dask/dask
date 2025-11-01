@@ -49,14 +49,12 @@ if "should_check_state" in get_named_args(gen_cluster):
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32",
     reason=(
-        "The teardown of distributed.utils_test.cluster_fixture "
-        "fails on windows CI currently"
+        "The teardown of distributed.utils_test.cluster_fixture fails on windows CI currently"
     ),
 )
 
 ignore_sync_scheduler_warning = pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
+    "ignore:Running on a single-machine scheduler when a distributed client is active might lead to unexpected results."
 )
 
 
@@ -815,8 +813,7 @@ def test_map_partitions_df_input():
 
 
 @pytest.mark.filterwarnings(
-    "ignore:Running on a single-machine scheduler when a distributed client "
-    "is active might lead to unexpected results."
+    "ignore:Running on a single-machine scheduler when a distributed client is active might lead to unexpected results."
 )
 @gen_cluster(client=True)
 async def test_to_sql_engine_kwargs(c, s, a, b):

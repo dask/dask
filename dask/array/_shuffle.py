@@ -95,7 +95,6 @@ def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"] = "a
 def _calculate_new_chunksizes(
     input_chunks, new_chunks, changeable_dimensions: set, maximum_chunk: int
 ):
-
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
     maximum_chunk = max(maximum_chunk, 1)
 

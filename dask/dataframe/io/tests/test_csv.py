@@ -109,17 +109,11 @@ tsv_files = {k: v.replace(b",", b"\t") for (k, v) in csv_files.items()}
 
 fwf_files = {
     "2014-01-01.csv": (
-        b"    name  amount  id\n"
-        b"   Alice     100   1\n"
-        b"     Bob     200   2\n"
-        b" Charlie     300   3\n"
+        b"    name  amount  id\n   Alice     100   1\n     Bob     200   2\n Charlie     300   3\n"
     ),
     "2014-01-02.csv": b"    name  amount  id\n",
     "2014-01-03.csv": (
-        b"    name  amount  id\n"
-        b"  Dennis     400   4\n"
-        b"   Edith     500   5\n"
-        b"   Frank     600   6\n"
+        b"    name  amount  id\n  Dennis     400   4\n   Edith     500   5\n   Frank     600   6\n"
     ),
 }
 
@@ -1333,14 +1327,7 @@ def test_error_if_sample_is_too_small():
 
 
 def test_read_csv_names_not_none():
-    text = (
-        "Alice,100\n"
-        "Bob,-200\n"
-        "Charlie,300\n"
-        "Dennis,400\n"
-        "Edith,-500\n"
-        "Frank,600\n"
-    )
+    text = "Alice,100\nBob,-200\nCharlie,300\nDennis,400\nEdith,-500\nFrank,600\n"
     names = ["name", "amount"]
     with filetext(text) as fn:
         ddf = dd.read_csv(fn, names=names, blocksize=16)

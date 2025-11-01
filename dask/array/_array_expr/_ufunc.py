@@ -87,8 +87,8 @@ class ufunc:
     def __init__(self, ufunc):
         if not isinstance(ufunc, (np.ufunc, da_frompyfunc)):
             raise TypeError(
-                "must be an instance of `ufunc` or "
-                "`da_frompyfunc`, got `%s" % type(ufunc).__name__
+                "must be an instance of `ufunc` or `da_frompyfunc`, got `%s"
+                % type(ufunc).__name__
             )
         self._ufunc = ufunc
         self.__name__ = ufunc.__name__
@@ -140,8 +140,7 @@ class ufunc:
             and not isinstance(B, Array)
         ):
             raise NotImplementedError(
-                "Dask objects besides `dask.array.Array` "
-                "are not supported at this time."
+                "Dask objects besides `dask.array.Array` are not supported at this time."
             )
 
         A = asarray(A)

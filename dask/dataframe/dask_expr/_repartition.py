@@ -267,16 +267,10 @@ class RepartitionDivisions(Repartition):
 
         if force:
             if a[0] < b[0]:
-                msg = (
-                    "left side of the new division must be equal or smaller "
-                    "than old division"
-                )
+                msg = "left side of the new division must be equal or smaller than old division"
                 raise ValueError(msg)
             if a[-1] > b[-1]:
-                msg = (
-                    "right side of the new division must be equal or larger "
-                    "than old division"
-                )
+                msg = "right side of the new division must be equal or larger than old division"
                 raise ValueError(msg)
         else:
             if a[0] != b[0]:
@@ -418,7 +412,6 @@ class RepartitionFreq(Repartition):
 
 
 class RepartitionSize(Repartition):
-
     @functools.cached_property
     def _size(self):
         size = self.operand("partition_size")

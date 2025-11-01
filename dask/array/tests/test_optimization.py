@@ -87,10 +87,18 @@ def test_fuse_slice_with_lists():
     assert fuse_slice([10, 20, 30, 40, 50], slice(1, None, 2)) == [20, 40]
     assert fuse_slice(
         (slice(None), slice(0, 10), [1, 2, 3]), (slice(None), slice(1, 5), slice(None))
-    ) == (slice(0, None), slice(1, 5), [1, 2, 3])
+    ) == (
+        slice(0, None),
+        slice(1, 5),
+        [1, 2, 3],
+    )
     assert fuse_slice(
         (slice(None), slice(None), [1, 2, 3]), (slice(None), slice(1, 5), 1)
-    ) == (slice(0, None), slice(1, 5), 2)
+    ) == (
+        slice(0, None),
+        slice(1, 5),
+        2,
+    )
 
 
 def test_nonfusible_fancy_indexing():

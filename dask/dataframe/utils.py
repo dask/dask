@@ -158,14 +158,7 @@ def raise_on_meta_error(funcname=None, udf=False):
                 "To resolve this please provide a meta= keyword.\n"
                 "The docstring of the Dask function you ran should have more information.\n\n"
             )
-        msg += (
-            "Original error is below:\n"
-            "------------------------\n"
-            "{1}\n\n"
-            "Traceback:\n"
-            "---------\n"
-            "{2}"
-        )
+        msg += "Original error is below:\n------------------------\n{1}\n\nTraceback:\n---------\n{2}"
         msg = msg.format(f" in `{funcname}`" if funcname else "", repr(e), tb)
         raise ValueError(msg) from e
 
@@ -348,8 +341,8 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta)
     ) or is_dask_collection(meta):
         raise TypeError(
-            "Expected partition to be DataFrame, Series, or "
-            "Index, got `%s`" % typename(type(meta))
+            "Expected partition to be DataFrame, Series, or Index, got `%s`"
+            % typename(type(meta))
         )
 
     # Notice, we use .__class__ as opposed to type() in order to support
@@ -383,8 +376,8 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         )
 
     raise ValueError(
-        "Metadata mismatch found%s.\n\n"
-        "%s" % ((" in `%s`" % funcname if funcname else ""), errmsg)
+        "Metadata mismatch found%s.\n\n%s"
+        % ((" in `%s`" % funcname if funcname else ""), errmsg)
     )
 
 
@@ -404,9 +397,7 @@ def check_matching_columns(meta, actual):
                 f"\nExpected: {meta.columns.tolist()}"
             )
         raise ValueError(
-            "The columns in the computed data do not match"
-            " the columns in the provided metadata.\n"
-            f"{extra_info}"
+            f"The columns in the computed data do not match the columns in the provided metadata.\n{extra_info}"
         )
 
 
@@ -483,8 +474,8 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
                 result, (pd.Timestamp, pd.Timedelta)
             ):
                 raise TypeError(
-                    "Expected object of type dataframe, series, index, or scalar.\n"
-                    "    Got: " + str(type(result))
+                    "Expected object of type dataframe, series, index, or scalar.\n    Got: "
+                    + str(type(result))
                 )
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)

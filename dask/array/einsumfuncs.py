@@ -87,8 +87,7 @@ def parse_einsum_input(operands):
                     subscripts += einsum_symbols[s]
                 else:
                     raise TypeError(
-                        "For this input type lists must contain "
-                        "either int or Ellipsis"
+                        "For this input type lists must contain either int or Ellipsis"
                     )
             if num != last:
                 subscripts += ","
@@ -102,8 +101,7 @@ def parse_einsum_input(operands):
                     subscripts += einsum_symbols[s]
                 else:
                     raise TypeError(
-                        "For this input type lists must contain "
-                        "either int or Ellipsis"
+                        "For this input type lists must contain either int or Ellipsis"
                     )
     # Check for proper "->"
     if ("-" in subscripts) or (">" in subscripts):

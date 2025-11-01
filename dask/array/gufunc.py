@@ -437,11 +437,9 @@ def apply_gufunc(
             #### Check if core dimensions consist of only one chunk
             if (dim in core_shapes) and (chunksizes[0][0] < core_shapes[dim]):
                 raise ValueError(
-                    "Core dimension `'{}'` consists of multiple chunks. To fix, rechunk into a single \
-chunk along this dimension or set `allow_rechunk=True`, but beware that this may increase memory usage \
-significantly.".format(
-                        dim
-                    )
+                    "Core dimension `'{}'` consists of multiple chunks. To fix, rechunk into a single "
+                    "chunk along this dimension or set `allow_rechunk=True`, but beware that this may "
+                    "increase memory usage significantly.".format(dim)
                 )
             #### Check if loop dimensions consist of same chunksizes, when they have sizes > 1
             relevant_chunksizes = list(
@@ -490,17 +488,17 @@ significantly.".format(
     # but we use it and validate it anyway just to be sure nothing odd has happened.
     metas = tmp._meta
     if nout is None:
-        assert not isinstance(
-            metas, (list, tuple)
-        ), f"meta changed from single output to multiple output during blockwise: {meta} -> {metas}"
+        assert not isinstance(metas, (list, tuple)), (
+            f"meta changed from single output to multiple output during blockwise: {meta} -> {metas}"
+        )
         metas = (metas,)
     else:
-        assert isinstance(
-            metas, (list, tuple)
-        ), f"meta changed from multiple output to single output during blockwise: {meta} -> {metas}"
-        assert (
-            len(metas) == nout
-        ), f"Number of outputs changed from {nout} to {len(metas)} during blockwise"
+        assert isinstance(metas, (list, tuple)), (
+            f"meta changed from multiple output to single output during blockwise: {meta} -> {metas}"
+        )
+        assert len(metas) == nout, (
+            f"Number of outputs changed from {nout} to {len(metas)} during blockwise"
+        )
 
     ## Prepare output shapes
     loop_output_shape = tmp.shape
@@ -521,9 +519,9 @@ significantly.".format(
         output_chunks = loop_output_chunks + core_output_shape
         leaf_name = "%s_%d-%s" % (name, i, token)
         leaf_dsk = {
-            (leaf_name,)
-            + key[1:]
-            + core_chunkinds: ((getitem, key, i) if nout else key)
+            (leaf_name,) + key[1:] + core_chunkinds: (
+                (getitem, key, i) if nout else key
+            )
             for key in keys
         }
         graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
@@ -695,9 +693,7 @@ class gufunc:
         Returns
         -------
         Single dask.array.Array or tuple of dask.array.Array
-        """.format(
-            func=str(self.pyfunc), signature=self.signature
-        )
+        """.format(func=str(self.pyfunc), signature=self.signature)
 
     def __call__(self, *args, allow_rechunk=False, **kwargs):
         return apply_gufunc(
@@ -827,7 +823,5 @@ def as_gufunc(signature=None, **kwargs):
         Returns
         -------
         ``dask.array.gufunc``
-        """.format(
-        signature=signature
-    )
+        """.format(signature=signature)
     return _as_gufunc

@@ -20,7 +20,6 @@ from dask.utils import cached_cumsum
 
 
 class ArrayExpr(SingletonExpr):
-
     def _operands_for_repr(self):
         return []
 
@@ -67,10 +66,7 @@ class ArrayExpr(SingletonExpr):
         if not self.chunks:
             raise TypeError("len() of unsized object")
         if np.isnan(self.chunks[0]).any():
-            msg = (
-                "Cannot call len() on object with unknown chunk size."
-                f"{unknown_chunk_message}"
-            )
+            msg = f"Cannot call len() on object with unknown chunk size.{unknown_chunk_message}"
             raise ValueError(msg)
         return int(sum(self.chunks[0]))
 
@@ -168,7 +164,9 @@ def unify_chunks_expr(*args):
                 (
                     chunkss[j]
                     if a.shape[n] > 1
-                    else (a.shape[n],) if not np.isnan(sum(chunkss[j])) else None
+                    else (a.shape[n],)
+                    if not np.isnan(sum(chunkss[j]))
+                    else None
                 )
                 for n, j in enumerate(i)
             )

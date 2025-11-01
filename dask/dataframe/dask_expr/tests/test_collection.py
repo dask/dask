@@ -82,11 +82,7 @@ def test_info(df, verbose, buf, memory_usage):
     ret = df.info(**kwargs)
 
     if buf and not verbose and not memory_usage:
-        expected = (
-            "<class 'dask.dataframe.dask_expr.DataFrame'>\n"
-            "Columns: 2 entries, x to y\n"
-            "dtypes: int64(2)"
-        )
+        expected = "<class 'dask.dataframe.dask_expr.DataFrame'>\nColumns: 2 entries, x to y\ndtypes: int64(2)"
         assert buf.getvalue() == expected
     elif buf and verbose and not memory_usage:
         expected = (
@@ -145,7 +141,6 @@ def test_column_projection_modify_list(df, pdf):
 
 @pytest.mark.parametrize("required_columns", [None, ["z"], ["z", "foo"]])
 def test_column_projection_map_partitions(required_columns):
-
     pdf = pd.DataFrame({"x": [1] * 5, "y": [2] * 5, "z": range(5)})
     df = from_pandas(pdf, npartitions=2)
 

@@ -106,10 +106,7 @@ def import_optional_dependency(
     package_name = INSTALL_MAPPING.get(name)
     install_name = package_name if package_name is not None else name
 
-    msg = (
-        f"Missing optional dependency '{install_name}'. {extra} "
-        f"Use pip or conda to install {install_name}."
-    )
+    msg = f"Missing optional dependency '{install_name}'. {extra} Use pip or conda to install {install_name}."
     try:
         # NOTE: Use `importlib_metadata.distribution` check to differentiate
         # between something that's importable (e.g. a directory named `xarray`)

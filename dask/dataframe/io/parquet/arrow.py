@@ -390,8 +390,7 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
                 return ~field.is_null(nan_is_null=nan_is_null)
             else:
                 raise ValueError(
-                    f'"{(col, op, val)}" is not a supported predicate '
-                    f'Please use "is" or "is not" for null comparison.'
+                    f'"{(col, op, val)}" is not a supported predicate Please use "is" or "is not" for null comparison.'
                 )
 
         if op == "=" or op == "==":
@@ -457,8 +456,7 @@ class ArrowDatasetEngine(Engine):
         else:
             if "filesystem" in dataset_options:
                 raise ValueError(
-                    "Cannot specify a filesystem argument if the "
-                    "'filesystem' dataset option is also defined."
+                    "Cannot specify a filesystem argument if the 'filesystem' dataset option is also defined."
                 )
             fs = filesystem
 
@@ -718,8 +716,9 @@ class ArrowDatasetEngine(Engine):
             dtypes = _get_pyarrow_dtypes(arrow_schema, categories)
             if set(names) != set(df.columns) - set(partition_on):
                 raise ValueError(
-                    "Appended columns not the same.\n"
-                    "Previous: {} | New: {}".format(names, list(df.columns))
+                    "Appended columns not the same.\nPrevious: {} | New: {}".format(
+                        names, list(df.columns)
+                    )
                 )
             elif pd.Series(dtypes).loc[names].tolist() != df[names].dtypes.tolist():
                 # TODO Coerce values for compatible but different dtypes
@@ -1163,8 +1162,7 @@ class ArrowDatasetEngine(Engine):
             and index_names
             and (
                 # Only set to `[None]` if pandas metadata includes an index
-                index_names != [None]
-                or pandas_metadata.get("index_columns", None)
+                index_names != [None] or pandas_metadata.get("index_columns", None)
             )
         ):
             index = index_names
@@ -1202,8 +1200,9 @@ class ArrowDatasetEngine(Engine):
             # Check that categories are included in columns
             if not set(categories).intersection(all_columns):
                 raise ValueError(
-                    "categories not in available columns.\n"
-                    "categories: {} | columns: {}".format(categories, list(all_columns))
+                    "categories not in available columns.\ncategories: {} | columns: {}".format(
+                        categories, list(all_columns)
+                    )
                 )
 
             # Make sure all categories are set to "unknown".

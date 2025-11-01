@@ -65,7 +65,9 @@ def meta_from_array(x, ndim=None, dtype=None):
             (
                 0
                 if isinstance(a, numbers.Number)
-                else a.ndim if hasattr(a, "ndim") else len(a)
+                else a.ndim
+                if hasattr(a, "ndim")
+                else len(a)
             )
             for a in x
         ]
@@ -253,9 +255,9 @@ def _check_chunks(x, check_ndim=True, scheduler=None):
         assert_eq_shape(
             expected_shape, chunk.shape, check_ndim=check_ndim, check_nan=False
         )
-        assert (
-            chunk.dtype == x.dtype
-        ), "maybe you forgot to pass the scheduler to `assert_eq`?"
+        assert chunk.dtype == x.dtype, (
+            "maybe you forgot to pass the scheduler to `assert_eq`?"
+        )
     return x
 
 
@@ -341,15 +343,15 @@ def assert_eq(
         raise AssertionError(f"a and b have different dtypes: (a: {adt}, b: {bdt})")
 
     try:
-        assert (
-            a.shape == b.shape
-        ), f"a and b have different shapes (a: {a.shape}, b: {b.shape})"
+        assert a.shape == b.shape, (
+            f"a and b have different shapes (a: {a.shape}, b: {b.shape})"
+        )
         if check_type:
             _a = a if a.shape else a.item()
             _b = b if b.shape else b.item()
-            assert type(_a) == type(
-                _b
-            ), f"a and b have different types (a: {type(_a)}, b: {type(_b)})"
+            assert type(_a) == type(_b), (
+                f"a and b have different types (a: {type(_a)}, b: {type(_b)})"
+            )
         if check_meta:
             if hasattr(a, "_meta") and hasattr(b, "_meta"):
                 assert_eq(a._meta, b._meta)
@@ -360,10 +362,7 @@ def assert_eq(
                 )
                 assert a_original._meta.ndim == a.ndim, msg
                 if a_meta is not None:
-                    msg = (
-                        f"compute()-ing 'a' changes its type "
-                        f"(before: {type(a_original._meta)}, after: {type(a_meta)})"
-                    )
+                    msg = f"compute()-ing 'a' changes its type (before: {type(a_original._meta)}, after: {type(a_meta)})"
                     assert type(a_original._meta) == type(a_meta), msg
                     if not (np.isscalar(a_meta) or np.isscalar(a_computed)):
                         msg = (
@@ -378,10 +377,7 @@ def assert_eq(
                 )
                 assert b_original._meta.ndim == b.ndim, msg
                 if b_meta is not None:
-                    msg = (
-                        f"compute()-ing 'b' changes its type "
-                        f"(before: {type(b_original._meta)}, after: {type(b_meta)})"
-                    )
+                    msg = f"compute()-ing 'b' changes its type (before: {type(b_original._meta)}, after: {type(b_meta)})"
                     assert type(b_original._meta) == type(b_meta), msg
                     if not (np.isscalar(b_meta) or np.isscalar(b_computed)):
                         msg = (

@@ -862,11 +862,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
 
     chunks = normalize_chunks(chunks, size, dtype=np.float64)
     if not replace and len(chunks[0]) > 1:
-        err_msg = (
-            "replace=False is not currently supported for "
-            "dask.array.choice with multi-chunk output "
-            "arrays"
-        )
+        err_msg = "replace=False is not currently supported for dask.array.choice with multi-chunk output arrays"
         raise NotImplementedError(err_msg)
 
     return a, size, replace, p, axis, chunks, meta, dependencies

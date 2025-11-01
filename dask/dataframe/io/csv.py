@@ -127,8 +127,7 @@ def coerce_dtypes(df, dtypes):
                 f"- {c}\n  {e!r}" for c, e in sorted(errors, key=lambda x: str(x[0]))
             )
             exceptions = (
-                "The following columns also raised exceptions on "
-                "conversion:\n\n%s\n\n"
+                "The following columns also raised exceptions on conversion:\n\n%s\n\n"
             ) % ex
             extra = ""
         else:

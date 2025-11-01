@@ -155,7 +155,6 @@ class Expr(core.SingletonExpr):
         try:
             return super().__getattr__(key)
         except AttributeError:
-
             if is_dataframe_like(self._meta) and key in self._meta.columns:
                 return self[key]
             raise
@@ -168,8 +167,7 @@ class Expr(core.SingletonExpr):
 
     def __bool__(self):
         raise ValueError(
-            f"The truth value of a {self.__class__.__name__} is ambiguous. "
-            "Use a.any() or a.all()."
+            f"The truth value of a {self.__class__.__name__} is ambiguous. Use a.any() or a.all()."
         )
 
     def __add__(self, other):

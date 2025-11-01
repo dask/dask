@@ -837,8 +837,7 @@ class HighLevelGraph(Graph):
         dep_key2 = dependencies.keys()
         if dep_key1 != dep_key2:
             raise ValueError(
-                f"incorrect dependencies keys {set(dep_key1)!r} "
-                f"expected {set(dep_key2)!r}"
+                f"incorrect dependencies keys {set(dep_key1)!r} expected {set(dep_key2)!r}"
             )
 
         # Check values

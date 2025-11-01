@@ -220,7 +220,6 @@ def test_top():
 
 
 def test_top_supports_broadcasting_rules():
-
     t = Task("add", add, TaskRef("A"), TaskRef("B"))
     assert _make_blockwise_graph(
         t,

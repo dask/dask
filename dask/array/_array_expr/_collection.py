@@ -571,8 +571,7 @@ class Array(DaskMethodsMixin):
             return self
         elif not np.can_cast(self.dtype, dtype, casting=casting):
             raise TypeError(
-                f"Cannot cast array from {self.dtype!r} to {dtype!r} "
-                f"according to the rule {casting!r}"
+                f"Cannot cast array from {self.dtype!r} to {dtype!r} according to the rule {casting!r}"
             )
         return self.map_blocks(chunk.astype, dtype=dtype, astype_dtype=dtype, **kwargs)
 
@@ -1541,10 +1540,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     if axis < 0:
         axis = ndim + axis
     if axis >= ndim:
-        msg = (
-            "Axis must be less than than number of dimensions"
-            "\nData has %d dimensions, but got axis=%d"
-        )
+        msg = "Axis must be less than than number of dimensions\nData has %d dimensions, but got axis=%d"
         raise ValueError(msg % (ndim, axis))
 
     n = len(seq2)

@@ -26,8 +26,8 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
 
     if x.ndim > 2:
         raise ValueError(
-            "from_array does not input more than 2D array, got"
-            " array with shape %r" % (x.shape,)
+            "from_array does not input more than 2D array, got array with shape %r"
+            % (x.shape,)
         )
 
     if index is not None:
@@ -153,9 +153,8 @@ def from_dask_array(x, columns=None, index=None, meta=None):
         # An index is explicitly given by the caller, so we can pass it through to the
         # initializer after a few checks.
         if index.npartitions != x.numblocks[0]:
-            msg = (
-                "The index and array have different numbers of blocks. "
-                "({} != {})".format(index.npartitions, x.numblocks[0])
+            msg = "The index and array have different numbers of blocks. ({} != {})".format(
+                index.npartitions, x.numblocks[0]
             )
             raise ValueError(msg)
         divisions = index.divisions

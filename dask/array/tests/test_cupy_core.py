@@ -37,8 +37,7 @@ functions = [
         lambda x: x.mean(),
         marks=pytest.mark.skipif(
             cupy_version < Version("6.4.0"),
-            reason="Requires CuPy 6.4.0+ "
-            "(with https://github.com/cupy/cupy/pull/2418)",
+            reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
         ),
     ),
     pytest.param(lambda x: x.moment(order=0)),
@@ -47,16 +46,14 @@ functions = [
         lambda x: x.std(),
         marks=pytest.mark.skipif(
             cupy_version < Version("6.4.0"),
-            reason="Requires CuPy 6.4.0+ "
-            "(with https://github.com/cupy/cupy/pull/2418)",
+            reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
         ),
     ),
     pytest.param(
         lambda x: x.var(),
         marks=pytest.mark.skipif(
             cupy_version < Version("6.4.0"),
-            reason="Requires CuPy 6.4.0+ "
-            "(with https://github.com/cupy/cupy/pull/2418)",
+            reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
         ),
     ),
     pytest.param(
@@ -110,16 +107,14 @@ functions = [
         lambda x: np.angle(x),
         marks=pytest.mark.skipif(
             not dask.utils.has_keyword(cupy.angle, "deg"),
-            reason="Requires `deg` argument in `cupy.angle()` introduced in "
-            "https://github.com/cupy/cupy/pull/6905",
+            reason="Requires `deg` argument in `cupy.angle()` introduced in https://github.com/cupy/cupy/pull/6905",
         ),
     ),
     pytest.param(
         lambda x: np.angle(x, True),
         marks=pytest.mark.skipif(
             not dask.utils.has_keyword(cupy.angle, "deg"),
-            reason="Requires `deg` argument in `cupy.angle()` introduced in "
-            "https://github.com/cupy/cupy/pull/6905",
+            reason="Requires `deg` argument in `cupy.angle()` introduced in https://github.com/cupy/cupy/pull/6905",
         ),
     ),
 ]

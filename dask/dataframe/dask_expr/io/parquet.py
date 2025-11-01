@@ -511,8 +511,7 @@ def to_parquet(
                 write_path_with_slash = path.rstrip("/") + "/"
                 if read_path_with_slash.startswith(write_path_with_slash):
                     raise ValueError(
-                        "Cannot overwrite a path that you are reading "
-                        "from in the same task graph."
+                        "Cannot overwrite a path that you are reading from in the same task graph."
                     )
 
             # Don't remove the directory if it's the current working directory
@@ -549,8 +548,7 @@ def to_parquet(
             )
         else:
             warnings.warn(
-                "If read back by Dask, column named __null_dask_index__ "
-                "will be set to the index (and renamed to None)."
+                "If read back by Dask, column named __null_dask_index__ will be set to the index (and renamed to None)."
             )
 
     # There are some "reserved" names that may be used as the default column

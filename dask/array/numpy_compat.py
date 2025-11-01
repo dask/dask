@@ -42,8 +42,7 @@ try:
             or not np.allclose(np.divide(0.4, 1), 0.4)
         ):
             raise TypeError(
-                "Divide not working with dtype: "
-                "https://github.com/numpy/numpy/issues/3484"
+                "Divide not working with dtype: https://github.com/numpy/numpy/issues/3484"
             )
         divide = np.divide
         ma_divide = np.ma.divide
@@ -61,7 +60,10 @@ except TypeError:
         return x
 
     ma_divide = np.ma.core._DomainedBinaryOperation(
-        divide, np.ma.core._DomainSafeDivide(), 0, 1  # type: ignore
+        divide,
+        np.ma.core._DomainSafeDivide(),  # type: ignore
+        0,
+        1,
     )
 
 
@@ -154,8 +156,7 @@ def moveaxis(a, source, destination):
     destination = normalize_axis_tuple(destination, a.ndim, "destination")
     if len(source) != len(destination):
         raise ValueError(
-            "`source` and `destination` arguments must have "
-            "the same number of elements"
+            "`source` and `destination` arguments must have the same number of elements"
         )
 
     order = [n for n in range(a.ndim) if n not in source]
