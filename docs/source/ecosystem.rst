@@ -25,6 +25,8 @@ Array
   on top of ``numpy`` and ``scipy.sparse``.
 - `pint <https://pint.readthedocs.io>`_: Allows arithmetic operations between them and conversions
   from and to different units.
+- `HyperSpy <https://hyperspy.org>`_: Uses dask to allow for scalability on multi-dimensional datasets
+  where navigation and signal axes can be separated (e.g. hyperspectral images).
 
 DataFrame
 ~~~~~~~~~
@@ -74,3 +76,8 @@ There are many different implementations of the Dask distributed cluster.
   cluster backend.
 - `dask-cuda <https://github.com/rapidsai/dask-cuda>`_: Construct a Dask cluster which resembles ``LocalCluster``  and is specifically
   optimized for GPUs.
+
+Commercial Dask Deployment Options
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=ecosystem>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).

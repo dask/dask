@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import pytest
 
 import dask
+from dask._task_spec import Task, TaskRef
 from dask.local import finish_task, get_sync, sortkey, start_state_from_dask
 from dask.order import order
 from dask.utils_test import GetFunctionTestMixin, add, inc
@@ -26,7 +29,7 @@ def test_start_state():
         "running": set(),
         "ready": ["z"],
         "waiting": {"w": {"z"}},
-        "waiting_data": {"x": {"z"}, "y": {"w"}, "z": {"w"}},
+        "waiting_data": {"w": set(), "x": {"z"}, "y": {"w"}, "z": {"w"}},
     }
     assert result == expected
 
@@ -85,7 +88,7 @@ def test_finish_task():
         "dependents": {"w": set(), "x": {"z"}, "y": {"w"}, "z": {"w"}},
         "ready": ["w"],
         "waiting": {},
-        "waiting_data": {"y": {"w"}, "z": {"w"}},
+        "waiting_data": {"w": set(), "y": {"w"}, "z": {"w"}},
     }
 
 
@@ -167,10 +170,11 @@ def test_ordering():
 
     get_sync(dsk, "y")
 
-    assert L == sorted(L)
+    assert L == sorted(L, reverse=True)
 
 
 def test_complex_ordering():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     from dask.diagnostics import Callback
 
@@ -187,3 +191,32 @@ def test_complex_ordering():
     with Callback(pretask=track_order):
         get_sync(dsk, exp_order[-1])
     assert actual_order == exp_order
+
+
+def test_ensure_calculate_only_whats_needed():
+    counter = 0
+
+    def only_once():
+        nonlocal counter
+        if counter > 0:
+            raise RuntimeError("Should only be called once")
+        counter += 1
+        return 1
+
+    def add(x, y):
+        return x + y
+
+    tasks = [
+        Task("x1", only_once),
+        (t1 := Task("x2", only_once)),
+        Task("y", add, 1, t1.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    assert get_sync(dsk, "y") == 2
+
+
+def test_detect_malformed_graph():
+    dsk = {"y": Task("y", lambda x: x, TaskRef("x"))}
+    with pytest.raises(ValueError, match="Missing dependency"):
+        get_sync(dsk, "y")
+    assert get_sync(dsk, "y", cache={"x": 1}) == 1

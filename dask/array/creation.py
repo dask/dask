@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 from collections.abc import Sequence
 from functools import partial
@@ -7,6 +9,7 @@ from numbers import Integral, Number
 import numpy as np
 from tlz import sliding_window
 
+from dask._task_spec import Task, TaskRef
 from dask.array import chunk
 from dask.array.backends import array_creation_dispatch
 from dask.array.core import (
@@ -20,13 +23,38 @@ from dask.array.core import (
     normalize_chunks,
     stack,
 )
-from dask.array.numpy_compat import _numpy_120
+from dask.array.numpy_compat import NUMPY_GE_200, AxisError
 from dask.array.ufunc import greater_equal, rint
 from dask.array.utils import meta_from_array
 from dask.array.wrap import empty, full, ones, zeros
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import cached_cumsum, derived_from, is_cupy_type
+
+
+def to_backend(x: Array, backend: str | None = None, **kwargs):
+    """Move an Array collection to a new backend
+
+    Parameters
+    ----------
+    x : Array
+        The input Array collection.
+    backend : str, Optional
+        The name of the new backend to move to. The default
+        is the current "array.backend" configuration.
+
+    Returns
+    -------
+    dask.Array
+        A new Array collection with the backend specified
+        by ``backend``.
+    """
+    # Get desired backend
+    backend = backend or array_creation_dispatch.backend
+    # Check that "backend" has a registered entrypoint
+    backend_entrypoint = array_creation_dispatch.dispatch(backend)
+    # Call `ArrayBackendEntrypoint.to_backend`
+    return backend_entrypoint.to_backend(x, **kwargs)
 
 
 def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -75,6 +103,12 @@ def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular empty function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.empty_like, dtype=(dtype or a.dtype)))
+
     return empty(
         shape,
         dtype=(dtype or a.dtype),
@@ -124,6 +158,12 @@ def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular ones function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.ones_like, dtype=(dtype or a.dtype)))
+
     return ones(
         shape,
         dtype=(dtype or a.dtype),
@@ -173,6 +213,12 @@ def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular zeros function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.zeros_like, dtype=(dtype or a.dtype)))
+
     return zeros(
         shape,
         dtype=(dtype or a.dtype),
@@ -226,6 +272,12 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
+
+    # if shape is nan we cannot rely on regular full function, we use
+    # generic map_blocks.
+    if np.isnan(shape).any():
+        return a.map_blocks(partial(np.full_like, dtype=(dtype or a.dtype)), fill_value)
+
     return full(
         shape,
         fill_value,
@@ -313,14 +365,15 @@ def linspace(
     for i, bs in enumerate(chunks[0]):
         bs_space = bs - 1 if endpoint else bs
         blockstop = blockstart + (bs_space * step)
-        task = (
+        task = Task(
+            (name, i),
             partial(chunk.linspace, endpoint=endpoint, dtype=dtype),
             blockstart,
             blockstop,
             bs,
         )
         blockstart = blockstart + (step * bs)
-        dsk[(name, i)] = task
+        dsk[task.key] = task
 
     if retstep:
         return Array(dsk, name, chunks, dtype=dtype), step
@@ -329,7 +382,7 @@ def linspace(
 
 
 @array_creation_dispatch.register_inplace("numpy")
-def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
+def arange(start=None, /, stop=None, step=1, *, chunks="auto", like=None, dtype=None):
     """
     Return evenly spaced values from `start` to `stop` with step size `step`.
 
@@ -342,13 +395,15 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
 
     Parameters
     ----------
-    start : int, optional
-        The starting value of the sequence. The default is 0.
-    stop : int
-        The end of the interval, this value is excluded from the interval.
-    step : int, optional
-        The spacing between the values. The default is 1 when not specified.
-        The last value of the sequence.
+    start : int | float, optional
+        If ``stop`` is specified, the start of interval (inclusive); otherwise, the end
+        of the interval (exclusive). Default: 0 when ``stop`` is specified.
+    stop : int | float
+        The end of the interval (exclusive).
+    step : int | float, optional
+        The distance between two adjacent elements ``(out[i+1] - out[i])``.
+        Must not be 0; may be negative, this results in an empty array if stop >= start.
+        Default: 1.
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
@@ -367,51 +422,46 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
     --------
     dask.array.linspace
     """
-    if len(args) == 1:
+    if start is None and stop is None:
+        raise TypeError("arange() requires stop to be specified.")
+    elif start is None:
         start = 0
-        stop = args[0]
-        step = 1
-    elif len(args) == 2:
-        start = args[0]
-        stop = args[1]
-        step = 1
-    elif len(args) == 3:
-        start, stop, step = args
-    else:
-        raise TypeError(
-            """
-        arange takes 3 positional arguments: arange([start], stop, [step])
-        """
-        )
+    elif stop is None:
+        start, stop = 0, start
+
+    # Avoid loss of precision calculating blockstart and blockstop below
+    # when start is a very large int (~2**63) and step is a small float
+    if start != 0 and not np.isclose(start + step - start, step, atol=0):
+        r = arange(0, stop - start, step, chunks=chunks, dtype=dtype, like=like)
+        return r + start
 
     num = int(max(np.ceil((stop - start) / step), 0))
 
     meta = meta_from_array(like) if like is not None else None
 
     if dtype is None:
-        dtype = np.arange(start, stop, step * num if num else step).dtype
+        dtype = np.arange(type(start)(0), type(stop)(0), step).dtype
 
     chunks = normalize_chunks(chunks, (num,), dtype=dtype)
-
-    if kwargs:
-        raise TypeError("Unexpected keyword argument(s): %s" % ",".join(kwargs.keys()))
 
     name = "arange-" + tokenize((start, stop, step, chunks, dtype))
     dsk = {}
     elem_count = 0
 
     for i, bs in enumerate(chunks[0]):
-        blockstart = start + (elem_count * step)
-        blockstop = start + ((elem_count + bs) * step)
-        task = (
-            partial(chunk.arange, like=like),
+        blockstart = start + elem_count * step
+        blockstop = start + (elem_count + bs) * step
+
+        task = Task(
+            (name, i),
+            partial(chunk.arange, like=meta),
             blockstart,
             blockstop,
             step,
             bs,
             dtype,
         )
-        dsk[(name, i)] = task
+        dsk[task.key] = task
         elem_count += bs
 
     return Array(dsk, name, chunks, dtype=dtype, meta=meta)
@@ -450,9 +500,10 @@ def meshgrid(*xi, sparse=False, indexing="xy", **kwargs):
         grid = broadcast_arrays(*grid)
 
     if indexing == "xy" and len(xi) > 1:
-        grid[0], grid[1] = grid[1], grid[0]
+        grid = (grid[1], grid[0], *grid[2:])
 
-    return grid
+    out_type = tuple if NUMPY_GE_200 else list
+    return out_type(grid)
 
 
 def indices(dimensions, dtype=int, chunks="auto"):
@@ -540,7 +591,6 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
       An array where all elements are equal to zero, except for the `k`-th
       diagonal, whose values are equal to one.
     """
-    eye = {}
     if M is None:
         M = N
     if dtype is None:
@@ -555,10 +605,13 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
     token = tokenize(N, chunks, M, k, dtype)
     name_eye = "eye-" + token
 
+    dsk = {}
     for i, vchunk in enumerate(vchunks):
         for j, hchunk in enumerate(hchunks):
+            key = (name_eye, i, j)
             if (j - i - 1) * chunks <= k <= (j - i + 1) * chunks:
-                eye[name_eye, i, j] = (
+                t = Task(
+                    key,
                     np.eye,
                     vchunk,
                     hchunk,
@@ -566,8 +619,9 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
                     dtype,
                 )
             else:
-                eye[name_eye, i, j] = (np.zeros, (vchunk, hchunk), dtype)
-    return Array(eye, name_eye, shape=(N, M), chunks=(chunks, chunks), dtype=dtype)
+                t = Task(key, np.zeros, (vchunk, hchunk), dtype)
+            dsk[t.key] = t
+    return Array(dsk, name_eye, shape=(N, M), chunks=(chunks, chunks), dtype=dtype)
 
 
 @derived_from(np)
@@ -585,13 +639,15 @@ def diag(v, k=0):
         if v.ndim == 1:
             m = abs(k)
             chunks = ((v.shape[0] + m,), (v.shape[0] + m,))
-            dsk = {(name, 0, 0): (np.diag, v, k)}
+            key = (name, 0, 0)
+            dsk = {key: Task(key, np.diag, v, k)}
         elif v.ndim == 2:
             kdiag_row_start = max(0, -k)
             kdiag_row_stop = min(v.shape[0], v.shape[1] - k)
             len_kdiag = kdiag_row_stop - kdiag_row_start
             chunks = ((0,),) if len_kdiag <= 0 else ((len_kdiag,),)
-            dsk = {(name, 0): (np.diag, v, k)}
+            key = (name, 0)
+            dsk = {key: Task(key, np.diag, v, k)}
         else:
             raise ValueError("Array must be 1d or 2d only")
         return Array(dsk, name, chunks, meta=meta)
@@ -600,9 +656,11 @@ def diag(v, k=0):
         if v.ndim != 2:
             raise ValueError("Array must be 1d or 2d only")
         if k == 0 and v.chunks[0] == v.chunks[1]:
-            dsk = {
-                (name, i): (np.diag, row[i]) for i, row in enumerate(v.__dask_keys__())
-            }
+            tasks = [
+                Task((name, i), np.diag, TaskRef(row[i]))
+                for i, row in enumerate(v.__dask_keys__())
+            ]
+            dsk = {t.key: t for t in tasks}
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
             return Array(graph, name, (v.chunks[0],), meta=meta)
         else:
@@ -616,10 +674,9 @@ def diag(v, k=0):
             for j, n in enumerate(chunks_1d):
                 key = (name, i, j)
                 if i == j:
-                    dsk[key] = (np.diag, blocks[i])
+                    dsk[key] = Task(key, np.diag, TaskRef(blocks[i]))
                 else:
-                    dsk[key] = (np.zeros, (m, n))
-                    dsk[key] = (partial(np.zeros_like, shape=(m, n)), meta)
+                    dsk[key] = Task(key, np.zeros_like, meta, shape=(m, n))
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
         return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
@@ -643,7 +700,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             t = ndim + axis
             if t < 0:
                 msg = "{}: axis {} is out of bounds for array of dimension {}"
-                raise np.AxisError(msg.format(name, axis, ndim))
+                raise AxisError(msg.format(name, axis, ndim))
             axis = t
         return axis
 
@@ -684,15 +741,17 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             xp = cupy
 
         out_chunks = pop_axes(a.chunks, axis1, axis2) + ((0,),)
-        dsk = dict()
+        dsk = {}
         for free_idx in free_indices:
             shape = tuple(
                 out_chunks[axis][free_idx[axis]] for axis in range(ndims_free)
             )
-            dsk[(name,) + free_idx + (0,)] = (
+            t = Task(
+                (name,) + free_idx + (0,),
                 partial(xp.empty, dtype=a.dtype),
                 shape + (0,),
             )
+            dsk[t.key] = t
 
         meta = meta_from_array(a, ndims_free + 1)
         return Array(dsk, name, out_chunks, meta=meta)
@@ -717,7 +776,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     (J,) = col_blockid[col_filter]
 
     # follow k-diagonal through chunks while constructing dask graph:
-    dsk = dict()
+    dsk = {}
     i = 0
     kdiag_chunks = ()
     while kdiag_row_start < a.shape[axis1] and kdiag_col_start < a.shape[axis2]:
@@ -739,13 +798,15 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
                 + free_idx[axis2 - 1 :]
             )
             output_idx = free_idx + (i,)
-            dsk[(name,) + output_idx] = (
+            t = Task(
+                (name,) + output_idx,
                 np.diagonal,
-                (a.name,) + input_idx,
+                TaskRef((a.name,) + input_idx),
                 k,
                 axis1,
                 axis2,
             )
+            dsk[t.key] = t
 
         kdiag_chunks += (kdiag_len,)
         # prepare for next iteration:
@@ -763,19 +824,14 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 @derived_from(np)
 def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
-    if not _numpy_120 and like is not None:
-        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-
-    _min_int = np.lib.twodim_base._min_int
-
     if M is None:
         M = N
 
     chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
 
     m = greater_equal(
-        arange(N, chunks=chunks[0][0], dtype=_min_int(0, N), like=like).reshape(1, N).T,
-        arange(-k, M - k, chunks=chunks[1][0], dtype=_min_int(-k, M - k), like=like),
+        arange(N, chunks=chunks[0][0], like=like).reshape(1, N).T,
+        arange(-k, M - k, chunks=chunks[1][0], like=like),
     )
 
     # Avoid making a copy if the requested type is already bool
@@ -878,7 +934,7 @@ def tile(A, reps):
 
 
 def expand_pad_value(array, pad_value):
-    if isinstance(pad_value, Number):
+    if isinstance(pad_value, Number) or getattr(pad_value, "ndim", None) == 0:
         pad_value = array.ndim * ((pad_value, pad_value),)
     elif (
         isinstance(pad_value, Sequence)
@@ -914,7 +970,7 @@ def expand_pad_value(array, pad_value):
     return pad_value
 
 
-def get_pad_shapes_chunks(array, pad_width, axes):
+def get_pad_shapes_chunks(array, pad_width, axes, mode):
     """
     Helper function for finding shapes and chunks of end pads.
     """
@@ -925,7 +981,12 @@ def get_pad_shapes_chunks(array, pad_width, axes):
     for d in axes:
         for i in range(2):
             pad_shapes[i][d] = pad_width[d][i]
-            pad_chunks[i][d] = (pad_width[d][i],)
+            if mode != "constant" or pad_width[d][i] == 0:
+                pad_chunks[i][d] = (pad_width[d][i],)
+            else:
+                pad_chunks[i][d] = normalize_chunks(
+                    (max(pad_chunks[i][d]),), (pad_width[d][i],)
+                )[0]
 
     pad_shapes = [tuple(s) for s in pad_shapes]
     pad_chunks = [tuple(c) for c in pad_chunks]
@@ -967,7 +1028,9 @@ def pad_edge(array, pad_width, mode, **kwargs):
 
     result = array
     for d in range(array.ndim):
-        pad_shapes, pad_chunks = get_pad_shapes_chunks(result, pad_width, (d,))
+        pad_shapes, pad_chunks = get_pad_shapes_chunks(
+            result, pad_width, (d,), mode=mode
+        )
         pad_arrays = [result, result]
 
         if mode == "constant":
@@ -1176,7 +1239,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
 
         result = result.map_blocks(
             wrapped_pad_func,
-            name="pad",
+            token="pad",
             dtype=result.dtype,
             pad_func=mode,
             iaxis_pad_width=pad_width[d],

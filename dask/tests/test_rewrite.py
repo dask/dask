@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dask.rewrite import VAR, RewriteRule, RuleSet, Traverser, args, head
 from dask.utils_test import add, inc
 

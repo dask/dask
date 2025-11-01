@@ -1,5 +1,5 @@
-Create and Store Dask DataFrames
-================================
+Load and Save Data with Dask DataFrames
+=======================================
 
 .. meta::
     :description: Learn how to create DataFrames and store them. Create a Dask DataFrame from various data storage formats like CSV, HDF, Apache Parquet, and others.
@@ -59,6 +59,12 @@ Pandas:
     from_pandas
     DataFrame.from_dict
 
+Other File Formats:
+
+- `Snowflake <https://github.com/coiled/dask-snowflake>`_
+- `Bigquery <https://github.com/coiled/dask-bigquery>`_
+- `Delta Lake <https://github.com/dask-contrib/dask-deltatable>`_
+
 Creating
 --------
 
@@ -67,7 +73,7 @@ Read from CSV
 
 You can use :func:`read_csv` to read one or more CSV files into a Dask DataFrame.
 It supports loading multiple files at once using globstrings:
-  
+
 .. code-block:: python
 
    >>> df = dd.read_csv('myfiles.*.csv')
@@ -76,7 +82,7 @@ You can break up a single large file with the ``blocksize`` parameter:
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('largefile.csv', blocksize=25e6)  # 25MB chunks  
+   >>> df = dd.read_csv('largefile.csv', blocksize=25e6)  # 25MB chunks
 
 Changing the ``blocksize`` parameter will change the number of partitions (see the explanation on
 :ref:`partitions <dataframe-design-partitions>`). A good rule of thumb when working with

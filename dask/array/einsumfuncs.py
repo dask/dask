@@ -1,11 +1,16 @@
-import numpy as np
-from numpy.compat import basestring
+from __future__ import annotations
 
+import math
+
+import numpy as np
+
+from dask.array._shuffle import _calculate_new_chunksizes
 from dask.array.core import asarray, blockwise, einsum_lookup
-from dask.utils import derived_from
+from dask.utils import cached_max, derived_from
 
 einsum_symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 einsum_symbols_set = set(einsum_symbols)
+from dask import config
 
 
 def chunk_einsum(*operands, **kwargs):
@@ -51,7 +56,7 @@ def parse_einsum_input(operands):
     if len(operands) == 0:
         raise ValueError("No input operands")
 
-    if isinstance(operands[0], basestring):
+    if isinstance(operands[0], str):
         subscripts = operands[0].replace(" ", "")
         operands = [asarray(o) for o in operands[1:]]
 
@@ -199,7 +204,7 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
 
     split_every: int >= 2 or dict(axis: int), optional
         Determines the depth of the recursive aggregation.
-        Deafults to ``None`` which would let dask heuristically
+        Defaults to ``None`` which would let dask heuristically
         decide a good default.
     """
 
@@ -228,6 +233,41 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
     contract_inds = all_inds - set(outputs)
     ncontract_inds = len(contract_inds)
 
+    if len(inputs) > 1 and len(outputs) > 0:
+        # Calculate the increase in chunk size compared to the largest input chunk
+        max_chunk_sizes, max_chunk_size_input = {}, 1
+        for op, input in zip(ops, inputs):
+            max_chunk_size_input = max(
+                math.prod(map(cached_max, op.chunks)), max_chunk_size_input
+            )
+            max_chunk_sizes.update(
+                {
+                    inp: max(cached_max(op.chunks[i]), max_chunk_sizes.get(inp, 1))
+                    for i, inp in enumerate(input)
+                    if inp not in contract_inds
+                }
+            )
+
+        max_chunk_size_output = math.prod(max_chunk_sizes.values())
+        factor = max_chunk_size_output / (
+            max_chunk_size_input * config.get("array.chunk-size-tolerance")
+        )
+
+        # Rechunk inputs to make input chunks smaller to avoid an increase in
+        # output chunks
+        new_ops = []
+        for op, input in zip(ops, inputs):
+            changeable_dimensions = {ctr for ctr, i in enumerate(input) if i in outputs}
+            f = max(factor ** (len(changeable_dimensions) / len(outputs)), 1)
+            result = _calculate_new_chunksizes(
+                op.chunks,
+                list(op.chunks),
+                changeable_dimensions,
+                math.prod(map(cached_max, op.chunks)) / f,
+            )
+            new_ops.append(op.rechunk(result))
+        ops = new_ops
+
     # Introduce the contracted indices into the blockwise product
     # so that we get numpy arrays, not lists
     result = blockwise(
@@ -235,7 +275,7 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
         tuple(outputs) + tuple(contract_inds),
         *(a for ap in zip(ops, inputs) for a in ap),
         # blockwise parameters
-        adjust_chunks={ind: 1 for ind in contract_inds},
+        adjust_chunks=dict.fromkeys(contract_inds, 1),
         dtype=dtype,
         # np.einsum parameters
         subscripts=subscripts,

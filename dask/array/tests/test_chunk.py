@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -96,6 +98,13 @@ def test_coarsen():
     y = coarsen(np.sum, x, {0: 2, 1: 4})
     assert y.shape == (12, 6)
     assert y[0, 0] == np.sum(x[:2, :4])
+
+
+def test_coarsen_unaligned_shape():
+    """https://github.com/dask/dask/issues/10274"""
+    x = da.random.random(100)
+    res = da.coarsen(np.mean, x, {0: 3}, trim_excess=True)
+    assert res.chunks == ((33,),)
 
 
 """

@@ -1,18 +1,28 @@
+from __future__ import annotations
+
+import contextlib
 from itertools import product
 
 import pandas as pd
 import pytest
 
 import dask.dataframe as dd
+from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
-CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
-    CHECK_FREQ["check_freq"] = False
+if PANDAS_GE_300:
+    from pandas.errors import Pandas4Warning
 
 
 def resample(df, freq, how="mean", **kwargs):
     return getattr(df.resample(freq, **kwargs), how)()
+
+
+# XFAIL_PANDAS_3_RESAMPLE = pytest.mark.xfail(
+#     PANDAS_GE_300, reason="Pandas 3 resample is buggy"
+# )
+
+ME = "ME" if PANDAS_GE_220 else "M"
 
 
 @pytest.mark.parametrize(
@@ -22,13 +32,17 @@ def resample(df, freq, how="mean", **kwargs):
             ["series", "frame"],
             ["count", "mean", "ohlc"],
             [2, 5],
-            ["30T", "h", "d", "w", "M"],
+            ["30min", "h", "D", "W", ME],
             ["right", "left"],
             ["right", "left"],
         )
     ),
 )
 def test_series_resample(obj, method, npartitions, freq, closed, label):
+    if PANDAS_GE_300 and freq == "D" and closed == "right":
+        # Temporary xfail until the upstream issue is resolved
+        pytest.xfail("https://github.com/pandas-dev/pandas/issues/62200")
+
     index = pd.date_range("1-1-2000", "2-15-2000", freq="h")
     index = index.union(pd.date_range("4-15-2000", "5-15-2000", freq="h"))
     if obj == "series":
@@ -91,7 +105,7 @@ def test_resample_throws_error_when_parition_index_does_not_match_index():
     ps = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(ps, npartitions=5)
     with pytest.raises(ValueError, match="Index is not contained within new index."):
-        ds.resample("2M").count().compute()
+        ds.resample(f"2{ME}").count().compute()
 
 
 def test_resample_pads_last_division_to_avoid_off_by_one():
@@ -122,20 +136,21 @@ def test_resample_pads_last_division_to_avoid_off_by_one():
         1559127673402811000,
     ]
 
+    freq = "1QE" if PANDAS_GE_220 else "1Q"
     df = pd.DataFrame({"Time": times, "Counts": range(len(times))})
     df["Time"] = pd.to_datetime(df["Time"], utc=True)
-    expected = df.set_index("Time").resample("1Q").size()
+    expected = df.set_index("Time").resample(freq).size()
 
     ddf = dd.from_pandas(df, npartitions=2).set_index("Time")
-    actual = ddf.resample("1Q").size().compute()
+    actual = ddf.resample(freq).size().compute()
     assert_eq(actual, expected)
 
 
 def test_resample_does_not_evenly_divide_day():
     import numpy as np
 
-    index = pd.date_range("2012-01-02", "2012-02-02", freq="H")
-    index = index.union(pd.date_range("2012-03-02", "2012-04-02", freq="H"))
+    index = pd.date_range("2012-01-02", "2012-02-02", freq="h")
+    index = index.union(pd.date_range("2012-03-02", "2012-04-02", freq="h"))
     df = pd.DataFrame({"p": np.random.random(len(index))}, index=index)
     ddf = dd.from_pandas(df, npartitions=5)
     # Frequency doesn't evenly divide day
@@ -146,22 +161,22 @@ def test_resample_does_not_evenly_divide_day():
 
 
 def test_series_resample_does_not_evenly_divide_day():
-    index = pd.date_range("2012-01-02 00:00:00", "2012-01-02 01:00:00", freq="T")
+    index = pd.date_range("2012-01-02 00:00:00", "2012-01-02 01:00:00", freq="min")
     index = index.union(
-        pd.date_range("2012-01-02 06:00:00", "2012-01-02 08:00:00", freq="T")
+        pd.date_range("2012-01-02 06:00:00", "2012-01-02 08:00:00", freq="min")
     )
     s = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day
-    expected = s.resample("57T").mean()
-    result = ds.resample("57T").mean().compute()
+    expected = s.resample("57min").mean()
+    result = ds.resample("57min").mean().compute()
 
     assert_eq(result, expected)
 
 
 def test_unknown_divisions_error():
     df = pd.DataFrame({"x": [1, 2, 3]})
-    ddf = dd.from_pandas(df, npartitions=2, sort=False)
+    ddf = dd.from_pandas(df, npartitions=2, sort=False).clear_divisions()
     try:
         ddf.x.resample("1m").mean()
         assert False
@@ -198,7 +213,7 @@ def test_series_resample_non_existent_datetime():
     result = ddf.resample("1D").mean()
     expected = df.resample("1D").mean()
 
-    assert_eq(result, expected, **CHECK_FREQ)
+    assert_eq(result, expected, check_freq=False)
 
 
 @pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size", "quantile"])
@@ -209,7 +224,26 @@ def test_common_aggs(agg):
 
     f = lambda df: getattr(df, agg)()
 
-    res = f(ps.resample("1d"))
-    expected = f(ds.resample("1d"))
+    res = f(ps.resample("1D"))
+    expected = f(ds.resample("1D"))
 
     assert_eq(res, expected, check_dtype=False)
+
+
+def test_rule_deprecated():
+    index = pd.date_range("2000-01-01", "2000-02-15", freq="h")
+    s = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(s, npartitions=2)
+
+    if PANDAS_GE_300:
+        ctx = pytest.warns(Pandas4Warning, match="'d' is deprecated")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        res = s.resample("1d").count()
+    with ctx:
+        expected = ds.resample("1d").count()
+
+    with ctx:
+        assert_eq(res, expected, check_dtype=False)

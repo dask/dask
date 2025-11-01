@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 def __getattr__(value):
     try:
         import dask_ml

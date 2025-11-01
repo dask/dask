@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 
 # Start list of valid chunk types, to be added to with guarded imports
@@ -129,6 +131,13 @@ try:
     import scipy.sparse
 
     register_chunk_type(scipy.sparse.spmatrix)
+except ImportError:
+    pass
+
+try:
+    from scipy.sparse import sparray
+
+    register_chunk_type(sparray)
 except ImportError:
     pass
 

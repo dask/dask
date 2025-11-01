@@ -7,7 +7,7 @@ import os
 import pickle
 import sys
 import traceback
-from collections.abc import Hashable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from warnings import warn
@@ -18,6 +18,7 @@ from dask import config
 from dask.local import MultiprocessingPoolExecutor, get_async, reraise
 from dask.optimization import cull, fuse
 from dask.system import CPU_COUNT
+from dask.typing import Key
 from dask.utils import ensure_dict
 
 
@@ -116,7 +117,7 @@ def pack_exception(e, dumps):
     tb = _pack_traceback(exc_traceback)
     try:
         result = dumps((e, tb))
-    except BaseException as e:
+    except Exception as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = _pack_traceback(exc_traceback)
         result = dumps((e, tb))
@@ -145,7 +146,7 @@ def get_context():
 
 def get(
     dsk: Mapping,
-    keys: Sequence[Hashable] | Hashable,
+    keys: Sequence[Key] | Key,
     num_workers=None,
     func_loads=None,
     func_dumps=None,
@@ -178,7 +179,7 @@ def get(
         Function to initialize a worker process before running any tasks in it.
     chunksize: int, optional
         Size of chunks to use when dispatching work.
-        Defaults to 5 as some batching is helpful.
+        Defaults to 6 as some batching is helpful.
         If -1, will be computed to evenly divide ready work across workers.
     """
     chunksize = chunksize or config.get("chunksize", 6)
@@ -212,7 +213,9 @@ def get(
             pool = MultiprocessingPoolExecutor(pool)
         cleanup = False
 
-    # Optimize Dask
+    if hasattr(dsk, "__dask_graph__"):
+        dsk = dsk.__dask_graph__()
+
     dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     if optimize_graph:

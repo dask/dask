@@ -2,35 +2,41 @@ from __future__ import annotations
 
 import codecs
 import functools
+import gc
 import inspect
 import os
 import re
 import shutil
 import sys
 import tempfile
+import types
 import uuid
 import warnings
-from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
-from contextlib import contextmanager, nullcontext, suppress
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Set
+from contextlib import ContextDecorator, contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
-from functools import lru_cache
+from functools import wraps
 from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import Any, ClassVar, Literal, TypeVar, overload
+from typing import Any, ClassVar, Literal, TypeVar, cast, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
 
 from dask import config
-from dask.core import get_deps
+from dask.typing import no_default
 
 K = TypeVar("K")
 V = TypeVar("V")
 T = TypeVar("T")
 
+# used in decorators to preserve the signature of the function it decorates
+# see https://mypy.readthedocs.io/en/stable/generics.html#declaring-decorators
+FuncType = Callable[..., Any]
+F = TypeVar("F", bound=FuncType)
 
 system_encoding = sys.getdefaultencoding()
 if system_encoding == "ascii":
@@ -135,6 +141,132 @@ def _deprecated(
         return wrapper
 
     return decorator
+
+
+def _deprecated_kwarg(
+    old_arg_name: str,
+    new_arg_name: str | None = None,
+    mapping: Mapping[Any, Any] | Callable[[Any], Any] | None = None,
+    stacklevel: int = 2,
+    comment: str | None = None,
+) -> Callable[[F], F]:
+    """
+    Decorator to deprecate a keyword argument of a function.
+
+    Parameters
+    ----------
+    old_arg_name : str
+        Name of argument in function to deprecate
+    new_arg_name : str, optional
+        Name of preferred argument in function. Omit to warn that
+        ``old_arg_name`` keyword is deprecated.
+    mapping : dict or callable, optional
+        If mapping is present, use it to translate old arguments to
+        new arguments. A callable must do its own value checking;
+        values not found in a dict will be forwarded unchanged.
+    comment :  str, optional
+        Additional message to deprecation message. Useful to pass
+        on suggestions with the deprecation warning.
+
+    Examples
+    --------
+    The following deprecates 'cols', using 'columns' instead
+
+    >>> @_deprecated_kwarg(old_arg_name='cols', new_arg_name='columns')
+    ... def f(columns=''):
+    ...     print(columns)
+    ...
+    >>> f(columns='should work ok')
+    should work ok
+
+    >>> f(cols='should raise warning')  # doctest: +SKIP
+    FutureWarning: cols is deprecated, use columns instead
+      warnings.warn(msg, FutureWarning)
+    should raise warning
+
+    >>> f(cols='should error', columns="can\'t pass do both")  # doctest: +SKIP
+    TypeError: Can only specify 'cols' or 'columns', not both
+
+    >>> @_deprecated_kwarg('old', 'new', {'yes': True, 'no': False})
+    ... def f(new=False):
+    ...     print('yes!' if new else 'no!')
+    ...
+    >>> f(old='yes')  # doctest: +SKIP
+    FutureWarning: old='yes' is deprecated, use new=True instead
+      warnings.warn(msg, FutureWarning)
+    yes!
+
+    To raise a warning that a keyword will be removed entirely in the future
+
+    >>> @_deprecated_kwarg(old_arg_name='cols', new_arg_name=None)
+    ... def f(cols='', another_param=''):
+    ...     print(cols)
+    ...
+    >>> f(cols='should raise warning')  # doctest: +SKIP
+    FutureWarning: the 'cols' keyword is deprecated and will be removed in a
+    future version please takes steps to stop use of 'cols'
+    should raise warning
+    >>> f(another_param='should not raise warning')  # doctest: +SKIP
+    should not raise warning
+
+    >>> f(cols='should raise warning', another_param='')  # doctest: +SKIP
+    FutureWarning: the 'cols' keyword is deprecated and will be removed in a
+    future version please takes steps to stop use of 'cols'
+    should raise warning
+    """
+    if mapping is not None and not hasattr(mapping, "get") and not callable(mapping):
+        raise TypeError(
+            "mapping from old to new argument values must be dict or callable!"
+        )
+
+    comment_ = f"\n{comment}" or ""
+
+    def _deprecated_kwarg(func: F) -> F:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Callable[..., Any]:
+            old_arg_value = kwargs.pop(old_arg_name, no_default)
+
+            if old_arg_value is not no_default:
+                if new_arg_name is None:
+                    msg = (
+                        f"the {repr(old_arg_name)} keyword is deprecated and "
+                        "will be removed in a future version. Please take "
+                        f"steps to stop the use of {repr(old_arg_name)}"
+                    ) + comment_
+                    warnings.warn(msg, FutureWarning, stacklevel=stacklevel)
+                    kwargs[old_arg_name] = old_arg_value
+                    return func(*args, **kwargs)
+
+                elif mapping is not None:
+                    if callable(mapping):
+                        new_arg_value = mapping(old_arg_value)
+                    else:
+                        new_arg_value = mapping.get(old_arg_value, old_arg_value)
+                    msg = (
+                        f"the {old_arg_name}={repr(old_arg_value)} keyword is "
+                        "deprecated, use "
+                        f"{new_arg_name}={repr(new_arg_value)} instead."
+                    )
+                else:
+                    new_arg_value = old_arg_value
+                    msg = (
+                        f"the {repr(old_arg_name)} keyword is deprecated, "
+                        f"use {repr(new_arg_name)} instead."
+                    )
+
+                warnings.warn(msg + comment_, FutureWarning, stacklevel=stacklevel)
+                if kwargs.get(new_arg_name) is not None:
+                    msg = (
+                        f"Can only specify {repr(old_arg_name)} "
+                        f"or {repr(new_arg_name)}, not both."
+                    )
+                    raise TypeError(msg)
+                kwargs[new_arg_name] = new_arg_value
+            return func(*args, **kwargs)
+
+        return cast(F, wrapper)
+
+    return _deprecated_kwarg
 
 
 def deepmap(func, *seqs):
@@ -341,7 +473,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
     automatically switch to a temporary current directory, to avoid
     race conditions when running tests in parallel.
     """
-    with (tmp_cwd() if use_tmpdir else nullcontext()):
+    with tmp_cwd() if use_tmpdir else nullcontext():
         for filename, text in d.items():
             try:
                 os.makedirs(os.path.dirname(filename))
@@ -425,7 +557,7 @@ def random_state_data(n: int, random_state=None) -> list:
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
-    l = list(np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1)))
+    l = list(np.frombuffer(random_data, dtype="<u4").reshape((n, -1)))
     assert len(l) == n
     return l
 
@@ -611,7 +743,25 @@ class Dispatch:
     def dispatch(self, cls):
         """Return the function implementation for the given ``cls``"""
         lk = self._lookup
+        if cls in lk:
+            return lk[cls]
         for cls2 in cls.__mro__:
+            # Is a lazy registration function present?
+            try:
+                toplevel, _, _ = cls2.__module__.partition(".")
+            except Exception:
+                continue
+            try:
+                register = self._lazy[toplevel]
+            except KeyError:
+                pass
+            else:
+                register()
+                self._lazy.pop(toplevel, None)
+                meth = self.dispatch(cls)  # recurse
+                lk[cls] = meth
+                lk[cls2] = meth
+                return meth
             try:
                 impl = lk[cls2]
             except KeyError:
@@ -621,16 +771,6 @@ class Dispatch:
                     # Cache lookup
                     lk[cls] = impl
                 return impl
-            # Is a lazy registration function present?
-            toplevel, _, _ = cls2.__module__.partition(".")
-            try:
-                register = self._lazy[toplevel]
-            except KeyError:
-                pass
-            else:
-                register()
-                self._lazy.pop(toplevel, None)
-                return self.dispatch(cls)  # recurse
         raise TypeError(f"No dispatch for {cls}")
 
     def __call__(self, arg, *args, **kwargs):
@@ -771,6 +911,11 @@ def _derived_from(
     if isinstance(original_method, property):
         # some things like SeriesGroupBy.unique are generated.
         original_method = original_method.fget
+        if not doc:
+            doc = getattr(original_method, "__doc__", None)
+
+    if isinstance(original_method, functools.cached_property):
+        original_method = original_method.func
         if not doc:
             doc = getattr(original_method, "__doc__", None)
 
@@ -1024,20 +1169,6 @@ def insert(tup, loc, val):
     return tuple(L)
 
 
-def dependency_depth(dsk):
-    deps, _ = get_deps(dsk)
-
-    @lru_cache(maxsize=None)
-    def max_depth_by_deps(key):
-        if not deps[key]:
-            return 1
-
-        d = 1 + max(max_depth_by_deps(dep_key) for dep_key in deps[key])
-        return d
-
-    return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
-
-
 def memory_repr(num):
     for x in ["bytes", "KB", "MB", "GB", "TB"]:
         if num < 1024.0:
@@ -1058,7 +1189,7 @@ def asciitable(columns, rows):
     """
     rows = [tuple(str(i) for i in r) for r in rows]
     columns = tuple(str(i) for i in columns)
-    widths = tuple(max(max(map(len, x)), len(c)) for x, c in zip(zip(*rows), columns))
+    widths = tuple(max(*map(len, x), len(c)) for x, c in zip(zip(*rows), columns))
     row_template = ("|" + (" %%-%ds |" * len(columns))) % widths
     header = row_template % tuple(columns)
     bar = "+%s+" % "+".join("-" * (w + 2) for w in widths)
@@ -1228,6 +1359,19 @@ def get_scheduler_lock(collection=None, scheduler=None):
 
     if actual_get == multiprocessing.get:
         return multiprocessing.get_context().Manager().Lock()
+    else:
+        # if this is a distributed client, we need to lock on
+        # the level between processes, SerializableLock won't work
+        try:
+            import distributed.lock
+            from distributed.worker import get_client
+
+            client = get_client()
+        except (ImportError, ValueError):
+            pass
+        else:
+            if actual_get == client.get:
+                return distributed.lock.Lock()
 
     return SerializableLock()
 
@@ -1615,8 +1759,8 @@ def format_time_ago(n: datetime) -> str:
         "minutes": lambda diff: diff.seconds % 3600 / 60,
     }
     diff = datetime.now() - n
-    for unit in units:
-        dur = int(units[unit](diff))
+    for unit, func in units.items():
+        dur = int(func(diff))
         if dur > 0:
             if dur == 1:  # De-pluralize
                 unit = unit[:-1]
@@ -1682,15 +1826,13 @@ timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
 @overload
-def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None:
-    ...
+def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None: ...
 
 
 @overload
 def parse_timedelta(
     s: str | float | timedelta, default: str | Literal[False] = "seconds"
-) -> float:
-    ...
+) -> float: ...
 
 
 def parse_timedelta(s, default="seconds"):
@@ -1741,7 +1883,13 @@ def parse_timedelta(s, default="seconds"):
 
     n = float(prefix)
 
-    multiplier = timedelta_sizes[suffix.lower()]
+    try:
+        multiplier = timedelta_sizes[suffix.lower()]
+    except KeyError:
+        valid_units = ", ".join(timedelta_sizes.keys())
+        raise KeyError(
+            f"Invalid time unit: {suffix}. Valid units are: {valid_units}"
+        ) from None
 
     result = n * multiplier
     if int(result) == result:
@@ -1826,10 +1974,11 @@ def key_split(s):
     >>> key_split('_(x)')  # strips unpleasant characters
     'x'
     """
+    # If we convert the key, recurse to utilize LRU cache better
     if type(s) is bytes:
-        s = s.decode()
+        return key_split(s.decode())
     if type(s) is tuple:
-        s = s[0]
+        return key_split(s[0])
     try:
         words = s.split("-")
         if not words[0][0].isalpha():
@@ -1848,7 +1997,7 @@ def key_split(s):
         else:
             if result[0] == "<":
                 result = result.strip("<>").split()[0].split(".")[-1]
-            return result
+            return sys.intern(result)
     except Exception:
         return "Other"
 
@@ -1893,23 +2042,6 @@ def stringify(obj, exclusive: Iterable | None = None):
     elif exclusive is None:
         return str(obj)
 
-    if typ is tuple and obj:
-        from dask.optimization import SubgraphCallable
-
-        obj0 = obj[0]
-        if type(obj0) is SubgraphCallable:
-            obj0 = obj0
-            return (
-                SubgraphCallable(
-                    stringify(obj0.dsk, exclusive),
-                    obj0.outkey,
-                    stringify(obj0.inkeys, exclusive),
-                    obj0.name,
-                ),
-            ) + tuple(stringify(x, exclusive) for x in obj[1:])
-        elif callable(obj0):
-            return (obj0,) + tuple(stringify(x, exclusive) for x in obj[1:])
-
     if typ is list:
         return [stringify(v, exclusive) for v in obj]
     if typ is dict:
@@ -1921,29 +2053,6 @@ def stringify(obj, exclusive: Iterable | None = None):
         pass
     if typ is tuple:  # If the tuple itself isn't a key, check its elements
         return tuple(stringify(v, exclusive) for v in obj)
-    return obj
-
-
-def stringify_collection_keys(obj):
-    """Convert all collection keys in ``obj`` to strings.
-
-    This is a specialized version of ``stringify()`` that only converts keys
-    of the form: ``("a string", ...)``
-    """
-
-    typ = type(obj)
-    if typ is tuple and obj:
-        obj0 = obj[0]
-        if type(obj0) is str or type(obj0) is bytes:
-            return stringify(obj)
-        if callable(obj0):
-            return (obj0,) + tuple(stringify_collection_keys(x) for x in obj[1:])
-    if typ is list:
-        return [stringify_collection_keys(v) for v in obj]
-    if typ is dict:
-        return {k: stringify_collection_keys(v) for k, v in obj.items()}
-    if typ is tuple:  # If the tuple itself isn't a key, check its elements
-        return tuple(stringify_collection_keys(v) for v in obj)
     return obj
 
 
@@ -1985,6 +2094,37 @@ def _cumsum(seq, initial_zero):
         return tuple(toolz.accumulate(add, seq))
 
 
+@functools.lru_cache
+def _max(seq):
+    if isinstance(seq, _HashIdWrapper):
+        seq = seq.wrapped
+    return max(seq)
+
+
+def cached_max(seq):
+    """Compute max with caching.
+
+    Caching is by the identity of `seq` rather than the value. It is thus
+    important that `seq` is a tuple of immutable objects, and this function
+    is intended for use where `seq` is a value that will persist (generally
+    block sizes).
+
+    Parameters
+    ----------
+    seq : tuple
+        Values to reduce
+
+    Returns
+    -------
+    tuple
+    """
+    assert isinstance(seq, tuple)
+    # Look up by identity first, to avoid a linear-time __hash__
+    # if we've seen this tuple object before.
+    result = _max(_HashIdWrapper(seq))
+    return result
+
+
 def cached_cumsum(seq, initial_zero=False):
     """Compute :meth:`toolz.accumulate` with caching.
 
@@ -2017,10 +2157,11 @@ def cached_cumsum(seq, initial_zero=False):
 def show_versions() -> None:
     """Provide version information for bug reports."""
 
-    from importlib.metadata import PackageNotFoundError, version
     from json import dumps
     from platform import uname
     from sys import stdout, version_info
+
+    from dask._compatibility import importlib_metadata
 
     try:
         from distributed import __version__ as distributed_version
@@ -2035,7 +2176,6 @@ def show_versions() -> None:
         "cloudpickle",
         "fsspec",
         "bokeh",
-        "fastparquet",
         "pyarrow",
         "zarr",
     ]
@@ -2050,8 +2190,8 @@ def show_versions() -> None:
 
     for modname in deps:
         try:
-            result[modname] = version(modname)
-        except PackageNotFoundError:
+            result[modname] = importlib_metadata.version(modname)
+        except importlib_metadata.PackageNotFoundError:
             result[modname] = None
 
     stdout.writelines(dumps(result, indent=2))
@@ -2084,13 +2224,104 @@ def is_namedtuple_instance(obj: Any) -> bool:
     )
 
 
-def get_default_shuffle_algorithm() -> str:
-    if d := config.get("shuffle", None):
+def get_default_shuffle_method() -> str:
+    if d := config.get("dataframe.shuffle.method", None):
         return d
     try:
         from distributed import default_client
 
         default_client()
-        return "tasks"
     except (ImportError, ValueError):
         return "disk"
+
+    try:
+        from distributed.shuffle import check_minimal_arrow_version
+
+        check_minimal_arrow_version()
+    except ModuleNotFoundError:
+        return "tasks"
+    return "p2p"
+
+
+def get_meta_library(like):
+    if hasattr(like, "_meta"):
+        like = like._meta
+
+    return import_module(typename(like).partition(".")[0])
+
+
+class shorten_traceback:
+    """Context manager that removes irrelevant stack elements from traceback.
+
+    * omits frames from modules that match `admin.traceback.shorten`
+    * always keeps the first and last frame.
+    """
+
+    __slots__ = ()
+
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        if exc_val and exc_tb:
+            exc_val.__traceback__ = self.shorten(exc_tb)
+
+    @staticmethod
+    def shorten(exc_tb: types.TracebackType) -> types.TracebackType:
+        paths = config.get("admin.traceback.shorten")
+        if not paths:
+            return exc_tb
+
+        exp = re.compile(".*(" + "|".join(paths) + ")")
+        curr: types.TracebackType | None = exc_tb
+        prev: types.TracebackType | None = None
+
+        while curr:
+            if prev is None:
+                prev = curr  # first frame
+            elif not curr.tb_next:
+                # always keep last frame
+                prev.tb_next = curr
+                prev = prev.tb_next
+            elif not exp.match(curr.tb_frame.f_code.co_filename):
+                # keep if module is not listed in config
+                prev.tb_next = curr
+                prev = curr
+            curr = curr.tb_next
+
+        # Uncomment to remove the first frame, which is something you don't want to keep
+        # if it matches the regexes. Requires Python >=3.11.
+        # if exc_tb.tb_next and exp.match(exc_tb.tb_frame.f_code.co_filename):
+        #     return exc_tb.tb_next
+
+        return exc_tb
+
+
+def unzip(ls, nout):
+    """Unzip a list of lists into ``nout`` outputs."""
+    out = list(zip(*ls))
+    if not out:
+        out = [()] * nout
+    return out
+
+
+class disable_gc(ContextDecorator):
+    """Context manager to disable garbage collection."""
+
+    def __init__(self, collect=False):
+        self.collect = collect
+        self._gc_enabled = gc.isenabled()
+
+    def __enter__(self):
+        gc.disable()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self._gc_enabled:
+            gc.enable()
+        return False

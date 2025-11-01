@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import inspect
+import warnings
 from collections.abc import Sequence
 
 import numpy as np
@@ -12,6 +15,7 @@ except ImportError:
 from dask.array.core import asarray
 from dask.array.core import concatenate as _concatenate
 from dask.array.creation import arange as _arange
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.utils import derived_from, skip_doctest
 
 chunk_error = (
@@ -111,7 +115,7 @@ _out_chunk_fns = {
 }
 
 
-def fft_wrap(fft_func, kind=None, dtype=None):
+def fft_wrap(fft_func, kind=None, dtype=None, allow_fftpack=False):
     """Wrap 1D, 2D, and ND real and complex FFT functions
 
     Takes a function that behaves like ``numpy.fft`` functions and
@@ -142,10 +146,18 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     >>> parallel_ifft = dff.fft_wrap(np.fft.ifft)
     """
     if scipy is not None:
-        if fft_func is scipy.fftpack.rfft:
-            raise ValueError("SciPy's `rfft` doesn't match the NumPy API.")
-        elif fft_func is scipy.fftpack.irfft:
-            raise ValueError("SciPy's `irfft` doesn't match the NumPy API.")
+        if fft_func.__module__.startswith("scipy.fftpack"):
+            if not allow_fftpack:
+                warnings.warn(
+                    f"Function {fft_func.__name__} from `scipy.fftpack` does not "
+                    "match NumPy's API and is considered legacy. Please use "
+                    "`scipy.fft` instead. To suppress this warning and allow usage"
+                    ", set `allow_fftpack=True`. Support for `scipy.fftpack` will "
+                    "be deprecated in future releases.",
+                    FutureWarning,
+                )
+            # If allow_fftpack is True, we proceed but we skip passing the norm
+            # argument.
 
     if kind is None:
         kind = fft_func.__name__
@@ -154,7 +166,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     except KeyError:
         raise ValueError("Given unknown `kind` %s." % kind)
 
-    def func(a, s=None, axes=None):
+    def func(a, s=None, axes=None, norm=None):
         a = asarray(a)
         if axes is None:
             if kind.endswith("2"):
@@ -163,6 +175,13 @@ def fft_wrap(fft_func, kind=None, dtype=None):
                 if s is None:
                     axes = tuple(range(a.ndim))
                 else:
+                    if NUMPY_GE_200:
+                        # Match deprecation in numpy
+                        warnings.warn(
+                            "DeprecationWarning: `axes` should not be `None` "
+                            "if `s` is not `None` (Deprecated in NumPy 2.0)",
+                            DeprecationWarning,
+                        )
                     axes = tuple(range(len(s)))
             else:
                 axes = (-1,)
@@ -174,7 +193,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         if _dtype is None:
             sample = np.ones(a.ndim * (8,), dtype=a.dtype)
             try:
-                _dtype = fft_func(sample, axes=axes).dtype
+                _dtype = fft_func(sample, axes=axes, norm=norm).dtype
             except TypeError:
                 _dtype = fft_func(sample).dtype
 
@@ -184,18 +203,18 @@ def fft_wrap(fft_func, kind=None, dtype=None):
 
         chunks = out_chunk_fn(a, s, axes)
 
-        args = (s, axes)
+        args = (s, axes, norm)
         if kind.endswith("fft"):
             axis = None if axes is None else axes[0]
             n = None if s is None else s[0]
-            args = (n, axis)
+            args = (n, axis, norm)
 
         return a.map_blocks(fft_func, *args, dtype=_dtype, chunks=chunks)
 
     if kind.endswith("fft"):
         _func = func
 
-        def func(a, n=None, axis=None):
+        def func(a, n=None, axis=None, norm=None):
             s = None
             if n is not None:
                 s = (n,)
@@ -204,7 +223,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
             if axis is not None:
                 axes = (axis,)
 
-            return _func(a, s, axes)
+            return _func(a, s, axes, norm)
 
     func_mod = inspect.getmodule(fft_func)
     func_name = fft_func.__name__

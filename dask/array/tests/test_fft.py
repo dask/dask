@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import contextlib
 from itertools import combinations_with_replacement
 
 import numpy as np
@@ -7,6 +10,7 @@ import dask.array as da
 import dask.array.fft
 from dask.array.core import normalize_chunks
 from dask.array.fft import fft_wrap
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.utils import assert_eq, same_keys
 
 all_1d_funcnames = ["fft", "ifft", "rfft", "irfft", "hfft", "ihfft"]
@@ -22,10 +26,12 @@ all_nd_funcnames = [
     "irfftn",
 ]
 
-nparr = np.arange(100).reshape(10, 10)
-darr = da.from_array(nparr, chunks=(1, 10))
-darr2 = da.from_array(nparr, chunks=(10, 1))
-darr3 = da.from_array(nparr, chunks=(10, 10))
+if not da._array_expr_enabled():
+
+    nparr = np.arange(100).reshape(10, 10)
+    darr = da.from_array(nparr, chunks=(1, 10))
+    darr2 = da.from_array(nparr, chunks=(10, 1))
+    darr3 = da.from_array(nparr, chunks=(10, 10))
 
 
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
@@ -51,11 +57,23 @@ def test_fft2n_shapes(funcname):
     da_fft = getattr(dask.array.fft, funcname)
     np_fft = getattr(np.fft, funcname)
     assert_eq(da_fft(darr3), np_fft(nparr))
-    assert_eq(da_fft(darr3, (8, 9)), np_fft(nparr, (8, 9)))
     assert_eq(da_fft(darr3, (8, 9), axes=(1, 0)), np_fft(nparr, (8, 9), axes=(1, 0)))
     assert_eq(
         da_fft(darr3, (12, 11), axes=(1, 0)), np_fft(nparr, (12, 11), axes=(1, 0))
     )
+
+    if NUMPY_GE_200 and funcname.endswith("fftn"):
+        ctx = pytest.warns(
+            DeprecationWarning,
+            match="`axes` should not be `None` if `s` is not `None`",
+        )
+    else:
+        ctx = contextlib.nullcontext()
+    with ctx:
+        expect = np_fft(nparr, (8, 9))
+    with ctx:
+        actual = da_fft(darr3, (8, 9))
+    assert_eq(expect, actual)
 
 
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
@@ -65,10 +83,22 @@ def test_fft_n_kwarg(funcname):
 
     assert_eq(da_fft(darr, 5), np_fft(nparr, 5))
     assert_eq(da_fft(darr, 13), np_fft(nparr, 13))
+    assert_eq(da_fft(darr, 13, norm="backward"), np_fft(nparr, 13, norm="backward"))
+    assert_eq(da_fft(darr, 13, norm="ortho"), np_fft(nparr, 13, norm="ortho"))
+    assert_eq(da_fft(darr, 13, norm="forward"), np_fft(nparr, 13, norm="forward"))
     assert_eq(da_fft(darr2, axis=0), np_fft(nparr, axis=0))
     assert_eq(da_fft(darr2, 5, axis=0), np_fft(nparr, 5, axis=0))
-    assert_eq(da_fft(darr2, 13, axis=0), np_fft(nparr, 13, axis=0))
-    assert_eq(da_fft(darr2, 12, axis=0), np_fft(nparr, 12, axis=0))
+    assert_eq(
+        da_fft(darr2, 13, axis=0, norm="backward"),
+        np_fft(nparr, 13, axis=0, norm="backward"),
+    )
+    assert_eq(
+        da_fft(darr2, 12, axis=0, norm="ortho"), np_fft(nparr, 12, axis=0, norm="ortho")
+    )
+    assert_eq(
+        da_fft(darr2, 12, axis=0, norm="forward"),
+        np_fft(nparr, 12, axis=0, norm="forward"),
+    )
 
 
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
@@ -113,7 +143,7 @@ def test_nd_ffts_axes(funcname, dtype):
                 assert_eq(r, er)
 
 
-@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
+@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fft"])
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_wrap_ffts(modname, funcname, dtype):
@@ -127,28 +157,24 @@ def test_wrap_ffts(modname, funcname, dtype):
     darr2c = darr2.astype(dtype)
     nparrc = nparr.astype(dtype)
 
-    if modname == "scipy.fftpack" and "rfft" in funcname:
-        with pytest.raises(ValueError):
-            fft_wrap(func)
-    else:
-        wfunc = fft_wrap(func)
-        assert wfunc(darrc).dtype == func(nparrc).dtype
-        assert wfunc(darrc).shape == func(nparrc).shape
-        assert_eq(wfunc(darrc), func(nparrc))
-        assert_eq(wfunc(darrc, axis=1), func(nparrc, axis=1))
-        assert_eq(wfunc(darr2c, axis=0), func(nparrc, axis=0))
-        assert_eq(wfunc(darrc, n=len(darrc) - 1), func(nparrc, n=len(darrc) - 1))
-        assert_eq(
-            wfunc(darrc, axis=1, n=darrc.shape[1] - 1),
-            func(nparrc, n=darrc.shape[1] - 1),
-        )
-        assert_eq(
-            wfunc(darr2c, axis=0, n=darr2c.shape[0] - 1),
-            func(nparrc, axis=0, n=darr2c.shape[0] - 1),
-        )
+    wfunc = fft_wrap(func)
+    assert wfunc(darrc).dtype == func(nparrc).dtype
+    assert wfunc(darrc).shape == func(nparrc).shape
+    assert_eq(wfunc(darrc), func(nparrc))
+    assert_eq(wfunc(darrc, axis=1), func(nparrc, axis=1))
+    assert_eq(wfunc(darr2c, axis=0), func(nparrc, axis=0))
+    assert_eq(wfunc(darrc, n=len(darrc) - 1), func(nparrc, n=len(darrc) - 1))
+    assert_eq(
+        wfunc(darrc, axis=1, n=darrc.shape[1] - 1),
+        func(nparrc, n=darrc.shape[1] - 1),
+    )
+    assert_eq(
+        wfunc(darr2c, axis=0, n=darr2c.shape[0] - 1),
+        func(nparrc, axis=0, n=darr2c.shape[0] - 1),
+    )
 
 
-@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fftpack"])
+@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fft"])
 @pytest.mark.parametrize("funcname", all_nd_funcnames)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_wrap_fftns(modname, funcname, dtype):
@@ -253,3 +279,17 @@ def test_fftshift_identity(funcname1, funcname2, shape, chunks, axes):
             assert len(each_d_r_chunks) != 1
 
     assert_eq(d_r, d)
+
+
+@pytest.mark.parametrize("modname", ["numpy.fft", "scipy.fft", "scipy.fftpack"])
+def test_scipy_fftpack_future_warning(modname):
+    fft_mod = pytest.importorskip(modname)
+
+    if modname == "scipy.fftpack":
+        # Check that a FutureWarning is raised when using scipy.fftpack with allow_fftpack=False
+        with pytest.warns(
+            FutureWarning, match="does not match NumPy's API and is considered legacy"
+        ):
+            da.fft.fft_wrap(fft_mod.fft, allow_fftpack=False)(np.random.random(16))
+    else:
+        da.fft.fft_wrap(fft_mod.fft, allow_fftpack=False)(np.random.random(16))

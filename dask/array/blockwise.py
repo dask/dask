@@ -1,12 +1,17 @@
+from __future__ import annotations
+
 import numbers
 import warnings
+from math import isnan
 
+import numpy as np
 import tlz as toolz
 
 from dask import base, utils
 from dask.blockwise import blockwise as core_blockwise
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ArrayBlockwiseDep
 
 
 def blockwise(
@@ -38,7 +43,8 @@ def blockwise(
     out_ind : iterable
         Block pattern of the output, something like 'ijk' or (1, 2, 3)
     *args : sequence of Array, index pairs
-        Sequence like (x, 'ij', y, 'jk', z, 'i')
+        You may also pass literal arguments, accompanied by None index
+        e.g. (x, 'ij', y, 'jk', z, 'i', some_literal, None)
     **kwargs : dict
         Extra keyword arguments to pass to function
     dtype : np.dtype
@@ -119,7 +125,7 @@ def blockwise(
 
     >>> z = blockwise(sequence_dot, '', a, 'i', b, 'i', dtype='f8')
     >>> z.compute()
-    250
+    np.int64(250)
 
     Add new single-chunk dimensions with the ``new_axes=`` keyword, including
     the length of the new dimension.  New dimensions will always be in a single
@@ -197,7 +203,7 @@ def blockwise(
             v = (v,)
         chunkss[k] = v
 
-    arginds = zip(arrays, args[1::2])
+    arginds = list(zip(arrays, args[1::2]))
     numblocks = {}
 
     dependencies = []
@@ -210,6 +216,7 @@ def blockwise(
         if ind is None:
             arg = normalize_arg(arg)
             arg, collections = unpack_collections(arg)
+
             dependencies.extend(collections)
         else:
             if (
@@ -221,9 +228,10 @@ def blockwise(
                     "Index string %s does not match array dimension %d"
                     % (ind, arg.ndim)
                 )
-            numblocks[arg.name] = arg.numblocks
-            arrays.append(arg)
-            arg = arg.name
+            if not isinstance(arg, ArrayBlockwiseDep):
+                numblocks[arg.name] = arg.numblocks
+                arrays.append(arg)
+                arg = arg.name
         argindsstr.extend((arg, ind))
 
     # Normalize keyword arguments
@@ -238,7 +246,18 @@ def blockwise(
     if not out:
         out = "{}-{}".format(
             token or utils.funcname(func).strip("_"),
-            base.tokenize(func, out_ind, argindsstr, dtype, **kwargs),
+            base.tokenize(
+                func,
+                out_ind,
+                argindsstr,
+                adjust_chunks,
+                new_axes,
+                align_arrays,
+                concatenate,
+                meta,
+                dtype,
+                **kwargs,
+            ),
         )
 
     graph = core_blockwise(
@@ -262,7 +281,9 @@ def blockwise(
             if ind in adjust_chunks:
                 if callable(adjust_chunks[ind]):
                     chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
-                elif isinstance(adjust_chunks[ind], numbers.Integral):
+                elif isinstance(adjust_chunks[ind], numbers.Integral) or (
+                    np.isscalar(adjust_chunks[ind]) and isnan(adjust_chunks[ind])
+                ):
                     chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
                     if len(adjust_chunks[ind]) != len(chunks[i]):

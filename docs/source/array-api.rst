@@ -66,9 +66,11 @@ Top level functions
    cumsum
    deg2rad
    degrees
+   delete
    diag
    diagonal
    diff
+   divide
    divmod
    digitize
    dot
@@ -80,7 +82,9 @@ Top level functions
    equal
    exp
    exp2
+   expand_dims
    expm1
+   extract
    eye
    fabs
    fix
@@ -107,6 +111,7 @@ Top level functions
    histogramdd
    hstack
    hypot
+   i0
    imag
    indices
    insert
@@ -124,6 +129,7 @@ Top level functions
    ldexp
    left_shift
    less
+   less_equal
    linspace
    log
    log10
@@ -159,6 +165,8 @@ Top level functions
    nanmedian
    nanmin
    nanprod
+   nanquantile
+   nanpercentile
    nanstd
    nansum
    nanvar
@@ -173,15 +181,18 @@ Top level functions
    outer
    pad
    percentile
+   push
    ~core.PerformanceWarning
    piecewise
    positive
    power
    prod
    ptp
+   quantile
    rad2deg
    radians
    ravel
+   ravel_multi_index
    real
    reciprocal
    rechunk
@@ -190,6 +201,7 @@ Top level functions
    remainder
    repeat
    reshape
+   reshape_blockwise
    result_type
    right_shift
    rint
@@ -198,11 +210,15 @@ Top level functions
    rot90
    round
    searchsorted
+   select
+   shape
+   shuffle
    sign
    signbit
    sin
    sinc
    sinh
+   spacing
    sqrt
    square
    squeeze
@@ -210,6 +226,7 @@ Top level functions
    std
    subtract
    sum
+   swapaxes
    take
    tan
    tanh
@@ -218,10 +235,16 @@ Top level functions
    topk
    trace
    transpose
-   true_divide
+   tri
    tril
+   tril_indices
+   tril_indices_from
    triu
+   triu_indices
+   triu_indices_from
+   true_divide
    trunc
+   union1d
    unique
    unravel_index
    var
@@ -283,12 +306,14 @@ Array
    Array.reshape
    Array.round
    Array.shape
+   Array.shuffle
    Array.size
    Array.squeeze
    Array.std
    Array.store
    Array.sum
    Array.swapaxes
+   Array.to_backend
    Array.to_dask_dataframe
    Array.to_delayed
    Array.to_hdf5
@@ -389,6 +414,7 @@ Random
    random.binomial
    random.chisquare
    random.choice
+   random.default_rng
    random.exponential
    random.f
    random.gamma
@@ -399,6 +425,7 @@ Random
    random.logistic
    random.lognormal
    random.logseries
+   random.multinomial
    random.negative_binomial
    random.noncentral_chisquare
    random.noncentral_f
@@ -409,6 +436,7 @@ Random
    random.power
    random.randint
    random.random
+   random.random_integers
    random.random_sample
    random.rayleigh
    random.standard_cauchy
@@ -493,6 +521,17 @@ Generalized Ufuncs
    gufunc
 
 
+Downstream Libraries API
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.api
+
+.. autosummary::
+   :toctree: generated/
+
+   normalize_chunks_cached
+   normalize_chunks
+
 Internal functions
 ~~~~~~~~~~~~~~~~~~
 
@@ -504,3 +543,14 @@ Internal functions
    blockwise
    normalize_chunks
    unify_chunks
+
+
+Dask Metadata
+~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.utils
+
+.. autosummary::
+   :toctree: generated/
+
+   meta_from_array

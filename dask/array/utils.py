@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import functools
 import itertools
@@ -8,9 +10,11 @@ import warnings
 import numpy as np
 from tlz import concat, frequencies
 
-from dask.array.core import Array
+from dask._task_spec import convert_legacy_graph
+from dask.array.numpy_compat import AxisError
+from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import has_keyword, is_arraylike, is_cupy_type
+from dask.utils import has_keyword, is_arraylike, is_cupy_type, typename
 
 
 def normalize_to_array(x):
@@ -39,7 +43,7 @@ def meta_from_array(x, ndim=None, dtype=None):
     """
     # If using x._meta, x must be a Dask Array, some libraries (e.g. zarr)
     # implement a _meta attribute that are incompatible with Dask Array._meta
-    if hasattr(x, "_meta") and isinstance(x, Array):
+    if hasattr(x, "_meta") and is_dask_collection(x) and is_arraylike(x):
         x = x._meta
 
     if dtype is None and x is None:
@@ -56,13 +60,13 @@ def meta_from_array(x, ndim=None, dtype=None):
     if isinstance(x, type):
         x = x(shape=(0,) * (ndim or 0), dtype=dtype)
 
-    if isinstance(x, list) or isinstance(x, tuple):
+    if isinstance(x, (list, tuple)):
         ndims = [
-            0
-            if isinstance(a, numbers.Number)
-            else a.ndim
-            if hasattr(a, "ndim")
-            else len(a)
+            (
+                0
+                if isinstance(a, numbers.Number)
+                else a.ndim if hasattr(a, "ndim") else len(a)
+            )
             for a in x
         ]
         a = [a if nd == 0 else meta_from_array(a, nd) for a, nd in zip(x, ndims)]
@@ -207,7 +211,22 @@ def _check_dsk(dsk):
     assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
     freqs = frequencies(concat(dsk.layers.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
-    assert not non_one, non_one
+    key_collisions = set()
+    # Allow redundant keys if the values are equivalent
+    collisions = set()
+    all_keys = set(dsk)
+    layers = [convert_legacy_graph(layer, all_keys) for layer in dsk.layers.values()]
+    for k in non_one.keys():
+        for layer in layers:
+            try:
+                key_collisions.add(tokenize(layer[k]))
+            except KeyError:
+                pass
+        if len(key_collisions) >= 2:
+            collisions.add(k)
+        key_collisions.clear()
+
+    assert len(collisions) == 0, {k: non_one[k] for k in collisions}
 
 
 def assert_eq_shape(a, b, check_ndim=True, check_nan=True):
@@ -252,7 +271,7 @@ def _get_dt_meta_computed(
     x_meta = None
     x_computed = None
 
-    if isinstance(x, Array):
+    if is_dask_collection(x) and is_arraylike(x):
         assert x.dtype is not None
         adt = x.dtype
         if check_graph:
@@ -423,19 +442,31 @@ def arange_safe(*args, like, **kwargs):
 
 
 def _array_like_safe(np_func, da_func, a, like, **kwargs):
+    from dask.array import Array
+
     if like is a and hasattr(a, "__array_function__"):
         return a
 
     if isinstance(like, Array):
         return da_func(a, **kwargs)
-    elif isinstance(a, Array):
-        if is_cupy_type(a._meta):
-            a = a.compute(scheduler="sync")
 
-    try:
-        return np_func(a, like=meta_from_array(like), **kwargs)
-    except TypeError:
-        return np_func(a, **kwargs)
+    if isinstance(a, Array) and is_cupy_type(a._meta):
+        a = a.compute(scheduler="sync")
+
+    if hasattr(like, "__array_function__"):
+        return np_func(a, like=like, **kwargs)
+
+    if type(like).__module__.startswith("scipy.sparse"):
+        # e.g. scipy.sparse.csr_matrix
+        kwargs.pop("order", None)
+        if np.isscalar(a):
+            a = np.array([[a]])
+        return type(like)(a, **kwargs)
+
+    # Unknown namespace with no __array_function__ support.
+    # Quietly disregard like= parameter.
+    # FIXME is there a use case for this?
+    return np_func(a, **kwargs)
 
 
 def array_safe(a, like, **kwargs):
@@ -489,7 +520,7 @@ def validate_axis(axis, ndim):
     if not isinstance(axis, numbers.Integral):
         raise TypeError("Axis value must be an integer, got %s" % axis)
     if axis < -ndim or axis >= ndim:
-        raise np.AxisError(
+        raise AxisError(
             "Axis %d is out of bounds for array of dimension %d" % (axis, ndim)
         )
     if axis < 0:
@@ -564,10 +595,10 @@ def __getattr__(name):
     if name == "AxisError":
         warnings.warn(
             "AxisError was deprecated after version 2021.10.0 and will be removed in a "
-            "future release. Please use numpy.AxisError instead.",
+            f"future release. Please use {typename(AxisError)} instead.",
             category=FutureWarning,
             stacklevel=2,
         )
-        return np.AxisError
+        return AxisError
     else:
         raise AttributeError(f"module {__name__} has no attribute {name}")

@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 class ORCEngine:
     """The API necessary to provide a new ORC reader/writer"""
 

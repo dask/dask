@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import os
 import warnings
+from contextlib import nullcontext as does_not_warn
 from itertools import permutations, zip_longest
 
 import pytest
@@ -10,7 +13,7 @@ import itertools
 
 import dask.array as da
 import dask.config as config
-from dask.array.numpy_compat import _numpy_122
+from dask.array.numpy_compat import ComplexWarning
 from dask.array.utils import assert_eq, same_keys
 from dask.core import get_deps
 
@@ -21,7 +24,7 @@ from dask.core import get_deps
 def test_numel(dtype, keepdims, nan):
     x = np.ones((2, 3, 4))
     if nan:
-        y = np.random.uniform(-1, 1, size=(2, 3, 4))
+        y = np.random.default_rng().uniform(-1, 1, size=(2, 3, 4))
         x[y < 0] = np.nan
         numel = da.reductions.nannumel
 
@@ -51,7 +54,7 @@ def test_numel(dtype, keepdims, nan):
 
     for length in range(x.ndim):
         for sub in itertools.combinations([d for d in range(x.ndim)], length):
-            ssub = np.random.shuffle(list(sub))
+            ssub = np.random.default_rng().shuffle(list(sub))
             assert_eq(
                 numel(x, axis=ssub, keepdims=keepdims, dtype=dtype),
                 _sum(x, axis=ssub, keepdims=keepdims, dtype=dtype),
@@ -100,9 +103,10 @@ def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
     assert same_keys(da_func(darr), da_func(darr))
     assert same_keys(da_func(darr, keepdims=True), da_func(darr, keepdims=True))
     if use_dtype:
-        assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
-        assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
-        assert same_keys(da_func(darr, dtype="i8"), da_func(darr, dtype="i8"))
+        with pytest.warns(ComplexWarning) if np.iscomplexobj(narr) else does_not_warn():
+            assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
+            assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
+            assert same_keys(da_func(darr, dtype="i8"), da_func(darr, dtype="i8"))
     if split_every:
         a1 = da_func(darr, split_every=2)
         a2 = da_func(darr, split_every={0: 2})
@@ -114,10 +118,12 @@ def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
         )
 
 
-@pytest.mark.parametrize("dtype", ["f4", "i4"])
+@pytest.mark.parametrize("dtype", ["f4", "i4", "c8"])
 def test_reductions_1D(dtype):
-    x = np.arange(5).astype(dtype)
-    a = da.from_array(x, chunks=(2,))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ComplexWarning)
+        x = (np.arange(5) + 1j * np.arange(5)).astype(dtype)
+        a = da.from_array(x, chunks=(2,))
 
     reduction_1d_test(da.sum, a, np.sum, x)
     reduction_1d_test(da.prod, a, np.prod, x)
@@ -136,6 +142,24 @@ def test_reductions_1D(dtype):
     reduction_1d_test(da.nanstd, a, np.std, x)
     reduction_1d_test(da.nanmin, a, np.nanmin, x, False)
     reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
+
+
+@pytest.mark.parametrize("dtype", ["f4", "c8"])
+@pytest.mark.parametrize(
+    "x", [np.array([np.inf, np.nan, -np.inf, 2]), np.array([np.nan, np.nan, 3, 2])]
+)
+def test_reductions_1D_nans(x, dtype):
+    x = x.astype(dtype)
+    a = da.from_array(x, chunks=(1,))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        reduction_1d_test(da.nansum, a, np.nansum, x)
+        reduction_1d_test(da.nanprod, a, np.nanprod, x)
+        reduction_1d_test(da.nanmean, a, np.nanmean, x, False)
+        reduction_1d_test(da.nanvar, a, np.nanvar, x, False)
+        reduction_1d_test(da.nanstd, a, np.nanstd, x, False)
+        reduction_1d_test(da.nanmin, a, np.nanmin, x, False)
+        reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
 
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
@@ -159,8 +183,9 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
     assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
 
     if use_dtype:
-        assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
-        assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
+        with pytest.warns(ComplexWarning) if np.iscomplexobj(narr) else does_not_warn():
+            assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
+            assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
 
     if split_every:
         a1 = da_func(darr, split_every=4)
@@ -198,9 +223,11 @@ def test_reduction_errors():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("dtype", ["f4", "i4"])
+@pytest.mark.parametrize("dtype", ["f4", "i4", "c8"])
 def test_reductions_2D(dtype):
-    x = np.arange(1, 122).reshape((11, 11)).astype(dtype)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ComplexWarning)
+        x = (np.arange(1, 122) + 1j * np.arange(1, 122)).reshape((11, 11)).astype(dtype)
     a = da.from_array(x, chunks=(4, 4))
 
     b = a.sum(keepdims=True)
@@ -240,7 +267,7 @@ def test_reductions_2D(dtype):
     ],
 )
 def test_arg_reductions(dfunc, func):
-    x = np.random.random((10, 10, 10))
+    x = np.random.default_rng().random((10, 10, 10))
     a = da.from_array(x, chunks=(3, 4, 5))
 
     assert_eq(dfunc(a), func(x))
@@ -252,8 +279,7 @@ def test_arg_reductions(dfunc, func):
         assert_eq(dfunc(a, 0), func(x, 0))
         assert_eq(dfunc(a, 1), func(x, 1))
         assert_eq(dfunc(a, 2), func(x, 2))
-    if _numpy_122:
-        assert_eq(dfunc(a, keepdims=True), func(x, keepdims=True))
+    assert_eq(dfunc(a, keepdims=True), func(x, keepdims=True))
 
     pytest.raises(ValueError, lambda: dfunc(a, 3))
     pytest.raises(TypeError, lambda: dfunc(a, (0, 1)))
@@ -270,11 +296,23 @@ def test_arg_reductions(dfunc, func):
 
 
 @pytest.mark.parametrize(
+    ["dfunc", "func"], [(da.nanmin, np.nanmin), (da.nanmax, np.nanmax)]
+)
+def test_nan_reduction_warnings(dfunc, func):
+    x = np.random.default_rng().random((10, 10, 10))
+    x[5] = np.nan
+    a = da.from_array(x, chunks=(3, 4, 5))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # All-NaN slice encountered
+        expected = func(x, 1)
+    assert_eq(dfunc(a, 1), expected)
+
+
+@pytest.mark.parametrize(
     ["dfunc", "func"], [(da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)]
 )
 def test_nanarg_reductions(dfunc, func):
-
-    x = np.random.random((10, 10, 10))
+    x = np.random.default_rng().random((10, 10, 10))
     x[5] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     assert_eq(dfunc(a), func(x))
@@ -363,8 +401,8 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.any, a, np.any, x, False, False)
     reduction_2d_test(da.all, a, np.all, x, False, False)
 
-    reduction_2d_test(da.nansum, a, np.nansum, x, False, False)
-    reduction_2d_test(da.nanprod, a, np.nanprod, x, False, False)
+    reduction_2d_test(da.nansum, a, np.nansum, x)
+    reduction_2d_test(da.nanprod, a, np.nanprod, x)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
@@ -415,7 +453,7 @@ def test_moment():
 
 
 def test_reductions_with_negative_axes():
-    x = np.random.random((4, 4, 4))
+    x = np.random.default_rng().random((4, 4, 4))
     a = da.from_array(x, chunks=2)
 
     assert_eq(a.argmin(axis=-1), x.argmin(axis=-1))
@@ -610,6 +648,40 @@ def test_array_cumreduction_axis(func, use_nan, axis, method):
     assert_eq(a_r, d_r)
 
 
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
+@pytest.mark.parametrize("method", ["sequential", "blelloch"])
+@pytest.mark.parametrize("target_dtype", [None, int, float])
+def test_array_cumreduction_dtype(func, method, target_dtype):
+    np_func = getattr(np, func)
+    da_func = getattr(da, func)
+
+    a = np.linspace(0, 1, num=10, dtype=float)
+    d = da.from_array(a)
+
+    a_r = np_func(a, axis=0, dtype=target_dtype)
+    d_r = da_func(d, method=method, axis=0, dtype=target_dtype)
+
+    assert_eq(a_r, d_r)
+
+
+@pytest.mark.parametrize("ufunc", ["add", "multiply", "maximum"])
+@pytest.mark.parametrize("target_dtype", [None, int, float])
+def test_array_cumreduction_ufunc(ufunc, target_dtype):
+    ufunc_obj = getattr(np, ufunc)
+    accumulate = ufunc_obj.accumulate
+    identity = ufunc_obj.identity
+
+    a = np.linspace(0, 1, num=10, dtype=float)
+    d = da.from_array(a)
+
+    cumreduction = da.reductions.cumreduction
+
+    a_r = accumulate(a, dtype=target_dtype)
+    d_r = cumreduction(accumulate, ufunc_obj, identity, d, dtype=target_dtype)
+
+    assert_eq(a_r, d_r)
+
+
 @pytest.mark.parametrize("func", [np.cumsum, np.cumprod])
 def test_array_cumreduction_out(func):
     x = da.ones((10, 10), chunks=(4, 4))
@@ -626,8 +698,9 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
     k = 5
     # Test at least 3 levels of aggregation when split_every=2
     # to stress the different chunk, combine, aggregate kernels
-    npa = np.random.random(800)
-    npb = np.random.random((10, 20, 30))
+    rng = np.random.default_rng()
+    npa = rng.random(800)
+    npb = rng.random((10, 20, 30))
 
     a = da.from_array(npa, chunks=((120, 80, 100, 200, 300),))
     b = da.from_array(npb, chunks=(4, 8, 8))
@@ -678,7 +751,7 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
 @pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 5, 10])
 def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     """Fine test use cases when k is larger than chunk size"""
-    npa = np.random.random((10,))
+    npa = np.random.default_rng().random((10,))
     a = da.from_array(npa, chunks=chunksize)
     k = 5
 
@@ -689,7 +762,7 @@ def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
 
 
 def test_topk_argtopk3():
-    a = da.random.random((10, 20, 30), chunks=(4, 8, 8))
+    a = da.random.default_rng().random((10, 20, 30), chunks=(4, 8, 8))
 
     # As Array methods
     assert_eq(a.topk(5, axis=1, split_every=2), da.topk(a, 5, axis=1, split_every=2))
@@ -887,3 +960,120 @@ def test_weighted_reduction():
     # Non-broadcastable weights (too many dims)
     with pytest.raises(ValueError):
         da.reduction(dx, w_sum, np.sum, weights=[[[2]]])
+
+
+def test_cumreduction_no_rechunk_on_1d_array():
+    x = da.ones((5,))
+    y = da.cumsum(x)
+    no_rechunk = "rechunk" not in str(dict(y.__dask_graph__()))
+    assert no_rechunk
+
+
+@pytest.mark.parametrize("axis", [3, 0, [1, 3]])
+@pytest.mark.parametrize("q", [0.75, [0.75], [0.75, 0.4]])
+@pytest.mark.parametrize("rechunk", [True, False])
+def test_nanquantile(rechunk, q, axis):
+    shape = 7, 10, 7, 10
+    arr = np.random.randn(*shape)
+    indexer = np.random.randint(0, 10, size=shape)
+    arr[indexer >= 8] = np.nan
+    arr[:, :, :, 1] = 1
+    arr[1, :, :, :] = 1
+
+    darr = da.from_array(arr, chunks=(2, 3, 4, (5 if rechunk else -1)))
+    assert_eq(da.nanquantile(darr, q, axis=axis), np.nanquantile(arr, q, axis=axis))
+    assert_eq(
+        da.nanquantile(darr, q, axis=axis, keepdims=True),
+        np.nanquantile(arr, q, axis=axis, keepdims=True),
+    )
+    assert_eq(
+        da.nanpercentile(darr, q * 100, axis=axis),
+        np.nanpercentile(arr, q * 100, axis=axis),
+    )
+    assert_eq(
+        da.nanpercentile(darr, q * 100, axis=axis, keepdims=True),
+        np.nanpercentile(arr, q * 100, axis=axis, keepdims=True),
+    )
+
+
+@pytest.mark.parametrize("axis", [3, [1, 3]])
+@pytest.mark.parametrize("q", [0.75, [0.75]])
+@pytest.mark.parametrize("rechunk", [True, False])
+def test_quantile(rechunk, q, axis):
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    indexer = np.random.randint(0, 10, size=shape)
+    arr[indexer >= 8] = np.nan
+
+    darr = da.from_array(arr, chunks=(2, 3, 4, (5 if rechunk else -1)))
+    assert_eq(da.quantile(darr, q, axis=axis), np.quantile(arr, q, axis=axis))
+    assert_eq(
+        da.quantile(darr, q, axis=axis, keepdims=True),
+        np.quantile(arr, q, axis=axis, keepdims=True),
+    )
+    assert_eq(da.percentile(darr, q, axis=axis), np.percentile(arr, q, axis=axis))
+    assert_eq(
+        da.percentile(darr, q, axis=axis, keepdims=True),
+        np.percentile(arr, q, axis=axis, keepdims=True),
+    )
+
+
+@pytest.mark.parametrize("func", [da.quantile, da.nanquantile, da.nanpercentile])
+def test_quantile_func_family_with_axis_none(func):
+    # Check that these functions raise a NotImplementedError
+    # when axis=None and more than one chunk is present
+    # along at least one dimension
+    darr = da.ones((3, 3), chunks=(2, 2))
+    with pytest.raises(
+        NotImplementedError, match="The full algorithm is difficult to do in parallel"
+    ):
+        func(darr, 0.5, axis=None)
+
+    # Check that the functions behave as expected
+    # when axis=None and the array is a single chunk
+    darr = da.from_array([-1, 0, 1])
+    assert_eq(func(darr, 0.0, axis=None), -1.0)
+
+
+def test_nanquantile_all_nan():
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    arr[:] = np.nan
+    darr = da.from_array(arr, chunks=(2, 3, 4, -1))
+    da.nanquantile(darr, 0.75, axis=-1).compute()
+    with pytest.raises(RuntimeWarning):
+        assert_eq(
+            da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1)
+        )
+        assert_eq(da.percentile(darr, 0.75, axis=-1), np.percentile(arr, 0.75, axis=-1))
+
+
+def test_nanquantile_method():
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    indexer = np.random.randint(0, 10, size=shape)
+    arr[indexer >= 8] = np.nan
+    darr = da.from_array(arr, chunks=(2, 3, 4, -1))
+    assert_eq(
+        da.nanquantile(darr, 0.75, axis=-1, method="weibull"),
+        np.nanquantile(arr, 0.75, axis=-1, method="weibull"),
+    )
+    assert_eq(
+        da.nanpercentile(darr, 0.75, axis=-1, method="weibull"),
+        np.nanpercentile(arr, 0.75, axis=-1, method="weibull"),
+    )
+
+
+def test_nanquantile_one_dim():
+    arr = np.random.randn(10)
+    darr = da.from_array(arr, chunks=(2,))
+    assert_eq(da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1))
+
+
+def test_nanquantile_two_dims():
+    arr = np.random.randn(10, 10)
+    darr = da.from_array(arr, chunks=(2, -1))
+    assert_eq(da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1))
+    assert_eq(
+        da.nanpercentile(darr, 0.75, axis=-1), np.nanpercentile(arr, 0.75, axis=-1)
+    )

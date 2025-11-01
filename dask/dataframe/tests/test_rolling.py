@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 import datetime
 
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
-import dask.dataframe.rolling
+from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import assert_eq
 
 N = 40
@@ -62,16 +63,12 @@ def test_map_overlap(npartitions, use_dask_input):
 
     for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
         # DataFrame
-        res = dask.dataframe.rolling.map_overlap(
-            shifted_sum, ddf, before, after, before, after, c=2
-        )
+        res = dd.map_overlap(shifted_sum, ddf, before, after, before, after, c=2)
         sol = shifted_sum(df, before, after, c=2)
         assert_eq(res, sol)
 
         # Series
-        res = dask.dataframe.rolling.map_overlap(
-            shifted_sum, ddf.b, before, after, before, after, c=2
-        )
+        res = dd.map_overlap(shifted_sum, ddf.b, before, after, before, after, c=2)
         sol = shifted_sum(df.b, before, after, c=2)
         assert_eq(res, sol)
 
@@ -110,7 +107,7 @@ def test_map_overlap_multiple_dataframes(
     ddf2 = dataframe * 2
     if use_dask_input:
         ddf = dd.from_pandas(ddf, npartitions)
-        ddf2 = dd.from_pandas(ddf2, npartitions)
+        ddf2 = dd.from_pandas(ddf2, 2 if align_dataframes else npartitions)
 
     def get_shifted_sum_arg(overlap):
         return (
@@ -122,7 +119,7 @@ def test_map_overlap_multiple_dataframes(
     ), get_shifted_sum_arg(after)
 
     # DataFrame
-    res = dask.dataframe.rolling.map_overlap(
+    res = dd.map_overlap(
         shifted_sum,
         ddf,
         before,
@@ -138,7 +135,7 @@ def test_map_overlap_multiple_dataframes(
     assert_eq(res, sol)
 
     # Series
-    res = dask.dataframe.rolling.map_overlap(
+    res = dd.map_overlap(
         shifted_sum,
         ddf.b,
         before,
@@ -276,14 +273,11 @@ rolling_method_args_check_less_precise = [
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_methods(method, args, window, center, check_less_precise):
-    if dd._compat.PANDAS_GT_110:
-        if check_less_precise:
-            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
-        else:
-            check_less_precise = {}
+    if check_less_precise:
+        check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
     else:
-        check_less_precise = {"check_less_precise": check_less_precise}
-    if dd._compat.PANDAS_GT_120 and method == "count":
+        check_less_precise = {}
+    if method == "count":
         min_periods = 0
     else:
         min_periods = None
@@ -325,44 +319,10 @@ def test_rolling_cov(window, center):
     assert_eq(prolling.cov(), drolling.cov())
 
 
-def test_rolling_raises():
-    df = pd.DataFrame(
-        {"a": np.random.randn(25).cumsum(), "b": np.random.randint(100, size=(25,))}
-    )
-    ddf = dd.from_pandas(df, 3)
-    pytest.raises(ValueError, lambda: ddf.rolling(1.5))
-    pytest.raises(ValueError, lambda: ddf.rolling(-1))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=1.2))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, min_periods=-2))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, axis=10))
-    pytest.raises(ValueError, lambda: ddf.rolling(3, axis="coulombs"))
-    pytest.raises(NotImplementedError, lambda: ddf.rolling(100).mean().compute())
-
-
 def test_rolling_names():
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     a = dd.from_pandas(df, npartitions=2)
     assert sorted(a.rolling(2).sum().dask) == sorted(a.rolling(2).sum().dask)
-
-
-def test_rolling_axis():
-    df = pd.DataFrame(np.random.randn(20, 16))
-    ddf = dd.from_pandas(df, npartitions=3)
-
-    assert_eq(df.rolling(3, axis=0).mean(), ddf.rolling(3, axis=0).mean())
-    assert_eq(df.rolling(3, axis=1).mean(), ddf.rolling(3, axis=1).mean())
-    assert_eq(
-        df.rolling(3, min_periods=1, axis=1).mean(),
-        ddf.rolling(3, min_periods=1, axis=1).mean(),
-    )
-    assert_eq(
-        df.rolling(3, axis="columns").mean(), ddf.rolling(3, axis="columns").mean()
-    )
-    assert_eq(df.rolling(3, axis="rows").mean(), ddf.rolling(3, axis="rows").mean())
-
-    s = df[3]
-    ds = ddf[3]
-    assert_eq(s.rolling(5, axis=0).std(), ds.rolling(5, axis=0).std())
 
 
 def test_rolling_partition_size():
@@ -376,38 +336,22 @@ def test_rolling_partition_size():
             dobj.rolling(12).mean().compute()
 
 
-def test_rolling_repr():
-    ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
-    res = repr(ddf.rolling(4))
-    assert res == "Rolling [window=4,center=False,axis=0]"
-
-
-def test_time_rolling_repr():
-    res = repr(dts.rolling("4s"))
-    assert res == "Rolling [window=4s,center=False,win_type=freq,axis=0]"
-
-
 def test_time_rolling_constructor():
     result = dts.rolling("4s")
     assert result.window == "4s"
     assert result.min_periods is None
     assert result.win_type is None
 
-    assert result._win_type == "freq"
-
 
 @pytest.mark.parametrize(
     "method,args,check_less_precise", rolling_method_args_check_less_precise
 )
-@pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
+@pytest.mark.parametrize("window", ["1s", "2s", "3s", pd.offsets.Second(5)])
 def test_time_rolling_methods(method, args, window, check_less_precise):
-    if dd._compat.PANDAS_GT_110:
-        if check_less_precise:
-            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
-        else:
-            check_less_precise = {}
+    if check_less_precise:
+        check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
     else:
-        check_less_precise = {"check_less_precise": check_less_precise}
+        check_less_precise = {}
 
     # DataFrame
     if method == "apply":
@@ -432,7 +376,7 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     )
 
 
-@pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
+@pytest.mark.parametrize("window", ["1s", "2s", "3s", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame
     prolling = ts.drop("a", axis=1).rolling(window)
@@ -501,23 +445,23 @@ def test_rolling_agg_aggregate():
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(
-        df.rolling(window=3).agg([np.mean, np.std]),
-        ddf.rolling(window=3).agg([np.mean, np.std]),
+        df.rolling(window=3).agg(["mean", "std"]),
+        ddf.rolling(window=3).agg(["mean", "std"]),
     )
 
     assert_eq(
-        df.rolling(window=3).agg({"A": np.sum, "B": lambda x: np.std(x, ddof=1)}),
-        ddf.rolling(window=3).agg({"A": np.sum, "B": lambda x: np.std(x, ddof=1)}),
+        df.rolling(window=3).agg({"A": "sum", "B": lambda x: np.std(x, ddof=1)}),
+        ddf.rolling(window=3).agg({"A": "sum", "B": lambda x: np.std(x, ddof=1)}),
     )
 
     assert_eq(
-        df.rolling(window=3).agg([np.sum, np.mean]),
-        ddf.rolling(window=3).agg([np.sum, np.mean]),
+        df.rolling(window=3).agg(["sum", "mean"]),
+        ddf.rolling(window=3).agg(["sum", "mean"]),
     )
 
     assert_eq(
-        df.rolling(window=3).agg({"A": [np.sum, np.mean]}),
-        ddf.rolling(window=3).agg({"A": [np.sum, np.mean]}),
+        df.rolling(window=3).agg({"A": ["sum", "mean"]}),
+        ddf.rolling(window=3).agg({"A": ["sum", "mean"]}),
     )
 
     kwargs = {"raw": True}
@@ -527,13 +471,9 @@ def test_rolling_agg_aggregate():
     )
 
 
+@pytest.mark.skipif(not PANDAS_GE_210, reason="buggy pandas implementation")
 def test_rolling_numba_engine():
-    numba = pytest.importorskip("numba")
-    numba_version = parse_version(numba.__version__)
-    if not dd._compat.PANDAS_GT_104 and numba_version >= parse_version("0.49"):
-        # Was fixed in https://github.com/pandas-dev/pandas/pull/33687
-        pytest.xfail("Known incompatibility between pandas and numba")
-
+    pytest.importorskip("numba")
     df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
     ddf = dd.from_pandas(df, npartitions=3)
 
@@ -566,13 +506,3 @@ def test_groupby_rolling():
     actual = ddf.groupby("group1").column1.rolling("15D").mean()
 
     assert_eq(expected, actual, check_divisions=False)
-
-
-def test_groupby_rolling_with_integer_window_raises():
-    df = pd.DataFrame(
-        {"B": [0, 1, 2, np.nan, 4, 5, 6], "C": ["a", "a", "a", "b", "b", "a", "b"]}
-    )
-    ddf = dd.from_pandas(df, npartitions=2)
-
-    with pytest.raises(ValueError, match="``window`` must be a ``freq``"):
-        ddf.groupby("C").rolling(2).sum()

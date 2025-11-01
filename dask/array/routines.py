@@ -9,6 +9,7 @@ from numbers import Integral, Real
 import numpy as np
 from tlz import concat, interleave, sliding_window
 
+from dask._task_spec import Task, TaskRef
 from dask.array import chunk
 from dask.array.core import (
     Array,
@@ -28,10 +29,10 @@ from dask.array.core import (
     tensordot_lookup,
 )
 from dask.array.creation import arange, diag, empty, indices, tri
-from dask.array.einsumfuncs import einsum  # noqa
-from dask.array.numpy_compat import _numpy_120
+from dask.array.einsumfuncs import einsum  # noqa: F401
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reductions import reduction
-from dask.array.ufunc import multiply, sqrt
+from dask.array.ufunc import multiply, sqrt, true_divide
 from dask.array.utils import (
     array_safe,
     asarray_safe,
@@ -52,8 +53,6 @@ _range = range
 
 @derived_from(np)
 def array(x, dtype=None, ndmin=None, *, like=None):
-    if not _numpy_120 and like is not None:
-        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
     x = asarray(x, like=like)
     while ndmin is not None and x.ndim < ndmin:
         x = x[None, :]
@@ -85,6 +84,8 @@ def atleast_3d(*arys):
     if len(new_arys) == 1:
         return new_arys[0]
     else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
         return new_arys
 
 
@@ -103,6 +104,8 @@ def atleast_2d(*arys):
     if len(new_arys) == 1:
         return new_arys[0]
     else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
         return new_arys
 
 
@@ -119,6 +122,8 @@ def atleast_1d(*arys):
     if len(new_arys) == 1:
         return new_arys[0]
     else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
         return new_arys
 
 
@@ -341,6 +346,7 @@ def tensordot(lhs, rhs, axes=2):
     if concatenate:
         return intermediate
     else:
+        left_axes = [ax if ax >= 0 else lhs.ndim + ax for ax in left_axes]
         return intermediate.sum(axis=left_axes)
 
 
@@ -520,7 +526,7 @@ def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs)
     # Adds other axes as needed.
     result = arr.map_blocks(
         _inner_apply_along_axis,
-        name=funcname(func1d) + "-along-axis",
+        token=funcname(func1d) + "-along-axis",
         dtype=dtype,
         chunks=(arr.chunks[:axis] + shape + arr.chunks[axis + 1 :]),
         drop_axis=axis,
@@ -844,23 +850,13 @@ def searchsorted(a, v, side="left", sorter=None):
     return out
 
 
-# TODO: dask linspace doesn't support delayed values
-def _linspace_from_delayed(start, stop, num=50):
-    linspace_name = "linspace-" + tokenize(start, stop, num)
-    (start_ref, stop_ref, num_ref), deps = unpack_collections([start, stop, num])
-    if len(deps) == 0:
-        return np.linspace(start, stop, num=num)
-
-    linspace_dsk = {(linspace_name, 0): (np.linspace, start_ref, stop_ref, num_ref)}
-    linspace_graph = HighLevelGraph.from_collections(
-        linspace_name, linspace_dsk, dependencies=deps
-    )
-
-    chunks = ((np.nan,),) if is_dask_collection(num) else ((num,),)
-    return Array(linspace_graph, linspace_name, chunks, dtype=float)
+def _linspace(bins_range):
+    bins, (start, stop) = bins_range
+    return np.linspace(start, stop, num=bins + 1)
 
 
-def _block_hist(x, bins, range=None, weights=None):
+def _block_hist(x, bins_range, weights=None):
+    bins, range = bins_range
     return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
 
 
@@ -1001,10 +997,27 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     token = tokenize(a, bins, range, weights, density)
     name = "histogram-sum-" + token
 
+    bins_range, deps = unpack_collections([bins, range])
+
     if scalar_bins:
-        bins = _linspace_from_delayed(range[0], range[1], bins + 1)
-        # ^ NOTE `range[1]` is safe because of the above check, and the initial check
-        # that range must not be None if `scalar_bins`
+        assert range is not None
+        assert bins is not None
+        if len(deps) == 0:
+            bins = np.linspace(range[0], range[1], num=bins + 1)
+        else:
+            linspace_name = "linspace-" + tokenize(bins_range)
+
+            linspace_dsk = {
+                (linspace_name, 0): Task((linspace_name, 0), _linspace, bins_range)
+            }
+            linspace_graph = HighLevelGraph.from_collections(
+                linspace_name, linspace_dsk, dependencies=deps
+            )
+            if is_dask_collection(bins):
+                chunks = ((np.nan,),)
+            else:
+                chunks = ((bins + 1,),)
+            bins = Array(linspace_graph, linspace_name, chunks, dtype=float)
     else:
         if not isinstance(bins, (Array, np.ndarray)):
             bins = asarray(bins)
@@ -1013,12 +1026,10 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                 f"bins must be a 1-dimensional array or sequence, got shape {bins.shape}"
             )
 
-    (bins_ref, range_ref), deps = unpack_collections([bins, range])
-
     # Map the histogram to all bins, forming a 2D array of histograms, stacked for each chunk
     if weights is None:
         dsk = {
-            (name, i, 0): (_block_hist, k, bins_ref, range_ref)
+            (name, i, 0): Task((name, i, 0), _block_hist, TaskRef(k), bins_range)
             for i, k in enumerate(flatten(a.__dask_keys__()))
         }
         dtype = np.histogram([])[0].dtype
@@ -1026,7 +1037,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, 0): (_block_hist, k, bins_ref, range_ref, w)
+            (name, i, 0): Task(
+                (name, i, 0), _block_hist, TaskRef(k), bins_range, TaskRef(w)
+            )
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
@@ -1207,7 +1220,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     If the sample 0th dimension and weight 0th (row) dimension are
     chunked differently, a ``ValueError`` will be raised. If
     coordinate groupings ((x, y, z) trios) are separated by a chunk
-    boundry, then a ``ValueError`` will be raised. We suggest that you
+    boundary, then a ``ValueError`` will be raised. We suggest that you
     rechunk your data if it is of that form.
 
     The chunks property of the data (and optional weights) are used to
@@ -1308,7 +1321,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     >>> w = da.random.uniform(0, 1, size=(1000,), chunks=x.chunksize[0])
     >>> h, edges = da.histogramdd(x, bins=bins, range=ranges, weights=w)
     >>> np.isclose(h.sum().compute(), w.sum().compute())
-    True
+    np.True_
 
     Using a sequence of 1D arrays as the input:
 
@@ -1349,10 +1362,8 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     # range= these are unsupported.
     dc_bins = is_dask_collection(bins)
     if isinstance(bins, (list, tuple)):
-        dc_bins = dc_bins or any([is_dask_collection(b) for b in bins])
-    dc_range = (
-        any([is_dask_collection(r) for r in range]) if range is not None else False
-    )
+        dc_bins = dc_bins or any(is_dask_collection(b) for b in bins)
+    dc_range = any(is_dask_collection(r) for r in range) if range is not None else False
     if dc_bins or dc_range:
         raise NotImplementedError(
             "Passing dask collections to bins=... or range=... is not supported."
@@ -1511,7 +1522,17 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
 
 
 @derived_from(np)
-def cov(m, y=None, rowvar=1, bias=0, ddof=None):
+def cov(
+    m,
+    y=None,
+    rowvar=True,
+    bias=False,
+    ddof=None,
+    fweights=None,
+    aweights=None,
+    *,
+    dtype=None,
+):
     # This was copied almost verbatim from np.cov
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
@@ -1520,47 +1541,87 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
 
     # Handles complex arrays too
     m = asarray(m)
+
     if y is None:
-        dtype = np.result_type(m, np.float64)
+        dtype = result_type(m, np.float64)
     else:
         y = asarray(y)
-        dtype = np.result_type(m, y, np.float64)
+        dtype = result_type(m, y, np.float64)
+
+    if m.ndim > 2:
+        raise ValueError("m has more than 2 dimensions")
+    if y is not None and y.ndim > 2:
+        raise ValueError("y has more than 2 dimensions")
+
     X = array(m, ndmin=2, dtype=dtype)
 
-    if X.shape[0] == 1:
-        rowvar = 1
-    if rowvar:
-        N = X.shape[1]
-        axis = 0
-    else:
-        N = X.shape[0]
-        axis = 1
-
-    # check ddof
     if ddof is None:
-        if bias == 0:
-            ddof = 1
+        ddof = 1 if bias == 0 else 0
+
+    if not rowvar and m.ndim != 1:
+        X = X.T
+    if X.shape[0] == 0:
+        return array([]).reshape(0, 0)
+    if y is not None:
+        y = array(y, ndmin=2, dtype=dtype)
+        if not rowvar and y.shape[0] != 1:
+            y = y.T
+        X = concatenate((X, y), axis=0)
+
+    # Unlike NumPy, these checks don't include:
+    #    - if fweights are all integers
+    #    - if either fweights or aweights are all non-negative
+    # These checks potientially expensive for distributed arrays.
+    w = None
+    if fweights is not None:
+        fweights = asarray(fweights, dtype=float)
+        if fweights.ndim > 1:
+            raise RuntimeError("cannot handle multidimensional fweights")
+        if fweights.shape[0] != X.shape[1]:
+            raise RuntimeError("incompatible numbers of samples and fweights")
+        w = fweights
+    if aweights is not None:
+        aweights = asarray(aweights, dtype=float)
+        if aweights.ndim > 1:
+            raise RuntimeError("cannot handle multidimensional aweights")
+        if aweights.shape[0] != X.shape[1]:
+            raise RuntimeError("incompatible numbers of samples and aweights")
+        if w is None:
+            w = aweights
         else:
-            ddof = 0
-    fact = float(N - ddof)
+            w *= aweights
+
+    avg, w_sum = average(X, axis=1, weights=w, returned=True)
+    w_sum = w_sum[0]
+
+    # Determine the normalization
+    if w is None:
+        fact = X.shape[1] - ddof
+    elif ddof == 0:
+        fact = w_sum
+    elif aweights is None:
+        fact = w_sum - ddof
+    else:
+        fact = w_sum - ddof * sum(w * aweights) / w_sum
+
     if fact <= 0:
         warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
         fact = 0.0
 
-    if y is not None:
-        y = array(y, ndmin=2, dtype=dtype)
-        X = concatenate((X, y), axis)
-
-    X = X - X.mean(axis=1 - axis, keepdims=True)
-    if not rowvar:
-        return (dot(X.T, X.conj()) / fact).squeeze()
+    X -= avg[:, None]
+    if w is None:
+        X_T = X.T
     else:
-        return (dot(X, X.T.conj()) / fact).squeeze()
+        X_T = (X * w).T
+    c = dot(X, X_T.conj())
+    c *= true_divide(1, fact)
+    return c.squeeze()
 
 
 @derived_from(np)
 def corrcoef(x, y=None, rowvar=1):
     c = cov(x, y, rowvar)
+
     if c.shape == ():
         return c / c
     d = diag(c)
@@ -1569,7 +1630,7 @@ def corrcoef(x, y=None, rowvar=1):
     return (c / sqr_d) / sqr_d.T
 
 
-@implements(np.round, np.round_)
+@implements(np.round)
 @derived_from(np)
 def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
@@ -1681,9 +1742,11 @@ def unique_no_structured_arr(
         (name, 0): (
             (np.unique,)
             + tuple(
-                (np.concatenate, o.__dask_keys__())
-                if hasattr(o, "__dask_keys__")
-                else o
+                (
+                    (np.concatenate, o.__dask_keys__())
+                    if hasattr(o, "__dask_keys__")
+                    else o
+                )
                 for o in out_parts
             )
         )
@@ -1722,6 +1785,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
             return_counts=return_counts,
         )
 
+    orig_shape = ar.shape
     ar = ar.ravel()
 
     # Run unique on each chunk and collect results in a Dask Array of
@@ -1767,9 +1831,11 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         (name, 0): (
             (_unique_internal,)
             + tuple(
-                (np.concatenate, o.__dask_keys__())
-                if hasattr(o, "__dask_keys__")
-                else o
+                (
+                    (np.concatenate, o.__dask_keys__())
+                    if hasattr(o, "__dask_keys__")
+                    else o
+                )
                 for o in out_parts
             )
             + (return_inverse,)
@@ -1800,8 +1866,11 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         # index in axis `1` (the one of unknown length). Reduce axis `1`
         # through summing to get an array with known dimensionality and the
         # mapping of the original values.
-        mtches = (ar[:, None] == out["values"][None, :]).astype(np.intp)
-        result.append((mtches * out["inverse"]).sum(axis=1))
+        matches = (ar[:, None] == out["values"][None, :]).astype(np.intp)
+        inverse = (matches * out["inverse"]).sum(axis=1)
+        if NUMPY_GE_200:
+            inverse = inverse.reshape(orig_shape)
+        result.append(inverse)
     if return_counts:
         result.append(out["counts"])
 
@@ -1814,7 +1883,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
 
 
 def _isin_kernel(element, test_elements, assume_unique=False):
-    values = np.in1d(element.ravel(), test_elements, assume_unique=assume_unique)
+    values = np.isin(element.ravel(), test_elements, assume_unique=assume_unique)
     return values.reshape(element.shape + (1,) * test_elements.ndim)
 
 
@@ -1948,7 +2017,6 @@ def squeeze(a, axis=None):
 
 @derived_from(np)
 def compress(condition, a, axis=None):
-
     if not is_arraylike(condition):
         # Allow `condition` to be anything array-like, otherwise ensure `condition`
         # is a numpy array.
@@ -2018,7 +2086,7 @@ def _asarray_isnull(values):
 def isnull(values):
     """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
-    import pandas as pd  # noqa
+    import pandas as pd  # noqa: F401
 
     return elemwise(_asarray_isnull, values, dtype="bool")
 
@@ -2055,24 +2123,19 @@ def _isnonzero_vec(v):
 _isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
 
 
+def _isnonzero(a):
+    # Output of np.vectorize can't be pickled
+    return _isnonzero_vec(a)
+
+
 def isnonzero(a):
-    if a.dtype.kind in {"U", "S"}:
-        # NumPy treats all-whitespace strings as falsy (like in `np.nonzero`).
-        # but not in `.astype(bool)`. To match the behavior of numpy at least until
-        # 1.19, we use `_isnonzero_vec`. When NumPy changes behavior, we should just
-        # use the try block below.
-        # https://github.com/numpy/numpy/issues/9875
-        return a.map_blocks(_isnonzero_vec, dtype=bool)
+    """Handle special cases where conversion to bool does not work correctly.
+    xref: https://github.com/numpy/numpy/issues/9479
+    """
     try:
-        np.zeros(tuple(), dtype=a.dtype).astype(bool)
+        np.zeros([], dtype=a.dtype).astype(bool)
     except ValueError:
-        ######################################################
-        # Handle special cases where conversion to bool does #
-        # not work correctly.                                #
-        #                                                    #
-        # xref: https://github.com/numpy/numpy/issues/9479   #
-        ######################################################
-        return a.map_blocks(_isnonzero_vec, dtype=bool)
+        return a.map_blocks(_isnonzero, dtype=bool)
     else:
         return a.astype(bool)
 
@@ -2197,7 +2260,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
         x,
         *condlist,
         dtype=x.dtype,
-        name="piecewise",
+        token="piecewise",
         funclist=funclist,
         func_args=args,
         func_kw=kw,
@@ -2206,7 +2269,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
 
 def _select(*args, **kwargs):
     """
-    This is a version of :func:`numpy.select` that acceptes an arbitrary number of arguments and
+    This is a version of :func:`numpy.select` that accepts an arbitrary number of arguments and
     splits them in half to create ``condlist`` and ``choicelist`` params.
     """
     split_at = len(args) // 2
@@ -2268,11 +2331,11 @@ def aligned_coarsen_chunks(chunks: list[int], multiple: int) -> tuple[int, ...]:
     Examples
     --------
     >>> aligned_coarsen_chunks(chunks=(1, 2, 3), multiple=4)
-    (4, 2)
+    (np.int64(4), np.int64(2))
     >>> aligned_coarsen_chunks(chunks=(1, 20, 3, 4), multiple=4)
-    (4, 20, 4)
+    (np.int64(4), np.int64(20), np.int64(4))
     >>> aligned_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multiple=10)
-    (20, 10, 20, 20, 20, 2)
+    (np.int64(20), np.int64(10), np.int64(20), np.int64(20), np.int64(20), np.int64(2))
     """
     overflow = np.array(chunks) % multiple
     excess = overflow.sum()
@@ -2321,8 +2384,11 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
         + key[1:]: (apply, chunk.coarsen, [reduction, key, axes, trim_excess], kwargs)
         for key in flatten(x.__dask_keys__())
     }
+
+    coarsen_dim = lambda dim, ax: int(dim // axes.get(ax, 1))
     chunks = tuple(
-        tuple(int(bd // axes.get(i, 1)) for bd in bds) for i, bds in enumerate(x.chunks)
+        tuple(coarsen_dim(bd, i) for bd in bds if coarsen_dim(bd, i) > 0)
+        for i, bds in enumerate(x.chunks)
     )
 
     meta = reduction(np.empty((1,) * x.ndim, dtype=x.dtype), **kwargs)
@@ -2413,11 +2479,16 @@ def delete(arr, obj, axis):
     target_arr = split_at_breaks(arr, obj, axis)
 
     target_arr = [
-        arr[
-            tuple(slice(1, None) if axis == n else slice(None) for n in range(arr.ndim))
-        ]
-        if i != 0
-        else arr
+        (
+            arr[
+                tuple(
+                    slice(1, None) if axis == n else slice(None)
+                    for n in range(arr.ndim)
+                )
+            ]
+            if i != 0
+            else arr
+        )
         for i, arr in enumerate(target_arr)
     ]
     return concatenate(target_arr, axis=axis)
@@ -2501,7 +2572,7 @@ def tril(m, k=0):
         k=k,
         dtype=bool,
         chunks=m.chunks[-2:],
-        like=meta_from_array(m) if _numpy_120 else None,
+        like=meta_from_array(m),
     )
 
     return where(mask, m, np.zeros_like(m, shape=(1,)))
@@ -2515,7 +2586,7 @@ def triu(m, k=0):
         k=k - 1,
         dtype=bool,
         chunks=m.chunks[-2:],
-        like=meta_from_array(m) if _numpy_120 else None,
+        like=meta_from_array(m),
     )
 
     return where(mask, np.zeros_like(m, shape=(1,)), m)

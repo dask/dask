@@ -38,6 +38,16 @@ The current set of dispatchable creation functions for Dask-Dataframe is:
 
 As the backend-library disptaching system becomes more mature, this set of dispatchable creation functions is likely to grow.
 
+For an existing collection, the underlying data can be forcibly moved to a desired backend using the ``to_backend`` method:
+
+.. code-block:: python
+
+   >>> import dask
+   >>> import dask.array as da
+   >>> darr = da.ones(10, chunks=(5,))  # Creates numpy-backed collection
+   >>> with dask.config.set({"array.backend": "cupy"}):
+   ...     darr = darr.to_backend()  # Moves numpy data to cupy
+
 
 Defining a new collection backend
 ---------------------------------
@@ -86,8 +96,9 @@ For example, a cudf-based backend definition for Dask-Dataframe would look somet
          return read_orc(*args, **kwargs)
       ...
 
+In order to support pandas-to-cudf conversion with ``DataFrame.to_backend``, this class also needs to implement the proper ``to_backend`` and ``to_backend_dispatch`` methods.
 
-In order to expose this entrypoint as a ``dask.dataframe.backends`` entrypoint, the necessary ``setup.cfg`` configuration in ``cudf`` (or ``dask_cudf``) would be as follows:
+To expose this class as a ``dask.dataframe.backends`` entrypoint, the necessary ``setup.cfg`` configuration in ``cudf`` (or ``dask_cudf``) would be as follows:
 
 .. code-block:: ini
 
@@ -117,12 +128,13 @@ Dask-Array compute-based dispatch functions (as defined in ``dask.array.dispatch
    - numel_lookup
    - percentile_lookup
    - tensordot_lookup
+   - take_lookup
 
 Dask-Dataframe compute-based dispatch functions (as defined in ``dask.dataframe.dispatch``, and defined for Pandas in ``dask.dataframe.backends``):
 
    - categorical_dtype_dispatch
    - concat_dispatch
-   - get_parallel_type
+   - get_collection_type
    - group_split_dispatch
    - grouper_dispatch
    - hash_object_dispatch

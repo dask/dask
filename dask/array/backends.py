@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import math
 
 import numpy as np
 
 from dask.array import chunk
+from dask.array.core import Array
 from dask.array.dispatch import (
     concatenate_lookup,
     divide_lookup,
@@ -11,7 +14,10 @@ from dask.array.dispatch import (
     nannumel_lookup,
     numel_lookup,
     percentile_lookup,
+    take_lookup,
     tensordot_lookup,
+    to_cupy_dispatch,
+    to_numpy_dispatch,
 )
 from dask.array.numpy_compat import divide as np_divide
 from dask.array.numpy_compat import ma_divide
@@ -19,6 +25,7 @@ from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
+take_lookup.register((object, np.ndarray, np.ma.masked_array), np.take)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
 einsum_lookup.register((object, np.ndarray), np.einsum)
 empty_lookup.register((object, np.ndarray), np.empty)
@@ -118,18 +125,28 @@ def _tensordot(a, b, axes=2):
 
 @tensordot_lookup.register_lazy("cupy")
 @concatenate_lookup.register_lazy("cupy")
+@take_lookup.register_lazy("cupy")
 @nannumel_lookup.register_lazy("cupy")
 @numel_lookup.register_lazy("cupy")
+@to_numpy_dispatch.register_lazy("cupy")
 def register_cupy():
     import cupy
 
-    from dask.array.dispatch import percentile_lookup
-
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
+    take_lookup.register(cupy.ndarray, cupy.take)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
     percentile_lookup.register(cupy.ndarray, percentile)
     numel_lookup.register(cupy.ndarray, _numel_arraylike)
     nannumel_lookup.register(cupy.ndarray, _nannumel)
+    empty_lookup.register(cupy.ndarray, cupy.empty)
+
+    @to_numpy_dispatch.register(cupy.ndarray)
+    def cupy_to_numpy(data, **kwargs):
+        return cupy.asnumpy(data, **kwargs)
+
+    @to_cupy_dispatch.register(np.ndarray)
+    def numpy_to_cupy(data, **kwargs):
+        return cupy.asarray(data, **kwargs)
 
     @einsum_lookup.register(cupy.ndarray)
     def _cupy_einsum(*args, **kwargs):
@@ -139,10 +156,16 @@ def register_cupy():
         return cupy.einsum(*args, **kwargs)
 
 
+def sparse_take(array, idx, axis=0):
+    if axis not in {0, 1}:  # pragma: no cover
+        raise ValueError("Sparse matrices can only be concatenated along axis 0 or 1")
+    indexer = (slice(None), idx) if axis else (idx, slice(None))
+    return array[indexer]
+
+
 @tensordot_lookup.register_lazy("cupyx")
 @concatenate_lookup.register_lazy("cupyx")
 def register_cupyx():
-
     from cupyx.scipy.sparse import spmatrix
 
     try:
@@ -166,12 +189,14 @@ def register_cupyx():
 
     concatenate_lookup.register(spmatrix, _concat_cupy_sparse)
     tensordot_lookup.register(spmatrix, _tensordot_scipy_sparse)
+    take_lookup.register(spmatrix, sparse_take)
 
 
 @tensordot_lookup.register_lazy("sparse")
 @concatenate_lookup.register_lazy("sparse")
 @nannumel_lookup.register_lazy("sparse")
 @numel_lookup.register_lazy("sparse")
+@take_lookup.register_lazy("sparse")
 def register_sparse():
     import sparse
 
@@ -182,10 +207,12 @@ def register_sparse():
     # https://github.com/dask/dask/issues/7169
     numel_lookup.register(sparse.COO, _numel_ndarray)
     nannumel_lookup.register(sparse.COO, _nannumel_sparse)
+    take_lookup.register(sparse.COO, np.take)
 
 
 @tensordot_lookup.register_lazy("scipy")
 @concatenate_lookup.register_lazy("scipy")
+@take_lookup.register_lazy("scipy")
 def register_scipy_sparse():
     import scipy.sparse
 
@@ -203,6 +230,16 @@ def register_scipy_sparse():
 
     concatenate_lookup.register(scipy.sparse.spmatrix, _concatenate)
     tensordot_lookup.register(scipy.sparse.spmatrix, _tensordot_scipy_sparse)
+    take_lookup.register(scipy.sparse.spmatrix, sparse_take)
+
+    try:
+        from scipy.sparse import sparray
+    except ImportError:
+        pass  # sparray is not available in older scipy versions
+    else:
+        concatenate_lookup.register(sparray, _concatenate)
+        tensordot_lookup.register(sparray, _tensordot_scipy_sparse)
+        take_lookup.register(sparray, sparse_take)
 
 
 def _tensordot_scipy_sparse(a, b, axes):
@@ -249,7 +286,7 @@ def _numel(x, coerce_np_ndarray: bool, **kwargs):
     """
     shape = x.shape
     keepdims = kwargs.get("keepdims", False)
-    axis = kwargs.get("axis", None)
+    axis = kwargs.get("axis")
     dtype = kwargs.get("dtype", np.float64)
 
     if axis is None:
@@ -316,6 +353,11 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         """
         raise NotImplementedError
 
+    @property
+    def default_bit_generator(self):
+        """Return the default BitGenerator type"""
+        raise NotImplementedError
+
     @staticmethod
     def ones(shape, *, dtype=None, meta=None, **kwargs):
         """Create an array of ones
@@ -361,10 +403,30 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
 
+@to_numpy_dispatch.register(np.ndarray)
+def to_numpy_dispatch_from_numpy(data, **kwargs):
+    return data
+
+
 class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
+    @classmethod
+    def to_backend_dispatch(cls):
+        return to_numpy_dispatch
+
+    @classmethod
+    def to_backend(cls, data: Array, **kwargs):
+        if isinstance(data._meta, np.ndarray):
+            # Already a numpy-backed collection
+            return data
+        return data.map_blocks(cls.to_backend_dispatch(), **kwargs)
+
     @property
     def RandomState(self):
         return np.random.RandomState
+
+    @property
+    def default_bit_generator(self):
+        return np.random.PCG64
 
 
 array_creation_dispatch = CreationDispatch(

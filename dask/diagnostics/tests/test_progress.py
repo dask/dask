@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from operator import add, mul
 
 import pytest
@@ -20,6 +22,7 @@ def check_bar_completed(capsys, width=40):
 
 
 def test_array_compute(capsys):
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
 
     data = da.ones((100, 100), dtype="f4", chunks=(100, 100))

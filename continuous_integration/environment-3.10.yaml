@@ -1,5 +1,5 @@
 # This job includes coverage
-name: test-environment
+name: test-environment-310
 channels:
   - conda-forge
   - nodefaults
@@ -7,18 +7,28 @@ dependencies:
   # required dependencies
   - python=3.10
   - packaging
-  - numpy
-  - pandas
+  - pyyaml
+  - click
+  - cloudpickle
+  - partd
+  - fsspec
+  - importlib_metadata
+  - toolz
   # test dependencies
   - pre-commit
   - pytest
   - pytest-cov
+  - pytest-mock
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
-  - moto
+  - moto<5
+  # Optional dependencies
+  - mimesis
+  - numpy=1.24
+  - pandas=2.1
+  - numba
   - flask
-  - fastparquet>=0.8.0
   - h5py
   - pytables
   - zarr
@@ -27,43 +37,40 @@ dependencies:
   # https://github.com/dask/dask/pull/9569
   - tiledb-py<0.17.4
   - pyspark
-  - tiledb>=2.5.0
+  - tiledb
   - xarray
-  - fsspec
-  - sqlalchemy>=1.4.0
-  - pyarrow
+  - numexpr>=2.8  # Something is pinning it to 2.7
+  - sqlalchemy
+  - pyarrow=14.0.1
   - coverage
   - jsonschema
   # other -- IO
   - boto3
   - botocore
-  # Temporary restriction until https://github.com/dask/distributed/issues/7173 is resolved
-  - bokeh<3
+  - bokeh
+  - bottleneck
   - httpretty
   - aiohttp
-  # Need recent version of s3fs to support newer aiobotocore versions
-  # https://github.com/dask/s3fs/issues/514
-  - s3fs>=2021.8.0
-  - click
-  - cloudpickle
+  - s3fs>=2021.9.0
   - crick
   - cytoolz
   - distributed
   - ipython
   - ipycytoscape
+  # until https://github.com/jupyter-widgets/ipywidgets/issues/3731 is fixed
+  - ipywidgets<8.0.5
+  - ipykernel<6.22.0
   - lz4
-  - numba
-  - partd
   - psutil
   - requests
   - scikit-image
   - scikit-learn
   - scipy
-  - toolz
   - python-snappy
   - sparse
   - cachey
   - python-graphviz
+  - python-cityhash
   - python-xxhash
   - mmh3
   - jinja2

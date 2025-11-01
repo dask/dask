@@ -1,17 +1,18 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 pytestmark = pytest.mark.gpu
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
 from dask.sizeof import sizeof
 
 cupy = pytest.importorskip("cupy")
-cupy_version = parse_version(cupy.__version__)
+cupy_version = Version(cupy.__version__)
 
 
 functions = [
@@ -35,7 +36,7 @@ functions = [
     pytest.param(
         lambda x: x.mean(),
         marks=pytest.mark.skipif(
-            cupy_version < parse_version("6.4.0"),
+            cupy_version < Version("6.4.0"),
             reason="Requires CuPy 6.4.0+ "
             "(with https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -45,7 +46,7 @@ functions = [
     pytest.param(
         lambda x: x.std(),
         marks=pytest.mark.skipif(
-            cupy_version < parse_version("6.4.0"),
+            cupy_version < Version("6.4.0"),
             reason="Requires CuPy 6.4.0+ "
             "(with https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -53,7 +54,7 @@ functions = [
     pytest.param(
         lambda x: x.var(),
         marks=pytest.mark.skipif(
-            cupy_version < parse_version("6.4.0"),
+            cupy_version < Version("6.4.0"),
             reason="Requires CuPy 6.4.0+ "
             "(with https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -126,7 +127,7 @@ functions = [
 
 @pytest.mark.parametrize("func", functions)
 def test_basic(func):
-    c = cupy.random.random((2, 3, 4))
+    c = cupy.random.default_rng().random((2, 3, 4))
     n = c.get()
     dc = da.from_array(c, chunks=(1, 2, 2), asarray=False)
     dn = da.from_array(n, chunks=(1, 2, 2))
@@ -146,12 +147,11 @@ def test_basic(func):
 
 @pytest.mark.parametrize("dtype", ["f4", "f8"])
 def test_sizeof(dtype):
-    c = cupy.random.random((2, 3, 4), dtype=dtype)
+    c = cupy.random.default_rng().random((2, 3, 4), dtype=dtype)
 
     assert sizeof(c) == c.nbytes
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize(
     "arr", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))]
 )
@@ -169,7 +169,6 @@ def test_asanyarray(arr, like):
         assert type(a) is type(like)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_vindex():
     x_np = np.arange(56).reshape((7, 8))
     x_cp = cupy.arange(56).reshape((7, 8))
@@ -188,7 +187,6 @@ def test_vindex():
     assert_eq(res_np, res_cp, check_type=False)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_view():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(cupy.array(x), chunks=(2, 3))
@@ -225,7 +223,6 @@ def test_view():
         d.view("i4", order="asdf")
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_view_fortran():
     x = np.asfortranarray(np.arange(64).reshape((8, 8)))
     d = da.from_array(cupy.asfortranarray(cupy.array(x)), chunks=(2, 3))
@@ -241,7 +238,6 @@ def test_view_fortran():
     assert_eq(result, x.T.view("i2").T, check_type=False)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_getter():
     result = da.core.getter(cupy.arange(5), (None, slice(None, None)))
 
@@ -249,7 +245,6 @@ def test_getter():
     assert_eq(result, np.arange(5)[None, :], check_type=False)
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_store_kwargs():
     d = da.from_array(cupy.ones((10, 10)), chunks=(2, 2))
     a = d + 1
@@ -278,15 +273,21 @@ def test_store_kwargs():
     assert called[0]
 
 
-def test_setitem_1d():
+@pytest.mark.parametrize(
+    "chunks", (-1, pytest.param(5, marks=pytest.mark.xfail(reason="dask/dask#11730")))
+)
+def test_setitem_1d(chunks):
     x = cupy.arange(10)
-    dx = da.from_array(x.copy(), chunks=(5,))
+    dx = da.from_array(x.copy(), chunks=chunks)
 
     x[x > 6] = -1
     x[x % 2 == 0] = -2
+    idx = cupy.asarray([2, 3])
+    x[idx,] = -3
 
     dx[dx > 6] = -1
     dx[dx % 2 == 0] = -2
+    dx[da.from_array(idx)] = -3
 
     assert_eq(x, dx)
 
@@ -662,7 +663,6 @@ def test_setitem_errs():
     dx = da.from_array(x, chunks=(2, 3))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("xp", [np, da])
 @pytest.mark.parametrize("orig_arr", [np.array, da.array])
 @pytest.mark.parametrize("array_func", ["array", "asarray", "asanyarray"])

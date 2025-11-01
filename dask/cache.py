@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 from numbers import Number
 from timeit import default_timer
@@ -33,7 +35,7 @@ class Cache(Callback):
             import cachey
         except ImportError as ex:
             raise ImportError(
-                'Cache requires cachey, "{ex}" problem ' "importing".format(ex=str(ex))
+                f'Cache requires cachey, "{str(ex)}" problem importing'
             ) from ex
         self._nbytes = cachey.nbytes
         if isinstance(cache, Number):

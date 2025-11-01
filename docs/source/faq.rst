@@ -184,6 +184,12 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
 
     For more information see :doc:`deploying-kubernetes`
 
+4. **Commercial Dask deployment:**
+
+   - You can use `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=faq>`_ to handle the creation and management of Dask clusters on cloud computing environments (AWS and GCP).
+   - `Domino Data Lab <https://www.dominodatalab.com/>`_ Lets users create Dask clusters in a hosted platform.
+   - `Saturn Cloud <https://saturncloud.io/>`_ Lets users create Dask clusters in a hosted platform or within their own AWS accounts.
+
 
 Is Dask secure?
 ~~~~~~~~~~~~~~~
@@ -226,6 +232,8 @@ the cluster.  This is particularly common in Cloudera/Hortonworks Hadoop/Spark d
 In these cases some level of explicit indirection may be required.  For this, we
 recommend the `Dask Gateway project <https://gateway.dask.org>`_, which uses IT-level
 permissions to properly route authenticated users into secure resources.
+
+You may also want to consider a managed cluster solution (see :ref:`managed-cluster-solutions`).
 
 
 How do I manage software environments?
@@ -418,59 +426,13 @@ Dask's custom APIs, notably :doc:`Delayed <delayed>` and :doc:`Futures
 
 See the section :doc:`gpu`.
 
-
-How do I cite Dask?
-~~~~~~~~~~~~~~~~~~~
-
-Dask is developed by many people from many institutions.  Some of these
-developers are academics who depend on academic citations to justify their
-efforts.  Unfortunately, no single citation can do all of these developers (and
-the developers to come) sufficient justice.  Instead, we choose to use a single
-blanket citation for all developers past and present.
-
-To cite Dask in publications, please use the following::
-
-   Dask Development Team (2016). Dask: Library for dynamic task scheduling
-   URL https://dask.org
-
-A BibTeX entry for LaTeX users follows::
-
-   @Manual{,
-     title = {Dask: Library for dynamic task scheduling},
-     author = {{Dask Development Team}},
-     year = {2016},
-     url = {https://dask.org},
-   }
-
-The full author list is available using ``git`` (e.g. ``git shortlog -ns``).
-
-
-Are there papers about Dask?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Rocklin, Matthew. "Dask: Parallel Computation with Blocked algorithms and Task
-Scheduling." (2015).
-`PDF <https://conference.scipy.org/proceedings/scipy2015/pdfs/matthew_rocklin.pdf>`_.
-
-::
-
-   @InProceedings{ matthew_rocklin-proc-scipy-2015,
-     author    = { Matthew Rocklin },
-     title     = { Dask: Parallel Computation with Blocked algorithms and Task Scheduling },
-     booktitle = { Proceedings of the 14th Python in Science Conference },
-     pages     = { 130 - 136 },
-     year      = { 2015 },
-     editor    = { Kathryn Huff and James Bergstra }
-   }
-
-
 For Marketing
 -------------
 
 There is a special subsite dedicated to addressing marketing concerns. You can
-find it at `marketing.dask.org <https://marketing.dask.org>`_.
+find it at `dask.org/brand-guide <https://dask.org/brand-guide>`_.
 
-Do you have any standardized logos?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Where can I find logos?
+~~~~~~~~~~~~~~~~~~~~~~~
 
 Yes! You can find them at :doc:`logos`.

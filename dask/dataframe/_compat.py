@@ -1,108 +1,93 @@
-import contextlib
-import string
-import warnings
+from __future__ import annotations
 
-import numpy as np
-import pandas as pd
+from dask._compatibility import import_optional_dependency
+
+import_optional_dependency("pandas")
+import_optional_dependency("numpy")
+# import_optional_dependency("pyarrow")
+
 from packaging.version import Version
 
-PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GT_104 = PANDAS_VERSION >= Version("1.0.4")
-PANDAS_GT_110 = PANDAS_VERSION >= Version("1.1.0")
-PANDAS_GT_120 = PANDAS_VERSION >= Version("1.2.0")
-PANDAS_GT_121 = PANDAS_VERSION >= Version("1.2.1")
-PANDAS_GT_130 = PANDAS_VERSION >= Version("1.3.0")
-PANDAS_GT_131 = PANDAS_VERSION >= Version("1.3.1")
-PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
-PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
-PANDAS_GT_150 = PANDAS_VERSION >= Version("1.5.0")
-PANDAS_GT_200 = PANDAS_VERSION.major >= 2  # Also true for nightly builds
+from dask._pandas_compat import (
+    PANDAS_GE_201,
+    PANDAS_GE_202,
+    PANDAS_GE_210,
+    PANDAS_GE_211,
+    PANDAS_GE_220,
+    PANDAS_GE_230,
+    PANDAS_GE_300,
+    PANDAS_VERSION,
+    IndexingError,
+    assert_categorical_equal,
+    assert_numpy_array_equal,
+    check_apply_dataframe_deprecation,
+    check_convert_dtype_deprecation,
+    check_groupby_axis_deprecation,
+    check_observed_deprecation,
+    check_reductions_runtime_warning,
+    is_any_real_numeric_dtype,
+    is_string_dtype,
+    makeDataFrame,
+    makeDateIndex,
+    makeMissingDataframe,
+    makeMixedDataFrame,
+    makeTimeDataFrame,
+    makeTimedeltaIndex,
+    makeTimeSeries,
+    tm,
+)
 
-import pandas.testing as tm
-
-
-def assert_categorical_equal(left, right, *args, **kwargs):
-    tm.assert_extension_array_equal(left, right, *args, **kwargs)
-    assert pd.api.types.is_categorical_dtype(
-        left.dtype
-    ), f"{left} is not categorical dtype"
-    assert pd.api.types.is_categorical_dtype(
-        right.dtype
-    ), f"{right} is not categorical dtype"
-
-
-def assert_numpy_array_equal(left, right):
-    left_na = pd.isna(left)
-    right_na = pd.isna(right)
-    np.testing.assert_array_equal(left_na, right_na)
-
-    left_valid = left[~left_na]
-    right_valid = right[~right_na]
-    np.testing.assert_array_equal(left_valid, right_valid)
+# re-export all the things we need from dask._pandas_compat
 
 
-def makeDataFrame():
-    data = np.random.randn(30, 4)
-    index = list(string.ascii_letters)[:30]
-    return pd.DataFrame(data, index=index, columns=list("ABCD"))
+try:
+    import pyarrow as pa
+except ImportError:
+    HAS_PYARROW = False
+else:
+    HAS_PYARROW = True
 
 
-def makeTimeDataFrame():
-    data = makeDataFrame()
-    data.index = makeDateIndex()
-    return data
+if HAS_PYARROW:
+    PYARROW_VERSION: Version | None = Version(pa.__version__)
+    # we know that Version should be non-None when PYARROW_VERSION is True.
+    PYARROW_GE_1500: bool | None = PYARROW_VERSION.release >= (15, 0, 0)  # type: ignore[union-attr]
+    PYARROW_GE_2101: bool | None = PYARROW_VERSION.release >= (21, 0, 1)  # type: ignore[union-attr]
+else:
+    PYARROW_VERSION = None
+    PYARROW_GE_1500 = None
+    PYARROW_GE_2101 = None
 
 
-def makeTimeSeries():
-    return makeTimeDataFrame()["A"]
-
-
-def makeDateIndex(k=30, freq="B"):
-    return pd.date_range("2000", periods=k, freq=freq)
-
-
-def makeTimedeltaIndex(k=30, freq="D"):
-    return pd.timedelta_range("1 day", periods=k, freq=freq)
-
-
-def makeMissingDataframe():
-    df = makeDataFrame()
-    data = df.values
-    data = np.where(data > 1, np.nan, data)
-    return pd.DataFrame(data, index=df.index, columns=df.columns)
-
-
-def makeMixedDataFrame():
-    df = pd.DataFrame(
-        {
-            "A": [0.0, 1, 2, 3, 4],
-            "B": [0.0, 1, 0, 1, 0],
-            "C": [f"foo{i}" for i in range(5)],
-            "D": pd.date_range("2009-01-01", periods=5),
-        }
-    )
-    return df
-
-
-@contextlib.contextmanager
-def check_numeric_only_deprecation():
-
-    if PANDAS_GT_150:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="The default value of numeric_only in",
-                category=FutureWarning,
-            )
-            yield
-    else:
-        yield
-
-
-def dtype_eq(a: type, b: type) -> bool:
-    # CategoricalDtype in pandas <1.3 cannot be compared to numpy dtypes
-    if not PANDAS_GT_130 and isinstance(a, pd.CategoricalDtype) != isinstance(
-        b, pd.CategoricalDtype
-    ):
-        return False
-    return a == b
+__all__ = [
+    "PANDAS_VERSION",
+    "PANDAS_GE_201",
+    "PANDAS_GE_202",
+    "PANDAS_GE_210",
+    "PANDAS_GE_211",
+    "PANDAS_GE_220",
+    "PANDAS_GE_230",
+    "PANDAS_GE_300",
+    "assert_categorical_equal",
+    "assert_numpy_array_equal",
+    "makeDataFrame",
+    "makeTimeDataFrame",
+    "makeTimeSeries",
+    "makeDateIndex",
+    "makeTimedeltaIndex",
+    "makeMissingDataframe",
+    "makeMixedDataFrame",
+    "check_groupby_axis_deprecation",
+    "check_observed_deprecation",
+    "check_convert_dtype_deprecation",
+    "check_apply_dataframe_deprecation",
+    "check_reductions_runtime_warning",
+    "is_any_real_numeric_dtype",
+    "is_string_dtype",
+    "IndexingError",
+    "HAS_PYARROW",
+    "PYARROW_VERSION",
+    "PYARROW_GE_1500",
+    "PYARROW_GE_2101",
+    "tm",
+]

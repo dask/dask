@@ -34,6 +34,8 @@ codebase:
 
 - **Microsoft Azure Storage**: ``adl://``, ``abfs://`` or ``az://`` - Microsoft Azure Storage using adlfs_.
 
+- **Hugging Face**: ``hf://`` - Hugging Face Hub of datasets for AI, using the huggingface_hub_ library.
+
 - **HTTP(s)**: ``http://`` or ``https://`` for reading data directly from HTTP web servers.
 
 `fsspec`_ also provides other file systems that may be of interest to Dask users, such as
@@ -48,6 +50,7 @@ file system is assumed (same as ``file://``).
 .. _adlfs: https://github.com/dask/adlfs
 .. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
 .. _PyArrow: https://arrow.apache.org/docs/python/
+.. _huggingface_hub: https://huggingface.co/docs/huggingface_hub
 
 Lower-level details on how Dask handles remote data is described
 below in the Internals section
@@ -102,10 +105,26 @@ We assume here that each worker has access to the same file system - either
 the workers are co-located on the same machine, or a network file system
 is mounted and referenced at the same path location for every worker node.
 
-Locations specified relative to the current working directory will, in
-general, be respected (as they would be with the built-in python ``open``),
-but this may fail in the case that the client and worker processes do not
-necessarily have the same working directory.
+Dask's data IO methods will typically normalize relative paths to absolute paths
+so that data can be read by a worker even if it has a different working
+directory than your client. But other functions, including ones you've written,
+might not normalize the paths. If the current working directory of your Client
+differs from the working directory of the Worker, you might run issues where a
+file can't be found since the relative path will be incorrect.
+
+In general, things will be simplest if your Client and Workers (and perhaps
+Scheduler) all share the same working directory. You can check this with a
+snippet like:
+
+.. code-block:: python
+
+   >>> import os
+   >>> from dask.distributed import Client, LocalCluster
+   >>> client = Client(LocalCluster())
+   >>> client.run(os.getcwd)  # doctest: +SKIP
+   {'tcp://127.0.0.1:64597': '/home/coder',
+    'tcp://127.0.0.1:64598': '/home/coder'}
+
 
 Hadoop File System
 ------------------

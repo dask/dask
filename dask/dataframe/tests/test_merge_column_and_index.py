@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import pytest
 
 import dask.dataframe as dd
+from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import assert_eq
 
 
@@ -95,7 +98,7 @@ def test_merge_known_to_known(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left.merge(ddf_right, on=on, how=how, shuffle_method=shuffle_method)
 
     # Assertions
     assert_eq(result, expected)
@@ -111,7 +114,9 @@ def test_merge_known_to_single(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_single, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left.merge(
+        ddf_right_single, on=on, how=how, shuffle_method=shuffle_method
+    )
 
     # Assertions
     assert_eq(result, expected)
@@ -127,7 +132,9 @@ def test_merge_single_to_known(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_single.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left_single.merge(
+        ddf_right, on=on, how=how, shuffle_method=shuffle_method
+    )
 
     # Assertions
     assert_eq(result, expected)
@@ -142,7 +149,9 @@ def test_merge_known_to_unknown(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_unknown, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left.merge(
+        ddf_right_unknown, on=on, how=how, shuffle_method=shuffle_method
+    )
 
     # Assertions
     assert_eq(result, expected)
@@ -156,7 +165,9 @@ def test_merge_unknown_to_known(
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_unknown.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
+    result = ddf_left_unknown.merge(
+        ddf_right, on=on, how=how, shuffle_method=shuffle_method
+    )
 
     # Assertions
     assert_eq(result, expected)
@@ -177,12 +188,31 @@ def test_merge_unknown_to_unknown(
 
     # Merge unknown to unknown
     result = ddf_left_unknown.merge(
-        ddf_right_unknown, on=on, how=how, shuffle=shuffle_method
+        ddf_right_unknown, on=on, how=how, shuffle_method=shuffle_method
     )
 
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, tuple(None for _ in range(11)))
+
+
+@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
+@pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
+def test_join(how, shuffle_method):
+    # Make simple left & right dfs
+    pdf1 = pd.DataFrame({"x": range(20), "y": range(20)})
+    df1 = dd.from_pandas(pdf1, 4)
+    pdf2 = pd.DataFrame({"z": range(10)}, index=pd.Index(range(10), name="a"))
+    df2 = dd.from_pandas(pdf2, 2)
+
+    # Partition-wise merge with map_partitions
+    df3 = df1.join(
+        df2.clear_divisions(), on="x", how=how, shuffle_method=shuffle_method
+    )
+
+    # Check result with/without fusion
+    expect = pdf1.join(pdf2, on="x", how=how)
+    assert_eq(df3, expect, check_index=False, check_dtype=False)
 
 
 @pytest.mark.parametrize("how", ["inner", "left"])
@@ -194,7 +224,7 @@ def test_merge_known_to_double_bcast_right(
 
     # Perform merge
     result = ddf_left.merge(
-        ddf_right_double, on=on, how=how, shuffle=shuffle_method, broadcast=True
+        ddf_right_double, on=on, how=how, shuffle_method=shuffle_method, broadcast=True
     )
 
     # Assertions
@@ -214,7 +244,7 @@ def test_merge_known_to_double_bcast_left(
 
     # Perform merge
     result = ddf_left_double.merge(
-        ddf_right, on=on, how=how, broadcast=broadcast, shuffle=shuffle_method
+        ddf_right, on=on, how=how, broadcast=broadcast, shuffle_method=shuffle_method
     )
 
     # Assertions
@@ -227,6 +257,7 @@ def test_merge_known_to_double_bcast_left(
     result.head(1)
 
 
+@pytest.mark.skipif(PANDAS_GE_210, reason="breaks with pandas=2.1.0+")
 @pytest.mark.parametrize("repartition", [None, 4])
 def test_merge_column_with_nulls(repartition):
     # See: https://github.com/dask/dask/issues/7558
@@ -236,7 +267,7 @@ def test_merge_column_with_nulls(repartition):
     df1_d = dd.from_pandas(df1, npartitions=4)
     df2_d = dd.from_pandas(df2, npartitions=3).set_index("b")
     if repartition:
-        df2_d = df2_d.repartition(repartition)
+        df2_d = df2_d.repartition(npartitions=repartition)
 
     pandas_result = df1.merge(
         df2.set_index("b"), how="left", left_on="a", right_index=True

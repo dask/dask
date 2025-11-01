@@ -1,6 +1,6 @@
 numpydoc
-sphinx>=4.0.0
-dask-sphinx-theme>=3.0.0
+sphinx>=8.0.0
+dask-sphinx-theme>=4.0.0
 sphinx-click
 sphinx-copybutton
 sphinx-remove-toctrees
@@ -8,13 +8,16 @@ sphinx_autosummary_accessors
 sphinx-tabs
 sphinx-design
 jupyter_sphinx
+nbconvert
 toolz
 cloudpickle>=1.5.0
-pandas>=1.4.0
+pandas>=2.0.0
 git+https://github.com/dask/distributed
 fsspec
 scipy
+pyarrow
 pytest
 pytest-check-links
 requests-cache
 ipython
+ipykernel<6.22.0

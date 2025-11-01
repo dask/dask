@@ -1,49 +1,53 @@
+from __future__ import annotations
+
 import builtins
-import contextlib
+import inspect
 import math
 import operator
+import warnings
 from collections.abc import Iterable
-from functools import partial
+from functools import partial, reduce
 from itertools import product, repeat
 from numbers import Integral, Number
+from operator import mul
 
 import numpy as np
-from tlz import accumulate, compose, drop, get, partition_all, pluck
+from packaging.version import Version
+from tlz import accumulate, drop, pluck
 
-from dask import config
+import dask.array as da
 from dask.array import chunk
-from dask.array.blockwise import blockwise
 from dask.array.core import (
     Array,
     _concatenate2,
-    asanyarray,
-    broadcast_to,
     handle_out,
     implements,
     unknown_chunk_message,
 )
 from dask.array.creation import arange, diagonal
 from dask.array.dispatch import divide_lookup, nannumel_lookup, numel_lookup
+from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.utils import (
     array_safe,
     asarray_safe,
-    compute_meta,
     is_arraylike,
     meta_from_array,
     validate_axis,
 )
 from dask.array.wrap import ones, zeros
 from dask.base import tokenize
-from dask.blockwise import lol_tuples
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import (
-    apply,
-    deepmap,
-    derived_from,
-    funcname,
-    getargspec,
-    is_series_like,
-)
+from dask.utils import apply, deepmap, derived_from
+
+try:
+    import numbagg
+except ImportError:
+    numbagg = None
+
+if da._array_expr_enabled():
+    from dask.array._array_expr import _tree_reduce, reduction
+else:
+    from dask.array._reductions_generic import _tree_reduce, reduction
 
 
 def divide(a, b, dtype=None):
@@ -58,333 +62,6 @@ def numel(x, **kwargs):
 
 def nannumel(x, **kwargs):
     return nannumel_lookup(x, **kwargs)
-
-
-def reduction(
-    x,
-    chunk,
-    aggregate,
-    axis=None,
-    keepdims=False,
-    dtype=None,
-    split_every=None,
-    combine=None,
-    name=None,
-    out=None,
-    concatenate=True,
-    output_size=1,
-    meta=None,
-    weights=None,
-):
-    """General version of reductions
-
-    Parameters
-    ----------
-    x: Array
-        Data being reduced along one or more axes
-    chunk: callable(x_chunk, [weights_chunk=None], axis, keepdims)
-        First function to be executed when resolving the dask graph.
-        This function is applied in parallel to all original chunks of x.
-        See below for function parameters.
-    combine: callable(x_chunk, axis, keepdims), optional
-        Function used for intermediate recursive aggregation (see
-        split_every below). If omitted, it defaults to aggregate.
-        If the reduction can be performed in less than 3 steps, it will not
-        be invoked at all.
-    aggregate: callable(x_chunk, axis, keepdims)
-        Last function to be executed when resolving the dask graph,
-        producing the final output. It is always invoked, even when the reduced
-        Array counts a single chunk along the reduced axes.
-    axis: int or sequence of ints, optional
-        Axis or axes to aggregate upon. If omitted, aggregate along all axes.
-    keepdims: boolean, optional
-        Whether the reduction function should preserve the reduced axes,
-        leaving them at size ``output_size``, or remove them.
-    dtype: np.dtype
-        data type of output. This argument was previously optional, but
-        leaving as ``None`` will now raise an exception.
-    split_every: int >= 2 or dict(axis: int), optional
-        Determines the depth of the recursive aggregation. If set to or more
-        than the number of input chunks, the aggregation will be performed in
-        two steps, one ``chunk`` function per input chunk and a single
-        ``aggregate`` function at the end. If set to less than that, an
-        intermediate ``combine`` function will be used, so that any one
-        ``combine`` or ``aggregate`` function has no more than ``split_every``
-        inputs. The depth of the aggregation graph will be
-        :math:`log_{split_every}(input chunks along reduced axes)`. Setting to
-        a low value can reduce cache size and network transfers, at the cost of
-        more CPU and a larger dask graph.
-
-        Omit to let dask heuristically decide a good default. A default can
-        also be set globally with the ``split_every`` key in
-        :mod:`dask.config`.
-    name: str, optional
-        Prefix of the keys of the intermediate and output nodes. If omitted it
-        defaults to the function names.
-    out: Array, optional
-        Another dask array whose contents will be replaced. Omit to create a
-        new one. Note that, unlike in numpy, this setting gives no performance
-        benefits whatsoever, but can still be useful  if one needs to preserve
-        the references to a previously existing Array.
-    concatenate: bool, optional
-        If True (the default), the outputs of the ``chunk``/``combine``
-        functions are concatenated into a single np.array before being passed
-        to the ``combine``/``aggregate`` functions. If False, the input of
-        ``combine`` and ``aggregate`` will be either a list of the raw outputs
-        of the previous step or a single output, and the function will have to
-        concatenate it itself. It can be useful to set this to False if the
-        chunk and/or combine steps do not produce np.arrays.
-    output_size: int >= 1, optional
-        Size of the output of the ``aggregate`` function along the reduced
-        axes. Ignored if keepdims is False.
-    weights : array_like, optional
-        Weights to be used in the reduction of `x`. Will be
-        automatically broadcast to the shape of `x`, and so must have
-        a compatible shape. For instance, if `x` has shape ``(3, 4)``
-        then acceptable shapes for `weights` are ``(3, 4)``, ``(4,)``,
-        ``(3, 1)``, ``(1, 1)``, ``(1)``, and ``()``.
-
-    Returns
-    -------
-    dask array
-
-    **Function Parameters**
-
-    x_chunk: numpy.ndarray
-        Individual input chunk. For ``chunk`` functions, it is one of the
-        original chunks of x. For ``combine`` and ``aggregate`` functions, it's
-        the concatenation of the outputs produced by the previous ``chunk`` or
-        ``combine`` functions. If concatenate=False, it's a list of the raw
-        outputs from the previous functions.
-    weights_chunk: numpy.ndarray, optional
-        Only applicable to the ``chunk`` function. Weights, with the
-        same shape as `x_chunk`, to be applied during the reduction of
-        the individual input chunk. If ``weights`` have not been
-        provided then the function may omit this parameter. When
-        `weights_chunk` is included then it must occur immediately
-        after the `x_chunk` parameter, and must also have a default
-        value for cases when ``weights`` are not provided.
-    axis: tuple
-        Normalized list of axes to reduce upon, e.g. ``(0, )``
-        Scalar, negative, and None axes have been normalized away.
-        Note that some numpy reduction functions cannot reduce along multiple
-        axes at once and strictly require an int in input. Such functions have
-        to be wrapped to cope.
-    keepdims: bool
-        Whether the reduction function should preserve the reduced axes or
-        remove them.
-
-    """
-    if axis is None:
-        axis = tuple(range(x.ndim))
-    if isinstance(axis, Integral):
-        axis = (axis,)
-    axis = validate_axis(axis, x.ndim)
-
-    if dtype is None:
-        raise ValueError("Must specify dtype")
-    if "dtype" in getargspec(chunk).args:
-        chunk = partial(chunk, dtype=dtype)
-    if "dtype" in getargspec(aggregate).args:
-        aggregate = partial(aggregate, dtype=dtype)
-    if is_series_like(x):
-        x = x.values
-
-    # Map chunk across all blocks
-    inds = tuple(range(x.ndim))
-
-    args = (x, inds)
-    if weights is not None:
-        # Broadcast weights to x and add to args
-        wgt = asanyarray(weights)
-        try:
-            wgt = broadcast_to(wgt, x.shape)
-        except ValueError:
-            raise ValueError(
-                f"Weights with shape {wgt.shape} are not broadcastable "
-                f"to x with shape {x.shape}"
-            )
-
-        args += (wgt, inds)
-
-    # The dtype of `tmp` doesn't actually matter, and may be incorrect.
-    tmp = blockwise(
-        chunk, inds, *args, axis=axis, keepdims=True, token=name, dtype=dtype or float
-    )
-    tmp._chunks = tuple(
-        (output_size,) * len(c) if i in axis else c for i, c in enumerate(tmp.chunks)
-    )
-
-    if meta is None and hasattr(x, "_meta"):
-        try:
-            reduced_meta = compute_meta(
-                chunk, x.dtype, x._meta, axis=axis, keepdims=True, computing_meta=True
-            )
-        except TypeError:
-            reduced_meta = compute_meta(
-                chunk, x.dtype, x._meta, axis=axis, keepdims=True
-            )
-        except ValueError:
-            pass
-    else:
-        reduced_meta = None
-
-    result = _tree_reduce(
-        tmp,
-        aggregate,
-        axis,
-        keepdims,
-        dtype,
-        split_every,
-        combine,
-        name=name,
-        concatenate=concatenate,
-        reduced_meta=reduced_meta,
-    )
-    if keepdims and output_size != 1:
-        result._chunks = tuple(
-            (output_size,) if i in axis else c for i, c in enumerate(tmp.chunks)
-        )
-    if meta is not None:
-        result._meta = meta
-    return handle_out(out, result)
-
-
-def _tree_reduce(
-    x,
-    aggregate,
-    axis,
-    keepdims,
-    dtype,
-    split_every=None,
-    combine=None,
-    name=None,
-    concatenate=True,
-    reduced_meta=None,
-):
-    """Perform the tree reduction step of a reduction.
-
-    Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
-    """
-    # Normalize split_every
-    split_every = split_every or config.get("split_every", 4)
-    if isinstance(split_every, dict):
-        split_every = {k: split_every.get(k, 2) for k in axis}
-    elif isinstance(split_every, Integral):
-        n = builtins.max(int(split_every ** (1 / (len(axis) or 1))), 2)
-        split_every = dict.fromkeys(axis, n)
-    else:
-        raise ValueError("split_every must be a int or a dict")
-
-    # Reduce across intermediates
-    depth = 1
-    for i, n in enumerate(x.numblocks):
-        if i in split_every and split_every[i] != 1:
-            depth = int(builtins.max(depth, math.ceil(math.log(n, split_every[i]))))
-    func = partial(combine or aggregate, axis=axis, keepdims=True)
-    if concatenate:
-        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
-    for _ in range(depth - 1):
-        x = partial_reduce(
-            func,
-            x,
-            split_every,
-            True,
-            dtype=dtype,
-            name=(name or funcname(combine or aggregate)) + "-partial",
-            reduced_meta=reduced_meta,
-        )
-    func = partial(aggregate, axis=axis, keepdims=keepdims)
-    if concatenate:
-        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
-    return partial_reduce(
-        func,
-        x,
-        split_every,
-        keepdims=keepdims,
-        dtype=dtype,
-        name=(name or funcname(aggregate)) + "-aggregate",
-        reduced_meta=reduced_meta,
-    )
-
-
-def partial_reduce(
-    func, x, split_every, keepdims=False, dtype=None, name=None, reduced_meta=None
-):
-    """Partial reduction across multiple axes.
-
-    Parameters
-    ----------
-    func : function
-    x : Array
-    split_every : dict
-        Maximum reduction block sizes in each dimension.
-
-    Examples
-    --------
-    Reduce across axis 0 and 2, merging a maximum of 1 block in the 0th
-    dimension, and 3 blocks in the 2nd dimension:
-
-    >>> partial_reduce(np.min, x, {0: 1, 2: 3})    # doctest: +SKIP
-    """
-    name = (
-        (name or funcname(func)) + "-" + tokenize(func, x, split_every, keepdims, dtype)
-    )
-    parts = [
-        list(partition_all(split_every.get(i, 1), range(n)))
-        for (i, n) in enumerate(x.numblocks)
-    ]
-    keys = product(*map(range, map(len, parts)))
-    out_chunks = [
-        tuple(1 for p in partition_all(split_every[i], c)) if i in split_every else c
-        for (i, c) in enumerate(x.chunks)
-    ]
-    if not keepdims:
-        out_axis = [i for i in range(x.ndim) if i not in split_every]
-        getter = lambda k: get(out_axis, k)
-        keys = map(getter, keys)
-        out_chunks = list(getter(out_chunks))
-    dsk = {}
-    for k, p in zip(keys, product(*parts)):
-        free = {
-            i: j[0] for (i, j) in enumerate(p) if len(j) == 1 and i not in split_every
-        }
-        dummy = dict(i for i in enumerate(p) if i[0] in split_every)
-        g = lol_tuples((x.name,), range(x.ndim), free, dummy)
-        dsk[(name,) + k] = (func, g)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-
-    meta = x._meta
-    if reduced_meta is not None:
-        try:
-            meta = func(reduced_meta, computing_meta=True)
-        # no meta keyword argument exists for func, and it isn't required
-        except TypeError:
-            try:
-                meta = func(reduced_meta)
-            except ValueError as e:
-                # min/max functions have no identity, don't apply function to meta
-                if "zero-size array to reduction operation" in str(e):
-                    meta = reduced_meta
-        # when no work can be computed on the empty array (e.g., func is a ufunc)
-        except ValueError:
-            pass
-
-    # some functions can't compute empty arrays (those for which reduced_meta
-    # fall into the ValueError exception) and we have to rely on reshaping
-    # the array according to len(out_chunks)
-    if is_arraylike(meta) and meta.ndim != len(out_chunks):
-        if len(out_chunks) == 0:
-            meta = meta.sum()
-        else:
-            meta = meta.reshape((0,) * len(out_chunks))
-
-    if np.isscalar(meta):
-        return Array(graph, name, out_chunks, dtype=dtype)
-    else:
-        with contextlib.suppress(AttributeError):
-            meta = meta.astype(dtype)
-        return Array(graph, name, out_chunks, meta=meta)
 
 
 @derived_from(np)
@@ -409,7 +86,7 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(np.empty((1,), dtype=a.dtype).prod(), "dtype", object)
+        dt = getattr(np.ones((1,), dtype=a.dtype).prod(), "dtype", object)
     return reduction(
         a,
         chunk.prod,
@@ -503,7 +180,7 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(chunk.nansum(np.ones((1,), dtype=a.dtype)), "dtype", object)
     return reduction(
         a,
         chunk.nansum,
@@ -521,7 +198,7 @@ def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(chunk.nansum(np.ones((1,), dtype=a.dtype)), "dtype", object)
     return reduction(
         a,
         chunk.nanprod,
@@ -608,7 +285,11 @@ def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
 
 def _nanmin_skip(x_chunk, axis, keepdims):
     if x_chunk.size > 0:
-        return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", "All-NaN slice encountered", RuntimeWarning
+            )
+            return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
     else:
         return asarray_safe(
             np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
@@ -637,7 +318,11 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 def _nanmax_skip(x_chunk, axis, keepdims):
     if x_chunk.size > 0:
-        return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", "All-NaN slice encountered", RuntimeWarning
+            )
+            return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
     else:
         return asarray_safe(
             np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
@@ -722,7 +407,7 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(np.mean(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
     return reduction(
         a,
         partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
@@ -738,17 +423,31 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
 
 
 def moment_chunk(
-    A, order=2, sum=chunk.sum, numel=numel, dtype="f8", computing_meta=False, **kwargs
+    A,
+    order=2,
+    sum=chunk.sum,
+    numel=numel,
+    dtype="f8",
+    computing_meta=False,
+    implicit_complex_dtype=False,
+    **kwargs,
 ):
     if computing_meta:
         return A
     n = numel(A, **kwargs)
 
     n = n.astype(np.int64)
-    total = sum(A, dtype=dtype, **kwargs)
+    if implicit_complex_dtype:
+        total = sum(A, **kwargs)
+    else:
+        total = sum(A, dtype=dtype, **kwargs)
+
     with np.errstate(divide="ignore", invalid="ignore"):
         u = total / n
-    xs = [sum((A - u) ** i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
+    d = A - u
+    if np.issubdtype(A.dtype, np.complexfloating):
+        d = np.abs(d)
+    xs = [sum(d**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
     M = np.stack(xs, axis=-1)
     return {"total": total, "n": n, "M": M}
 
@@ -776,7 +475,7 @@ def moment_combine(
     if not isinstance(pairs, list):
         pairs = [pairs]
 
-    kwargs["dtype"] = dtype
+    kwargs["dtype"] = None
     kwargs["keepdims"] = True
 
     ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
@@ -792,8 +491,12 @@ def moment_combine(
     total = totals.sum(axis=axis, **kwargs)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        mu = divide(total, n, dtype=dtype)
-        inner_term = divide(totals, ns, dtype=dtype) - mu
+        if np.issubdtype(total.dtype, np.complexfloating):
+            mu = divide(total, n)
+            inner_term = np.abs(divide(totals, ns) - mu)
+        else:
+            mu = divide(total, n, dtype=dtype)
+            inner_term = divide(totals, ns, dtype=dtype) - mu
 
     xs = [
         _moment_helper(Ms, ns, inner_term, o, sum, axis, kwargs)
@@ -821,6 +524,7 @@ def moment_agg(
     # part of the calculation.
     keepdim_kw = kwargs.copy()
     keepdim_kw["keepdims"] = True
+    keepdim_kw["dtype"] = None
 
     ns = deepmap(lambda pair: pair["n"], pairs) if not computing_meta else pairs
     ns = _concatenate2(ns, axes=axis)
@@ -832,11 +536,14 @@ def moment_agg(
     totals = _concatenate2(deepmap(lambda pair: pair["total"], pairs), axes=axis)
     Ms = _concatenate2(deepmap(lambda pair: pair["M"], pairs), axes=axis)
 
-    mu = divide(totals.sum(axis=axis, **keepdim_kw), n, dtype=dtype)
+    mu = divide(totals.sum(axis=axis, **keepdim_kw), n)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        inner_term = divide(totals, ns, dtype=dtype) - mu
-
+        if np.issubdtype(totals.dtype, np.complexfloating):
+            inner_term = np.abs(divide(totals, ns) - mu)
+        else:
+            inner_term = divide(totals, ns, dtype=dtype) - mu
+    inner_term = np.where(ns == 0, 0, inner_term)
     M = _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs)
 
     denominator = n.sum(axis=axis, **kwargs) - ddof
@@ -908,9 +615,14 @@ def moment(
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+
+    implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
+
     return reduction(
         a,
-        partial(moment_chunk, order=order),
+        partial(
+            moment_chunk, order=order, implicit_complex_dtype=implicit_complex_dtype
+        ),
         partial(moment_agg, order=order, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
@@ -928,9 +640,12 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+
+    implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
+
     return reduction(
         a,
-        moment_chunk,
+        partial(moment_chunk, implicit_complex_dtype=implicit_complex_dtype),
         partial(moment_agg, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
@@ -951,10 +666,18 @@ def nanvar(
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+
+    implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
+
     return reduction(
         a,
-        partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
-        partial(moment_agg, sum=np.nansum, ddof=ddof),
+        partial(
+            moment_chunk,
+            sum=chunk.nansum,
+            numel=nannumel,
+            implicit_complex_dtype=implicit_complex_dtype,
+        ),
+        partial(moment_agg, sum=np.sum, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
         dtype=dt,
@@ -966,10 +689,9 @@ def nanvar(
 
 
 def _sqrt(a):
-    o = np.sqrt(a)
-    if isinstance(o, np.ma.masked_array) and not o.shape and o.mask.all():
+    if isinstance(a, np.ma.masked_array) and not a.shape and a.mask.all():
         return np.ma.masked
-    return o
+    return np.sqrt(a)
 
 
 def safe_sqrt(a):
@@ -1046,7 +768,7 @@ def _arg_combine(data, axis, argfunc, keepdims=False):
         arg = arg.ravel()[local_args]
     else:
         local_args = argfunc(vals, axis=axis)
-        inds = np.ogrid[tuple(map(slice, local_args.shape))]
+        inds = list(np.ogrid[tuple(map(slice, local_args.shape))])
         inds.insert(axis, local_args)
         inds = tuple(inds)
         vals = vals[inds]
@@ -1343,7 +1065,7 @@ def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
         x = x.flatten().rechunk(chunks=x.npartitions)
         axis = 0
     if dtype is None:
-        dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
+        dtype = getattr(func(np.ones((0,), dtype=x.dtype)), "dtype", object)
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
     name = f"{func.__name__}-{tokenize(func, axis, preop, binop, x, dtype)}"
@@ -1487,14 +1209,31 @@ def cumreduction(
         )
 
     if axis is None:
-        x = x.flatten().rechunk(chunks=x.npartitions)
+        if x.ndim > 1:
+            x = x.flatten().rechunk(chunks=x.npartitions)
         axis = 0
     if dtype is None:
-        dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
+        dtype = getattr(func(np.ones((0,), dtype=x.dtype)), "dtype", object)
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 
-    m = x.map_blocks(func, axis=axis, dtype=dtype)
+    use_dtype = False
+    try:
+        func_params = inspect.signature(func).parameters
+        use_dtype = "dtype" in func_params
+    except ValueError:
+        try:
+            # Workaround for https://github.com/numpy/numpy/issues/30095
+            # np.ufunc.accumulate doesn't have a signature, but it does accept dtype
+            if isinstance(func.__self__, np.ufunc) and func.__name__ == "accumulate":
+                use_dtype = True
+        except AttributeError:
+            pass
+
+    if use_dtype:
+        m = x.map_blocks(partial(func, dtype=dtype), axis=axis, dtype=dtype)
+    else:
+        m = x.map_blocks(func, axis=axis, dtype=dtype)
 
     name = f"{func.__name__}-{tokenize(func, axis, binop, ident, x, dtype)}"
     n = x.numblocks[axis]
@@ -1764,9 +1503,11 @@ def median(a, axis=None, keepdims=False, out=None):
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
-        chunks=[1 if ax in axis else c for ax, c in enumerate(a.chunks)]
-        if keepdims
-        else None,
+        chunks=(
+            [1 if ax in axis else c for ax, c in enumerate(a.chunks)]
+            if keepdims
+            else None
+        ),
     )
 
     result = handle_out(out, result)
@@ -1794,15 +1535,278 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
+    if (
+        numbagg is not None
+        and Version(numbagg.__version__).release >= (0, 7, 0)
+        and a.dtype.kind in "uif"
+        and not keepdims
+    ):
+        func = numbagg.nanmedian
+        kwargs = {}
+    else:
+        func = np.nanmedian
+        kwargs = {"keepdims": keepdims}
+
     result = a.map_blocks(
-        np.nanmedian,
+        func,
         axis=axis,
-        keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
-        chunks=[1 if ax in axis else c for ax, c in enumerate(a.chunks)]
-        if keepdims
-        else None,
+        chunks=(
+            [1 if ax in axis else c for ax, c in enumerate(a.chunks)]
+            if keepdims
+            else None
+        ),
+        **kwargs,
     )
 
     result = handle_out(out, result)
     return result
+
+
+@derived_from(np)
+def quantile(
+    a,
+    q,
+    axis=None,
+    out=None,
+    overwrite_input=False,
+    method="linear",
+    keepdims=False,
+    *,
+    weights=None,
+    interpolation=None,
+):
+    """
+    This works by automatically chunking the reduced axes to a single chunk if necessary
+    and then calling ``numpy.quantile`` function across the remaining dimensions
+    """
+    if interpolation is not None:
+        warnings.warn(
+            "The `interpolation` argument to quantile was renamed to `method`.",
+            FutureWarning,
+            stacklevel=2,
+        )
+
+        if method != "linear":
+            raise TypeError("Cannot pass interpolation and method keywords!")
+
+        method = interpolation
+    if axis is None:
+        if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
+            raise NotImplementedError(
+                "The da.quantile function only works along an axis.  "
+                "The full algorithm is difficult to do in parallel"
+            )
+        else:
+            axis = tuple(range(len(a.shape)))
+
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
+
+    axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
+
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+
+    if NUMPY_GE_200:
+        kwargs = {"weights": weights}
+    else:
+        kwargs = {}
+
+    result = a.map_blocks(
+        np.quantile,
+        q=q,
+        method=method,
+        axis=axis,
+        keepdims=keepdims,
+        drop_axis=axis if not keepdims else None,
+        new_axis=0 if isinstance(q, Iterable) else None,
+        chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        **kwargs,
+    )
+
+    result = handle_out(out, result)
+    return result
+
+
+def _span_indexers(a):
+    # We have to create an indexer so that we can index into every quantile slice
+    # The method relies on the quantile axis being the last axis, which means that
+    # we have to calculate reduce(mul, list(a.shape)[:-1]) number of quantiles
+    # We create an indexer combination for each of these quantiles
+
+    shapes = 1 if len(a.shape) <= 2 else reduce(mul, list(a.shape)[1:-1])
+    original_shapes = shapes * a.shape[0]
+    indexers = [tuple(np.repeat(np.arange(a.shape[0]), shapes))]
+
+    for i in range(1, len(a.shape) - 1):
+        indexer = np.repeat(np.arange(a.shape[i]), shapes // a.shape[i])
+        indexers.append(tuple(np.tile(indexer, original_shapes // shapes)))
+        shapes //= a.shape[i]
+    return indexers
+
+
+def _custom_quantile(
+    a,
+    q,
+    axis=None,
+    method="linear",
+    keepdims=False,
+    **kwargs,
+):
+    if (
+        method != "linear"
+        or len(axis) != 1
+        or axis[0] != len(a.shape) - 1
+        or len(a.shape) == 1
+        or a.shape[-1] > 1000
+    ):
+        # bail to nanquantile. Assumptions are pretty strict for now but we
+        # do cover the xarray.quantile case.
+        return np.nanquantile(
+            a,
+            q,
+            axis=axis,
+            method=method,
+            keepdims=keepdims,
+            **kwargs,
+        )
+    # nanquantile in NumPy is pretty slow if the quantile axis is slow because
+    # each quantile has overhead.
+    # This method works around this by calculating the quantile manually.
+    # Steps:
+    # 1. Sort the array along the quantile axis (this is the most expensive step
+    # 2. Calculate which positions are the quantile positions
+    #    (respecting NaN values, so each quantile can have a different indexer)
+    # 3. Get the neighboring values of the quantile positions
+    # 4. Perform linear interpolation between the neighboring values
+    #
+    # The main advantage is that we get rid of the overhead, removing GIL blockage
+    # and just generally making things faster.
+
+    sorted_arr = np.sort(a, axis=-1)
+    indexers = _span_indexers(a)
+    nr_quantiles = len(indexers[0])
+
+    is_scalar = False
+    if not isinstance(q, Iterable):
+        is_scalar = True
+        q = [q]
+
+    quantiles = []
+    reshape_shapes = (1,) + tuple(sorted_arr.shape[:-1]) + ((1,) if keepdims else ())
+    for single_q in list(q):
+        i = (
+            np.ones(nr_quantiles) * (a.shape[-1] - 1)
+            - np.isnan(sorted_arr).sum(axis=-1).reshape(-1)
+        ) * single_q
+        lower_value, higher_value = np.floor(i).astype(int), np.ceil(i).astype(int)
+
+        # Get neighboring values
+        lower = sorted_arr[tuple(indexers) + (tuple(lower_value),)]
+        higher = sorted_arr[tuple(indexers) + (tuple(higher_value),)]
+
+        # Perform linear interpolation
+        factor_higher = i - lower_value
+        factor_higher = np.where(factor_higher == 0.0, 1.0, factor_higher)
+        factor_lower = higher_value - i
+
+        quantiles.append(
+            (higher * factor_higher + lower * factor_lower).reshape(*reshape_shapes)
+        )
+
+    if is_scalar:
+        return quantiles[0].squeeze(axis=0)
+    else:
+        return np.concatenate(quantiles, axis=0)
+
+
+@derived_from(np)
+def nanquantile(
+    a,
+    q,
+    axis=None,
+    out=None,
+    overwrite_input=False,
+    method="linear",
+    keepdims=False,
+    *,
+    weights=None,
+    interpolation=None,
+):
+    """
+    This works by automatically chunking the reduced axes to a single chunk
+    and then calling ``numpy.nanquantile`` function across the remaining dimensions
+    """
+    if interpolation is not None:
+        warnings.warn(
+            "The `interpolation` argument to nanquantile was renamed to `method`.",
+            FutureWarning,
+            stacklevel=2,
+        )
+
+        if method != "linear":
+            raise TypeError("Cannot pass interpolation and method keywords!")
+
+        method = interpolation
+
+    if axis is None:
+        if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
+            raise NotImplementedError(
+                "The da.nanquantile function only works along an axis.  "
+                "The full algorithm is difficult to do in parallel"
+            )
+        else:
+            axis = tuple(range(len(a.shape)))
+
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
+
+    axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
+
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+
+    if (
+        numbagg is not None
+        and Version(numbagg.__version__).release >= (0, 8, 0)
+        and a.dtype.kind in "uif"
+        and weights is None
+        and method == "linear"
+        and not keepdims
+    ):
+        func = numbagg.nanquantile
+        kwargs = {"quantiles": q}
+    else:
+        func = _custom_quantile
+        kwargs = {
+            "q": q,
+            "method": method,
+            "keepdims": keepdims,
+        }
+        if NUMPY_GE_200:
+            kwargs.update({"weights": weights})
+
+    result = a.map_blocks(
+        func,
+        axis=axis,
+        drop_axis=axis if not keepdims else None,
+        new_axis=0 if isinstance(q, Iterable) else None,
+        chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        **kwargs,
+    )
+
+    result = handle_out(out, result)
+    return result
+
+
+def _get_quantile_chunks(a, q, axis, keepdims):
+    quantile_chunk = [len(q)] if isinstance(q, Iterable) else []
+    if keepdims:
+        return quantile_chunk + [
+            1 if ax in axis else c for ax, c in enumerate(a.chunks)
+        ]
+    else:
+        return quantile_chunk + [c for ax, c in enumerate(a.chunks) if ax not in axis]

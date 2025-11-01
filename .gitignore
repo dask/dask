@@ -23,4 +23,7 @@ coverage.xml
 hdfs-initialized-indicator
 .ipynb_checkpoints
 .vscode/
+.env
 .history
+env.yaml
+uv.lock

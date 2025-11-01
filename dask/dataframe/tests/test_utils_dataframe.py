@@ -1,17 +1,20 @@
+from __future__ import annotations
+
 import re
+import textwrap
 import warnings
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_GE_300, tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
-    PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
     assert_eq,
     check_matching_columns,
@@ -23,21 +26,11 @@ from dask.dataframe.utils import (
     meta_frame_constructor,
     meta_nonempty,
     meta_series_constructor,
+    pyarrow_strings_enabled,
     raise_on_meta_error,
-    shard_df_on_index,
+    valid_divisions,
 )
 from dask.local import get_sync
-
-
-def test_shard_df_on_index():
-    df = pd.DataFrame(
-        {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
-    )
-
-    result = list(shard_df_on_index(df, [20, 50]))
-    assert list(result[0].index) == [10]
-    assert list(result[1].index) == [20, 30, 40]
-    assert list(result[2].index) == [50, 60]
 
 
 def test_make_meta():
@@ -52,12 +45,19 @@ def test_make_meta():
     assert isinstance(meta.index, type(df.index))
     # - ensure no references to original data arrays are kept
     for col in "abc":
-        meta_pointer = meta[col].values.__array_interface__["data"][0]
-        df_pointer = df[col].values.__array_interface__["data"][0]
+        if PANDAS_GE_300 and col == "b":
+            # backed by an arrow array
+            meta_pointer = meta[col].array._pa_array.chunks[0].buffers()[1].address
+            df_pointer = df[col].array._pa_array.chunks[0].buffers()[1].address
+        else:
+            # backed by a numpy array
+            meta_pointer = meta[col].values.__array_interface__["data"][0]
+            df_pointer = df[col].values.__array_interface__["data"][0]
         assert meta_pointer != df_pointer
-    meta_pointer = meta.index.values.__array_interface__["data"][0]
-    df_pointer = df.index.values.__array_interface__["data"][0]
-    assert meta_pointer != df_pointer
+
+        meta_index_pointer = meta.index.values.__array_interface__["data"][0]
+        df_index_pointer = df.index.values.__array_interface__["data"][0]
+        assert meta_index_pointer != df_index_pointer
 
     # Pandas series
     meta = make_meta(df.a)
@@ -86,14 +86,22 @@ def test_make_meta():
     assert make_meta(ddf) is ddf._meta
 
     # Dict
-    meta = make_meta({"a": "i8", "b": "O", "c": "f8"})
+    if PANDAS_GE_300:
+        meta = make_meta({"a": "i8", "b": "str", "c": "f8"})
+    else:
+        meta = make_meta({"a": "i8", "b": "O", "c": "f8"})
+
     assert isinstance(meta, pd.DataFrame)
     assert len(meta) == 0
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, pd.RangeIndex)
 
     # List
-    meta = make_meta([("a", "i8"), ("c", "f8"), ("b", "O")])
+    if PANDAS_GE_300:
+        meta = make_meta([("a", "i8"), ("c", "f8"), ("b", "str")])
+    else:
+        meta = make_meta([("a", "i8"), ("c", "f8"), ("b", "O")])
+
     assert (meta.columns == ["a", "c", "b"]).all()
     assert len(meta) == 0
     assert (meta.dtypes == df.dtypes[meta.dtypes.index]).all()
@@ -111,7 +119,10 @@ def test_make_meta():
         """Custom class iterator returning pandas types."""
 
         def __init__(self, max=0):
-            self.types = [("a", "i8"), ("c", "f8"), ("b", "O")]
+            if PANDAS_GE_300:
+                self.types = [("a", "i8"), ("c", "f8"), ("b", "str")]
+            else:
+                self.types = [("a", "i8"), ("c", "f8"), ("b", "O")]
 
         def __iter__(self):
             self.n = 0
@@ -209,8 +220,13 @@ def test_meta_nonempty():
     df3 = meta_nonempty(df2)
     assert (df3.dtypes == df2.dtypes).all()
     assert df3["A"][0] == "Alice"
-    assert df3["B"][0] == "foo"
-    assert df3["C"][0] == "foo"
+
+    if PANDAS_GE_300:
+        assert df3["B"][0] == "a"
+        assert df3["C"][0] == "a"
+    else:
+        assert df3["B"][0] == "foo"
+        assert df3["C"][0] == "foo"
     assert df3["D"][0] == np.float32(1)
     assert df3["D"][0].dtype == "f4"
     assert df3["E"][0] == np.int32(1)
@@ -218,7 +234,10 @@ def test_meta_nonempty():
     assert df3["F"][0] == pd.Timestamp("1970-01-01 00:00:00")
     assert df3["G"][0] == pd.Timestamp("1970-01-01 00:00:00", tz="America/New_York")
     assert df3["H"][0] == pd.Timedelta("1")
-    assert df3["I"][0] == "foo"
+    if PANDAS_GE_300:
+        assert type(df3["I"][0]) is object
+    else:
+        assert df3["I"][0] == "foo"
     assert df3["J"][0] == UNKNOWN_CATEGORIES
     assert len(df3["K"].cat.categories) == 0
 
@@ -231,9 +250,14 @@ def test_meta_duplicated():
     df = pd.DataFrame(columns=["A", "A", "B"])
     res = meta_nonempty(df)
 
+    if PANDAS_GE_300:
+        o = dd.utils._object
+    else:
+        o = "foo"
+
     exp = pd.DataFrame(
-        [["foo", "foo", "foo"], ["foo", "foo", "foo"]],
-        index=["a", "b"],
+        [[o, o, o], [o, o, o]],
+        index=meta_nonempty(df.index),
         columns=["A", "A", "B"],
     )
     tm.assert_frame_equal(res, exp)
@@ -269,7 +293,7 @@ def test_meta_nonempty_index():
     idx = pd.Index([1], name="foo", dtype="int")
     res = meta_nonempty(idx)
     assert type(res) is type(idx)
-    assert res.dtype == "int64"
+    assert res.dtype == np.int_
     assert res.name == idx.name
 
     idx = pd.Index(["a"], name="foo")
@@ -277,20 +301,20 @@ def test_meta_nonempty_index():
     assert type(res) is pd.Index
     assert res.name == idx.name
 
-    idx = pd.DatetimeIndex(["1970-01-01"], freq="d", tz="America/New_York", name="foo")
+    idx = pd.DatetimeIndex(["1970-01-01"], freq="D", tz="America/New_York", name="foo")
     res = meta_nonempty(idx)
     assert type(res) is pd.DatetimeIndex
     assert res.tz == idx.tz
     assert res.freq == idx.freq
     assert res.name == idx.name
 
-    idx = pd.PeriodIndex(["1970-01-01"], freq="d", name="foo")
+    idx = pd.PeriodIndex(["1970-01-01"], freq="D", name="foo")
     res = meta_nonempty(idx)
     assert type(res) is pd.PeriodIndex
     assert res.freq == idx.freq
     assert res.name == idx.name
 
-    idx = pd.TimedeltaIndex([np.timedelta64(1, "D")], freq="d", name="foo")
+    idx = pd.TimedeltaIndex([pd.Timedelta(1, "D")], freq="D", name="foo")
     res = meta_nonempty(idx)
     assert type(res) is pd.TimedeltaIndex
     assert res.freq == idx.freq
@@ -406,10 +430,11 @@ def test_check_meta():
     # Series metadata error
     with pytest.raises(ValueError) as err:
         check_meta(d, meta.d.astype("f8"), numeric_equal=False)
+    series = "pandas.core.series.Series" if not PANDAS_GE_300 else "pandas.Series"
     assert str(err.value) == (
         "Metadata mismatch found.\n"
         "\n"
-        "Partition type: `pandas.core.series.Series`\n"
+        f"Partition type: `{series}`\n"
         "+----------+---------+\n"
         "|          | dtype   |\n"
         "+----------+---------+\n"
@@ -423,42 +448,59 @@ def test_check_meta():
     df2 = df[["a", "b", "d", "e"]]
     with pytest.raises(ValueError) as err:
         check_meta(df2, meta2, funcname="from_delayed")
+    frame = "pandas.core.frame.DataFrame" if not PANDAS_GE_300 else "pandas.DataFrame"
 
-    exp = (
-        "Metadata mismatch found in `from_delayed`.\n"
-        "\n"
-        "Partition type: `pandas.core.frame.DataFrame`\n"
-        "+--------+----------+----------+\n"
-        "| Column | Found    | Expected |\n"
-        "+--------+----------+----------+\n"
-        "| 'a'    | object   | category |\n"
-        "| 'c'    | -        | float64  |\n"
-        "| 'e'    | category | -        |\n"
-        "+--------+----------+----------+"
+    if PANDAS_GE_300:
+        string_type = "str   "  # space for alignment
+    else:
+        string_type = "object"
+
+    exp = textwrap.dedent(
+        f"""\
+        Metadata mismatch found in `from_delayed`.
+
+        Partition type: `{frame}`
+        +--------+----------+----------+
+        | Column | Found    | Expected |
+        +--------+----------+----------+
+        | 'a'    | {string_type}   | category |
+        | 'c'    | -        | float64  |
+        | 'e'    | category | -        |
+        +--------+----------+----------+"""
     )
+
     assert str(err.value) == exp
 
     # pandas dtype metadata error
     with pytest.raises(ValueError) as err:
         check_meta(df.a, pd.Series([], dtype="string"), numeric_equal=False)
-    assert str(err.value) == (
-        "Metadata mismatch found.\n"
-        "\n"
-        "Partition type: `pandas.core.series.Series`\n"
-        "+----------+--------+\n"
-        "|          | dtype  |\n"
-        "+----------+--------+\n"
-        "| Found    | object |\n"
-        "| Expected | string |\n"
-        "+----------+--------+"
+
+    expected = textwrap.dedent(
+        f"""\
+        Metadata mismatch found.
+
+        Partition type: `{series}`
+        +----------+--------+
+        |          | dtype  |
+        +----------+--------+
+        | Found    | {string_type} |
+        | Expected | string |
+        +----------+--------+"""
     )
+
+    assert str(err.value) == expected
 
 
 def test_check_matching_columns_raises_appropriate_errors():
     df = pd.DataFrame(columns=["a", "b", "c"])
 
     meta = pd.DataFrame(columns=["b", "a", "c"])
-    with pytest.raises(ValueError, match="Order of columns does not match"):
+    with pytest.raises(
+        ValueError,
+        match="Order of columns does not match."
+        "\nActual:   \\['a', 'b', 'c'\\]"
+        "\nExpected: \\['b', 'a', 'c'\\]",
+    ):
         assert check_matching_columns(meta, df)
 
     meta = pd.DataFrame(columns=["a", "b", "c", "d"])
@@ -516,7 +558,7 @@ def test_is_dataframe_like(monkeypatch, frame_value_counts):
     assert not is_index_like(pd.Index)
 
     # The following checks support of class wrappers, which
-    # requires the comparions of `x.__class__` instead of `type(x)`
+    # requires the comparisons of `x.__class__` instead of `type(x)`
     class DataFrameWrapper:
         __class__ = pd.DataFrame
 
@@ -561,7 +603,6 @@ def test_nonempty_series_sparse():
     assert not record
 
 
-@pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
 def test_nonempty_series_nullable_float():
     ser = pd.Series([], dtype="Float64")
     non_empty = meta_nonempty(ser)
@@ -650,3 +691,44 @@ def test_meta_constructor_utilities_raise(data):
         meta_series_constructor(data)
     with pytest.raises(TypeError, match="not supported by meta_frame"):
         meta_frame_constructor(data)
+
+
+@pytest.mark.parametrize(
+    "divisions, valid",
+    [
+        ([1, 2, 3], True),
+        ([3, 2, 1], False),
+        ([1, 1, 1], False),
+        ([0, 1, 1], True),
+        ((1, 2, 3), True),
+        (123, False),
+        ([0, float("nan"), 1], False),
+    ],
+)
+def test_valid_divisions(divisions, valid):
+    assert valid_divisions(divisions) == valid
+
+
+def test_pyarrow_strings_enabled():
+    try:
+        import pyarrow as pa
+    except ImportError:
+        pa = None
+
+    # If `pyarrow>=12` are installed, then default to using pyarrow strings
+    if (
+        dask.config.get("dataframe.convert-string") in (True, None)
+        and pa is not None
+        and Version(pa.__version__) >= Version("12.0.0")
+    ):
+        assert pyarrow_strings_enabled() is True
+    else:
+        assert pyarrow_strings_enabled() is False
+
+    # Regardless of dependencies that are installed, always obey
+    # the `dataframe.convert-string` config value if it's specified
+    with dask.config.set({"dataframe.convert-string": False}):
+        assert pyarrow_strings_enabled() is False
+
+    with dask.config.set({"dataframe.convert-string": True}):
+        assert pyarrow_strings_enabled() is True

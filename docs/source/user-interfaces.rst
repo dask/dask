@@ -38,8 +38,9 @@ large subset of the API from the original project.
 
    # Arrays
    import dask.array as da
-   x = da.random.uniform(low=0, high=10, size=(10000, 10000),  # normal numpy code
-                         chunks=(1000, 1000))  # break into chunks of size 1000x1000
+   rng = da.random.default_rng()
+   x = rng.uniform(low=0, high=10, size=(10000, 10000),  # normal numpy code
+                   chunks=(1000, 1000))  # break into chunks of size 1000x1000
 
    y = x + x.T - x.mean(axis=0)  # Use normal syntax for high level algorithms
 
@@ -169,6 +170,13 @@ consider writing it to disk instead.
 
 Persist into Distributed Memory
 -------------------------------
+
+.. warning::
+
+    persist will store the full dataset in memory. This has the disadvantage that
+    the available memory must actually exceed the size of the dataset. Use persist
+    only when interactively iterating on the same dataset over and over again and
+    avoid it in productive use-cases as much as possible.
 
 Alternatively, if you are on a cluster, then you may want to trigger a
 computation and store the results in distributed memory.  In this case you do

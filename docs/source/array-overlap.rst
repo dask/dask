@@ -175,7 +175,7 @@ and ``trim_internal``:
 
    >>> x = ...
    >>> g = da.overlap.overlap(x, depth={0: 2, 1: 2},
-   ...                       boundary={0: 'periodic', 1: 'periodic'})
+   ...                        boundary={0: 'periodic', 1: 'periodic'})
    >>> g2 = g.map_blocks(myfunc)
    >>> result = da.overlap.trim_internal(g2, {0: 2, 1: 2})
 

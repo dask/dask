@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 import dask
@@ -5,6 +7,7 @@ from dask.context import globalmethod
 
 
 def test_with_get():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     var = [0]
 

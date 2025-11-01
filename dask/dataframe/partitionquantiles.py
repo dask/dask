@@ -68,21 +68,19 @@ such as for extremely large ``npartitions`` or if we find we need to
 increase the sample size for each partition.
 
 """
+
+from __future__ import annotations
+
 import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_datetime64_dtype,
-    is_datetime64tz_dtype,
-    is_integer_dtype,
-)
-from tlz import merge, merge_sorted, take
+from pandas.api.types import is_datetime64_dtype, is_integer_dtype
+from tlz import merge_sorted, take
 
-from dask.base import tokenize
-from dask.dataframe.core import Series
-from dask.dataframe.utils import is_categorical_dtype
-from dask.utils import is_cupy_type, random_state_data
+from dask.dataframe.dispatch import tolist_dispatch
+from dask.dataframe.utils import is_series_like
+from dask.utils import is_cupy_type
 
 
 def sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_state=None):
@@ -201,7 +199,7 @@ def tree_groups(N, num_groups):
     return rv
 
 
-def create_merge_tree(func, keys, token):
+def create_merge_tree(func, keys, token, level=0):
     """Create a task tree that merges all the keys with a reduction function.
 
     Parameters
@@ -212,6 +210,8 @@ def create_merge_tree(func, keys, token):
         Keys to reduce from the source dask graph.
     token: object
         Included in each key of the returned dict.
+    level: int, default 0
+        The token-level to begin with.
 
     This creates a k-ary tree where k depends on the current level and is
     greater the further away a node is from the root node.  This reduces the
@@ -221,7 +221,6 @@ def create_merge_tree(func, keys, token):
     For reasonable numbers of keys, N < 1e5, the total number of nodes in the
     tree is roughly ``N**0.78``.  For 1e5 < N < 2e5, is it roughly ``N**0.8``.
     """
-    level = 0
     prev_width = len(keys)
     prev_keys = iter(keys)
     rv = {}
@@ -252,19 +251,23 @@ def percentiles_to_weights(qs, vals, length):
     between the first and second percentiles, and then scaled by length:
 
     >>> 0.5 * length * (percentiles[1] - percentiles[0])
-    125.0
+    np.float64(125.0)
 
     The second weight uses the difference of percentiles on both sides, so
     it will be twice the first weight if the percentiles are equally spaced:
 
     >>> 0.5 * length * (percentiles[2] - percentiles[0])
-    250.0
+    np.float64(250.0)
     """
     if length == 0:
         return ()
     diff = np.ediff1d(qs, 0.0, 0.0)
     weights = 0.5 * length * (diff[1:] + diff[:-1])
-    return vals.tolist(), weights.tolist()
+    try:
+        # Try using tolist_dispatch first
+        return tolist_dispatch(vals), weights.tolist()
+    except TypeError:
+        return vals.tolist(), weights.tolist()
 
 
 def merge_and_compress_summaries(vals_and_weights):
@@ -318,7 +321,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
             return np.array(None, dtype=dtype)
         except Exception:
             # dtype does not support None value so allow it to change
-            return np.array(None, dtype=np.float_)
+            return np.array(None, dtype=np.float64)
 
     vals, weights = vals_and_weights
     vals = np.array(vals)
@@ -340,7 +343,9 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = vals
     elif len(vals) < npartitions + 1:
         # The data is under-sampled
-        if np.issubdtype(vals.dtype, np.number) and not is_categorical_dtype(dtype):
+        if np.issubdtype(vals.dtype, np.number) and not isinstance(
+            dtype, pd.CategoricalDtype
+        ):
             # Interpolate extra divisions
             q_weights = np.cumsum(weights)
             q_target = np.linspace(q_weights[0], q_weights[-1], npartitions + 1)
@@ -369,20 +374,23 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         left = np.searchsorted(q_weights, q_target, side="left")
         right = np.searchsorted(q_weights, q_target, side="right") - 1
         # stay inbounds
-        np.maximum(right, 0, right)
+        np.maximum(right, 0, out=right)
         lower = np.minimum(left, right)
         trimmed = trimmed_vals[lower]
 
         rv = np.concatenate([trimmed, jumbo_vals])
         rv.sort()
 
-    if is_categorical_dtype(dtype):
+    if isinstance(dtype, pd.CategoricalDtype):
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
-    elif is_datetime64tz_dtype(dtype):
+    elif isinstance(dtype, pd.DatetimeTZDtype):
         rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
+        if is_integer_dtype(dtype) and pd.api.types.is_float_dtype(rv.dtype):
+            # pandas EA raises instead of truncating
+            rv = np.floor(rv)
         rv = pd.array(rv, dtype=dtype)
     return rv
 
@@ -405,9 +413,6 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         Scale factor to increase the number of percentiles calculated in
         each partition.  Use to improve accuracy.
     """
-    from dask.array.dispatch import percentile_lookup as _percentile
-    from dask.array.utils import array_safe
-
     length = len(df)
     if length == 0:
         return ()
@@ -416,18 +421,38 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     data = df
     interpolation = "linear"
 
-    if is_categorical_dtype(data):
+    if isinstance(data.dtype, pd.CategoricalDtype):
         data = data.cat.codes
         interpolation = "nearest"
     elif is_datetime64_dtype(data.dtype) or is_integer_dtype(data.dtype):
         interpolation = "nearest"
 
-    # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
-    # We fall back to an ndarray as a workaround.
     try:
-        vals = data.quantile(q=qs / 100, interpolation=interpolation).values
+        # Plan A: Use `Series.quantile`
+        vals = data.quantile(q=qs / 100, interpolation=interpolation)
     except (TypeError, NotImplementedError):
-        vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
+        # Series.quantile doesn't work with some data types (e.g. strings)
+        # Fall back to DataFrame.quantile with "nearest" interpolation
+        interpolation = "nearest"
+        vals = (
+            data.to_frame()
+            .quantile(
+                q=qs / 100,
+                interpolation=interpolation,
+                numeric_only=False,
+                method="table",
+            )
+            .iloc[:, 0]
+        )
+
+    # Convert to array if necessary (and possible)
+    if is_series_like(vals):
+        try:
+            vals = vals.values
+        except (ValueError, TypeError):
+            # cudf->cupy won't work if nulls are present,
+            # or if this is a string dtype
+            pass
 
     if (
         is_cupy_type(data)
@@ -444,62 +469,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
 
 def dtype_info(df):
     info = None
-    if is_categorical_dtype(df):
+    if isinstance(df.dtype, pd.CategoricalDtype):
         data = df.values
         info = (data.categories, data.ordered)
     return df.dtype, info
-
-
-def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
-    """Approximate quantiles of Series used for repartitioning"""
-    assert isinstance(df, Series)
-    # currently, only Series has quantile method
-    # Index.quantile(list-like) must be pd.Series, not pd.Index
-    return_type = Series
-
-    qs = np.linspace(0, 1, npartitions + 1)
-    token = tokenize(df, qs, upsample)
-    if random_state is None:
-        random_state = int(token, 16) % np.iinfo(np.int32).max
-    state_data = random_state_data(df.npartitions, random_state)
-
-    df_keys = df.__dask_keys__()
-
-    name0 = "re-quantiles-0-" + token
-    dtype_dsk = {(name0, 0): (dtype_info, df_keys[0])}
-
-    name1 = "re-quantiles-1-" + token
-    val_dsk = {
-        (name1, i): (
-            percentiles_summary,
-            key,
-            df.npartitions,
-            npartitions,
-            upsample,
-            state,
-        )
-        for i, (state, key) in enumerate(zip(state_data, df_keys))
-    }
-
-    name2 = "re-quantiles-2-" + token
-    merge_dsk = create_merge_tree(merge_and_compress_summaries, sorted(val_dsk), name2)
-    if not merge_dsk:
-        # Compress the data even if we only have one partition
-        merge_dsk = {(name2, 0, 0): (merge_and_compress_summaries, [list(val_dsk)[0]])}
-
-    merged_key = max(merge_dsk)
-
-    name3 = "re-quantiles-3-" + token
-    last_dsk = {
-        (name3, 0): (
-            pd.Series,  # TODO: Use `type(df._meta)` when cudf adds `tolist()`
-            (process_val_weights, merged_key, npartitions, (name0, 0)),
-            qs,
-            None,
-            df.name,
-        )
-    }
-
-    dsk = merge(df.dask, dtype_dsk, val_dsk, merge_dsk, last_dsk)
-    new_divisions = [0.0, 1.0]
-    return return_type(dsk, name3, df._meta, new_divisions)

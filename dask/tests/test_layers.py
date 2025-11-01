@@ -1,16 +1,17 @@
+from __future__ import annotations
+
 import os
 
 import pytest
 
-distributed = pytest.importorskip("distributed")
+pytest.importorskip("distributed")
 
 import sys
 from operator import getitem
 
 from distributed import Client, SchedulerPlugin
-from distributed.utils_test import cluster, loop  # noqa F401
+from distributed.utils_test import cluster, loop  # noqa: F401
 
-from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayChunkShapeDep, ArraySliceDep, fractional_slice
 
 
@@ -29,11 +30,12 @@ class SchedulerImportCheck(SchedulerPlugin):
             if not mod.startswith(self.pattern):
                 self.start_modules.add(mod)
             else:
-                # Maually remove the target library
+                # Manually remove the target library
                 sys.modules.pop(mod)
 
 
 def test_array_chunk_shape_dep():
+    pytest.importorskip("numpy")
     dac = pytest.importorskip("dask.array.core")
     d = 2  # number of chunks in x,y
     chunk = (2, 3)  # chunk shape
@@ -51,6 +53,7 @@ def test_array_chunk_shape_dep():
 
 
 def test_array_slice_deps():
+    pytest.importorskip("numpy")
     dac = pytest.importorskip("dask.array.core")
     d = 2  # number of chunks in x,y
     chunk = (2, 3)  # chunk shape
@@ -76,7 +79,7 @@ def _dataframe_shuffle(tmpdir):
 
     # Perform a computation using an HLG-based shuffle
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
-    return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle="tasks")
+    return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle_method="tasks")
 
 
 def _dataframe_tree_reduction(tmpdir):
@@ -96,7 +99,7 @@ def _dataframe_broadcast_join(tmpdir):
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
     ddf1 = dd.from_pandas(df, npartitions=4)
     ddf2 = dd.from_pandas(df, npartitions=1)
-    return ddf1.merge(ddf2, how="left", broadcast=True, shuffle="tasks")
+    return ddf1.merge(ddf2, how="left", broadcast=True, shuffle_method="tasks")
 
 
 def _array_creation(tmpdir):
@@ -132,46 +135,17 @@ def test_fractional_slice():
 
 
 def _pq_pyarrow(tmpdir):
-    pytest.importorskip("pyarrow.parquet")
+    pytest.importorskip("pyarrow")
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    try:
-        import pyarrow.dataset as pa_ds
-    except ImportError:
-        # PyArrow version too old for Dataset API
-        pa_ds = None
-
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
-        str(tmpdir),
-        engine="pyarrow",
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2).to_parquet(
+        str(tmpdir)
     )
-    filters = [(("a", "<=", 2))]
+    filters = [("a", "<=", 2)]
 
-    ddf1 = dd.read_parquet(str(tmpdir), engine="pyarrow", filters=filters)
-    if pa_ds:
-        # Need to test that layer serialization succeeds
-        # with "pyarrow-dataset" filtering
-        ddf2 = dd.read_parquet(
-            str(tmpdir),
-            engine="pyarrow-dataset",
-            filters=filters,
-        )
-        return (ddf1, ddf2)
-    else:
-        return ddf1
-
-
-def _pq_fastparquet(tmpdir):
-    pytest.importorskip("fastparquet")
-    pd = pytest.importorskip("pandas")
-    dd = pytest.importorskip("dask.dataframe")
-
-    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
-        str(tmpdir),
-        engine="fastparquet",
-    )
-    return dd.read_parquet(str(tmpdir), engine="fastparquet")
+    ddf1 = dd.read_parquet(str(tmpdir), filters=filters)
+    return ddf1
 
 
 def _read_csv(tmpdir):
@@ -193,7 +167,6 @@ def _read_csv(tmpdir):
         (_dataframe_tree_reduction, "pandas."),
         (_dataframe_broadcast_join, "pandas."),
         (_pq_pyarrow, "pandas."),
-        (_pq_fastparquet, "pandas."),
         (_read_csv, "pandas."),
         (_array_creation, "numpy."),
         (_array_map_overlap, "numpy."),
@@ -222,7 +195,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
             new_modules = end_modules - start_modules
 
             # Check that the scheduler didn't start with `lib`
-            # (otherwise we arent testing anything)
+            # (otherwise we aren't testing anything)
             assert not any(module.startswith(lib) for module in start_modules)
 
             # Check whether we imported `lib` on the scheduler
@@ -230,67 +203,8 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
 
 
 def _shuffle_op(ddf):
-    return ddf.shuffle("x", shuffle="tasks")
+    return ddf.shuffle("x", shuffle_method="tasks")
 
 
 def _groupby_op(ddf):
     return ddf.groupby("name").agg({"x": "mean"})
-
-
-@pytest.mark.parametrize("op", [_shuffle_op, _groupby_op])
-def test_dataframe_cull_key_dependencies(op):
-    # Test that HighLevelGraph.cull does not populate the
-    # output graph with incorrect key_dependencies for
-    # "complex" DataFrame Layers
-    # See: https://github.com/dask/dask/pull/9267
-
-    pytest.importorskip("dask.dataframe")
-    datasets = pytest.importorskip("dask.datasets")
-
-    result = op(datasets.timeseries(end="2000-01-15")).count()
-    graph = result.dask
-    culled_graph = graph.cull(result.__dask_keys__())
-
-    assert graph.get_all_dependencies() == culled_graph.get_all_dependencies()
-
-
-def test_dataframe_cull_key_dependencies_materialized():
-    # Test that caching of MaterializedLayer
-    # dependencies during culling doesn't break
-    # the result of ``get_all_dependencies``
-
-    datasets = pytest.importorskip("dask.datasets")
-    dd = pytest.importorskip("dask.dataframe")
-
-    ddf = datasets.timeseries(end="2000-01-15")
-
-    # Build a custom layer to ensure
-    # MaterializedLayer is used
-    name = "custom_graph_test"
-    name_0 = "custom_graph_test_0"
-    dsk = {}
-    for i in range(ddf.npartitions):
-        dsk[(name_0, i)] = (lambda x: x, (ddf._name, i))
-        dsk[(name, i)] = (lambda x: x, (name_0, i))
-    dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
-    result = dd.core.new_dd_object(dsk, name, ddf._meta, ddf.divisions)
-    graph = result.dask
-
-    # HLG cull
-    culled_keys = [k for k in result.__dask_keys__() if k != (name, 0)]
-    culled_graph = graph.cull(culled_keys)
-
-    # Check that culled_deps are cached
-    # See: https://github.com/dask/dask/issues/9389
-    cached_deps = culled_graph.key_dependencies.copy()
-    deps = culled_graph.get_all_dependencies()
-    assert cached_deps == deps
-
-    # Manual cull
-    deps0 = graph.get_all_dependencies()
-    deps0.pop((name, 0))
-    deps0.pop((name_0, 0))
-    deps0.pop((ddf._name, 0))
-
-    # Check that get_all_dependencies results match
-    assert deps0 == deps

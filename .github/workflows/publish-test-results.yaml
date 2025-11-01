@@ -1,0 +1,50 @@
+# Copied from https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.23/README.md#support-fork-repositories-and-dependabot-branches
+# Warning: changes to this workflow will NOT be picked up until they land in the main branch!
+# See https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#workflow_run
+
+name: Publish test results
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+
+jobs:
+  publish-test-results:
+    name: Publish test results
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion != 'skipped'
+
+    # Needed to post comments on the PR
+    permissions:
+      checks: write
+      pull-requests: write
+
+    steps:
+      - name: Download and extract artifacts
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        run: |
+          mkdir artifacts && cd artifacts
+
+          artifacts_url=${{ github.event.workflow_run.artifacts_url }}
+
+          gh api --paginate "$artifacts_url" -q '.artifacts[] | [.name, .archive_download_url] | @tsv' | while read artifact
+          do
+            IFS=$'\t' read name url <<< "$artifact"
+            gh api $url > "$name.zip"
+            unzip -d "$name" "$name.zip"
+          done
+
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          check_name: Unit Test Results
+          comment_title: |
+            Unit Test Results
+            _See [test report](https://dask.github.io/dask/test_report.html) for an extended history of previous test failures. This is useful for diagnosing flaky tests._
+          commit: ${{ github.event.workflow_run.head_sha }}
+          event_file: artifacts/Event File/event.json
+          event_name: ${{ github.event.workflow_run.event }}
+          junit_files: artifacts/**/*.xml
+          fail_on: "errors"

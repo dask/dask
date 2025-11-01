@@ -1,16 +1,23 @@
+from __future__ import annotations
+
 import os
+import threading
 import xml.etree.ElementTree
 from collections.abc import Set
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 import dask
-from dask.blockwise import Blockwise, blockwise_token
+from dask.base import collections_to_expr, tokenize
+from dask.blockwise import Blockwise
+from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
-from dask.utils_test import inc
+from dask.utils_test import dec, inc
 
 
 def test_visualize(tmpdir):
+    pytest.importorskip("numpy")
     pytest.importorskip("graphviz")
     da = pytest.importorskip("dask.array")
     fn = str(tmpdir)
@@ -34,6 +41,7 @@ def test_basic():
 
 
 def test_keys_values_items_to_dict_methods():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     a = da.ones(10, chunks=(5,))
     b = a + 1
@@ -151,16 +159,18 @@ def annot_map_fn(key):
     ],
 )
 def test_single_annotation(annotation):
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     with dask.annotate(**annotation):
         A = da.ones((10, 10), chunks=(5, 5))
 
     alayer = A.__dask_graph__().layers[A.name]
     assert alayer.annotations == annotation
-    assert dask.config.get("annotations", None) is None
+    assert not dask.get_annotations()
 
 
 def test_multiple_annotations():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     with dask.annotate(block_id=annot_map_fn):
         with dask.annotate(resources={"GPU": 1}):
@@ -170,7 +180,7 @@ def test_multiple_annotations():
 
     C = B + 1
 
-    assert dask.config.get("annotations", None) is None
+    assert not dask.get_annotations()
 
     alayer = A.__dask_graph__().layers[A.name]
     blayer = B.__dask_graph__().layers[B.name]
@@ -180,14 +190,14 @@ def test_multiple_annotations():
     assert clayer.annotations is None
 
 
-def test_annotation_pack_unpack():
-    layer = MaterializedLayer({"n": 42}, annotations={"workers": ("alice",)})
-    packed_anno = layer.__dask_distributed_annotations_pack__()
-    annotations = {}
-    Layer.__dask_distributed_annotations_unpack__(
-        annotations, packed_anno, layer.keys()
-    )
-    assert annotations == {"workers": {"n": ("alice",)}}
+def test_annotation_cleared_on_error():
+    with dask.annotate(x=1):
+        with pytest.raises(ZeroDivisionError):
+            with dask.annotate(x=2):
+                assert dask.get_annotations() == {"x": 2}
+                1 / 0
+        assert dask.get_annotations() == {"x": 1}
+    assert not dask.get_annotations()
 
 
 def test_materializedlayer_cull_preserves_annotations():
@@ -201,13 +211,33 @@ def test_materializedlayer_cull_preserves_annotations():
     assert culled_layer.annotations == {"foo": "bar"}
 
 
+def test_annotations_leak():
+    """Annotations shouldn't leak between threads.
+    See https://github.com/dask/dask/issues/10340."""
+    b1 = threading.Barrier(2)
+    b2 = threading.Barrier(2)
+
+    def f(n):
+        with dask.annotate(foo=n):
+            b1.wait()
+            out = dask.get_annotations()
+            b2.wait()
+            return out
+
+    with ThreadPoolExecutor(2) as ex:
+        f1 = ex.submit(f, 1)
+        f2 = ex.submit(f, 2)
+        result = [f1.result(), f2.result()]
+    assert result == [{"foo": 1}, {"foo": 2}]
+
+
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
-    da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
     if flat:
         # Simple "flat" mapping between input and
-        # outut indices
+        # output indices
         x = da.from_array(np.arange(40).reshape((4, 10)), (2, 4)) + 100
     else:
         # Complex mapping between input and output
@@ -223,11 +253,12 @@ def test_blockwise_cull(flat):
     keys = {(x._name, *select)}
     dsk_cull = dsk.cull(keys)
     for name, layer in dsk_cull.layers.items():
+        old_name = name.rsplit("-", 1)[0]
         if not isinstance(layer, dask.blockwise.Blockwise):
             # The original layer shouldn't be Blockwise if the new one isn't
-            assert not isinstance(dsk.layers[name], dask.blockwise.Blockwise)
+            assert not isinstance(dsk.layers[old_name], dask.blockwise.Blockwise)
             continue
-        assert isinstance(dsk.layers[name], dask.blockwise.Blockwise)
+        assert isinstance(dsk.layers[old_name], dask.blockwise.Blockwise)
         assert not layer.is_materialized()
         out_keys = layer.get_output_keys()
         assert out_keys == {(layer.output, *select)}
@@ -235,11 +266,13 @@ def test_blockwise_cull(flat):
 
 
 def test_len_does_not_materialize():
+    from dask._task_spec import Task
+
     a = {"x": 1}
     b = Blockwise(
         output="b",
         output_indices=tuple("ij"),
-        dsk={"b": [[blockwise_token(0)]]},
+        task=Task("b", lambda: "1"),
         indices=(),
         numblocks={},
         new_axes={"i": (1, 1, 1), "j": (1, 1)},
@@ -259,6 +292,7 @@ def test_len_does_not_materialize():
 
 
 def test_node_tooltips_exist():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     pytest.importorskip("graphviz")
 
@@ -276,3 +310,55 @@ def test_node_tooltips_exist():
             end = layer.find('"', start)
             tooltip = layer[start:end]
             assert len(tooltip) > 0
+
+
+def test_tokenize_hlg():
+    import dask.bag as db
+
+    a = db.from_sequence(list(range(10)), npartitions=2).max()
+    b = db.from_sequence(list(range(10)), npartitions=2).max()
+    c = db.from_sequence(list(range(10)), npartitions=3).max()
+    assert tokenize(a.dask) == tokenize(b.dask)
+    assert tokenize(a.dask) != tokenize(c.dask)
+
+
+def test_culling_changes_layer_names():
+    """Test that culling changes the layer names in the graph."""
+    dsk = MaterializedLayer({"x": 1, "y": (inc, "x"), "z": (dec, "x")})
+    hg = HighLevelGraph({"a": dsk}, {"a": set()})
+
+    # This construction of Delayed objects is similar to array.to_delayed
+    y = Delayed("y", hg, layer="a")
+    z = Delayed("z", hg, layer="a")
+
+    from dask.delayed import optimize
+
+    # This is roughly what dask.optimize is doing
+    # The exception is that collection_to_dsk takes the Delayed object and
+    # extracts the layer as a low level graph in which case we're losing the
+    # layer name, i.e. all internal manipulations of the graphs with and without
+    # optimization could be affected but triggering this with user APIs is
+    # almost impossible
+    yopt_hlg = optimize(y._dask, ["y"])
+    assert isinstance(yopt_hlg, HighLevelGraph)
+    layers = yopt_hlg.layers
+    # This test doesn't care about there being a single layer but after
+    # optimization we no longer want to hardcode the delayed layer key
+    assert len(layers) == 1
+    layer_key = next(iter(layers))
+    yopt = Delayed("y", yopt_hlg, layer=layer_key)
+
+    zopt_hlg = optimize(z._dask, ["z"])
+    assert isinstance(zopt_hlg, HighLevelGraph)
+    layers = zopt_hlg.layers
+    # This test doesn't care about there being a single layer but after
+    # optimization we no longer want to hardcode the delayed layer key
+    assert len(layers) == 1
+    layer_key = next(iter(layers))
+    zopt = Delayed("z", zopt_hlg, layer=layer_key)
+
+    # This internally merged the HLG graphs i.e. if layer names are not
+    # deduplicated we will loose keys.
+    expr_opt = collections_to_expr([yopt, zopt]).optimize()
+    dsk_out = expr_opt.__dask_graph__()
+    assert set(dsk_out) == set("xyz")

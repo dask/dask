@@ -12,7 +12,10 @@ from dask.context import globalmethod
 from dask.delayed import Delayed, delayed
 from dask.typing import (
     DaskCollection,
+    Graph,
     HLGDaskCollection,
+    Key,
+    NestedKeys,
     PostComputeCallable,
     PostPersistCallable,
 )
@@ -23,6 +26,8 @@ except ImportError:
     DisplayObject = Any
 
 
+pytest.importorskip("numpy")
+pytest.importorskip("pandas")
 da = pytest.importorskip("dask.array")
 db = pytest.importorskip("dask.bag")
 dds = pytest.importorskip("dask.datasets")
@@ -33,11 +38,11 @@ def finalize(x: Sequence[Any]) -> Any:
     return x[0]
 
 
-def get1(dsk: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs: Any) -> Any:
+def get1(dsk: Mapping, keys: Sequence[Key] | Key, **kwargs: Any) -> Any:
     return dask.threaded.get(dsk, keys, **kwargs)
 
 
-def get2(dsk: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs: Any) -> Any:
+def get2(dsk: Mapping, keys: Sequence[Key] | Key, **kwargs: Any) -> Any:
     return dask.get(dsk, keys, **kwargs)
 
 
@@ -45,10 +50,10 @@ class Inheriting(DaskCollection):
     def __init__(self, based_on: DaskCollection) -> None:
         self.based_on = based_on
 
-    def __dask_graph__(self) -> Mapping:
+    def __dask_graph__(self) -> Graph:
         return self.based_on.__dask_graph__()
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return self.based_on.__dask_keys__()
 
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
@@ -94,13 +99,13 @@ class HLGCollection(DaskMethodsMixin):
     def __init__(self, based_on: HLGDaskCollection) -> None:
         self.based_on = based_on
 
-    def __dask_graph__(self) -> Mapping:
+    def __dask_graph__(self) -> Graph:
         return self.based_on.__dask_graph__()
 
     def __dask_layers__(self) -> Sequence[str]:
         return self.based_on.__dask_layers__()
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return self.based_on.__dask_keys__()
 
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
@@ -125,10 +130,10 @@ class NotHLGCollection(DaskMethodsMixin):
     def __init__(self, based_on: DaskCollection) -> None:
         self.based_on = based_on
 
-    def __dask_graph__(self) -> Mapping:
+    def __dask_graph__(self) -> Graph:
         return self.based_on.__dask_graph__()
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> NestedKeys:
         return self.based_on.__dask_keys__()
 
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
@@ -164,12 +169,10 @@ def assert_isinstance(coll: DaskCollection, protocol: Any) -> None:
 def test_isinstance_core(protocol):
     arr = da.ones(10)
     bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
-    df = dds.timeseries()
     dobj = increment(2)
 
     assert_isinstance(arr, protocol)
     assert_isinstance(bag, protocol)
-    assert_isinstance(df, protocol)
     assert_isinstance(dobj, protocol)
 
 

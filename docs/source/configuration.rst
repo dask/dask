@@ -186,6 +186,19 @@ they are initialized. These settings may also be cached for performance reasons.
 This is particularly true for ``dask.distributed`` objects such as Client, Scheduler,
 Worker, and Nanny.
 
+Directly from CLI
+~~~~~~~~~~~~~~~~~
+
+Configuration can also be set and viewed from the CLI.
+
+.. code-block::
+
+	$ dask config set optimization.fuse.ave-width 4
+	Updated [optimization.fuse.ave-width] to [4], config saved to ~/dask/dask.yaml
+
+	$ dask config get optimization.fuse.ave-width
+	4
+
 
 Distributing configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

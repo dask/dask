@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pickle
 import warnings
 from functools import partial
@@ -252,7 +254,6 @@ def test_ufunc_outer():
 
 @pytest.mark.parametrize("ufunc", ["isreal", "iscomplex", "real", "imag"])
 def test_complex(ufunc):
-
     dafunc = getattr(da, ufunc)
     # Note that these functions are not NumPy ufuncs
     npfunc = getattr(np, ufunc)
@@ -282,7 +283,6 @@ def test_complex(ufunc):
 
 @pytest.mark.parametrize("ufunc", ["frexp", "modf"])
 def test_ufunc_2results(ufunc):
-
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
@@ -557,7 +557,7 @@ def test_ufunc_where_no_out():
     d_left = da.from_array(left, chunks=2)
     d_right = da.from_array(right, chunks=2)
 
-    expected = np.add(left, right, where=where)
+    expected = np.add(left, right, where=where, out=None)
     result = da.add(d_left, d_right, where=d_where)
 
     # If no `out` is provided, numpy leaves elements that don't match `where`

@@ -11,6 +11,19 @@ your situation, some of these approaches may be more appropriate than others.
 These approaches are ordered from lightweight or easy solutions to more
 involved solutions.
 
+Printing
+--------
+
+One of the most basic methods of debugging is to simply print values and inspect them.
+However, when using Python's built-in :func:`print` function with Dask, those prints
+often happen on remote machines instead of in the user's Python session, which typically
+isn't the experience developers want when debugging.
+
+Because of this, Dask offers a :func:`dask.distributed.print <distributed.print>` function which acts
+just like Python's built-in :func:`print` but also forwards the printed output to the
+client side Python session. This makes distributed debugging feel more like debugging
+locally.
+
 Exceptions
 ----------
 
@@ -264,19 +277,3 @@ This can be very helpful if you want to use the Dask distributed API and still
 want to investigate what is going on directly within the workers.  Information
 is not distilled for you like it is in the web diagnostics, but you have full
 low-level access.
-
-
-Inspect state with IPython
---------------------------
-
-Sometimes you want to inspect the state of your cluster but you don't have the
-luxury of operating on a single machine.  In these cases you can launch an
-IPython kernel on the scheduler and on every worker, which lets you inspect
-state on the scheduler and workers as computations are completing.
-
-This does not give you the ability to run ``%pdb`` or ``%debug`` on remote
-machines. The tasks are still running in separate threads, and so are not
-easily accessible from an interactive IPython session.
-
-For more details, see the `Dask distributed IPython docs
-<https://distributed.dask.org/en/latest/ipython.html>`_.

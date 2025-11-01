@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
+from packaging.version import Version
 
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
 from dask.array.tests.test_dispatch import EncapsulateNDArray, WrappedArray
 from dask.array.utils import assert_eq
+
+if da._array_expr_enabled():
+    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
 
 
 @pytest.mark.parametrize(
@@ -36,7 +41,7 @@ from dask.array.utils import assert_eq
     ],
 )
 def test_array_function_dask(func):
-    x = np.random.random((100, 100))
+    x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
     res_x = func(x)
     res_y = func(y)
@@ -54,7 +59,7 @@ def test_array_function_dask(func):
     ],
 )
 def test_stack_functions_require_sequence_of_arrays(func):
-    x = np.random.random((100, 100))
+    x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
 
     with pytest.raises(
@@ -65,7 +70,7 @@ def test_stack_functions_require_sequence_of_arrays(func):
 
 @pytest.mark.parametrize("func", [np.fft.fft, np.fft.fft2])
 def test_array_function_fft(func):
-    x = np.random.random((100, 100))
+    x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(100, 100))
     res_x = func(x)
     res_y = func(y)
@@ -84,7 +89,7 @@ def test_array_function_fft(func):
     ],
 )
 def test_array_notimpl_function_dask(func):
-    x = np.random.random((100, 100))
+    x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
 
     with pytest.warns(
@@ -98,7 +103,9 @@ def test_array_notimpl_function_dask(func):
 )
 def test_array_function_sparse(func):
     sparse = pytest.importorskip("sparse")
-    x = da.random.random((500, 500), chunks=(100, 100))
+    if Version(sparse.__version__) == Version("0.15.2"):
+        pytest.skip(reason="https://github.com/pydata/sparse/issues/682")
+    x = da.random.default_rng().random((500, 500), chunks=(100, 100))
     x[x < 0.9] = 0
 
     y = x.map_blocks(sparse.COO)
@@ -108,9 +115,10 @@ def test_array_function_sparse(func):
 
 def test_array_function_sparse_tensordot():
     sparse = pytest.importorskip("sparse")
-    x = np.random.random((2, 3, 4))
+    rng = np.random.default_rng()
+    x = rng.random((2, 3, 4))
     x[x < 0.9] = 0
-    y = np.random.random((4, 3, 2))
+    y = rng.random((4, 3, 2))
     y[y < 0.9] = 0
 
     xx = sparse.COO(x)
@@ -124,7 +132,7 @@ def test_array_function_sparse_tensordot():
 @pytest.mark.parametrize("chunks", [(100, 100), (500, 100)])
 def test_array_function_cupy_svd(chunks):
     cupy = pytest.importorskip("cupy")
-    x = cupy.random.random((500, 100))
+    x = cupy.random.default_rng().random((500, 100))
 
     y = da.from_array(x, chunks=chunks, asarray=False)
 
@@ -156,7 +164,7 @@ def test_array_function_cupy_svd(chunks):
 )
 def test_unregistered_func(func):
     # Wrap a procol-based encapsulated ndarray
-    x = EncapsulateNDArray(np.random.random((100, 100)))
+    x = EncapsulateNDArray(np.random.default_rng().random((100, 100)))
 
     # See if Dask holds the array fine
     y = da.from_array(x, chunks=(50, 50))
@@ -199,16 +207,16 @@ def test_non_existent_func():
     "arr_upcast, arr_downcast",
     [
         (
-            WrappedArray(np.random.random((10, 10))),
-            da.random.random((10, 10), chunks=(5, 5)),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
         ),
         (
-            da.random.random((10, 10), chunks=(5, 5)),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            da.random.default_rng().random((10, 10), chunks=(5, 5)),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
         (
-            WrappedArray(np.random.random((10, 10))),
-            EncapsulateNDArray(np.random.random((10, 10))),
+            WrappedArray(np.random.default_rng().random((10, 10))),
+            EncapsulateNDArray(np.random.default_rng().random((10, 10))),
         ),
     ],
 )
@@ -221,24 +229,37 @@ def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
     )
 
 
-@pytest.mark.parametrize("func", [da.array, da.asarray, da.asanyarray, da.tri])
-def test_like_raises(func):
-    if _numpy_120:
-        assert_eq(func(1, like=func(1)), func(1))
-    else:
-        with pytest.raises(
-            RuntimeError, match="The use of ``like`` required NumPy >= 1.20"
-        ):
-            func(1, like=func(1))
+@pytest.mark.parametrize("like_ns", (np, da))
+@pytest.mark.parametrize("func", [da.array, da.asarray, da.asanyarray])
+def test_like(func, like_ns):
+    like = like_ns.array(0, dtype=np.int16)
+
+    assert_eq(func(1, like=like), da.array(1))
+    assert_eq(func(1.1, like=like), da.array(1.1))
+    assert_eq(func(np.int8(1), like=like, dtype=np.int32), da.array(1, dtype=np.int32))
+    assert_eq(func(1, like=like, dtype=np.int32), da.array(1, dtype=np.int32))
+    assert_eq(func(1.1, like=like, dtype=np.int32), da.array(1, dtype=np.int32))
+
+    assert_eq(func(da.array(1, dtype=np.int8), like=like), da.array(1, dtype=np.int8))
+    assert_eq(func(da.array(1.1), like=like), da.array(1.1))
+    assert_eq(
+        func(da.array(1, dtype=np.int8), like=like, dtype=np.int32),
+        da.array(1, dtype=np.int32),
+    )
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+@pytest.mark.parametrize("like_ns", (np, da))
+def test_tri_like(like_ns):
+    like = like_ns.array(0)
+    assert_eq(da.tri(1, like=like), da.tri(1))
+    assert_eq(da.tri(1, like=like, dtype=np.float32), da.tri(1, dtype=np.float32))
+
+
 @pytest.mark.parametrize("func", [np.array, np.asarray, np.asanyarray])
 def test_like_with_numpy_func(func):
     assert_eq(func(1, like=da.array(1)), func(1))
 
 
-@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("func", [np.array, np.asarray, np.asanyarray])
 def test_like_with_numpy_func_and_dtype(func):
     assert_eq(func(1, dtype=float, like=da.array(1)), func(1, dtype=float))

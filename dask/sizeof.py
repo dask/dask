@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import random
 import sys
 from array import array
 
-from dask.compatibility import entry_points
+from packaging.version import Version
+
+from dask._compatibility import importlib_metadata
 from dask.utils import Dispatch
 
 sizeof = Dispatch(name="sizeof")
@@ -61,11 +65,17 @@ class SimpleSizeof:
 
     Examples
     --------
+    >>> def _get_gc_overhead():
+    ...     class _CustomObject:
+    ...         def __sizeof__(self):
+    ...             return 0
+    ...
+    ...     return sys.getsizeof(_CustomObject())
 
     >>> class TheAnswer(SimpleSizeof):
-    ...         def __sizeof__(self):
-    ...             # Sizeof always add overhead of an object for GC
-    ...             return 42 - sizeof(object())
+    ...     def __sizeof__(self):
+    ...         # Sizeof always add overhead of an object for GC
+    ...         return 42 - _get_gc_overhead()
 
     >>> sizeof(TheAnswer())
     42
@@ -135,12 +145,7 @@ def register_pandas():
     import numpy as np
     import pandas as pd
 
-    from dask.dataframe._compat import PANDAS_GT_130, dtype_eq
-
-    if PANDAS_GT_130:
-        OBJECT_DTYPES = (object, pd.StringDtype("python"))
-    else:
-        OBJECT_DTYPES = (object,)
+    OBJECT_DTYPES = (object, pd.StringDtype("python"))
 
     def object_size(*xs):
         if not xs:
@@ -178,7 +183,7 @@ def register_pandas():
         # Unlike df.items(), df._series will not duplicate multiple views of the same
         # column e.g. df[["x", "x", "x"]]
         for col in df._series.values():
-            if prev_dtype is None or not dtype_eq(prev_dtype, col.dtype):
+            if prev_dtype is None or col.dtype != prev_dtype:
                 prev_dtype = col.dtype
                 # Contiguous columns of the same dtype share the same overhead
                 p += 1200
@@ -208,19 +213,19 @@ def register_pandas():
 
     @sizeof.register(pd.MultiIndex)
     def sizeof_pandas_multiindex(i):
-        p = 400 + object_size(*i.levels)
-        for c in i.codes:
-            p += c.nbytes
-        return p
+        return sum(sizeof(l) for l in i.levels) + sum(c.nbytes for c in i.codes)
 
 
 @sizeof.register_lazy("scipy")
 def register_spmatrix():
+    import scipy
     from scipy import sparse
 
-    @sizeof.register(sparse.dok_matrix)
-    def sizeof_spmatrix_dok(s):
-        return s.__sizeof__()
+    if Version(scipy.__version__) < Version("1.12.0.dev0"):
+
+        @sizeof.register(sparse.dok_matrix)
+        def sizeof_spmatrix_dok(s):
+            return s.__sizeof__()
 
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
@@ -253,9 +258,54 @@ def register_pyarrow():
         return int(_get_col_size(data)) + 1000
 
 
+@sizeof.register_lazy("xarray")
+def register_xarray():
+    import sys
+
+    import xarray as xr
+
+    XARRAY_VERSION = Version(xr.__version__)
+    XARRAY_GE_2024_02 = XARRAY_VERSION >= Version("2024.02.0")
+
+    @sizeof.register(xr.core.utils.Frozen)
+    def xarray_sizeof_frozen(obj):
+        return sys.getsizeof(obj) + sizeof(obj.mapping)
+
+    @sizeof.register(xr.DataArray)
+    @sizeof.register(xr.Variable)
+    def xarray_sizeof_da(obj):
+        return sys.getsizeof(obj) + sizeof(obj.data)
+
+    @sizeof.register(xr.Dataset)
+    def xarray_sizeof_ds(obj):
+        return sys.getsizeof(obj) + sizeof(obj.variables)
+
+    if XARRAY_GE_2024_02:
+        xarray_sizeof_da = sizeof.register(xr.NamedArray)(xarray_sizeof_da)
+
+    @sizeof.register(xr.core.indexes.Indexes)
+    def xarray_sizeof_indexes(obj):
+        return (
+            sys.getsizeof(obj)
+            + sizeof(obj._index_type)
+            + sizeof(obj._indexes)
+            + sizeof(obj._variables)
+            + sizeof(obj._dims)
+        )
+
+    @sizeof.register(xr.core.indexes.PandasIndex)
+    def xarray_sizeof_pd_index(obj):
+        return (
+            sys.getsizeof(obj)
+            + sizeof(obj.index)
+            + sizeof(obj.dim)
+            + sizeof(obj.coord_dtype)
+        )
+
+
 def _register_entry_point_plugins():
     """Register sizeof implementations exposed by the entry_point mechanism."""
-    for entry_point in entry_points(group="dask.sizeof"):
+    for entry_point in importlib_metadata.entry_points(group="dask.sizeof"):
         registrar = entry_point.load()
         try:
             registrar(sizeof)

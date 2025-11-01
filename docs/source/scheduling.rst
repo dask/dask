@@ -236,7 +236,7 @@ Other libraries like ipyparallel_ and mpi4py_ also supply
 Standalone Python scripts
 -------------------------
 
-Some care needs to be taken when running Dask schedulers in a standlone Python script.
+Some care needs to be taken when running Dask schedulers in a standalone Python script.
 Specifically, when using the single-machine multiprocessing scheduler or the local distributed
 scheduler, Dask will create additional Python processes. As part of Python's normal subprocess
 initialization, Python will import the contents of the script in every child process that is created

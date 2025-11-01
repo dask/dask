@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import functools
 import operator
@@ -9,7 +11,6 @@ from tlz import curry
 
 from dask import get
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import SubgraphCallable
 from dask.utils import (
     Dispatch,
     M,
@@ -26,6 +27,7 @@ from dask.utils import (
     format_bytes,
     format_time,
     funcname,
+    get_meta_library,
     getargspec,
     has_keyword,
     is_arraylike,
@@ -40,7 +42,6 @@ from dask.utils import (
     random_state_data,
     skip_doctest,
     stringify,
-    stringify_collection_keys,
     takes_multiple_arguments,
     tmpfile,
     typename,
@@ -597,7 +598,35 @@ def test_derived_from():
     assert "not supported" in b_arg.lower()
     assert "dask" in b_arg.lower()
 
-    assert "  extra docstring\n\n" in Zap.f.__doc__
+    assert "extra docstring\n\n" in Zap.f.__doc__
+
+
+@pytest.mark.parametrize(
+    "decorator",
+    [property, functools.cached_property],
+    ids=["@property", "@cached_property"],
+)
+def test_derived_from_prop_cached_prop(decorator):
+    class Base:
+        @decorator
+        def prop(self):
+            """A property
+
+            Long details"""
+            return 1
+
+    class Derived:
+        @decorator
+        @derived_from(Base)
+        def prop(self):
+            "Some extra doc"
+            return 3
+
+    docstring = Derived.prop.__doc__
+    assert docstring is not None
+    assert docstring.strip().startswith("A property")
+    assert any("inconsistencies" in line for line in docstring.split("\n"))
+    assert any("Some extra doc" in line for line in docstring.split("\n"))
 
 
 def test_derived_from_func():
@@ -614,6 +643,7 @@ def test_derived_from_func():
 
 
 def test_derived_from_dask_dataframe():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
     assert "inconsistencies" in dd.DataFrame.dropna.__doc__
@@ -678,6 +708,8 @@ def test_parse_timedelta():
         parse_timedelta("1", default=False)
     with pytest.raises(TypeError):
         parse_timedelta("1", default=None)
+    with pytest.raises(KeyError, match="Invalid time unit: foo. Valid units are"):
+        parse_timedelta("1 foo")
 
 
 def test_is_arraylike():
@@ -740,22 +772,6 @@ def test_stringify():
         skeys = [str(k) for k in keys]
         assert all(isinstance(k, str) for k in sdsk)
         assert get(dsk, keys) == get(sdsk, skeys)
-
-    dsk = {("y", 1): (SubgraphCallable({"x": ("y", 1)}, "x", (("y", 1),)), (("z", 1),))}
-    dsk = stringify(dsk, exclusive=set(dsk) | {("z", 1)})
-    assert dsk[("y", 1)][0].dsk["x"] == "('y', 1)"
-    assert dsk[("y", 1)][1][0] == "('z', 1)"
-
-
-def test_stringify_collection_keys():
-    obj = "Hello"
-    assert stringify_collection_keys(obj) is obj
-
-    obj = [("a", 0), (b"a", 0), (1, 1)]
-    res = stringify_collection_keys(obj)
-    assert res[0] == str(obj[0])
-    assert res[1] == str(obj[1])
-    assert res[2] == obj[2]
 
 
 @pytest.mark.parametrize(
@@ -894,3 +910,41 @@ def test_tmpfile_naming():
     with tmpfile(extension=".jpg") as fn:
         assert fn[-4:] == ".jpg"
         assert fn[-5] != "."
+
+
+def test_get_meta_library():
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(pd.DataFrame()) == pd
+    assert get_meta_library(np.array([])) == np
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(pd.DataFrame)
+    assert get_meta_library(np.ndarray([])) == get_meta_library(np.ndarray)
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1)
+    )
+    assert get_meta_library(np.ndarray([])) == get_meta_library(da.from_array([]))
+
+
+def test_get_meta_library_gpu():
+    cp = pytest.importorskip("cupy")
+    cudf = pytest.importorskip("cudf")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(cudf.DataFrame()) == cudf
+    assert get_meta_library(cp.array([])) == cp
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(cudf.DataFrame)
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(cp.ndarray)
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1).to_backend("cudf")
+    )
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(
+        da.from_array([]).to_backend("cupy")
+    )

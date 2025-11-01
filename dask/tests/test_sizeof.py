@@ -1,26 +1,22 @@
+from __future__ import annotations
+
 import os
 import sys
 from array import array
 
 import pytest
+from packaging.version import Version
 
 from dask.multiprocessing import get_context
 from dask.sizeof import sizeof
-from dask.utils import funcname
+from dask.utils import funcname, tmpdir
 
 try:
     import pandas as pd
-
-    from dask.dataframe._compat import PANDAS_GT_130
-
 except ImportError:
     pd = None
-    PANDAS_GT_130 = False
 
 requires_pandas = pytest.mark.skipif(pd is None, reason="requires pandas")
-requires_pandas_130 = pytest.mark.skipif(
-    not PANDAS_GT_130, reason="requires pandas 1.3.0"
-)
 
 
 def test_base():
@@ -83,10 +79,10 @@ def test_pandas_contiguous_dtypes():
 
 @requires_pandas
 def test_pandas_multiindex():
-    index = pd.MultiIndex.from_product([range(5), ["a", "b", "c", "d", "e"]])
+    index = pd.MultiIndex.from_product([range(50), list("abcdefghilmnopqrstuvwxyz")])
     actual_size = sys.getsizeof(index)
 
-    assert 0.5 * actual_size < sizeof(index) < 2 * actual_size
+    assert 0.5 * actual_size < sizeof(index) < 3 * actual_size
     assert isinstance(sizeof(index), int)
 
 
@@ -109,15 +105,13 @@ def test_sparse_matrix():
     assert sizeof(sp.tocoo()) >= 240
     assert sizeof(sp.tocsc()) >= 232
     assert sizeof(sp.tocsr()) >= 232
-    assert sizeof(sp.todok()) >= 188
+    assert sizeof(sp.todok()) >= 184
     assert sizeof(sp.tolil()) >= 204
 
 
 @requires_pandas
 @pytest.mark.parametrize("cls_name", ["Series", "DataFrame", "Index"])
-@pytest.mark.parametrize(
-    "dtype", [object, pytest.param("string[python]", marks=requires_pandas_130)]
-)
+@pytest.mark.parametrize("dtype", [object, "string[python]"])
 def test_pandas_object_dtype(dtype, cls_name):
     cls = getattr(pd, cls_name)
     s1 = cls([f"x{i:3d}" for i in range(1000)], dtype=dtype)
@@ -140,9 +134,7 @@ def test_pandas_object_dtype(dtype, cls_name):
 
 
 @requires_pandas
-@pytest.mark.parametrize(
-    "dtype", [object, pytest.param("string[python]", marks=requires_pandas_130)]
-)
+@pytest.mark.parametrize("dtype", [object, "string[python]"])
 def test_dataframe_object_dtype(dtype):
     x = "x" * 100_000
     y = "y" * 100_000
@@ -161,7 +153,6 @@ def test_dataframe_object_dtype(dtype):
     assert sizeof(df4) < sizeof(df3) < sizeof(df2)
 
 
-@requires_pandas_130
 @pytest.mark.parametrize("cls_name", ["Series", "DataFrame", "Index"])
 def test_pandas_string_arrow_dtype(cls_name):
     pytest.importorskip("pyarrow")
@@ -213,7 +204,7 @@ def test_dict():
     assert sizeof({"x": [x]}) > x.nbytes
     assert sizeof({"x": [{"y": x}]}) > x.nbytes
 
-    d = {i: x for i in range(100)}
+    d = dict.fromkeys(range(100), x)
     assert sizeof(d) > x.nbytes * 100
     assert isinstance(sizeof(d), int)
 
@@ -260,3 +251,61 @@ def test_register_backend_entrypoint(tmp_path):
             pool.apply(_get_sizeof_on_path, args=(tmp_path, 3_14159265)) == 3_14159265
         )
     pool.join()
+
+
+def test_xarray():
+    xr = pytest.importorskip("xarray")
+    np = pytest.importorskip("numpy")
+
+    ind = np.arange(-66, 67, 1).astype(float)
+    arr = np.random.random((len(ind),))
+
+    dataset = (
+        xr.DataArray(
+            arr,
+            dims=["coord"],
+            coords={"coord": ind},
+        )
+        .rename("foo")
+        .to_dataset()
+    )
+    assert sizeof(dataset) > sizeof(arr)
+    assert sizeof(dataset.foo) >= sizeof(arr)
+    assert sizeof(dataset["coord"]) >= sizeof(ind)
+    assert sizeof(dataset.indexes) >= sizeof(ind)
+
+
+def test_xarray_not_in_memory():
+    xr = pytest.importorskip("xarray")
+    zarr = pytest.importorskip("zarr")
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("zarr")
+
+    ind = np.arange(-66, 67, 1).astype(float)
+    arr = np.random.random((len(ind),))
+
+    # TODO: remove this conditional after consolidated metadata lands in v3
+    if Version(zarr.__version__) > Version("3.0.0.a0") and Version(
+        zarr.__version__
+    ) < Version("3.0.0"):
+        pytest.xfail("consolidated metadata and xarray support is not complete")
+
+    with tmpdir() as path:
+        xr.DataArray(
+            arr,
+            dims=["coord"],
+            coords={"coord": ind},
+        ).rename(
+            "foo"
+        ).to_dataset().to_zarr(path)
+        dataset = xr.open_zarr(path, chunks={"foo": 10})
+        assert not dataset.foo._in_memory
+        assert sizeof(ind) < sizeof(dataset) < sizeof(arr) + sizeof(ind)
+        assert sizeof(dataset.foo) < sizeof(arr)
+        assert sizeof(dataset["coord"]) >= sizeof(ind)
+        assert sizeof(dataset.indexes) >= sizeof(ind)
+        assert not dataset.foo._in_memory
+
+        dataset.load()
+        assert dataset.foo._in_memory
+        assert sizeof(dataset) >= sizeof(arr) + sizeof(ind)

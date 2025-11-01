@@ -1,11 +1,19 @@
+from __future__ import annotations
+
 import warnings
 from functools import partial
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_extension_array_dtype
+from pandas.errors import PerformanceWarning
 from tlz import partition
 
-from dask.dataframe._compat import PANDAS_GT_131
+from dask.dataframe._compat import (
+    check_apply_dataframe_deprecation,
+    check_convert_dtype_deprecation,
+    check_observed_deprecation,
+)
 
 #  preserve compatibility while moving dispatch objects
 from dask.dataframe.dispatch import (  # noqa: F401
@@ -20,6 +28,7 @@ from dask.dataframe.dispatch import (  # noqa: F401
     union_categoricals,
 )
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
+from dask.utils import _deprecated_kwarg
 
 # cuDF may try to import old dispatch functions
 hash_df = hash_object_dispatch
@@ -44,6 +53,13 @@ def iloc(df, cindexer=None):
     return df.iloc[:, cindexer]
 
 
+@_deprecated_kwarg("convert_dtype", None)
+def apply(df, *args, **kwargs):
+    with check_convert_dtype_deprecation():
+        with check_apply_dataframe_deprecation():
+            return df.apply(*args, **kwargs)
+
+
 def try_loc(df, iindexer, cindexer=None):
     """
     .loc for unknown divisions
@@ -54,7 +70,7 @@ def try_loc(df, iindexer, cindexer=None):
         return df.head(0).loc[:, cindexer]
 
 
-def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kind=None):
+def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True):
     """Index slice start/stop. Can switch include/exclude boundaries.
 
     Examples
@@ -89,20 +105,7 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
     if len(df.index) == 0:
         return df
 
-    if PANDAS_GT_131:
-        if kind is not None:
-            warnings.warn(
-                "The `kind` argument is no longer used/supported. "
-                "It will be dropped in a future release.",
-                category=FutureWarning,
-            )
-        kind_opts = {}
-        kind = "loc"
-    else:
-        kind = kind or "loc"
-        kind_opts = {"kind": kind}
-
-    if kind == "loc" and not df.index.is_monotonic_increasing:
+    if not df.index.is_monotonic_increasing:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
@@ -119,12 +122,12 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
                 df = df[df.index < stop]
         return df
 
-    result = getattr(df, kind)[start:stop]
+    result = df.loc[start:stop]
     if not right_boundary and stop is not None:
-        right_index = result.index.get_slice_bound(stop, "left", **kind_opts)
+        right_index = result.index.get_slice_bound(stop, "left")
         result = result.iloc[:right_index]
     if not left_boundary and start is not None:
-        left_index = result.index.get_slice_bound(start, "right", **kind_opts)
+        left_index = result.index.get_slice_bound(start, "right")
         result = result.iloc[left_index:]
     return result
 
@@ -144,21 +147,21 @@ def mean_aggregate(s, n):
 
 
 def wrap_var_reduction(array_var, index):
-    if isinstance(array_var, np.ndarray) or isinstance(array_var, list):
+    if isinstance(array_var, (np.ndarray, list)):
         return pd.Series(array_var, index=index)
 
     return array_var
 
 
 def wrap_skew_reduction(array_skew, index):
-    if isinstance(array_skew, np.ndarray) or isinstance(array_skew, list):
+    if isinstance(array_skew, (np.ndarray, list)):
         return pd.Series(array_skew, index=index)
 
     return array_skew
 
 
 def wrap_kurtosis_reduction(array_kurtosis, index):
-    if isinstance(array_kurtosis, np.ndarray) or isinstance(array_kurtosis, list):
+    if isinstance(array_kurtosis, (np.ndarray, list)):
         return pd.Series(array_kurtosis, index=index)
 
     return array_kurtosis
@@ -185,8 +188,13 @@ def describe_aggregate(values):
 
 
 def describe_numeric_aggregate(
-    stats, name=None, is_timedelta_col=False, is_datetime_col=False
+    stats,
+    name=None,
+    is_timedelta_col=False,
+    is_datetime_col=False,
+    unit="ns",
 ):
+    unit = unit or "ns"
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
@@ -196,17 +204,17 @@ def describe_numeric_aggregate(
         typ = type(q)
 
     if is_timedelta_col:
-        mean = pd.to_timedelta(mean)
-        std = pd.to_timedelta(std)
-        min = pd.to_timedelta(min)
-        max = pd.to_timedelta(max)
-        q = q.apply(lambda x: pd.to_timedelta(x))
+        mean = pd.to_timedelta(mean, unit=unit).as_unit(unit)
+        std = pd.to_timedelta(std, unit=unit).as_unit(unit)
+        min = pd.to_timedelta(min, unit=unit).as_unit(unit)
+        max = pd.to_timedelta(max, unit=unit).as_unit(unit)
+        q = q.apply(lambda x: pd.to_timedelta(x, unit=unit).as_unit(unit))
 
     if is_datetime_col:
         # mean is not implemented for datetime
-        min = pd.to_datetime(min)
-        max = pd.to_datetime(max)
-        q = q.apply(lambda x: pd.to_datetime(x))
+        min = pd.to_datetime(min, unit=unit).as_unit(unit)
+        max = pd.to_datetime(max, unit=unit).as_unit(unit)
+        q = q.apply(lambda x: pd.to_datetime(x, unit=unit).as_unit(unit))
 
     if is_datetime_col:
         part1 = typ([count, min], index=["count", "min"])
@@ -244,7 +252,7 @@ def describe_nonnumeric_aggregate(stats, name):
         data = [0, 0]
         index = ["count", "unique"]
         dtype = None
-        data.extend([None, None])
+        data.extend([np.nan, np.nan])
         index.extend(["top", "freq"])
         dtype = object
         result = pd.Series(data, index=index, dtype=dtype, name=name)
@@ -327,11 +335,17 @@ def cummax_aggregate(x, y):
 def assign(df, *pairs):
     # Only deep copy when updating an element
     # (to avoid modifying the original)
+    # Setitem never modifies an array inplace with pandas 1.4 and up
     pairs = dict(partition(2, pairs))
-    deep = bool(set(pairs) & set(df.columns))
-    df = df.copy(deep=bool(deep))
-    for name, val in pairs.items():
-        df[name] = val
+    df = df.copy(deep=False)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="DataFrame is highly fragmented *",
+            category=PerformanceWarning,
+        )
+        for name, val in pairs.items():
+            df[name] = val
     return df
 
 
@@ -346,17 +360,20 @@ def unique(x, series_name=None):
 
 def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
     # sort and ascending don't actually matter until the agg step
-    return x.groupby(level=0, **groupby_kwargs).sum()
+    with check_observed_deprecation():
+        return x.groupby(level=0, **groupby_kwargs).sum()
 
 
 def value_counts_aggregate(
-    x, sort=True, ascending=False, normalize=False, total_length=None, **groupby_kwargs
+    x, total_length=None, sort=True, ascending=False, normalize=False, **groupby_kwargs
 ):
     out = value_counts_combine(x, **groupby_kwargs)
     if normalize:
         out /= total_length if total_length is not None else out.sum()
     if sort:
-        return out.sort_values(ascending=ascending)
+        out = out.sort_values(ascending=ascending)
+    if normalize:
+        out.name = "proportion"
     return out
 
 
@@ -369,7 +386,12 @@ def size(x):
 
 
 def values(df):
-    return df.values
+    values = df.values
+    # We currently only offer limited support for converting pandas extension
+    # dtypes to arrays. For now we simply convert to `object` dtype.
+    if is_extension_array_dtype(values):
+        values = values.astype(object)
+    return values
 
 
 def sample(df, state, frac, replace):
@@ -384,7 +406,10 @@ def drop_columns(df, columns, dtype):
 
 
 def fillna_check(df, method, check=True):
-    out = df.fillna(method=method)
+    if method:
+        out = getattr(df, method)()
+    else:
+        out = df.fillna()
     if check and out.isnull().values.all(axis=0).any():
         raise ValueError(
             "All NaN partition encountered in `fillna`. Try "
@@ -400,20 +425,26 @@ def fillna_check(df, method, check=True):
 
 
 def pivot_agg(df):
-    return df.groupby(level=0).sum()
+    return df.groupby(level=0, observed=False).sum()
 
 
 def pivot_agg_first(df):
-    return df.groupby(level=0).first()
+    return df.groupby(level=0, observed=False).first()
 
 
 def pivot_agg_last(df):
-    return df.groupby(level=0).last()
+    return df.groupby(level=0, observed=False).last()
 
 
 def pivot_sum(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="sum", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="sum",
+        dropna=False,
+        observed=False,
     )
 
 
@@ -421,19 +452,37 @@ def pivot_count(df, index, columns, values):
     # we cannot determine dtype until concatenationg all partitions.
     # make dtype deterministic, always coerce to np.float64
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="count", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="count",
+        dropna=False,
+        observed=False,
     ).astype(np.float64)
 
 
 def pivot_first(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="first", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="first",
+        dropna=False,
+        observed=False,
     )
 
 
 def pivot_last(df, index, columns, values):
     return pd.pivot_table(
-        df, index=index, columns=columns, values=values, aggfunc="last", dropna=False
+        df,
+        index=index,
+        columns=columns,
+        values=values,
+        aggfunc="last",
+        dropna=False,
+        observed=False,
     )
 
 

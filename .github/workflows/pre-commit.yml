@@ -11,8 +11,8 @@ jobs:
     name: pre-commit hooks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.3.0
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: '3.9'
-      - uses: pre-commit/action@v3.0.0
+          python-version: '3.11'
+      - uses: pre-commit/action@v3.0.1

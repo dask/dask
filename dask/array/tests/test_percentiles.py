@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -95,20 +97,30 @@ def test_percentiles_with_empty_q(internal_method):
 
 
 @percentile_internal_methods
-@pytest.mark.parametrize("q", [5, 5.0, np.int64(5), np.float64(5)])
-def test_percentiles_with_scaler_percentile(internal_method, q):
+@pytest.mark.parametrize("q", [5, 5.0, np.int64(5), np.float64(5), 50, 95])
+@pytest.mark.parametrize(
+    "x",
+    [
+        np.ones(17),
+        np.linspace(500, 1000, 50),
+        np.array([5000, 4400, 6000, 6050, 6000] * 3),
+    ],
+)
+def test_percentiles_with_scaler_percentile(internal_method, q, x):
     # Regression test to ensure da.percentile works with scalar percentiles
     # See #3020
-    d = da.ones((16,), chunks=(4,))
+    d = da.from_array(x, chunks=(4,))
+
     assert_eq(
         da.percentile(d, q, internal_method=internal_method),
-        np.array([1], dtype=d.dtype),
+        np.percentile(x, q),
+        rtol=0.05,
     )
 
 
 @percentile_internal_methods
 def test_unknown_chunk_sizes(internal_method):
-    x = da.random.random(1000, chunks=(100,))
+    x = da.random.default_rng().random(1000, chunks=(100,))
     x._chunks = ((np.nan,) * 10,)
 
     result = da.percentile(x, 50, internal_method=internal_method).compute()

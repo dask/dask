@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import warnings
 
 import numpy as np
 import pandas as pd
 
+import dask.dataframe as dd
 from dask.base import compute as dask_compute
 from dask.dataframe import methods
-from dask.dataframe.io.io import from_delayed, from_pandas
+from dask.dataframe._compat import PANDAS_GE_300
+from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.delayed import delayed, tokenize
 from dask.utils import parse_bytes
 
@@ -80,6 +84,9 @@ def read_sql_query(
     """
     import sqlalchemy as sa
 
+    if isinstance(sql, str):
+        raise ValueError("`sql` must be a SQLAlchemy Selectable, not a string")
+
     if not isinstance(con, str):
         raise TypeError(
             "'con' must be of type str, not "
@@ -120,7 +127,13 @@ def read_sql_query(
 
         if len(head) == 0:
             # no results at all
-            return from_pandas(head, npartitions=1)
+            return dd.from_pandas(head, npartitions=1)
+
+        if pyarrow_strings_enabled():
+            from dask.dataframe._pyarrow import to_pyarrow_string
+
+            # to estimate partition size with pyarrow strings
+            head = to_pyarrow_string(head)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
         if meta is None:
@@ -130,7 +143,7 @@ def read_sql_query(
         if limits is None:
             # calculate max and min for given index
             q = sa.sql.select(
-                [sa.sql.func.max(index), sa.sql.func.min(index)]
+                sa.sql.func.max(index), sa.sql.func.min(index)
             ).select_from(sql.subquery())
             minmax = pd.read_sql(q, engine)
             maxi, mini = minmax.iloc[0]
@@ -140,7 +153,7 @@ def read_sql_query(
             dtype = pd.Series(limits).dtype
 
         if npartitions is None:
-            q = sa.sql.select([sa.sql.func.count(index)]).select_from(sql.subquery())
+            q = sa.sql.select(sa.sql.func.count(index)).select_from(sql.subquery())
             count = pd.read_sql(q, engine)["count_1"][0]
             npartitions = (
                 int(round(count * bytes_per_row / parse_bytes(bytes_per_chunk))) or 1
@@ -150,7 +163,7 @@ def read_sql_query(
                 pd.date_range(
                     start=mini,
                     end=maxi,
-                    freq="%iS" % ((maxi - mini).total_seconds() / npartitions),
+                    freq="%is" % ((maxi - mini).total_seconds() / npartitions),
                 )
             )
             divisions[0] = mini
@@ -176,7 +189,7 @@ def read_sql_query(
 
     engine.dispose()
 
-    return from_delayed(parts, meta, divisions=divisions)
+    return dd.from_delayed(parts, meta, divisions)
 
 
 def read_sql_table(
@@ -298,9 +311,7 @@ def read_sql_table(
     engine = sa.create_engine(con, **engine_kwargs)
     m = sa.MetaData()
     if isinstance(table_name, str):
-        table_name = sa.Table(
-            table_name, m, autoload=True, autoload_with=engine, schema=schema
-        )
+        table_name = sa.Table(table_name, m, autoload_with=engine, schema=schema)
     else:
         raise TypeError(
             "`table_name` must be of type str, not " + str(type(table_name))
@@ -328,7 +339,7 @@ def read_sql_table(
     if index.name not in [c.name for c in columns]:
         columns.append(index)
 
-    query = sql.select(columns).select_from(table_name)
+    query = sql.select(*columns).select_from(table_name)
 
     return read_sql_query(
         sql=query,
@@ -398,7 +409,8 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
         # required only for pandas < 1.0.0
         return df
     else:
-        return df.astype(meta.dtypes.to_dict(), copy=False)
+        kwargs = {} if PANDAS_GE_300 else {"copy": False}
+        return df.astype(meta.dtypes.to_dict(), **kwargs)
 
 
 def _to_sql_chunk(d, uri, engine_kwargs=None, **kwargs):
@@ -528,12 +540,13 @@ def to_sql(
     Dask Name: from_pandas, 2 tasks
 
     >>> from dask.utils import tmpfile
-    >>> from sqlalchemy import create_engine
+    >>> from sqlalchemy import create_engine, text
     >>> with tmpfile() as f:
     ...     db = 'sqlite:///%s' %f
     ...     ddf.to_sql('test', db)
     ...     engine = create_engine(db, echo=False)
-    ...     result = engine.execute("SELECT * FROM test").fetchall()
+    ...     with engine.connect() as conn:
+    ...         result = conn.execute(text("SELECT * FROM test")).fetchall()
     >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """

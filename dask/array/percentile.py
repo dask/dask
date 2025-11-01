@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 from collections.abc import Iterator
 from functools import wraps
@@ -7,10 +9,10 @@ import numpy as np
 from tlz import merge
 
 from dask.array.core import Array
-from dask.array.numpy_compat import _numpy_122
-from dask.array.numpy_compat import percentile as np_percentile
+from dask.array.dispatch import empty_lookup, percentile_lookup
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from
 
 
 @wraps(np.percentile)
@@ -21,7 +23,7 @@ def _percentile(a, q, method="linear"):
     if isinstance(q, Iterator):
         q = list(q)
     if a.dtype.name == "category":
-        result = np_percentile(a.cat.codes, q, method=method)
+        result = np.percentile(a.cat.codes, q, method=method)
         import pandas as pd
 
         return pd.Categorical.from_codes(result, a.dtype.categories, a.dtype.ordered), n
@@ -33,19 +35,21 @@ def _percentile(a, q, method="linear"):
 
     if np.issubdtype(a.dtype, np.datetime64):
         values = a
-        a2 = values.view("i8")
-        result = np_percentile(a2, q, method=method).astype(values.dtype)
+        if type(a).__name__ in ("Series", "Index"):
+            a2 = values.astype("i8")
+        else:
+            a2 = values.view("i8")
+        result = np.percentile(a2, q, method=method).astype(values.dtype)
         if q[0] == 0:
             # https://github.com/dask/dask/issues/6864
             result[0] = min(result[0], values.min())
         return result, n
     if not np.issubdtype(a.dtype, np.number):
         method = "nearest"
-    return np_percentile(a, q, method=method), n
+    return np.percentile(a, q, method=method), n
 
 
 def _tdigest_chunk(a):
-
     from crick import TDigest
 
     t = TDigest()
@@ -55,7 +59,6 @@ def _tdigest_chunk(a):
 
 
 def _percentiles_from_tdigest(qs, digests):
-
     from crick import TDigest
 
     t = TDigest()
@@ -75,7 +78,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
         0 and 100 inclusive.
     method : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}, optional
         The interpolation method to use when the desired percentile lies
-        between two data points ``i < j``. Only valid for ``method='dask'``.
+        between two data points ``i < j``.
 
         - 'linear': ``i + (j - i) * fraction``, where ``fraction``
           is the fractional part of the index surrounded by ``i``
@@ -91,7 +94,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
     internal_method : {'default', 'dask', 'tdigest'}, optional
         What internal method to use. By default will use dask's internal custom
         algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest for
-        floats and ints and fallback to the ``'dask'`` otherwise.
+        floats and ints if method is linear and fallback to ``'dask'`` otherwise.
 
         .. versionchanged:: 2022.1.0
             This argument was previously called “method”.
@@ -105,96 +108,108 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
     --------
     numpy.percentile : Numpy's equivalent Percentile function
     """
-    from dask.array.dispatch import percentile_lookup as _percentile
-    from dask.array.utils import array_safe, meta_from_array
 
-    allowed_internal_methods = ["default", "dask", "tdigest"]
+    if a.ndim == 1:
+        from dask.array.utils import array_safe, meta_from_array
 
-    if method in allowed_internal_methods:
-        warnings.warn(
-            "In Dask 2022.1.0, the `method=` argument was renamed to `internal_method=`",
-            FutureWarning,
-        )
-        internal_method = method
+        allowed_internal_methods = {"default", "dask", "tdigest"}
 
-    if "interpolation" in kwargs:
-        if _numpy_122:
+        if method in allowed_internal_methods:
             warnings.warn(
-                "In Dask 2022.1.0, the `interpolation=` argument to percentile was renamed to "
-                "`method= ` ",
+                "The `method=` argument was renamed to `internal_method=`",
                 FutureWarning,
             )
-        method = kwargs.pop("interpolation")
+            internal_method = method
 
-    if kwargs:
-        raise TypeError(
-            f"percentile() got an unexpected keyword argument {kwargs.keys()}"
-        )
-
-    if not a.ndim == 1:
-        raise NotImplementedError("Percentiles only implemented for 1-d arrays")
-    if isinstance(q, Number):
-        q = [q]
-    q = array_safe(q, like=meta_from_array(a))
-    token = tokenize(a, q, method)
-
-    dtype = a.dtype
-    if np.issubdtype(dtype, np.integer):
-        dtype = (array_safe([], dtype=dtype, like=meta_from_array(a)) / 0.5).dtype
-    meta = meta_from_array(a, dtype=dtype)
-
-    if internal_method not in allowed_internal_methods:
-        raise ValueError(
-            f"`internal_method=` must be one of {allowed_internal_methods}"
-        )
-
-    # Allow using t-digest if method is allowed and dtype is of floating or integer type
-    if (
-        internal_method == "tdigest"
-        and method == "linear"
-        and (np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.integer))
-    ):
-
-        from dask.utils import import_required
-
-        import_required(
-            "crick", "crick is a required dependency for using the t-digest method."
-        )
-
-        name = "percentile_tdigest_chunk-" + token
-        dsk = {
-            (name, i): (_tdigest_chunk, key) for i, key in enumerate(a.__dask_keys__())
-        }
-
-        name2 = "percentile_tdigest-" + token
-
-        dsk2 = {(name2, 0): (_percentiles_from_tdigest, q, sorted(dsk))}
-
-    # Otherwise use the custom percentile algorithm
-    else:
-        # Add 0 and 100 during calculation for more robust behavior (hopefully)
-        calc_q = np.pad(q, 1, mode="constant")
-        calc_q[-1] = 100
-        name = "percentile_chunk-" + token
-        dsk = {
-            (name, i): (_percentile, key, calc_q, method)
-            for i, key in enumerate(a.__dask_keys__())
-        }
-
-        name2 = "percentile-" + token
-        dsk2 = {
-            (name2, 0): (
-                merge_percentiles,
-                q,
-                [calc_q] * len(a.chunks[0]),
-                sorted(dsk),
-                method,
+        if "interpolation" in kwargs:
+            warnings.warn(
+                "The `interpolation=` argument to percentile was renamed to `method= ` ",
+                FutureWarning,
             )
-        }
+            method = kwargs.pop("interpolation")
 
-    dsk = merge(dsk, dsk2)
-    graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
-    return Array(graph, name2, chunks=((len(q),),), meta=meta)
+        if kwargs:
+            raise TypeError(
+                f"percentile() got an unexpected keyword argument {kwargs.keys()}"
+            )
+
+        q_is_number = False
+        if isinstance(q, Number):
+            q_is_number = True
+            q = [q]
+        q = array_safe(q, like=meta_from_array(a))
+        token = tokenize(a, q, method)
+
+        dtype = a.dtype
+        if np.issubdtype(dtype, np.integer):
+            dtype = (array_safe([], dtype=dtype, like=meta_from_array(a)) / 0.5).dtype
+        meta = meta_from_array(a, dtype=dtype)
+
+        if internal_method not in allowed_internal_methods:
+            raise ValueError(
+                f"`internal_method=` must be one of {allowed_internal_methods}"
+            )
+
+        # Allow using t-digest if method is allowed and dtype is of floating or integer type
+        if (
+            internal_method == "tdigest"
+            and method == "linear"
+            and (np.issubdtype(dtype, np.floating) or np.issubdtype(dtype, np.integer))
+        ):
+            from dask.utils import import_required
+
+            import_required(
+                "crick", "crick is a required dependency for using the t-digest method."
+            )
+
+            name = "percentile_tdigest_chunk-" + token
+            dsk = {
+                (name, i): (_tdigest_chunk, key)
+                for i, key in enumerate(a.__dask_keys__())
+            }
+
+            name2 = "percentile_tdigest-" + token
+
+            dsk2 = {(name2, 0): (_percentiles_from_tdigest, q, sorted(dsk))}
+
+        # Otherwise use the custom percentile algorithm
+        else:
+            # Add 0 and 100 during calculation for more robust behavior (hopefully)
+            zero = empty_lookup.dispatch(type(q))(1, dtype=q.dtype)
+            zero[:] = 0
+
+            hundred = empty_lookup.dispatch(type(q))(1, dtype=q.dtype)
+            hundred[:] = 100
+
+            calc_q = np.concatenate((zero, q, hundred))
+            name = "percentile_chunk-" + token
+            dsk = {
+                (name, i): (percentile_lookup, key, calc_q, method)
+                for i, key in enumerate(a.__dask_keys__())
+            }
+
+            name2 = "percentile-" + token
+            dsk2 = {
+                (name2, 0): (
+                    merge_percentiles,
+                    q,
+                    [calc_q] * len(a.chunks[0]),
+                    sorted(dsk),
+                    method,
+                )
+            }
+        dsk = merge(dsk, dsk2)
+        graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
+        arr = Array(graph, name2, chunks=((len(q),),), meta=meta)
+        return arr.reshape(()) if q_is_number else arr
+
+    elif a.ndim > 1:
+        from dask.array.reductions import quantile
+
+        q = np.true_divide(q, a.dtype.type(100) if a.dtype.kind == "f" else 100)
+        return quantile(a, q, method=method, **kwargs)
+    else:
+        raise NotImplementedError("support for arrays of ndim 0 is not implemented.")
 
 
 def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=True):
@@ -231,13 +246,13 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
     if isinstance(finalq, Iterator):
         finalq = list(finalq)
     finalq = array_safe(finalq, like=finalq)
-    qs = list(map(list, qs))
+    qs = [list(q) for q in qs]
     vals = list(vals)
     if Ns is None:
         vals, Ns = zip(*vals)
     Ns = list(Ns)
 
-    L = list(zip(*[(q, val, N) for q, val, N in zip(qs, vals, Ns) if N]))
+    L = list(zip(*((q, val, N) for q, val, N in zip(qs, vals, Ns) if N)))
     if not L:
         if raise_on_nan:
             raise ValueError("No non-trivial arrays found")
@@ -260,17 +275,21 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
         raise ValueError("qs, vals, and Ns parameters must be the same length")
 
     # transform qs and Ns into number of observations between percentiles
-    counts = []
+    total_len = sum(len(q) for q in qs)
+    counts = empty_lookup.dispatch(type(finalq))(total_len, dtype=finalq.dtype)
+    start = 0
     for q, N in zip(qs, Ns):
-        count = np.empty_like(finalq, shape=len(q))
+        length = len(q)
+        count = empty_lookup.dispatch(type(finalq))(length, dtype=finalq.dtype)
         count[1:] = np.diff(array_safe(q, like=q[0]))
         count[0] = q[0]
         count *= N
-        counts.append(count)
+        counts[start : start + length] = count
+        start += length
 
     # Sort by calculated percentile values, then number of observations.
     combined_vals = np.concatenate(vals)
-    combined_counts = array_safe(np.concatenate(counts), like=combined_vals)
+    combined_counts = array_safe(counts, like=combined_vals)
     sort_order = np.argsort(combined_vals)
     combined_vals = np.take(combined_vals, sort_order)
     combined_counts = np.take(combined_counts, sort_order)
@@ -289,7 +308,7 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
     else:
         left = np.searchsorted(combined_q, desired_q, side="left")
         right = np.searchsorted(combined_q, desired_q, side="right") - 1
-        np.minimum(left, len(combined_vals) - 1, left)  # don't exceed max index
+        np.minimum(left, len(combined_vals) - 1, out=left)  # don't exceed max index
         lower = np.minimum(left, right)
         upper = np.maximum(left, right)
         if method == "lower":
@@ -311,3 +330,12 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
                 "'higher', 'midpoint', or 'nearest'"
             )
     return rv
+
+
+@derived_from(np)
+def nanpercentile(a, q, **kwargs):
+    from dask.array.reductions import nanquantile
+
+    q = np.true_divide(q, a.dtype.type(100) if a.dtype.kind == "f" else 100)
+
+    return nanquantile(a, q, **kwargs)

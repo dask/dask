@@ -1,13 +1,26 @@
+from __future__ import annotations
+
+import functools
+from collections import namedtuple
+
 import numpy as np
 import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
 
-from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_140
-from dask.dataframe.core import DataFrame, Series
-from dask.highlevelgraph import HighLevelGraph
+from dask.dataframe.dask_expr._collection import new_collection
+from dask.dataframe.dask_expr._expr import (
+    Blockwise,
+    Expr,
+    Projection,
+    make_meta,
+    plain_column_projection,
+)
+from dask.dataframe.dask_expr._repartition import Repartition
+from dask.dataframe.dispatch import meta_nonempty
 from dask.utils import derived_from
+
+BlockwiseDep = namedtuple(typename="BlockwiseDep", field_names=["iterable"])  # type: ignore
 
 
 def _resample_series(
@@ -25,15 +38,11 @@ def _resample_series(
     out = getattr(series.resample(rule, **resample_kwargs), how)(
         *how_args, **how_kwargs
     )
-
-    if PANDAS_GT_140:
-        if reindex_closed is None:
-            inclusive = "both"
-        else:
-            inclusive = reindex_closed
-        closed_kwargs = {"inclusive": inclusive}
+    if reindex_closed is None:
+        inclusive = "both"
     else:
-        closed_kwargs = {"closed": reindex_closed}
+        inclusive = reindex_closed
+    closed_kwargs = {"inclusive": inclusive}
 
     new_index = pd.date_range(
         start.tz_localize(None),
@@ -41,6 +50,7 @@ def _resample_series(
         freq=rule,
         **closed_kwargs,
         name=out.index.name,
+        unit=out.index.unit,
     ).tz_localize(start.tz, nonexistent="shift_forward")
 
     if not out.index.isin(new_index).all():
@@ -63,7 +73,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     tempdivs = temp.loc[temp > 0].index
 
     # Cleanup closed == 'right' and label == 'right'
-    res = pd.offsets.Nano() if hasattr(rule, "delta") else pd.offsets.Day()
+    res = pd.offsets.Nano() if isinstance(rule, pd.offsets.Tick) else pd.offsets.Day()
     if g.closed == "right":
         newdivs = tempdivs + res
     else:
@@ -93,28 +103,187 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
 
 
+class ResampleReduction(Expr):
+    _parameters = [
+        "frame",
+        "rule",
+        "kwargs",
+        "how_args",
+        "how_kwargs",
+    ]
+    _defaults = {
+        "closed": None,
+        "label": None,
+        "kwargs": None,
+        "how_args": (),
+        "how_kwargs": None,
+    }
+    how: str | None = None
+    fill_value = np.nan
+
+    @functools.cached_property
+    def npartitions(self):
+        return self.frame.npartitions
+
+    def _divisions(self):
+        return self._resample_divisions[1]
+
+    @functools.cached_property
+    def _meta(self):
+        resample = meta_nonempty(self.frame._meta).resample(self.rule, **self.kwargs)
+        meta = getattr(resample, self.how)(*self.how_args, **self.how_kwargs or {})
+        return make_meta(meta)
+
+    @functools.cached_property
+    def kwargs(self):
+        return {} if self.operand("kwargs") is None else self.operand("kwargs")
+
+    @functools.cached_property
+    def how_kwargs(self):
+        return {} if self.operand("how_kwargs") is None else self.operand("how_kwargs")
+
+    @functools.cached_property
+    def _resample_divisions(self):
+        return _resample_bin_and_out_divs(
+            self.frame.divisions, self.rule, **self.kwargs or {}
+        )
+
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Projection):
+            return plain_column_projection(self, parent, dependents)
+
+    def _lower(self):
+        partitioned = Repartition(
+            self.frame, new_divisions=self._resample_divisions[0], force=True
+        )
+        output_divisions = self._resample_divisions[1]
+        return ResampleAggregation(
+            partitioned,
+            BlockwiseDep(output_divisions[:-1]),
+            BlockwiseDep(output_divisions[1:]),
+            BlockwiseDep(["left"] * (len(output_divisions[1:]) - 1) + [None]),
+            self.rule,
+            self.kwargs,
+            self.how,
+            self.fill_value,
+            list(self.how_args),
+            self.how_kwargs,
+        )
+
+
+class ResampleAggregation(Blockwise):
+    _parameters = [
+        "frame",
+        "divisions_left",
+        "divisions_right",
+        "closed",
+        "rule",
+        "kwargs",
+        "how",
+        "fill_value",
+        "how_args",
+        "how_kwargs",
+    ]
+    operation = staticmethod(_resample_series)
+
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta
+
+    def _divisions(self):
+        return list(self.divisions_left.iterable) + [self.divisions_right.iterable[-1]]
+
+    def _blockwise_arg(self, arg, i):
+        if isinstance(arg, BlockwiseDep):
+            return arg.iterable[i]
+        return super()._blockwise_arg(arg, i)
+
+
+class ResampleCount(ResampleReduction):
+    how = "count"
+    fill_value = 0
+
+
+class ResampleSum(ResampleReduction):
+    how = "sum"
+    fill_value = 0
+
+
+class ResampleProd(ResampleReduction):
+    how = "prod"
+
+
+class ResampleMean(ResampleReduction):
+    how = "mean"
+
+
+class ResampleMin(ResampleReduction):
+    how = "min"
+
+
+class ResampleMax(ResampleReduction):
+    how = "max"
+
+
+class ResampleFirst(ResampleReduction):
+    how = "first"
+
+
+class ResampleLast(ResampleReduction):
+    how = "last"
+
+
+class ResampleVar(ResampleReduction):
+    how = "var"
+
+
+class ResampleStd(ResampleReduction):
+    how = "std"
+
+
+class ResampleSize(ResampleReduction):
+    how = "size"
+    fill_value = 0
+
+
+class ResampleNUnique(ResampleReduction):
+    how = "nunique"
+    fill_value = 0
+
+
+class ResampleMedian(ResampleReduction):
+    how = "median"
+
+
+class ResampleQuantile(ResampleReduction):
+    how = "quantile"
+
+
+class ResampleOhlc(ResampleReduction):
+    how = "ohlc"
+
+
+class ResampleSem(ResampleReduction):
+    how = "sem"
+
+
+class ResampleAgg(ResampleReduction):
+    how = "agg"
+
+    def _simplify_up(self, parent, dependents):
+        # Disable optimization in `agg`; function may access other columns
+        return
+
+
 class Resampler:
-    """Class for resampling timeseries data.
+    """Aggregate using one or more operations
 
-    This class is commonly encountered when using ``obj.resample(...)`` which
-    return ``Resampler`` objects.
-
-    Parameters
-    ----------
-    obj : Dask DataFrame or Series
-        Data to be resampled.
-    rule : str, tuple, datetime.timedelta, DateOffset or None
-        The offset string or object representing the target conversion.
-    kwargs : optional
-        Keyword arguments passed to underlying pandas resampling function.
-
-    Returns
-    -------
-    Resampler instance of the appropriate type
+    The purpose of this class is to expose an API similar
+    to Pandas' `Resampler` for dask-expr
     """
 
     def __init__(self, obj, rule, **kwargs):
-        if not obj.known_divisions:
+        if obj.divisions[0] is None:
             msg = (
                 "Can only resample dataframes with known divisions\n"
                 "See https://docs.dask.org/en/latest/dataframe-design.html#partitions\n"
@@ -122,144 +291,84 @@ class Resampler:
             )
             raise ValueError(msg)
         self.obj = obj
-        self._rule = pd.tseries.frequencies.to_offset(rule)
-        self._kwargs = kwargs
+        self.rule = rule
+        self.kwargs = kwargs
 
-    def _agg(
-        self,
-        how,
-        meta=None,
-        fill_value=np.nan,
-        how_args=(),
-        how_kwargs=None,
-    ):
-        """Aggregate using one or more operations
-
-        Parameters
-        ----------
-        how : str
-            Name of aggregation operation
-        fill_value : scalar, optional
-            Value to use for missing values, applied during upsampling.
-            Default is NaN.
-        how_args : optional
-            Positional arguments for aggregation operation.
-        how_kwargs : optional
-            Keyword arguments for aggregation operation.
-
-        Returns
-        -------
-        Dask DataFrame or Series
-        """
-        if how_kwargs is None:
-            how_kwargs = {}
-
-        rule = self._rule
-        kwargs = self._kwargs
-        name = "resample-" + tokenize(
-            self.obj, rule, kwargs, how, *how_args, **how_kwargs
-        )
-
-        # Create a grouper to determine closed and label conventions
-        newdivs, outdivs = _resample_bin_and_out_divs(
-            self.obj.divisions, rule, **kwargs
-        )
-
-        # Repartition divs into bins. These won't match labels after mapping
-        partitioned = self.obj.repartition(newdivs, force=True)
-
-        keys = partitioned.__dask_keys__()
-        dsk = {}
-
-        args = zip(keys, outdivs, outdivs[1:], ["left"] * (len(keys) - 1) + [None])
-        for i, (k, s, e, c) in enumerate(args):
-            dsk[(name, i)] = (
-                _resample_series,
-                k,
-                s,
-                e,
-                c,
-                rule,
-                kwargs,
-                how,
-                fill_value,
-                list(how_args),
-                how_kwargs,
+    def _single_agg(self, expr_cls, how_args=(), how_kwargs=None):
+        return new_collection(
+            expr_cls(
+                self.obj,
+                self.rule,
+                self.kwargs,
+                how_args=how_args,
+                how_kwargs=how_kwargs,
             )
-
-        # Infer output metadata
-        meta_r = self.obj._meta_nonempty.resample(self._rule, **self._kwargs)
-        meta = getattr(meta_r, how)(*how_args, **how_kwargs)
-
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[partitioned])
-        if isinstance(meta, pd.DataFrame):
-            return DataFrame(graph, name, meta, outdivs)
-        return Series(graph, name, meta, outdivs)
-
-    @derived_from(pd_Resampler)
-    def agg(self, agg_funcs, *args, **kwargs):
-        return self._agg("agg", how_args=(agg_funcs,) + args, how_kwargs=kwargs)
+        )
 
     @derived_from(pd_Resampler)
     def count(self):
-        return self._agg("count", fill_value=0)
-
-    @derived_from(pd_Resampler)
-    def first(self):
-        return self._agg("first")
-
-    @derived_from(pd_Resampler)
-    def last(self):
-        return self._agg("last")
-
-    @derived_from(pd_Resampler)
-    def mean(self):
-        return self._agg("mean")
-
-    @derived_from(pd_Resampler)
-    def min(self):
-        return self._agg("min")
-
-    @derived_from(pd_Resampler)
-    def median(self):
-        return self._agg("median")
-
-    @derived_from(pd_Resampler)
-    def max(self):
-        return self._agg("max")
-
-    @derived_from(pd_Resampler)
-    def nunique(self):
-        return self._agg("nunique", fill_value=0)
-
-    @derived_from(pd_Resampler)
-    def ohlc(self):
-        return self._agg("ohlc")
-
-    @derived_from(pd_Resampler)
-    def prod(self):
-        return self._agg("prod")
-
-    @derived_from(pd_Resampler)
-    def sem(self):
-        return self._agg("sem")
-
-    @derived_from(pd_Resampler)
-    def std(self):
-        return self._agg("std")
-
-    @derived_from(pd_Resampler)
-    def size(self):
-        return self._agg("size", fill_value=0)
+        return self._single_agg(ResampleCount)
 
     @derived_from(pd_Resampler)
     def sum(self):
-        return self._agg("sum", fill_value=0)
+        return self._single_agg(ResampleSum)
+
+    @derived_from(pd_Resampler)
+    def prod(self):
+        return self._single_agg(ResampleProd)
+
+    @derived_from(pd_Resampler)
+    def mean(self):
+        return self._single_agg(ResampleMean)
+
+    @derived_from(pd_Resampler)
+    def min(self):
+        return self._single_agg(ResampleMin)
+
+    @derived_from(pd_Resampler)
+    def max(self):
+        return self._single_agg(ResampleMax)
+
+    @derived_from(pd_Resampler)
+    def first(self):
+        return self._single_agg(ResampleFirst)
+
+    @derived_from(pd_Resampler)
+    def last(self):
+        return self._single_agg(ResampleLast)
 
     @derived_from(pd_Resampler)
     def var(self):
-        return self._agg("var")
+        return self._single_agg(ResampleVar)
+
+    @derived_from(pd_Resampler)
+    def std(self):
+        return self._single_agg(ResampleStd)
+
+    @derived_from(pd_Resampler)
+    def size(self):
+        return self._single_agg(ResampleSize)
+
+    @derived_from(pd_Resampler)
+    def nunique(self):
+        return self._single_agg(ResampleNUnique)
+
+    @derived_from(pd_Resampler)
+    def median(self):
+        return self._single_agg(ResampleMedian)
 
     @derived_from(pd_Resampler)
     def quantile(self):
-        return self._agg("quantile")
+        return self._single_agg(ResampleQuantile)
+
+    @derived_from(pd_Resampler)
+    def ohlc(self):
+        return self._single_agg(ResampleOhlc)
+
+    @derived_from(pd_Resampler)
+    def sem(self):
+        return self._single_agg(ResampleSem)
+
+    @derived_from(pd_Resampler)
+    def agg(self, func, *args, **kwargs):
+        return self._single_agg(ResampleAgg, how_args=(func, *args), how_kwargs=kwargs)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 import warnings
 from bisect import bisect_left
@@ -6,15 +8,16 @@ from operator import add, itemgetter
 
 from tlz import accumulate, groupby, pluck, unique
 
+from dask._compatibility import import_optional_dependency
 from dask.core import istask
-from dask.utils import apply, funcname, import_required
+from dask.utils import import_required
 
 
 def BOKEH_VERSION():
-    import bokeh
-    from packaging.version import parse as parse_version
+    bokeh = import_optional_dependency("bokeh")
+    from packaging.version import Version
 
-    return parse_version(bokeh.__version__)
+    return Version(bokeh.__version__)
 
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
@@ -33,98 +36,6 @@ def unquote(expr):
     return expr
 
 
-def pprint_task(task, keys, label_size=60):
-    """Return a nicely formatted string for a task.
-
-    Parameters
-    ----------
-    task:
-        Value within dask graph to render as text
-    keys: iterable
-        List of keys within dask graph
-    label_size: int (optional)
-        Maximum size of output label, defaults to 60
-
-    Examples
-    --------
-    >>> from operator import add, mul
-    >>> dsk = {'a': 1,
-    ...        'b': 2,
-    ...        'c': (add, 'a', 'b'),
-    ...        'd': (add, (mul, 'a', 'b'), 'c'),
-    ...        'e': (sum, ['a', 'b', 5]),
-    ...        'f': (add,),
-    ...        'g': []}
-
-    >>> pprint_task(dsk['c'], dsk)
-    'add(_, _)'
-    >>> pprint_task(dsk['d'], dsk)
-    'add(mul(_, _), _)'
-    >>> pprint_task(dsk['e'], dsk)
-    'sum([_, _, *])'
-    >>> pprint_task(dsk['f'], dsk)
-    'add()'
-    >>> pprint_task(dsk['g'], dsk)
-    '[]'
-    """
-    if istask(task):
-        func = task[0]
-        if func is apply:
-            head = funcname(task[1])
-            tail = ")"
-            args = unquote(task[2]) if len(task) > 2 else ()
-            kwargs = unquote(task[3]) if len(task) > 3 else {}
-        else:
-            if hasattr(func, "funcs"):
-                head = "(".join(funcname(f) for f in func.funcs)
-                tail = ")" * len(func.funcs)
-            else:
-                head = funcname(task[0])
-                tail = ")"
-            args = task[1:]
-            kwargs = {}
-        if args or kwargs:
-            label_size2 = int(
-                (label_size - len(head) - len(tail)) // (len(args) + len(kwargs))
-            )
-            pprint = lambda t: pprint_task(t, keys, label_size2)
-        if args:
-            if label_size2 > 5:
-                args = ", ".join(pprint(t) for t in args)
-            else:
-                args = "..."
-        else:
-            args = ""
-        if kwargs:
-            if label_size2 > 5:
-                kwargs = ", " + ", ".join(
-                    f"{k}={pprint(v)}" for k, v in sorted(kwargs.items())
-                )
-            else:
-                kwargs = ", ..."
-        else:
-            kwargs = ""
-        return f"{head}({args}{kwargs}{tail}"
-    elif isinstance(task, list):
-        if not task:
-            return "[]"
-        elif len(task) > 3:
-            result = pprint_task(task[:3], keys, label_size)
-            return result[:-1] + ", ...]"
-        else:
-            label_size2 = int((label_size - 2 - 2 * len(task)) // len(task))
-            args = ", ".join(pprint_task(t, keys, label_size2) for t in task)
-            return f"[{args}]"
-    else:
-        try:
-            if task in keys:
-                return "_"
-            else:
-                return "*"
-        except TypeError:
-            return "*"
-
-
 def get_colors(palette, funcs):
     """Get a dict mapping funcs to colors from palette.
 
@@ -141,7 +52,7 @@ def get_colors(palette, funcs):
     unique_funcs = sorted(unique(funcs))
     n_funcs = len(unique_funcs)
     palette_lookup = palettes.all_palettes[palette]
-    keys = list(sorted(palette_lookup.keys()))
+    keys = sorted(palette_lookup.keys())
     index = keys[min(bisect_left(keys, n_funcs), len(keys) - 1)]
     palette = palette_lookup[index]
     # Some bokeh palettes repeat colors, we want just the unique set
@@ -208,17 +119,11 @@ def visualize(
             f.x_range = top.x_range
             f.title = None
             f.min_border_top = 20
-            if BOKEH_VERSION().major < 3:
-                f.plot_height -= 30
-            else:
-                f.height -= 30
+            f.height -= 30
         for f in figs[:-1]:
             f.xaxis.axis_label = None
             f.min_border_bottom = 20
-            if BOKEH_VERSION().major < 3:
-                f.plot_height -= 30
-            else:
-                f.height -= 30
+            f.height -= 30
         for f in figs:
             f.min_border_left = 75
             f.min_border_right = 75
@@ -231,7 +136,9 @@ def visualize(
     return p
 
 
-def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
+def plot_tasks(
+    results, dsk, start_time, end_time, palette="Viridis", label_size=60, **kwargs
+):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -240,6 +147,10 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         Output of Profiler.results
     dsk : dict
         The dask graph being profiled.
+    start_time : float
+        Start time of the profile in seconds
+    end_time : float
+        End time of the profile in seconds
     palette : string, optional
         Name of the bokeh palette to use, must be a member of
         bokeh.palettes.all_palettes.
@@ -284,20 +195,17 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
             )
         }
 
-        left = min(starts)
-        right = max(ends)
-
         p = bp.figure(
             y_range=[str(i) for i in range(len(id_lk))],
-            x_range=[0, right - left],
+            x_range=[0, end_time - start_time],
             **defaults,
         )
 
         data = {}
         data["width"] = width = [e - s for (s, e) in zip(starts, ends)]
-        data["x"] = [w / 2 + s - left for (w, s) in zip(width, starts)]
+        data["x"] = [w / 2 + s - start_time for (w, s) in zip(width, starts)]
         data["y"] = [id_lk[i] + 1 for i in ids]
-        data["function"] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
+        data["function"] = funcs = [repr(i) for i in tasks]
         data["color"] = get_colors(palette, funcs)
         data["key"] = [str(i) for i in keys]
 
@@ -336,13 +244,17 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
     return p
 
 
-def plot_resources(results, palette="Viridis", **kwargs):
+def plot_resources(results, start_time, end_time, palette="Viridis", **kwargs):
     """Plot resource usage in a bokeh plot.
 
     Parameters
     ----------
     results : sequence
         Output of ResourceProfiler.results
+    start_time : float
+        Start time of the profile in seconds
+    end_time : float
+        End time of the profile in seconds
     palette : string, optional
         Name of the bokeh palette to use, must be a member of
         bokeh.palettes.all_palettes.
@@ -383,7 +295,8 @@ def plot_resources(results, palette="Viridis", **kwargs):
 
     if results:
         t, mem, cpu = zip(*results)
-        left, right = min(t), max(t)
+        left = start_time
+        right = end_time
         t = [i - left for i in t]
         p = bp.figure(
             y_range=fix_bounds(0, max(cpu), 100),
@@ -426,7 +339,14 @@ def fix_bounds(start, end, min_span):
 
 
 def plot_cache(
-    results, dsk, start_time, metric_name, palette="Viridis", label_size=60, **kwargs
+    results,
+    dsk,
+    start_time,
+    end_time,
+    metric_name,
+    palette="Viridis",
+    label_size=60,
+    **kwargs,
 ):
     """Visualize the results of profiling in a bokeh plot.
 
@@ -437,7 +357,9 @@ def plot_cache(
     dsk : dict
         The dask graph being profiled.
     start_time : float
-        Start time of the profile.
+        Start time of the profile in seconds
+    end_time : float
+        End time of the profile in seconds
     metric_name : string
         Metric used to measure cache size
     palette : string, optional
@@ -477,7 +399,7 @@ def plot_cache(
     if results:
         starts, ends = list(zip(*results))[3:]
         tics = sorted(unique(starts + ends))
-        groups = groupby(lambda d: pprint_task(d[1], dsk, label_size), results)
+        groups = groupby(lambda d: repr(d), results)
         data = {}
         for k, vals in groups.items():
             cnts = dict.fromkeys(tics, 0)
@@ -487,7 +409,7 @@ def plot_cache(
             data[k] = [0] + list(accumulate(add, pluck(1, sorted(cnts.items()))))
 
         tics = [0] + [i - start_time for i in tics]
-        p = bp.figure(x_range=[0, max(tics)], **defaults)
+        p = bp.figure(x_range=[0, end_time - start_time], **defaults)
 
         for (key, val), color in zip(data.items(), get_colors(palette, data.keys())):
             p.line(

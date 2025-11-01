@@ -1,13 +1,15 @@
-import re
+from __future__ import annotations
+
 import warnings
 
+import numpy as np
 import pandas as pd
 from fsspec.core import expand_paths_if_needed, get_fs_token_paths, stringify_path
 from fsspec.spec import AbstractFileSystem
 
 from dask import config
 from dask.dataframe.io.utils import _is_local_fs
-from dask.utils import natural_sort_key
+from dask.utils import natural_sort_key, parse_bytes
 
 
 class Engine:
@@ -103,70 +105,8 @@ class Engine:
             )
 
     @classmethod
-    def read_metadata(
-        cls,
-        fs,
-        paths,
-        categories=None,
-        index=None,
-        use_nullable_dtypes=False,
-        gather_statistics=None,
-        filters=None,
-        **kwargs,
-    ):
-        """Gather metadata about a Parquet Dataset to prepare for a read
-
-        This function is called once in the user's Python session to gather
-        important metadata about the parquet dataset.
-
-        Parameters
-        ----------
-        fs: FileSystem
-        paths: List[str]
-            A list of paths to files (or their equivalents)
-        categories: list, dict or None
-            Column(s) containing categorical data.
-        index: str, List[str], or False
-            The column name(s) to be used as the index.
-            If set to ``None``, pandas metadata (if available) can be used
-            to reset the value in this function
-        use_nullable_dtypes: boolean
-            Whether to use pandas nullable dtypes (like "string" or "Int64")
-            where appropriate when reading parquet files.
-        gather_statistics: bool
-            Whether or not to gather statistics to calculate divisions
-            for the output DataFrame collection.
-        filters: list
-            List of filters to apply, like ``[('x', '>', 0), ...]``.
-        **kwargs: dict (of dicts)
-            User-specified arguments to pass on to backend.
-            Top level key can be used by engine to select appropriate dict.
-
-        Returns
-        -------
-        meta: pandas.DataFrame
-            An empty DataFrame object to use for metadata.
-            Should have appropriate column names and dtypes but need not have
-            any actual data
-        statistics: Optional[List[Dict]]
-            Either None, if no statistics were found, or a list of dictionaries
-            of statistics data, one dict for every partition (see the next
-            return value).  The statistics should look like the following:
-
-            [
-                {'num-rows': 1000, 'columns': [
-                    {'name': 'id', 'min': 0, 'max': 100},
-                    {'name': 'x', 'min': 0.0, 'max': 1.0},
-                    ]},
-                ...
-            ]
-        parts: List[object]
-            A list of objects to be passed to ``Engine.read_partition``.
-            Each object should represent a piece of data (usually a row-group).
-            The type of each object can be anything, as long as the
-            engine's read_partition function knows how to interpret it.
-        """
-        raise NotImplementedError()
+    def default_blocksize(cls):
+        return "256 MiB"
 
     @classmethod
     def read_partition(
@@ -189,6 +129,11 @@ class Engine:
         use_nullable_dtypes: boolean
             Whether to use pandas nullable dtypes (like "string" or "Int64")
             where appropriate when reading parquet files.
+        dtype_backend: {"numpy_nullable", "pyarrow"}
+            Whether to use pandas nullable dtypes (like "string" or "Int64")
+            where appropriate when reading parquet files.
+        convert_string: boolean
+            Whether to use pyarrow strings when reading parquet files.
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
             of `engine.read_metadata`. May also include arguments to be
@@ -347,90 +292,6 @@ class Engine:
         raise NotImplementedError()
 
 
-def _parse_pandas_metadata(pandas_metadata):
-    """Get the set of names from the pandas metadata section
-
-    Parameters
-    ----------
-    pandas_metadata : dict
-        Should conform to the pandas parquet metadata spec
-
-    Returns
-    -------
-    index_names : list
-        List of strings indicating the actual index names
-    column_names : list
-        List of strings indicating the actual column names
-    storage_name_mapping : dict
-        Pairs of storage names (e.g. the field names for
-        PyArrow) and actual names. The storage and field names will
-        differ for index names for certain writers (pyarrow > 0.8).
-    column_indexes_names : list
-        The names for ``df.columns.name`` or ``df.columns.names`` for
-        a MultiIndex in the columns
-
-    Notes
-    -----
-    This should support metadata written by at least
-
-    * fastparquet>=0.1.3
-    * pyarrow>=0.7.0
-    """
-    index_storage_names = [
-        n["name"] if isinstance(n, dict) else n
-        for n in pandas_metadata["index_columns"]
-    ]
-    index_name_xpr = re.compile(r"__index_level_\d+__")
-
-    # older metadatas will not have a 'field_name' field so we fall back
-    # to the 'name' field
-    pairs = [
-        (x.get("field_name", x["name"]), x["name"]) for x in pandas_metadata["columns"]
-    ]
-
-    # Need to reconcile storage and real names. These will differ for
-    # pyarrow, which uses __index_leveL_d__ for the storage name of indexes.
-    # The real name may be None (e.g. `df.index.name` is None).
-    pairs2 = []
-    for storage_name, real_name in pairs:
-        if real_name and index_name_xpr.match(real_name):
-            real_name = None
-        pairs2.append((storage_name, real_name))
-    index_names = [name for (storage_name, name) in pairs2 if name != storage_name]
-
-    # column_indexes represents df.columns.name
-    # It was added to the spec after pandas 0.21.0+, and implemented
-    # in PyArrow 0.8. It was added to fastparquet in 0.3.1.
-    column_index_names = pandas_metadata.get("column_indexes", [{"name": None}])
-    column_index_names = [x["name"] for x in column_index_names]
-
-    # Now we need to disambiguate between columns and index names. PyArrow
-    # 0.8.0+ allows for duplicates between df.index.names and df.columns
-    if not index_names:
-        # For PyArrow < 0.8, Any fastparquet. This relies on the facts that
-        # 1. Those versions used the real index name as the index storage name
-        # 2. Those versions did not allow for duplicate index / column names
-        # So we know that if a name is in index_storage_names, it must be an
-        # index name
-        if index_storage_names and isinstance(index_storage_names[0], dict):
-            # Cannot handle dictionary case
-            index_storage_names = []
-        index_names = list(index_storage_names)  # make a copy
-        index_storage_names2 = set(index_storage_names)
-        column_names = [
-            name for (storage_name, name) in pairs if name not in index_storage_names2
-        ]
-    else:
-        # For newer PyArrows the storage names differ from the index names
-        # iff it's an index level. Though this is a fragile assumption for
-        # other systems...
-        column_names = [name for (storage_name, name) in pairs2 if name == storage_name]
-
-    storage_name_mapping = dict(pairs2)  # TODO: handle duplicates gracefully
-
-    return index_names, column_names, storage_name_mapping, column_index_names
-
-
 def _normalize_index_columns(user_columns, data_columns, user_index, data_index):
     """Normalize user and file-provided column and index names
 
@@ -503,7 +364,7 @@ def _analyze_paths(file_list, fs, root=False):
     """Consolidate list of file-paths into parquet relative paths
 
     Note: This function was mostly copied from dask/fastparquet to
-    use in both `FastParquetEngine` and `ArrowEngine`."""
+    use in ArrowEngine`."""
 
     def _join_path(*path):
         def _scrub(i, p):
@@ -632,23 +493,38 @@ def _aggregate_stats(
         if len(file_row_group_column_stats) > 1:
             df_cols = pd.DataFrame(file_row_group_column_stats)
         for ind, name in enumerate(stat_col_indices):
-            i = ind * 2
+            i = ind * 3
             if df_cols is None:
-                s["columns"].append(
-                    {
-                        "name": name,
-                        "min": file_row_group_column_stats[0][i],
-                        "max": file_row_group_column_stats[0][i + 1],
-                    }
-                )
+                minval = file_row_group_column_stats[0][i]
+                maxval = file_row_group_column_stats[0][i + 1]
+                null_count = file_row_group_column_stats[0][i + 2]
+                if minval == maxval and null_count:
+                    # Remove "dangerous" stats (min == max, but null values exist)
+                    s["columns"].append({"null_count": null_count})
+                else:
+                    s["columns"].append(
+                        {
+                            "name": name,
+                            "min": minval,
+                            "max": maxval,
+                            "null_count": null_count,
+                        }
+                    )
             else:
-                s["columns"].append(
-                    {
-                        "name": name,
-                        "min": df_cols.iloc[:, i].min(),
-                        "max": df_cols.iloc[:, i + 1].max(),
-                    }
-                )
+                minval = df_cols.iloc[:, i].dropna().min()
+                maxval = df_cols.iloc[:, i + 1].dropna().max()
+                null_count = df_cols.iloc[:, i + 2].sum()
+                if minval == maxval and null_count:
+                    s["columns"].append({"null_count": null_count})
+                else:
+                    s["columns"].append(
+                        {
+                            "name": name,
+                            "min": minval,
+                            "max": maxval,
+                            "null_count": null_count,
+                        }
+                    )
         return s
 
 
@@ -663,7 +539,6 @@ def _row_groups_to_parts(
     make_part_func,
     make_part_kwargs,
 ):
-
     # Construct `parts` and `stats`
     parts = []
     stats = []
@@ -680,7 +555,6 @@ def _row_groups_to_parts(
                 _rgs = list(range(residual, row_group_count, split_row_groups))
 
             for i in _rgs:
-
                 i_end = i + split_row_groups
                 if aggregation_depth is True:
                     if residual and i == 0:
@@ -711,7 +585,6 @@ def _row_groups_to_parts(
                     stats.append(stat)
     else:
         for filename, row_groups in file_row_groups.items():
-
             part = make_part_func(
                 filename,
                 row_groups,
@@ -798,7 +671,7 @@ def _process_open_file_options(
         # (probably because the file system is local)
         precache_options = {}
     if "open_file_func" not in open_file_options:
-        if precache_options.get("method", None) == "parquet":
+        if precache_options.get("method") == "parquet":
             open_file_options["cache_type"] = open_file_options.get(
                 "cache_type", "parts"
             )
@@ -847,7 +720,7 @@ def _split_user_options(**kwargs):
 
 def _set_gather_statistics(
     gather_statistics,
-    chunksize,
+    blocksize,
     split_row_groups,
     aggregation_depth,
     filter_columns,
@@ -860,7 +733,7 @@ def _set_gather_statistics(
     # If the user has specified `calculate_divisions=True`, then
     # we will be starting with `gather_statistics=True` here.
     if (
-        chunksize
+        (blocksize and split_row_groups is True)
         or (int(split_row_groups) > 1 and aggregation_depth)
         or filter_columns.intersection(stat_columns)
     ):
@@ -876,3 +749,14 @@ def _set_gather_statistics(
         gather_statistics = False
 
     return bool(gather_statistics)
+
+
+def _infer_split_row_groups(row_group_sizes, blocksize, aggregate_files=False):
+    # Use blocksize to choose an appropriate split_row_groups value
+    if row_group_sizes:
+        blocksize = parse_bytes(blocksize)
+        if aggregate_files or np.sum(row_group_sizes) > 2 * blocksize:
+            # If we are aggregating files, or the file is larger
+            # than `blocksize`, set split_row_groups to "adaptive"
+            return "adaptive"
+    return False

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from typing import Protocol, runtime_checkable
 from uuid import uuid4
@@ -5,7 +7,7 @@ from uuid import uuid4
 import fsspec
 import pandas as pd
 from fsspec.implementations.local import LocalFileSystem
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
 try:
     import fsspec.parquet as fsspec_parquet
@@ -34,9 +36,9 @@ def _is_local_fs_pyarrow(fs):
     return False
 
 
-def _get_pyarrow_dtypes(schema, categories, use_nullable_dtypes=False):
+def _get_pyarrow_dtypes(schema, categories, dtype_backend=None):
     """Convert a pyarrow.Schema object to pandas dtype dict"""
-    if use_nullable_dtypes:
+    if dtype_backend == "numpy_nullable":
         from dask.dataframe.io.parquet.arrow import PYARROW_NULLABLE_DTYPE_MAPPING
 
         type_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
@@ -193,7 +195,7 @@ def _open_input_files(
         precache == "parquet"
         and fs is not None
         and not _is_local_fs(fs)
-        and parse_version(fsspec.__version__) > parse_version("2021.11.0")
+        and Version(fsspec.__version__) > Version("2021.11.0")
     ):
         kwargs.update(precache_options)
         row_groups = kwargs.pop("row_groups", None) or ([None] * len(paths))
@@ -241,3 +243,10 @@ class DataFrameIOFunction(Protocol):
     def __call__(self, *args, **kwargs):
         """Return a new DataFrame partition"""
         raise NotImplementedError
+
+
+@runtime_checkable
+class SupportsLock(Protocol):
+    def acquire(self) -> object: ...
+
+    def release(self) -> object: ...
