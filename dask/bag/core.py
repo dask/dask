@@ -72,6 +72,7 @@ from dask.utils import (
     funcname,
     get_default_shuffle_method,
     insert,
+    is_empty,
     iter_chunks,
     key_split,
     parse_bytes,
@@ -1870,7 +1871,11 @@ def concat(bags):
 def reify(seq):
     if isinstance(seq, Iterator):
         seq = list(seq)
-    if len(seq) and isinstance(seq[0], Iterator):
+    try:
+        first = next(iter(seq))
+    except StopIteration:
+        return seq  # empty iterator
+    if isinstance(first, Iterator):
         seq = list(map(list, seq))
     return seq
 
@@ -2508,7 +2513,7 @@ def empty_safe_apply(func, part, is_last):
             if not is_last:
                 return no_result
         return func(part)
-    elif not is_last and len(part) == 0:
+    elif not is_last and is_empty(part):
         return no_result
     else:
         return func(part)
