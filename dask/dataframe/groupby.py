@@ -1179,9 +1179,9 @@ def _aggregate_docstring(based_on=None):
             intermediate ``combine`` function will be used, so that any one 
             ``combine`` or ``aggregate`` function has no more than ``split_every`` 
             inputs. The depth of the aggregation graph will be 
-            :math:`log_{split_every}(input chunks along reduced axes)`. Setting to 
+            :math:``log_`split_every`(input chunks along reduced axes)``. Setting to 
             a low value can reduce cache size and network transfers, at the cost of 
-            more CPU and a larger dask graph. 
+            more CPU and a larger dask graph.
         split_out : int, optional
             Number of output results in group-by like aggregations (defaults to 1)
         shuffle : bool or str, optional
