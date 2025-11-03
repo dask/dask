@@ -846,10 +846,20 @@ class Expr:
             # Allow operands to be accessed as attributes
             # as long as the keys are not already reserved
             # by existing methods/properties
-            _parameters = type(self)._parameters
-            if key in _parameters:
-                idx = _parameters.index(key)
-                return self.operands[idx]
+
+            expr = self
+            lowered: dict = {}
+            while True:
+                # Check if key is a parameter
+                _parameters = type(expr)._parameters
+                if key in _parameters:
+                    idx = _parameters.index(key)
+                    return expr.operands[idx]
+                # If not, try lowering the expression
+                new = expr.lower_once(lowered)
+                if new._name == expr._name:
+                    break
+                expr = new
 
             raise AttributeError(
                 f"{err}\n\n"
