@@ -846,20 +846,17 @@ class Expr:
             # Allow operands to be accessed as attributes
             # as long as the keys are not already reserved
             # by existing methods/properties
+            _parameters = type(self)._parameters
+            if key in _parameters:
+                idx = _parameters.index(key)
+                return self.operands[idx]
 
-            expr = self
-            lowered: dict = {}
-            while True:
-                # Check if key is a parameter
-                _parameters = type(expr)._parameters
-                if key in _parameters:
-                    idx = _parameters.index(key)
-                    return expr.operands[idx]
-                # If not, try lowering the expression
-                new = expr.lower_once(lowered)
-                if new._name == expr._name:
+            # Check if key is a parameter with default value in superclasses
+            for cls in type(self).__mro__[1:]:
+                if not issubclass(cls, Expr):
                     break
-                expr = new
+                if hasattr(cls, "_defaults") and key in cls._defaults:
+                    return cls._defaults[key]
 
             raise AttributeError(
                 f"{err}\n\n"

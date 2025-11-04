@@ -175,12 +175,8 @@ class MyExprWithDefaults(Expr):
 class MyExprOverrideParams(MyExprWithDefaults):
     _parameters = ["baz"]
 
-    def _lower(self):
-        return MyExprWithDefaults(bar=2)
-
 
 def test_getattr_override():
     e = MyExprOverrideParams(baz=3)
     assert e.foo == 1
-    assert e.bar == 2
     assert e.baz == 3
