@@ -12,7 +12,6 @@ import sys
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum, Flag, IntEnum, IntFlag
-from typing import Union
 
 import cloudpickle
 import pytest
@@ -998,7 +997,7 @@ def test_tokenize_dataclass():
 
     # Same name, same values, new definition: tokenize differently
     ADataClassRedefinedDifferently = dataclasses.make_dataclass(
-        "ADataClass", [("a", Union[int, str])]
+        "ADataClass", [("a", int | str)]
     )
     assert check_tokenize(a1) != check_tokenize(ADataClassRedefinedDifferently(1))
 
