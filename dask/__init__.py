@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dask import config, datasets
 from dask._expr import Expr, HLGExpr, LLGExpr, SingletonExpr
-from dask._version import get_versions
+
+# Backwards compatibility with versioneer
+from dask._version import __commit_id__ as __git_revision__
+from dask._version import __version__
 from dask.base import (
     annotate,
     compute,
@@ -15,8 +18,3 @@ from dask.base import (
 from dask.core import istask
 from dask.delayed import delayed
 from dask.local import get_sync as get
-
-versions = get_versions()
-__version__ = versions["version"]
-__git_revision__ = versions["full-revisionid"]
-del get_versions, versions
