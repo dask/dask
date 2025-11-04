@@ -1088,7 +1088,6 @@ class _HLGExprGroup(HLGExpr):
 
 
 class _HLGExprSequence(Expr):
-
     def __getitem__(self, other):
         return self.operands[other]
 
@@ -1300,7 +1299,6 @@ def _convert_dask_keys(keys):
 
 
 class HLGFinalizeCompute(HLGExpr):
-
     def _simplify_down(self):
         if not self.postcompute:
             return self.dsk

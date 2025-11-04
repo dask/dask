@@ -291,7 +291,6 @@ class Concat(Expr):
 
 
 class StackPartition(Concat):
-
     def _layer(self):
         dsk, i = {}, 0
         kwargs = self._kwargs.copy()

@@ -475,8 +475,8 @@ def to_parquet(
     if set(partition_on) - set(df.columns):
         raise ValueError(
             "Partitioning on non-existent column. "
-            "partition_on=%s ."
-            "columns=%s" % (str(partition_on), str(list(df.columns)))
+            f"partition_on={partition_on} ."
+            f"columns={list(df.columns)}"
         )
 
     if df.columns.inferred_type not in {"string", "empty"}:

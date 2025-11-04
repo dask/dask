@@ -40,10 +40,10 @@ class da_frompyfunc:
         self.nin = nin
         self.nout = nout
         self._name = funcname(func)
-        self.__name__ = "frompyfunc-%s" % self._name
+        self.__name__ = f"frompyfunc-{self._name}"
 
     def __repr__(self):
-        return "da.frompyfunc<%s, %d, %d>" % (self._name, self.nin, self.nout)
+        return f"da.frompyfunc<{self._name}, {self.nin}, {self.nout}>"
 
     def __dask_tokenize__(self):
         return (normalize_token(self._func), self.nin, self.nout)
@@ -88,7 +88,7 @@ class ufunc:
         if not isinstance(ufunc, (np.ufunc, da_frompyfunc)):
             raise TypeError(
                 "must be an instance of `ufunc` or "
-                "`da_frompyfunc`, got `%s" % type(ufunc).__name__
+                f"`da_frompyfunc`, got `{type(ufunc).__name__}"
             )
         self._ufunc = ufunc
         self.__name__ = ufunc.__name__

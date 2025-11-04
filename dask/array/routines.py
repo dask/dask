@@ -582,7 +582,7 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
     if n == 0:
         return a
     if n < 0:
-        raise ValueError("order must be non-negative but got %d" % n)
+        raise ValueError(f"order must be non-negative but got {n}")
 
     combined = []
     if prepend is not None:
@@ -701,8 +701,8 @@ def gradient(f, *varargs, axis=None, **kwargs):
             if np.min(c) < kwargs["edge_order"] + 1:
                 raise ValueError(
                     "Chunk size must be larger than edge_order + 1. "
-                    "Minimum chunk for axis {} is {}. Rechunk to "
-                    "proceed.".format(ax, np.min(c))
+                    f"Minimum chunk for axis {ax} is {np.min(c)}. Rechunk to "
+                    "proceed."
                 )
 
         if np.isscalar(varargs[i]):
@@ -976,7 +976,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
             raise TypeError(
                 "Dask types besides Array and Delayed are not supported "
-                "for `histogram`. For argument `{}`, got: {!r}".format(argname, val)
+                f"for `histogram`. For argument `{argname}`, got: {val!r}"
             )
 
     if range is not None:
@@ -1402,7 +1402,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
             raise TypeError(
                 "Dask types besides Array and Delayed are not supported "
-                "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
+                f"for `histogramdd`. For argument `{argname}`, got: {val!r}"
             )
 
     # Require that the chunking of the sample and weights are compatible.

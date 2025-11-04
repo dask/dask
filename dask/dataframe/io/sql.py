@@ -159,12 +159,9 @@ def read_sql_query(
                 int(round(count * bytes_per_row / parse_bytes(bytes_per_chunk))) or 1
             )
         if dtype.kind == "M":
+            freq = (maxi - mini).total_seconds() / npartitions
             divisions = methods.tolist(
-                pd.date_range(
-                    start=mini,
-                    end=maxi,
-                    freq="%is" % ((maxi - mini).total_seconds() / npartitions),
-                )
+                pd.date_range(start=mini, end=maxi, freq=f"{int(freq)}s")
             )
             divisions[0] = mini
             divisions[-1] = maxi
@@ -172,8 +169,8 @@ def read_sql_query(
             divisions = np.linspace(mini, maxi, npartitions + 1, dtype=dtype).tolist()
         else:
             raise TypeError(
-                'Provided index column is of type "{}".  If divisions is not provided the '
-                "index column type must be numeric or datetime.".format(dtype)
+                f'Provided index column is of type "{dtype}".  If divisions is not provided the '
+                "index column type must be numeric or datetime."
             )
 
     parts = []
@@ -580,7 +577,7 @@ def to_sql(
                 d,
                 extras=meta_task,
                 **worker_kwargs,
-                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
+                dask_key_name=f"to_sql-{tokenize(d, **worker_kwargs)}",
             )
             for d in df.to_delayed()
         ]
@@ -595,7 +592,7 @@ def to_sql(
                     d,
                     extras=last,
                     **worker_kwargs,
-                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
+                    dask_key_name=f"to_sql-{tokenize(d, **worker_kwargs)}",
                 )
             )
             last = result[-1]

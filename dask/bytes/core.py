@@ -83,7 +83,7 @@ def read_bytes(
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode="rb", storage_options=kwargs)
 
     if len(paths) == 0:
-        raise OSError("%s resolved to no files" % urlpath)
+        raise OSError(f"{urlpath} resolved to no files")
 
     if blocksize is not None:
         if isinstance(blocksize, str):

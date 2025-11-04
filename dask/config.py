@@ -348,7 +348,7 @@ def ensure_file(
             # Atomically create destination.  Parallel testing discovered
             # a race condition where a process can be busy creating the
             # destination while another process reads an empty config file.
-            tmp = "%s.tmp.%d" % (destination, os.getpid())
+            tmp = f"{destination}.tmp.{os.getpid()}"
             with open(source) as f:
                 lines = list(f)
 

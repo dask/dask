@@ -381,9 +381,8 @@ class RepartitionDivisions(Repartition):
             else:
                 if not tmp:
                     raise ValueError(
-                        "check for duplicate partitions\nold:\n%s\n\n"
-                        "new:\n%s\n\ncombined:\n%s"
-                        % (pformat(a), pformat(b), pformat(c))
+                        f"check for duplicate partitions\nold:\n{pformat(a)}\n\n"
+                        f"new:\n{pformat(b)}\n\ncombined:\n{pformat(c)}"
                     )
                 d[(out2, j - 1)] = (methods.concat, tmp)
             j += 1
@@ -418,7 +417,6 @@ class RepartitionFreq(Repartition):
 
 
 class RepartitionSize(Repartition):
-
     @functools.cached_property
     def _size(self):
         size = self.operand("partition_size")

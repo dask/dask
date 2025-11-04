@@ -547,7 +547,7 @@ def repeat(a, repeats, axis=None):
     if -a.ndim <= axis < 0:
         axis += a.ndim
     elif not 0 <= axis <= a.ndim - 1:
-        raise ValueError("axis(=%d) out of bounds" % axis)
+        raise ValueError(f"axis(={axis}) out of bounds")
 
     if repeats == 0:
         return a[tuple(slice(None) if d != axis else slice(0) for d in range(a.ndim))]

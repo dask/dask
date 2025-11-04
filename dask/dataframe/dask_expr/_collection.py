@@ -736,7 +736,7 @@ Expr={expr}"""
             ):
                 # Can broadcast
                 return new_collection(expr.Isin(self, values=values))
-            raise NotImplementedError("Passing a %r to `isin`" % typename(type(values)))
+            raise NotImplementedError(f"Passing a {typename(type(values))!r} to `isin`")
 
         # We wrap values in a delayed for two reasons:
         # - avoid serializing data in every task
@@ -2562,7 +2562,7 @@ Expr={expr}"""
             func, target = func
             if target in kwargs:
                 raise ValueError(
-                    "%s is both the pipe target and a keyword argument" % target
+                    f"{target} is both the pipe target and a keyword argument"
                 )
             kwargs[target] = self
             return func(*args, **kwargs)
@@ -3577,7 +3577,7 @@ class DataFrame(FrameBase):
             raise NotImplementedError(
                 "Dataframes only support sorting by named columns which must be passed as a "
                 "string or a list of strings.\n"
-                "You passed %s" % str(by)
+                f"You passed {by}"
             )
 
         if not isinstance(ascending, bool) and not len(ascending) == len(by):
@@ -3986,10 +3986,8 @@ class DataFrame(FrameBase):
                 .format(column="Column", underl="------")
             )
             column_template = textwrap.dedent(
-                """\
-            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}""".format(
-                    column_width=column_width
-                )
+                f"""\
+            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}"""
             )
             column_info = [
                 column_template.format(
@@ -4009,7 +4007,8 @@ class DataFrame(FrameBase):
 
         lines.extend(column_info)
         dtype_counts = [
-            "%s(%d)" % k for k in sorted(self.dtypes.value_counts().items(), key=str)
+            f"{name}({count})"
+            for name, count in sorted(self.dtypes.value_counts().items(), key=str)
         ]
         lines.append("dtypes: {}".format(", ".join(dtype_counts)))
 
@@ -6409,14 +6408,14 @@ def handle_out(out, result):
     if out is not None and out.__class__ != result.__class__:
         raise TypeError(
             "Mismatched types between result and out parameter. "
-            "out=%s, result=%s" % (str(type(out)), str(type(result)))
+            f"out={type(out)}, result={type(result)}"
         )
 
     if isinstance(out, DataFrame):
         if len(out.columns) != len(result.columns):
             raise ValueError(
                 "Mismatched columns count between result and out parameter. "
-                "out=%s, result=%s" % (str(len(out.columns)), str(len(result.columns)))
+                f"out={len(out.columns)}, result={len(result.columns)}"
             )
 
     if isinstance(out, (Series, DataFrame, Scalar)):
@@ -6424,11 +6423,7 @@ def handle_out(out, result):
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
-            " Received type %s, expected %s "
-            % (
-                typename(type(out)),
-                typename(type(result)),
-            )
+            f" Received type {typename(type(out))}, expected {typename(type(result))} "
         )
         raise NotImplementedError(msg)
     else:

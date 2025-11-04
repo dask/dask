@@ -247,7 +247,6 @@ class SerializeOnlyOnce:
 
 
 def test_pickle():
-
     def assert_slots_equal(a, b):
         def get_all_slots(obj):
             slots = set()
@@ -1032,9 +1031,7 @@ def test_dict_class():
 
 
 def test_block_io_fusion():
-
     class SubTask(Task):
-
         @property
         def block_fusion(self) -> bool:
             return True

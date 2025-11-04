@@ -20,7 +20,6 @@ from dask.utils import cached_cumsum
 
 
 class ArrayExpr(SingletonExpr):
-
     def _operands_for_repr(self):
         return []
 
