@@ -117,10 +117,8 @@ ignore = [
     "E731",   # Do not assign a `lambda` expression, use a `def`
     "E741",   # Ambiguous variable name: `l`
     # The following rules will make extensive changes, we will adopt these gradually in the future
-    "UP007",  # Update Union type annotations to use the | operator
     "UP031",  # Replace printf style string formatting with f-strings
     "UP032",  # Replace .format() style string formatting with f-strings
-    "UP033",  # Use functools.cache instead of functools.lru_cache
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
