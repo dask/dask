@@ -47,9 +47,6 @@ dependencies = [
 ]
 dynamic = ["version"]
 
-[tool.setuptools_scm]
-version_file = "dask/_version.py"
-
 [project.optional-dependencies]
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
@@ -139,6 +136,9 @@ default_section = "THIRDPARTY"
 known_first_party = ["dask"]
 known_distributed = ["distributed"]
 add_imports = ["from __future__ import annotations"]
+
+[tool.setuptools_scm]
+version_file = "dask/_version.py"
 
 [tool.pytest.ini_options]
 markers = [
