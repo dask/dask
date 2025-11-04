@@ -23,7 +23,7 @@ requirements:
     - python >=3.10
     - pip
     - setuptools-scm
-    - setuptools >=77.0.3
+    - setuptools >=80
     - tomli # [py<311]
 
   run:
