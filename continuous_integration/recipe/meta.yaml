@@ -22,7 +22,7 @@ requirements:
   host:
     - python >=3.10
     - pip
-    - versioneer =0.29
+    - setuptools-scm
     - setuptools >=77.0.3
     - tomli # [py<311]
 
