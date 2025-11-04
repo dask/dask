@@ -996,30 +996,28 @@ def _wrap_func(
         for i, ar in enumerate(args):
             if i not in lookup:
                 arg.append(ar)
+            elif isinstance(ar, Array):
+                arg.append(TaskRef((lookup[i],) + block))
+            elif isinstance(ar, np.ndarray):
+                t_ = Task(
+                    f"getitem-{tokenize(lookup[i], slc)}",
+                    getitem,
+                    TaskRef(lookup[i]),
+                    slc,
+                )
+                arg.append(t_)
             else:
-                if isinstance(ar, Array):
-                    arg.append(TaskRef((lookup[i],) + block))
-                elif isinstance(ar, np.ndarray):
-                    t_ = Task(
-                        f"getitem-{tokenize(lookup[i], slc)}",
-                        getitem,
-                        TaskRef(lookup[i]),
-                        slc,
-                    )
-                    arg.append(t_)
-                else:
-                    raise TypeError("Unknown object type in args")
+                raise TypeError("Unknown object type in args")
         kwrg = {}
         for k, ar in kwargs.items():
             if k not in lookup:
                 kwrg[k] = ar
+            elif isinstance(ar, Array):
+                kwrg[k] = (lookup[k],) + block
+            elif isinstance(ar, np.ndarray):
+                kwrg[k] = (getitem, lookup[k], slc)
             else:
-                if isinstance(ar, Array):
-                    kwrg[k] = (lookup[k],) + block
-                elif isinstance(ar, np.ndarray):
-                    kwrg[k] = (getitem, lookup[k], slc)
-                else:
-                    raise TypeError("Unknown object type in kwargs")
+                raise TypeError("Unknown object type in kwargs")
         dsk[key] = Task(
             key,
             func_applier,

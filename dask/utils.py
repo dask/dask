@@ -2196,8 +2196,6 @@ def show_versions() -> None:
 
     stdout.writelines(dumps(result, indent=2))
 
-    return
-
 
 def maybe_pluralize(count, noun, plural_form=None):
     """Pluralize a count-noun string pattern when necessary"""

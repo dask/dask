@@ -162,16 +162,15 @@ def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_cored
                         idx
                     )
                 )
-    else:
-        if input_coredimss:
-            icd0 = input_coredimss[0]
-            for icd in input_coredimss:
-                if icd0 != icd:
-                    raise ValueError(
-                        "To use `keepdims`, all core dimensions have to be equal"
-                    )
-            iax0 = input_axes[0]
-            output_axes = [iax0 for _ in output_coredimss]
+    elif input_coredimss:
+        icd0 = input_coredimss[0]
+        for icd in input_coredimss:
+            if icd0 != icd:
+                raise ValueError(
+                    "To use `keepdims`, all core dimensions have to be equal"
+                )
+        iax0 = input_axes[0]
+        output_axes = [iax0 for _ in output_coredimss]
 
     return input_axes, output_axes
 

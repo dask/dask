@@ -135,18 +135,17 @@ def update(
                 priority=priority,
                 defaults=defaults.get(k) if defaults else None,
             )
-        else:
-            if (
-                priority == "new"
-                or k not in old
-                or (
-                    priority == "new-defaults"
-                    and defaults
-                    and k in defaults
-                    and defaults[k] == old[k]
-                )
-            ):
-                old[k] = v
+        elif (
+            priority == "new"
+            or k not in old
+            or (
+                priority == "new-defaults"
+                and defaults
+                and k in defaults
+                and defaults[k] == old[k]
+            )
+        ):
+            old[k] = v
 
     return old
 

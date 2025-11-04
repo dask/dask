@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-import dask.dataframe.methods as methods
+from dask.dataframe import methods
 
 
 def test_assign_not_modifying_array_inplace():

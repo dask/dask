@@ -219,7 +219,7 @@ def _get_display_cls(format):
     """
     dummy = lambda *args, **kwargs: None
     try:
-        import IPython.display as display
+        from IPython import display
     except ImportError:
         # Can't return a display object if no IPython.
         return dummy
