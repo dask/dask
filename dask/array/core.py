@@ -3936,12 +3936,11 @@ def to_zarr(
         return arr.store(
             z, lock=False, regions=regions, compute=compute, return_stored=return_stored
         )
-    else:
-        if not _check_regular_chunks(arr.chunks):
-            # We almost certainly get here because auto chunking has been used
-            # on irregular chunks. The max will then be smaller than auto, so using
-            # max is a safe choice
-            arr = arr.rechunk(tuple(map(max, arr.chunks)))
+    elif not _check_regular_chunks(arr.chunks):
+        # We almost certainly get here because auto chunking has been used
+        # on irregular chunks. The max will then be smaller than auto, so using
+        # max is a safe choice
+        arr = arr.rechunk(tuple(map(max, arr.chunks)))
 
     if region is not None:
         raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")

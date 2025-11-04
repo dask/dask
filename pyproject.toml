@@ -103,22 +103,32 @@ line-length = 120
 # We specify additional rules with extend-select.
 extend-select = [
     "B",
+    "PLR",
     "UP",
 ]
 ignore = [
-    "B011",   # Do not `assert False`, raise `AssertionError()`
-    "B018",   # Found useless expression
-    "B028",   # FIXME: No explicit `stacklevel` keyword argument found
-    "B904",   # Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling
-    "B905",   # `zip()` without an explicit `strict=` parameter
-    "E402",   # Module level import not at top of file
-    "E714",   # Test for object identity should be `is not`
-    "E721",   # Use `is` and `is not` for type comparisons, or `isinstance()` for isinstance checks
-    "E731",   # Do not assign a `lambda` expression, use a `def`
-    "E741",   # Ambiguous variable name: `l`
+    "B011",     # Do not `assert False`, raise `AssertionError()`
+    "B018",     # Found useless expression
+    "B028",     # FIXME: No explicit `stacklevel` keyword argument found
+    "B904",     # Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling
+    "B905",     # `zip()` without an explicit `strict=` parameter
+    "E402",     # Module level import not at top of file
+    "E714",     # Test for object identity should be `is not`
+    "E721",     # Use `is` and `is not` for type comparisons, or `isinstance()` for isinstance checks
+    "E731",     # Do not assign a `lambda` expression, use a `def`
+    "E741",     # Ambiguous variable name: `l`
+    "PLR0124",  # Name compared with itself, consider replacing `... == ...`
+    "PLR0206",  # Cannot have defined parameters for properties
+    "PLR09",    # Too many statements, branches, arguments in function definition, statements, ...
+    "PLR1704",  # Redefining argument with local name
+    "PLR1714",  # Consider merging multiple comparisons
+    "PLR1730",  # Replace `if` statement with `min()` or `max()`
+    "PLR1733",  # Unnecessary lookup of dictionary value by key
+    "PLR2004",  # Magic value used in comparison, consider replacing with a constant variable
+    "PLR2044",  # Line with empty comment
     # The following rules will make extensive changes, we will adopt these gradually in the future
-    "UP031",  # Replace printf style string formatting with f-strings
-    "UP032",  # Replace .format() style string formatting with f-strings
+    "UP031",    # Replace printf style string formatting with f-strings
+    "UP032",    # Replace .format() style string formatting with f-strings
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
