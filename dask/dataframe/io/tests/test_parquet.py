@@ -2538,6 +2538,10 @@ def test_filter_nonpartition_columns(
             "random": np.random.choice(["cat", "dog"], size=16),
         }
     )
+    df_write["random"] = df_write["random"].astype(
+        pd.CategoricalDtype(categories=["cat", "dog"])
+    )
+
     ddf_write = dd.from_pandas(df_write, npartitions=4)
     ddf_write.to_parquet(
         tmpdir, write_index=False, partition_on=["id"], engine=write_engine
