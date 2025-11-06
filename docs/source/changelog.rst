@@ -5,6 +5,48 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2025.11.0:
+
+2025.11.0
+---------
+
+Highlights
+^^^^^^^^^^
+- Use shard shape when available in ``to_zarr`` (:pr:`12105`) `Davis Bennett`_
+- Improve worker and nanny support for ipv6 (:pr-distributed:`9133`) `Jianyu Sun`_
+- Linting and type hinting improvements across the codebase
+
+.. dropdown:: Additional changes
+
+  - Replace ``versioneer`` with ``setuptools-scm`` (:pr:`12133`) `Jacob Tomlinson`_
+  - Apply ruff/Pylint Refactor rules (PLR) (:pr:`12010`) `Dimitri Papadopoulos Orfanos`_
+  - Remove files from ``MANIFEST.in`` (:pr:`12041`) `Dimitri Papadopoulos Orfanos`_
+  - Stabilize ``test_filter_nonpartition_columns`` (:pr:`12131`) `DongWon`_
+  - Enforce ruff/pyupgrade rules UP007 and UP033 (:pr:`12125`) `Dimitri Papadopoulos Orfanos`_
+  - Update ``np.accumulate`` workaround comment (:pr:`12129`) `Jacob Tomlinson`_
+  - ``flake8``, ``bugbear``, ``pyupgrade`` → ``ruff`` (:pr:`12002`) `Dimitri Papadopoulos Orfanos`_
+  - Adjust pyarrow version skip in ``test_parquet`` (:pr:`12124`) `Tom Augspurger`_
+  - Fix ufunc in ``dask.array.cumreduction`` (:pr:`12119`) `Tony Ding`_
+  - Fix docs footer (:pr:`12120`) `Jacob Tomlinson`_
+  - Use integer multiple of shard shape when rechunking in ``to_zarr`` (:pr:`12106`) `Davis Bennett`_
+  - Ensure that the shard shape is used as the default chunk shape for sharded Zarr arrays (:pr:`12104`) `Davis Bennett`_
+  - Skip ``test_parquet`` for ``pyarrow==22.0`` (:pr:`12116`) `Tom Augspurger`_
+  - Clean up setuptools-specific configuration (:pr:`12040`) `Dimitri Papadopoulos Orfanos`_
+  - PEP 639 compliance (:pr:`12024`) `Dimitri Papadopoulos Orfanos`_
+  - Fix deprecated quantile ``interpolation`` being passed to numpy (:pr:`12108`) `David Hoese`_
+  - Add ``uv.lock`` to ``.gitignore`` (:pr:`12110`) `Jacob Tomlinson`_
+  - Use shard shape when available in ``to_zarr`` (:pr:`12105`) `Davis Bennett`_
+  - Add more optional dependencies to Python 3.13 CI builds (:pr:`12100`) `James Bourbeau`_
+  - Remove ``pip`` pin for docs (:pr:`12102`) `James Bourbeau`_
+  - Address collection-based ``meta`` arguments in ``GroupByApply`` (:pr:`12099`) `Richard (Rick) Zamora`_
+
+  - Replace versioneer with setuptools-scm (:pr-distributed:`9137`) `Jacob Tomlinson`_
+  - Improve worker and nanny support for ipv6 (:pr-distributed:`9133`) `Jianyu Sun`_
+  - Fix CI Multiple aliased keys in file ``/Users/runner/.condarc`` (:pr-distributed:`9136`) `Jacob Tomlinson`_
+  - Remove ``pip`` pin for docs (:pr-distributed:`9132`) `James Bourbeau`_
+  - Remove UCX configuration schema (:pr-distributed:`9127`) `Peter Andreas Entschev`_
+  - Add generic type support to ``Future`` and ``Client`` methods (:pr-distributed:`9123`) `Simon-Martin Schröder`_
+
 .. _v2025.10.0:
 
 2025.10.0
@@ -9692,3 +9734,6 @@ Other
 .. _`Oisin-M`: https://github.com/Oisin-M
 .. _`Username46786`: https://github.com/Username46786
 .. _`Maneesh Sutar`: https://github.com/maneesh29s
+.. _`Jianyu Sun`: https://github.com/csfldf
+.. _`DongWon`: https://github.com/dongwonmoon
+.. _`Simon-Martin Schröder`: https://github.com/moi90
