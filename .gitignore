@@ -27,3 +27,4 @@ hdfs-initialized-indicator
 .history
 env.yaml
 uv.lock
+dask/_version.py
