@@ -492,8 +492,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
         tb = "".join(traceback.format_tb(exc_traceback))
         suggest = (
             (
-                "Please specify the dtype explicitly using the "
-                f"`{suggest_dtype}` kwarg.\n\n"
+                f"Please specify the dtype explicitly using the `{suggest_dtype}` kwarg.\n\n"
             )
             if suggest_dtype
             else ""
@@ -2052,7 +2051,7 @@ class Array(DaskMethodsMixin):
             key = (key,)
         if any(k is None for k in key):
             raise IndexError(
-                "vindex does not support indexing with None (np.newaxis), " f"got {key}"
+                f"vindex does not support indexing with None (np.newaxis), got {key}"
             )
         if all(isinstance(k, slice) for k in key):
             if all(

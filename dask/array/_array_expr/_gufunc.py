@@ -434,9 +434,9 @@ def apply_gufunc(
             #### Check if core dimensions consist of only one chunk
             if (dim in core_shapes) and (chunksizes[0][0] < core_shapes[dim]):
                 raise ValueError(
-                    f"Core dimension `'{dim}'` consists of multiple chunks. To fix, rechunk into a single \
-chunk along this dimension or set `allow_rechunk=True`, but beware that this may increase memory usage \
-significantly."
+                    f"Core dimension `'{dim}'` consists of multiple chunks. To fix, rechunk into "
+                    "a single chunk along this dimension or set `allow_rechunk=True`, but beware "
+                    "that this may increase memory usage significantly."
                 )
             #### Check if loop dimensions consist of same chunksizes, when they have sizes > 1
             relevant_chunksizes = list(
@@ -709,7 +709,7 @@ class gufunc:
 
         self.__doc__ = f"""
         Bound ``dask.array.gufunc``
-        func: ``{str(self.pyfunc)}``
+        func: ``{self.pyfunc}``
         signature: ``'{self.signature}'``
 
         Parameters
