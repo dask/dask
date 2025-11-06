@@ -123,9 +123,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             "  2. Have only one column of blocks\n\n"
             "Note: This function (tsqr) supports QR decomposition in the case of\n"
             "tall-and-skinny matrices (single column chunk/block; see qr)\n"
-            "Current shape: {},\nCurrent chunksize: {}".format(
-                data.shape, data.chunksize
-            )
+            f"Current shape: {data.shape},\nCurrent chunksize: {data.chunksize}"
         )
 
     token = "-" + tokenize(data, compute_svd)
@@ -920,17 +918,15 @@ def svd(a, coerce_signs=True):
     nb = a.numblocks
     if a.ndim != 2:
         raise ValueError(
-            "Array must be 2D.\n"
-            "Input shape: {}\n"
-            "Input ndim: {}\n".format(a.shape, a.ndim)
+            "Array must be 2D.\n" f"Input shape: {a.shape}\n" f"Input ndim: {a.ndim}\n"
         )
     if nb[0] > 1 and nb[1] > 1:
         raise NotImplementedError(
             "Array must be chunked in one dimension only. "
             "This function (svd) only supports tall-and-skinny or short-and-fat "
             "matrices (see da.linalg.svd_compressed for SVD on fully chunked arrays).\n"
-            "Input shape: {}\n"
-            "Input numblocks: {}\n".format(a.shape, nb)
+            f"Input shape: {a.shape}\n"
+            f"Input numblocks: {nb}\n"
         )
 
     # Single-chunk case

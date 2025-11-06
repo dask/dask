@@ -601,12 +601,12 @@ def set_index_columns(meta, index, columns, auto_index_allowed):
                 raise ValueError(
                     "Specified index and column arguments must not intersect"
                     " (set index=False or remove the detected index from columns).\n"
-                    "index: {} | column: {}".format(index, columns)
+                    f"index: {index} | column: {columns}"
                 )
             else:
                 raise ValueError(
                     "Specified index and column arguments must not intersect.\n"
-                    "index: {} | column: {}".format(index, columns)
+                    f"index: {index} | column: {columns}"
                 )
 
     return meta[list(columns)], index, columns

@@ -493,7 +493,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
         suggest = (
             (
                 "Please specify the dtype explicitly using the "
-                "`{dtype}` kwarg.\n\n".format(dtype=suggest_dtype)
+                f"`{suggest_dtype}` kwarg.\n\n"
             )
             if suggest_dtype
             else ""
@@ -2052,8 +2052,7 @@ class Array(DaskMethodsMixin):
             key = (key,)
         if any(k is None for k in key):
             raise IndexError(
-                "vindex does not support indexing with None (np.newaxis), "
-                "got {}".format(key)
+                "vindex does not support indexing with None (np.newaxis), " f"got {key}"
             )
         if all(isinstance(k, slice) for k in key):
             if all(
@@ -2063,7 +2062,7 @@ class Array(DaskMethodsMixin):
             raise IndexError(
                 "vindex requires at least one non-slice to vectorize over "
                 "when the slices are not over the entire array (i.e, x[:]). "
-                "Use normal slicing instead when only using slices. Got: {}".format(key)
+                f"Use normal slicing instead when only using slices. Got: {key}"
             )
         elif any(is_dask_collection(k) for k in key):
             if math.prod(self.numblocks) == 1 and len(key) == 1 and self.ndim == 1:
@@ -2075,9 +2074,7 @@ class Array(DaskMethodsMixin):
             else:
                 raise IndexError(
                     "vindex does not support indexing with dask objects. Call compute "
-                    "on the indexer first to get an evalurated array. Got: {}".format(
-                        key
-                    )
+                    f"on the indexer first to get an evalurated array. Got: {key}"
                 )
         return _vindex(self, *key)
 
@@ -4424,11 +4421,9 @@ def block(arrays, allow_unknown_chunksizes=False):
             #  - horribly confusing behaviour that results when tuples are
             #    treated like ndarray
             raise TypeError(
-                "{} is a tuple. "
+                f"{format_index(index)} is a tuple. "
                 "Only lists can be used to arrange blocks, and np.block does "
-                "not allow implicit conversion from tuple to ndarray.".format(
-                    format_index(index)
-                )
+                "not allow implicit conversion from tuple to ndarray."
             )
         if not entering:
             curr_depth = len(index)
@@ -4440,10 +4435,8 @@ def block(arrays, allow_unknown_chunksizes=False):
 
         if list_ndim is not None and list_ndim != curr_depth:
             raise ValueError(
-                "List depths are mismatched. First element was at depth {}, "
-                "but there is an element at depth {} ({})".format(
-                    list_ndim, curr_depth, format_index(index)
-                )
+                f"List depths are mismatched. First element was at depth {list_ndim}, "
+                f"but there is an element at depth {curr_depth} ({format_index(index)})"
             )
         list_ndim = curr_depth
 
