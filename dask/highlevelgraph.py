@@ -38,7 +38,7 @@ def compute_layer_dependencies(layers):
         for k, v in layers.items():
             if key in v:
                 return k
-        raise RuntimeError(f"{repr(key)} not found")
+        raise RuntimeError(f"{key!r} not found")
 
     all_keys = {key for layer in layers.values() for key in layer}
     ret = {k: set() for k in layers}
@@ -820,11 +820,11 @@ class HighLevelGraph(Graph):
         for layer_name, deps in self.dependencies.items():
             if layer_name not in self.layers:
                 raise ValueError(
-                    f"dependencies[{repr(layer_name)}] not found in layers"
+                    f"dependencies[{layer_name!r}] not found in layers"
                 )
             for dep in deps:
                 if dep not in self.dependencies:
-                    raise ValueError(f"{repr(dep)} not found in dependencies")
+                    raise ValueError(f"{dep!r} not found in dependencies")
 
         for layer in self.layers.values():
             assert hasattr(layer, "annotations")
@@ -845,8 +845,8 @@ class HighLevelGraph(Graph):
         for k in dep_key1:
             if self.dependencies[k] != dependencies[k]:
                 raise ValueError(
-                    f"incorrect HLG dependencies[{repr(k)}]: {repr(self.dependencies[k])} "
-                    f"expected {repr(dependencies[k])} from task dependencies"
+                    f"incorrect HLG dependencies[{k!r}]: {self.dependencies[k]!r} "
+                    f"expected {dependencies[k]!r} from task dependencies"
                 )
 
     def __repr__(self) -> str:

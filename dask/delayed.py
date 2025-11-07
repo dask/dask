@@ -732,7 +732,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return Delayed(key, dsk, self._length, layer=layer)
 
     def __repr__(self):
-        return f"Delayed({repr(self.key)})"
+        return f"Delayed({self.key!r})"
 
     def __hash__(self):
         return hash(self.key)

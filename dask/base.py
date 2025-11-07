@@ -1170,7 +1170,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             assert isinstance(num_workers, Integral) and num_workers > 0
             return partial(local.get_async, scheduler.submit, num_workers)
         else:
-            raise ValueError(f"Unexpected scheduler: {repr(scheduler)}")
+            raise ValueError(f"Unexpected scheduler: {scheduler!r}")
         # else:  # try to connect to remote scheduler with this name
         #     return get_client(scheduler).get
 

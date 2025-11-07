@@ -166,7 +166,7 @@ class LocIndexer(Indexer):
 
     def _loc_element(self, iindexer, cindexer):
         if iindexer < self.obj.divisions[0] or iindexer > self.obj.divisions[-1]:
-            raise KeyError(f"the label [{str(iindexer)}] is not in the index")
+            raise KeyError(f"the label [{iindexer!s}] is not in the index")
         return new_collection(LocElement(self.obj, iindexer, cindexer))
 
 

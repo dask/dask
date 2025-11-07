@@ -1079,7 +1079,7 @@ def broadcast_chunks(*chunkss):
         else:
             step2 = [c for c in step1 if c != (1,)]
         if len(set(step2)) != 1:
-            raise ValueError(f"Chunks do not align: {str(step2)}")
+            raise ValueError(f"Chunks do not align: {step2!s}")
         result.append(step2[0])
     return tuple(result)
 
@@ -4567,7 +4567,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         if any(map(np.isnan, seq2[0].shape)):
             raise ValueError(
                 "Tried to concatenate arrays with unknown"
-                f" shape {str(seq2[0].shape)}.\n\nTwo solutions:\n"
+                f" shape {seq2[0].shape!s}.\n\nTwo solutions:\n"
                 "  1. Force concatenation pass"
                 " allow_unknown_chunksizes=True.\n"
                 "  2. Compute shapes with "
@@ -5104,7 +5104,7 @@ def handle_out(out, result):
         if out.shape != result.shape:
             raise ValueError(
                 "Mismatched shapes between result and out parameter. "
-                f"out={str(out.shape)}, result={str(result.shape)}"
+                f"out={out.shape!s}, result={result.shape!s}"
             )
         out._chunks = result.chunks
         out.dask = result.dask

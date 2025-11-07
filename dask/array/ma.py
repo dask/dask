@@ -141,8 +141,8 @@ def masked_array(data, mask=np.ma.nomask, fill_value=None, **kwargs):
         elif data.shape != mask.shape:
             raise np.ma.MaskError(
                 "Mask and data not compatible: data shape "
-                f"is {repr(data.shape)}, and mask shape is "
-                f"{repr(mask.shape)}."
+                f"is {data.shape!r}, and mask shape is "
+                f"{mask.shape!r}."
             )
         arginds.extend([mask, inds])
 
