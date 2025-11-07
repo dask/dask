@@ -520,9 +520,7 @@ def validate_axis(axis, ndim):
     if not isinstance(axis, numbers.Integral):
         raise TypeError(f"Axis value must be an integer, got {axis}")
     if axis < -ndim or axis >= ndim:
-        raise AxisError(
-            "Axis %d is out of bounds for array of dimension %d" % (axis, ndim)
-        )
+        raise AxisError(f"Axis {axis} is out of bounds for array of dimension {ndim}")
     if axis < 0:
         axis += ndim
     return axis

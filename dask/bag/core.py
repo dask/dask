@@ -517,7 +517,7 @@ class Bag(DaskMethodsMixin):
         return type(self)(dsk, name, self.npartitions)
 
     def __str__(self):
-        return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
+        return f"dask.bag<{key_split(self.name)}, npartitions={self.npartitions}>"
 
     __repr__ = __str__
 
@@ -1968,7 +1968,7 @@ def bag_range(n, npartitions):
     [0, 1, 2, 3, 4]
     """
     size = n // npartitions
-    name = "range-%d-npartitions-%d" % (n, npartitions)
+    name = f"range-{n}-npartitions-{npartitions}"
     ijs = list(enumerate(take(npartitions, range(0, n, size))))
     dsk = {(name, i): (reify, (range, j, min(j + size, n))) for i, j in ijs}
 
@@ -2635,7 +2635,7 @@ def repartition_npartitions(bag, npartitions):
     if npartitions == bag.npartitions:
         return bag
 
-    new_name = "repartition-%d-%s" % (npartitions, tokenize(bag, npartitions))
+    new_name = f"repartition-{npartitions}-{tokenize(bag, npartitions)}"
     if bag.npartitions > npartitions:
         ratio = bag.npartitions / npartitions
         new_partitions_boundaries = [

@@ -4007,7 +4007,8 @@ class DataFrame(FrameBase):
 
         lines.extend(column_info)
         dtype_counts = [
-            "%s(%d)" % k for k in sorted(self.dtypes.value_counts().items(), key=str)
+            f"{value}({count})"
+            for value, count in sorted(self.dtypes.value_counts().items(), key=str)
         ]
         lines.append("dtypes: {}".format(", ".join(dtype_counts)))
 

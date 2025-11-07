@@ -497,7 +497,7 @@ def _maybe_sort(a, check_index: bool):
         if is_dataframe_like(a):
             if set(a.index.names) & set(a.columns):
                 a.index.names = [
-                    "-overlapped-index-name-%d" % i for i in range(len(a.index.names))
+                    f"-overlapped-index-name-{i}" for i in range(len(a.index.names))
                 ]
             a = a.sort_values(by=methods.tolist(a.columns))
         else:

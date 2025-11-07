@@ -221,7 +221,7 @@ _BLOCKWISE_DEFAULT_PREFIX = "__dask_blockwise__"
 
 
 def blockwise_token(i, prefix=_BLOCKWISE_DEFAULT_PREFIX):
-    return prefix + "%d" % i
+    return f"{prefix}{int(i)}"
 
 
 def blockwise(

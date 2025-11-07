@@ -694,9 +694,9 @@ def _expander(where):
             if i in where:
                 left.append("val, ")
             else:
-                left.append("seq[%d], " % j)
+                left.append(f"seq[{j}], ")
                 j += 1
-        right = "seq[%d:]" % j
+        right = f"seq[{j}:]"
         left = "".join(left)
         decl = decl.format(**locals())
         ns = {}

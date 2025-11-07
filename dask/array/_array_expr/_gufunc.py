@@ -377,8 +377,7 @@ def apply_gufunc(
 
     if len(input_coredimss) != len(args):
         raise ValueError(
-            "According to `signature`, `func` requires %d arguments, but %s given"
-            % (len(input_coredimss), len(args))
+            f"According to `signature`, `func` requires {len(input_coredimss)} arguments, but {len(args)} given"
         )
 
     ## Axes: transpose input arguments
@@ -405,7 +404,7 @@ def apply_gufunc(
     core_shapes.update(output_sizes)
 
     loop_input_dimss = [
-        tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims))
+        tuple(f"__loopdim{d}__" for d in range(max_loopdims - n, max_loopdims))
         for n in num_loopdims
     ]
     input_dimss = [l + c for l, c in zip(loop_input_dimss, input_coredimss)]
@@ -554,7 +553,8 @@ class GUfuncLeafExpr(ArrayExpr):
 
     @functools.cached_property
     def _name(self):
-        return "%s_%d-%s" % (self.name_prefix, self.i, self.array._name.split("-")[-1])
+        last_name = self.array._name.split("-")[-1]
+        return f"{self.name_prefix}_{self.i}-{last_name}"
 
     @functools.cached_property
     def _shape(self):

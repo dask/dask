@@ -1174,8 +1174,7 @@ def store(
 
     if len(sources) != len(targets):
         raise ValueError(
-            "Different number of sources [%d] and targets [%d]"
-            % (len(sources), len(targets))
+            f"Different number of sources [{len(sources)}] and targets [{len(targets)}]"
         )
 
     if isinstance(regions, tuple) or regions is None:
@@ -4259,7 +4258,7 @@ def unify_chunks(*args, **kwargs):
 
     if warn and nparts and nparts >= max_parts * 10:
         warnings.warn(
-            "Increasing number of chunks by factor of %d" % (nparts / max_parts),
+            f"Increasing number of chunks by factor of {int(nparts / max_parts)}",
             PerformanceWarning,
             stacklevel=3,
         )
@@ -5963,7 +5962,7 @@ def to_npy_stack(dirname, x, axis=0):
 
     name = f"to-npy-stack-{uuid.uuid1()}"
     dsk = {
-        (name, i): (np.save, os.path.join(dirname, "%d.npy" % i), key)
+        (name, i): (np.save, os.path.join(dirname, f"{i}.npy"), key)
         for i, key in enumerate(core.flatten(xx.__dask_keys__()))
     }
 
@@ -5995,7 +5994,7 @@ def from_npy_stack(dirname, mmap_mode="r"):
     name = f"from-npy-stack-{dirname}"
     keys = list(product([name], *[range(len(c)) for c in chunks]))
     values = [
-        (np.load, os.path.join(dirname, "%d.npy" % i), mmap_mode)
+        (np.load, os.path.join(dirname, f"{i}.npy"), mmap_mode)
         for i in range(len(chunks[axis]))
     ]
     dsk = dict(zip(keys, values))

@@ -40,7 +40,7 @@ class da_frompyfunc:
         self.__name__ = f"frompyfunc-{self._name}"
 
     def __repr__(self):
-        return "da.frompyfunc<%s, %d, %d>" % (self._name, self.nin, self.nout)
+        return f"da.frompyfunc<{self._name}, {self.nin}, {self.nout}>"
 
     def __dask_tokenize__(self):
         return (normalize_token(self._func), self.nin, self.nout)

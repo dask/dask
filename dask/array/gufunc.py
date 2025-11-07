@@ -376,8 +376,7 @@ def apply_gufunc(
 
     if len(input_coredimss) != len(args):
         raise ValueError(
-            "According to `signature`, `func` requires %d arguments, but %s given"
-            % (len(input_coredimss), len(args))
+            f"According to `signature`, `func` requires {len(input_coredimss)} arguments, but {len(args)} given"
         )
 
     ## Axes: transpose input arguments
@@ -403,7 +402,7 @@ def apply_gufunc(
     core_shapes.update(output_sizes)
 
     loop_input_dimss = [
-        tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims))
+        tuple(f"__loopdim{d}__" for d in range(max_loopdims - n, max_loopdims))
         for n in num_loopdims
     ]
     input_dimss = [l + c for l, c in zip(loop_input_dimss, input_coredimss)]
@@ -512,7 +511,7 @@ def apply_gufunc(
         core_chunkinds = len(ocd) * (0,)
         output_shape = loop_output_shape + core_output_shape
         output_chunks = loop_output_chunks + core_output_shape
-        leaf_name = "%s_%d-%s" % (name, i, token)
+        leaf_name = f"{name}_{i}-{token}"
         leaf_dsk = {
             (leaf_name,)
             + key[1:]
