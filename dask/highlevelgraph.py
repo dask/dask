@@ -819,9 +819,7 @@ class HighLevelGraph(Graph):
         # Check dependencies
         for layer_name, deps in self.dependencies.items():
             if layer_name not in self.layers:
-                raise ValueError(
-                    f"dependencies[{layer_name!r}] not found in layers"
-                )
+                raise ValueError(f"dependencies[{layer_name!r}] not found in layers")
             for dep in deps:
                 if dep not in self.dependencies:
                     raise ValueError(f"{dep!r} not found in dependencies")

@@ -3104,7 +3104,7 @@ class _DelayedExpr(Expr):
     _parameters = ["obj"]
 
     def __str__(self):
-        return f"{type(self).__name__}({self.obj!s})"
+        return f"{type(self).__name__}({self.obj})"
 
     @property
     def _name(self):
@@ -3126,7 +3126,7 @@ class _DelayedExpr(Expr):
 
 class DelayedsExpr(Expr):
     def __str__(self):
-        return f"{type(self).__name__}({self.operands[0]!s})"
+        return f"{type(self).__name__}({self.operands[0]})"
 
     @functools.cached_property
     def _name(self):
@@ -3818,7 +3818,7 @@ class Fused(Blockwise):
 
     @functools.cached_property
     def _name(self):
-        return f"{self!s}-{self.deterministic_token}"
+        return f"{self}-{self.deterministic_token}"
 
     def _divisions(self):
         return self.exprs[0]._divisions()

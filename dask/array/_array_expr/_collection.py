@@ -1563,7 +1563,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         if any(map(np.isnan, seq2[0].shape)):
             raise ValueError(
                 "Tried to concatenate arrays with unknown"
-                f" shape {seq2[0].shape!s}.\n\nTwo solutions:\n"
+                f" shape {seq2[0].shape}.\n\nTwo solutions:\n"
                 "  1. Force concatenation pass"
                 " allow_unknown_chunksizes=True.\n"
                 "  2. Compute shapes with "

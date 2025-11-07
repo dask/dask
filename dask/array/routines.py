@@ -222,9 +222,7 @@ def flip(m, axis=None):
         for ax in axis:
             sl[ax] = slice(None, None, -1)
     except IndexError as e:
-        raise ValueError(
-            f"`axis` of {axis!s} invalid for {m.ndim!s}-D array"
-        ) from e
+        raise ValueError(f"`axis` of {axis} invalid for {m.ndim}-D array") from e
     sl = tuple(sl)
 
     return m[sl]

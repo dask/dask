@@ -604,7 +604,7 @@ def _nunique_df_combine(df, levels, sort=False):
 #
 ###############################################################
 def _make_agg_id(func, column):
-    return f"{func!s}-{column!s}-{tokenize(func, column)}"
+    return f"{func}-{column}-{tokenize(func, column)}"
 
 
 def _normalize_spec(spec, non_group_columns):

@@ -3577,7 +3577,7 @@ class DataFrame(FrameBase):
             raise NotImplementedError(
                 "Dataframes only support sorting by named columns which must be passed as a "
                 "string or a list of strings.\n"
-                f"You passed {by!s}"
+                f"You passed {by}"
             )
 
         if not isinstance(ascending, bool) and not len(ascending) == len(by):
@@ -6407,14 +6407,14 @@ def handle_out(out, result):
     if out is not None and out.__class__ != result.__class__:
         raise TypeError(
             "Mismatched types between result and out parameter. "
-            f"out={type(out)!s}, result={type(result)!s}"
+            f"out={type(out)}, result={type(result)}"
         )
 
     if isinstance(out, DataFrame):
         if len(out.columns) != len(result.columns):
             raise ValueError(
                 "Mismatched columns count between result and out parameter. "
-                f"out={len(out.columns)!s}, result={len(result.columns)!s}"
+                f"out={len(out.columns)}, result={len(result.columns)}"
             )
 
     if isinstance(out, (Series, DataFrame, Scalar)):

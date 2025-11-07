@@ -82,9 +82,7 @@ class Expr:
         return self
 
     def _operands_for_repr(self):
-        return [
-            f"{param}={op!r}" for param, op in zip(self._parameters, self.operands)
-        ]
+        return [f"{param}={op!r}" for param, op in zip(self._parameters, self.operands)]
 
     def __str__(self):
         s = ", ".join(self._operands_for_repr())
