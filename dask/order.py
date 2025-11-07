@@ -184,8 +184,7 @@ def order(
     if len(total_dependencies) != len(dsk):
         cycle = getcycle(dsk, None)
         raise RuntimeError(
-            "Cycle detected between the following keys:\n  -> %s"
-            % "\n  -> ".join(str(x) for x in cycle)
+            "Cycle detected between the following keys:\n  -> {}".format("\n  -> ".join(str(x) for x in cycle))
         )
     assert dependencies is not None
     roots_connected, max_dependents = _connecting_to_roots(dependencies, dependents)

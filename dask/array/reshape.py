@@ -378,8 +378,8 @@ def reshape(x, shape, merge_chunks=True, limit=None):
 def _sanity_checks(x, shape):
     if np.isnan(sum(x.shape)):
         raise ValueError(
-            "Array chunk size or shape is unknown. shape: %s\n\n"
-            "Possible solution with x.compute_chunk_sizes()" % str(x.shape)
+            f"Array chunk size or shape is unknown. shape: {str(x.shape)}\n\n"
+            "Possible solution with x.compute_chunk_sizes()"
         )
 
     if reduce(mul, shape, 1) != x.size:

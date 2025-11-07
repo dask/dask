@@ -580,7 +580,7 @@ def to_sql(
                 d,
                 extras=meta_task,
                 **worker_kwargs,
-                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
+                dask_key_name=f"to_sql-{tokenize(d, **worker_kwargs)}",
             )
             for d in df.to_delayed()
         ]
@@ -595,7 +595,7 @@ def to_sql(
                     d,
                     extras=last,
                     **worker_kwargs,
-                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
+                    dask_key_name=f"to_sql-{tokenize(d, **worker_kwargs)}",
                 )
             )
             last = result[-1]

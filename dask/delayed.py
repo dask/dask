@@ -625,7 +625,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         collections = set()
 
     if not (nout is None or (type(nout) is int and nout >= 0)):
-        raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
+        raise ValueError(f"nout must be None or a non-negative integer, got {nout}")
     if task is obj:
         if isinstance(obj, TaskRef):
             name = obj.key
@@ -865,7 +865,7 @@ class DelayedAttr(Delayed):
     __slots__ = ("_obj", "_attr")
 
     def __init__(self, obj, attr):
-        key = "getattr-%s" % tokenize(obj, attr, pure=True)
+        key = f"getattr-{tokenize(obj, attr, pure=True)}"
         super().__init__(key, None)
         self._obj = obj
         self._attr = attr

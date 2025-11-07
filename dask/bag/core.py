@@ -697,7 +697,7 @@ class Bag(DaskMethodsMixin):
         if not isinstance(random_state, Random):
             random_state = Random(random_state)
 
-        name = "random-sample-%s" % tokenize(self, prob, random_state.getstate())
+        name = f"random-sample-{tokenize(self, prob, random_state.getstate())}"
         state_data = random_state_data_python(self.npartitions, random_state)
         dsk = {
             (name, i): (reify, (random_sample, (self.name, i), state, prob))
@@ -1188,7 +1188,7 @@ class Bag(DaskMethodsMixin):
             if other.npartitions == 1:
                 dsk.update(other.dask)
                 other = other.__dask_keys__()[0]
-                dsk["join-%s-other" % name] = (list, other)
+                dsk[f"join-{name}-other"] = (list, other)
             else:
                 msg = (
                     "Multi-bag joins are not implemented. "
@@ -1201,7 +1201,7 @@ class Bag(DaskMethodsMixin):
         elif not isinstance(other, Iterable):
             msg = (
                 "Joined argument must be single-partition Bag, "
-                " delayed object, or Iterable, got %s" % type(other).__name
+                f" delayed object, or Iterable, got {type(other).__name}"
             )
             raise TypeError(msg)
 

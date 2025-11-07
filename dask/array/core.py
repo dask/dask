@@ -1079,7 +1079,7 @@ def broadcast_chunks(*chunkss):
         else:
             step2 = [c for c in step1 if c != (1,)]
         if len(set(step2)) != 1:
-            raise ValueError("Chunks do not align: %s" % str(step2))
+            raise ValueError(f"Chunks do not align: {str(step2)}")
         result.append(step2[0])
     return tuple(result)
 
@@ -1253,8 +1253,7 @@ def blockdims_from_blockshape(shape, chunks):
         raise TypeError("Must supply shape= keyword argument")
     if np.isnan(sum(shape)) or np.isnan(sum(chunks)):
         raise ValueError(
-            "Array chunk sizes are unknown. shape: %s, chunks: %s%s"
-            % (shape, chunks, unknown_chunk_message)
+            f"Array chunk sizes are unknown. shape: {shape}, chunks: {chunks}{unknown_chunk_message}"
         )
     if not all(map(is_integer, chunks)):
         raise ValueError("chunks can only contain integers.")
@@ -3035,7 +3034,7 @@ class Array(DaskMethodsMixin):
 def ensure_int(f):
     i = int(f)
     if i != f:
-        raise ValueError("Could not coerce %f to integer" % f)
+        raise ValueError(f"Could not coerce {f:f} to integer")
     return i
 
 
@@ -3178,7 +3177,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     if shape and len(chunks) != len(shape):
         raise ValueError(
             "Chunks and shape must be of the same length/dimension. "
-            "Got chunks=%s, shape=%s" % (chunks, shape)
+            f"Got chunks={chunks}, shape={shape}"
         )
     if -1 in chunks or None in chunks:
         chunks = tuple(s if c == -1 or c is None else c for c, s in zip(chunks, shape))
@@ -3193,7 +3192,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
             elif parsed != limit:
                 raise ValueError(
                     "Only one consistent value of limit or chunk is allowed."
-                    "Used %s != %s" % (parsed, limit)
+                    f"Used {parsed} != {limit}"
                 )
     # Substitute byte limits with 'auto' now that limit is set.
     chunks = tuple("auto" if isinstance(c, str) and c != "auto" else c for c in chunks)
@@ -3220,7 +3219,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
         ):
             raise ValueError(
                 "Chunks do not add up to shape. "
-                "Got chunks=%s, shape=%s" % (chunks, shape)
+                f"Got chunks={chunks}, shape={shape}"
             )
     if allints or isinstance(sum(sum(_) for _ in chunks), int):
         # Fastpath for when we already know chunks contains only integers
@@ -3318,7 +3317,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         ):
             raise ValueError(
                 "Can not perform automatic rechunking with unknown "
-                "(nan) chunk sizes.%s" % unknown_chunk_message
+                f"(nan) chunk sizes.{unknown_chunk_message}"
             )
 
     limit = max(1, limit)
@@ -3863,7 +3862,7 @@ def to_zarr(
     if np.isnan(arr.shape).any():
         raise ValueError(
             "Saving a dask array with unknown chunk sizes is not "
-            "currently supported by Zarr.%s" % unknown_chunk_message
+            f"currently supported by Zarr.{unknown_chunk_message}"
         )
 
     if _zarr_v3():
@@ -4152,9 +4151,9 @@ def common_blockdim(blockdims):
 
     if np.isnan(sum(map(sum, blockdims))):
         raise ValueError(
-            "Arrays' chunk sizes (%s) are unknown.\n\n"
+            f"Arrays' chunk sizes ({blockdims}) are unknown.\n\n"
             "A possible solution:\n"
-            "  x.compute_chunk_sizes()" % blockdims
+            "  x.compute_chunk_sizes()"
         )
 
     if len(set(map(sum, non_trivial_dims))) > 1:
@@ -4569,11 +4568,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         if any(map(np.isnan, seq2[0].shape)):
             raise ValueError(
                 "Tried to concatenate arrays with unknown"
-                " shape %s.\n\nTwo solutions:\n"
+                f" shape {str(seq2[0].shape)}.\n\nTwo solutions:\n"
                 "  1. Force concatenation pass"
                 " allow_unknown_chunksizes=True.\n"
                 "  2. Compute shapes with "
-                "[x.compute_chunk_sizes() for x in seq]" % str(seq2[0].shape)
+                "[x.compute_chunk_sizes() for x in seq]"
             )
         raise ValueError("Shapes do not align: %s", [x.shape for x in seq2])
 
@@ -5106,7 +5105,7 @@ def handle_out(out, result):
         if out.shape != result.shape:
             raise ValueError(
                 "Mismatched shapes between result and out parameter. "
-                "out=%s, result=%s" % (str(out.shape), str(result.shape))
+                f"out={str(out.shape)}, result={str(result.shape)}"
             )
         out._chunks = result.chunks
         out.dask = result.dask
@@ -5141,10 +5140,9 @@ def _enforce_dtype(*args, **kwargs):
     if hasattr(result, "dtype") and dtype != result.dtype and dtype != object:
         if not np.can_cast(result, dtype, casting="same_kind"):
             raise ValueError(
-                "Inferred dtype from function %r was %r "
-                "but got %r, which can't be cast using "
+                f"Inferred dtype from function {funcname(function)!r} was {str(dtype)!r} "
+                f"but got {str(result.dtype)!r}, which can't be cast using "
                 "casting='same_kind'"
-                % (funcname(function), str(dtype), str(result.dtype))
             )
         if np.isscalar(result):
             # scalar astype method doesn't take the keyword arguments, so
@@ -5213,9 +5211,9 @@ def broadcast_to(x, shape, chunks=None, meta=None):
         for old_bd, new_bd in zip(x.chunks, chunks[ndim_new:]):
             if old_bd != new_bd and old_bd != (1,):
                 raise ValueError(
-                    "cannot broadcast chunks %s to chunks %s: "
+                    f"cannot broadcast chunks {x.chunks} to chunks {chunks}: "
                     "new chunks must either be along a new "
-                    "dimension or a dimension of size 1" % (x.chunks, chunks)
+                    "dimension or a dimension of size 1"
                 )
 
     name = "broadcast_to-" + tokenize(x, shape, chunks)
@@ -5693,7 +5691,7 @@ def _vindex(x, *indexes):
             if ((ind >= size) | (ind < -size)).any():
                 raise IndexError(
                     "vindex key has entries out of bounds for "
-                    "indexing along axis %s of size %s: %r" % (i, size, ind)
+                    f"indexing along axis {i} of size {size}: {ind!r}"
                 )
             ind %= size
             array_indexes[i] = ind
@@ -5996,7 +5994,7 @@ def from_npy_stack(dirname, mmap_mode="r"):
     chunks = info["chunks"]
     axis = info["axis"]
 
-    name = "from-npy-stack-%s" % dirname
+    name = f"from-npy-stack-{dirname}"
     keys = list(product([name], *[range(len(c)) for c in chunks]))
     values = [
         (np.load, os.path.join(dirname, "%d.npy" % i), mmap_mode)
