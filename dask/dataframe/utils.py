@@ -129,8 +129,8 @@ def insert_meta_param_description(*args, **kwargs):
             parameter_header = "Parameters\n%s----------" % indent[4:]
             first, last = re.split("Parameters\\n[ ]*----------", f.__doc__)
             parameters, rest = last.split("\n\n", 1)
-            f.__doc__ = "{}{}{}\n{}{}\n\n{}".format(
-                first, parameter_header, parameters, indent[4:], descr, rest
+            f.__doc__ = (
+                f"{first}{parameter_header}{parameters}\n{indent[4:]}{descr}\n\n{rest}"
             )
     return f
 
@@ -355,10 +355,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     # Notice, we use .__class__ as opposed to type() in order to support
     # object proxies see <https://github.com/dask/dask/pull/6981>
     if x.__class__ != meta.__class__:
-        errmsg = "Expected partition of type `{}` but got `{}`".format(
-            typename(type(meta)),
-            typename(type(x)),
-        )
+        errmsg = f"Expected partition of type `{typename(type(meta))}` but got `{typename(type(x))}`"
     elif is_dataframe_like(meta):
         dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, sort=True)
         bad_dtypes = [

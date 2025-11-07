@@ -172,8 +172,8 @@ def read_sql_query(
             divisions = np.linspace(mini, maxi, npartitions + 1, dtype=dtype).tolist()
         else:
             raise TypeError(
-                'Provided index column is of type "{}".  If divisions is not provided the '
-                "index column type must be numeric or datetime.".format(dtype)
+                f'Provided index column is of type "{dtype}".  If divisions is not provided the '
+                "index column type must be numeric or datetime."
             )
 
     parts = []
