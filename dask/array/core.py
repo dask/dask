@@ -1613,14 +1613,13 @@ class Array(DaskMethodsMixin):
         >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
         dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5), chunktype=numpy.ndarray>
         """
-        chunksize = str(self.chunksize)
         name = self.name.rsplit("-", 1)[0]
         return (
             "dask.array<{}, shape={}, dtype={}, chunksize={}, chunktype={}.{}>".format(
                 name,
                 self.shape,
                 self.dtype,
-                chunksize,
+                self.chunksize,
                 type(self._meta).__module__.split(".")[0],
                 type(self._meta).__name__,
             )
@@ -3673,9 +3672,9 @@ def from_array(
 
     if name in (None, True):
         token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
-        name = name or "array-" + token
+        name = name or f"array-{token}"
     elif name is False:
-        name = "array-" + str(uuid.uuid1())
+        name = f"array-{uuid.uuid1()}"
 
     if lock is True:
         lock = SerializableLock()
@@ -5962,7 +5961,7 @@ def to_npy_stack(dirname, x, axis=0):
     with open(os.path.join(dirname, "info"), "wb") as f:
         pickle.dump(meta, f)
 
-    name = "to-npy-stack-" + str(uuid.uuid1())
+    name = f"to-npy-stack-{uuid.uuid1()}"
     dsk = {
         (name, i): (np.save, os.path.join(dirname, "%d.npy" % i), key)
         for i, key in enumerate(core.flatten(xx.__dask_keys__()))
