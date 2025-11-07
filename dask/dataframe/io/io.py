@@ -155,7 +155,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
         if index.npartitions != x.numblocks[0]:
             msg = (
                 "The index and array have different numbers of blocks. "
-                "({} != {})".format(index.npartitions, x.numblocks[0])
+                f"({index.npartitions} != {x.numblocks[0]})"
             )
             raise ValueError(msg)
         divisions = index.divisions

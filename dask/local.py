@@ -189,9 +189,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None, keys=None):
         if task is None:
             if dependents[key] and not cache.get(key):
                 raise ValueError(
-                    "Missing dependency {} for dependents {}".format(
-                        key, dependents[key]
-                    )
+                    f"Missing dependency {key} for dependents {dependents[key]}"
                 )
             continue
         elif isinstance(task, DataNode):

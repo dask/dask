@@ -481,6 +481,4 @@ class DataFrameIOLayer(Blockwise):
             return self
 
     def __repr__(self):
-        return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.inputs), self.columns
-        )
+        return f"DataFrameIOLayer<name='{self.name}', n_parts={len(self.inputs)}, columns={self.columns}>"

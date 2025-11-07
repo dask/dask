@@ -167,11 +167,9 @@ def warn_dtype_mismatch(left, right, left_on, right_on):
             )
 
             warnings.warn(
-                (
-                    "Merging dataframes with merge column data "
-                    "type mismatches: \n{}\nCast dtypes explicitly to "
-                    "avoid unexpected results."
-                ).format(col_tb)
+                "Merging dataframes with merge column data "
+                f"type mismatches: \n{col_tb}\nCast dtypes explicitly to "
+                "avoid unexpected results."
             )
 
 

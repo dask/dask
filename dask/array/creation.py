@@ -1281,9 +1281,7 @@ def pad(array, pad_width, mode="constant", **kwargs):
         raise ValueError(f"mode '{mode}' is not supported") from e
     if unsupported_kwargs:
         raise ValueError(
-            "unsupported keyword arguments for mode '{}': {}".format(
-                mode, unsupported_kwargs
-            )
+            f"unsupported keyword arguments for mode '{mode}': {unsupported_kwargs}"
         )
 
     if mode in {"maximum", "mean", "median", "minimum"}:

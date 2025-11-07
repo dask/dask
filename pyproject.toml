@@ -128,7 +128,6 @@ ignore = [
     "PLR2044",  # Line with empty comment
     # The following rules will make extensive changes, we will adopt these gradually in the future
     "UP031",    # Replace printf style string formatting with f-strings
-    "UP032",    # Replace .format() style string formatting with f-strings
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]

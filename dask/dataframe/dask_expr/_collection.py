@@ -3986,10 +3986,8 @@ class DataFrame(FrameBase):
                 .format(column="Column", underl="------")
             )
             column_template = textwrap.dedent(
-                """\
-            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}""".format(
-                    column_width=column_width
-                )
+                f"""\
+            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}"""
             )
             column_info = [
                 column_template.format(
