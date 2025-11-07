@@ -147,7 +147,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
             pass
         else:
             raise TypeError(
-                "'workers' annotation must be a sequence of str, a str or a callable, but got {}.".format(annotations["workers"])
+                "'workers' annotation must be a sequence of str, a str or a callable, but got {}.".format(
+                    annotations["workers"]
+                )
             )
 
     if (
@@ -156,7 +158,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
         and not callable(annotations["priority"])
     ):
         raise TypeError(
-            "'priority' annotation must be a Number or a callable, but got {}".format(annotations["priority"])
+            "'priority' annotation must be a Number or a callable, but got {}".format(
+                annotations["priority"]
+            )
         )
 
     if (
@@ -165,7 +169,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
         and not callable(annotations["retries"])
     ):
         raise TypeError(
-            "'retries' annotation must be a Number or a callable, but got {}".format(annotations["retries"])
+            "'retries' annotation must be a Number or a callable, but got {}".format(
+                annotations["retries"]
+            )
         )
 
     if (
@@ -174,7 +180,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
         and not callable(annotations["resources"])
     ):
         raise TypeError(
-            "'resources' annotation must be a dict, but got {}".format(annotations["resources"])
+            "'resources' annotation must be a dict, but got {}".format(
+                annotations["resources"]
+            )
         )
 
     if (
@@ -183,7 +191,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
         and not callable(annotations["allow_other_workers"])
     ):
         raise TypeError(
-            "'allow_other_workers' annotations must be a bool or a callable, but got {}".format(annotations["allow_other_workers"])
+            "'allow_other_workers' annotations must be a bool or a callable, but got {}".format(
+                annotations["allow_other_workers"]
+            )
         )
     ctx_annot = _annotations.get()
     if ctx_annot is None:
@@ -1147,7 +1157,9 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                 return _ensure_not_async(client)
             else:
                 raise ValueError(
-                    "Expected one of [distributed, {}]".format(", ".join(sorted(named_schedulers)))
+                    "Expected one of [distributed, {}]".format(
+                        ", ".join(sorted(named_schedulers))
+                    )
                 )
         elif isinstance(scheduler, Executor):
             # Get `num_workers` from `Executor`'s `_max_workers` attribute.

@@ -3218,8 +3218,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
             for c, s in zip(map(sum, chunks), shape)
         ):
             raise ValueError(
-                "Chunks do not add up to shape. "
-                f"Got chunks={chunks}, shape={shape}"
+                f"Chunks do not add up to shape. Got chunks={chunks}, shape={shape}"
             )
     if allints or isinstance(sum(sum(_) for _ in chunks), int):
         # Fastpath for when we already know chunks contains only integers

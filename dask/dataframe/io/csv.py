@@ -142,9 +142,9 @@ def coerce_dtypes(df, dtypes):
 
         bad_dtypes = sorted(bad_dtypes, key=lambda x: str(x[0]))
         table = asciitable(["Column", "Found", "Expected"], bad_dtypes)
-        dtype_kw = "dtype={{{}}}".format(",\n       ".join(
-            f"{k!r}: '{v}'" for (k, v, _) in bad_dtypes
-        ))
+        dtype_kw = "dtype={{{}}}".format(
+            ",\n       ".join(f"{k!r}: '{v}'" for (k, v, _) in bad_dtypes)
+        )
 
         dtype_msg = (
             f"{table}\n\n"
