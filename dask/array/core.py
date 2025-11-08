@@ -19,7 +19,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Literal, TypeVar, Union, cast
+from typing import Any, Literal, TypeVar, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -101,7 +101,7 @@ try:
 except ImportError:
     ARRAY_TEMPLATE = None
 
-T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
+T_IntOrNaN = int | float  # Should be int | Literal[np.nan]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
@@ -492,8 +492,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
         tb = "".join(traceback.format_tb(exc_traceback))
         suggest = (
             (
-                "Please specify the dtype explicitly using the "
-                "`{dtype}` kwarg.\n\n".format(dtype=suggest_dtype)
+                f"Please specify the dtype explicitly using the `{suggest_dtype}` kwarg.\n\n"
             )
             if suggest_dtype
             else ""
@@ -2052,8 +2051,7 @@ class Array(DaskMethodsMixin):
             key = (key,)
         if any(k is None for k in key):
             raise IndexError(
-                "vindex does not support indexing with None (np.newaxis), "
-                "got {}".format(key)
+                f"vindex does not support indexing with None (np.newaxis), got {key}"
             )
         if all(isinstance(k, slice) for k in key):
             if all(
@@ -2063,7 +2061,7 @@ class Array(DaskMethodsMixin):
             raise IndexError(
                 "vindex requires at least one non-slice to vectorize over "
                 "when the slices are not over the entire array (i.e, x[:]). "
-                "Use normal slicing instead when only using slices. Got: {}".format(key)
+                f"Use normal slicing instead when only using slices. Got: {key}"
             )
         elif any(is_dask_collection(k) for k in key):
             if math.prod(self.numblocks) == 1 and len(key) == 1 and self.ndim == 1:
@@ -2075,9 +2073,7 @@ class Array(DaskMethodsMixin):
             else:
                 raise IndexError(
                     "vindex does not support indexing with dask objects. Call compute "
-                    "on the indexer first to get an evalurated array. Got: {}".format(
-                        key
-                    )
+                    f"on the indexer first to get an evalurated array. Got: {key}"
                 )
         return _vindex(self, *key)
 
@@ -3661,6 +3657,18 @@ def from_array(
 
     previous_chunks = getattr(x, "chunks", None)
 
+    # As of Zarr 3.x, arrays can have a shards attribute. If present,
+    # this defines the smallest array region that is safe to write, and
+    # thus this is a better starting point than the chunks attribute.
+    # We check for chunks AND shards to be somewhat specific to Zarr 3.x arrays
+    if (
+        hasattr(x, "chunks")
+        and hasattr(x, "shards")
+        and (x.shards is not None)
+        and chunks == "auto"
+    ):
+        previous_chunks = x.shards
+
     chunks = normalize_chunks(
         chunks, x.shape, dtype=x.dtype, previous_chunks=previous_chunks
     )
@@ -3877,34 +3885,58 @@ def to_zarr(
                     "Cannot store into in memory Zarr Array using "
                     "the distributed scheduler."
                 )
+        zarr_write_chunks = _get_zarr_write_chunks(z)
+        dask_write_chunks = normalize_chunks(
+            chunks="auto",
+            shape=z.shape,
+            dtype=z.dtype,
+            previous_chunks=zarr_write_chunks,
+        )
 
+        for ax, (dw, zw) in enumerate(
+            zip(dask_write_chunks, zarr_write_chunks, strict=True)
+        ):
+            if len(dw) >= 1:
+                nominal_dask_chunk_size = dw[0]
+                if not nominal_dask_chunk_size % zw == 0:
+                    safe_chunk_size = np.prod(zarr_write_chunks) * max(
+                        1, z.dtype.itemsize
+                    )
+                    msg = (
+                        f"The input Dask array will be rechunked along axis {ax} with chunk size "
+                        f"{nominal_dask_chunk_size}, but a chunk size divisible by {zw} is "
+                        f"required for Dask to write safely to the Zarr array {z}. "
+                        "To avoid risk of data loss when writing to this Zarr array, set the "
+                        '"array.chunk-size" configuration parameter to at least the size in'
+                        " bytes of a single on-disk "
+                        f"chunk (or shard) of the Zarr array, which in this case is "
+                        f"{safe_chunk_size} bytes. "
+                        f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
+                    )
+                    raise PerformanceWarning(msg)
+                    break
         if region is None:
             # Get the appropriate write granularity (shard shape if sharding, else chunk shape)
-            write_chunks = _get_zarr_write_chunks(z)
-            arr = arr.rechunk(write_chunks)
+            arr = arr.rechunk(dask_write_chunks)
             regions = None
         else:
             from dask.array.slicing import new_blockdim, normalize_index
 
-            # For regions, use the appropriate write granularity
-            write_chunks = _get_zarr_write_chunks(z)
-            old_chunks = normalize_chunks(write_chunks, z.shape)
             index = normalize_index(region, z.shape)
             chunks = tuple(
                 tuple(new_blockdim(s, c, r))
-                for s, c, r in zip(z.shape, old_chunks, index)
+                for s, c, r in zip(z.shape, dask_write_chunks, index)
             )
             arr = arr.rechunk(chunks)
             regions = [region]
         return arr.store(
             z, lock=False, regions=regions, compute=compute, return_stored=return_stored
         )
-    else:
-        if not _check_regular_chunks(arr.chunks):
-            # We almost certainly get here because auto chunking has been used
-            # on irregular chunks. The max will then be smaller than auto, so using
-            # max is a safe choice
-            arr = arr.rechunk(tuple(map(max, arr.chunks)))
+    elif not _check_regular_chunks(arr.chunks):
+        # We almost certainly get here because auto chunking has been used
+        # on irregular chunks. The max will then be smaller than auto, so using
+        # max is a safe choice
+        arr = arr.rechunk(tuple(map(max, arr.chunks)))
 
     if region is not None:
         raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")
@@ -4388,11 +4420,9 @@ def block(arrays, allow_unknown_chunksizes=False):
             #  - horribly confusing behaviour that results when tuples are
             #    treated like ndarray
             raise TypeError(
-                "{} is a tuple. "
+                f"{format_index(index)} is a tuple. "
                 "Only lists can be used to arrange blocks, and np.block does "
-                "not allow implicit conversion from tuple to ndarray.".format(
-                    format_index(index)
-                )
+                "not allow implicit conversion from tuple to ndarray."
             )
         if not entering:
             curr_depth = len(index)
@@ -4404,10 +4434,8 @@ def block(arrays, allow_unknown_chunksizes=False):
 
         if list_ndim is not None and list_ndim != curr_depth:
             raise ValueError(
-                "List depths are mismatched. First element was at depth {}, "
-                "but there is an element at depth {} ({})".format(
-                    list_ndim, curr_depth, format_index(index)
-                )
+                f"List depths are mismatched. First element was at depth {list_ndim}, "
+                f"but there is an element at depth {curr_depth} ({format_index(index)})"
             )
         list_ndim = curr_depth
 

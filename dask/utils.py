@@ -846,11 +846,7 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0, inconsistencies=None)
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from {}.{}.{}.\n\n".format(
-            cls.__module__,
-            cls.__name__,
-            name,
-        )
+        l1 = f"This docstring was copied from {cls.__module__}.{cls.__name__}.{name}.\n\n"
     else:
         l1 = f"This docstring was copied from {cls.__name__}.{name}.\n\n"
     l2 = "Some inconsistencies with the Dask version may exist."
@@ -2196,8 +2192,6 @@ def show_versions() -> None:
             result[modname] = None
 
     stdout.writelines(dumps(result, indent=2))
-
-    return
 
 
 def maybe_pluralize(count, noun, plural_form=None):

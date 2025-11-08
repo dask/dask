@@ -808,10 +808,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     pure = kwargs.pop("pure", pure)
 
     if dask_key_name is None:
-        name = "{}-{}".format(
-            funcname(func),
-            tokenize(func_token, *args, pure=pure, **kwargs),
-        )
+        name = f"{funcname(func)}-{tokenize(func_token, *args, pure=pure, **kwargs)}"
     else:
         name = dask_key_name
 

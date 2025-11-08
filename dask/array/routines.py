@@ -29,7 +29,7 @@ from dask.array.core import (
     tensordot_lookup,
 )
 from dask.array.creation import arange, diag, empty, indices, tri
-from dask.array.einsumfuncs import einsum  # noqa
+from dask.array.einsumfuncs import einsum  # noqa: F401
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reductions import reduction
 from dask.array.ufunc import multiply, sqrt, true_divide
@@ -701,8 +701,8 @@ def gradient(f, *varargs, axis=None, **kwargs):
             if np.min(c) < kwargs["edge_order"] + 1:
                 raise ValueError(
                     "Chunk size must be larger than edge_order + 1. "
-                    "Minimum chunk for axis {} is {}. Rechunk to "
-                    "proceed.".format(ax, np.min(c))
+                    f"Minimum chunk for axis {ax} is {np.min(c)}. Rechunk to "
+                    "proceed."
                 )
 
         if np.isscalar(varargs[i]):
@@ -976,7 +976,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
             raise TypeError(
                 "Dask types besides Array and Delayed are not supported "
-                "for `histogram`. For argument `{}`, got: {!r}".format(argname, val)
+                f"for `histogram`. For argument `{argname}`, got: {val!r}"
             )
 
     if range is not None:
@@ -1402,7 +1402,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
             raise TypeError(
                 "Dask types besides Array and Delayed are not supported "
-                "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
+                f"for `histogramdd`. For argument `{argname}`, got: {val!r}"
             )
 
     # Require that the chunking of the sample and weights are compatible.
@@ -2086,7 +2086,7 @@ def _asarray_isnull(values):
 def isnull(values):
     """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
-    import pandas as pd  # noqa
+    import pandas as pd  # noqa: F401
 
     return elemwise(_asarray_isnull, values, dtype="bool")
 

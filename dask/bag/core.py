@@ -1442,8 +1442,7 @@ class Bag(DaskMethodsMixin):
             npartitions = self.npartitions
         if npartitions > self.npartitions:
             raise ValueError(
-                "only {} partitions, take "
-                "received {}".format(self.npartitions, npartitions)
+                f"only {self.npartitions} partitions, take received {npartitions}"
             )
 
         token = tokenize(self, k, npartitions)

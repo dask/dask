@@ -33,8 +33,6 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
         if lock:
             lock.release()
 
-    return None
-
 
 def to_hdf(
     df,
@@ -485,8 +483,7 @@ def _one_path_one_key(path, key, start, stop, chunksize):
 
     if start >= stop:
         raise ValueError(
-            "Start row number ({}) is above or equal to stop "
-            "row number ({})".format(start, stop)
+            f"Start row number ({start}) is above or equal to stop row number ({stop})"
         )
 
     return [
@@ -533,8 +530,7 @@ def _get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
                 stops.append(storer.nrows)
             elif stop > storer.nrows:
                 raise ValueError(
-                    "Stop keyword exceeds dataset number "
-                    "of rows ({})".format(storer.nrows)
+                    f"Stop keyword exceeds dataset number of rows ({storer.nrows})"
                 )
             else:
                 stops.append(stop)

@@ -621,15 +621,14 @@ class ArrowDatasetEngine(Engine):
                 # User does not want to set index and an
                 # "unwanted" column has been set to the index
                 df.reset_index(drop=True, inplace=True)
-        else:
-            if set(df.index.names) != set(index) and index_in_columns_and_parts:
-                # The wrong index has been set and it contains
-                # one or more desired columns/partitions
-                df.reset_index(drop=False, inplace=True)
-            elif index_in_columns_and_parts:
-                # The correct index has already been set
-                index = False
-                columns_and_parts = list(set(columns_and_parts) - set(df.index.names))
+        elif set(df.index.names) != set(index) and index_in_columns_and_parts:
+            # The wrong index has been set and it contains
+            # one or more desired columns/partitions
+            df.reset_index(drop=False, inplace=True)
+        elif index_in_columns_and_parts:
+            # The correct index has already been set
+            index = False
+            columns_and_parts = list(set(columns_and_parts) - set(df.index.names))
         df = df[list(columns_and_parts)]
 
         if index:
@@ -719,14 +718,12 @@ class ArrowDatasetEngine(Engine):
             if set(names) != set(df.columns) - set(partition_on):
                 raise ValueError(
                     "Appended columns not the same.\n"
-                    "Previous: {} | New: {}".format(names, list(df.columns))
+                    f"Previous: {names} | New: {list(df.columns)}"
                 )
             elif pd.Series(dtypes).loc[names].tolist() != df[names].dtypes.tolist():
                 # TODO Coerce values for compatible but different dtypes
                 raise ValueError(
-                    "Appended dtypes differ.\n{}".format(
-                        set(dtypes.items()) ^ set(df.dtypes.items())
-                    )
+                    f"Appended dtypes differ.\n{set(dtypes.items()) ^ set(df.dtypes.items())}"
                 )
 
             # Check divisions if necessary
@@ -1187,9 +1184,7 @@ class ArrowDatasetEngine(Engine):
                 raise ValueError(
                     "No partition-columns should be written in the \n"
                     "file unless they are ALL written in the file.\n"
-                    "physical columns: {} | partitions: {}".format(
-                        physical_column_names, partitions
-                    )
+                    f"physical columns: {physical_column_names} | partitions: {partitions}"
                 )
 
         # Get all available column names
@@ -1203,7 +1198,7 @@ class ArrowDatasetEngine(Engine):
             if not set(categories).intersection(all_columns):
                 raise ValueError(
                     "categories not in available columns.\n"
-                    "categories: {} | columns: {}".format(categories, list(all_columns))
+                    f"categories: {categories} | columns: {list(all_columns)}"
                 )
 
             # Make sure all categories are set to "unknown".
@@ -1573,11 +1568,10 @@ class ArrowDatasetEngine(Engine):
                                 else:
                                     cstats += [cmin, cmax, null_count]
                                 cmax_last[name] = cmax
+                            elif single_rg_parts:
+                                s["columns"].append({"name": name})
                             else:
-                                if single_rg_parts:
-                                    s["columns"].append({"name": name})
-                                else:
-                                    cstats += [None, None, None]
+                                cstats += [None, None, None]
                         if gather_statistics:
                             file_row_group_stats[fpath].append(s)
                             if not single_rg_parts:

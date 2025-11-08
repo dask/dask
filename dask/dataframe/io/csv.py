@@ -147,14 +147,14 @@ def coerce_dtypes(df, dtypes):
         )
 
         dtype_msg = (
-            "{table}\n\n"
-            "{exceptions}"
+            f"{table}\n\n"
+            f"{exceptions}"
             "Usually this is due to dask's dtype inference failing, and\n"
             "*may* be fixed by specifying dtypes manually by adding:\n\n"
-            "{dtype_kw}\n\n"
+            f"{dtype_kw}\n\n"
             "to the call to `read_csv`/`read_table`."
-            "{extra}"
-        ).format(table=table, exceptions=exceptions, dtype_kw=dtype_kw, extra=extra)
+            f"{extra}"
+        )
     else:
         dtype_msg = None
 
@@ -162,13 +162,13 @@ def coerce_dtypes(df, dtypes):
         also = " also " if bad_dtypes else " "
         cols = "\n".join("- %s" % c for c in bad_dates)
         date_msg = (
-            "The following columns{also}failed to properly parse as dates:\n\n"
-            "{cols}\n\n"
+            f"The following columns{also}failed to properly parse as dates:\n\n"
+            f"{cols}\n\n"
             "This is usually due to an invalid value in that column. To\n"
             "diagnose and fix it's recommended to drop these columns from the\n"
             "`parse_dates` keyword, and manually convert them to dates later\n"
             "using `dd.to_datetime`."
-        ).format(also=also, cols=cols)
+        )
     else:
         date_msg = None
 
@@ -461,9 +461,9 @@ def read_pandas(
     if kwargs.get("nrows"):
         raise ValueError(
             "The 'nrows' keyword is not supported by "
-            "`dd.{0}`. To achieve the same behavior, it's "
-            "recommended to use `dd.{0}(...)."
-            "head(n=nrows)`".format(reader_name)
+            f"`dd.{reader_name}`. To achieve the same behavior, it's "
+            f"recommended to use `dd.{reader_name}(...)."
+            "head(n=nrows)`"
         )
     if isinstance(kwargs.get("skiprows"), int):
         lastskiprow = firstrow = kwargs.get("skiprows")

@@ -86,7 +86,7 @@ def test_arr_like(
         else:
             assert da_r.name == name
 
-        if "order" == "F":
+        if "order" == "F":  # FIXME: this is clearly a bug!  # noqa: PLR0133
             assert np.isfortran(da_r.compute())
         else:
             assert not np.isfortran(da_r.compute())
