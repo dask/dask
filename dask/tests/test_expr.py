@@ -58,7 +58,6 @@ def test_pickle_cached_properties():
 
     @gen_cluster(client=True, Worker=Nanny, nthreads=[("", 1)])
     async def test(c, s, a):
-
         expr = MyExprCachedProperty(foo=1, bar=2)
         for _ in range(10):
             assert expr.baz == 3

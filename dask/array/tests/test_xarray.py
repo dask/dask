@@ -93,9 +93,9 @@ def test_positional_indexer_multiple_variables():
 def test_xarray_blockwise_fusion_store(compute):
     def custom_scheduler_get(dsk, keys, expected, **kwargs):
         dsk = dsk.__dask_graph__()
-        assert (
-            len(dsk) == expected
-        ), f"False number of tasks got {len(dsk)} but expected {expected}"
+        assert len(dsk) == expected, (
+            f"False number of tasks got {len(dsk)} but expected {expected}"
+        )
         return [42 for _ in keys]
 
     # First test that this mocking stuff works as expecged

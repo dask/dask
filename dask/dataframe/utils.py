@@ -380,8 +380,9 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         )
 
     raise ValueError(
-        "Metadata mismatch found{}.\n\n"
-        "{}".format((f" in `{funcname}`" if funcname else ""), errmsg)
+        "Metadata mismatch found{}.\n\n{}".format(
+            (f" in `{funcname}`" if funcname else ""), errmsg
+        )
     )
 
 

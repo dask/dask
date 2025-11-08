@@ -1160,8 +1160,7 @@ class ArrowDatasetEngine(Engine):
             and index_names
             and (
                 # Only set to `[None]` if pandas metadata includes an index
-                index_names != [None]
-                or pandas_metadata.get("index_columns", None)
+                index_names != [None] or pandas_metadata.get("index_columns", None)
             )
         ):
             index = index_names

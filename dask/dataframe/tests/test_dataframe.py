@@ -1983,7 +1983,6 @@ def test_series_round():
 
 
 def test_repartition():
-
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
     )

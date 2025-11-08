@@ -84,7 +84,6 @@ def _explain_info(expr: BaseExpr):
 
 
 def _explain_details(expr: BaseExpr):
-
     if not isinstance(expr, Expr):
         return {}
     details = {"npartitions": expr.npartitions}

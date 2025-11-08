@@ -557,9 +557,9 @@ class Blockwise(Layer):
             for dep, ind in indices:
                 if ind is not None:
                     # FIXME: The Blockwise API is a little weird this way
-                    assert not isinstance(
-                        dep, TaskRef
-                    ), "TaskRef objects are only allowed for broadcasted inputs with None as index."
+                    assert not isinstance(dep, TaskRef), (
+                        "TaskRef objects are only allowed for broadcasted inputs with None as index."
+                    )
                 if isinstance(dep, BlockwiseDep):
                     name = tokenize(dep)
                     io_deps[name] = dep

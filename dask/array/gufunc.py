@@ -482,17 +482,17 @@ def apply_gufunc(
     # but we use it and validate it anyway just to be sure nothing odd has happened.
     metas = tmp._meta
     if nout is None:
-        assert not isinstance(
-            metas, (list, tuple)
-        ), f"meta changed from single output to multiple output during blockwise: {meta} -> {metas}"
+        assert not isinstance(metas, (list, tuple)), (
+            f"meta changed from single output to multiple output during blockwise: {meta} -> {metas}"
+        )
         metas = (metas,)
     else:
-        assert isinstance(
-            metas, (list, tuple)
-        ), f"meta changed from multiple output to single output during blockwise: {meta} -> {metas}"
-        assert (
-            len(metas) == nout
-        ), f"Number of outputs changed from {nout} to {len(metas)} during blockwise"
+        assert isinstance(metas, (list, tuple)), (
+            f"meta changed from multiple output to single output during blockwise: {meta} -> {metas}"
+        )
+        assert len(metas) == nout, (
+            f"Number of outputs changed from {nout} to {len(metas)} during blockwise"
+        )
 
     ## Prepare output shapes
     loop_output_shape = tmp.shape
@@ -513,9 +513,9 @@ def apply_gufunc(
         output_chunks = loop_output_chunks + core_output_shape
         leaf_name = f"{name}_{i}-{token}"
         leaf_dsk = {
-            (leaf_name,)
-            + key[1:]
-            + core_chunkinds: ((getitem, key, i) if nout else key)
+            (leaf_name,) + key[1:] + core_chunkinds: (
+                (getitem, key, i) if nout else key
+            )
             for key in keys
         }
         graph = HighLevelGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])

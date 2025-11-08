@@ -127,8 +127,7 @@ def from_delayed(
 
     if divisions == "sorted":
         raise NotImplementedError(
-            "divisions='sorted' not supported, please calculate the divisions "
-            "yourself."
+            "divisions='sorted' not supported, please calculate the divisions yourself."
         )
     elif divisions is not None:
         divs = list(divisions)

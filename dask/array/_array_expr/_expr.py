@@ -20,7 +20,6 @@ from dask.utils import cached_cumsum
 
 
 class ArrayExpr(SingletonExpr):
-
     def _operands_for_repr(self):
         return []
 
@@ -168,7 +167,9 @@ def unify_chunks_expr(*args):
                 (
                     chunkss[j]
                     if a.shape[n] > 1
-                    else (a.shape[n],) if not np.isnan(sum(chunkss[j])) else None
+                    else (a.shape[n],)
+                    if not np.isnan(sum(chunkss[j]))
+                    else None
                 )
                 for n, j in enumerate(i)
             )

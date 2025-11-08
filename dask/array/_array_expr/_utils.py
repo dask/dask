@@ -18,7 +18,9 @@ def compute_meta(func, _dtype, *args, **kwargs):
             (
                 x._meta
                 if isinstance(x, ArrayExpr)
-                else meta_from_array(x) if is_arraylike(x) else x
+                else meta_from_array(x)
+                if is_arraylike(x)
+                else x
             )
             for x in args
         ]
@@ -26,7 +28,9 @@ def compute_meta(func, _dtype, *args, **kwargs):
             k: (
                 v._meta
                 if isinstance(v, ArrayExpr)
-                else meta_from_array(v) if is_arraylike(v) else v
+                else meta_from_array(v)
+                if is_arraylike(v)
+                else v
             )
             for k, v in kwargs.items()
         }

@@ -63,7 +63,10 @@ except TypeError:
         return x
 
     ma_divide = np.ma.core._DomainedBinaryOperation(
-        divide, np.ma.core._DomainSafeDivide(), 0, 1  # type: ignore[attr-defined]
+        divide,
+        np.ma.core._DomainSafeDivide(),
+        0,
+        1,  # type: ignore[attr-defined]
     )
 
 
@@ -156,8 +159,7 @@ def moveaxis(a, source, destination):
     destination = normalize_axis_tuple(destination, a.ndim, "destination")
     if len(source) != len(destination):
         raise ValueError(
-            "`source` and `destination` arguments must have "
-            "the same number of elements"
+            "`source` and `destination` arguments must have the same number of elements"
         )
 
     order = [n for n in range(a.ndim) if n not in source]

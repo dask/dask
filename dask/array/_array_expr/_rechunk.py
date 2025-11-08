@@ -86,7 +86,6 @@ class Rechunk(ArrayExpr):
         return chunks
 
     def _lower(self):
-
         if not self.balance and (self.chunks == self.array.chunks):
             return self.array
 

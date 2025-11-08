@@ -635,8 +635,9 @@ def take(outname, inname, chunks, index, axis=0):
         slices = tuple(slices)
         chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks)))
         dsk = {
-            (outname,)
-            + ct: Task((outname,) + ct, getitem, TaskRef((inname,) + ct), slices)
+            (outname,) + ct: Task(
+                (outname,) + ct, getitem, TaskRef((inname,) + ct), slices
+            )
             for ct in chunk_tuples
         }
         return chunks, dsk

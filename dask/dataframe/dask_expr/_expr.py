@@ -155,7 +155,6 @@ class Expr(core.SingletonExpr):
         try:
             return super().__getattr__(key)
         except AttributeError:
-
             if is_dataframe_like(self._meta) and key in self._meta.columns:
                 return self[key]
             raise

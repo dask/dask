@@ -196,8 +196,7 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
         if lambda_ not in _power_div_lambda_names:
             names = repr(list(_power_div_lambda_names.keys()))[1:-1]
             raise ValueError(
-                f"invalid string for lambda_: {lambda_!r}. "
-                f"Valid strings are {names}"
+                f"invalid string for lambda_: {lambda_!r}. Valid strings are {names}"
             )
         lambda_ = _power_div_lambda_names[lambda_]
     elif lambda_ is None:

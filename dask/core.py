@@ -360,7 +360,6 @@ def subs(task, key, val):
 
 
 def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
-
     # Stack-based depth-first search traversal.  This is based on Tarjan's
     # method for topological sorting (see wikipedia for pseudocode)
     if keys is None:
@@ -382,7 +381,6 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
     seen = set()
 
     if dependencies is None:
-
         dependencies = DependenciesMapping(dsk)
 
     for key in keys:

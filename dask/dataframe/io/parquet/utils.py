@@ -434,9 +434,9 @@ def _analyze_paths(file_list, fs, root=False):
     else:
         basepath = _join_path(root).split("/")
         l = len(basepath)
-        assert all(
-            p[:l] == basepath for p in path_parts_list
-        ), "All paths must begin with the given root"
+        assert all(p[:l] == basepath for p in path_parts_list), (
+            "All paths must begin with the given root"
+        )
     out_list = []
     for path_parts in path_parts_list:
         out_list.append(

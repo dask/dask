@@ -154,7 +154,9 @@ def _trim(x, axes, boundary, _overlap_trim_info):
         (
             -ax[1]
             if isinstance(ax, tuple) and ax[1]
-            else -ax if isinstance(ax, Integral) and ax else None
+            else -ax
+            if isinstance(ax, Integral) and ax
+            else None
         )
         for ax in axes
     )

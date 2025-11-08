@@ -247,7 +247,6 @@ class SerializeOnlyOnce:
 
 
 def test_pickle():
-
     def assert_slots_equal(a, b):
         def get_all_slots(obj):
             slots = set()
@@ -358,7 +357,6 @@ def test_async_func():
 
     @gen_test()
     async def _():
-
         t = Task("key-1", afunc, "a", "b")
         assert t.is_coro
         assert await t() == "ab"
@@ -593,7 +591,6 @@ def test_resolve_aliases():
 
 
 def test_resolve_multiple_aliases():
-
     tasks = [
         Task("first", func, 10),
         Alias("second", "first"),
@@ -758,7 +755,6 @@ def test_keys_in_tasks():
 
 
 def test_dependencies_mapping_doesnt_mutate_task():
-
     t = Task("key", func, "a", "b")
     t2 = Task("key2", func, "a", t.ref())
 
@@ -1032,9 +1028,7 @@ def test_dict_class():
 
 
 def test_block_io_fusion():
-
     class SubTask(Task):
-
         @property
         def block_fusion(self) -> bool:
             return True

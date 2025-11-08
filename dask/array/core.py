@@ -4271,7 +4271,9 @@ def unify_chunks(*args, **kwargs):
                 (
                     chunkss[j]
                     if a.shape[n] > 1
-                    else a.shape[n] if not np.isnan(sum(chunkss[j])) else None
+                    else a.shape[n]
+                    if not np.isnan(sum(chunkss[j]))
+                    else None
                 )
                 for n, j in enumerate(i)
             )
@@ -4928,8 +4930,9 @@ def broadcast_shapes(*shapes):
             dim = 0 if 0 in sizes else np.max(sizes).item()
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError(
-                "operands could not be broadcast together with "
-                "shapes {}".format(" ".join(map(str, shapes)))
+                "operands could not be broadcast together with shapes {}".format(
+                    " ".join(map(str, shapes))
+                )
             )
         out.append(dim)
     return tuple(reversed(out))

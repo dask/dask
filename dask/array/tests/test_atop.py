@@ -823,7 +823,8 @@ def test_args_delayed():
 
 
 @pytest.mark.parametrize(
-    "tup", [(1, 2), collections.namedtuple("foo", ["a", "b"])(1, 2)]  # type: ignore[arg-type, call-arg]
+    "tup",
+    [(1, 2), collections.namedtuple("foo", ["a", "b"])(1, 2)],  # type: ignore[arg-type, call-arg]
 )
 def test_namedtuple(tup):
     A = da.random.default_rng().random((20, 20), chunks=(10, 10))

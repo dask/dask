@@ -145,7 +145,6 @@ def test_column_projection_modify_list(df, pdf):
 
 @pytest.mark.parametrize("required_columns", [None, ["z"], ["z", "foo"]])
 def test_column_projection_map_partitions(required_columns):
-
     pdf = pd.DataFrame({"x": [1] * 5, "y": [2] * 5, "z": range(5)})
     df = from_pandas(pdf, npartitions=2)
 

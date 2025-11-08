@@ -283,9 +283,10 @@ def test_map_overlap_multiple_dataframes(
             overlap.seconds - 1 if isinstance(overlap, datetime.timedelta) else overlap
         )
 
-    before_shifted_sum, after_shifted_sum = get_shifted_sum_arg(
-        before
-    ), get_shifted_sum_arg(after)
+    before_shifted_sum, after_shifted_sum = (
+        get_shifted_sum_arg(before),
+        get_shifted_sum_arg(after),
+    )
 
     # DataFrame
     res = map_overlap(

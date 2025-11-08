@@ -481,8 +481,7 @@ class TakeUnknownOneChunk(Slice):
             product(*(range(len(c)) for i, c in enumerate(self.array.chunks)))
         )
         dsk = {
-            (self._name,)
-            + ct: Task(
+            (self._name,) + ct: Task(
                 (self._name,) + ct, getitem, TaskRef((self.array.name,) + ct), sl
             )
             for ct in chunk_tuples

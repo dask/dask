@@ -417,7 +417,6 @@ class RepartitionFreq(Repartition):
 
 
 class RepartitionSize(Repartition):
-
     @functools.cached_property
     def _size(self):
         size = self.operand("partition_size")

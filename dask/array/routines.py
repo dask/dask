@@ -1412,8 +1412,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
             )
         elif not rectangular_sample and weights.numblocks[0] != n_chunks:
             raise ValueError(
-                "Input arrays and weights must have the same shape "
-                "and chunk structure."
+                "Input arrays and weights must have the same shape and chunk structure."
             )
 
     # if bins is a list, tuple, then make sure the length is the same
@@ -2378,8 +2377,12 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
 
     name = "coarsen-" + tokenize(reduction, x, axes, trim_excess)
     dsk = {
-        (name,)
-        + key[1:]: (apply, chunk.coarsen, [reduction, key, axes, trim_excess], kwargs)
+        (name,) + key[1:]: (
+            apply,
+            chunk.coarsen,
+            [reduction, key, axes, trim_excess],
+            kwargs,
+        )
         for key in flatten(x.__dask_keys__())
     }
 

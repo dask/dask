@@ -1333,14 +1333,7 @@ def test_error_if_sample_is_too_small():
 
 
 def test_read_csv_names_not_none():
-    text = (
-        "Alice,100\n"
-        "Bob,-200\n"
-        "Charlie,300\n"
-        "Dennis,400\n"
-        "Edith,-500\n"
-        "Frank,600\n"
-    )
+    text = "Alice,100\nBob,-200\nCharlie,300\nDennis,400\nEdith,-500\nFrank,600\n"
     names = ["name", "amount"]
     with filetext(text) as fn:
         ddf = dd.read_csv(fn, names=names, blocksize=16)

@@ -504,8 +504,7 @@ def reshape_blockwise(
             )
 
         dsk = {
-            (outname,)
-            + tuple(chunk_out): Task(
+            (outname,) + tuple(chunk_out): Task(
                 (outname,) + tuple(chunk_out),
                 _reshape_blockwise,
                 TaskRef((x.name,) + tuple(chunk_in)),
@@ -541,8 +540,7 @@ def reshape_blockwise(
     out_chunk_tuples = list(product(*(range(c) for c in nr_out_chunks)))
 
     dsk = {
-        (outname,)
-        + tuple(chunk_out): Task(
+        (outname,) + tuple(chunk_out): Task(
             (outname,) + tuple(chunk_out),
             _reshape_blockwise,
             TaskRef((x.name,) + tuple(chunk_in)),

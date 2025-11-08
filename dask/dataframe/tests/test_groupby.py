@@ -3172,7 +3172,6 @@ def test_groupby_numeric_only_true(func):
 
 @pytest.mark.parametrize("func", ["cov", "corr"])
 def test_groupby_numeric_only_false_cov_corr(func):
-
     df = pd.DataFrame(
         {
             "float": [1.0, 2.0, 3.0, 4.0, 5, 6.0, 7.0, 8.0],

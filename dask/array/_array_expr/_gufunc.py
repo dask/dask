@@ -460,17 +460,17 @@ def apply_gufunc(
     # but we use it and validate it anyway just to be sure nothing odd has happened.
     metas = tmp._meta
     if nout is None:
-        assert not isinstance(
-            metas, (list, tuple)
-        ), f"meta changed from single output to multiple output during blockwise: {meta} -> {metas}"
+        assert not isinstance(metas, (list, tuple)), (
+            f"meta changed from single output to multiple output during blockwise: {meta} -> {metas}"
+        )
         metas = (metas,)
     else:
-        assert isinstance(
-            metas, (list, tuple)
-        ), f"meta changed from multiple output to single output during blockwise: {meta} -> {metas}"
-        assert (
-            len(metas) == nout
-        ), f"Number of outputs changed from {nout} to {len(metas)} during blockwise"
+        assert isinstance(metas, (list, tuple)), (
+            f"meta changed from multiple output to single output during blockwise: {meta} -> {metas}"
+        )
+        assert len(metas) == nout, (
+            f"Number of outputs changed from {nout} to {len(metas)} during blockwise"
+        )
 
     ## Prepare output shapes
     loop_output_shape = tmp.shape
@@ -571,9 +571,9 @@ class GUfuncLeafExpr(ArrayExpr):
     def _layer(self):
         core_chunkinds = len(self.ocd) * (0,)
         leaf_dsk = {
-            (self._name,)
-            + key[1:]
-            + core_chunkinds: ((getitem, key, self.i) if self.nout else key)
+            (self._name,) + key[1:] + core_chunkinds: (
+                (getitem, key, self.i) if self.nout else key
+            )
             for key in list(flatten(self.array.__dask_keys__()))
         }
         return leaf_dsk

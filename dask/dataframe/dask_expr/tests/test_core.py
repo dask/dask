@@ -41,7 +41,6 @@ class NondeterminisitcToken:
 
 
 def test_expr_nondeterministic_token_pickle_roundtrip():
-
     foo = NondeterminisitcToken()
     assert tokenize(foo) != tokenize(foo)
     assert tokenize(Expr(foo)) != tokenize(Expr(foo))
