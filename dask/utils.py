@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import codecs
+import contextlib
 import functools
 import gc
 import inspect
@@ -2353,22 +2354,15 @@ def is_empty(obj):
         True if the object is considered empty, False otherwise.
     """
     # Check standard sequences
-    try:
+    with contextlib.suppress(Exception):
         return len(obj) == 0
-    except TypeError:
-        pass
 
     # Sparse-like objects
-    if hasattr(obj, "nnz"):
-        try:
-            return obj.nnz == 0
-        except Exception:
-            pass
-    if hasattr(obj, "shape"):
-        try:
-            return 0 in obj.shape
-        except Exception:
-            pass
+    with contextlib.suppress(Exception):
+        return obj.nnz == 0
+
+    with contextlib.suppress(Exception):
+        return 0 in obj.shape
 
     # Fallback: assume non-empty
     return False
