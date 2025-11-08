@@ -52,7 +52,7 @@ try:
 
 except TypeError:
     # Divide with dtype doesn't work on Python 3
-    def divide(x1, x2, out=None, dtype=None):  # type: ignore
+    def divide(x1, x2, out=None, dtype=None):  # type: ignore[misc]
         """Implementation of numpy.divide that works with dtype kwarg.
 
         Temporary compatibility fix for a bug in numpy's version. See
@@ -63,7 +63,7 @@ except TypeError:
         return x
 
     ma_divide = np.ma.core._DomainedBinaryOperation(
-        divide, np.ma.core._DomainSafeDivide(), 0, 1  # type: ignore
+        divide, np.ma.core._DomainSafeDivide(), 0, 1  # type: ignore[attr-defined]
     )
 
 

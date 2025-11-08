@@ -612,7 +612,7 @@ def order(
     assert len(result) == expected_len
     for k in external_keys:
         del result[k]
-    return result  # type: ignore
+    return result  # type: ignore[return-value]
 
 
 def _connecting_to_roots(

@@ -825,7 +825,7 @@ class Expr:
         assert (
             isinstance(operation, tuple)
             and all(issubclass(e, Expr) for e in operation)
-            or issubclass(operation, Expr)  # type: ignore
+            or issubclass(operation, Expr)  # type: ignore[arg-type]
         ), "`operation` must be`Expr` subclass)"
         return (expr for expr in self.walk() if isinstance(expr, operation))
 

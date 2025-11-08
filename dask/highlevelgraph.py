@@ -533,11 +533,11 @@ class HighLevelGraph(Graph):
         # either the keys (Scalar, Item, Delayed) or the first element of the key tuples
         # (Array, Bag, DataFrame, Series). This assumption is not always true.
         try:
-            return self.layers[key][key]  # type: ignore
+            return self.layers[key][key]  # type: ignore[index]
         except KeyError:
             pass
         try:
-            return self.layers[key[0]][key]  # type: ignore
+            return self.layers[key[0]][key]  # type: ignore[index]
         except (KeyError, IndexError, TypeError):
             pass
 

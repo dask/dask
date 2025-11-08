@@ -142,10 +142,10 @@ class CumProd(CumulativeAggregations):
 class CumMax(CumulativeAggregations):
     chunk_operation = M.cummax
     aggregate_operation = staticmethod(methods.cummax_aggregate)
-    neutral_element = -math.inf  # type: ignore
+    neutral_element = -math.inf  # type: ignore[assignment]
 
 
 class CumMin(CumulativeAggregations):
     chunk_operation = M.cummin
     aggregate_operation = staticmethod(methods.cummin_aggregate)
-    neutral_element = math.inf  # type: ignore
+    neutral_element = math.inf  # type: ignore[assignment]
