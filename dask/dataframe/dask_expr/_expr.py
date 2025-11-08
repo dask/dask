@@ -3361,7 +3361,7 @@ class Diff(MapOverlap):
 
     @property
     def before(self):
-        return self.periods if self.periods > 0 else 0
+        return max(0, self.periods)
 
     @property
     def after(self):
@@ -3469,7 +3469,7 @@ class Shift(MapOverlap):
 
     @property
     def before(self):
-        return self.periods if self.periods > 0 else 0
+        return max(0, self.periods)
 
     @property
     def after(self):
