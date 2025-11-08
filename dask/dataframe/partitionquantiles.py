@@ -172,7 +172,7 @@ def tree_width(N, to_binary=False):
         group_size = int(math.log(N))
     num_groups = N // group_size
     if to_binary or num_groups < 16:
-        return 2 ** int(math.log(N / group_size, 2))
+        return 2 ** int(math.log2(N / group_size))
     else:
         return num_groups
 
