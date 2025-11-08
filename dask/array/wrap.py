@@ -125,7 +125,7 @@ def wrap(wrap_func, func, func_like=None, **kwargs):
     """
     if func.__doc__ is not None:
         f.__doc__ = template % {"name": func.__name__} + func.__doc__
-        f.__name__ = "blocked_" + func.__name__
+        f.__name__ = f"blocked_{func.__name__}"
     return f
 
 

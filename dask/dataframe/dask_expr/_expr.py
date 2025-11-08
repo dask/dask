@@ -606,7 +606,7 @@ class Blockwise(Expr):
             head = funcname(self.operation)
         else:
             head = funcname(type(self)).lower()
-        return head + "-" + self.deterministic_token
+        return f"{head}-{self.deterministic_token}"
 
     def _blockwise_arg(self, arg, i):
         """Return a Blockwise-task argument"""
@@ -688,7 +688,7 @@ class MapPartitions(Blockwise):
             head = self.token
         else:
             head = funcname(self.func).lower()
-        return head + "-" + self.deterministic_token
+        return f"{head}-{self.deterministic_token}"
 
     def _broadcast_dep(self, dep: Expr):
         # Always broadcast single-partition dependencies in MapPartitions
@@ -1045,7 +1045,7 @@ class CreateOverlappingPartitions(Expr):
     def _layer(self) -> dict:
         dsk, prevs, nexts = {}, [], []  # type: ignore
 
-        name_prepend = "overlap-prepend-" + self._name
+        name_prepend = f"overlap-prepend-{self._name}"
         if self.before:
             prevs.append(None)
             if isinstance(self.before, numbers.Integral):
@@ -1096,7 +1096,7 @@ class CreateOverlappingPartitions(Expr):
         else:
             prevs.extend([None] * self.frame.npartitions)  # type: ignore
 
-        name_append = "overlap-append-" + self._name
+        name_append = f"overlap-append-{self._name}"
         if self.after:
             if isinstance(self.after, numbers.Integral):
                 after = self.after
@@ -2198,7 +2198,7 @@ class Projection(Elemwise):
     def __str__(self):
         base = str(self.frame)
         if " " in base:
-            base = "(" + base + ")"
+            base = f"({base})"
         return f"{base}[{self.operand('columns')!r}]"
 
     def _divisions(self):
@@ -2367,7 +2367,7 @@ class Lengths(Expr):
             return Lengths(child)
 
     def _layer(self):
-        name = "part-" + self._name
+        name = f"part-{self._name}"
         dsk = {
             (name, i): (len, (self.frame._name, i))
             for i in range(self.frame.npartitions)
@@ -3130,7 +3130,7 @@ class DelayedsExpr(Expr):
 
     @functools.cached_property
     def _name(self):
-        return "delayed-container-" + self.deterministic_token
+        return f"delayed-container-{self.deterministic_token}"
 
     def _layer(self) -> dict:
         from dask.delayed import Delayed
@@ -3812,7 +3812,7 @@ class Fused(Blockwise):
         exprs = sorted(self.exprs, key=M._depth)
         names = [expr._name.split("-")[0] for expr in exprs]
         if len(names) > 4:
-            return names[0] + "-fused-" + names[-1]
+            return f"{names[0]}-fused-{names[-1]}"
         else:
             return "-".join(names)
 

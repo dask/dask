@@ -137,7 +137,7 @@ def to_hdf(
     if dask_kwargs is None:
         dask_kwargs = {}
 
-    name = "to-hdf-" + uuid.uuid1().hex
+    name = f"to-hdf-{uuid.uuid1().hex}"
 
     pd_to_hdf = df._partition_type.to_hdf
 
@@ -271,7 +271,7 @@ def to_hdf(
     else:
         keys = [(name, i) for i in range(df.npartitions)]
 
-    final_name = name + "-final"
+    final_name = f"{name}-final"
     dsk[(final_name, 0)] = (lambda x: None, keys)
     graph = HighLevelGraph.from_collections((name, 0), dsk, dependencies=[df])
 
@@ -375,7 +375,8 @@ def read_hdf(
     if lock is True:
         lock = get_scheduler_lock()
 
-    key = key if key.startswith("/") else "/" + key
+    if not key.startswith("/"):
+        key = f"/{key}"
     # Convert path-like objects to a string
     pattern = stringify_path(pattern)
 

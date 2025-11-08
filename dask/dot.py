@@ -544,6 +544,7 @@ def cytoscape_graph(
     if filename is not None:
         from ipywidgets.embed import embed_minimal_html
 
-        filename = filename if filename.endswith(".html") else filename + ".html"
+        if not filename.endswith(".html"):
+            filename = f"{filename}.html"
         embed_minimal_html(filename, views=[g], title="Dask task graph")
     return g
