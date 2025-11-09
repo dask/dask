@@ -1,0 +1,14 @@
+<strong>Future: {{ key | key_split | html_escape }}</strong>
+<span style="color: var(--jp-ui-font-color2, gray)"> status: </span>
+
+{% if status == "error" %}
+<span style="color: var(--jp-error-color0, red)">{{ status }}</span>,
+{% else %}
+<span style="color: var(--jp-error-color0, black)">{{ status }}</span>,
+{% endif %}
+
+{% if type %}
+<span style="color: var(--jp-ui-font-color2, gray)"> type:</span> {{ type }},
+{% endif %}
+
+<span style="color: var(--jp-ui-font-color2, gray)"> key:</span> {{ key | html_escape }}

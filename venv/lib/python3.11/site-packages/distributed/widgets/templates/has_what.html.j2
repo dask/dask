@@ -1,0 +1,24 @@
+<table>
+    <tr>
+        <th>Worker</th>
+        <th>Key count</th>
+        <th>Key list</th>
+    </tr>
+
+    {% for worker, keys in has_what.items() %}
+    <tr>
+        <td>{{ worker }}</td>
+        <td>{{ keys | length }}</td>
+        <td>
+            <details>
+            <summary style='display:list-item'>Expand</summary>
+            <table>
+            {% for key in keys %}
+                <tr><td>{{ key }}</td></tr>
+            {% endfor %}
+            </table>
+            </details>
+        </td>
+    </tr>
+    {% endfor %}
+</table>

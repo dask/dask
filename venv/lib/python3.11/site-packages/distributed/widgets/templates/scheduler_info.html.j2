@@ -1,0 +1,139 @@
+<div style="">
+    <div>
+        <div style="width: 24px; height: 24px; background-color: #FFF7E5; border: 3px solid #FF6132; border-radius: 5px; position: absolute;"> </div>
+        <div style="margin-left: 48px;">
+            <h3 style="margin-bottom: 0px;">{{ type }}</h3>
+            <p style="color: #9D9D9D; margin-bottom: 0px;">{{ id }}</p>
+            <table style="width: 100%; text-align: left;">
+                <tr>
+                    <td style="text-align: left;">
+                        <strong>Comm:</strong> {{ address }}
+                    </td>
+                    <td style="text-align: left;">
+                        <strong>Workers:</strong> {{ n_workers }} {% if n_workers > workers | length %} (shown below: {{ workers | length }}) {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align: left;">
+                        <strong>Dashboard:</strong> <a href="{{ scheduler | format_dashboard_address }}" target="_blank">{{ scheduler | format_dashboard_address }}</a>
+                    </td>
+                    <td style="text-align: left;">
+                        <strong>Total threads:</strong> {{ total_threads }}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align: left;">
+                        <strong>Started:</strong> {{ started | datetime_from_timestamp | format_time_ago }}
+                    </td>
+                    <td style="text-align: left;">
+                        <strong>Total memory:</strong> {{ total_memory | format_bytes }}
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <details style="margin-left: 48px;">
+        <summary style="margin-bottom: 20px;">
+            <h3 style="display: inline;">Workers</h3>
+        </summary>
+
+        {% for worker_name, worker in workers.items()|sort(attribute='1.name') %}
+        <div style="margin-bottom: 20px;">
+            <div style="width: 24px; height: 24px; background-color: #DBF5FF; border: 3px solid #4CC9FF; border-radius: 5px; position: absolute;"> </div>
+            <div style="margin-left: 48px;">
+            <details>
+                <summary>
+                    <h4 style="margin-bottom: 0px; display: inline;">{{ worker["type"] }}: {{ worker["name"] }}</h4>
+                </summary>
+                <table style="width: 100%; text-align: left;">
+                    <tr>
+                        <td style="text-align: left;">
+                            <strong>Comm: </strong> {{ worker_name }}
+                        </td>
+                        <td style="text-align: left;">
+                            <strong>Total threads: </strong> {{ worker["nthreads"] }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: left;">
+                            <strong>Dashboard: </strong> <a href="{{ worker | format_dashboard_address }}" target="_blank">{{ worker | format_dashboard_address }}</a>
+                        </td>
+                        <td style="text-align: left;">
+                            <strong>Memory: </strong> {{ worker["memory_limit"] | format_bytes }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: left;">
+                            <strong>Nanny: </strong> {{ worker["nanny"] }}
+                        </td>
+                        <td style="text-align: left;"></td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="text-align: left;">
+                            <strong>Local directory: </strong> {{ worker["local_directory"] }}
+                        </td>
+                    </tr>
+
+                    {% if "gpu" in worker %}
+                    <tr>
+                        <td style="text-align: left;">
+                            <strong>GPU: </strong>{{ worker["gpu"]["name"]}}
+                        </td>
+                        <td style="text-align: left;">
+                            <strong>GPU memory: </strong> {{ worker["gpu"]["memory-total"] | format_bytes }}
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    {% if "metrics" in worker %}
+                    <tr>
+                        <td style="text-align: left;">
+                            <strong>Tasks executing: </strong> {{ worker["metrics"]["executing"] }}
+                        </td>
+                        <td style="text-align: left;">
+                            <strong>Tasks in memory: </strong> {{ worker["metrics"]["in_memory"] }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: left;">
+                            <strong>Tasks ready: </strong> {{ worker["metrics"]["ready"] }}
+                        </td>
+                        <td style="text-align: left;">
+                            <strong>Tasks in flight: </strong>{{ worker["metrics"]["in_flight"] }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: left;">
+                            <strong>CPU usage:</strong> {{ worker["metrics"]["cpu"]}}%
+                        </td>
+                        <td style="text-align: left;">
+                            <strong>Last seen: </strong> {{ worker["last_seen"] | datetime_from_timestamp | format_time_ago }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: left;">
+                            <strong>Memory usage: </strong> {{ worker["metrics"]["memory"] | format_bytes}}
+                        </td>
+                        <td style="text-align: left;">
+                            <strong>Spilled bytes: </strong> {{ worker["metrics"]["spilled_bytes"]["disk"] | format_bytes }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: left;">
+                            <strong>Read bytes: </strong> {{ worker["metrics"]["host_net_io"]["read_bps"] | format_bytes }}
+                        </td>
+                        <td style="text-align: left;">
+                            <strong>Write bytes: </strong> {{ worker["metrics"]["host_net_io"]["write_bps"] | format_bytes }}
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                </table>
+            </details>
+            </div>
+        </div>
+        {% endfor %}
+
+    </details>
+</div>

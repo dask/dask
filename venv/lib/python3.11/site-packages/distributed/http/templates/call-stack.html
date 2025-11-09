@@ -1,0 +1,15 @@
+{% extends main.html %}
+{% block content %}
+  <h1 class="title"> {{ title }}</h1>
+
+  {% for worker, stacks in call_stack.items() %}
+    <h2 class="title is-4"> Worker: {{worker}} </h2>
+    {% for task, stack in stacks.items() %}
+      <h3 class="title is-5"> Key: {{task}} </h3>
+      {% for line in stack %}
+      <p> {{ line }} </p>
+      {% end %}
+    {% end %}
+  {% end %}
+
+{% end %}

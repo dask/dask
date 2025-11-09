@@ -1,0 +1,76 @@
+<table class="table is-striped is-hoverable sortable">
+    <thead>
+        <tr>
+            <th> Worker </th>
+            <th> Name </th>
+            <th> Cores </th>
+            <th> Memory </th>
+            <th> Memory use </th>
+            <th> Occupancy </th>
+            <th> Processing </th>
+            <th> In-memory </th>
+            <th> Services</th>
+            <th> Logs </th>
+            <th> Last seen </th>
+            {% if api_enabled %}
+            <th>  </th>
+            {% else %}
+            {% end %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for ws in worker_list %}
+        <tr {{ "style=background-color:#ffcdd2" if time() - ws.last_seen> 60 else ""}}>
+            <td><a href="../worker/{{ url_escape(ws.address) }}.html">{{ws.address}}</a></td>
+            <td> {{ ws.name if ws.name is not None else "" }} </td>
+            <td> {{ ws.nthreads }} </td>
+            <td data-sort="{{ws.memory_limit}}"> {{ format_bytes(ws.memory_limit) if ws.memory_limit is not None else "" }} </td>
+            <td> <progress class="progress" value="{{ ws.metrics['memory'] }}" max="{{ ws.memory_limit }}"></progress>
+            </td>
+            <td data-sort="{{ ws.occupancy }}"> {{ format_time(ws.occupancy) }} </td>
+            <td> {{ len(ws.processing) }} </td>
+            <td> {{ len(ws.has_what) }} </td>
+            {% if 'dashboard' in ws.services %}
+            <td> <a href="../../proxy/{{ ws.services['dashboard'] }}/{{ ws.host }}/status">dashboard</a> </td>
+            {% else %}
+            <td> </td>
+            {% end %}
+            <td> <a href="../logs/{{ url_escape(ws.address) }}.html">logs</a></td>
+            <td data-sort="{{time() - ws.last_seen}}"> {{ format_time(time() - ws.last_seen) }} </td>
+            {% if api_enabled %}
+            <td>
+                <form action="" id="close-worker" method="post" name="asdf">
+                    <button class="button is-default" name="{{ws.address}}">Close</button>
+                </form>
+            </td>
+            {% else %}
+            {% end %}
+        </tr>
+        {% end %}
+    </tbody>
+</table>
+
+<script>
+    const forms = document.querySelectorAll("#close-worker");
+    forms.forEach(p =>
+        p.addEventListener("submit", (event) => {
+        let submitter = event.submitter;
+        let handler = submitter.id;
+        event.preventDefault();
+        closeWorker(submitter.name);
+        })
+    );
+
+    async function closeWorker(address) {
+        try {
+            const response = await fetch("../../api/v1/retire_workers", {
+                method: "POST",
+                body: JSON.stringify({workers: [address]}),
+            });
+            console.log(await response.json());
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+</script>

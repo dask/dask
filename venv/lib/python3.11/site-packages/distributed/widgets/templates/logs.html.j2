@@ -1,0 +1,6 @@
+{% for title, log in logs.items() %}
+    <details>
+    <summary style='display:list-item'>{{ title }}</summary>
+    {{ log._repr_html_() }}
+    </details>
+{% endfor %}

@@ -1,0 +1,67 @@
+{% extends main.html %}
+{% block content %}
+{% set ws = workers[Worker] %}
+{% set worker_list = [ws] %}
+    <h1 class="title"> Worker: {{ ws.address }} </h1>
+      {% include "worker-table.html" %}
+
+    <div class="columns">
+      <div class="column">
+        <div class="content">
+          <h2 class="subtitle"> In Memory </h2>
+          <table class="table is-striped is-hoverable">
+            <tr>
+              <th> Task </th>
+              <th> Bytes </th>
+            </tr>
+            {% for ts in ws.has_what %}
+            <tr>
+              <td> <a href="../task/{{ url_escape(str(ts.key)) }}.html">{{ts.key}}</a></td>
+              <td> {{format_bytes(ts.nbytes)}} </td>
+            </tr>
+            {% end %}
+          </table>
+        </div>
+      </div>
+
+      <div class="column">
+        <div class="content">
+          <h2 class="subtitle"> Processing </h2>
+          <a class="button is-primary" href="../call-stacks/{{ url_escape(ws.address) }}.html">Call Stacks</a>
+          <table class="table is-striped is-hoverable">
+            <tr>
+                <th> Task </th>
+                <th> Priority </th>
+            </tr>
+            {% for ts in sorted(ws.processing, key=lambda ts: ts.priority) %}
+            <tr>
+                <td> <a href="../task/{{ url_escape(str(ts.key)) }}.html">{{ts.key}}</a></td>
+                <td> {{ts.priority }} </td>
+            </tr>
+            {% end %}
+          </table>
+        </div>
+      </div>
+    </div>
+
+    {% if ws.resources %}
+    <div class="content">
+      <h2 class="subtitle"> Resources </h2>
+      <table class="table is-striped is-hoverable">
+        <tr>
+            <th> Resource </th>
+            <th> Consumed </th>
+            <th> Total </th>
+        </tr>
+
+        {% for resource in ws.resources %}
+        <tr>
+            <td> {{ resource }} </td>
+            <td> {{ ws.used_resources[resource] }} </td>
+            <td> {{ ws.resources[resource] }} </td>
+        </tr>
+        {% end %}
+      </table>
+    </div>
+    {% end %}
+{% end %}

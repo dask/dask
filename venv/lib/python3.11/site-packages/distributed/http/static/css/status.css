@@ -1,0 +1,58 @@
+#status-fluid {
+  display: grid;
+  height: 100%;
+}
+
+@media (min-width: 0px) {
+  #status-fluid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 90px 2fr 6fr 2fr;
+  }
+  #status-cluster-memory {
+    grid-column: 1 / span 2;
+    grid-row: 1;
+  }
+  #status-workers-memory {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  #status-processing {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  #status-tasks {
+    grid-column: 1 / span 2;
+    grid-row: 3;
+  }
+  #status-progress {
+    grid-column: 1 / span 2;
+    grid-row: 4;
+  }
+}
+
+@media (min-width: 992px) {
+  #status-fluid {
+    grid-template-columns: 1fr 3fr;
+    grid-template-rows: 100px 4fr 1fr 1fr 4fr;
+  }
+  #status-cluster-memory {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  #status-workers-memory {
+    grid-column: 1;
+    grid-row: 2 / span 2;
+  }
+  #status-processing {
+    grid-column: 1;
+    grid-row: 4 / span 2;
+  }
+  #status-tasks {
+    grid-column: 2;
+    grid-row: 1 / span 4;
+  }
+  #status-progress {
+    grid-column: 2;
+    grid-row: 5;
+  }
+}
