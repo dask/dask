@@ -13,7 +13,7 @@ from operator import add
 
 from distributed import Client, SchedulerPlugin, futures_of, wait
 from distributed.utils_test import (  # noqa: F401
-    cleanup,  # noqa: F401
+    cleanup,
     cluster,
     cluster_fixture,
     gen_cluster,
