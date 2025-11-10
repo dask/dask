@@ -23,9 +23,11 @@ from dask._task_spec import List, Task
 from dask.bag.core import (
     Bag,
     collect,
+    empty_safe_apply,
     from_delayed,
     lazify,
     lazify_task,
+    no_result,
     partition,
     reduceby,
     reify,
@@ -1748,3 +1750,66 @@ def test_map_total_mem_usage():
     c = b.map(lambda x: x)
     total_mem_c = sum(c.map_partitions(total_mem_usage).compute())
     assert total_mem_b == total_mem_c
+
+
+def test_reify_empty_iterator():
+    seq = iter([])
+    result = reify(seq)
+    # It should return the same empty iterator (or equivalent)
+    assert list(result) == []
+
+
+def test_reify_iterator_of_iterators():
+    seq = iter([iter([1, 2]), iter([3, 4])])
+    result = reify(seq)
+    # Each nested iterator should be materialized into a list
+    assert result == [[1, 2], [3, 4]]
+
+
+def test_empty_safe_apply_with_fake_sparse():
+    class FakeSparse:
+        def __init__(self, nnz):
+            self.nnz = nnz
+
+    def f(x):
+        return "called"
+
+    assert empty_safe_apply(f, FakeSparse(0), is_last=False) is no_result
+    assert empty_safe_apply(f, FakeSparse(5), is_last=False) == "called"
+
+
+def test_empty_safe_apply_numpy():
+    np = pytest.importorskip("numpy")
+
+    def f(x):
+        return "ok"
+
+    assert empty_safe_apply(f, np.array([]), is_last=False) is no_result
+    assert empty_safe_apply(f, np.array([1, 2]), is_last=False) == "ok"
+
+
+@pytest.mark.parametrize("sparse_type", ["csr", "csc", "coo"])
+def test_empty_safe_apply_with_scipy_sparse(sparse_type):
+    """Check behavior with real SciPy sparse matrices."""
+    np = pytest.importorskip("numpy")
+    sp = pytest.importorskip("scipy.sparse")
+
+    def f(x):
+        return "ok"
+
+    sparse_constructor = {
+        "csr": sp.csr_matrix,
+        "csc": sp.csc_matrix,
+        "coo": sp.coo_matrix,
+    }[sparse_type]
+
+    # Empty sparse matrix (no stored elements)
+    empty_mat = sparse_constructor((0, 0))
+    assert empty_safe_apply(f, empty_mat, is_last=False) is no_result
+
+    # Non-empty sparse matrix
+    data = np.array([1, 2, 3])
+    row = np.array([0, 1, 2])
+    col = np.array([0, 1, 2])
+    non_empty = sp.coo_matrix((data, (row, col)), shape=(3, 3)).asformat(sparse_type)
+    assert empty_safe_apply(f, non_empty, is_last=False) == "ok"
