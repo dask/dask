@@ -103,6 +103,7 @@ line-length = 120
 # We specify additional rules with extend-select.
 extend-select = [
     "B",
+    "TID",
     "PLR",
     "UP",
 ]
