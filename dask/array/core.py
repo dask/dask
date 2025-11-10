@@ -61,9 +61,8 @@ from dask.base import (
     persist,
     tokenize,
 )
-from dask.blockwise import BlockwiseDep
+from dask.blockwise import BlockwiseDep, broadcast_dimensions
 from dask.blockwise import blockwise as core_blockwise
-from dask.blockwise import broadcast_dimensions
 from dask.context import globalmethod
 from dask.core import quote, reshapelist
 from dask.delayed import Delayed, delayed
