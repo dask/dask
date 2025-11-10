@@ -199,7 +199,6 @@ platform = "linux"
 disallow_untyped_decorators = true
 ignore_missing_imports = true
 no_implicit_optional = true
-show_error_codes = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unreachable = true
