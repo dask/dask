@@ -112,7 +112,7 @@ class Expr:
     def tree_repr(self):
         return os.linesep.join(self._tree_repr_lines())
 
-    def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+    def analyze(self, filename: str | None = None, format: str | None = None) -> Any:
         from dask.dataframe.dask_expr._expr import Expr as DFExpr
         from dask.dataframe.dask_expr.diagnostics import analyze
 
