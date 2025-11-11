@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("distributed")
 
-from distributed.utils_test import *  # noqa: F401, F403
+from distributed.utils_test import *  # noqa: F403
 
 from dask.dataframe.dask_expr import from_pandas
 from dask.dataframe.dask_expr.tests._util import _backend_library
