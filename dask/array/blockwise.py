@@ -225,8 +225,7 @@ def blockwise(
                 and arg.ndim != len(ind)
             ):
                 raise ValueError(
-                    "Index string %s does not match array dimension %d"
-                    % (ind, arg.ndim)
+                    f"Index string {ind} does not match array dimension {arg.ndim}"
                 )
             if not isinstance(arg, ArrayBlockwiseDep):
                 numblocks[arg.name] = arg.numblocks

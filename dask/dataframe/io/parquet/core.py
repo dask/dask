@@ -583,9 +583,8 @@ def set_index_columns(meta, index, columns, auto_index_allowed):
 
     if not set(columns).issubset(set(meta.columns)):
         raise ValueError(
-            "The following columns were not found in the dataset %s\n"
-            "The following columns were found %s"
-            % (set(columns) - set(meta.columns), meta.columns)
+            f"The following columns were not found in the dataset {set(columns) - set(meta.columns)}\n"
+            f"The following columns were found {meta.columns}"
         )
 
     if index:

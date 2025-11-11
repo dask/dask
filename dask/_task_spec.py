@@ -732,7 +732,7 @@ class Task(GraphNode):
             if kwargs:
                 if label_size2 > 5:
                     kwargs_repr = ", " + ", ".join(
-                        f"{k}={repr(v)}" for k, v in sorted(kwargs.items())
+                        f"{k}={v!r}" for k, v in sorted(kwargs.items())
                     )
                 else:
                     kwargs_repr = ", ..."

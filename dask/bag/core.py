@@ -517,7 +517,7 @@ class Bag(DaskMethodsMixin):
         return type(self)(dsk, name, self.npartitions)
 
     def __str__(self):
-        return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
+        return f"dask.bag<{key_split(self.name)}, npartitions={self.npartitions}>"
 
     __repr__ = __str__
 
@@ -697,7 +697,7 @@ class Bag(DaskMethodsMixin):
         if not isinstance(random_state, Random):
             random_state = Random(random_state)
 
-        name = "random-sample-%s" % tokenize(self, prob, random_state.getstate())
+        name = f"random-sample-{tokenize(self, prob, random_state.getstate())}"
         state_data = random_state_data_python(self.npartitions, random_state)
         dsk = {
             (name, i): (reify, (random_sample, (self.name, i), state, prob))
@@ -1188,7 +1188,7 @@ class Bag(DaskMethodsMixin):
             if other.npartitions == 1:
                 dsk.update(other.dask)
                 other = other.__dask_keys__()[0]
-                dsk["join-%s-other" % name] = (list, other)
+                dsk[f"join-{name}-other"] = (list, other)
             else:
                 msg = (
                     "Multi-bag joins are not implemented. "
@@ -1201,7 +1201,7 @@ class Bag(DaskMethodsMixin):
         elif not isinstance(other, Iterable):
             msg = (
                 "Joined argument must be single-partition Bag, "
-                " delayed object, or Iterable, got %s" % type(other).__name
+                f" delayed object, or Iterable, got {type(other).__name}"
             )
             raise TypeError(msg)
 
@@ -1968,7 +1968,7 @@ def bag_range(n, npartitions):
     [0, 1, 2, 3, 4]
     """
     size = n // npartitions
-    name = "range-%d-npartitions-%d" % (n, npartitions)
+    name = f"range-{n}-npartitions-{npartitions}"
     ijs = list(enumerate(take(npartitions, range(0, n, size))))
     dsk = {(name, i): (reify, (range, j, min(j + size, n))) for i, j in ijs}
 
@@ -2635,7 +2635,7 @@ def repartition_npartitions(bag, npartitions):
     if npartitions == bag.npartitions:
         return bag
 
-    new_name = "repartition-%d-%s" % (npartitions, tokenize(bag, npartitions))
+    new_name = f"repartition-{npartitions}-{tokenize(bag, npartitions)}"
     if bag.npartitions > npartitions:
         ratio = bag.npartitions / npartitions
         new_partitions_boundaries = [

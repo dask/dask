@@ -222,9 +222,7 @@ def flip(m, axis=None):
         for ax in axis:
             sl[ax] = slice(None, None, -1)
     except IndexError as e:
-        raise ValueError(
-            f"`axis` of {str(axis)} invalid for {str(m.ndim)}-D array"
-        ) from e
+        raise ValueError(f"`axis` of {axis} invalid for {m.ndim}-D array") from e
     sl = tuple(sl)
 
     return m[sl]
@@ -582,7 +580,7 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
     if n == 0:
         return a
     if n < 0:
-        raise ValueError("order must be non-negative but got %d" % n)
+        raise ValueError(f"order must be non-negative but got {n}")
 
     combined = []
     if prepend is not None:

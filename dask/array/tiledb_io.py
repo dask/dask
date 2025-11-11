@@ -68,7 +68,7 @@ def from_tiledb(uri, attribute=None, chunks=None, storage_options=None, **kwargs
 
     assert len(chunks) == tdb.schema.ndim
 
-    return core.from_array(tdb, chunks, name="tiledb-%s" % uri)
+    return core.from_array(tdb, chunks, name=f"tiledb-{uri}")
 
 
 def to_tiledb(

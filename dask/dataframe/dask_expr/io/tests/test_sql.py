@@ -14,7 +14,7 @@ pytest.importorskip("sqlalchemy")
 
 def test_shuffle_after_read_sql():
     with tmpfile() as f:
-        uri = "sqlite:///%s" % f
+        uri = f"sqlite:///{f}"
 
         df = pd.DataFrame(
             {

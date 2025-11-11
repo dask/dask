@@ -181,9 +181,9 @@ def _raise_if_object_series(x, funcname):
     """
     if x.ndim == 1 and hasattr(x, "dtype"):
         if x.dtype == object:
-            raise ValueError("`%s` not supported with object series" % funcname)
+            raise ValueError(f"`{funcname}` not supported with object series")
         elif is_string_dtype(x):
-            raise ValueError("`%s` not supported with string series" % funcname)
+            raise ValueError(f"`{funcname}` not supported with string series")
 
 
 def _is_any_real_numeric_dtype(arr_or_dtype):

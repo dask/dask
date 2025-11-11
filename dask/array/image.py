@@ -49,9 +49,9 @@ def imread(filename, imread=None, preprocess=None):
     imread = imread or sk_imread
     filenames = sorted(glob(filename))
     if not filenames:
-        raise ValueError("No files found under name %s" % filename)
+        raise ValueError(f"No files found under name {filename}")
 
-    name = "imread-%s" % tokenize(filenames, map(os.path.getmtime, filenames))
+    name = f"imread-{tokenize(filenames, map(os.path.getmtime, filenames))}"
 
     sample = imread(filenames[0])
     if preprocess:

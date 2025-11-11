@@ -230,9 +230,9 @@ def _deprecated_kwarg(
             if old_arg_value is not no_default:
                 if new_arg_name is None:
                     msg = (
-                        f"the {repr(old_arg_name)} keyword is deprecated and "
+                        f"the {old_arg_name!r} keyword is deprecated and "
                         "will be removed in a future version. Please take "
-                        f"steps to stop the use of {repr(old_arg_name)}"
+                        f"steps to stop the use of {old_arg_name!r}"
                     ) + comment_
                     warnings.warn(msg, FutureWarning, stacklevel=stacklevel)
                     kwargs[old_arg_name] = old_arg_value
@@ -244,22 +244,22 @@ def _deprecated_kwarg(
                     else:
                         new_arg_value = mapping.get(old_arg_value, old_arg_value)
                     msg = (
-                        f"the {old_arg_name}={repr(old_arg_value)} keyword is "
+                        f"the {old_arg_name}={old_arg_value!r} keyword is "
                         "deprecated, use "
-                        f"{new_arg_name}={repr(new_arg_value)} instead."
+                        f"{new_arg_name}={new_arg_value!r} instead."
                     )
                 else:
                     new_arg_value = old_arg_value
                     msg = (
-                        f"the {repr(old_arg_name)} keyword is deprecated, "
-                        f"use {repr(new_arg_name)} instead."
+                        f"the {old_arg_name!r} keyword is deprecated, "
+                        f"use {new_arg_name!r} instead."
                     )
 
                 warnings.warn(msg + comment_, FutureWarning, stacklevel=stacklevel)
                 if kwargs.get(new_arg_name) is not None:
                     msg = (
-                        f"Can only specify {repr(old_arg_name)} "
-                        f"or {repr(new_arg_name)}, not both."
+                        f"Can only specify {old_arg_name!r} "
+                        f"or {new_arg_name!r}, not both."
                     )
                     raise TypeError(msg)
                 kwargs[new_arg_name] = new_arg_value
@@ -787,7 +787,7 @@ class Dispatch:
             func = self.dispatch(object)
             return func.__doc__
         except TypeError:
-            return "Single Dispatch for %s" % self.__name__
+            return f"Single Dispatch for {self.__name__}"
 
 
 def ensure_not_exists(filename) -> None:
@@ -1189,7 +1189,7 @@ def asciitable(columns, rows):
     widths = tuple(max(*map(len, x), len(c)) for x, c in zip(zip(*rows), columns))
     row_template = ("|" + (" %%-%ds |" * len(columns))) % widths
     header = row_template % tuple(columns)
-    bar = "+%s+" % "+".join("-" * (w + 2) for w in widths)
+    bar = "+{}+".format("+".join("-" * (w + 2) for w in widths))
     data = "\n".join(row_template % r for r in rows)
     return "\n".join([bar, header, bar, data, bar])
 
@@ -1625,12 +1625,12 @@ def parse_bytes(s: float | str) -> int:
     try:
         n = float(prefix)
     except ValueError as e:
-        raise ValueError("Could not interpret '%s' as a number" % prefix) from e
+        raise ValueError(f"Could not interpret '{prefix}' as a number") from e
 
     try:
         multiplier = byte_sizes[suffix.lower()]
     except KeyError as e:
-        raise ValueError("Could not interpret '%s' as a byte unit" % suffix) from e
+        raise ValueError(f"Could not interpret '{suffix}' as a byte unit") from e
 
     result = n * multiplier
     return int(result)
@@ -1689,7 +1689,7 @@ def format_time(n: float) -> str:
         s = int(n - m * 60)
         return f"{m}m {s}s"
     if n >= 1:
-        return "%.2f s" % n
+        return f"{n:.2f} s"
     if n >= 1e-3:
         return "%.2f ms" % (n * 1e3)
     return "%.2f us" % (n * 1e6)

@@ -17,7 +17,7 @@ from dask.utils import tmpdir
 def random_images(n, shape):
     with tmpdir() as dirname:
         for i in range(n):
-            fn = os.path.join(dirname, "image.%d.png" % i)
+            fn = os.path.join(dirname, f"image.{i}.png")
             x = np.random.randint(0, 255, size=shape).astype("u1")
             imsave(fn, x, check_contrast=False)
 
