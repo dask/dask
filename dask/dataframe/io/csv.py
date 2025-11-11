@@ -16,9 +16,8 @@ except ImportError:
 import numpy as np
 import pandas as pd
 from fsspec.compression import compr
-from fsspec.core import get_fs_token_paths
+from fsspec.core import get_fs_token_paths, open_files
 from fsspec.core import open as open_file
-from fsspec.core import open_files
 from fsspec.utils import infer_compression
 from pandas.api.types import (
     CategoricalDtype,

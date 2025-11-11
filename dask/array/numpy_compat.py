@@ -25,8 +25,10 @@ else:
         AxisError,
         ComplexWarning,
     )
-    from numpy.core.numeric import normalize_axis_index  # type: ignore[no-redef]
-    from numpy.core.numeric import normalize_axis_tuple  # type: ignore[no-redef]
+    from numpy.core.numeric import (  # type: ignore[no-redef]
+        normalize_axis_index,
+        normalize_axis_tuple,
+    )
 
 
 # Taken from scikit-learn:

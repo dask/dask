@@ -643,9 +643,8 @@ if _array_expr_enabled():
         return inner_func
 
     try:
-        from dask.array._array_expr import Array  # type: ignore
-        from dask.array._array_expr import _overlap as overlap  # type: ignore
         from dask.array._array_expr import (  # type: ignore
+            Array,
             abs,
             absolute,
             add,
@@ -772,6 +771,7 @@ if _array_expr_enabled():
             zeros,
             zeros_like,
         )
+        from dask.array._array_expr import _overlap as overlap  # type: ignore
         from dask.array.reductions import (
             all,
             any,

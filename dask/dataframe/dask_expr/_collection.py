@@ -15,9 +15,13 @@ import pyarrow as pa
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 from pandas import CategoricalDtype
-from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
+from pandas.api.types import (
+    is_bool_dtype,
+    is_datetime64_any_dtype,
+    is_numeric_dtype,
+    is_timedelta64_dtype,
+)
 from pandas.api.types import is_scalar as pd_is_scalar
-from pandas.api.types import is_timedelta64_dtype
 from pandas.core.dtypes.common import is_extension_array_dtype
 from pyarrow import fs as pa_fs
 from tlz import first
