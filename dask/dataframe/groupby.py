@@ -1172,6 +1172,8 @@ def _aggregate_docstring(based_on=None):
             - dict of column names -> function, function name or list of such.
             - None only if named aggregation syntax is used
         split_every : int >= 2 or dict(axis: int), optional 
+            Number of intermediate partitions that may be aggregated at once.
+            This defaults to 8.
             Determines the depth of the recursive aggregation. If set to or more 
             than the number of input chunks, the aggregation will be performed in 
             two steps, one ``chunk`` function per input chunk and a single 
