@@ -298,7 +298,7 @@ def test_combine_similar_no_projection_on_one_branch(tmpdir):
 def test_from_map(tmpdir, meta, label, allow_projection, enforce_metadata):
     pdf = pd.DataFrame({c: range(10) for c in "abcdefghijklmn"})
     dd.from_pandas(pdf, 3).to_parquet(tmpdir, write_index=False)
-    files = sorted(glob.glob(str(tmpdir) + "/*.parquet"))
+    files = sorted(glob.glob(f"{tmpdir}/*.parquet"))
     if allow_projection:
         func = pd.read_parquet
     else:

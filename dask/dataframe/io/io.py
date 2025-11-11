@@ -27,7 +27,7 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
     if x.ndim > 2:
         raise ValueError(
             "from_array does not input more than 2D array, got"
-            " array with shape %r" % (x.shape,)
+            f" array with shape {x.shape!r}"
         )
 
     if index is not None:

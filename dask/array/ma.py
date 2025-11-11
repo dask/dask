@@ -79,7 +79,7 @@ def masked_where(condition, a):
     if cshape and cshape != a.shape:
         raise IndexError(
             "Inconsistent shape between the condition and the "
-            "input (got %s and %s)" % (cshape, a.shape)
+            f"input (got {cshape} and {a.shape})"
         )
     condition = asanyarray(condition)
     a = asanyarray(a)
@@ -141,8 +141,8 @@ def masked_array(data, mask=np.ma.nomask, fill_value=None, **kwargs):
         elif data.shape != mask.shape:
             raise np.ma.MaskError(
                 "Mask and data not compatible: data shape "
-                "is %s, and mask shape is "
-                "%s." % (repr(data.shape), repr(mask.shape))
+                f"is {data.shape!r}, and mask shape is "
+                f"{mask.shape!r}."
             )
         arginds.extend([mask, inds])
 

@@ -404,8 +404,8 @@ def _cov_finalizer(df, cols, std=False):
         y = col_idx_mapping[j]
         idx = x + num_cols * y
         mul_col = f"{i}{j}"
-        ni = df["%s-count" % i]
-        nj = df["%s-count" % j]
+        ni = df[f"{i}-count"]
+        nj = df[f"{j}-count"]
 
         n = np.sqrt(ni * nj)
         div = n - 1
@@ -604,7 +604,7 @@ def _nunique_df_combine(df, levels, sort=False):
 #
 ###############################################################
 def _make_agg_id(func, column):
-    return f"{func!s}-{column!s}-{tokenize(func, column)}"
+    return f"{func}-{column}-{tokenize(func, column)}"
 
 
 def _normalize_spec(spec, non_group_columns):

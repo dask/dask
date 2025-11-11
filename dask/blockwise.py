@@ -221,7 +221,7 @@ _BLOCKWISE_DEFAULT_PREFIX = "__dask_blockwise__"
 
 
 def blockwise_token(i, prefix=_BLOCKWISE_DEFAULT_PREFIX):
-    return prefix + "%d" % i
+    return f"{prefix}{int(i)}"
 
 
 def blockwise(
@@ -1496,7 +1496,7 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
         return toolz.valmap(consolidate, g2)
 
     if g2 and not set(map(len, g2.values())) == {1}:
-        raise ValueError("Shapes do not align %s" % g)
+        raise ValueError(f"Shapes do not align {g}")
 
     return toolz.valmap(toolz.first, g2)
 

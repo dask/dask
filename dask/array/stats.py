@@ -272,8 +272,7 @@ def skewtest(a, axis=0, nan_policy="propagate"):
     n = float(a.shape[axis])
     if n < 8:
         raise ValueError(
-            "skewtest is not valid with less than 8 samples; %i samples"
-            " were given." % int(n)
+            f"skewtest is not valid with less than 8 samples; {int(n)} samples were given."
         )
     y = b2 * math.sqrt(((n + 1) * (n + 3)) / (6.0 * (n - 2)))
     beta2 = (

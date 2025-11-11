@@ -107,7 +107,7 @@ def test_infer_storage_options():
     # - Parsing doesn't lowercase the bucket
     # - The bucket is included in path
     for protocol in ["s3", "gcs", "gs"]:
-        options = infer_storage_options("%s://Bucket-name.com/test.csv" % protocol)
+        options = infer_storage_options(f"{protocol}://Bucket-name.com/test.csv")
         assert options["path"] == "Bucket-name.com/test.csv"
 
     with pytest.raises(KeyError):

@@ -149,9 +149,7 @@ class Generator:
         sizes = list(product(*chunks))
         bitgens = _spawn_bitgens(self._bit_generator, len(sizes))
 
-        name = "da.random.choice-%s" % tokenize(
-            bitgens, size, chunks, a, replace, p, axis, shuffle
-        )
+        name = f"da.random.choice-{tokenize(bitgens, size, chunks, a, replace, p, axis, shuffle)}"
         keys = product([name], *(range(len(bd)) for bd in chunks))
         dsk = {
             k: Task(k, _choice_rng, bitgen, a, size, replace, p, axis, shuffle)
@@ -566,8 +564,8 @@ class RandomState:
             sizes = list(product(*chunks))
             state_data = random_state_data(len(sizes), self._numpy_state)
 
-            name = "da.random.choice-%s" % tokenize(
-                state_data, size, chunks, a, replace, p
+            name = (
+                f"da.random.choice-{tokenize(state_data, size, chunks, a, replace, p)}"
             )
             keys = product([name], *(range(len(bd)) for bd in chunks))
             dsk = {

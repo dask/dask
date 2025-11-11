@@ -1995,7 +1995,7 @@ class Assign(Elemwise):
             sep = "" if i == 1 else ","
             header += f"{sep} {repr(op)[1:-1]}="
         else:
-            header += f"{repr(op)}"
+            header += f"{op!r}"
         return header
 
     def _node_label_args(self):
@@ -2199,7 +2199,7 @@ class Projection(Elemwise):
         base = str(self.frame)
         if " " in base:
             base = "(" + base + ")"
-        return f"{base}[{repr(self.operand('columns'))}]"
+        return f"{base}[{self.operand('columns')!r}]"
 
     def _divisions(self):
         if self.ndim == 0:
@@ -3104,7 +3104,7 @@ class _DelayedExpr(Expr):
     _parameters = ["obj"]
 
     def __str__(self):
-        return f"{type(self).__name__}({str(self.obj)})"
+        return f"{type(self).__name__}({self.obj})"
 
     @property
     def _name(self):
@@ -3126,7 +3126,7 @@ class _DelayedExpr(Expr):
 
 class DelayedsExpr(Expr):
     def __str__(self):
-        return f"{type(self).__name__}({str(self.operands[0])})"
+        return f"{type(self).__name__}({self.operands[0]})"
 
     @functools.cached_property
     def _name(self):
@@ -3818,7 +3818,7 @@ class Fused(Blockwise):
 
     @functools.cached_property
     def _name(self):
-        return f"{str(self)}-{self.deterministic_token}"
+        return f"{self}-{self.deterministic_token}"
 
     def _divisions(self):
         return self.exprs[0]._divisions()

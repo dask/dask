@@ -126,7 +126,7 @@ def insert_meta_param_description(*args, **kwargs):
             f.__doc__ = f.__doc__.replace("$META", descr)
         else:
             # Put it at the end of the parameters section
-            parameter_header = "Parameters\n%s----------" % indent[4:]
+            parameter_header = f"Parameters\n{indent[4:]}----------"
             first, last = re.split("Parameters\\n[ ]*----------", f.__doc__)
             parameters, rest = last.split("\n\n", 1)
             f.__doc__ = (
@@ -349,7 +349,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     ) or is_dask_collection(meta):
         raise TypeError(
             "Expected partition to be DataFrame, Series, or "
-            "Index, got `%s`" % typename(type(meta))
+            f"Index, got `{typename(type(meta))}`"
         )
 
     # Notice, we use .__class__ as opposed to type() in order to support
@@ -380,8 +380,8 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         )
 
     raise ValueError(
-        "Metadata mismatch found%s.\n\n"
-        "%s" % ((" in `%s`" % funcname if funcname else ""), errmsg)
+        "Metadata mismatch found{}.\n\n"
+        "{}".format((f" in `{funcname}`" if funcname else ""), errmsg)
     )
 
 
@@ -497,7 +497,7 @@ def _maybe_sort(a, check_index: bool):
         if is_dataframe_like(a):
             if set(a.index.names) & set(a.columns):
                 a.index.names = [
-                    "-overlapped-index-name-%d" % i for i in range(len(a.index.names))
+                    f"-overlapped-index-name-{i}" for i in range(len(a.index.names))
                 ]
             a = a.sort_values(by=methods.tolist(a.columns))
         else:
