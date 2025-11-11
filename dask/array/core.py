@@ -1224,7 +1224,7 @@ def store(
                 slices = ArraySliceDep(s.chunks)
                 arrays.append(
                     s.map_blocks(
-                        load_chunk,  # type: ignore[arg-type]
+                        load_chunk,
                         # Note: slices / BlockwiseDep have to be passed by arg, not by kwarg
                         slices,
                         lock=lock,

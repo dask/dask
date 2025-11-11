@@ -463,7 +463,7 @@ Expr={expr}"""
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
 
-    def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+    def analyze(self, filename: str | None = None, format: str | None = None) -> Any:
         """Outputs statistics about every node in the expression.
 
         analyze optimizes the expression and triggers a computation. It records statistics
@@ -884,7 +884,7 @@ Expr={expr}"""
         --------
         >>> df = df.shuffle(df.columns[0])  # doctest: +SKIP
         """
-        if on is no_default and not on_index:  # type: ignore[unreachable]
+        if on is no_default and not on_index:
             raise TypeError(
                 "Must shuffle on either columns or the index; currently shuffling on "
                 "neither. Pass column(s) to 'on' or set 'on_index' to True."
@@ -909,7 +909,7 @@ Expr={expr}"""
             elif isinstance(on, (str, int)):
                 on = [on]
             elif on_index:
-                on = []  # type: ignore[unreachable]
+                on = []
             bad_cols = [
                 index_col
                 for index_col in on
