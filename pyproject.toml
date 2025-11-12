@@ -151,7 +151,15 @@ markers = [
     "array_expr: Tests that are array-expr specific",
     "normal_and_array_expr: Tests that should run with and without array-expr",
 ]
-addopts = "-v -rsfE --durations=10 --color=yes --cov-config=pyproject.toml"
+addopts = [
+    "-v",
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+    "--durations=10",
+    "--color=yes",
+    "--cov-config=pyproject.toml",
+]
 filterwarnings = [
     "error:::dask[.*]",
     "error:::pandas[.*]",
@@ -170,6 +178,7 @@ filterwarnings = [
     'ignore:The previous implementation of stack is deprecated and will be removed in a future version of pandas\.:FutureWarning',
     "ignore:distutils Version classes are deprecated. Use packaging.version instead.:DeprecationWarning",
 ]
+log_cli_level = "INFO"
 xfail_strict = true
 # pytest-timeout settings
 # 'thread' kills off the whole test suite. 'signal' only kills the offending test.
@@ -190,7 +199,6 @@ platform = "linux"
 disallow_untyped_decorators = true
 ignore_missing_imports = true
 no_implicit_optional = true
-show_error_codes = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unreachable = true
