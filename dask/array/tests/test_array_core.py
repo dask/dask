@@ -4959,6 +4959,31 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
+@pytest.mark.parametrize(
+    "chunks, shard_factors",
+    [
+        ((3, 3), (6, 6)),
+        ((3, 3), (4, 4)),
+    ],
+)
+def test_zarr_sharding_roundtrip(chunks, shard_factors):
+    zarr = pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.zeros((60, 60), chunks=chunks)
+        remainder = a.shape[0] % (chunks[0] * shard_factors[0])
+        if remainder:
+            with pytest.warns(UserWarning, match="Array shape"):
+                a.to_zarr(d, shard_factors=shard_factors)
+        else:
+            a.to_zarr(d, shard_factors=shard_factors)
+        store = zarr.storage.FsspecStore.from_url(d)
+        z = zarr.open_array(store)
+        assert z.shards == tuple((chunks[0] * shard_factors[0],)) * z.ndim
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
 def test_zarr_roundtrip_with_path_like():
     pytest.importorskip("zarr")
     with tmpdir() as d:
