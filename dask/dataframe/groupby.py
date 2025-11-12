@@ -1171,13 +1171,21 @@ def _aggregate_docstring(based_on=None):
             - list of functions and/or function names, e.g. ``[np.sum, 'mean']``
             - dict of column names -> function, function name or list of such.
             - None only if named aggregation syntax is used
-        split_every : int, optional
+        split_every : int >= 2 or dict(axis: int), optional 
             Number of intermediate partitions that may be aggregated at once.
-            This defaults to 8. If your intermediate partitions are likely to
-            be small (either due to a small number of groups or a small initial
-            partition size), consider increasing this number for better performance.
+            This defaults to 8.
+            Determines the depth of the recursive aggregation. If set to or more 
+            than the number of input chunks, the aggregation will be performed in 
+            two steps, one ``chunk`` function per input chunk and a single 
+            ``aggregate`` function at the end. If set to less than that, an 
+            intermediate ``combine`` function will be used, so that any one 
+            ``combine`` or ``aggregate`` function has no more than ``split_every`` 
+            inputs. The depth of the aggregation graph will be 
+            :math:``log_`split_every`(input chunks along reduced axes)``. Setting to 
+            a low value can reduce cache size and network transfers, at the cost of 
+            more CPU and a larger dask graph.
         split_out : int, optional
-            Number of output partitions. Default is 1.
+            Number of output results in group-by like aggregations (defaults to 1)
         shuffle : bool or str, optional
             Whether a shuffle-based algorithm should be used. A specific
             algorithm name may also be specified (e.g. ``"tasks"`` or ``"p2p"``).
