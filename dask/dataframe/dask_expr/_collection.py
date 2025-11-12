@@ -245,7 +245,7 @@ def _wrap_expr_method_operator(name, class_):
 
     elif class_ == Series:
 
-        def method(self, other, level=None, fill_value=None, axis=0):  # type: ignore
+        def method(self, other, level=None, fill_value=None, axis=0):  # type: ignore[misc]
             if level is not None:
                 raise NotImplementedError("level must be None")
 
@@ -618,7 +618,7 @@ Expr={expr}"""
                 # Raise original error
                 raise err
 
-    def visualize(self, tasks: bool = False, **kwargs):  # type: ignore
+    def visualize(self, tasks: bool = False, **kwargs):  # type: ignore[override]
         """Visualize the expression or task graph
 
         Parameters
@@ -841,7 +841,7 @@ Expr={expr}"""
 
     def shuffle(
         self,
-        on: str | list | no_default = no_default,  # type: ignore
+        on: str | list | no_default = no_default,  # type: ignore[valid-type]
         ignore_index: bool = False,
         npartitions: int | None = None,
         shuffle_method: str | None = None,
@@ -884,7 +884,7 @@ Expr={expr}"""
         --------
         >>> df = df.shuffle(df.columns[0])  # doctest: +SKIP
         """
-        if on is no_default and not on_index:  # type: ignore
+        if on is no_default and not on_index:  # type: ignore[unreachable]
             raise TypeError(
                 "Must shuffle on either columns or the index; currently shuffling on "
                 "neither. Pass column(s) to 'on' or set 'on_index' to True."
@@ -909,7 +909,7 @@ Expr={expr}"""
             elif isinstance(on, (str, int)):
                 on = [on]
             elif on_index:
-                on = []  # type: ignore
+                on = []  # type: ignore[unreachable]
             bad_cols = [
                 index_col
                 for index_col in on
@@ -4763,7 +4763,7 @@ class Index(Series):
     def count(self, split_every=False):
         return new_collection(IndexCount(self, split_every))
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     def index(self):
         raise AttributeError("'Index' object has no attribute 'index'")
 

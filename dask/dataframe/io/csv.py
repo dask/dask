@@ -11,7 +11,7 @@ from dask._task_spec import convert_legacy_task
 try:
     import psutil
 except ImportError:
-    psutil = None  # type: ignore
+    psutil = None  # type: ignore[assignment]
 
 import numpy as np
 import pandas as pd

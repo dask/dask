@@ -205,7 +205,7 @@ class FusedParquetIO(FusedIO):
         table = pa.concat_tables(tables, promote_options="permissive")
         return ReadParquetPyarrowFS._table_to_pandas(table, **to_pandas_kwargs)
 
-    def _task(self, name: str, index: int) -> Task:  # type: ignore
+    def _task(self, name: str, index: int) -> Task:  # type: ignore[override]
         expr = self.operand("_expr")
         bucket = self._fusion_buckets[index]
         fragments_filters = []
@@ -529,7 +529,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
     def _locations(self):
         return self._divisions_and_locations[1]
 
-    def _filtered_task(self, name: Key, index: int) -> DataNode:  # type: ignore
+    def _filtered_task(self, name: Key, index: int) -> DataNode:  # type: ignore[override]
         start, stop = self._locations()[index : index + 2]
         part = self.frame.iloc[start:stop]
         if self.pyarrow_strings_enabled:

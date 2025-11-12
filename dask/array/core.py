@@ -1165,7 +1165,7 @@ def store(
         sources = [sources]
         # There's no way to test that targets is a single array-like.
         # We need to trust the user.
-        targets = [targets]  # type: ignore
+        targets = [targets]  # type: ignore[list-item]
     targets = cast("Collection[ArrayLike | Delayed]", targets)
 
     if any(not isinstance(s, Array) for s in sources):
@@ -6072,7 +6072,7 @@ class BlockView:
             raise ValueError("Slicing with np.newaxis or None is not supported")
         index = normalize_index(index, self._array.numblocks)
         index = tuple(
-            slice(k, k + 1) if isinstance(k, Number) else k  # type: ignore
+            slice(k, k + 1) if isinstance(k, Number) else k  # type: ignore[operator]
             for k in index
         )
 

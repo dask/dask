@@ -523,7 +523,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
 
     from dask.dataframe import from_map
 
-    k = {}  # type: ignore
+    k = {}  # type: ignore[var-annotated]
 
     with warnings.catch_warnings():
         warnings.filterwarnings(

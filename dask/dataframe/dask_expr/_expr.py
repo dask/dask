@@ -537,7 +537,7 @@ class Literal(Expr):
 
     def _task(self, name: Key, index: int) -> Task:
         assert index == 0
-        return DataNode(name, self.value)  # type: ignore
+        return DataNode(name, self.value)  # type: ignore[return-value]
 
 
 class Blockwise(Expr):
@@ -634,9 +634,9 @@ class Blockwise(Expr):
         """
         args = [self._blockwise_arg(op, index) for op in self._args]
         if self._kwargs:
-            return Task(name, self.operation, *args, **self._kwargs)  # type: ignore
+            return Task(name, self.operation, *args, **self._kwargs)  # type: ignore[arg-type]
         else:
-            return Task(name, self.operation, *args)  # type: ignore
+            return Task(name, self.operation, *args)  # type: ignore[arg-type]
 
     def _simplify_up(self, parent, dependents):
         if self._projection_passthrough and isinstance(parent, Projection):
@@ -1043,7 +1043,7 @@ class CreateOverlappingPartitions(Expr):
         return self.frame.divisions
 
     def _layer(self) -> dict:
-        dsk, prevs, nexts = {}, [], []  # type: ignore
+        dsk, prevs, nexts = {}, [], []  # type: ignore[var-annotated]
 
         name_prepend = "overlap-prepend-" + self._name
         if self.before:
@@ -1077,7 +1077,7 @@ class CreateOverlappingPartitions(Expr):
                             first = first - deltas[j]
                             j = j - 1
 
-                        dsk[(name_prepend, i)] = (  # type: ignore
+                        dsk[(name_prepend, i)] = (  # type: ignore[assignment]
                             _tail_timedelta,
                             (self.frame._name, i + 1),
                             [(self.frame._name, k) for k in range(j, i + 1)],
@@ -1086,7 +1086,7 @@ class CreateOverlappingPartitions(Expr):
                         prevs.append((name_prepend, i))
                 else:
                     for i in range(self.frame.npartitions - 1):
-                        dsk[(name_prepend, i)] = (  # type: ignore
+                        dsk[(name_prepend, i)] = (  # type: ignore[assignment]
                             _tail_timedelta,
                             (self.frame._name, i + 1),
                             [(self.frame._name, i)],
@@ -1094,7 +1094,7 @@ class CreateOverlappingPartitions(Expr):
                         )
                         prevs.append((name_prepend, i))
         else:
-            prevs.extend([None] * self.frame.npartitions)  # type: ignore
+            prevs.extend([None] * self.frame.npartitions)  # type: ignore[list-item]
 
         name_append = "overlap-append-" + self._name
         if self.after:
@@ -1108,7 +1108,7 @@ class CreateOverlappingPartitions(Expr):
                 # validate later.
                 after = 2 * self.after
                 for i in range(1, self.frame.npartitions):
-                    dsk[(name_append, i)] = (  # type: ignore
+                    dsk[(name_append, i)] = (  # type: ignore[assignment]
                         _head_timedelta,
                         (self.frame._name, i - 1),
                         (self.frame._name, i),
@@ -1116,13 +1116,13 @@ class CreateOverlappingPartitions(Expr):
                     )
                     nexts.append((name_append, i))
 
-            nexts.append(None)  # type: ignore
+            nexts.append(None)  # type: ignore[arg-type]
 
         else:
-            nexts.extend([None] * self.frame.npartitions)  # type: ignore
+            nexts.extend([None] * self.frame.npartitions)  # type: ignore[list-item]
 
         for i, (prev, next) in enumerate(zip(prevs, nexts)):
-            dsk[(self._name, i)] = (  # type: ignore
+            dsk[(self._name, i)] = (  # type: ignore[assignment]
                 _combined_parts,
                 prev,
                 (self.frame._name, i),
@@ -1301,7 +1301,7 @@ class Sample(Blockwise):
 
 class Query(Blockwise):
     _parameters = ["frame", "_expr", "expr_kwargs"]
-    _defaults: dict[str, Any] = {"expr_kwargs": {}}  # type: ignore
+    _defaults: dict[str, Any] = {"expr_kwargs": {}}  # type: ignore[dict-item]
     _keyword_only = ["expr_kwargs"]
     operation = M.query
 
@@ -3015,7 +3015,7 @@ class Partitions(Expr):
         return tuple(divisions)
 
     def _task(self, name: Key, index: int) -> Task:
-        return Alias(name, (self.frame._name, self.partitions[index]))  # type: ignore
+        return Alias(name, (self.frame._name, self.partitions[index]))  # type: ignore[return-value]
 
     def _simplify_down(self):
         from dask.dataframe.dask_expr import SetIndexBlockwise
@@ -3838,7 +3838,7 @@ class Fused(Blockwise):
 
             assert t.key == subname
             internal_tasks.append(t)
-        return Task.fuse(*internal_tasks, key=name)  # type: ignore
+        return Task.fuse(*internal_tasks, key=name)  # type: ignore[return-value]
 
     @staticmethod
     def _execute_internal_graph(internal_tasks, dependencies, outkey):

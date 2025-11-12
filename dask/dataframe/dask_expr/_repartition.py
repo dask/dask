@@ -505,7 +505,7 @@ def _clean_new_division_boundaries(new_partitions_boundaries, frame_npartitions)
     return new_partitions_boundaries
 
 
-mem_usages_lru = LRU(10)  # type: ignore
+mem_usages_lru = LRU(10)  # type: ignore[var-annotated]
 
 
 def _get_mem_usages(frame):

@@ -67,7 +67,7 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
                 _data_producer=True,
             )
         else:
-            return Alias((self.delayed_container._name, index))  # type: ignore
+            return Alias((self.delayed_container._name, index))  # type: ignore[return-value]
 
 
 def identity(x):
@@ -123,7 +123,7 @@ def from_delayed(
         raise TypeError("Must supply at least one delayed object")
 
     if meta is None:
-        meta = delayed(make_meta)(dfs[0]).compute()  # type: ignore
+        meta = delayed(make_meta)(dfs[0]).compute()  # type: ignore[index]
 
     if divisions == "sorted":
         raise NotImplementedError(

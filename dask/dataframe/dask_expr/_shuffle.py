@@ -735,7 +735,7 @@ class AssignPartitioningIndex(Blockwise):
     _preserves_partitioning_information = True
 
     @staticmethod
-    def operation(df, index, name: str, npartitions: int, meta, index_shuffle: bool):  # type: ignore
+    def operation(df, index, name: str, npartitions: int, meta, index_shuffle: bool):
         """Construct a hash-based partitioning index"""
 
         def _get_index(idx, obj):
@@ -1316,7 +1316,7 @@ class SetIndexBlockwise(Blockwise):
             )
 
 
-divisions_lru = LRU(10)  # type: ignore
+divisions_lru = LRU(10)  # type: ignore[var-annotated]
 
 
 def _get_divisions(
@@ -1379,7 +1379,7 @@ def _calculate_divisions(
         else:
             raise e
 
-    sizes = []  # type: ignore
+    sizes = []  # type: ignore[var-annotated]
 
     empty_dataframe_detected = pd.isna(divisions).all()
     if empty_dataframe_detected:

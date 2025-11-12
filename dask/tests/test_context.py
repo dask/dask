@@ -39,7 +39,7 @@ def bar():
 
 class Foo:
     @globalmethod(key="f")
-    def f():  # type: ignore
+    def f():  # type: ignore[misc]
         return 1
 
     g = globalmethod(foo, key="g", falsey=bar)

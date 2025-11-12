@@ -777,14 +777,14 @@ class BroadcastJoin(Merge, PartitionsFiltered):
                     _merge_args.reverse()
 
                 inter_key = (inter_name, part_out, j)
-                dsk[(inter_name, part_out, j)] = (  # type: ignore
+                dsk[(inter_name, part_out, j)] = (  # type: ignore [assignment, index]
                     apply,
                     _merge_chunk_wrapper,
                     _merge_args,
                     kwargs,
                 )
                 _concat_list.append(inter_key)
-            dsk[(self._name, part_out)] = (_concat_wrapper, _concat_list)  # type: ignore
+            dsk[(self._name, part_out)] = (_concat_wrapper, _concat_list)  # type: ignore[assignment]
         return dsk
 
 

@@ -88,7 +88,7 @@ def _maybe_adjust_cpu_count():
         _CPU_COUNT_SET = True
 
 
-_STATS_CACHE = {}  # type: ignore
+_STATS_CACHE = {}  # type: ignore[var-annotated]
 
 
 PYARROW_NULLABLE_DTYPE_MAPPING = {
@@ -109,11 +109,11 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
 NONE_LABEL = "__null_dask_index__"
 
 _CACHED_PLAN_SIZE = 10
-_cached_plan = {}  # type: ignore
+_cached_plan = {}  # type: ignore[var-annotated]
 
 
 class FragmentWrapper:
-    _filesystems = weakref.WeakValueDictionary()  # type: ignore
+    _filesystems = weakref.WeakValueDictionary()  # type: ignore[var-annotated]
     _filesystem_pickle_cache = (-1, None)
 
     def __init__(
@@ -1606,7 +1606,7 @@ class _DNF:
 
         def to_list_tuple(self) -> list:
             # DNF "and" is List[Tuple]
-            return tuple(  # type: ignore
+            return tuple(  # type: ignore[return-value]
                 val.to_list_tuple() if hasattr(val, "to_list_tuple") else val
                 for val in self
             )
@@ -1617,7 +1617,7 @@ class _DNF:
         self._filters = self.normalize(filters)
 
     def to_list_tuple(self) -> list:
-        return self._filters.to_list_tuple()  # type: ignore
+        return self._filters.to_list_tuple()  # type: ignore[union-attr]
 
     def __bool__(self) -> bool:
         return bool(self._filters)
@@ -1678,8 +1678,8 @@ class _DNF:
             ):
                 # Simple dict to make sure field comes first in filter
                 flip = {LE: GE, LT: GT, GE: LE, GT: LT}
-                op = predicate_expr  # type: ignore
-                op = flip.get(op, op)._operator_repr  # type: ignore
+                op = predicate_expr  # type: ignore[assignment]
+                op = flip.get(op, op)._operator_repr  # type: ignore[call-overload]
                 column = predicate_expr.right.columns[0]
                 value = predicate_expr.left
                 _filters = (column, op, value)
@@ -1689,9 +1689,9 @@ class _DNF:
             right = cls.extract_pq_filters(pq_expr, predicate_expr.right)._filters
             if left and right:
                 if isinstance(predicate_expr, And):
-                    _filters = cls._And([left, right])  # type: ignore
+                    _filters = cls._And([left, right])  # type: ignore[assignment]
                 else:
-                    _filters = cls._Or([left, right])  # type: ignore
+                    _filters = cls._Or([left, right])  # type: ignore[assignment]
 
         return _DNF(_filters)
 
