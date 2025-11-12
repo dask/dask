@@ -3826,6 +3826,14 @@ def _determine_shard_size(arr, shard_factors):
             raise ValueError(
                 f"Shard factors {len(shard_factors)} must match array dimensions {len(arr.shape)}"
             )
+        if chunks == arr.shape and sum(shard_factors) != len(arr.shape):
+            warnings.warn(
+                "The chunk size is equal to the size of the array. Shard factors will be set to 1 for each"
+                "dimension",
+                UserWarning,
+                stacklevel=3,
+            )
+            shard_factors = (1,) * len(chunks)
         shards = tuple(chunks[i] * shard_factors[i] for i in range(len(arr.shape)))
 
         remainders = tuple(arr.shape[i] % shards[i] for i in range(len(arr.shape)))
@@ -4082,7 +4090,7 @@ def to_zarr(
     root = zarr.open_group(store=zarr_store, mode="a") if component else None
 
     if _zarr_v3():
-        shards = _determine_shard_size(arr, chunks, shard_factors)
+        shards = _determine_shard_size(arr, shard_factors)
         create_kwargs["shards"] = shards
     if component:
         z = root.create_array(name=component, **create_kwargs)
