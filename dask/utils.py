@@ -1387,7 +1387,7 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
     if type(d) is dict:
         return d.copy() if copy else d
     try:
-        layers = d.layers  # type: ignore
+        layers = d.layers  # type: ignore[attr-defined]
     except AttributeError:
         return dict(d)
 

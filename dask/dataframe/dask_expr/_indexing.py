@@ -222,7 +222,7 @@ class LocBase(Blockwise):
     def _task(self, name: Key, index: int) -> Task:
         t = self._layer_cache[(self._name, index)]
         if isinstance(t, Alias):
-            return Alias(name, t.target)  # type: ignore
+            return Alias(name, t.target)  # type: ignore[return-value]
         elif t.key != name:
             return Task(name, lambda x: x, t)
         return t
@@ -409,7 +409,7 @@ class LocSlice(LocBase):
         }
         for i in range(1, self.stop - self.start):
             if self.cindexer is None:
-                dsk[self._name, i] = Alias((self.frame._name, self.start + i))  # type: ignore
+                dsk[self._name, i] = Alias((self.frame._name, self.start + i))  # type: ignore[assignment]
             else:
                 dsk[self._name, i] = Task(
                     (self._name, i),

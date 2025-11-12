@@ -565,7 +565,7 @@ class Blockwise(Layer):
                     io_deps[name] = dep
                     numblocks[name] = dep.numblocks
                 else:
-                    name = dep  # type: ignore
+                    name = dep  # type: ignore[assignment]
                 _tmp_indices.append((name, tuple(ind) if ind is not None else ind))
         self.numblocks = numblocks
         self.io_deps = io_deps or {}
@@ -772,7 +772,7 @@ class Blockwise(Layer):
 
             if ishashable(k) and k in names:
                 is_leaf = False
-                k = clone_key(k, seed)  # type: ignore
+                k = clone_key(k, seed)  # type: ignore[type-var]
             elif isinstance(k, TaskRef) and k.key in names:
                 is_leaf = False
                 k = TaskRef(clone_key(k.key, seed))

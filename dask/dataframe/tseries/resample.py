@@ -20,7 +20,7 @@ from dask.dataframe.dask_expr._repartition import Repartition
 from dask.dataframe.dispatch import meta_nonempty
 from dask.utils import derived_from
 
-BlockwiseDep = namedtuple(typename="BlockwiseDep", field_names=["iterable"])  # type: ignore
+BlockwiseDep = namedtuple(typename="BlockwiseDep", field_names=["iterable"])  # type: ignore[misc]
 
 
 def _resample_series(

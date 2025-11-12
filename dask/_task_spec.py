@@ -539,7 +539,7 @@ class Alias(GraphNode):
                 raise RuntimeError(
                     f"Invalid substitution encountered {self.key!r} -> {sub_key}"
                 )
-            return Alias(key or sub_key, val)  # type: ignore
+            return Alias(key or sub_key, val)  # type: ignore [arg-type]
         return self
 
     def __dask_tokenize__(self):
@@ -785,7 +785,7 @@ class Task(GraphNode):
         subs_filtered = {
             k: v for k, v in subs.items() if k in self.dependencies and k != v
         }
-        extras = _extra_args(type(self))  # type: ignore
+        extras = _extra_args(type(self))  # type: ignore[arg-type]
         extra_kwargs = {
             name: getattr(self, name) for name in extras if name not in {"key", "func"}
         }
@@ -838,7 +838,7 @@ class NestedContainer(Task, Iterable):
         **kwargs: Any,
     ):
         if len(args) == 1 and isinstance(args[0], self.klass):
-            args = args[0]  # type: ignore
+            args = args[0]  # type: ignore[assignment]
         super().__init__(
             None,
             self.to_container,
@@ -925,8 +925,8 @@ class Dict(NestedContainer, Mapping):
             assert not kwargs
             if len(args) == 1:
                 args = args[0]
-                if isinstance(args, dict):  # type: ignore
-                    args = tuple(itertools.chain(*args.items()))  # type: ignore
+                if isinstance(args, dict):  # type: ignore[unreachable]
+                    args = tuple(itertools.chain(*args.items()))  # type: ignore[unreachable]
                 elif isinstance(args, (list, tuple)):
                     if all(
                         len(el) == 2 if isinstance(el, (list, tuple)) else False
@@ -1204,6 +1204,6 @@ def _extra_args(typ: type) -> set[str]:
             inspect.Parameter.VAR_KEYWORD,
         ):
             continue
-        if name in typ.get_all_slots():  # type: ignore
+        if name in typ.get_all_slots():  # type: ignore[attr-defined]
             extras.add(name)
     return extras

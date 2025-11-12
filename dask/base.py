@@ -496,7 +496,7 @@ def unpack_collections(*args, traverse=True):
             return TaskRef(tok)
 
         tok = uuid.uuid4().hex
-        tsk: DataNode | Task  # type: ignore
+        tsk: DataNode | Task  # type: ignore[annotation-unchecked]
         if not traverse:
             tsk = DataNode(None, expr)
         else:

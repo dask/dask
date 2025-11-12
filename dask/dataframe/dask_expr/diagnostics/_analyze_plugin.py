@@ -106,7 +106,7 @@ class _AnalyzeWorkerPlugin(WorkerPlugin):
         self._statistics = defaultdict(Statistics)
 
     def setup(self, worker: Worker) -> None:
-        self._digests = defaultdict(lambda: defaultdict(lambda: defaultdict(Digest)))  # type: ignore
+        self._digests = defaultdict(lambda: defaultdict(lambda: defaultdict(Digest)))  # type: ignore[var-annotated]
         self._worker = worker
         self._worker.handlers["analyze_get_statistics"] = self.get_statistics
 

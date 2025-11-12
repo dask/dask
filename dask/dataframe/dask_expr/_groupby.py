@@ -306,7 +306,7 @@ class SingleAggregation(GroupByApplyConcatApply, GroupByBase):
         return _groupby_aggregate(_concat(inputs), **kwargs)
 
     @property
-    def chunk_kwargs(self) -> dict:  # type: ignore
+    def chunk_kwargs(self) -> dict:  # type: ignore[override]
         chunk_kwargs = self.operand("chunk_kwargs") or {}
         columns = self._slice
         return {
@@ -318,7 +318,7 @@ class SingleAggregation(GroupByApplyConcatApply, GroupByBase):
         }
 
     @property
-    def aggregate_kwargs(self) -> dict:  # type: ignore
+    def aggregate_kwargs(self) -> dict:  # type: ignore[override]
         aggregate_kwargs = self.operand("aggregate_kwargs") or {}
         groupby_aggregate = self.groupby_aggregate or self.groupby_chunk
         return {
@@ -496,7 +496,7 @@ class HolisticGroupbyAggregation(GroupbyAggregationBase):
         return _groupby_aggregate_spec(_concat(inputs), **kwargs)
 
     @property
-    def chunk_kwargs(self) -> dict:  # type: ignore
+    def chunk_kwargs(self) -> dict:  # type: ignore[override]
         return {
             "by": self._by_columns,
             "key": [col for col in self.frame.columns if col not in self._by_columns],
@@ -505,7 +505,7 @@ class HolisticGroupbyAggregation(GroupbyAggregationBase):
         }
 
     @property
-    def aggregate_kwargs(self) -> dict:  # type: ignore
+    def aggregate_kwargs(self) -> dict:  # type: ignore[override]
         return {
             "spec": self.arg,
             "levels": _determine_levels(self.by),
@@ -531,7 +531,7 @@ class DecomposableGroupbyAggregation(GroupbyAggregationBase):
         return _agg_finalize(_concat(inputs), **kwargs)
 
     @property
-    def chunk_kwargs(self) -> dict:  # type: ignore
+    def chunk_kwargs(self) -> dict:  # type: ignore[override]
         return {
             "funcs": self.agg_args["chunk_funcs"],
             "sort": self.sort,
@@ -540,7 +540,7 @@ class DecomposableGroupbyAggregation(GroupbyAggregationBase):
         }
 
     @property
-    def combine_kwargs(self) -> dict:  # type: ignore
+    def combine_kwargs(self) -> dict:  # type: ignore[override]
         return {
             "funcs": self.agg_args["aggregate_funcs"],
             "level": self.levels,
@@ -550,7 +550,7 @@ class DecomposableGroupbyAggregation(GroupbyAggregationBase):
         }
 
     @property
-    def aggregate_kwargs(self) -> dict:  # type: ignore
+    def aggregate_kwargs(self) -> dict:  # type: ignore[override]
         return {
             "aggregate_funcs": self.agg_args["aggregate_funcs"],
             "arg": self.arg,
@@ -638,7 +638,7 @@ class Unique(SingleAggregation):
     groupby_aggregate = staticmethod(_unique_aggregate)
 
     @functools.cached_property
-    def aggregate_kwargs(self) -> dict:  # type: ignore
+    def aggregate_kwargs(self) -> dict:  # type: ignore[override]
         kwargs = super().aggregate_kwargs
         meta = self.frame._meta
         if meta.ndim == 1:
@@ -661,11 +661,11 @@ class Cov(SingleAggregation):
         return _cov_agg(_concat(inputs), **kwargs)
 
     @property
-    def chunk_kwargs(self) -> dict:  # type: ignore
+    def chunk_kwargs(self) -> dict:  # type: ignore[override]
         return self.operand("chunk_kwargs")
 
     @property
-    def aggregate_kwargs(self) -> dict:  # type: ignore
+    def aggregate_kwargs(self) -> dict:  # type: ignore[override]
         kwargs = self.operand("aggregate_kwargs").copy()
         kwargs["sort"] = self.sort
         kwargs["std"] = self.std
@@ -673,7 +673,7 @@ class Cov(SingleAggregation):
         return kwargs
 
     @property
-    def combine_kwargs(self) -> dict:  # type: ignore
+    def combine_kwargs(self) -> dict:  # type: ignore[override]
         return {"levels": self.levels}
 
 
@@ -847,13 +847,13 @@ class NUnique(SingleAggregation):
         return _nunique_df_chunk(df, *by, **kwargs)
 
     @functools.cached_property
-    def chunk_kwargs(self) -> dict:  # type: ignore
+    def chunk_kwargs(self) -> dict:  # type: ignore[override]
         kwargs = super().chunk_kwargs
         kwargs["name"] = self._slice
         return kwargs
 
     @functools.cached_property
-    def aggregate_kwargs(self) -> dict:  # type: ignore
+    def aggregate_kwargs(self) -> dict:  # type: ignore[override]
         return {"levels": self.levels, "name": self._slice}
 
     @functools.cached_property
@@ -1469,14 +1469,14 @@ class GroupByCumulativeFinalizer(Expr, GroupByBase):
                 dsk[(name_cum, i)] = (self.cum_last._name, i - 1)
             else:
                 # aggregate with previous cumulation results
-                dsk[(name_cum, i)] = (  # type: ignore
+                dsk[(name_cum, i)] = (  # type: ignore[assignment]
                     _cum_agg_filled,
                     (name_cum, i - 1),
                     (self.cum_last._name, i - 1),
                     self.aggregate,
                     self.initial,
                 )
-            dsk[(self._name, i)] = (  # type: ignore
+            dsk[(self._name, i)] = (  # type: ignore[assignment]
                 _cum_agg_aligned,
                 (self.frame._name, i),
                 (name_cum, i),
