@@ -4087,16 +4087,22 @@ def to_zarr(
         **kwargs,
     )
 
-    root = zarr.open_group(store=zarr_store, mode="a") if component else None
-
     if _zarr_v3():
+        root = zarr.open_group(store=zarr_store, mode="a") if component else None
         shards = _determine_shard_size(arr, shard_factors)
         create_kwargs["shards"] = shards
-    if component:
-        z = root.create_array(name=component, **create_kwargs)
+        if component:
+            z = root.create_array(name=component, **create_kwargs)
+        else:
+            create_kwargs["store"] = zarr_store
+            z = zarr.create_array(**create_kwargs)
     else:
-        create_kwargs["store"] = zarr_store
-        z = zarr.create_array(**create_kwargs)
+        # TODO: drop this as soon as zarr v2 gets dropped.
+        z = zarr.create(
+            store=zarr_store,
+            path=component,
+            **create_kwargs,
+        )
 
     return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
 

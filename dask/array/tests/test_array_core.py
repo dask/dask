@@ -4964,7 +4964,7 @@ def test_zarr_roundtrip():
     [((3, 3), (6, 6)), ((3, 3), (4, 4)), ((60, 60), (5, 5))],
 )
 def test_zarr_sharding_roundtrip(chunks, shard_factors):
-    zarr = pytest.importorskip("zarr")
+    zarr = pytest.importorskip("zarr", minversion="3.0.0")
     with tmpdir() as d:
         a = da.zeros((60, 60), chunks=chunks)
         remainder = a.shape[0] % (chunks[0] * shard_factors[0])
