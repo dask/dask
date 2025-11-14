@@ -943,7 +943,7 @@ def test_filter_with_struct_column(tmpdir):
             ]
         ),
     )
-    fn = str(tmpdir) + "file.parq"
+    fn = f"{tmpdir}file.parq"
     pq.write_table(table, fn)
 
     pdf = table.to_pandas()
@@ -1760,7 +1760,7 @@ def pandas_metadata(request):
 def test_read_no_metadata(tmpdir, engine):
     # use pyarrow.parquet to create a parquet file without
     # pandas metadata
-    tmp = str(tmpdir) + "table.parq"
+    tmp = f"{tmpdir}table.parq"
 
     table = pa.Table.from_arrays(
         [pa.array([1, 2, 3]), pa.array([3, 4, 5])], names=["A", "B"]
@@ -3101,7 +3101,7 @@ def test_create_metadata_file(tmpdir, partition_on):
 
     # Add global _metadata file
     if partition_on:
-        fns = glob.glob(os.path.join(tmpdir, partition_on + "=*/*.parquet"))
+        fns = glob.glob(os.path.join(tmpdir, f"{partition_on}=*/*.parquet"))
     else:
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
     dd.io.parquet.create_metadata_file(
@@ -4052,21 +4052,21 @@ def test_non_categorical_partitioning_pyarrow(tmpdir, filters):
 @PYARROW_MARK
 def test_read_parquet_lists_not_converting(tmpdir):
     df = pd.DataFrame({"a": [1, 2], "b": [{"a": 2}, {"a": 4}]})
-    df.to_parquet(tmpdir + "test.parquet")
-    result = dd.read_parquet(tmpdir + "test.parquet").compute()
+    df.to_parquet(f"{tmpdir}test.parquet")
+    result = dd.read_parquet(f"{tmpdir}test.parquet").compute()
     assert_eq(df, result)
 
 
 @PYARROW_MARK
 def test_parquet_string_roundtrip(tmpdir):
     pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
-    pdf.to_parquet(tmpdir + "string.parquet")
+    pdf.to_parquet(f"{tmpdir}string.parquet")
     if not pyarrow_strings_enabled():
         # If auto pyarrow strings aren't enabled, we match pandas behavior.
         # Pandas currently doesn't roundtrip `string[pyarrow]` through parquet.
         # See https://github.com/pandas-dev/pandas/issues/42664
-        pdf = pd.read_parquet(tmpdir + "string.parquet")
-    df = dd.read_parquet(tmpdir + "string.parquet")
+        pdf = pd.read_parquet(f"{tmpdir}string.parquet")
+    df = dd.read_parquet(f"{tmpdir}string.parquet")
     assert_eq(df, pdf)
     pd.testing.assert_frame_equal(df.compute(), pdf)
 
@@ -4079,11 +4079,11 @@ def test_parquet_botocore_exception(tmpdir):
     from botocore.exceptions import BotoCoreError
 
     pdf = pd.DataFrame({"a": ["a", "b", "c"]}, dtype="string[pyarrow]")
-    pdf.to_parquet(tmpdir + "string.parquet")
+    pdf.to_parquet(f"{tmpdir}string.parquet")
 
     def mock_get_engine(engine):
         raise BotoCoreError
 
     with pytest.raises(BotoCoreError, match="An unspecified error occurred"):
         with patch("dask.dataframe.dask_expr.io.parquet.get_engine", mock_get_engine):
-            dd.read_parquet(tmpdir + "string.parquet")
+            dd.read_parquet(f"{tmpdir}string.parquet")

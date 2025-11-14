@@ -873,7 +873,7 @@ def visualize_dsk(
             if color.startswith("order-"):
 
                 def label(x):
-                    return str(o[x]) + "-" + str(values[x])
+                    return f"{o[x]}-{values[x]}"
 
         else:
             values = o
@@ -1045,8 +1045,7 @@ def _colorize(t):
     t = t[:3]
     i = sum(v * 256 ** (len(t) - i - 1) for i, v in enumerate(t))
     h = hex(int(i))[2:].upper()
-    h = "0" * (6 - len(h)) + h
-    return "#" + h
+    return f"#{h:>06}"
 
 
 named_schedulers: dict[str, SchedulerGetCallable] = {

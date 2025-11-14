@@ -1461,7 +1461,7 @@ class GroupByCumulativeFinalizer(Expr, GroupByBase):
 
     def _layer(self) -> dict:
         dsk = {(self._name, 0): (self.cum_raw._name, 0)}
-        name_cum = "cum-last" + self._name
+        name_cum = f"cum-last{self._name}"
 
         for i in range(1, self.frame.npartitions):
             # store each cumulative step to graph to reduce computation

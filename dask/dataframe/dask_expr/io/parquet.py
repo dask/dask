@@ -787,7 +787,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 
     @cached_property
     def _name(self):
-        return self._funcname + "-" + self.deterministic_token
+        return f"{self._funcname}-{self.deterministic_token}"
 
     @property
     def checksum(self):
@@ -1383,7 +1383,7 @@ class ReadParquetFSSpec(ReadParquet):
                     next(path for path in self.path if path.endswith("_metadata"))
                 ]
             else:
-                files_for_checksum = [self.path + fs.sep + "_metadata"]
+                files_for_checksum = [f"{self.path}{fs.sep}_metadata"]
         else:
             files_for_checksum = dataset_info["ds"].files
 

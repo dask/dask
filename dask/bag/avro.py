@@ -260,7 +260,7 @@ def to_avro(
         num=b.npartitions,
         **storage_options,
     )
-    name = "to-avro-" + uuid.uuid4().hex
+    name = f"to-avro-{uuid.uuid4().hex}"
     dsk = {
         (name, i): (
             _write_avro_part,

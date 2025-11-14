@@ -328,7 +328,7 @@ def graph_from_arraylike(
         )
         return HighLevelGraph.from_collections(name, layer)
     else:
-        original_name = "original-" + name
+        original_name = f"original-{name}"
 
         layers = {}
         layers[original_name] = MaterializedLayer({original_name: arr})
@@ -1731,12 +1731,11 @@ class Array(DaskMethodsMixin):
         def handle_nonmatching_names(func, args, kwargs):
             if func not in _HANDLED_FUNCTIONS:
                 warnings.warn(
-                    "The `{}` function is not implemented by Dask array. "
+                    f"The `{func.__module__}.{func.__name__}` function "
+                    "is not implemented by Dask array. "
                     "You may want to use the da.map_blocks function "
                     "or something similar to silence this warning. "
-                    "Your code may stop working in a future release.".format(
-                        func.__module__ + "." + func.__name__
-                    ),
+                    "Your code may stop working in a future release.",
                     FutureWarning,
                 )
                 # Need to convert to array object (e.g. numpy.ndarray or
@@ -1964,7 +1963,8 @@ class Array(DaskMethodsMixin):
         # Still here? Then apply the assignment to other type of
         # indices via the `setitem_array` function.
 
-        out = "setitem-" + tokenize(self, key, value)
+        token = tokenize(self, key, value)
+        out = f"setitem-{token}"
         dsk = setitem_array(out, self, key, value)
 
         meta = meta_from_array(self._meta)
@@ -2967,8 +2967,8 @@ class Array(DaskMethodsMixin):
         graph = self.__dask_graph__()
         layer = self.__dask_layers__()[0]
         if optimize_graph:
-            graph = self.__dask_optimize__(graph, keys)  # TODO, don't collape graph
-            layer = "delayed-" + self.name
+            graph = self.__dask_optimize__(graph, keys)  # TODO, don't collapse graph
+            layer = f"delayed-{self.name}"
             graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
         L = ndeepmap(self.ndim, lambda k: Delayed(k, graph, layer=layer), keys)
         return np.array(L, dtype=object)
@@ -5267,7 +5267,7 @@ def offset_func(func, offset, *args):
         return func(*args2)
 
     with contextlib.suppress(Exception):
-        _offset.__name__ = "offset_" + func.__name__
+        _offset.__name__ = f"offset_{func.__name__}"
 
     return _offset
 
@@ -5711,7 +5711,7 @@ def _vindex_array(x, dict_indexes):
         shapes_str = " ".join(str(a.shape) for a in dict_indexes.values())
         raise IndexError(
             "shape mismatch: indexing arrays could not be "
-            "broadcast together with shapes " + shapes_str
+            f"broadcast together with shapes {shapes_str}"
         ) from e
     npoints = math.prod(broadcast_shape)
     axes = [i for i in range(x.ndim) if i in dict_indexes]

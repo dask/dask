@@ -43,7 +43,7 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
     def _name(self):
         if self.prefix is None:
             return super()._name
-        return self.prefix + "-" + self.deterministic_token
+        return f"{self.prefix}-{self.deterministic_token}"
 
     @functools.cached_property
     def _meta(self):

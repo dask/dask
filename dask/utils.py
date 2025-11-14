@@ -359,7 +359,7 @@ def tmpfile(extension="", dir=None):
     """
     extension = extension.lstrip(".")
     if extension:
-        extension = "." + extension
+        extension = f".{extension}"
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
     os.remove(filename)
@@ -480,7 +480,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
                 os.makedirs(os.path.dirname(filename))
             except OSError:
                 pass
-            f = open(filename, "w" + mode)
+            f = open(filename, f"w{mode}")
             try:
                 f.write(text)
             finally:
@@ -808,9 +808,9 @@ def _skip_doctest(line):
         return line
     elif ">>>" in stripped and "+SKIP" not in stripped:
         if "# doctest:" in line:
-            return line + ", +SKIP"
+            return f"{line}, +SKIP"
         else:
-            return line + "  # doctest: +SKIP"
+            return f"{line}  # doctest: +SKIP"
     else:
         return line
 
@@ -832,7 +832,7 @@ def extra_titles(doc):
     seen = set()
     for i, title in sorted(titles.items()):
         if title in seen:
-            new_title = "Extra " + title
+            new_title = f"Extra {title}"
             lines[i] = lines[i].replace(title, new_title)
             lines[i + 1] = lines[i + 1].replace("-" * len(title), "-" * len(new_title))
         else:
@@ -889,7 +889,7 @@ def unsupported_arguments(doc, args):
         ]
         if len(subset) == 1:
             [(i, line)] = subset
-            lines[i] = line + "  (Not supported in Dask)"
+            lines[i] = f"{line}  (Not supported in Dask)"
     return "\n".join(lines)
 
 
@@ -1072,7 +1072,7 @@ def typename(typ: Any, short: bool = False) -> str:
                 module, *_ = typ.__module__.split(".")
             else:
                 module = typ.__module__
-            return module + "." + typ.__name__
+            return f"{module}.{typ.__name__}"
     except AttributeError:
         return str(typ)
 
@@ -1612,7 +1612,7 @@ def parse_bytes(s: float | str) -> int:
         return int(s)
     s = s.replace(" ", "")
     if not any(char.isdigit() for char in s):
-        s = "1" + s
+        s = f"1{s}"
 
     for i in range(len(s) - 1, -1, -1):
         if not s[i].isalpha():
@@ -1817,7 +1817,7 @@ tds2 = {
     "microsecond": 1e-6,
     "nanosecond": 1e-9,
 }
-tds2.update({k + "s": v for k, v in tds2.items()})
+tds2.update({f"{k}s": v for k, v in tds2.items()})
 timedelta_sizes.update(tds2)
 timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
@@ -1864,7 +1864,7 @@ def parse_timedelta(s, default="seconds"):
         s = str(s)
     s = s.replace(" ", "")
     if not s[0].isdigit():
-        s = "1" + s
+        s = f"1{s}"
 
     for i in range(len(s) - 1, -1, -1):
         if not s[i].isalpha():
@@ -1986,7 +1986,7 @@ def key_split(s):
             if word.isalpha() and not (
                 len(word) == 8 and hex_pattern.match(word) is not None
             ):
-                result += "-" + word
+                result += f"-{word}"
             else:
                 break
         if len(result) == 32 and re.match(r"[a-f0-9]{32}", result):

@@ -1739,7 +1739,7 @@ Expr={expr}"""
                 M.kurtosis,
                 self,
                 meta=meta,
-                token=self._token_prefix + "kurtosis",
+                token=f"{self._token_prefix}kurtosis",
                 axis=axis,
                 enforce_metadata=False,
             )
@@ -2521,7 +2521,7 @@ Expr={expr}"""
             frame = self
         keys = frame.__dask_keys__()
         graph = frame.__dask_graph__()
-        layer = "delayed-" + frame._name
+        layer = f"delayed-{frame._name}"
         graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
         return [Delayed(k, graph, layer=layer) for k in keys]
 

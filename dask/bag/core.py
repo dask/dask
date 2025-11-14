@@ -266,7 +266,7 @@ def to_textfiles(
         **(storage_options or {}),
     )
 
-    name = "to-textfiles-" + uuid.uuid4().hex
+    name = f"to-textfiles-{uuid.uuid4().hex}"
     dsk = {
         (name, i): (_to_textfiles_chunk, (b.name, i), f, last_endline)
         for i, f in enumerate(files)
@@ -1655,7 +1655,7 @@ class Bag(DaskMethodsMixin):
         layer = self.name
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, keys)
-            layer = "delayed-" + layer
+            layer = f"delayed-{layer}"
             dsk = HighLevelGraph.from_collections(layer, dsk, dependencies=())
         return [Delayed(k, dsk, layer=layer) for k in keys]
 
@@ -1833,7 +1833,7 @@ def from_url(urls):
     """
     if isinstance(urls, str):
         urls = [urls]
-    name = "from_url-" + uuid.uuid4().hex
+    name = f"from_url-{uuid.uuid4().hex}"
     dsk = {}
     for i, u in enumerate(urls):
         dsk[(name, i)] = (list, (urlopen, u))
@@ -2393,9 +2393,9 @@ def groupby_tasks(b, grouper, hash=lambda x: int(tokenize(x), 16), max_branch=32
 
     token = tokenize(b, grouper, hash, max_branch)
 
-    shuffle_join_name = "shuffle-join-" + token
-    shuffle_group_name = "shuffle-group-" + token
-    shuffle_split_name = "shuffle-split-" + token
+    shuffle_join_name = f"shuffle-join-{token}"
+    shuffle_group_name = f"shuffle-group-{token}"
+    shuffle_split_name = f"shuffle-split-{token}"
 
     start = {}
 
@@ -2448,7 +2448,7 @@ def groupby_tasks(b, grouper, hash=lambda x: int(tokenize(x), 16), max_branch=32
 
         joins.append(join)
 
-    name = "shuffle-" + token
+    name = f"shuffle-{token}"
 
     end = {
         (name, i): (list, (dict.items, (groupby, grouper, (pluck, 1, j))))
@@ -2470,7 +2470,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     import partd
 
-    p = ("partd-" + token,)
+    p = (f"partd-{token}",)
     dirname = config.get("temporary_directory", None)
     if dirname:
         file = (apply, partd.File, (), {"dir": dirname})
@@ -2489,12 +2489,12 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     }
 
     # Barrier
-    barrier_token = "groupby-barrier-" + token
+    barrier_token = f"groupby-barrier-{token}"
 
     dsk3 = {barrier_token: (chunk.barrier,) + tuple(dsk2)}
 
     # Collect groups
-    name = "groupby-collect-" + token
+    name = f"groupby-collect-{token}"
     dsk4 = {
         (name, i): (collect, grouper, i, p, barrier_token) for i in range(npartitions)
     }

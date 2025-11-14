@@ -572,8 +572,8 @@ def test_combine_statistics():
 
 def test_index_only_from_parquet(tmpdir):
     pdf = pd.DataFrame({"foo": range(5)}, index=range(50, 55))
-    pdf.to_parquet(tmpdir + "/test.parquet")
-    result = read_parquet(tmpdir + "/test.parquet").index
+    pdf.to_parquet(f"{tmpdir}/test.parquet")
+    result = read_parquet(f"{tmpdir}/test.parquet").index
     assert_eq(result, pdf.index)
 
 
@@ -586,9 +586,9 @@ def test_timestamp_divisions(tmpdir):
         }
     )
     pdf["Timestamp"] = pd.to_datetime(pdf.Date) + pd.to_timedelta(pdf.Time)
-    pdf.to_parquet(tmpdir + "/test.parquet")
+    pdf.to_parquet(f"{tmpdir}/test.parquet")
     df = read_parquet(
-        tmpdir + "/test.parquet", index="Timestamp", calculate_divisions=True
+        f"{tmpdir}/test.parquet", index="Timestamp", calculate_divisions=True
     )["Volume"]
     assert df.optimize().divisions == (
         pd.Timestamp("2017-11-26 17:00:00.067000"),
@@ -602,9 +602,9 @@ def test_read_parquet_index_projection(tmpdir):
         columns=["val1", "val2", "val3", "val4", "val5", "val6", "val7", "tsprv"],
     )
     df = df.repartition(npartitions=201)
-    df.to_parquet(tmpdir + "/index", write_index=False)
+    df.to_parquet(f"{tmpdir}/index", write_index=False)
 
-    df = read_parquet(tmpdir + "/index", calculate_divisions=True)
+    df = read_parquet(f"{tmpdir}/index", calculate_divisions=True)
     result = df.assign(dts=df.index - df.tsprv)
     expected = df.compute()
     expected = expected.assign(dts=expected.index - expected.tsprv)

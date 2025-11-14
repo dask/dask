@@ -4478,10 +4478,10 @@ def test_cumulative_multiple_columns():
 
     for d in [ddf, df]:
         for c in df.columns:
-            d[c + "cs"] = d[c].cumsum()
-            d[c + "cmin"] = d[c].cummin()
-            d[c + "cmax"] = d[c].cummax()
-            d[c + "cp"] = d[c].cumprod()
+            d[f"{c}cs"] = d[c].cumsum()
+            d[f"{c}cmin"] = d[c].cummin()
+            d[f"{c}cmax"] = d[c].cummax()
+            d[f"{c}cp"] = d[c].cumprod()
 
     assert_eq(ddf, df)
 

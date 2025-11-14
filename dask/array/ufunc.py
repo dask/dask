@@ -114,7 +114,7 @@ class ufunc:
                 if type(result) != type(NotImplemented):
                     return result
             raise TypeError(
-                "Parameters of such types are not supported by " + self.__name__
+                f"Parameters of such types are not supported by {self.__name__}"
             )
         else:
             return self._ufunc(*args, **kwargs)
@@ -165,7 +165,7 @@ class ufunc:
             B,
             B_inds,
             dtype=dtype,
-            token=self.__name__ + ".outer",
+            token=f"{self.__name__}.outer",
             **kwargs,
         )
 
@@ -297,8 +297,8 @@ def angle(x, deg=0):
 def frexp(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.frexp, x, dtype=object)
-    left = "mantissa-" + tmp.name
-    right = "exponent-" + tmp.name
+    left = f"mantissa-{tmp.name}"
+    right = f"exponent-{tmp.name}"
     ldsk = {
         (left,) + key[1:]: (getitem, key, 0)
         for key in core.flatten(tmp.__dask_keys__())
@@ -322,8 +322,8 @@ def frexp(x):
 def modf(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.modf, x, dtype=object)
-    left = "modf1-" + tmp.name
-    right = "modf2-" + tmp.name
+    left = f"modf1-{tmp.name}"
+    right = f"modf2-{tmp.name}"
     ldsk = {
         (left,) + key[1:]: (getitem, key, 0)
         for key in core.flatten(tmp.__dask_keys__())

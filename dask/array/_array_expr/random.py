@@ -89,9 +89,7 @@ class Generator:
         self._bit_generator = bit_generator
 
     def __str__(self):
-        _str = self.__class__.__name__
-        _str += "(" + self._bit_generator.__class__.__name__ + ")"
-        return _str
+        return f"{self.__class__.__name__}({self._bit_generator.__class__.__name__})"
 
     @property
     def _backend_name(self):

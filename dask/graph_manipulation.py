@@ -72,7 +72,7 @@ def checkpoint(
 
 def _checkpoint_one(collection, split_every) -> Delayed:
     tok = tokenize(collection)
-    name = "checkpoint-" + tok
+    name = f"checkpoint-{tok}"
 
     keys_iter = flatten(collection.__dask_keys__())
     try:

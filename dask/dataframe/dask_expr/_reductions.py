@@ -325,7 +325,7 @@ class TreeReduce(Expr):
             name = funcname(self.combine.__self__).lower() + "-tree"
         else:
             name = funcname(self.combine)
-        return name + "-" + self.deterministic_token
+        return f"{name}-{self.deterministic_token}"
 
     def __dask_postcompute__(self):
         return toolz.first, ()
@@ -829,13 +829,11 @@ class Reduction(ApplyConcatApply):
     def __str__(self):
         params = {param: self.operand(param) for param in self._parameters[1:]}
         s = ", ".join(
-            k + "=" + repr(v)
-            for k, v in params.items()
-            if v is not self._defaults.get(k)
+            f"{k}={v!r}" for k, v in params.items() if v is not self._defaults.get(k)
         )
         base = str(self.frame)
         if " " in base:
-            base = "(" + base + ")"
+            base = f"({base})"
         return f"{base}.{self.__class__.__name__.lower()}({s})"
 
     def _simplify_up(self, parent, dependents):

@@ -117,7 +117,7 @@ class ufunc:
                 if type(result) != type(NotImplemented):
                     return result
             raise TypeError(
-                "Parameters of such types are not supported by " + self.__name__
+                f"Parameters of such types are not supported by {self.__name__}"
             )
         else:
             return self._ufunc(*args, **kwargs)
