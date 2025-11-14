@@ -107,6 +107,7 @@ extend-select = [
     "TID",
     "ISC",
     "FA",
+    "TID",
     "I",
     "PGH",
     "PLR",
