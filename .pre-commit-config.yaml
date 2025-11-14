@@ -11,9 +11,6 @@ repos:
     rev: 25.11.0
     hooks:
       - id: black
-        language_version: python3
-        args:
-          - --target-version=py310
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
