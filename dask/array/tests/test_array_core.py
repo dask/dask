@@ -4963,28 +4963,28 @@ def test_zarr_roundtrip():
     "chunks, shard_factors",
     [((3, 3), (6, 6)), ((3, 3), (4, 4)), ((60, 60), (5, 5))],
 )
-def test_zarr_sharding_roundtrip(chunks, shard_factors):
+def test_zarr_sharding_roundtrip(tmp_path, chunks, shard_factors):
     zarr = pytest.importorskip("zarr", minversion="3.0.0")
-    with tmpdir() as d:
-        a = da.zeros((60, 60), chunks=chunks)
-        remainder = a.shape[0] % (chunks[0] * shard_factors[0])
-        if a.shape == a.chunksize:
-            with pytest.warns(UserWarning, match="The chunk size is equal"):
-                a.to_zarr(d, shard_factors=shard_factors)
-        elif remainder:
-            with pytest.warns(UserWarning, match="Array shape"):
-                a.to_zarr(d, shard_factors=shard_factors)
-        else:
-            a.to_zarr(d, shard_factors=shard_factors)
-        store = zarr.storage.FsspecStore.from_url(d)
-        z = zarr.open_array(store)
-        if a.shape == a.chunksize:
-            assert z.shards == chunks
-        else:
-            assert z.shards == tuple((chunks[0] * shard_factors[0],)) * z.ndim
-        a2 = da.from_zarr(d)
-        assert_eq(a, a2)
-        assert a2.chunks == a.chunks
+
+    a = da.zeros((60, 60), chunks=chunks)
+    remainder = a.shape[0] % (chunks[0] * shard_factors[0])
+    if a.shape == a.chunksize:
+        with pytest.warns(UserWarning, match="The chunk size is equal"):
+            a.to_zarr(tmp_path, shard_factors=shard_factors)
+    elif remainder:
+        with pytest.warns(UserWarning, match="Array shape"):
+            a.to_zarr(tmp_path, shard_factors=shard_factors)
+    else:
+        a.to_zarr(tmp_path, shard_factors=shard_factors)
+    store = zarr.storage.FsspecStore.from_url(tmp_path)
+    z = zarr.open_array(store)
+    if a.shape == a.chunksize:
+        assert z.shards == chunks
+    else:
+        assert z.shards == tuple((chunks[0] * shard_factors[0],)) * z.ndim
+    a2 = da.from_zarr(tmp_path)
+    assert_eq(a, a2)
+    assert a2.chunks == a.chunks
 
 
 def test_zarr_roundtrip_with_path_like():
