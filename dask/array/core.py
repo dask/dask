@@ -3937,7 +3937,7 @@ def _write_dask_to_existing_zarr(
     )
 
 
-def _setup_zarr_store(url, storage_options, **kwargs):
+def _setup_zarr_store(url: str, storage_options: dict[str, object] | None = None, **kwargs: object):
     """
     Set up a Zarr store for reading or writing, handling both Zarr v2 and v3.
 
@@ -3951,7 +3951,7 @@ def _setup_zarr_store(url, storage_options, **kwargs):
         Location of the data. A URL can include a protocol specifier like s3://
         for remote data. Can also be any MutableMapping instance, which should
         be serializable if used in multiple processes.
-    storage_options: dict
+    storage_options: dict | None, default = None
         Any additional parameters for the storage backend (ignored for local
         paths)
     **kwargs:
@@ -3969,9 +3969,7 @@ def _setup_zarr_store(url, storage_options, **kwargs):
     # Cannot directly import FSStore from storage.
     from zarr import storage
 
-    storage_options = storage_options or {}
-
-    if storage_options:
+    if storage_options is not None:
         if _zarr_v3():
             read_only = kwargs.pop("read_only", kwargs.pop("mode", "a") == "r")
             store = storage.FsspecStore.from_url(
