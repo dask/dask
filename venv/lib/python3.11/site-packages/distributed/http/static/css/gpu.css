@@ -1,0 +1,16 @@
+#status-fluid {
+    display: grid;
+    height: 100%;
+  }
+#status-fluid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+}
+#gpu-memory {
+    grid-column: 2;
+    grid-row: 1;
+}
+#gpu-utilization {
+    grid-column: 1;
+    grid-row: 1;
+}

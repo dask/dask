@@ -1,0 +1,13 @@
+<div style="margin-left: auto;">
+    <h3 style="margin-bottom: 0px;"><b>Security</b></h3>
+    <p>
+        <table style="width: 100%;">
+        {% for key, val in security.items() %}
+            <tr>
+                <th style="text-align: left; width: 150px;">{{ key }}</th>
+                <td style="text-align: left;">{{ val }}</td>
+            </tr>
+        {% endfor %}
+        </table>
+    </p>
+</div>

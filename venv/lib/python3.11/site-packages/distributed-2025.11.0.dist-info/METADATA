@@ -1,0 +1,72 @@
+Metadata-Version: 2.4
+Name: distributed
+Version: 2025.11.0
+Summary: Distributed scheduler for Dask
+Maintainer-email: Matthew Rocklin <mrocklin@gmail.com>
+License: BSD-3-Clause
+Project-URL: Homepage, https://distributed.dask.org
+Project-URL: Source, https://github.com/dask/distributed
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: System :: Distributed Computing
+Requires-Python: >=3.10
+Description-Content-Type: text/x-rst
+License-File: LICENSE.txt
+License-File: AUTHORS.md
+Requires-Dist: click>=8.0
+Requires-Dist: cloudpickle>=3.0.0
+Requires-Dist: dask==2025.11.0
+Requires-Dist: jinja2>=2.10.3
+Requires-Dist: locket>=1.0.0
+Requires-Dist: msgpack>=1.0.2
+Requires-Dist: packaging>=20.0
+Requires-Dist: psutil>=5.8.0
+Requires-Dist: pyyaml>=5.4.1
+Requires-Dist: sortedcontainers>=2.0.5
+Requires-Dist: tblib>=1.6.0
+Requires-Dist: toolz>=0.11.2
+Requires-Dist: tornado>=6.2.0
+Requires-Dist: urllib3>=1.26.5
+Requires-Dist: zict>=3.0.0
+Dynamic: license-file
+
+Distributed
+===========
+
+|Test Status| |Longitudinal Report (full)| |Longitudinal Report (short)| |Coverage| |Doc Status| |Discourse| |Version Status| |NumFOCUS|
+
+A library for distributed computation.  See documentation_ for more details.
+
+.. _documentation: https://distributed.dask.org
+.. |Test Status| image:: https://github.com/dask/distributed/actions/workflows/tests.yaml/badge.svg?branch=main
+   :target: https://github.com/dask/distributed/actions?query=workflow%3ATests+branch%3Amain
+.. |Longitudinal Report (full)| image:: https://github.com/dask/distributed/actions/workflows/test-report.yaml/badge.svg?branch=main
+   :target: https://dask.github.io/distributed/test_report.html
+   :alt: Longitudinal test report (full version)
+.. |Longitudinal Report (short)| image:: https://github.com/dask/distributed/actions/workflows/test-report.yaml/badge.svg?branch=main
+   :target: https://dask.github.io/distributed/test_short_report.html
+   :alt: Longitudinal test report (short version)
+.. |Coverage| image:: https://codecov.io/gh/dask/distributed/branch/main/graph/badge.svg
+   :target: https://codecov.io/gh/dask/distributed/branch/main
+   :alt: Coverage status
+.. |Doc Status| image:: https://readthedocs.org/projects/distributed/badge/?version=latest
+   :target: https://distributed.dask.org
+   :alt: Documentation Status
+.. |Discourse| image:: https://img.shields.io/discourse/users?logo=discourse&server=https%3A%2F%2Fdask.discourse.group
+   :alt: Discuss Dask-related things and ask for help
+   :target: https://dask.discourse.group
+.. |Version Status| image:: https://img.shields.io/pypi/v/distributed.svg
+   :target: https://pypi.python.org/pypi/distributed/
+.. |NumFOCUS| image:: https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A
+   :target: https://www.numfocus.org/

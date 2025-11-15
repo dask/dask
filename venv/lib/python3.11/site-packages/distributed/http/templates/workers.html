@@ -1,0 +1,13 @@
+{% extends main.html %}
+{% block content %}
+
+  <h1 class="title"> Scheduler {{scheduler.address}} </h1>
+
+  <a class="button is-primary" href="logs.html">Logs</a>
+  <a class="button is-primary" href="exceptions.html">Exceptions</a>
+  <a class="button is-primary" href="../../status">Bokeh</a>
+  <h2 class="title is-4">Workers</h2>
+  {% set worker_list = sorted(workers.values(), key=lambda ws: str(ws.name)) %}
+  {% include "worker-table.html" %}
+
+{% end %}

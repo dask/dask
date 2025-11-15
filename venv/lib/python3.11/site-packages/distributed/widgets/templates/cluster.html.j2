@@ -1,0 +1,38 @@
+<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-mod-trusted jp-OutputArea-output">
+    <div style="width: 24px; height: 24px; background-color: #e1e1e1; border: 3px solid #9D9D9D; border-radius: 5px; position: absolute;">
+    </div>
+    <div style="margin-left: 48px;">
+        <h3 style="margin-bottom: 0px; margin-top: 0px;">{{ type }}</h3>
+        <p style="color: #9D9D9D; margin-bottom: 0px;">{{ name }}</p>
+        <table style="width: 100%; text-align: left;">
+            <tr>
+                <td style="text-align: left;">
+                    <strong>Dashboard:</strong> <a href="{{ dashboard_link }}" target="_blank">{{ dashboard_link }}</a>
+                </td>
+                <td style="text-align: left;">
+                    <strong>Workers:</strong> {{ workers | length }}
+                </td>
+            </tr>
+            <tr>
+                <td style="text-align: left;">
+                    <strong>Total threads:</strong> {{ workers.values() | map(attribute='nthreads') | sum }}
+                </td>
+                <td style="text-align: left;">
+                    <strong>Total memory:</strong> {{ workers.values() | map(attribute='memory_limit') | sum | format_bytes }}
+                </td>
+            </tr>
+            {% if cluster_status %}
+            {{ cluster_status }}
+            {% endif %}
+        </table>
+
+        <details>
+            <summary style="margin-bottom: 20px;">
+                <h3 style="display: inline;">Scheduler Info</h3>
+            </summary>
+
+            {{ scheduler_info_repr }}
+
+        </details>
+    </div>
+</div>

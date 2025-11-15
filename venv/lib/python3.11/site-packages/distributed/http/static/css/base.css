@@ -1,0 +1,152 @@
+html {
+  width: 100%;
+  height: 100%;
+  background: #FAFAFA;
+}
+
+body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  font-family: Helvetica, Arial, sans-serif;
+  padding: 0px 10px;
+  padding-top: 3rem;
+  padding-bottom: 1rem;
+}
+
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.navbar ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #EEE;
+}
+
+.navbar li {
+  float: left;
+  font-size: 17px;
+  transition: .3s background-color;
+}
+
+.navbar li.active {
+  background-color: rgba(234, 170, 109, 0.7);
+}
+
+.navbar li a {
+  display: block;
+  color: black;
+  padding: 11px 16px;
+  text-decoration: none;
+}
+
+.navbar li:hover {
+  background-color: #eaaa6d;
+}
+
+.pull-right {
+  float: right !important;
+}
+
+#dask-logo img {
+  height: 28px;
+  padding: 5px 15px;
+}
+
+#dask-logo a {
+  padding: 0px;
+}
+
+#navbar-toggle-icon {
+  float: right;
+}
+
+#navbar-toggle-icon a {
+  display: none;
+}
+
+#navbar-toggle-icon img {
+  height: 22px;
+}
+
+@media screen and (max-width: 800px) {
+  .navbar li:not(#dask-logo):not(#navbar-toggle-icon) a {
+    display: none;
+  }
+
+  #navbar-toggle-icon a {
+    display: block;
+  }
+}
+
+@media screen and (max-width: 800px) {
+  .navbar.responsive li:not(#navbar-toggle-icon) {
+    float: none;
+  }
+
+  .navbar.responsive li:not(#dask-logo):not(#navbar-toggle-icon) a {
+    display: block;
+    text-align: left;
+  }
+
+  .navbar.responsive #navbar-toggle-icon a {
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
+}
+
+/* The bokeh-specific CSS below can be removed once `bokeh=3` is the
+minimum supported version */
+.bk-root .bk-toolbar-box .bk-toolbar-right {
+  top: 4px;
+  right: 4px;
+}
+
+.bk-root .bk-data-table {
+  z-index: 0;
+}
+
+.content {
+  width: 100%;
+  height: 100%;
+}
+
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-content {
+  display: none;
+  position: fixed;
+  top: 40px;
+  background-color: #EEE;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+  max-height: 90%;
+  overflow-y: scroll;
+}
+
+.dropdown-content ul li {
+  float: none;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+.jupyter-link img {
+  height: 1.3rem;
+  margin-bottom: -0.3rem;
+  margin-right: 0.25rem;
+}

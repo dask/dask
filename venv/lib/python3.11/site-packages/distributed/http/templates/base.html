@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Dask Diagnostic UI</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' />
+    <link rel="stylesheet" href="statics/css/base.css" />
+    <link rel="shortcut icon" href="statics/images/favicon.ico" />
+    {% block resources %}
+    {% block css_resources %}
+    {{ bokeh_css | indent(8) if bokeh_css }}
+    {% endblock %}
+    {% block js_resources%}
+    {{ bokeh_js | indent(8) if bokeh_js }}
+    {% endblock %}
+    {% block extra_resources %}
+    {% endblock %}
+    {% endblock %}
+</head>
+
+<body>
+    <div class="navbar" id="myTopnav">
+        <ul>
+            <li id="dask-logo">
+                <a href="https://dask.org/">
+                    <img src="statics/images/dask-logo.svg"></img>
+                </a>
+            </li>
+            {% for page in pages %}
+            <li>
+                <a href="{{ page }}">{{ page|title }}</a>
+            </li>
+            {% endfor %}
+            <div class="dropdown">
+                <li>
+                    <a href="javascript:void(0);">More...</a>
+                </li>
+                <div class="dropdown-content">
+                    <ul>
+                        {% for plot in plots %}
+                        <li><a href="{{ plot["url"] }}">{{ plot["name"] }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <li id="navbar-toggle-icon">
+                <a href="javascript:void(0);" onclick="myFunction()">
+                    <img src="statics/images/fa-bars.svg"></img>
+                </a>
+            </li>
+            <li class="pull-right">
+                <a href="https://docs.dask.org/en/stable/" target="_blank">Documentation</a>
+            </li>
+            {% if jupyter %}
+            <li class="pull-right">
+                <a class="jupyter-link" href="jupyter/lab" target="_blank">
+                    <img src="statics/images/jupyter.svg" />
+                    Launch Jupyter
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+    <div class="content">
+        {% block content %}
+        {% endblock %}
+    </div>
+    <script>
+        /* Add the "active" class to the current navbar li element */
+        var active = document.querySelectorAll("a[href='" + location.pathname + "']");
+        if (active.length > 0) {
+            active[0].closest('li').classList.add('active')
+        }
+
+        /* Toggle between adding and removing the "responsive" class to navbar when the user clicks on the icon */
+        function myFunction() {
+            var x = document.getElementById("myTopnav");
+            if (x.className === "navbar") {
+                x.className += " responsive";
+            } else {
+                x.className = "navbar";
+            }
+        }
+    </script>
+</body>
+
+</html>
