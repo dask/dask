@@ -3908,7 +3908,12 @@ def to_zarr(
                         f"{safe_chunk_size} bytes. "
                         f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
                     )
-                    raise PerformanceWarning(msg)
+                    
+                    warnings.warn(
+                        msg,
+                        PerformanceWarning,
+                        stacklevel=3,
+                    )
                     break
         if region is None:
             # Get the appropriate write granularity (shard shape if sharding, else chunk shape)
