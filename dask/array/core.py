@@ -3917,7 +3917,7 @@ def to_zarr(
                         f"{safe_chunk_size} bytes. "
                         f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
                     )
-                    
+
                     warnings.warn(
                         msg,
                         PerformanceWarning,
