@@ -3929,6 +3929,8 @@ def to_zarr(
 
         if region is not None:
             regions = [region]
+        else:
+            regions = None
 
         return arr.store(
             z, lock=False, regions=regions, compute=compute, return_stored=return_stored
