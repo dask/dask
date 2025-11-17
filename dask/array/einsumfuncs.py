@@ -168,7 +168,7 @@ def parse_einsum_input(operands):
                     output_subscript += s
             normal_inds = "".join(sorted(set(output_subscript) - set(out_ellipse)))
 
-            subscripts += "->" + out_ellipse + normal_inds
+            subscripts += f"->{out_ellipse}{normal_inds}"
 
     # Build output string if does not exist
     if "->" in subscripts:

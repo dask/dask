@@ -150,7 +150,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     dependencies[name_qr_st1] = set(data.__dask_layers__())
 
     # Block qr[0]
-    name_q_st1 = "getitem" + token + "-q1"
+    name_q_st1 = f"getitem{token}-q1"
     dsk_q_st1 = {
         (name_q_st1, i, 0): (operator.getitem, (name_qr_st1, i, 0), 0)
         for i in range(numblocks[0])
@@ -159,7 +159,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     dependencies[name_q_st1] = {name_qr_st1}
 
     # Block qr[1]
-    name_r_st1 = "getitem" + token + "-r1"
+    name_r_st1 = f"getitem{token}-r1"
     dsk_r_st1 = {
         (name_r_st1, i, 0): (operator.getitem, (name_qr_st1, i, 0), 1)
         for i in range(numblocks[0])
@@ -202,7 +202,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             all_blocks.append(curr_block)
 
         # R_stacked
-        name_r_stacked = "stack" + token + "-r1"
+        name_r_stacked = f"stack{token}-r1"
         dsk_r_stacked = {
             (name_r_stacked, i, 0): (
                 np.vstack,
@@ -236,7 +236,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         dependencies = toolz.merge(q_inner.dask.dependencies, r_inner.dask.dependencies)
 
         # Q_inner: "unstack"
-        name_q_st2 = "getitem" + token + "-q2"
+        name_q_st2 = f"getitem{token}-q2"
         dsk_q_st2 = {
             (name_q_st2, j, 0): (
                 operator.getitem,
@@ -253,13 +253,13 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         dependencies[name_q_st2] = set(q_inner.__dask_layers__())
 
         # R: R_inner
-        name_r_st2 = "r-inner" + token
+        name_r_st2 = f"r-inner{token}"
         dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
         layers[name_r_st2] = dsk_r_st2
         dependencies[name_r_st2] = set(r_inner.__dask_layers__())
 
         # Q: Block qr[0] (*) Q_inner
-        name_q_st3 = "dot" + token + "-q3"
+        name_q_st3 = f"dot{token}-q3"
         dsk_q_st3 = blockwise(
             np.dot,
             name_q_st3,
@@ -277,13 +277,13 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # Stacking for in-core QR computation
         to_stack = [(name_r_st1, i, 0) for i in range(numblocks[0])]
-        name_r_st1_stacked = "stack" + token + "-r1"
+        name_r_st1_stacked = f"stack{token}-r1"
         dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack, (tuple, to_stack))}
         layers[name_r_st1_stacked] = dsk_r_st1_stacked
         dependencies[name_r_st1_stacked] = {name_r_st1}
 
         # In-core QR computation
-        name_qr_st2 = "qr" + token + "-qr2"
+        name_qr_st2 = f"qr{token}-qr2"
         dsk_qr_st2 = blockwise(
             np.linalg.qr,
             name_qr_st2,
@@ -296,7 +296,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         dependencies[name_qr_st2] = {name_r_st1_stacked}
 
         # In-core qr[0]
-        name_q_st2_aux = "getitem" + token + "-q2-aux"
+        name_q_st2_aux = f"getitem{token}-q2-aux"
         dsk_q_st2_aux = {
             (name_q_st2_aux, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 0)
         }
@@ -317,18 +317,18 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             # when chunks are not already known...
 
             # request shape information: vertical chunk sizes & column dimension (n)
-            name_q2bs = "shape" + token + "-q2"
+            name_q2bs = f"shape{token}-q2"
             dsk_q2_shapes = {
                 (name_q2bs, i): (min, (getattr, (data.name, i, 0), "shape"))
                 for i in range(numblocks[0])
             }
-            name_n = "getitem" + token + "-n"
+            name_n = f"getitem{token}-n"
             dsk_n = {
                 name_n: (operator.getitem, (getattr, (data.name, 0, 0), "shape"), 1)
             }
 
             # cumulative sums (start, end)
-            name_q2cs = "cumsum" + token + "-q2"
+            name_q2cs = f"cumsum{token}-q2"
             dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
 
             for i in range(1, numblocks[0]):
@@ -339,7 +339,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                 )
 
             # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
-            name_blockslice = "slice" + token + "-q"
+            name_blockslice = f"slice{token}-q"
             dsk_block_slices = {
                 (name_blockslice, i): (
                     tuple,
@@ -355,11 +355,11 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             deps = {data.name}
             block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
 
-        layers["q-blocksizes" + token] = dsk_q_blockslices
-        dependencies["q-blocksizes" + token] = deps
+        layers[f"q-blocksizes{token}"] = dsk_q_blockslices
+        dependencies[f"q-blocksizes{token}"] = deps
 
         # In-core qr[0] unstacking
-        name_q_st2 = "getitem" + token + "-q2"
+        name_q_st2 = f"getitem{token}-q2"
         dsk_q_st2 = {
             (name_q_st2, i, 0): (operator.getitem, (name_q_st2_aux, 0, 0), b)
             for i, b in enumerate(block_slices)
@@ -368,10 +368,10 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         if chucks_are_all_known:
             dependencies[name_q_st2] = {name_q_st2_aux}
         else:
-            dependencies[name_q_st2] = {name_q_st2_aux, "q-blocksizes" + token}
+            dependencies[name_q_st2] = {name_q_st2_aux, f"q-blocksizes{token}"}
 
         # Q: Block qr[0] (*) In-core qr[0]
-        name_q_st3 = "dot" + token + "-q3"
+        name_q_st3 = f"dot{token}-q3"
         dsk_q_st3 = blockwise(
             np.dot,
             name_q_st3,
@@ -386,7 +386,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         dependencies[name_q_st3] = {name_q_st1, name_q_st2}
 
         # R: In-core qr[1]
-        name_r_st2 = "getitem" + token + "-r2"
+        name_r_st2 = f"getitem{token}-r2"
         dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
         layers[name_r_st2] = dsk_r_st2
         dependencies[name_r_st2] = {name_qr_st2}
@@ -441,7 +441,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         return q, r
     else:
         # In-core SVD computation
-        name_svd_st2 = "svd" + token + "-2"
+        name_svd_st2 = f"svd{token}-2"
         dsk_svd_st2 = blockwise(
             np.linalg.svd,
             name_svd_st2,
@@ -451,16 +451,16 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             numblocks={name_r_st2: (1, 1)},
         )
         # svd[0]
-        name_u_st2 = "getitem" + token + "-u2"
+        name_u_st2 = f"getitem{token}-u2"
         dsk_u_st2 = {(name_u_st2, 0, 0): (operator.getitem, (name_svd_st2, 0, 0), 0)}
         # svd[1]
-        name_s_st2 = "getitem" + token + "-s2"
+        name_s_st2 = f"getitem{token}-s2"
         dsk_s_st2 = {(name_s_st2, 0): (operator.getitem, (name_svd_st2, 0, 0), 1)}
         # svd[2]
-        name_v_st2 = "getitem" + token + "-v2"
+        name_v_st2 = f"getitem{token}-v2"
         dsk_v_st2 = {(name_v_st2, 0, 0): (operator.getitem, (name_svd_st2, 0, 0), 2)}
         # Q * U
-        name_u_st4 = "getitem" + token + "-u4"
+        name_u_st4 = f"getitem{token}-u4"
         dsk_u_st4 = blockwise(
             dotmany,
             name_u_st4,
@@ -568,8 +568,8 @@ def sfqr(data, name=None):
     dependencies = data.__dask_graph__().dependencies.copy()
 
     # data = A = [A_1 A_rest]
-    name_A_1 = prefix + "A_1"
-    name_A_rest = prefix + "A_rest"
+    name_A_1 = f"{prefix}A_1"
+    name_A_rest = f"{prefix}A_rest"
     layers[name_A_1] = {(name_A_1, 0, 0): (data.name, 0, 0)}
     dependencies[name_A_1] = set(data.__dask_layers__())
     layers[name_A_rest] = {
@@ -581,9 +581,9 @@ def sfqr(data, name=None):
         dependencies[name_A_rest] = set()
 
     # Q R_1 = A_1
-    name_Q_R1 = prefix + "Q_R_1"
-    name_Q = prefix + "Q"
-    name_R_1 = prefix + "R_1"
+    name_Q_R1 = f"{prefix}Q_R_1"
+    name_Q = f"{prefix}Q"
+    name_R_1 = f"{prefix}R_1"
     layers[name_Q_R1] = {(name_Q_R1, 0, 0): (np.linalg.qr, (name_A_1, 0, 0))}
     dependencies[name_Q_R1] = {name_A_1}
 

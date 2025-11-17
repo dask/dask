@@ -297,7 +297,7 @@ def _map_freq_to_period_start(freq):
         new_offset_type = getattr(pd.tseries.offsets, new_offset)
         if "-" in freq:
             _, anchor = freq.split("-")
-            anchor = "-" + anchor
+            anchor = f"-{anchor}"
         else:
             anchor = ""
         n = str(offset.n) if offset.n != 1 else ""

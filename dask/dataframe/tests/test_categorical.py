@@ -340,7 +340,7 @@ def test_categorical_set_index_npartitions_vs_ncategories(npartitions, ncategori
     rows_per_category = 10
     n_rows = ncategories * rows_per_category
 
-    categories = ["CAT" + str(i) for i in range(ncategories)]
+    categories = [f"CAT{i}" for i in range(ncategories)]
     pdf = pd.DataFrame(
         {"id": categories * rows_per_category, "value": np.random.random(n_rows)}
     )

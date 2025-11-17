@@ -240,20 +240,18 @@ def test_get_s3():
 
 
 def test_open_files_write(s3, s3so):
-    paths = ["s3://" + test_bucket_name + "/more/" + f for f in files]
+    paths = [f"s3://{test_bucket_name}/more/{f}" for f in files]
     fils = open_files(paths, mode="wb", **s3so)
     for fil, data in zip(fils, files.values()):
         with fil as f:
             f.write(data)
-    sample, values = read_bytes(
-        "s3://" + test_bucket_name + "/more/test/accounts.*", **s3so
-    )
+    sample, values = read_bytes(f"s3://{test_bucket_name}/more/test/accounts.*", **s3so)
     results = compute(*concat(values))
     assert set(files.values()) == set(results)
 
 
 def test_read_bytes(s3, s3so):
-    sample, values = read_bytes("s3://" + test_bucket_name + "/test/accounts.*", **s3so)
+    sample, values = read_bytes(f"s3://{test_bucket_name}/test/accounts.*", **s3so)
     assert isinstance(sample, bytes)
     assert sample[:5] == files[sorted(files)[0]][:5]
     assert sample.endswith(b"\n")
@@ -269,21 +267,21 @@ def test_read_bytes(s3, s3so):
 
 def test_read_bytes_sample_delimiter(s3, s3so):
     sample, values = read_bytes(
-        "s3://" + test_bucket_name + "/test/accounts.*",
+        f"s3://{test_bucket_name}/test/accounts.*",
         sample=80,
         delimiter=b"\n",
         **s3so,
     )
     assert sample.endswith(b"\n")
     sample, values = read_bytes(
-        "s3://" + test_bucket_name + "/test/accounts.1.json",
+        f"s3://{test_bucket_name}/test/accounts.1.json",
         sample=80,
         delimiter=b"\n",
         **s3so,
     )
     assert sample.endswith(b"\n")
     sample, values = read_bytes(
-        "s3://" + test_bucket_name + "/test/accounts.1.json",
+        f"s3://{test_bucket_name}/test/accounts.1.json",
         sample=2,
         delimiter=b"\n",
         **s3so,
@@ -293,12 +291,12 @@ def test_read_bytes_sample_delimiter(s3, s3so):
 
 def test_read_bytes_non_existing_glob(s3, s3so):
     with pytest.raises(IOError):
-        read_bytes("s3://" + test_bucket_name + "/non-existing/*", **s3so)
+        read_bytes(f"s3://{test_bucket_name}/non-existing/*", **s3so)
 
 
 def test_read_bytes_blocksize_none(s3, s3so):
     _, values = read_bytes(
-        "s3://" + test_bucket_name + "/test/accounts.*", blocksize=None, **s3so
+        f"s3://{test_bucket_name}/test/accounts.*", blocksize=None, **s3so
     )
     assert sum(map(len, values)) == len(files)
 
@@ -324,7 +322,7 @@ def test_read_bytes_blocksize_on_large_data(s3_with_yellow_tripdata, s3so):
 @pytest.mark.parametrize("blocksize", [5, 15, 45, 1500])
 def test_read_bytes_block(s3, blocksize, s3so):
     _, vals = read_bytes(
-        "s3://" + test_bucket_name + "/test/account*", blocksize=blocksize, **s3so
+        f"s3://{test_bucket_name}/test/account*", blocksize=blocksize, **s3so
     )
     assert list(map(len, vals)) == [
         max((len(v) // blocksize), 1) for v in files.values()
@@ -341,13 +339,13 @@ def test_read_bytes_block(s3, blocksize, s3so):
 @pytest.mark.parametrize("blocksize", [5, 15, 45, 1500])
 def test_read_bytes_delimited(s3, blocksize, s3so):
     _, values = read_bytes(
-        "s3://" + test_bucket_name + "/test/accounts*",
+        f"s3://{test_bucket_name}/test/accounts*",
         blocksize=blocksize,
         delimiter=b"\n",
         **s3so,
     )
     _, values2 = read_bytes(
-        "s3://" + test_bucket_name + "/test/accounts*",
+        f"s3://{test_bucket_name}/test/accounts*",
         blocksize=blocksize,
         delimiter=b"foo",
         **s3so,
@@ -364,7 +362,7 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
     # delimiter not at the end
     d = b"}"
     _, values = read_bytes(
-        "s3://" + test_bucket_name + "/test/accounts*",
+        f"s3://{test_bucket_name}/test/accounts*",
         blocksize=blocksize,
         delimiter=d,
         **s3so,
@@ -411,9 +409,7 @@ def test_compression(s3, fmt, blocksize, s3so):
 
 @pytest.mark.parametrize("mode", ["rt", "rb"])
 def test_open_files(s3, mode, s3so):
-    myfiles = open_files(
-        "s3://" + test_bucket_name + "/test/accounts.*", mode=mode, **s3so
-    )
+    myfiles = open_files(f"s3://{test_bucket_name}/test/accounts.*", mode=mode, **s3so)
     assert len(myfiles) == len(files)
     for lazy_file, path in zip(myfiles, sorted(files)):
         with lazy_file as f:
@@ -632,5 +628,5 @@ def test_parquet_wstoragepars(s3, s3so, engine):
         storage_options={"default_block_size": 2**20, **s3so},
     )
     assert s3.current().default_block_size == 2**20
-    with s3.current().open(url + "/_metadata") as f:
+    with s3.current().open(f"{url}/_metadata") as f:
         assert f.blocksize == 2**20

@@ -481,7 +481,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
             ):
                 raise TypeError(
                     "Expected object of type dataframe, series, index, or scalar.\n"
-                    "    Got: " + str(type(result))
+                    f"    Got: {type(result)}"
                 )
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)

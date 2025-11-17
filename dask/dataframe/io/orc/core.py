@@ -194,7 +194,7 @@ def to_orc(
         write_index,
         storage_options,
     )
-    final_name = name + "-final"
+    final_name = f"{name}-final"
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
             apply,

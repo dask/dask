@@ -92,7 +92,7 @@ class CumulativeFinalize(Expr):
         frame, previous_partitions = self.frame, self.previous_partitions
         dsk[(self._name, 0)] = (frame._name, 0)
 
-        intermediate_name = self._name + "-intermediate"
+        intermediate_name = f"{self._name}-intermediate"
         for i in range(1, self.frame.npartitions):
             if i == 1:
                 dsk[(intermediate_name, i)] = (previous_partitions._name, i - 1)

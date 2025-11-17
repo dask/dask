@@ -242,8 +242,8 @@ class MergeAsofIndexed(MergeAsof):
     def _layer(self) -> dict:
         dsk = dict()
         tails = heads = None
-        tails_name = "prefix-reduction-" + self._name
-        heads_name = "suffix_reduction-" + self._name
+        tails_name = f"prefix-reduction-{self._name}"
+        heads_name = f"suffix_reduction-{self._name}"
         if self.direction in ["backward", "nearest"]:
             tails = compute_tails(self.right, tails_name, by=self.right_by)
             dsk.update(tails)

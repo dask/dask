@@ -52,7 +52,7 @@ def register_chunk_type(type):
     ...         self.a = a
     ...         self.flag = flag
     ...     def __repr__(self):
-    ...         return f"Flag: {self.flag}, Array: " + repr(self.a)
+    ...         return f"Flag: {self.flag}, Array: {self.a!r}"
     ...     def __array__(self):
     ...         return np.asarray(self.a)
     ...     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):

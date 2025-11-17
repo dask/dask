@@ -701,7 +701,7 @@ def test_groupby_rolling():
     df = pd.DataFrame(
         {
             "column1": range(600),
-            "group1": 5 * ["g" + str(i) for i in range(120)],
+            "group1": 5 * [f"g{i}" for i in range(120)],
         },
         index=pd.date_range("20190101", periods=60).repeat(10),
     )
@@ -745,7 +745,7 @@ def test_rolling_groupby_projection():
         {
             "column1": range(600),
             "a": 1,
-            "group1": 5 * ["g" + str(i) for i in range(120)],
+            "group1": 5 * [f"g{i}" for i in range(120)],
         },
         index=pd.date_range("20190101", periods=60).repeat(10),
     )

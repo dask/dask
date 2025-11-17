@@ -1417,8 +1417,8 @@ class ArrowDatasetEngine(Engine):
                             stats += stat
                     return parts, stats
 
-                gather_parts_dsk["final-" + name] = (_combine_parts, finalize_list)
-                parts, stats = Delayed("final-" + name, gather_parts_dsk).compute()
+                gather_parts_dsk[f"final-{name}"] = (_combine_parts, finalize_list)
+                parts, stats = Delayed(f"final-{name}", gather_parts_dsk).compute()
 
         return parts, stats, common_kwargs
 

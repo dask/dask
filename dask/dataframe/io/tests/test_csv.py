@@ -780,9 +780,9 @@ def test_read_csv_compression(fmt, blocksize):
         # read_csv.  The paths must have the appropriate extension.
         if fmt and blocksize:
             with pytest.warns(UserWarning):
-                df = dd.read_csv("2014-01-*.csv" + suffix, blocksize=blocksize)
+                df = dd.read_csv(f"2014-01-*.csv{suffix}", blocksize=blocksize)
         else:
-            df = dd.read_csv("2014-01-*.csv" + suffix, blocksize=blocksize)
+            df = dd.read_csv(f"2014-01-*.csv{suffix}", blocksize=blocksize)
         assert_eq(
             df.compute(scheduler="sync").reset_index(drop=True),
             expected.reset_index(drop=True),
@@ -1774,7 +1774,7 @@ def test_block_mask(block_lists):
 def test_reading_empty_csv_files_with_path():
     with tmpdir() as tdir:
         for k, content in enumerate(["0, 1, 2", "", "6, 7, 8"]):
-            with open(os.path.join(tdir, str(k) + ".csv"), "w") as file:
+            with open(os.path.join(tdir, f"{k}.csv"), "w") as file:
                 file.write(content)
         result = dd.read_csv(
             os.path.join(tdir, "*.csv"),
@@ -1876,11 +1876,11 @@ def test_select_with_include_path_column(tmpdir):
     d = {"col1": [i for i in range(0, 100)], "col2": [i for i in range(100, 200)]}
     df = pd.DataFrame(data=d)
 
-    temp_path = str(tmpdir) + "/"
+    temp_path = f"{tmpdir}/"
     for i in range(6):
         df.to_csv(f"{temp_path}file_{i}.csv", index=False)
 
-    ddf = dd.read_csv(temp_path + "*.csv", include_path_column=True)
+    ddf = dd.read_csv(f"{temp_path}*.csv", include_path_column=True)
 
     assert_eq(ddf.col1, pd.concat([df.col1] * 6))
 

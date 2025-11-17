@@ -951,11 +951,11 @@ ext_open = [("gz", GzipFile), ("bz2", BZ2File), ("", open)]
 def test_to_textfiles(ext, myopen):
     b = db.from_sequence(["abc", "123", "xyz"], npartitions=2)
     with tmpdir() as dir:
-        c = b.to_textfiles(os.path.join(dir, "*." + ext), compute=False)
+        c = b.to_textfiles(os.path.join(dir, f"*.{ext}"), compute=False)
         dask.compute(*c, scheduler="sync")
-        assert os.path.exists(os.path.join(dir, "1." + ext))
+        assert os.path.exists(os.path.join(dir, f"1.{ext}"))
 
-        f = myopen(os.path.join(dir, "1." + ext), "rb")
+        f = myopen(os.path.join(dir, f"1.{ext}"), "rb")
         text = f.read()
         if hasattr(text, "decode"):
             text = text.decode()
@@ -1024,12 +1024,12 @@ def test_to_textfiles_encoding():
     for ext, myopen in ext_open:
         with tmpdir() as dir:
             c = b.to_textfiles(
-                os.path.join(dir, "*." + ext), encoding="gb18030", compute=False
+                os.path.join(dir, f"*.{ext}"), encoding="gb18030", compute=False
             )
             dask.compute(*c)
-            assert os.path.exists(os.path.join(dir, "1." + ext))
+            assert os.path.exists(os.path.join(dir, f"1.{ext}"))
 
-            f = myopen(os.path.join(dir, "1." + ext), "rb")
+            f = myopen(os.path.join(dir, f"1.{ext}"), "rb")
             text = f.read()
             if hasattr(text, "decode"):
                 text = text.decode("gb18030")

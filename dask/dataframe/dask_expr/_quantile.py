@@ -88,7 +88,7 @@ class SeriesQuantileTdigest(SeriesQuantile):
 
         dsk = {}
         for i in range(self.frame.npartitions):
-            dsk[("chunk-" + self._name, i)] = (
+            dsk[(f"chunk-{self._name}", i)] = (
                 _tdigest_chunk,
                 (getattr, (self.frame._name, i), "values"),
             )
@@ -113,7 +113,7 @@ class SeriesQuantileDask(SeriesQuantile):
         calc_qs[-1] = 100
 
         for i in range(self.frame.npartitions):
-            dsk[("chunk-" + self._name, i)] = (
+            dsk[(f"chunk-{self._name}", i)] = (
                 _percentile,
                 (self.frame._name, i),
                 calc_qs,
