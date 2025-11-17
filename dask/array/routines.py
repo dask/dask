@@ -993,7 +993,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             ) from None
 
     token = tokenize(a, bins, range, weights, density)
-    name = "histogram-sum-" + token
+    name = f"histogram-sum-{token}"
 
     bins_range, deps = unpack_collections([bins, range])
 
@@ -1735,7 +1735,7 @@ def unique_no_structured_arr(
 
     out_parts = [out]
 
-    name = "unique-aggregate-" + out.name
+    name = f"unique-aggregate-{out.name}"
     dsk = {
         (name, 0): (
             (np.unique,)
@@ -1824,7 +1824,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     else:
         out_parts.append(None)
 
-    name = "unique-aggregate-" + out.name
+    name = f"unique-aggregate-{out.name}"
     dsk = {
         (name, 0): (
             (_unique_internal,)

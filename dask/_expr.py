@@ -541,7 +541,7 @@ class Expr:
 
     @functools.cached_property
     def _name(self) -> str:
-        return self._funcname + "-" + self.deterministic_token
+        return f"{self._funcname}-{self.deterministic_token}"
 
     @property
     def _meta(self):
