@@ -3888,6 +3888,15 @@ def to_zarr(
             previous_chunks=zarr_write_chunks,
         )
 
+        if region is not None:
+            from dask.array.slicing import new_blockdim, normalize_index
+
+            index = normalize_index(region, z.shape)
+            dask_write_chunks = tuple(
+                tuple(new_blockdim(s, c, r))
+                for s, c, r in zip(z.shape, dask_write_chunks, index)
+            )
+
         for ax, (dw, zw) in enumerate(
             zip(dask_write_chunks, zarr_write_chunks, strict=True)
         ):
@@ -3915,20 +3924,12 @@ def to_zarr(
                         stacklevel=3,
                     )
                     break
-        if region is None:
-            # Get the appropriate write granularity (shard shape if sharding, else chunk shape)
-            arr = arr.rechunk(dask_write_chunks)
-            regions = None
-        else:
-            from dask.array.slicing import new_blockdim, normalize_index
 
-            index = normalize_index(region, z.shape)
-            chunks = tuple(
-                tuple(new_blockdim(s, c, r))
-                for s, c, r in zip(z.shape, dask_write_chunks, index)
-            )
-            arr = arr.rechunk(chunks)
+        arr = arr.rechunk(dask_write_chunks)
+
+        if region is not None:
             regions = [region]
+
         return arr.store(
             z, lock=False, regions=regions, compute=compute, return_stored=return_stored
         )
