@@ -5239,7 +5239,7 @@ def test_zarr_regions():
 
     with pytest.warns(PerformanceWarning):
         a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
-    
+
     a2 = da.from_zarr(z)
     expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 0, 7, 0], [0, 0, 11, 0]]
     assert_eq(a2, expected)
