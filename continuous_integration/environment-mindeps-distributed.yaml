@@ -11,7 +11,7 @@ dependencies:
   - partd=1.2.0
   - fsspec=2021.09.0
   - importlib-metadata=4.13.0
-  - toolz=0.10.0
+  - toolz=0.12.0
   # optional dependencies pulled in by pip install dask[distributed]
   - pip
   - pip:
