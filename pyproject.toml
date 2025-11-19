@@ -109,6 +109,7 @@ extend-select = [
     "PGH",
     "PLR",
     "UP",
+    "FURB",
 ]
 ignore = [
     "B011",     # Do not `assert False`, raise `AssertionError()`
@@ -130,6 +131,7 @@ ignore = [
     "PLR1733",  # Unnecessary lookup of dictionary value by key
     "PLR2004",  # Magic value used in comparison, consider replacing with a constant variable
     "PLR2044",  # Line with empty comment
+    "FURB157",  # Verbose expression in `Decimal` constructor
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]

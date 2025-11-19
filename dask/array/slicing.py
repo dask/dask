@@ -736,7 +736,7 @@ def new_blockdim(dim_shape, lengths, index):
         for i, slc in pairs
     ]
     if isinstance(index, slice) and index.step and index.step < 0:
-        slices = slices[::-1]
+        slices.reverse()
     return [int(math.ceil((1.0 * slc.stop - slc.start) / slc.step)) for slc in slices]
 
 

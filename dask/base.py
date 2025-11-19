@@ -1043,9 +1043,8 @@ def _colorize(t):
     '#002080'
     """
     t = t[:3]
-    i = sum(v * 256 ** (len(t) - i - 1) for i, v in enumerate(t))
-    h = hex(int(i))[2:].upper()
-    return f"#{h:>06}"
+    i = sum(v << 8 * i for i, v in enumerate(reversed(t)))
+    return f"#{i:>06X}"
 
 
 named_schedulers: dict[str, SchedulerGetCallable] = {

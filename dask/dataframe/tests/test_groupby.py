@@ -187,7 +187,7 @@ def test_full_groupby():
 def test_full_groupby_multilevel(grouper, reverse):
     index = [0, 1, 3, 5, 6, 8, 9, 9, 9]
     if reverse:
-        index = index[::-1]
+        index.reverse()
     df = pd.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7, 8, 9],
