@@ -463,7 +463,9 @@ Expr={expr}"""
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
 
-    def analyze(self, filename: str | None = None, format: str | None = None) -> Any:
+    def analyze(
+        self, filename: str | None = None, format: str | None = None
+    ) -> graphviz.Digraph:
         """Outputs statistics about every node in the expression.
 
         analyze optimizes the expression and triggers a computation. It records statistics

@@ -40,7 +40,7 @@ def inject_analyze(expr: Expr, id: str, injected: dict) -> Expr:
 
 def analyze(
     expr: Expr, filename: str | None = None, format: str | None = None, **kwargs: Any
-) -> Any:
+) -> graphviz.Digraph:
     import_required(
         "distributed",
         "distributed is a required dependency for using the analyze method.",
