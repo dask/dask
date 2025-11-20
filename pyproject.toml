@@ -104,6 +104,7 @@ line-length = 120
 extend-select = [
     "B",
     "T10",
+    "ISC",
     "TID",
     "I",
     "PGH",
