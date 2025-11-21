@@ -10,6 +10,7 @@ import pytest
 np = pytest.importorskip("numpy")
 
 import dask.array as da
+from dask.array.numpy_compat import NUMPY_GE_240
 from dask.array.ufunc import da_frompyfunc
 from dask.array.utils import assert_eq
 from dask.base import tokenize
@@ -21,8 +22,24 @@ Some inconsistencies with the Dask version may exist.
 """
 
 
-@pytest.mark.parametrize("name", ["log", "modf", "frexp"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(
+            "log",
+            marks=[
+                pytest.mark.xfail(
+                    condition=NUMPY_GE_240,
+                    reason="https://github.com/numpy/numpy/issues/30095",
+                )
+            ],
+        ),
+        "modf",
+        "frexp",
+    ],
+)
 def test_ufunc_meta(name):
+
     disclaimer = DISCLAIMER.format(name=name)
     skip_test = "  # doctest: +SKIP"
     ufunc = getattr(da, name)
