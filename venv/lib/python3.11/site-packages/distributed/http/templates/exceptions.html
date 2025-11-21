@@ -1,0 +1,54 @@
+{% extends main.html %}
+{% block content %}
+
+<style>
+.workerlist {
+  display: inline;
+  list-style: none;
+}
+
+.workerlist li {
+  display: inline;
+}
+
+.workerlist li:after {
+  content: ", ";
+}
+.workerlist li:last-child:after {
+  content: "";
+}
+</style>
+
+<div style="max-width: 1200px">
+    <h2 class="title is-3">Exceptions</h2>
+    {% for ts in erred_tasks %}
+    <div class="box">
+        <div style="display: inline-block;">
+            <p>
+                <span>Task:</span>
+                <code> <a href="../task/{{ url_escape(str(ts.key)) }}.html">{{ts.key}}</a> </code>
+            </p>
+            <div>
+                <span>Worker(s):</span>
+                <ul class="workerlist">
+                    {% for w in ts.erred_on %}
+                    <li><a href="../worker/{{ url_escape(w) }}.html">{{w}}</a></li>
+                    {% end %}
+                </ul>
+            </div>
+            <p>
+                <span>Exception:</span>
+                <code> {{ ts.exception_text }} </code>
+            </p>
+        </div>
+        <details style="border: 1px solid black; border-radius: 4px; padding: 1em; margin-top: 4px;">
+            <summary style="font-weight: bold">Traceback</summary>
+            <pre><code>{{ ts.traceback_text }} </code></pre>
+        </details>
+        <div>
+        </div>
+    </div>
+    {% end %}
+</div>
+
+{% end %}

@@ -1,0 +1,8 @@
+{% extends main.html %}
+{% block content %}
+
+  {% for _, log in logs %}
+  <p> {{ log }} </p>
+  {% end %}
+
+{% end %}

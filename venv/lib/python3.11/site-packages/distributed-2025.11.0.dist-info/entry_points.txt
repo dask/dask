@@ -1,0 +1,10 @@
+[console_scripts]
+dask-scheduler = distributed.cli.dask_scheduler:main
+dask-ssh = distributed.cli.dask_ssh:main
+dask-worker = distributed.cli.dask_worker:main
+
+[dask_cli]
+scheduler = distributed.cli.dask_scheduler:main
+spec = distributed.cli.dask_spec:main
+ssh = distributed.cli.dask_ssh:main
+worker = distributed.cli.dask_worker:main

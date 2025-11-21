@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block extra_resources %}
+<link rel="stylesheet" href="statics/css/gpu.css">
+{% endblock %}
+
+{% block content %}
+{% from macros import embed %}
+<div id="status-fluid">
+
+  <div id="gpu-utilization">
+    {{ embed(roots.gpu_utilization_histogram) }}
+  </div>
+
+  <div id="gpu-memory">
+    {{ embed(roots.gpu_memory_histogram) }}
+  </div>
+
+</div>
+{{ plot_script }}
+
+{% endblock %}

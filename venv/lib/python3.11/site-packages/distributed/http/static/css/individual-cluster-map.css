@@ -1,0 +1,54 @@
+#vis {
+    height: 100%;
+}
+
+.node {
+    stroke: black;
+    stroke-width: 3px;
+    stroke-linejoin: round;
+    filter: drop-shadow(-1px 1px 2px rgba(0, 0, 0, .4));
+}
+
+.worker {
+    fill: #ECB172;
+}
+
+.scheduler {
+    fill: #c5c1ff
+}
+
+.projectile {
+    stroke-width: 4;
+    stroke-linecap: round;
+    fill: transparent;
+    stroke-dasharray: 20 1000;
+    stroke-dashoffset: 0;
+    animation: shoot 0.5s linear infinite;
+}
+
+.transfer {
+    stroke-width: 4;
+    stroke-linecap: round;
+    fill: transparent;
+    stroke-dasharray: 10;
+    stroke-dashoffset: 10;
+    animation: transfer 1s linear infinite;
+}
+
+@keyframes transfer {
+    from {
+        stroke-dashoffset: -100;
+    }
+    to {
+        stroke-dashoffset: 100;
+    }
+}
+
+@keyframes shoot {
+    from {
+        stroke-dashoffset: 0;
+    }
+    to {
+        stroke-dashoffset: 1000;
+    }
+}

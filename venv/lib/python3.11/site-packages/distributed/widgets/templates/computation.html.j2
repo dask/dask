@@ -1,0 +1,42 @@
+<strong>Computation</strong> {{ id }}
+
+<table>
+    <tr>
+        <td style="text-align: left;"><strong>Duration: </strong>{{ '%0.3f' | format(stop - start) }}</td>
+        <td style="text-align: left;"></td>
+    </tr>
+    <tr>
+        <td style="text-align: left;"><strong>Start: </strong>{{ start }}</td>
+        <td style="text-align: left;"></td>
+    </tr>
+    <tr>
+        <td style="text-align: left;"><strong>Groups: </strong>{{ groups | length }}</td>
+        <td style="text-align: left;"></td>
+    </tr>
+    <tr>
+        <td style="text-align: left;"><strong>Tasks: </strong>
+        {% for k, v in states.items() if v %}
+            {{ k }}: {{ v }}
+            {{ ", " if not loop.last else "" }}
+        {% endfor %}
+        </td>
+        <td style="text-align: left;"></td>
+    </tr>
+</table>
+
+<details>
+<summary style="margin-bottom": 20px><h4 style="display:inline">Code</h4></summary>
+{% for frames in code if frames %}
+<h5>Code segment {{ loop.index }} / {{ code | length }}</h5>
+<pre><code>{{ frames[-1] }}</code></pre>
+{% endfor %}
+</details>
+
+<details>
+<summary style="margin-bottom": 20px><h4 style="display:inline">Task Groups</h4></summary>
+<ul>
+{% for gr in groups %}
+    <li> {{ gr.__repr__() | html_escape }} </li>
+{% endfor %}
+</ul>
+</details>

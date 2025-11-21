@@ -1,0 +1,9 @@
+### contents of theme.yaml
+attrs:
+    Plot:
+        background_fill_color: null
+        border_fill_color: null
+        min_border_left: 10
+        min_border_right: 10
+    Toolbar:
+      logo: null
