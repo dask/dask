@@ -25,15 +25,7 @@ Some inconsistencies with the Dask version may exist.
 @pytest.mark.parametrize(
     "name",
     [
-        pytest.param(
-            "log",
-            marks=[
-                pytest.mark.xfail(
-                    condition=NUMPY_GE_240,
-                    reason="https://github.com/numpy/numpy/issues/30095",
-                )
-            ],
-        ),
+        "log",
         "modf",
         "frexp",
     ],
@@ -46,10 +38,14 @@ def test_ufunc_meta(name):
     assert ufunc.__name__ == name
     assert disclaimer in ufunc.__doc__
 
-    assert (
-        ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
-        == getattr(np, name).__doc__
-    )
+    if not NUMPY_GE_240:
+        # https://github.com/numpy/numpy/issues/30095
+        # ufunc inspection doesn't provide argument names, which
+        # breaks our docstring rewriting
+        assert (
+            ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
+            == getattr(np, name).__doc__
+        )
 
 
 def test_ufunc():
