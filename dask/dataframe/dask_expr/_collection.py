@@ -148,8 +148,6 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
-from dask.dataframe.dask_expr._expr import maybe_align_partitions
-
 
 #
 # Utilities to wrap Expr API
@@ -404,7 +402,7 @@ class FrameBase(DaskMethodsMixin):
         return new_collection, (self._expr,)
 
     def __getitem__(self, other):
-        if is_series_like(other) and getattr(other, 'dtype', None) == 'bool':
+        if is_series_like(other) and getattr(other, "dtype", None) == "bool":
             return self.map_partitions(lambda df, mask: df.loc[mask], other)
         if isinstance(other, FrameBase):
             if not expr.are_co_aligned(self.expr, other.expr):
