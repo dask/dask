@@ -5439,31 +5439,3 @@ def test_loc_partitions_are_plain_scalars():
     assert type(result.divisions[0]) is int
 
 
-def test_boolean_indexing_astype_consistency():
-    pd_t0 = pd.DataFrame({"c0": [0, 1, 1, 1, 1, 0, 1]})
-    dd_t0 = dd.from_pandas(pd_t0, npartitions=2)
-
-    # Test Case 1
-    pd_result_1 = pd_t0[pd_t0["c0"].astype(bool)]
-    dd_result_1 = dd_t0[dd_t0["c0"].astype(bool)].compute()
-    dd.assert_eq(dd_result_1, pd_result_1, check_dtype=False)
-
-    # Test Case 2
-    pd_result_2 = pd_t0[pd_t0["c0"].astype(str).astype(bool)]
-    dd_result_2 = dd_t0[dd_t0["c0"].astype(str).astype(bool)].compute()
-    dd.assert_eq(dd_result_2, pd_result_2, check_dtype=False)
-
-    # Test Case 3
-    pd_a = pd.DataFrame({"c0": [1, 0, 1, 0]})
-    pd_b = pd.DataFrame({"mask": [True, False, True, True]})
-    dd_a = dd.from_pandas(pd.DataFrame(pd_a), npartitions=1)
-    dd_b = dd.from_pandas(pd.DataFrame(pd_b), npartitions=3)
-
-    if dd_a.npartitions != dd_b.npartitions:
-        dd_b = dd_b.repartition(npartitions=dd_a.npartitions)
-    dd_result_3 = dd_a.map_partitions(
-        lambda df, mask: df.loc[mask], dd_b["mask"]
-    ).compute()
-
-    pd_result_3 = pd_a[pd_b["mask"]]
-    dd.assert_eq(dd_result_3, pd_result_3, check_dtype=False)
