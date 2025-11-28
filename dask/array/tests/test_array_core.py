@@ -4960,28 +4960,27 @@ def test_zarr_roundtrip():
 
 
 @pytest.mark.parametrize(
-    "chunks, shard_factors",
-    [((3, 3), (6, 6)), ((3, 3), (4, 4)), ((60, 60), (5, 5))],
+    "chunks, shards",
+    [
+        ((3, 3), (18, 18)),  # 6 chunks per shard dimension
+        ((3, 3), (12, 12)),  # 4 chunks per shard dimension
+        ((60, 60), (60, 60)),  # Single chunk = single shard
+    ],
 )
-def test_zarr_sharding_roundtrip(tmp_path, chunks, shard_factors):
+def test_zarr_sharding_roundtrip(tmp_path, chunks, shards):
+    """Test sharding with various chunk and shard combinations"""
     zarr = pytest.importorskip("zarr", minversion="3.0.0")
 
     a = da.zeros((60, 60), chunks=chunks)
-    remainder = a.shape[0] % (chunks[0] * shard_factors[0])
-    if a.shape == a.chunksize:
-        with pytest.warns(UserWarning, match="The chunk size is equal"):
-            a.to_zarr(tmp_path, shard_factors=shard_factors)
-    elif remainder:
-        with pytest.warns(UserWarning, match="Array shape"):
-            a.to_zarr(tmp_path, shard_factors=shard_factors)
-    else:
-        a.to_zarr(tmp_path, shard_factors=shard_factors)
+    zarr_kwargs = {"shards": shards}
+
+    a.to_zarr(tmp_path, zarr_kwargs=zarr_kwargs)
+
     store = zarr.storage.FsspecStore.from_url(tmp_path)
     z = zarr.open_array(store)
-    if a.shape == a.chunksize:
-        assert z.shards == chunks
-    else:
-        assert z.shards == tuple((chunks[0] * shard_factors[0],)) * z.ndim
+
+    assert z.shards == shards
+
     a2 = da.from_zarr(tmp_path)
     assert_eq(a, a2)
     assert a2.chunks == a.chunks

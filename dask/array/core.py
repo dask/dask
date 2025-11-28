@@ -19,13 +19,14 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Literal, TypeVar, Union, cast
+from typing import Any, Literal, TypedDict, TypeVar, Union, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
 from packaging.version import Version
 from tlz import accumulate, concat, first, partition
 from toolz import frequencies
+from typing_extensions import NotRequired
 
 from dask._compatibility import import_optional_dependency
 from dask.core import flatten
@@ -97,6 +98,21 @@ from dask.utils import (
 from dask.widgets import get_template
 
 try:
+    from zarr.core.array import CompressorsLike, FiltersLike, SerializerLike, ShardsLike
+    from zarr.core.array_spec import ArrayConfigLike
+    from zarr.core.chunk_key_encodings import ChunkKeyEncodingLike
+    from zarr.core.common import (
+        JSON,
+        DimensionNames,
+        MemoryOrder,
+        ShapeLike,
+        ZarrFormat,
+    )
+    from zarr.core.dtype import ZDTypeLike
+except ModuleNotFoundError:
+    pass
+
+try:
     ARRAY_TEMPLATE = get_template("array.html.j2")
 except ImportError:
     ARRAY_TEMPLATE = None
@@ -117,6 +133,28 @@ unknown_chunk_message = (
 
 class PerformanceWarning(Warning):
     """A warning given when bad chunking may cause poor performance"""
+
+
+class ZarrKwargs(TypedDict):
+    name: NotRequired[str]
+    shape: NotRequired[ShapeLike | None]
+    dtype: NotRequired[ZDTypeLike | None]
+    data: NotRequired[np.ndarray[Any, np.dtype[Any]] | None]
+    chunks: NotRequired[tuple[int, ...] | Literal["auto"]]
+    shards: NotRequired[ShardsLike | None]
+    filters: NotRequired[FiltersLike]
+    compressors: NotRequired[CompressorsLike]
+    serializer: NotRequired[SerializerLike]
+    fill_value: NotRequired[Any | None]
+    order: NotRequired[MemoryOrder | None]
+    zarr_format: NotRequired[ZarrFormat | None]
+    attributes: NotRequired[dict[str, JSON] | None]
+    chunk_key_encoding: NotRequired[ChunkKeyEncodingLike | None]
+    dimension_names: NotRequired[DimensionNames]
+    storage_options: NotRequired[dict[str, Any] | None]
+    overwrite: NotRequired[bool]
+    config: NotRequired[ArrayConfigLike | None]
+    write_data: NotRequired[bool]
 
 
 def getter(a, b, asarray=True, lock=None):
@@ -3988,12 +4026,11 @@ def to_zarr(
     arr,
     url,
     component=None,
-    shard_factors=None,
     storage_options=None,
-    overwrite=False,
     region=None,
     compute=True,
     return_stored=False,
+    zarr_kwargs=None,
     **kwargs,
 ):
     """Save array to the zarr storage format
@@ -4011,15 +4048,13 @@ def to_zarr(
     component: str or None
         If the location is a zarr group rather than an array, this is the
         subcomponent that should be created/over-written.
-    shard_factors: tuple of int or None
-        The factors by which to multiply the chunk size in order to get the shard size, e.g. chunksize of (3,3)
-        and shard_factors of (6,6) will result in shards of size (18,18).
     storage_options: dict
         Any additional parameters for the storage backend (ignored for local
         paths)
     overwrite: bool
         If given array already exists, overwrite=False will cause an error,
-        where overwrite=True will replace the existing data.
+        where overwrite=True will replace the existing data. Deprecated, please
+        add to zarr_kwargs
     region: tuple of slices or None
         The region of data that should be written if ``url`` is a zarr.Array.
         Not to be used with other types of ``url``.
@@ -4027,8 +4062,13 @@ def to_zarr(
         See :func:`~dask.array.store` for more details.
     return_stored: bool
         See :func:`~dask.array.store` for more details.
+    zarr_kwargs: ZarrKwargs or None
+        Passed to the :func:`zarr.create_array` function, e.g., compression options. See
+        https://zarr.readthedocs.io/en/stable/api/zarr/index.html#zarr.create_array for the
+        full range of arguments.
     **kwargs:
-        Passed to the :func:`zarr.create_array` function, e.g., compression options.
+        Arguments used when creating the FssspecStore from a url. Either 'read_only' with as value a boolean,
+        or if not specified 'mode'. If both are not specified the 'mode' will default to 'a'.
 
     Raises
     ------
@@ -4059,49 +4099,42 @@ def to_zarr(
         return _write_dask_to_existing_zarr(
             url, arr, region, zarr_mem_store_types, compute, return_stored
         )
-    else:
-        if not _check_regular_chunks(arr.chunks):
-            # We almost certainly get here because auto chunking has been used
-            # on irregular chunks. The max will then be smaller than auto, so using
-            # max is a safe choice
-            arr = arr.rechunk(tuple(map(max, arr.chunks)))
+
+    if not _check_regular_chunks(arr.chunks):
+        warnings.warn(
+            "Array has irregular chunks. Automatically rechunking to regular chunks, to prevent"
+            "issues with writing data.",
+            UserWarning,
+            stacklevel=2,
+        )
+        # We almost certainly get here because auto chunking has been used
+        # on irregular chunks. The max will then be smaller than auto, so using
+        # max is a safe choice
+        arr = arr.rechunk(tuple(map(max, arr.chunks)))
 
     if region is not None:
         raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")
 
-    if not _check_regular_chunks(arr.chunks):
-        raise ValueError(
-            "Attempt to save array to zarr with irregular "
-            "chunking, please call `arr.rechunk(...)` first."
-        )
-
     zarr_store = _setup_zarr_store(url, storage_options, **kwargs)
+    zarr_kwargs = {} if zarr_kwargs is None else dict(zarr_kwargs)
 
-    chunks = tuple(c[0] for c in arr.chunks)
-
-    create_kwargs = dict(
-        shape=arr.shape,
-        chunks=chunks,
-        dtype=arr.dtype,
-        overwrite=overwrite,
-        **kwargs,
-    )
+    zarr_kwargs.setdefault("shape", arr.shape)
+    zarr_kwargs.setdefault("chunks", tuple(c[0] for c in arr.chunks))
+    zarr_kwargs.setdefault("dtype", arr.dtype)
 
     if _zarr_v3():
         root = zarr.open_group(store=zarr_store, mode="a") if component else None
-        shards = _determine_shard_size(arr, shard_factors)
-        create_kwargs["shards"] = shards
         if component:
-            z = root.create_array(name=component, **create_kwargs)
+            z = root.create_array(name=component, **zarr_kwargs)
         else:
-            create_kwargs["store"] = zarr_store
-            z = zarr.create_array(**create_kwargs)
+            zarr_kwargs["store"] = zarr_store
+            z = zarr.create_array(**zarr_kwargs)
     else:
         # TODO: drop this as soon as zarr v2 gets dropped.
         z = zarr.create(
             store=zarr_store,
             path=component,
-            **create_kwargs,
+            **zarr_kwargs,
         )
 
     return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
