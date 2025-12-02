@@ -183,7 +183,7 @@ def register_cupyx():
         else:
             msg = (
                 "Can only concatenate cupy sparse matrices for axis in "
-                "{0, 1}.  Got %s" % axis
+                f"{{0, 1}}.  Got {axis}"
             )
             raise ValueError(msg)
 
@@ -224,7 +224,7 @@ def register_scipy_sparse():
         else:
             msg = (
                 "Can only concatenate scipy sparse matrices for axis in "
-                "{0, 1}.  Got %s" % axis
+                f"{{0, 1}}.  Got {axis}"
             )
             raise ValueError(msg)
 

@@ -325,7 +325,7 @@ class TreeReduce(Expr):
             name = funcname(self.combine.__self__).lower() + "-tree"
         else:
             name = funcname(self.combine)
-        return name + "-" + self.deterministic_token
+        return f"{name}-{self.deterministic_token}"
 
     def __dask_postcompute__(self):
         return toolz.first, ()
@@ -598,11 +598,11 @@ class Unique(ApplyConcatApply):
         return self.chunk_kwargs
 
     @classmethod
-    def combine(cls, inputs: list, **kwargs):  # type: ignore
+    def combine(cls, inputs: list, **kwargs):
         return _concat(inputs)
 
     @classmethod
-    def aggregate(cls, inputs: list, **kwargs):  # type: ignore
+    def aggregate(cls, inputs: list, **kwargs):
         df = _concat(inputs)
         return cls.aggregate_func(df, **kwargs)
 
@@ -740,13 +740,13 @@ class PivotTableAbstract(ApplyConcatApply):
         }
 
     @classmethod
-    def combine(cls, inputs: list, **kwargs):  # type: ignore
+    def combine(cls, inputs: list, **kwargs):
         return _concat(inputs)
 
     @classmethod
-    def aggregate(cls, inputs: list, **kwargs):  # type: ignore
+    def aggregate(cls, inputs: list, **kwargs):
         df = _concat(inputs)
-        return cls.aggregate_func(df, **kwargs)  # type: ignore
+        return cls.aggregate_func(df, **kwargs)  # type: ignore[attr-defined]
 
 
 class PivotTableSum(PivotTableAbstract):
@@ -805,10 +805,10 @@ class Reduction(ApplyConcatApply):
         return out.to_frame().T if is_series_like(out) else out
 
     @classmethod
-    def combine(cls, inputs: list, **kwargs):  # type: ignore
+    def combine(cls, inputs: list, **kwargs):
         func = cls.reduction_combine or cls.reduction_aggregate or cls.reduction_chunk
         df = _concat(inputs)
-        out = func(df, **kwargs)  # type: ignore
+        out = func(df, **kwargs)  # type: ignore[misc]
         # Return a dataframe so that the concatenated version is also a dataframe
         return out.to_frame().T if is_series_like(out) else out
 
@@ -829,13 +829,11 @@ class Reduction(ApplyConcatApply):
     def __str__(self):
         params = {param: self.operand(param) for param in self._parameters[1:]}
         s = ", ".join(
-            k + "=" + repr(v)
-            for k, v in params.items()
-            if v is not self._defaults.get(k)
+            f"{k}={v!r}" for k, v in params.items() if v is not self._defaults.get(k)
         )
         base = str(self.frame)
         if " " in base:
-            base = "(" + base + ")"
+            base = f"({base})"
         return f"{base}.{self.__class__.__name__.lower()}({s})"
 
     def _simplify_up(self, parent, dependents):
@@ -867,7 +865,7 @@ class CustomReduction(Reduction):
         return out.to_frame().T if is_series_like(out) else out
 
     @classmethod
-    def combine(cls, inputs: list, **kwargs):  # type: ignore
+    def combine(cls, inputs: list, **kwargs):
         func = kwargs.pop("func")
         df = _concat(inputs)
         out = func(df, **kwargs)
@@ -1110,9 +1108,9 @@ class ArrayReduction(Reduction):
         return cls.reduction_chunk(df, **kwargs)
 
     @classmethod
-    def combine(cls, inputs: list, **kwargs):  # type: ignore
+    def combine(cls, inputs: list, **kwargs):
         func = cls.reduction_combine or cls.reduction_aggregate or cls.reduction_chunk
-        return func(inputs, **kwargs)  # type: ignore
+        return func(inputs, **kwargs)  # type: ignore[misc]
 
     @classmethod
     def aggregate(cls, inputs, meta, index, **kwargs):
@@ -1339,10 +1337,10 @@ class ReductionConstantDim(Reduction):
         return cls.reduction_chunk(df, **kwargs)
 
     @classmethod
-    def combine(cls, inputs: list, **kwargs):  # type: ignore
+    def combine(cls, inputs: list, **kwargs):
         func = cls.reduction_combine or cls.reduction_aggregate or cls.reduction_chunk
         df = _concat(inputs)
-        return func(df, **kwargs)  # type: ignore
+        return func(df, **kwargs)  # type: ignore[misc]
 
     def _divisions(self):
         # TODO: We can do better in some cases

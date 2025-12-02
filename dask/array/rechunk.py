@@ -783,7 +783,7 @@ class _PrettyBlocks:
             if repeats is None:
                 parts.append(str(run))
             else:
-                parts.append("%d*[%s]" % (repeats, run))
+                parts.append(f"{repeats}*[{run}]")
         return " | ".join(parts)
 
     __repr__ = __str__

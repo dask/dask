@@ -43,7 +43,7 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
     def _name(self):
         if self.prefix is None:
             return super()._name
-        return self.prefix + "-" + self.deterministic_token
+        return f"{self.prefix}-{self.deterministic_token}"
 
     @functools.cached_property
     def _meta(self):
@@ -67,7 +67,7 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
                 _data_producer=True,
             )
         else:
-            return Alias((self.delayed_container._name, index))  # type: ignore
+            return Alias((self.delayed_container._name, index))  # type: ignore[return-value]
 
 
 def identity(x):
@@ -123,7 +123,7 @@ def from_delayed(
         raise TypeError("Must supply at least one delayed object")
 
     if meta is None:
-        meta = delayed(make_meta)(dfs[0]).compute()  # type: ignore
+        meta = delayed(make_meta)(dfs[0]).compute()  # type: ignore[index]
 
     if divisions == "sorted":
         raise NotImplementedError(
@@ -149,7 +149,7 @@ def from_delayed(
 
     for item in dfs:
         if not (isinstance(item, (Delayed, TaskRef))):
-            raise TypeError("Expected Delayed object, got %s" % type(item).__name__)
+            raise TypeError(f"Expected Delayed object, got {type(item).__name__}")
 
     from dask.dataframe.dask_expr._collection import new_collection
 

@@ -296,8 +296,8 @@ def create_metadata_file(
     # Start constructing a raw graph
     dsk = {}
     name = "gen-metadata-" + tokenize(paths, fs)
-    collect_name = "collect-" + name
-    agg_name = "agg-" + name
+    collect_name = f"collect-{name}"
+    agg_name = f"agg-{name}"
 
     # Define a "collect" task for each file in the input list.
     # Each tasks will:
@@ -583,9 +583,8 @@ def set_index_columns(meta, index, columns, auto_index_allowed):
 
     if not set(columns).issubset(set(meta.columns)):
         raise ValueError(
-            "The following columns were not found in the dataset %s\n"
-            "The following columns were found %s"
-            % (set(columns) - set(meta.columns), meta.columns)
+            f"The following columns were not found in the dataset {set(columns) - set(meta.columns)}\n"
+            f"The following columns were found {meta.columns}"
         )
 
     if index:
@@ -601,12 +600,12 @@ def set_index_columns(meta, index, columns, auto_index_allowed):
                 raise ValueError(
                     "Specified index and column arguments must not intersect"
                     " (set index=False or remove the detected index from columns).\n"
-                    "index: {} | column: {}".format(index, columns)
+                    f"index: {index} | column: {columns}"
                 )
             else:
                 raise ValueError(
                     "Specified index and column arguments must not intersect.\n"
-                    "index: {} | column: {}".format(index, columns)
+                    f"index: {index} | column: {columns}"
                 )
 
     return meta[list(columns)], index, columns

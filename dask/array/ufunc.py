@@ -37,10 +37,10 @@ class da_frompyfunc:
         self.nin = nin
         self.nout = nout
         self._name = funcname(func)
-        self.__name__ = "frompyfunc-%s" % self._name
+        self.__name__ = f"frompyfunc-{self._name}"
 
     def __repr__(self):
-        return "da.frompyfunc<%s, %d, %d>" % (self._name, self.nin, self.nout)
+        return f"da.frompyfunc<{self._name}, {self.nin}, {self.nout}>"
 
     def __dask_tokenize__(self):
         return (normalize_token(self._func), self.nin, self.nout)
@@ -85,7 +85,7 @@ class ufunc:
         if not isinstance(ufunc, (np.ufunc, da_frompyfunc)):
             raise TypeError(
                 "must be an instance of `ufunc` or "
-                "`da_frompyfunc`, got `%s" % type(ufunc).__name__
+                f"`da_frompyfunc`, got `{type(ufunc).__name__}"
             )
         self._ufunc = ufunc
         self.__name__ = ufunc.__name__
@@ -114,7 +114,7 @@ class ufunc:
                 if type(result) != type(NotImplemented):
                     return result
             raise TypeError(
-                "Parameters of such types are not supported by " + self.__name__
+                f"Parameters of such types are not supported by {self.__name__}"
             )
         else:
             return self._ufunc(*args, **kwargs)
@@ -165,7 +165,7 @@ class ufunc:
             B,
             B_inds,
             dtype=dtype,
-            token=self.__name__ + ".outer",
+            token=f"{self.__name__}.outer",
             **kwargs,
         )
 
@@ -297,8 +297,8 @@ def angle(x, deg=0):
 def frexp(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.frexp, x, dtype=object)
-    left = "mantissa-" + tmp.name
-    right = "exponent-" + tmp.name
+    left = f"mantissa-{tmp.name}"
+    right = f"exponent-{tmp.name}"
     ldsk = {
         (left,) + key[1:]: (getitem, key, 0)
         for key in core.flatten(tmp.__dask_keys__())
@@ -322,8 +322,8 @@ def frexp(x):
 def modf(x):
     # Not actually object dtype, just need to specify something
     tmp = elemwise(np.modf, x, dtype=object)
-    left = "modf1-" + tmp.name
-    right = "modf2-" + tmp.name
+    left = f"modf1-{tmp.name}"
+    right = f"modf2-{tmp.name}"
     ldsk = {
         (left,) + key[1:]: (getitem, key, 0)
         for key in core.flatten(tmp.__dask_keys__())

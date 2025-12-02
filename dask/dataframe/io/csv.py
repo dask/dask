@@ -11,14 +11,13 @@ from dask._task_spec import convert_legacy_task
 try:
     import psutil
 except ImportError:
-    psutil = None  # type: ignore
+    psutil = None  # type: ignore[assignment]
 
 import numpy as np
 import pandas as pd
 from fsspec.compression import compr
-from fsspec.core import get_fs_token_paths
+from fsspec.core import get_fs_token_paths, open_files
 from fsspec.core import open as open_file
-from fsspec.core import open_files
 from fsspec.utils import infer_compression
 from pandas.api.types import (
     CategoricalDtype,
@@ -128,8 +127,8 @@ def coerce_dtypes(df, dtypes):
             )
             exceptions = (
                 "The following columns also raised exceptions on "
-                "conversion:\n\n%s\n\n"
-            ) % ex
+                f"conversion:\n\n{ex}\n\n"
+            )
             extra = ""
         else:
             exceptions = ""
@@ -142,41 +141,39 @@ def coerce_dtypes(df, dtypes):
 
         bad_dtypes = sorted(bad_dtypes, key=lambda x: str(x[0]))
         table = asciitable(["Column", "Found", "Expected"], bad_dtypes)
-        dtype_kw = "dtype={%s}" % ",\n       ".join(
-            f"{k!r}: '{v}'" for (k, v, _) in bad_dtypes
+        dtype_kw = "dtype={{{}}}".format(
+            ",\n       ".join(f"{k!r}: '{v}'" for (k, v, _) in bad_dtypes)
         )
 
         dtype_msg = (
-            "{table}\n\n"
-            "{exceptions}"
+            f"{table}\n\n"
+            f"{exceptions}"
             "Usually this is due to dask's dtype inference failing, and\n"
             "*may* be fixed by specifying dtypes manually by adding:\n\n"
-            "{dtype_kw}\n\n"
+            f"{dtype_kw}\n\n"
             "to the call to `read_csv`/`read_table`."
-            "{extra}"
-        ).format(table=table, exceptions=exceptions, dtype_kw=dtype_kw, extra=extra)
+            f"{extra}"
+        )
     else:
         dtype_msg = None
 
     if bad_dates:
         also = " also " if bad_dtypes else " "
-        cols = "\n".join("- %s" % c for c in bad_dates)
+        cols = "\n".join(f"- {c}" for c in bad_dates)
         date_msg = (
-            "The following columns{also}failed to properly parse as dates:\n\n"
-            "{cols}\n\n"
+            f"The following columns{also}failed to properly parse as dates:\n\n"
+            f"{cols}\n\n"
             "This is usually due to an invalid value in that column. To\n"
             "diagnose and fix it's recommended to drop these columns from the\n"
             "`parse_dates` keyword, and manually convert them to dates later\n"
             "using `dd.to_datetime`."
-        ).format(also=also, cols=cols)
+        )
     else:
         date_msg = None
 
     if bad_dtypes or bad_dates:
         rule = "\n\n%s\n\n" % ("-" * 61)
-        msg = "Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n\n%s" % (
-            rule.join(filter(None, [dtype_msg, date_msg]))
-        )
+        msg = f"Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n\n{rule.join(filter(None, [dtype_msg, date_msg]))}"
         raise ValueError(msg)
 
 
@@ -461,9 +458,9 @@ def read_pandas(
     if kwargs.get("nrows"):
         raise ValueError(
             "The 'nrows' keyword is not supported by "
-            "`dd.{0}`. To achieve the same behavior, it's "
-            "recommended to use `dd.{0}(...)."
-            "head(n=nrows)`".format(reader_name)
+            f"`dd.{reader_name}`. To achieve the same behavior, it's "
+            f"recommended to use `dd.{reader_name}(...)."
+            "head(n=nrows)`"
         )
     if isinstance(kwargs.get("skiprows"), int):
         lastskiprow = firstrow = kwargs.get("skiprows")
@@ -506,14 +503,14 @@ def read_pandas(
     if blocksize and compression:
         # NONE of the compressions should use chunking
         warn(
-            "Warning %s compression does not support breaking apart files\n"
+            f"Warning {compression} compression does not support breaking apart files\n"
             "Please ensure that each individual file can fit in memory and\n"
             "use the keyword ``blocksize=None to remove this message``\n"
-            "Setting ``blocksize=None``" % compression
+            "Setting ``blocksize=None``"
         )
         blocksize = None
     if compression not in compr:
-        raise NotImplementedError("Compression format %s not installed" % compression)
+        raise NotImplementedError(f"Compression format {compression} not installed")
     if blocksize and sample and blocksize < sample and lastskiprow != 0:
         warn(
             "Unexpected behavior can result from passing skiprows when\n"
@@ -602,9 +599,9 @@ def read_pandas(
         raise
     if include_path_column and (include_path_column in head.columns):
         raise ValueError(
-            "Files already contain the column name: %s, so the "
+            f"Files already contain the column name: {include_path_column}, so the "
             "path column cannot use this name. Please set "
-            "`include_path_column` to a unique name." % include_path_column
+            "`include_path_column` to a unique name."
         )
 
     specified_dtypes = kwargs.get("dtype", {})

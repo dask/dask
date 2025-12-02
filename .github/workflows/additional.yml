@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v3.2.0

@@ -381,9 +381,8 @@ class RepartitionDivisions(Repartition):
             else:
                 if not tmp:
                     raise ValueError(
-                        "check for duplicate partitions\nold:\n%s\n\n"
-                        "new:\n%s\n\ncombined:\n%s"
-                        % (pformat(a), pformat(b), pformat(c))
+                        f"check for duplicate partitions\nold:\n{pformat(a)}\n\n"
+                        f"new:\n{pformat(b)}\n\ncombined:\n{pformat(c)}"
                     )
                 d[(out2, j - 1)] = (methods.concat, tmp)
             j += 1
@@ -459,7 +458,7 @@ class RepartitionSize(Repartition):
 
     def _lower(self):
         # populate cache
-        self._mem_usage  # noqa
+        self._mem_usage
         return super()._lower()
 
     def _layer(self) -> dict:
@@ -506,7 +505,7 @@ def _clean_new_division_boundaries(new_partitions_boundaries, frame_npartitions)
     return new_partitions_boundaries
 
 
-mem_usages_lru = LRU(10)  # type: ignore
+mem_usages_lru = LRU(10)  # type: ignore[var-annotated]
 
 
 def _get_mem_usages(frame):

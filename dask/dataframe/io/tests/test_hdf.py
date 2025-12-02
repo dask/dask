@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
-from functools import lru_cache
+from functools import cache
 from time import sleep
 
 import numpy as np
@@ -325,7 +325,7 @@ def test_to_hdf_modes_multiple_files():
 def dependency_depth(dsk):
     deps, _ = get_deps(dsk)
 
-    @lru_cache(maxsize=None)
+    @cache
     def max_depth_by_deps(key):
         if not deps[key]:
             return 1

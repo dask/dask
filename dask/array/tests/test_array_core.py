@@ -5073,12 +5073,12 @@ def test_zarr_group():
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d, component="test")
         with pytest.raises((OSError, ValueError)):
-            a.to_zarr(d, component="test", overwrite=False)
-        a.to_zarr(d, component="test", overwrite=True)
+            a.to_zarr(d, component="test", zarr_kwargs={"overwrite": False})
+        a.to_zarr(d, component="test", zarr_kwargs={"overwrite": True})
 
         # second time is fine, group exists
-        a.to_zarr(d, component="test2", overwrite=False)
-        a.to_zarr(d, component="nested/test", overwrite=False)
+        a.to_zarr(d, component="test2", zarr_kwargs={"overwrite": False})
+        a.to_zarr(d, component="nested/test", zarr_kwargs={"overwrite": False})
 
         group = zarr.open_group(store=d, mode="r")
         assert set(group) == {"nested", "test", "test2"}
@@ -5103,7 +5103,11 @@ def test_zarr_irregular_chunks(shape, chunks, expect_rechunk):
     pytest.importorskip("zarr")
     with tmpdir() as d:
         a = da.zeros(shape, chunks=chunks)  # ((2, 1, 1, 2), 1))
-        store_delayed = a.to_zarr(d, component="test", compute=False)
+        if expect_rechunk:
+            with pytest.warns(UserWarning, match="Array has irregular chunks"):
+                store_delayed = a.to_zarr(d, component="test", compute=False)
+        else:
+            store_delayed = a.to_zarr(d, component="test", compute=False)
         assert (
             any("rechunk" in key_split(k) for k in dict(store_delayed.dask))
             is expect_rechunk
@@ -5264,13 +5268,17 @@ def test_zarr_regions():
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
+    with pytest.warns(PerformanceWarning):
+        a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
+
     a2 = da.from_zarr(z)
     expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 0, 7, 0], [0, 0, 11, 0]]
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
+    with pytest.warns(PerformanceWarning):
+        a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
+
     a2 = da.from_zarr(z)
     expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 15, 7, 0], [0, 0, 11, 0]]
     assert_eq(a2, expected)

@@ -119,13 +119,12 @@ def trim_internal(x, axes, boundary=None):
                 else:
                     d = d - overlap * 2
 
+            elif isinstance(overlap, tuple):
+                d = d - overlap[0] if j != 0 else d
+                d = d - overlap[1] if j != len(bd) - 1 else d
             else:
-                if isinstance(overlap, tuple):
-                    d = d - overlap[0] if j != 0 else d
-                    d = d - overlap[1] if j != len(bd) - 1 else d
-                else:
-                    d = d - overlap if j != 0 else d
-                    d = d - overlap if j != len(bd) - 1 else d
+                d = d - overlap if j != 0 else d
+                d = d - overlap if j != len(bd) - 1 else d
 
             ilist.append(d)
         olist.append(tuple(ilist))
@@ -679,17 +678,15 @@ def map_overlap(
 
     if not callable(func):
         raise TypeError(
-            "First argument must be callable function, not {}\n"
+            f"First argument must be callable function, not {type(func).__name__}\n"
             "Usage:   da.map_overlap(function, x)\n"
-            "   or:   da.map_overlap(function, x, y, z)".format(type(func).__name__)
+            "   or:   da.map_overlap(function, x, y, z)"
         )
     if not all(isinstance(x, Array) for x in args):
         raise TypeError(
-            "All variadic arguments must be arrays, not {}\n"
+            f"All variadic arguments must be arrays, not {[type(x).__name__ for x in args]}\n"
             "Usage:   da.map_overlap(function, x)\n"
-            "   or:   da.map_overlap(function, x, y, z)".format(
-                [type(x).__name__ for x in args]
-            )
+            "   or:   da.map_overlap(function, x, y, z)"
         )
 
     # Coerce depth and boundary arguments to lists of individual
@@ -718,7 +715,7 @@ def map_overlap(
                 raise NotImplementedError(
                     "Asymmetric overlap is currently only implemented "
                     "for boundary='none', however boundary for dimension "
-                    "{} in array argument {} is {}".format(j, i, boundary[i][j])
+                    f"{j} in array argument {i} is {boundary[i][j]}"
                 )
 
     def assert_int_chunksize(xs):

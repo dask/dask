@@ -29,7 +29,7 @@ from dask.array.core import (
     tensordot_lookup,
 )
 from dask.array.creation import arange, diag, empty, indices, tri
-from dask.array.einsumfuncs import einsum  # noqa
+from dask.array.einsumfuncs import einsum  # noqa: F401
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reductions import reduction
 from dask.array.ufunc import multiply, sqrt, true_divide
@@ -222,9 +222,7 @@ def flip(m, axis=None):
         for ax in axis:
             sl[ax] = slice(None, None, -1)
     except IndexError as e:
-        raise ValueError(
-            f"`axis` of {str(axis)} invalid for {str(m.ndim)}-D array"
-        ) from e
+        raise ValueError(f"`axis` of {axis} invalid for {m.ndim}-D array") from e
     sl = tuple(sl)
 
     return m[sl]
@@ -582,7 +580,7 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
     if n == 0:
         return a
     if n < 0:
-        raise ValueError("order must be non-negative but got %d" % n)
+        raise ValueError(f"order must be non-negative but got {n}")
 
     combined = []
     if prepend is not None:
@@ -701,8 +699,8 @@ def gradient(f, *varargs, axis=None, **kwargs):
             if np.min(c) < kwargs["edge_order"] + 1:
                 raise ValueError(
                     "Chunk size must be larger than edge_order + 1. "
-                    "Minimum chunk for axis {} is {}. Rechunk to "
-                    "proceed.".format(ax, np.min(c))
+                    f"Minimum chunk for axis {ax} is {np.min(c)}. Rechunk to "
+                    "proceed."
                 )
 
         if np.isscalar(varargs[i]):
@@ -976,7 +974,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
             raise TypeError(
                 "Dask types besides Array and Delayed are not supported "
-                "for `histogram`. For argument `{}`, got: {!r}".format(argname, val)
+                f"for `histogram`. For argument `{argname}`, got: {val!r}"
             )
 
     if range is not None:
@@ -995,7 +993,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             ) from None
 
     token = tokenize(a, bins, range, weights, density)
-    name = "histogram-sum-" + token
+    name = f"histogram-sum-{token}"
 
     bins_range, deps = unpack_collections([bins, range])
 
@@ -1402,7 +1400,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
             raise TypeError(
                 "Dask types besides Array and Delayed are not supported "
-                "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
+                f"for `histogramdd`. For argument `{argname}`, got: {val!r}"
             )
 
     # Require that the chunking of the sample and weights are compatible.
@@ -1737,7 +1735,7 @@ def unique_no_structured_arr(
 
     out_parts = [out]
 
-    name = "unique-aggregate-" + out.name
+    name = f"unique-aggregate-{out.name}"
     dsk = {
         (name, 0): (
             (np.unique,)
@@ -1826,7 +1824,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     else:
         out_parts.append(None)
 
-    name = "unique-aggregate-" + out.name
+    name = f"unique-aggregate-{out.name}"
     dsk = {
         (name, 0): (
             (_unique_internal,)
@@ -2086,7 +2084,7 @@ def _asarray_isnull(values):
 def isnull(values):
     """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
-    import pandas as pd  # noqa
+    import pandas as pd  # noqa: F401
 
     return elemwise(_asarray_isnull, values, dtype="bool")
 

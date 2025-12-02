@@ -184,8 +184,9 @@ def order(
     if len(total_dependencies) != len(dsk):
         cycle = getcycle(dsk, None)
         raise RuntimeError(
-            "Cycle detected between the following keys:\n  -> %s"
-            % "\n  -> ".join(str(x) for x in cycle)
+            "Cycle detected between the following keys:\n  -> {}".format(
+                "\n  -> ".join(str(x) for x in cycle)
+            )
         )
     assert dependencies is not None
     roots_connected, max_dependents = _connecting_to_roots(dependencies, dependents)
@@ -391,16 +392,14 @@ def order(
                                                 pruned_branches.append(path)
                                                 break
                                             add_to_result(k)
+                        elif (
+                            len(dependencies[current]) > 1 and num_needed[current] <= 1
+                        ):
+                            for k in path:
+                                add_to_result(k)
                         else:
-                            if (
-                                len(dependencies[current]) > 1
-                                and num_needed[current] <= 1
-                            ):
-                                for k in path:
-                                    add_to_result(k)
-                            else:
-                                known_runnable_paths[current] = [path]
-                                runnable_hull.discard(current)
+                            known_runnable_paths[current] = [path]
+                            runnable_hull.discard(current)
                         break
 
     # Pick strategy
@@ -613,7 +612,7 @@ def order(
     assert len(result) == expected_len
     for k in external_keys:
         del result[k]
-    return result  # type: ignore
+    return result  # type: ignore[return-value]
 
 
 def _connecting_to_roots(

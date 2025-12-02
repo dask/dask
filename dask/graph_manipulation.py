@@ -72,7 +72,7 @@ def checkpoint(
 
 def _checkpoint_one(collection, split_every) -> Delayed:
     tok = tokenize(collection)
-    name = "checkpoint-" + tok
+    name = f"checkpoint-{tok}"
 
     keys_iter = flatten(collection.__dask_keys__())
     try:
@@ -325,13 +325,13 @@ def _bind_one(
         # writing, can only happen with third-party collections
         return child
 
-    dsk = child.__dask_graph__()  # type: ignore
+    dsk = child.__dask_graph__()  # type: ignore[attr-defined]
     new_layers: dict[str, Layer] = {}
     new_deps: dict[str, set[str]] = {}
 
     if isinstance(dsk, HighLevelGraph):
         try:
-            layers_to_clone = set(child.__dask_layers__())  # type: ignore
+            layers_to_clone = set(child.__dask_layers__())  # type: ignore[attr-defined]
         except AttributeError:
             layers_to_clone = prev_coll_names.copy()
     else:
@@ -400,7 +400,7 @@ def _bind_one(
         new_deps[layer_name] = layer_deps
         new_layers[layer_name] = dsk.layers[layer_name]
 
-    rebuild, args = child.__dask_postpersist__()  # type: ignore
+    rebuild, args = child.__dask_postpersist__()  # type: ignore[attr-defined]
     return rebuild(
         HighLevelGraph(new_layers, new_deps),
         *args,

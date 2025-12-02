@@ -19,12 +19,12 @@ from dask.core import flatten
 #   - Allow for zero input arguments
 # See https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
 _DIMENSION_NAME = r"\w+"
-_CORE_DIMENSION_LIST = "(?:{0:}(?:,{0:})*,?)?".format(_DIMENSION_NAME)
+_CORE_DIMENSION_LIST = f"(?:{_DIMENSION_NAME}(?:,{_DIMENSION_NAME})*,?)?"
 _ARGUMENT = rf"\({_CORE_DIMENSION_LIST}\)"
-_INPUT_ARGUMENTS = "(?:{0:}(?:,{0:})*,?)?".format(_ARGUMENT)
-_OUTPUT_ARGUMENTS = "{0:}(?:,{0:})*".format(
-    _ARGUMENT
-)  # Use `'{0:}(?:,{0:})*,?'` if gufunc-
+_INPUT_ARGUMENTS = f"(?:{_ARGUMENT}(?:,{_ARGUMENT})*,?)?"
+_OUTPUT_ARGUMENTS = (
+    f"{_ARGUMENT}(?:,{_ARGUMENT})*"  # Use `'{0:}(?:,{0:})*,?'` if gufunc-
+)
 # signature should be allowed for length 1 tuple returns
 _SIGNATURE = f"^{_INPUT_ARGUMENTS}->{_OUTPUT_ARGUMENTS}$"
 
@@ -149,30 +149,25 @@ def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_cored
     for idx, (iax, icd) in enumerate(zip(input_axes, input_coredimss)):
         if len(iax) != len(icd):
             raise ValueError(
-                "The number of `axes` entries for argument #{} is not equal "
-                "the number of respective input core dimensions in signature".format(
-                    idx
-                )
+                f"The number of `axes` entries for argument #{idx} is not equal "
+                "the number of respective input core dimensions in signature"
             )
     if not keepdims:
         for idx, (oax, ocd) in enumerate(zip(output_axes, output_coredimss)):
             if len(oax) != len(ocd):
                 raise ValueError(
-                    "The number of `axes` entries for argument #{} is not equal "
-                    "the number of respective output core dimensions in signature".format(
-                        idx
-                    )
+                    f"The number of `axes` entries for argument #{idx} is not equal "
+                    "the number of respective output core dimensions in signature"
                 )
-    else:
-        if input_coredimss:
-            icd0 = input_coredimss[0]
-            for icd in input_coredimss:
-                if icd0 != icd:
-                    raise ValueError(
-                        "To use `keepdims`, all core dimensions have to be equal"
-                    )
-            iax0 = input_axes[0]
-            output_axes = [iax0 for _ in output_coredimss]
+    elif input_coredimss:
+        icd0 = input_coredimss[0]
+        for icd in input_coredimss:
+            if icd0 != icd:
+                raise ValueError(
+                    "To use `keepdims`, all core dimensions have to be equal"
+                )
+        iax0 = input_axes[0]
+        output_axes = [iax0 for _ in output_coredimss]
 
     return input_axes, output_axes
 
@@ -382,8 +377,7 @@ def apply_gufunc(
 
     if len(input_coredimss) != len(args):
         raise ValueError(
-            "According to `signature`, `func` requires %d arguments, but %s given"
-            % (len(input_coredimss), len(args))
+            f"According to `signature`, `func` requires {len(input_coredimss)} arguments, but {len(args)} given"
         )
 
     ## Axes: transpose input arguments
@@ -410,7 +404,7 @@ def apply_gufunc(
     core_shapes.update(output_sizes)
 
     loop_input_dimss = [
-        tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims))
+        tuple(f"__loopdim{d}__" for d in range(max_loopdims - n, max_loopdims))
         for n in num_loopdims
     ]
     input_dimss = [l + c for l, c in zip(loop_input_dimss, input_coredimss)]
@@ -439,11 +433,9 @@ def apply_gufunc(
             #### Check if core dimensions consist of only one chunk
             if (dim in core_shapes) and (chunksizes[0][0] < core_shapes[dim]):
                 raise ValueError(
-                    "Core dimension `'{}'` consists of multiple chunks. To fix, rechunk into a single \
-chunk along this dimension or set `allow_rechunk=True`, but beware that this may increase memory usage \
-significantly.".format(
-                        dim
-                    )
+                    f"Core dimension `'{dim}'` consists of multiple chunks. To fix, rechunk into "
+                    "a single chunk along this dimension or set `allow_rechunk=True`, but beware "
+                    "that this may increase memory usage significantly."
                 )
             #### Check if loop dimensions consist of same chunksizes, when they have sizes > 1
             relevant_chunksizes = list(
@@ -561,7 +553,8 @@ class GUfuncLeafExpr(ArrayExpr):
 
     @functools.cached_property
     def _name(self):
-        return "%s_%d-%s" % (self.name_prefix, self.i, self.array._name.split("-")[-1])
+        last_name = self.array._name.split("-")[-1]
+        return f"{self.name_prefix}_{self.i}-{last_name}"
 
     @functools.cached_property
     def _shape(self):
@@ -714,10 +707,10 @@ class gufunc:
         self.allow_rechunk = allow_rechunk
         self.meta = meta
 
-        self.__doc__ = """
+        self.__doc__ = f"""
         Bound ``dask.array.gufunc``
-        func: ``{func}``
-        signature: ``'{signature}'``
+        func: ``{self.pyfunc}``
+        signature: ``'{self.signature}'``
 
         Parameters
         ----------
@@ -730,9 +723,7 @@ class gufunc:
         Returns
         -------
         Single dask.array.Array or tuple of dask.array.Array
-        """.format(
-            func=str(self.pyfunc), signature=self.signature
-        )
+        """
 
     def __call__(self, *args, allow_rechunk=False, **kwargs):
         return apply_gufunc(
@@ -850,7 +841,7 @@ def as_gufunc(signature=None, **kwargs):
     def _as_gufunc(pyfunc):
         return gufunc(pyfunc, signature=signature, **kwargs)
 
-    _as_gufunc.__doc__ = """
+    _as_gufunc.__doc__ = f"""
         Decorator to make ``dask.array.gufunc``
         signature: ``'{signature}'``
 
@@ -862,7 +853,5 @@ def as_gufunc(signature=None, **kwargs):
         Returns
         -------
         ``dask.array.gufunc``
-        """.format(
-        signature=signature
-    )
+        """
     return _as_gufunc
