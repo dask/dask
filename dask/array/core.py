@@ -4102,7 +4102,7 @@ def to_zarr(
     if not _check_regular_chunks(arr.chunks):
         warnings.warn(
             "Array has irregular chunks. Automatically rechunking to regular chunks, to prevent"
-            "issues with writing data.",
+            " issues with writing data.",
             UserWarning,
             stacklevel=2,
         )

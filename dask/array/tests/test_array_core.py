@@ -5839,7 +5839,8 @@ def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
         with pytest.raises(ValueError, match="compute_chunk_sizes"):
             y.to_zarr(d)
         y.compute_chunk_sizes()
-        y.to_zarr(d)
+        with pytest.warns(UserWarning, match="Array has irregular"):
+            y.to_zarr(d)
 
 
 def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
