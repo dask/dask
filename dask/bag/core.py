@@ -299,6 +299,15 @@ def finalize(results):
 def finalize_item(results):
     return results[0]
 
+class StringMethodDispatcher:
+    """Handles dispatching of string methods for Bag string operations."""
+
+    def __init__(self, bag):
+        self._bag = bag
+
+    def dispatch(self, key, *args, **kwargs):
+        return self._bag.map_string_method(key, *args, **kwargs)
+
 
 class StringAccessor:
     """String processing functions
@@ -320,12 +329,13 @@ class StringAccessor:
 
     def __init__(self, bag):
         self._bag = bag
+        self._dispatcher = StringMethodDispatcher(bag)
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + dir(str)))
 
     def _strmap(self, key, *args, **kwargs):
-         return self._bag.map_string_method(key, *args, **kwargs)
+         return self._dispatcher.dispatch(key, *args, **kwargs)
 
 
     def __getattr__(self, key):
