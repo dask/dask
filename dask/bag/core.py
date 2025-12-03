@@ -2527,13 +2527,13 @@ def empty_safe_aggregate(func, parts, is_last):
 
 
 def safe_take(n, b, warn=True):
-    r = list(take(n, b))
-    if len(r) != n and warn:
+    results = list(take(n, b))
+    if len(results) != n and warn:
         warnings.warn(
-            f"Insufficient elements for `take`. {n} elements requested, only {len(r)} "
+            f"Insufficient elements for `take`. {n} elements requested, only {len(results)} "
             "elements available. Try passing larger `npartitions` to `take`."
         )
-    return r
+    return results
 
 
 def random_sample(x, state_data, prob):
