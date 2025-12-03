@@ -1967,6 +1967,24 @@ def merge_frequencies(seqs):
             out[k] += v
     return out
 
+def empty_safe_apply(func, part, is_last):
+    if isinstance(part, Iterator):
+        try:
+            _, part = peek(part)
+        except StopIteration:
+            if not is_last:
+                return no_result
+        return func(part)
+    elif not is_last and is_empty(part):
+        return no_result
+    else:
+        return func(part)
+
+
+def empty_safe_aggregate(func, parts, is_last):
+    parts2 = (p for p in parts if p is not no_result)
+    return empty_safe_apply(func, parts2, is_last)
+
 
 def bag_range(n, npartitions):
     """Numbers from zero to n
@@ -2514,25 +2532,6 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     dsk = merge(dsk1, dsk2, dsk3, dsk4)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b])
     return type(b)(graph, name, npartitions)
-
-
-def empty_safe_apply(func, part, is_last):
-    if isinstance(part, Iterator):
-        try:
-            _, part = peek(part)
-        except StopIteration:
-            if not is_last:
-                return no_result
-        return func(part)
-    elif not is_last and is_empty(part):
-        return no_result
-    else:
-        return func(part)
-
-
-def empty_safe_aggregate(func, parts, is_last):
-    parts2 = (p for p in parts if p is not no_result)
-    return empty_safe_apply(func, parts2, is_last)
 
 
 def safe_take(n, b, warn=True):
