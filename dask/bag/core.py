@@ -1458,7 +1458,8 @@ class Bag(DaskMethodsMixin):
             for i in range(npartitions):
                 dsk[(name_p, i)] = (list, (take, k, (self.name, i)))
 
-            concat = (toolz.concat, ([(name_p, i) for i in range(npartitions)]))
+            partition_keys = [(name_p, i) for i in range(npartitions)]
+            concat = (toolz.concat, partition_keys)
             dsk[(name, 0)] = (safe_take, k, concat, warn)
         else:
             dsk = {(name, 0): (safe_take, k, (self.name, 0), warn)}
