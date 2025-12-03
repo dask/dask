@@ -325,7 +325,8 @@ class StringAccessor:
         return sorted(set(dir(type(self)) + dir(str)))
 
     def _strmap(self, key, *args, **kwargs):
-        return self._bag.map(operator.methodcaller(key, *args, **kwargs))
+         return self._bag.map_string_method(key, *args, **kwargs)
+
 
     def __getattr__(self, key):
         try:
@@ -525,6 +526,12 @@ class Bag(DaskMethodsMixin):
     __repr__ = __str__
 
     str = property(fget=StringAccessor)
+
+    def map_string_method(self, method, *args, **kwargs):
+        """Apply a string method across all elements in the bag."""
+        import operator
+        return self.map(operator.methodcaller(method, *args, **kwargs))
+
 
     def map(self, func, *args, **kwargs):
         """Apply a function elementwise across one or more bags.
@@ -1460,6 +1467,7 @@ class Bag(DaskMethodsMixin):
 
             partition_keys = [(name_p, i) for i in range(npartitions)]
             concat = (toolz.concat, partition_keys)
+
             dsk[(name, 0)] = (safe_take, k, concat, warn)
         else:
             dsk = {(name, 0): (safe_take, k, (self.name, 0), warn)}
