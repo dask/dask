@@ -279,15 +279,18 @@ def to_textfiles(
         return [f.path for f in files]
     else:
         return out.to_delayed()
-
+    
+def _flatten_results(results):
+    if isinstance(results[0], Iterable) and not isinstance(results[0], str):
+        return toolz.concat(results)
+    return results
 
 def finalize(results):
     if not results:
         return results
     if isinstance(results, Iterator):
         results = list(results)
-    if isinstance(results[0], Iterable) and not isinstance(results[0], str):
-        results = toolz.concat(results)
+    results = _flatten_results(results)
     if isinstance(results, Iterator):
         results = list(results)
     return results
