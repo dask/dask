@@ -145,7 +145,7 @@ def test_reductions_1D(dtype):
 
 
 def test_reductions_1D_datetime():
-    x = (np.arange(5) * np.arange(5)).astype("datetime64[ns]")
+    x = np.arange(5).astype("datetime64[ns]")
     a = da.from_array(x, chunks=(2,))
     reduction_1d_test(da.min, a, np.min, x, False)
     reduction_1d_test(da.max, a, np.max, x, False)
@@ -269,11 +269,7 @@ def test_reductions_2D(dtype):
 
 
 def test_reductions_2D_datetime():
-    x = (
-        (np.arange(1, 122) + 1j * np.arange(1, 122))
-        .reshape((11, 11))
-        .astype("datetime64[ns]")
-    )
+    x = np.arange(1, 122).reshape(11, 11).astype("datetime64[ns]")
     a = da.from_array(x, chunks=(4, 4))
     reduction_2d_test(da.min, a, np.min, x, False)
     reduction_2d_test(da.max, a, np.max, x, False)
