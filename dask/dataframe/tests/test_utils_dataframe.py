@@ -236,7 +236,7 @@ def test_meta_nonempty():
     if PANDAS_GE_300:
         assert df3["H"][0] == pd.Timedelta(1, unit="us")
     else:
-        assert df3["H"][0] == pd.Timedelta("1 hours")
+        assert df3["H"][0] == pd.Timedelta(1, unit="ns")
     if PANDAS_GE_300:
         assert type(df3["I"][0]) is object
     else:
