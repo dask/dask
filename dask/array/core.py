@@ -19,13 +19,14 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, Literal, TypedDict, TypeVar, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
 from packaging.version import Version
 from tlz import accumulate, concat, first, partition
 from toolz import frequencies
+from typing_extensions import NotRequired
 
 from dask._compatibility import import_optional_dependency
 from dask.core import flatten
@@ -96,6 +97,21 @@ from dask.utils import (
 from dask.widgets import get_template
 
 try:
+    from zarr.core.array import CompressorsLike, FiltersLike, SerializerLike, ShardsLike
+    from zarr.core.array_spec import ArrayConfigLike
+    from zarr.core.chunk_key_encodings import ChunkKeyEncodingLike
+    from zarr.core.common import (
+        JSON,
+        DimensionNames,
+        MemoryOrder,
+        ShapeLike,
+        ZarrFormat,
+    )
+    from zarr.core.dtype import ZDTypeLike
+except ModuleNotFoundError:
+    pass
+
+try:
     ARRAY_TEMPLATE = get_template("array.html.j2")
 except ImportError:
     ARRAY_TEMPLATE = None
@@ -116,6 +132,28 @@ unknown_chunk_message = (
 
 class PerformanceWarning(Warning):
     """A warning given when bad chunking may cause poor performance"""
+
+
+class ZarrKwargs(TypedDict):
+    name: NotRequired[str]
+    shape: NotRequired[ShapeLike | None]
+    dtype: NotRequired[ZDTypeLike | None]
+    data: NotRequired[np.ndarray[Any, np.dtype[Any]] | None]
+    chunks: NotRequired[tuple[int, ...] | Literal["auto"]]
+    shards: NotRequired[ShardsLike | None]
+    filters: NotRequired[FiltersLike]
+    compressors: NotRequired[CompressorsLike]
+    serializer: NotRequired[SerializerLike]
+    fill_value: NotRequired[Any | None]
+    order: NotRequired[MemoryOrder | None]
+    zarr_format: NotRequired[ZarrFormat | None]
+    attributes: NotRequired[dict[str, JSON] | None]
+    chunk_key_encoding: NotRequired[ChunkKeyEncodingLike | None]
+    dimension_names: NotRequired[DimensionNames]
+    storage_options: NotRequired[dict[str, Any] | None]
+    overwrite: NotRequired[bool]
+    config: NotRequired[ArrayConfigLike | None]
+    write_data: NotRequired[bool]
 
 
 def getter(a, b, asarray=True, lock=None):
@@ -3781,16 +3819,9 @@ def from_zarr(
     elif isinstance(url, (str, os.PathLike)):
         if isinstance(url, os.PathLike):
             url = os.fspath(url)
-        if storage_options:
-            if _zarr_v3():
-                store = zarr.storage.FsspecStore.from_url(
-                    url, storage_options=storage_options
-                )
-            else:
-                store = zarr.storage.FSStore(url, **storage_options)
-        else:
-            store = url
-        z = zarr.open_array(store=store, path=component, **kwargs)
+
+        zarr_store = _setup_zarr_store(url, storage_options, **kwargs)
+        z = zarr.open_array(store=zarr_store, path=component, **kwargs)
     else:
         z = zarr.open_array(store=url, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
@@ -3799,15 +3830,206 @@ def from_zarr(
     return from_array(z, chunks, name=name, inline_array=inline_array)
 
 
+def _determine_shard_size(arr, shard_factors):
+    """Determine the shard size based on chunks and shard_factors.
+
+    This function is only for when writing zarr with zarr version being >= 3.
+    It is expected that the dask array is already regularly chunked.
+
+    Parameters
+    ----------
+    arr: dask.array
+        Data for which to determine the shard size.
+    shard_factors: tuple[int]
+        The factors by which to multiply the chunk size per dimension.
+
+    Returns
+    -------
+    shards: tuple[int]
+        The shard size.
+    """
+    shards = None
+    chunks = arr.chunksize
+    if shard_factors:
+        if len(shard_factors) != len(arr.shape):
+            raise ValueError(
+                f"Shard factors {len(shard_factors)} must match array dimensions {len(arr.shape)}"
+            )
+        if chunks == arr.shape and sum(shard_factors) != len(arr.shape):
+            warnings.warn(
+                "The chunk size is equal to the size of the array. Shard factors will be set to 1 for each"
+                "dimension",
+                UserWarning,
+                stacklevel=3,
+            )
+            shard_factors = (1,) * len(chunks)
+        shards = tuple(chunks[i] * shard_factors[i] for i in range(len(arr.shape)))
+
+        remainders = tuple(arr.shape[i] % shards[i] for i in range(len(arr.shape)))
+        if sum(remainders) != 0:
+            warnings.warn(
+                f"Array shape {arr.shape} is not evenly divisible by shard shape {shards}. "
+                f"Remainders: {remainders}. Consider adjusting `shard_factors` to avoid partial shards.",
+                UserWarning,
+                stacklevel=3,
+            )
+    return shards
+
+
+def _write_dask_to_existing_zarr(
+    url, arr, region, zarr_mem_store_types, compute, return_stored
+):
+    """Write dask array to existing zarr store.
+
+    Parameters
+    ----------
+    url: zarr.Array
+        The zarr array.
+    arr:
+        The dask array to be stored
+    region: tuple of slices or None
+        The region of data that should be written if ``url`` is a zarr.Array.
+        Not to be used with other types of ``url``.
+    zarr_mem_store_types: tuple[Type[dict] | Type[zarr.storage.MemoryStore] | Type[zarr.storage.KVStore], ...]
+        The type of zarr memory store that is allowed.
+    compute: bool
+        See :func:`~dask.array.store` for more details.
+    return_stored: bool
+        See :func:`~dask.array.store` for more details.
+
+    Returns
+    -------
+    If return_stored=True
+        tuple of Arrays
+    If return_stored=False and compute=True
+        None
+    If return_stored=False and compute=False
+        Delayed
+    """
+    z = url
+    if isinstance(z.store, zarr_mem_store_types):
+        try:
+            from distributed import default_client
+
+            default_client()
+        except (ImportError, ValueError):
+            pass
+        else:
+            raise RuntimeError(
+                "Cannot store into in memory Zarr Array using "
+                "the distributed scheduler."
+            )
+    zarr_write_chunks = _get_zarr_write_chunks(z)
+    dask_write_chunks = normalize_chunks(
+        chunks="auto",
+        shape=z.shape,
+        dtype=z.dtype,
+        previous_chunks=zarr_write_chunks,
+    )
+
+    if region is not None:
+        from dask.array.slicing import new_blockdim, normalize_index
+
+        index = normalize_index(region, z.shape)
+        dask_write_chunks = tuple(
+            tuple(new_blockdim(s, c, r))
+            for s, c, r in zip(z.shape, dask_write_chunks, index)
+        )
+
+    for ax, (dw, zw) in enumerate(
+        zip(dask_write_chunks, zarr_write_chunks, strict=True)
+    ):
+        if len(dw) >= 1:
+            nominal_dask_chunk_size = dw[0]
+            if not nominal_dask_chunk_size % zw == 0:
+                safe_chunk_size = np.prod(zarr_write_chunks) * max(1, z.dtype.itemsize)
+                msg = (
+                    f"The input Dask array will be rechunked along axis {ax} with chunk size "
+                    f"{nominal_dask_chunk_size}, but a chunk size divisible by {zw} is "
+                    f"required for Dask to write safely to the Zarr array {z}. "
+                    "To avoid risk of data loss when writing to this Zarr array, set the "
+                    '"array.chunk-size" configuration parameter to at least the size in'
+                    " bytes of a single on-disk "
+                    f"chunk (or shard) of the Zarr array, which in this case is "
+                    f"{safe_chunk_size} bytes. "
+                    f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
+                )
+
+                warnings.warn(
+                    msg,
+                    PerformanceWarning,
+                    stacklevel=3,
+                )
+                break
+
+    arr = arr.rechunk(dask_write_chunks)
+
+    if region is not None:
+        regions = [region]
+    else:
+        regions = None
+
+    return arr.store(
+        z, lock=False, regions=regions, compute=compute, return_stored=return_stored
+    )
+
+
+def _setup_zarr_store(
+    url: str, storage_options: dict[str, object] | None = None, **kwargs: object
+):
+    """
+    Set up a Zarr store for reading or writing, handling both Zarr v2 and v3.
+
+    This function prepares a Zarr-compatible storage object (`store`) from a URL or existing
+    store. It supports optional storage options for fsspec-based stores and automatically
+    selects the appropriate store type depending on the Zarr version.
+
+    Parameters
+    ----------
+    url: Zarr Array or str or MutableMapping
+        Location of the data. A URL can include a protocol specifier like s3://
+        for remote data. Can also be any MutableMapping instance, which should
+        be serializable if used in multiple processes.
+    storage_options: dict | None, default = None
+        Any additional parameters for the storage backend (ignored for local
+        paths)
+    **kwargs:
+        Passed to determine whether the store should be readonly by evaluating the following:
+        'kwargs.pop("read_only", kwargs.pop("mode", "a") == "r")'
+
+    Returns
+    -------
+    store : zarr.store.Store or original url
+        A Zarr-compatible store object. Can be:
+        - `zarr.storage.FsspecStore` for Zarr v3 with storage options
+        - `zarr.storage.FSStore` for Zarr v2 with storage options
+        - The original URL/path if no storage options are provided
+    """
+    # Cannot directly import FSStore from storage.
+    from zarr import storage
+
+    if storage_options is not None:
+        if _zarr_v3():
+            read_only = kwargs.pop("read_only", kwargs.pop("mode", "a") == "r")
+            store = storage.FsspecStore.from_url(
+                url, read_only=read_only, storage_options=storage_options
+            )
+        else:
+            store = storage.FSStore(url, **storage_options)
+    else:
+        store = url
+    return store
+
+
 def to_zarr(
     arr,
     url,
     component=None,
     storage_options=None,
-    overwrite=False,
     region=None,
     compute=True,
     return_stored=False,
+    zarr_kwargs=None,
     **kwargs,
 ):
     """Save array to the zarr storage format
@@ -3830,7 +4052,8 @@ def to_zarr(
         paths)
     overwrite: bool
         If given array already exists, overwrite=False will cause an error,
-        where overwrite=True will replace the existing data.
+        where overwrite=True will replace the existing data. Deprecated, please
+        add to zarr_kwargs
     region: tuple of slices or None
         The region of data that should be written if ``url`` is a zarr.Array.
         Not to be used with other types of ``url``.
@@ -3838,8 +4061,13 @@ def to_zarr(
         See :func:`~dask.array.store` for more details.
     return_stored: bool
         See :func:`~dask.array.store` for more details.
+    zarr_kwargs: ZarrKwargs or None
+        Passed to the :func:`zarr.create_array` function, e.g., compression options. See
+        https://zarr.readthedocs.io/en/stable/api/zarr/index.html#zarr.create_array for the
+        full range of arguments.
     **kwargs:
-        Passed to the :func:`zarr.creation.create` function, e.g., compression options.
+        Arguments used when creating the FssspecStore from a url. Either 'read_only' with as value a boolean,
+        or if not specified 'mode'. If both are not specified the 'mode' will default to 'a'.
 
     Raises
     ------
@@ -3867,75 +4095,17 @@ def to_zarr(
         zarr_mem_store_types = (dict, zarr.storage.MemoryStore, zarr.storage.KVStore)
 
     if isinstance(url, zarr.Array):
-        z = url
-        if isinstance(z.store, zarr_mem_store_types):
-            try:
-                from distributed import default_client
-
-                default_client()
-            except (ImportError, ValueError):
-                pass
-            else:
-                raise RuntimeError(
-                    "Cannot store into in memory Zarr Array using "
-                    "the distributed scheduler."
-                )
-        zarr_write_chunks = _get_zarr_write_chunks(z)
-        dask_write_chunks = normalize_chunks(
-            chunks="auto",
-            shape=z.shape,
-            dtype=z.dtype,
-            previous_chunks=zarr_write_chunks,
+        return _write_dask_to_existing_zarr(
+            url, arr, region, zarr_mem_store_types, compute, return_stored
         )
 
-        if region is not None:
-            from dask.array.slicing import new_blockdim, normalize_index
-
-            index = normalize_index(region, z.shape)
-            dask_write_chunks = tuple(
-                tuple(new_blockdim(s, c, r))
-                for s, c, r in zip(z.shape, dask_write_chunks, index)
-            )
-
-        for ax, (dw, zw) in enumerate(
-            zip(dask_write_chunks, zarr_write_chunks, strict=True)
-        ):
-            if len(dw) >= 1:
-                nominal_dask_chunk_size = dw[0]
-                if not nominal_dask_chunk_size % zw == 0:
-                    safe_chunk_size = np.prod(zarr_write_chunks) * max(
-                        1, z.dtype.itemsize
-                    )
-                    msg = (
-                        f"The input Dask array will be rechunked along axis {ax} with chunk size "
-                        f"{nominal_dask_chunk_size}, but a chunk size divisible by {zw} is "
-                        f"required for Dask to write safely to the Zarr array {z}. "
-                        "To avoid risk of data loss when writing to this Zarr array, set the "
-                        '"array.chunk-size" configuration parameter to at least the size in'
-                        " bytes of a single on-disk "
-                        f"chunk (or shard) of the Zarr array, which in this case is "
-                        f"{safe_chunk_size} bytes. "
-                        f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
-                    )
-
-                    warnings.warn(
-                        msg,
-                        PerformanceWarning,
-                        stacklevel=3,
-                    )
-                    break
-
-        arr = arr.rechunk(dask_write_chunks)
-
-        if region is not None:
-            regions = [region]
-        else:
-            regions = None
-
-        return arr.store(
-            z, lock=False, regions=regions, compute=compute, return_stored=return_stored
+    if not _check_regular_chunks(arr.chunks):
+        warnings.warn(
+            "Array has irregular chunks. Automatically rechunking to regular chunks, to prevent"
+            " issues with writing data.",
+            UserWarning,
+            stacklevel=2,
         )
-    elif not _check_regular_chunks(arr.chunks):
         # We almost certainly get here because auto chunking has been used
         # on irregular chunks. The max will then be smaller than auto, so using
         # max is a safe choice
@@ -3944,40 +4114,28 @@ def to_zarr(
     if region is not None:
         raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")
 
-    if not _check_regular_chunks(arr.chunks):
-        raise ValueError(
-            "Attempt to save array to zarr with irregular "
-            "chunking, please call `arr.rechunk(...)` first."
+    zarr_store = _setup_zarr_store(url, storage_options, **kwargs)
+    zarr_kwargs = {} if zarr_kwargs is None else dict(zarr_kwargs)
+
+    zarr_kwargs.setdefault("shape", arr.shape)
+    zarr_kwargs.setdefault("chunks", tuple(c[0] for c in arr.chunks))
+    zarr_kwargs.setdefault("dtype", arr.dtype)
+
+    if _zarr_v3():
+        root = zarr.open_group(store=zarr_store, mode="a") if component else None
+        if component:
+            z = root.create_array(name=component, **zarr_kwargs)
+        else:
+            zarr_kwargs["store"] = zarr_store
+            z = zarr.create_array(**zarr_kwargs)
+    else:
+        # TODO: drop this as soon as zarr v2 gets dropped.
+        z = zarr.create(
+            store=zarr_store,
+            path=component,
+            **zarr_kwargs,
         )
 
-    storage_options = storage_options or {}
-
-    if storage_options:
-        if _zarr_v3():
-            read_only = (
-                kwargs["read_only"]
-                if "read_only" in kwargs
-                else kwargs.pop("mode", "a") == "r"
-            )
-            store = zarr.storage.FsspecStore.from_url(
-                url, read_only=read_only, storage_options=storage_options
-            )
-        else:
-            store = zarr.storage.FSStore(url, **storage_options)
-    else:
-        store = url
-
-    chunks = [c[0] for c in arr.chunks]
-
-    z = zarr.create(
-        shape=arr.shape,
-        chunks=chunks,
-        dtype=arr.dtype,
-        store=store,
-        path=component,
-        overwrite=overwrite,
-        **kwargs,
-    )
     return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
 
 
