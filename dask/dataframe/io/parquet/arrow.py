@@ -720,7 +720,9 @@ class ArrowDatasetEngine(Engine):
                     "Appended columns not the same.\n"
                     f"Previous: {names} | New: {list(df.columns)}"
                 )
-            elif pd.Series(dtypes).loc[names].tolist() != df[names].dtypes.tolist():
+            elif pd.Series(dtypes).loc[names].tolist() != [
+                str(dtype) for dtype in df[names].dtypes.tolist()
+            ]:
                 # TODO Coerce values for compatible but different dtypes
                 raise ValueError(
                     f"Appended dtypes differ.\n{set(dtypes.items()) ^ set(df.dtypes.items())}"

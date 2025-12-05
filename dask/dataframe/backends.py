@@ -409,7 +409,7 @@ def _nonempty_index(idx):
             start="1970-01-01", periods=2, freq=idx.freq, name=idx.name
         )
     elif typ is pd.TimedeltaIndex:
-        start = np.timedelta64(1, "D")
+        start = np.timedelta64(1, idx.unit)
         try:
             return pd.timedelta_range(
                 start=start, periods=2, freq=idx.freq, name=idx.name
