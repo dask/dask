@@ -4312,6 +4312,10 @@ def test_to_datetime(gpu):
             dd.to_datetime(arg)
 
 
+@pytest.mark.xfail(
+    condition=PANDAS_GE_300,
+    reason="https://github.com/dask/dask/issues/12178#issuecomment-3604828151",
+)
 def test_to_timedelta():
     s = pd.Series(range(10))
     ds = dd.from_pandas(s, npartitions=2)
