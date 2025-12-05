@@ -1,0 +1,15 @@
+<table>
+    <tr>
+        <th>Key</th>
+        <th>Copies</th>
+        <th>Workers</th>
+    </tr>
+
+    {% for title, keys in who_has.items() %}
+    <tr>
+        <td>{{ title }}</td>
+        <td>{{ keys | length }}</td>
+        <td>{{ keys | join(", ") }}</td>
+    </tr>
+    {% endfor %}
+</table>

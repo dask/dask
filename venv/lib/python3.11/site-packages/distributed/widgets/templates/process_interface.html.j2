@@ -1,0 +1,31 @@
+{% if process_interface.status.name == "running" %}
+    {% set bg_color = '#c7f9cc' %}
+    {% set border_color = '#78c6a3' %}
+{% elif process_interface.status.name == "created" %}
+    {% set bg_color = '#caf0f8' %}
+    {% set border_color = '#48cae4' %}
+{% elif process_interface.status.name == "closed" %}
+    {% set bg_color = '#ffbfad' %}
+    {% set border_color = '#ff6132' %}
+{% endif %}
+
+<div>
+    <div style="width: 24px; height: 24px; background-color: {{ bg_color }}; border: 3px solid {{ border_color }}; border-radius: 5px; position: absolute;"></div>
+    <div style="margin-left: 48px">
+        <h3 style="margin-bottom: 0px">{{ process_interface | type | typename }}</h3>
+        <p style="color: #9d9d9d; margin-bottom: 0px">Status: {{ process_interface.status.name | title }}</p>
+    </div>
+    <p>
+        <table style="width: 100%">
+            <tr>
+                <th style="text-align: left; width: 150px">Address</th>
+                <td style="text-align: left">{{ process_interface.address }}</td>
+            </tr>
+            <tr>
+                <th style="text-align: left; width: 150px">External Address</th>
+                <td style="text-align: left">{{ process_interface.external_address }}</td>
+            </tr>
+        </table>
+    </p>
+    </div>
+</div>

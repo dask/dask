@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block extra_resources %}
+<link rel="stylesheet" href="statics/css/status.css">
+{% endblock %}
+
+{% block content %}
+{% from macros import embed %}
+<div id="status-fluid">
+
+  <div id="status-cluster-memory">
+    {{ embed(roots.cluster_memory) }}
+  </div>
+
+  <div id="status-workers-memory">
+    {{ embed(roots.workers_memory) }}
+  </div>
+
+  <div id="status-processing">
+    {{ embed(roots.processing_tabs) }}
+  </div>
+
+  <div id="status-tasks">
+    {{ embed(roots.task_stream) }}
+  </div>
+
+  <div id="status-progress">
+    {{ embed(roots.task_progress) }}
+  </div>
+
+</div>
+{{ plot_script }}
+
+{% endblock %}

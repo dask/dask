@@ -1,0 +1,355 @@
+distributed:
+  version: 2
+  # logging:
+  #   distributed: info
+  #   distributed.client: warning
+  #   distributed.gc: warning
+  #   bokeh: error
+  #   # http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
+  #   tornado: critical
+  #   tornado.application: error
+
+  scheduler:
+    allowed-failures: 3     # number of retries before a task is considered bad
+    bandwidth: 100000000    # 100 MB/s estimated worker-worker bandwidth
+    blocked-handlers: []
+    contact-address: null
+    default-data-size: 1kiB
+    # Whether to reuse the same Scheduler to Worker comm for repeated broadcasts.
+    reuse-broadcast-comm: True
+    # Number of seconds to wait until workers or clients are removed from the events log
+    # after they have been removed from the scheduler
+    events-cleanup-delay: 1h
+    idle-timeout: null       # Shut down after this duration, like "1h" or "30 minutes"
+    no-workers-timeout: null # If a task remains unrunnable for longer than this, it fails.
+    work-stealing: True     # workers should steal tasks from each other
+    work-stealing-interval: 1s  # Callback time for work stealing
+    worker-saturation: 1.1  # Send this fraction of nthreads root tasks to workers
+    rootish-taskgroup: 5  # number of dependencies of a rootish tg
+    rootish-taskgroup-dependencies: 5  # number of dependencies of the dependencies of the rootish tg
+    worker-ttl: "5 minutes" # like '60s'. Time to live for workers.  They must heartbeat faster than this
+    preload: []             # Run custom modules with Scheduler
+    preload-argv: []        # See https://docs.dask.org/en/latest/how-to/customize-initialization.html
+    unknown-task-duration: 500ms  # Default duration for all tasks with unknown durations ("15m", "2h")
+    default-task-durations: # How long we expect function names to run ("1h", "1s") (helps for long tasks)
+      rechunk-split: 1us
+      split-shuffle: 1us
+      split-taskshuffle: 1us
+      split-stage: 1us
+    validate: False         # Check scheduler state at every step for debugging
+    dashboard:
+      status:
+        task-stream-length: 1000
+      tasks:
+        task-stream-length: 100000
+      tls:
+        ca-file: null
+        key: null
+        cert: null
+      bokeh-application:  # keywords to pass to BokehTornado application
+        allow_websocket_origin: ["*"]
+        keep_alive_milliseconds: 500
+        check_unused_sessions_milliseconds: 500
+    locks:
+      lease-validation-interval: 10s  # The interval in which the scheduler validates staleness of all acquired leases. Must always be smaller than the lease-timeout itself.
+      lease-timeout: 30s  # Maximum interval to wait for a Client refresh before a lease is invalidated and released.
+
+    http:
+      routes:
+        - distributed.http.scheduler.prometheus
+        - distributed.http.scheduler.info
+        - distributed.http.scheduler.json
+        - distributed.http.health
+        - distributed.http.proxy
+        - distributed.http.statics
+
+    allowed-imports:
+      - dask
+      - distributed
+
+    active-memory-manager:
+      # Set to true to auto-start the Active Memory Manager on Scheduler start; if false
+      # you'll have to either manually start it with client.amm.start() or run it once
+      # with client.amm.run_once().
+      start: true
+
+      # Once started, run the AMM cycle every <interval>
+      interval: 2s
+
+      # Memory measure to use. Must be one of the attributes of
+      # distributed.scheduler.MemoryState.
+      measure: optimistic
+
+      # Policies that should be executed at every cycle. Any additional keys in each
+      # object are passed as keyword arguments to the policy constructor.
+      policies:
+        - class: distributed.active_memory_manager.ReduceReplicas
+
+  worker:
+    blocked-handlers: []
+    multiprocessing-method: spawn
+    use-file-locking: True
+    transfer:
+      message-bytes-limit: 50MB
+    connections:            # Maximum concurrent connections for data
+      outgoing: 50          # This helps to control network saturation
+      incoming: 10
+    preload: []             # Run custom modules with Worker
+    preload-argv: []        # See https://docs.dask.org/en/latest/how-to/customize-initialization.html
+    daemon: True
+    validate: False         # Check worker state at every step for debugging
+    resources: {}           # Key: value pairs specifying worker resources.
+    lifetime:
+      duration: null        # Time after which to gracefully shutdown the worker
+      stagger: 0 seconds    # Random amount by which to stagger lifetimes
+      restart: False        # Do we ressurrect the worker after the lifetime deadline?
+
+    profile:
+      enabled: True         # Whether or not to enable profiling
+      interval: 10ms        # Time between statistical profiling queries
+      cycle: 1000ms         # Time between starting new profile
+      low-level: False      # Whether or not to include low-level functions
+                            # Requires https://github.com/numba/stacktrace
+
+    memory:
+      # When there is an increase in process memory (as observed by the operating
+      # system) that is not accounted for by the dask keys stored on the worker, ignore
+      # it for this long before considering it in non-critical memory measures.
+      # This should be set to be longer than the duration of most dask tasks.
+      recent-to-old-time: 30s
+
+      rebalance:
+        # Memory measure to rebalance upon. Possible choices are:
+        # process
+        #     Total process memory, as measured by the OS.
+        # optimistic
+        #     Managed by dask (instantaneous) + unmanaged (without any increases
+        #     happened in the last <distributed.worker.memory.recent-to-old-time>).
+        #     Recommended for use on CPython with large (2MiB+) numpy-based data chunks.
+        # managed
+        #     Only consider the data allocated by dask in RAM. Recommended if RAM is not
+        #     released in a timely fashion back to the OS after the Python objects are
+        #     dereferenced, but remains available for reuse by PyMalloc.
+        #
+        #     If this is your problem on Linux, you should alternatively consider
+        #     setting the MALLOC_TRIM_THRESHOLD_ environment variable (note the final
+        #     underscore) to a low value; refer to the mallopt man page and to the
+        #     comments about M_TRIM_THRESHOLD on
+        #     https://sourceware.org/git/?p=glibc.git;a=blob;f=malloc/malloc.c
+        # managed_total
+        #     Only consider data allocated by dask, including that spilled to disk.
+        #     Recommended if disk occupation of the spill file is an issue.
+        measure: optimistic
+        # Fraction of worker process memory at which we start potentially sending
+        # data to other workers. Ignored when max_memory is not set.
+        sender-min: 0.30
+        # Fraction of worker process memory at which we stop potentially accepting
+        # data from other workers. Ignored when max_memory is not set.
+        recipient-max: 0.60
+        # Fraction of worker process memory, around the cluster mean, where a worker is
+        # neither a sender nor a recipient of data during a rebalance operation. E.g. if
+        # the mean cluster occupation is 50%, sender-recipient-gap=0.10 means that only
+        # nodes above 55% will donate data and only nodes below 45% will receive them.
+        # This helps avoid data from bouncing around the cluster repeatedly.
+        # Ignored when max_memory is not set.
+        sender-recipient-gap: 0.10
+
+      # Fractions of worker process memory at which we take action to avoid memory
+      # blowup. Set any of the values to False to turn off the behavior entirely.
+      # All fractions are relative to each worker's memory_limit.
+      transfer: 0.10  # fractional size of incoming data transfers where we start
+                       # throttling incoming data transfers
+      target: 0.60     # fraction of managed memory where we start spilling to disk
+      spill: 0.70      # fraction of process memory where we start spilling to disk
+      pause: 0.80      # fraction of process memory at which we pause worker threads
+      terminate: 0.95  # fraction of process memory at which we terminate the worker
+
+      # Max size of the spill file on disk (e.g. "10 GB")
+      # Set to false for no maximum.
+      max-spill: false
+
+      spill-compression: auto  # See also: distributed.comm.compression
+
+      # Interval between checks for the spill, pause, and terminate thresholds.
+      # The target threshold is checked every time new data is inserted.
+      monitor-interval: 100ms
+
+    http:
+      routes:
+        - distributed.http.worker.prometheus
+        - distributed.http.health
+        - distributed.http.statics
+
+  nanny:
+    preload: []             # Run custom modules with Nanny
+    preload-argv: []        # See https://docs.dask.org/en/latest/how-to/customize-initialization.html
+    # Override environment variables after spawning the Worker process.
+    # Use whenever you are sure that nothing will read them before the end of the worker
+    # initialization.
+    environ: {}
+    # Override environment variables *before* spawning the Worker initialization.
+    # Use for variables that are parsed in or before the worker init.
+    # Note that this leaks variables into the nanny process.
+    # Read important caveats at
+    # https://distributed.dask.org/en/stable/worker.html#nanny.
+    pre-spawn-environ:
+      # See https://distributed.dask.org/en/stable/worker-memory.html#automatically-trim-memory
+      MALLOC_TRIM_THRESHOLD_: 65536
+      # Numpy configuration
+      OMP_NUM_THREADS: 1
+      MKL_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+
+  client:
+    direct-to-workers: null # Whether to connect directly to workers for gather / scatter
+    heartbeat: 5s  # Interval between client heartbeats
+    scheduler-info-interval: 2s  # Interval between scheduler-info updates
+    security-loader: null  # A callable to load security credentials if none are provided explicitl
+    preload: []             # Run custom modules with Client
+    preload-argv: []        # See https://docs.dask.org/en/latest/how-to/customize-initialization.html
+
+  deploy:
+    lost-worker-timeout: 15s  # Interval after which to hard-close a lost worker job
+    cluster-repr-interval: 500ms  # Interval between calls to update cluster-repr for the widget
+
+  adaptive:
+    interval: 1s         # Interval between scaling evaluations
+    target-duration: 5s  # Time an entire graph calculation is desired to take ("1m", "30m")
+    minimum: 0           # Minimum number of workers
+    maximum: .inf        # Maximum number of workers
+    wait-count: 3        # Number of times a worker should be suggested for removal before removing it
+
+  comm:
+    retry:  # some operations (such as gathering data) are subject to re-tries with the below parameters
+      count: 0  # the maximum retry attempts. 0 disables re-trying.
+      delay:
+         min: 1s  # the first non-zero delay between re-tries
+         max: 20s  # the maximum delay between re-tries
+    compression: false  # See also: distributed.worker.memory.spill-compression
+    shard: 64MiB
+    offload: 10MiB # Size after which we choose to offload serialization to another thread
+    default-scheme: tcp
+    socket-backlog: 2048
+    zstd:
+      level: 3      # Compression level, between 1 and 22.
+      threads: 0    # Threads to use. 0 for single-threaded, -1 to infer from cpu count.
+
+    timeouts:
+      connect: 30s          # time before connecting fails
+      tcp: 30s              # time before calling an unresponsive connection dead
+
+    require-encryption: null # Whether to require encryption on non-local comms
+
+    tls:
+      ciphers: null     # Allowed ciphers, specified as an OpenSSL cipher string.
+      min-version: 1.2  # The minimum TLS version supported.
+      max-version: null # The maximum TLS version supported.
+      ca-file: null     # Path to a CA file, in pem format, optional
+      scheduler:
+        cert: null      # Path to certificate file for scheduler.
+        key: null       # Path to key file for scheduler. Alternatively, the key
+                        # can be appended to the cert file above, and this field
+                        # left blank.
+      worker:
+        key: null
+        cert: null
+      client:
+        key: null
+        cert: null
+
+
+    websockets:
+      shard: 8MiB
+
+  diagnostics:
+    nvml: True
+    cudf: False
+    computations:
+      max-history: 100
+      nframes: 0
+      ignore-modules:
+        - asyncio
+        - functools
+        - threading
+        - datashader
+        - dask
+        - debugpy
+        - distributed
+        - ipykernel
+        - coiled
+        - cudf
+        - cuml
+        - matplotlib
+        - pluggy  # part of pytest
+        - prefect
+        - rechunker
+        - xarray
+        - xgboost
+        - xdist
+        - __channelexec__  # more xdist
+        - execnet  # more xdist
+      ignore-files:
+        - runpy\.py  # `python -m pytest` (or other module) shell command
+        - pytest  # `pytest` shell command
+        - py\.test  # `py.test` shell command
+        - pytest-script\.py  # `pytest` shell command in Windows
+        - _pytest  # pytest implementation
+        - pycharm  # Run pytest from PyCharm GUI
+        - vscode_pytest
+        - get_output_via_markers\.py
+    erred-tasks:
+      max-history: 100
+
+  p2p:
+    comm:
+      buffer: 1 GiB
+      concurrency: 10
+      message-bytes-limit: 2 MiB
+      retry:
+        count: 10
+        delay:
+          min: 1s  # the first non-zero delay between re-tries
+          max: 30s  # the maximum delay between re-tries
+    storage:
+      buffer: 100 MiB
+      disk: True
+    threads: null
+
+  ###################
+  # Bokeh dashboard #
+  ###################
+
+  dashboard:
+    link: "{scheme}://{host}:{port}/status"
+    export-tool: False
+    graph-max-items: 5000  # maximum number of tasks to try to plot in graph view
+    prometheus:
+      namespace: "dask"
+
+  ##################
+  # Administrative #
+  ##################
+
+  admin:
+    large-graph-warning-threshold: 10MB  # Threshold for warning on large graph
+    tick:
+      interval: 20ms  # time between event loop health checks
+      limit: 3s       # time allowed before triggering a warning
+      cycle: 1s       # time between checking event loop speed
+
+    max-error-length: 10000 # Maximum size traceback after error to return
+    log-length: 10000  # Maximum length of worker/scheduler logs to keep in memory
+    log-format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    low-level-log-length: 1000  # Maximum length of various logs for developers
+    pdb-on-err: False       # enter debug mode on scheduling error
+    system-monitor:
+      interval: 500ms
+      log-length: 7200  # Maximum number of samples to keep in memory
+      disk: true  # Monitor host-wide disk I/O
+      host-cpu: false  # Monitor host-wide CPU usage, with very granular breakdown
+      gil:
+        enabled: true  # Monitor GIL contention
+        interval: "1ms"  # Frequency to poll GIL
+    event-loop: tornado
+  rmm:
+    pool-size: null

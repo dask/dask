@@ -1,0 +1,7 @@
+<tr>
+    <td style="text-align: left;"><strong>Status:</strong> {{ status }}</td>
+    <td style="text-align: left;"><strong>Using processes:</strong> {{ processes }}</td>
+</tr>
+{% if cluster_status %}
+{{ cluster_status }}
+{% endif %}

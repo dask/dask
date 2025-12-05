@@ -1,0 +1,13 @@
+<strong>TaskState: </strong>
+
+{% if state == "erred" %}
+<span style="color: var(--jp-error-color0, red)"> {{ state }} </span>
+{% else %}
+<span style="color: var(--jp-ui-font-color0, black)"> {{ state }} </span>
+{% endif %}
+
+{% if state == "memory" %}
+<span style="color: var(--jp-ui-font-color2, gray)">nbytes: </span>{{  nbytes | format_bytes }}
+{% endif %}
+
+<span style="color: var(--jp-ui-font-color2, gray)">key: </span>{{ key | html_escape }}

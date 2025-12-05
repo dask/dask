@@ -1,0 +1,167 @@
+{% extends main.html %}
+{% block content %}
+
+  {% set ts = tasks[Task] %}
+  <h1 class="title"> Task: {{ ts.key }} </h1>
+
+      <table class="table box">
+          <tr>
+              <th> Status </th>
+              <td> {{ ts.state }} </td>
+          </tr>
+          {% if ts.processing_on %}
+          <tr>
+              <th> Processing on </th>
+              <td><a href="../worker/{{ url_escape(ts.processing_on.address) }}.html">{{ts.processing_on.address}}</a></td>
+          </tr>
+          <tr>
+              <th> Call stack </th>
+              <td><a class="button is-primary" href="../call-stack/{{ url_escape(str(Task)) }}.html">Call Stack</a></td>
+          </tr>
+          {% end %}
+          {% if ts.type %}
+          <tr>
+              <th> Type </th>
+              <td> {{ ts.type }} </td>
+          </tr>
+          {% end %}
+          {% if ts.nbytes %}
+          <tr>
+              <th> Bytes </th>
+              <td> {{ format_bytes(ts.nbytes) }} </td>
+          </tr>
+          {% end %}
+          {% if ts.state == 'waiting' %}
+          {% for dts in ts.waiting_on %}
+          <tr>
+              <td> waiting on </td>
+              <td><a href="{{ url_escape(str(dts.key)) }}.html">{{dts.key}}</a> </td>
+          </tr>
+          {% end %}
+          {% end %}
+          <tr>
+              <th> Priority </th>
+              <td>{{ts.priority}}</td>
+          </tr>
+          {% for attr in ['has_lost_dependencies', 'host_restrictions', 'worker_restrictions', 'resource_restrictions', 'loose_restrictions', 'suspicious', 'retries', 'metadata'] %}
+          {% if getattr(ts, attr) %}
+          <tr>
+              <th> {{attr.replace('_', ' ').title()}} </th>
+              <td> {{getattr(ts, attr)}} </td>
+          </tr>
+          {% end %}
+          {% end %}
+      </table>
+
+    {% if ts.exception_text and ts.traceback_text %}
+    <div class="box">
+        <h3 class="title is-5"> Exception information </h3>
+        <p>
+            <span>Exception:</span>
+            <code> {{ ts.exception_text }} </code>
+        </p>
+        <details style="border: 1px solid black; border-radius: 4px; padding: 1em; margin-top: 4px;">
+            <summary style="font-weight: bold">Traceback</summary>
+            <pre><code>{{ ts.traceback_text }} </code></pre>
+        </details>
+        <div>
+        </div>
+    </div>
+    {% end %}
+
+    <div id="dependencies-dependents" class="columns box">
+      <div id="dependencies" class="column">
+        <h3 class="title is-5"> Dependencies </h3>
+        <table class="table is-striped is-hoverable">
+          <thead>
+            <th> Key </th>
+            <th> State </th>
+          </thead>
+          {% for dts in ts.dependencies %}
+          <tr>
+            <td> <a href="{{ url_escape(str(dts.key)) }}.html">{{dts.key}}</a> </td>
+            <td> {{ dts.state }} </td>
+          </tr>
+          {% end %}
+        </table>
+      </div><!-- #dependencies -->
+
+      <div id="dependents" class="column">
+        <h3 class="title is-5"> Dependents </h3>
+        <table class="table is-striped is-hoverable">
+          <thead>
+            <th> Key </th>
+            <th> State </th>
+          </thead>
+          {% for dts in ts.dependents %}
+          <tr>
+            <td> <a href="{{ url_escape(str(dts.key)) }}.html">{{dts.key}}</a> </td>
+            <td> {{ dts.state }} </td>
+          </tr>
+          {% end %}
+        </table>
+      </div><!-- #dependents -->
+    </div><!-- #dependencies-dependents -->
+
+    <div id="workers-clients" class="columns box">
+      {% if ts.state == 'memory' %}
+      <div id="workers" class="column">
+        <h3 class="title is-5"> Workers with data </h3>
+          {% set worker_list = ts.who_has %}
+          {% include "worker-table.html" %}
+      </div><!-- #workers -->
+      {% end %}
+
+      {% if ts.who_wants %}
+      <div id="clients" class="column">
+        <h3 class="title is-5"> Clients with future </h3>
+        <div class="content">
+          <ul>
+            <!--FIXME: There was supposed to be a client route but there isn't-->
+            {% for cs in ts.who_wants %}
+            <li>{{ cs.client_key }}</li>
+            {% end %}
+          </ul>
+        </div>
+      </div><!-- #clients -->
+      {% end %}
+    </div><!-- #workers-clients -->
+
+      <div id="transition-log" class="box">
+        <h3 class="title is-5"> Transition Log </h3>
+          <table class="table is-bordered is-striped is-hoverable">
+              <thead>
+                  <th> Time </th>
+                  <th> Key </th>
+                  <th> Start </th>
+                  <th> Finish </th>
+                  <th> Stimulus ID </th>
+                  <th> Recommended Key </th>
+                  <th> Recommended Action </th>
+              </thead>
+
+              {% for key, start, finish, recommendations, stimulus_id, transition_time in scheduler.story(ts.key) %}
+              <tr>
+                  <td> {{ fromtimestamp(transition_time) }} </td>
+                  <td> <a href="{{ url_escape(str(key)) }}.html">{{key}}</a> </td>
+                  <td> {{ start }} </td>
+                  <td> {{ finish }} </td>
+                  <td> {{ stimulus_id }} </td>
+                  <td> </td>
+                  <td> </td>
+              </tr>
+                {% for key2, rec in recommendations.items() %}
+              <tr>
+                  <td> </td>
+                  <td> </td>
+                  <td> </td>
+                  <td> </td>
+                  <td> </td>
+                  <td> <a href="{{ url_escape(str(key2)) }}.html">{{key2}}</a> </td>
+                  <td> {{ rec }} </td>
+              </tr>
+                {% end %}
+              {% end %}
+          </table>
+      </div><!-- #transition-log -->
+{% end %}
