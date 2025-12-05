@@ -15,7 +15,7 @@ from dask import config
 from dask.array.blockwise import blockwise
 from dask.array.core import Array, _concatenate2, asanyarray, broadcast_to, handle_out
 from dask.array.numpy_compat import ComplexWarning
-from dask.array.utils import compute_meta, is_arraylike, validate_axis
+from dask.array.utils import compute_meta, validate_axis
 from dask.base import tokenize
 from dask.blockwise import lol_tuples
 from dask.highlevelgraph import HighLevelGraph
@@ -331,15 +331,6 @@ def partial_reduce(
         # when no work can be computed on the empty array (e.g., func is a ufunc)
         except ValueError:
             pass
-
-    # some functions can't compute empty arrays (those for which reduced_meta
-    # fall into the ValueError exception) and we have to rely on reshaping
-    # the array according to len(out_chunks)
-    if is_arraylike(meta) and meta.ndim != len(out_chunks):
-        if len(out_chunks) == 0:
-            meta = meta.sum()
-        else:
-            meta = meta.reshape((0,) * len(out_chunks))
 
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
