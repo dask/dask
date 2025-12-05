@@ -1823,6 +1823,16 @@ def test_choose():
     assert_eq(np.choose(indices_np, choices_np), da.choose(indices_da, choices_da))
 
 
+def test_choose_single_array_choices():
+    indices = np.array([0, 0, 0, 0])
+    choices = (np.array([10.0, 20.0, 30.0, 40.0]),)
+
+    d_indices = da.from_array(indices)
+    d_choices = da.from_array(choices)
+
+    assert_eq(da.choose(d_indices, d_choices), np.choose(indices, choices))
+
+
 def test_piecewise():
     rng = np.random.default_rng(1337)
 
