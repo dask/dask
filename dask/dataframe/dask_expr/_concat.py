@@ -64,6 +64,11 @@ class Concat(Expr):
             if df.ndim < 2 or len(df._meta.columns) > 0
         ]
         if len(filtered) == 0:
+            # Handle case where _frames is empty (concat([]))
+            if len(self._frames) == 0:
+                import pandas as pd
+
+                return pd.DataFrame() if self.axis == 0 else pd.Series(dtype=object)
             return make_meta(meta_nonempty(self._frames[0]._meta))
         else:
             return make_meta(
@@ -79,6 +84,9 @@ class Concat(Expr):
 
     def _divisions(self):
         dfs = self._frames
+
+        if len(dfs) == 0:
+            return (None, None)
 
         if self.axis == 1:
             if self._are_co_alinged_or_single_partition:
@@ -118,11 +126,16 @@ class Concat(Expr):
     @functools.cached_property
     def _all_known_divisions(self):
         dfs = self._frames
+        if len(dfs) == 0:
+            return True
         return all(df.known_divisions for df in dfs)
 
     @functools.cached_property
     def _monotonic_divisions(self):
         dfs = self._frames
+
+        if len(dfs) == 0:
+            return True
 
         if self._all_known_divisions:
             # each DataFrame's division must be greater than previous one
@@ -134,12 +147,20 @@ class Concat(Expr):
 
     @functools.cached_property
     def _are_co_alinged_or_single_partition(self):
+        if len(self._frames) == 0:
+            return True
         return are_co_aligned(*self._frames) or {
             df.npartitions for df in self._frames
         } == {1}
 
     def _lower(self):
         dfs = self._frames
+
+        if len(dfs) == 0:
+            from dask.dataframe.dask_expr._expr import Literal
+
+            return Literal(self._meta)
+
         if self.axis == 1:
             if self._are_co_alinged_or_single_partition:
                 return ConcatIndexed(
