@@ -66,7 +66,6 @@ class Concat(Expr):
         if len(filtered) == 0:
             # Handle case where _frames is empty (concat([]))
             if len(self._frames) == 0:
-                import pandas as pd
 
                 return pd.DataFrame() if self.axis == 0 else pd.Series(dtype=object)
             return make_meta(meta_nonempty(self._frames[0]._meta))
