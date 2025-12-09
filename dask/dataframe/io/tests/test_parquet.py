@@ -810,7 +810,7 @@ def test_append_wo_index(tmpdir, engine, metadata_file):
             # There is some odd behavior with date ranges and pyarrow in some cirucmstances!
             # https://github.com/pandas-dev/pandas/issues/48573
             pd.date_range("2022-01-01", "2022-01-31", freq="D"),
-            pd.Timedelta(days=1),
+            pd.Timedelta("1D"),
         ),
         (pd.RangeIndex(0, 500, 1), 499),
     ],
