@@ -4016,7 +4016,7 @@ def to_zarr(
         See :func:`~dask.array.store` for more details.
     return_stored: bool
         See :func:`~dask.array.store` for more details.
-    zarr_array_kwargs:
+    zarr_array_kwargs: dict or None
         Keyword arguments passed to :func:`zarr.create_array` (for zarr v3) or
         :func:`zarr.create` (for zarr v2). This function automatically sets
         ``shape``, ``chunks``, and ``dtype`` based on the dask array, but these
