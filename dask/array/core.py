@@ -4055,8 +4055,10 @@ def to_zarr(
 
     if not _check_regular_chunks(arr.chunks):
         warnings.warn(
-            "Array has irregular chunks. Automatically rechunking to regular chunks, to prevent"
-            " issues with writing data.",
+            "The array uses irregular chunk sizes. Rechunking to regular (uniform) chunks "
+            "to ensure the data can be written safely. If you want to avoid this automatic "
+            "rechunking, manually rechunk the array so that all chunks, except possibly the "
+            "final chunk, in each dimension—have the same size (e.g., arr = arr.rechunk(...)).",
             UserWarning,
             stacklevel=2,
         )
