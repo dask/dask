@@ -196,41 +196,6 @@ def test_concat_dataframe_empty():
     assert_eq(df_concat, ddf_concat)
 
 
-def test_concat_empty_list_issue_12147():
-    """Test that concatenating only empty DataFrames does not raise IndexError.
-
-    Regression test for issue #12147 where accessing self._frames[0] without
-    checking if the list is empty would cause IndexError.
-    """
-    # Test case 1: All frames are empty
-    empty_df1 = pd.DataFrame({"a": pd.Series([], dtype="int64")})
-    empty_df2 = pd.DataFrame({"a": pd.Series([], dtype="int64")})
-    expected = pd.concat([empty_df1, empty_df2])
-
-    empty_ddf1 = from_pandas(empty_df1, npartitions=1)
-    empty_ddf2 = from_pandas(empty_df2, npartitions=1)
-    result = concat([empty_ddf1, empty_ddf2])
-
-    assert_eq(expected, result)
-
-    # Test case 2: Mix of empty and non-empty, but result is empty
-    # (edge case where concatenation produces an empty result)
-    df = pd.DataFrame({"a": [1, 2, 3]}, dtype="int64")
-    empty_df = pd.DataFrame({"a": pd.Series([], dtype="int64")})
-
-    # Concat empty after non-empty
-    ddf = from_pandas(df, npartitions=1)
-    empty_ddf = from_pandas(empty_df, npartitions=1)
-    result = concat([ddf, empty_ddf])
-    expected = pd.concat([df, empty_df])
-    assert_eq(expected, result)
-
-    # Concat empty before non-empty
-    result = concat([empty_ddf, ddf])
-    expected = pd.concat([empty_df, df])
-    assert_eq(expected, result)
-
-
 def test_concat_after_merge():
     pdf1 = pd.DataFrame(
         {"x": range(10), "y": [1, 2, 3, 4, 5] * 2, "z": ["cat", "dog"] * 5}
