@@ -2,8 +2,6 @@
 Tests for chunk memory profiling utilities.
 """
 
-import math
-
 import numpy as np
 import pytest
 
@@ -191,6 +189,7 @@ class TestProfileChunkMemoryDecorator:
         @profile_chunk_memory(profile_name="my_processor")
         def process_chunk(x):
             return x * 2
+
         result = process_chunk(np.arange(100, dtype=np.float64))
         assert result.shape == (100,)
         assert profiler.get_profile("my_processor") is not None
