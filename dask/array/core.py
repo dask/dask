@@ -4001,7 +4001,9 @@ def to_zarr(
         be serializable if used in multiple processes.
     component: str or None
         If the location is a zarr group rather than an array, this is the
-        subcomponent that should be created/over-written.
+        subcomponent that should be created/over-written. If both `component`
+        and 'name' in `zarr_array_kwargs` are specified, `component` takes
+        precedence. This will change in a future version.
     storage_options: dict
         Any additional parameters for the storage backend (ignored for local
         paths)
@@ -4034,7 +4036,7 @@ def to_zarr(
 
         - zarr v3: https://zarr.readthedocs.io/en/stable/api/zarr/index.html#zarr.create_array
         - zarr v2: https://zarr.readthedocs.io/en/stable/api/core.html#zarr.create
-    zarr_store_kwargs: dict or None
+    zarr_read_kwargs: dict or None
         Keyword arguments passed to the storage backend when creating a zarr
         store from a URL string. Only used when ``url`` is a string (not when
         ``url`` is already a zarr.Array or MutableMapping instance).
@@ -4052,9 +4054,9 @@ def to_zarr(
         Additional backend-specific options may be available depending on the
         storage system (e.g., fsspec parameters for cloud storage).
     **kwargs:
-        Deprecated. Previously used for passing arguments to the storage backend.
-        Please use the ``zarr_store_kwargs`` parameter instead. This will be
-        removed in a future version.
+        .. deprecated:: 2025.12.0
+            Passing storage-related arguments via **kwargs is deprecated.
+            Please use the ``zarr_read_kwargs`` parameter instead.
 
     Raises
     ------
@@ -4076,11 +4078,19 @@ def to_zarr(
             f"currently supported by Zarr.{unknown_chunk_message}"
         )
 
+    zarr_array_kwargs = {} if zarr_array_kwargs is None else dict(zarr_array_kwargs)
+    if component is not None and "name" in zarr_array_kwargs:
+        raise ValueError(
+            "Cannot specify both 'component' and 'name' in zarr_array_kwargs. Please use 'name' in "
+            "zarr_array_kwargs"
+        )
+
     if kwargs:
         warnings.warn(
             "Passing storage-related arguments via **kwargs is deprecated. "
-            "Please use the 'zarr_store_kwargs' parameter instead.",
-            DeprecationWarning,
+            "Please use the 'zarr_store_kwargs' parameter instead. **kwargs will be "
+            "removed in a future version.",
+            FutureWarning,
             stacklevel=2,
         )
         if zarr_read_kwargs is None:
@@ -4118,16 +4128,15 @@ def to_zarr(
     zarr_read_kwargs = {} if zarr_read_kwargs is None else dict(zarr_read_kwargs)
     zarr_store = _setup_zarr_store(url, storage_options, **zarr_read_kwargs)
 
-    zarr_array_kwargs = {} if zarr_array_kwargs is None else dict(zarr_array_kwargs)
-
     zarr_array_kwargs.setdefault("shape", arr.shape)
     zarr_array_kwargs.setdefault("chunks", tuple(c[0] for c in arr.chunks))
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
+    array_name = component or zarr_array_kwargs.pop("name", None)
     if _zarr_v3():
-        root = zarr.open_group(store=zarr_store, mode="a") if component else None
-        if component:
-            z = root.create_array(name=component, **zarr_array_kwargs)
+        root = zarr.open_group(store=zarr_store, mode="a") if array_name else None
+        if array_name:
+            z = root.create_array(name=array_name, **zarr_array_kwargs)
         else:
             zarr_array_kwargs["store"] = zarr_store
             z = zarr.create_array(**zarr_array_kwargs)
@@ -4135,7 +4144,7 @@ def to_zarr(
         # TODO: drop this as soon as zarr v2 gets dropped.
         z = zarr.create(
             store=zarr_store,
-            path=component,
+            path=array_name,
             **zarr_array_kwargs,
         )
 
