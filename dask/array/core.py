@@ -19,14 +19,13 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Literal, TypedDict, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
 import numpy as np
 from numpy.typing import ArrayLike
 from packaging.version import Version
 from tlz import accumulate, concat, first, partition
 from toolz import frequencies
-from typing_extensions import NotRequired
 
 from dask._compatibility import import_optional_dependency
 from dask.core import flatten
@@ -97,21 +96,6 @@ from dask.utils import (
 from dask.widgets import get_template
 
 try:
-    from zarr.core.array import CompressorsLike, FiltersLike, SerializerLike, ShardsLike
-    from zarr.core.array_spec import ArrayConfigLike
-    from zarr.core.chunk_key_encodings import ChunkKeyEncodingLike
-    from zarr.core.common import (
-        JSON,
-        DimensionNames,
-        MemoryOrder,
-        ShapeLike,
-        ZarrFormat,
-    )
-    from zarr.core.dtype import ZDTypeLike
-except ModuleNotFoundError:
-    pass
-
-try:
     ARRAY_TEMPLATE = get_template("array.html.j2")
 except ImportError:
     ARRAY_TEMPLATE = None
@@ -132,28 +116,6 @@ unknown_chunk_message = (
 
 class PerformanceWarning(Warning):
     """A warning given when bad chunking may cause poor performance"""
-
-
-class ZarrKwargs(TypedDict):
-    name: NotRequired[str]
-    shape: NotRequired[ShapeLike | None]
-    dtype: NotRequired[ZDTypeLike | None]
-    data: NotRequired[np.ndarray[Any, np.dtype[Any]] | None]
-    chunks: NotRequired[tuple[int, ...] | Literal["auto"]]
-    shards: NotRequired[ShardsLike | None]
-    filters: NotRequired[FiltersLike]
-    compressors: NotRequired[CompressorsLike]
-    serializer: NotRequired[SerializerLike]
-    fill_value: NotRequired[Any | None]
-    order: NotRequired[MemoryOrder | None]
-    zarr_format: NotRequired[ZarrFormat | None]
-    attributes: NotRequired[dict[str, JSON] | None]
-    chunk_key_encoding: NotRequired[ChunkKeyEncodingLike | None]
-    dimension_names: NotRequired[DimensionNames]
-    storage_options: NotRequired[dict[str, Any] | None]
-    overwrite: NotRequired[bool]
-    config: NotRequired[ArrayConfigLike | None]
-    write_data: NotRequired[bool]
 
 
 def getter(a, b, asarray=True, lock=None):
