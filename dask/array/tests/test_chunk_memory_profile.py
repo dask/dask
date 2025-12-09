@@ -191,8 +191,8 @@ class TestProfileChunkMemoryDecorator:
         @profile_chunk_memory(profile_name="my_processor")
         def process_chunk(x):
             return x * 2
-
         result = process_chunk(np.arange(100, dtype=np.float64))
+        assert result.shape == (100,)
         assert profiler.get_profile("my_processor") is not None
 
     def test_decorator_preserves_function(self):
@@ -365,7 +365,6 @@ class TestIntegration:
         suggestions = suggest_chunk_size(shape, dtype, available_memory)
 
         # Estimate with suggested chunks
-        chunk_size = math.prod(suggestions.values())
         estimation = estimate_chunk_memory(shape, tuple(suggestions.values()), dtype)
 
         # Verify it fits in memory
