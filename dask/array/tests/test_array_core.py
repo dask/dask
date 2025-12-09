@@ -4972,9 +4972,9 @@ def test_zarr_sharding_roundtrip(tmp_path, chunks, shards):
     zarr = pytest.importorskip("zarr", minversion="3.0.0")
 
     a = da.zeros((60, 60), chunks=chunks)
-    zarr_kwargs = {"shards": shards}
+    zarr_array_kwargs = {"shards": shards}
 
-    a.to_zarr(tmp_path, zarr_kwargs=zarr_kwargs)
+    a.to_zarr(tmp_path, zarr_array_kwargs=zarr_array_kwargs)
 
     store = zarr.storage.FsspecStore.from_url(tmp_path)
     z = zarr.open_array(store)
@@ -5073,12 +5073,12 @@ def test_zarr_group():
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d, component="test")
         with pytest.raises((OSError, ValueError)):
-            a.to_zarr(d, component="test", zarr_kwargs={"overwrite": False})
-        a.to_zarr(d, component="test", zarr_kwargs={"overwrite": True})
+            a.to_zarr(d, component="test", zarr_array_kwargs={"overwrite": False})
+        a.to_zarr(d, component="test", zarr_array_kwargs={"overwrite": True})
 
         # second time is fine, group exists
-        a.to_zarr(d, component="test2", zarr_kwargs={"overwrite": False})
-        a.to_zarr(d, component="nested/test", zarr_kwargs={"overwrite": False})
+        a.to_zarr(d, component="test2", zarr_array_kwargs={"overwrite": False})
+        a.to_zarr(d, component="nested/test", zarr_array_kwargs={"overwrite": False})
 
         group = zarr.open_group(store=d, mode="r")
         assert set(group) == {"nested", "test", "test2"}
@@ -5104,7 +5104,7 @@ def test_zarr_irregular_chunks(shape, chunks, expect_rechunk):
     with tmpdir() as d:
         a = da.zeros(shape, chunks=chunks)  # ((2, 1, 1, 2), 1))
         if expect_rechunk:
-            with pytest.warns(UserWarning, match="Array has irregular chunks"):
+            with pytest.warns(UserWarning, match="The array uses irregular chunk"):
                 store_delayed = a.to_zarr(d, component="test", compute=False)
         else:
             store_delayed = a.to_zarr(d, component="test", compute=False)
@@ -5839,7 +5839,7 @@ def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
         with pytest.raises(ValueError, match="compute_chunk_sizes"):
             y.to_zarr(d)
         y.compute_chunk_sizes()
-        with pytest.warns(UserWarning, match="Array has irregular"):
+        with pytest.warns(UserWarning, match="The array uses irregular chunk"):
             y.to_zarr(d)
 
 

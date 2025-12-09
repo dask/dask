@@ -3983,7 +3983,8 @@ def to_zarr(
     region=None,
     compute=True,
     return_stored=False,
-    zarr_kwargs=None,
+    zarr_array_kwargs=None,
+    zarr_read_kwargs=None,
     **kwargs,
 ):
     """Save array to the zarr storage format
@@ -4015,13 +4016,45 @@ def to_zarr(
         See :func:`~dask.array.store` for more details.
     return_stored: bool
         See :func:`~dask.array.store` for more details.
-    zarr_kwargs: ZarrKwargs or None
-        Passed to the :func:`zarr.create_array` function, e.g., compression options. See
-        https://zarr.readthedocs.io/en/stable/api/zarr/index.html#zarr.create_array for the
-        full range of arguments.
+    zarr_array_kwargs:
+        Keyword arguments passed to :func:`zarr.create_array` (for zarr v3) or
+        :func:`zarr.create` (for zarr v2). This function automatically sets
+        ``shape``, ``chunks``, and ``dtype`` based on the dask array, but these
+        can be overridden.
+
+        Common options include:
+
+        - ``compressor``: Compression algorithm (e.g., ``zarr.Blosc()``)
+        - ``filters``: List of filters to apply
+        - ``fill_value``: Value to use for uninitialized portions
+        - ``order``: Memory layout ('C' or 'F')
+        - ``dimension_separator``: Separator for chunk keys ('/' or '.')
+
+        For the complete list of available arguments, see the zarr documentation:
+
+        - zarr v3: https://zarr.readthedocs.io/en/stable/api/zarr/index.html#zarr.create_array
+        - zarr v2: https://zarr.readthedocs.io/en/stable/api/core.html#zarr.create
+    zarr_store_kwargs: dict or None
+        Keyword arguments passed to the storage backend when creating a zarr
+        store from a URL string. Only used when ``url`` is a string (not when
+        ``url`` is already a zarr.Array or MutableMapping instance).
+
+        Common options include:
+
+        - ``mode``: File access mode. Options include:
+            - ``'r'``: Read-only, must exist
+            - ``'r+'``: Read/write, must exist
+            - ``'a'``: Read/write, create if doesn't exist (default)
+            - ``'w'``: Create, remove existing data if present
+            - ``'w-'``: Create, fail if exists
+        - ``read_only``: If True, open the store in read-only mode (alternative to ``mode='r'``)
+
+        Additional backend-specific options may be available depending on the
+        storage system (e.g., fsspec parameters for cloud storage).
     **kwargs:
-        Arguments used when creating the FssspecStore from a url. Either 'read_only' with as value a boolean,
-        or if not specified 'mode'. If both are not specified the 'mode' will default to 'a'.
+        Deprecated. Previously used for passing arguments to the storage backend.
+        Please use the ``zarr_store_kwargs`` parameter instead. This will be
+        removed in a future version.
 
     Raises
     ------
@@ -4042,6 +4075,18 @@ def to_zarr(
             "Saving a dask array with unknown chunk sizes is not "
             f"currently supported by Zarr.{unknown_chunk_message}"
         )
+
+    if kwargs:
+        warnings.warn(
+            "Passing storage-related arguments via **kwargs is deprecated. "
+            "Please use the 'zarr_store_kwargs' parameter instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if zarr_read_kwargs is None:
+            zarr_read_kwargs = kwargs
+        else:
+            zarr_read_kwargs = {**kwargs, **zarr_read_kwargs}
 
     if _zarr_v3():
         zarr_mem_store_types = (zarr.storage.MemoryStore,)
@@ -4070,26 +4115,28 @@ def to_zarr(
     if region is not None:
         raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")
 
-    zarr_store = _setup_zarr_store(url, storage_options, **kwargs)
-    zarr_kwargs = {} if zarr_kwargs is None else dict(zarr_kwargs)
+    zarr_read_kwargs = {} if zarr_read_kwargs is None else dict(zarr_read_kwargs)
+    zarr_store = _setup_zarr_store(url, storage_options, **zarr_read_kwargs)
 
-    zarr_kwargs.setdefault("shape", arr.shape)
-    zarr_kwargs.setdefault("chunks", tuple(c[0] for c in arr.chunks))
-    zarr_kwargs.setdefault("dtype", arr.dtype)
+    zarr_array_kwargs = {} if zarr_array_kwargs is None else dict(zarr_array_kwargs)
+
+    zarr_array_kwargs.setdefault("shape", arr.shape)
+    zarr_array_kwargs.setdefault("chunks", tuple(c[0] for c in arr.chunks))
+    zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     if _zarr_v3():
         root = zarr.open_group(store=zarr_store, mode="a") if component else None
         if component:
-            z = root.create_array(name=component, **zarr_kwargs)
+            z = root.create_array(name=component, **zarr_array_kwargs)
         else:
-            zarr_kwargs["store"] = zarr_store
-            z = zarr.create_array(**zarr_kwargs)
+            zarr_array_kwargs["store"] = zarr_store
+            z = zarr.create_array(**zarr_array_kwargs)
     else:
         # TODO: drop this as soon as zarr v2 gets dropped.
         z = zarr.create(
             store=zarr_store,
             path=component,
-            **zarr_kwargs,
+            **zarr_array_kwargs,
         )
 
     return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
