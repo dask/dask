@@ -3830,52 +3830,6 @@ def from_zarr(
     return from_array(z, chunks, name=name, inline_array=inline_array)
 
 
-def _determine_shard_size(arr, shard_factors):
-    """Determine the shard size based on chunks and shard_factors.
-
-    This function is only for when writing zarr with zarr version being >= 3.
-    It is expected that the dask array is already regularly chunked.
-
-    Parameters
-    ----------
-    arr: dask.array
-        Data for which to determine the shard size.
-    shard_factors: tuple[int]
-        The factors by which to multiply the chunk size per dimension.
-
-    Returns
-    -------
-    shards: tuple[int]
-        The shard size.
-    """
-    shards = None
-    chunks = arr.chunksize
-    if shard_factors:
-        if len(shard_factors) != len(arr.shape):
-            raise ValueError(
-                f"Shard factors {len(shard_factors)} must match array dimensions {len(arr.shape)}"
-            )
-        if chunks == arr.shape and sum(shard_factors) != len(arr.shape):
-            warnings.warn(
-                "The chunk size is equal to the size of the array. Shard factors will be set to 1 for each"
-                "dimension",
-                UserWarning,
-                stacklevel=3,
-            )
-            shard_factors = (1,) * len(chunks)
-        shards = tuple(chunks[i] * shard_factors[i] for i in range(len(arr.shape)))
-
-        remainders = tuple(arr.shape[i] % shards[i] for i in range(len(arr.shape)))
-        if sum(remainders) != 0:
-            warnings.warn(
-                f"Array shape {arr.shape} is not evenly divisible by shard shape {shards}. "
-                f"Remainders: {remainders}. Consider adjusting `shard_factors` to avoid partial shards.",
-                UserWarning,
-                stacklevel=3,
-            )
-    return shards
-
-
 def _write_dask_to_existing_zarr(
     url, arr, region, zarr_mem_store_types, compute, return_stored
 ):
