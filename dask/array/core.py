@@ -4104,6 +4104,7 @@ def to_zarr(
             z = zarr.create_array(**zarr_array_kwargs)
     else:
         # TODO: drop this as soon as zarr v2 gets dropped.
+        # https://github.com/dask/dask/issues/12188
         z = zarr.create(
             store=zarr_store,
             path=array_name,
