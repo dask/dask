@@ -7,6 +7,7 @@ sphinx-remove-toctrees
 sphinx_autosummary_accessors
 sphinx-tabs
 sphinx-design
+sphinx-llm
 jupyter_sphinx
 nbconvert
 toolz

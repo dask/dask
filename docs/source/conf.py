@@ -52,6 +52,7 @@ extensions = [
     "jupyter_sphinx",
     "sphinx_copybutton",
     "sphinx_design",
+    "sphinx_llm.txt",
 ]
 
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
