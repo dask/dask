@@ -196,9 +196,10 @@ properties:
           active:
             type: boolean
             description: |
-              Turn partition tuning optimization on/off. When active, the optimizer
-              may fuse small partitions together based on column projections and
-              partition sizes. Default is true.
+              Enable/disable the performance-tuning optimization stage. When active,
+              the optimizer may adjust the partition count based on heuristics. Set
+              this configuration to False to prevent the partition count from changing
+              at optimization time. Default is True.
 
       fuse:
         type: object
