@@ -934,7 +934,8 @@ def optimize_until(expr: Expr, stage: OptimizerStage) -> Expr:
         return expr
 
     # Manipulate Expression to make it more efficient
-    expr = expr.rewrite(kind="tune", rewritten={})
+    if dask.config.get("optimization.tune.active", True):
+        expr = expr.rewrite(kind="tune", rewritten={})
     if stage == "tuned-logical":
         return expr
 

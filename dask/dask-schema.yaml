@@ -188,6 +188,18 @@ properties:
               disabled, then adjacent blockwise layers with different annotations
               will *not* be fused.
 
+      tune:
+        type: object
+        description: Options for Dask's partition tuning optimizations
+        properties:
+
+          active:
+            type: boolean
+            description: |
+              Turn partition tuning optimization on/off. When active, the optimizer
+              may fuse small partitions together based on column projections and
+              partition sizes. Default is true.
+
       fuse:
         type: object
         description: Options for Dask's task fusion optimizations

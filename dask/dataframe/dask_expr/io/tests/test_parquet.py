@@ -638,15 +638,13 @@ def test_ensure_plan_computed_during_optimization(tmpdir, filesystem):
     _test()
 
 
-def test_fuse_small_partitions_disabled(tmpdir):
-    """Test that fuse_small_partitions=False preserves the original partition structure."""
+def test_tune_optimization_disabled(tmpdir):
+    """Test that optimization.tune.active=False preserves the original partition structure."""
     n_partitions = 10
     pdf = pd.DataFrame(
         {
             "x": np.random.randn(1000),
             "y": np.random.randn(1000),
-            "genes": np.random.choice(["GeneA", "GeneB", "GeneC", "GeneD"], size=1000),
-            "instance_id": np.arange(1000),
         }
     )
     pdf["genes"] = pdf["genes"].astype("category")
@@ -656,17 +654,18 @@ def test_fuse_small_partitions_disabled(tmpdir):
     path = str(tmpdir.join("test.parquet"))
     ddf.to_parquet(path)
 
-    # Read with fuse_small_partitions=False
-    result = read_parquet(path, fuse_small_partitions=False)
+    # Read with tune optimization disabled via config
+    with dask.config.set({"optimization.tune.active": False}):
+        result = read_parquet(path)
 
-    # Verify that the number of partitions is preserved
-    assert result.npartitions == n_partitions
+        # Verify that the number of partitions is preserved
+        assert result.npartitions == n_partitions
 
-    # Verify that map_partitions(len) gives consistent results
-    # for both the full DataFrame and a column selection
-    full_lens = result.map_partitions(len).compute()
-    col_lens = result["x"].map_partitions(len).compute()
+        # Verify that map_partitions(len) gives consistent results
+        # for both the full DataFrame and a column selection
+        full_lens = result.map_partitions(len).compute()
+        col_lens = result["x"].map_partitions(len).compute()
 
-    assert len(full_lens) == n_partitions
-    assert len(col_lens) == n_partitions
-    assert_eq(full_lens, col_lens)
+        assert len(full_lens) == n_partitions
+        assert len(col_lens) == n_partitions
+        assert_eq(full_lens, col_lens)
