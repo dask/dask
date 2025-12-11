@@ -816,7 +816,10 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 
     @property
     def _fusion_compression_factor(self):
-        if self.operand("_freeze_partitions") or self.operand("columns") is None:
+        if (
+            not self.operand("_fuse_small_partitions")
+            or self.operand("columns") is None
+        ):
             return 1
         nr_original_columns = max(len(self._dataset_info["schema"].names) - 1, 1)
         return max(
@@ -840,7 +843,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         "kwargs",
         "_partitions",
         "_series",
-        "_freeze_partitions",
+        "_fuse_small_partitions",
         "_dataset_info_cache",
     ]
     _defaults = {
@@ -857,7 +860,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         "kwargs": None,
         "_partitions": None,
         "_series": False,
-        "_freeze_partitions": False,
+        "_fuse_small_partitions": True,
         "_dataset_info_cache": None,
     }
     _absorb_projections = True
@@ -1149,7 +1152,7 @@ class ReadParquetPyarrowFS(ReadParquet):
 
     @property
     def _fusion_compression_factor(self):
-        if self.operand("_freeze_partitions"):
+        if not self.operand("_fuse_small_partitions"):
             return 1
         approx_stats = self.approx_statistics()
         total_uncompressed = 0
@@ -1278,7 +1281,7 @@ class ReadParquetFSSpec(ReadParquet):
         "kwargs",
         "_partitions",
         "_series",
-        "_freeze_partitions",
+        "_fuse_small_partitions",
         "_dataset_info_cache",
         "_pq_length_stats",
     ]
@@ -1300,7 +1303,7 @@ class ReadParquetFSSpec(ReadParquet):
         "kwargs": {"dtype_backend": None},
         "_partitions": None,
         "_series": False,
-        "_freeze_partitions": False,
+        "_fuse_small_partitions": True,
         "_dataset_info_cache": None,
         "_pq_length_stats": None,
     }

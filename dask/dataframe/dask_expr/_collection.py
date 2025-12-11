@@ -5115,7 +5115,7 @@ def read_parquet(
     filesystem="fsspec",
     engine=None,
     arrow_to_pandas=None,
-    freeze_partitions=False,
+    fuse_small_partitions=True,
     **kwargs,
 ):
     """
@@ -5295,11 +5295,10 @@ def read_parquet(
     arrow_to_pandas: dict, default None
         Dictionary of options to use when converting from ``pyarrow.Table`` to
         a pandas ``DataFrame`` object. Only used by the "arrow" engine.
-    freeze_partitions: bool, default False
-        Whether to freeze the partition count of the output collection during
-        query optimization. This will only prevent multiple IO operations from
-        being fused into the same partition. Follow-on operations are still
-        allowed to modify the initial partition count.
+    fuse_small_partitions: bool, default True
+        Whether to allow the query optimizer to fuse multiple partitions
+        together when a column projection is pushed into the ``read_parquet``
+        operation. Default is True.
     **kwargs: dict (of dicts)
         Options to pass through to ``engine.read_partitions`` as stand-alone
         key-word arguments. Note that these options will be ignored by the
@@ -5383,7 +5382,7 @@ def read_parquet(
                 pyarrow_strings_enabled=pyarrow_strings_enabled(),
                 kwargs=kwargs,
                 _series=isinstance(columns, str),
-                _freeze_partitions=freeze_partitions,
+                _fuse_small_partitions=fuse_small_partitions,
             )
         )
 
@@ -5406,7 +5405,7 @@ def read_parquet(
             engine=_set_parquet_engine(engine),
             kwargs=kwargs,
             _series=isinstance(columns, str),
-            _freeze_partitions=freeze_partitions,
+            _fuse_small_partitions=fuse_small_partitions,
         )
     )
 
