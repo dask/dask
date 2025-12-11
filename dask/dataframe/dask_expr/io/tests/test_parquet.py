@@ -647,7 +647,6 @@ def test_tune_optimization_disabled(tmpdir):
             "y": np.random.randn(1000),
         }
     )
-    pdf["genes"] = pdf["genes"].astype("category")
     ddf = from_pandas(pdf, npartitions=n_partitions)
 
     # Write parquet with multiple partitions
