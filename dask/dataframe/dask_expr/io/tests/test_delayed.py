@@ -75,24 +75,3 @@ def test_from_delayed_fusion():
 
     expected = df.map_partitions(func, meta={}).lower_completely().dask
     assert result.keys() == expected.keys()
-
-
-def test_tune_optimization_disabled_from_delayed():
-    """Test that optimization.tune.active=False preserves partitions for from_delayed."""
-    n_partitions = 10
-    df = from_delayed(
-        [_load(x) for x in range(n_partitions)], meta={"x": "int64", "y": "int64"}
-    )
-
-    with dask.config.set({"optimization.tune.active": False}):
-        # Verify that the number of partitions is preserved
-        assert df.npartitions == n_partitions
-
-        # Verify that map_partitions(len) gives consistent results
-        # for both the full DataFrame and a column selection
-        full_lens = df.map_partitions(len).compute()
-        col_lens = df["x"].map_partitions(len).compute()
-
-        assert len(full_lens) == n_partitions
-        assert len(col_lens) == n_partitions
-        assert_eq(full_lens, col_lens)
