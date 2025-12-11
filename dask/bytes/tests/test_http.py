@@ -156,7 +156,7 @@ def test_errors(dir_server):
 
 def test_files(dir_server):
     root = "http://localhost:8999/"
-    fs = open_files([root + f for f in files])
+    fs = open_files([f"{root}{f}" for f in files])
     for f, f2 in zip(fs, files):
         with f as f:
             with open(os.path.join(dir_server, f2), "rb") as expected:
@@ -165,9 +165,9 @@ def test_files(dir_server):
 
 def test_open_glob(dir_server):
     root = "http://localhost:8999/"
-    fs = open_files(root + "*")
-    assert fs[0].path == "http://localhost:8999/a"
-    assert fs[1].path == "http://localhost:8999/b"
+    fs = open_files(f"{root}*")
+    assert fs[0].path == f"{root}a"
+    assert fs[1].path == f"{root}b"
 
 
 @pytest.mark.network
@@ -178,7 +178,10 @@ def test_open_glob(dir_server):
 def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
-    pytest.importorskip(engine)
+    pa = pytest.importorskip(engine)
+    if Version(pa.__version__) >= Version("22.0.0"):
+        pytest.skip(reason="https://github.com/apache/arrow/issues/47981")
+
     df = dd.read_parquet(
         [
             "https://github.com/Parquet/parquet-compatibility/raw/"

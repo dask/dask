@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import inspect
 import math
 import operator
 import warnings
@@ -542,7 +543,7 @@ def moment_agg(
             inner_term = np.abs(divide(totals, ns) - mu)
         else:
             inner_term = divide(totals, ns, dtype=dtype) - mu
-
+    inner_term = np.where(ns == 0, 0, inner_term)
     M = _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs)
 
     denominator = n.sum(axis=axis, **kwargs) - ddof
@@ -676,7 +677,7 @@ def nanvar(
             numel=nannumel,
             implicit_complex_dtype=implicit_complex_dtype,
         ),
-        partial(moment_agg, sum=np.nansum, ddof=ddof),
+        partial(moment_agg, sum=np.sum, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
         dtype=dt,
@@ -1216,7 +1217,24 @@ def cumreduction(
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 
-    m = x.map_blocks(func, axis=axis, dtype=dtype)
+    use_dtype = False
+    try:
+        func_params = inspect.signature(func).parameters
+        use_dtype = "dtype" in func_params
+    except ValueError:
+        try:
+            # Workaround for numpy<=2.3.4
+            # np.ufunc.accumulate doesn't have a signature, but it does accept dtype
+            # See https://github.com/numpy/numpy/issues/30095
+            if isinstance(func.__self__, np.ufunc) and func.__name__ == "accumulate":
+                use_dtype = True
+        except AttributeError:
+            pass
+
+    if use_dtype:
+        m = x.map_blocks(partial(func, dtype=dtype), axis=axis, dtype=dtype)
+    else:
+        m = x.map_blocks(func, axis=axis, dtype=dtype)
 
     name = f"{func.__name__}-{tokenize(func, axis, binop, ident, x, dtype)}"
     n = x.numblocks[axis]
@@ -1563,6 +1581,17 @@ def quantile(
     This works by automatically chunking the reduced axes to a single chunk if necessary
     and then calling ``numpy.quantile`` function across the remaining dimensions
     """
+    if interpolation is not None:
+        warnings.warn(
+            "The `interpolation` argument to quantile was renamed to `method`.",
+            FutureWarning,
+            stacklevel=2,
+        )
+
+        if method != "linear":
+            raise TypeError("Cannot pass interpolation and method keywords!")
+
+        method = interpolation
     if axis is None:
         if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
             raise NotImplementedError(
@@ -1590,7 +1619,6 @@ def quantile(
         np.quantile,
         q=q,
         method=method,
-        interpolation=interpolation,
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
@@ -1625,12 +1653,11 @@ def _custom_quantile(
     q,
     axis=None,
     method="linear",
-    interpolation=None,
     keepdims=False,
     **kwargs,
 ):
     if (
-        not {method, interpolation}.issubset({"linear", None})
+        method != "linear"
         or len(axis) != 1
         or axis[0] != len(a.shape) - 1
         or len(a.shape) == 1
@@ -1643,7 +1670,6 @@ def _custom_quantile(
             q,
             axis=axis,
             method=method,
-            interpolation=interpolation,
             keepdims=keepdims,
             **kwargs,
         )
@@ -1714,6 +1740,18 @@ def nanquantile(
     This works by automatically chunking the reduced axes to a single chunk
     and then calling ``numpy.nanquantile`` function across the remaining dimensions
     """
+    if interpolation is not None:
+        warnings.warn(
+            "The `interpolation` argument to nanquantile was renamed to `method`.",
+            FutureWarning,
+            stacklevel=2,
+        )
+
+        if method != "linear":
+            raise TypeError("Cannot pass interpolation and method keywords!")
+
+        method = interpolation
+
     if axis is None:
         if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
             raise NotImplementedError(
@@ -1747,7 +1785,6 @@ def nanquantile(
         kwargs = {
             "q": q,
             "method": method,
-            "interpolation": interpolation,
             "keepdims": keepdims,
         }
         if NUMPY_GE_200:

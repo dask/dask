@@ -135,18 +135,17 @@ def update(
                 priority=priority,
                 defaults=defaults.get(k) if defaults else None,
             )
-        else:
-            if (
-                priority == "new"
-                or k not in old
-                or (
-                    priority == "new-defaults"
-                    and defaults
-                    and k in defaults
-                    and defaults[k] == old[k]
-                )
-            ):
-                old[k] = v
+        elif (
+            priority == "new"
+            or k not in old
+            or (
+                priority == "new-defaults"
+                and defaults
+                and k in defaults
+                and defaults[k] == old[k]
+            )
+        ):
+            old[k] = v
 
     return old
 
@@ -349,7 +348,7 @@ def ensure_file(
             # Atomically create destination.  Parallel testing discovered
             # a race condition where a process can be busy creating the
             # destination while another process reads an empty config file.
-            tmp = "%s.tmp.%d" % (destination, os.getpid())
+            tmp = f"{destination}.tmp.{os.getpid()}"
             with open(source) as f:
                 lines = list(f)
 

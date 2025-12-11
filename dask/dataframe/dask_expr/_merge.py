@@ -584,8 +584,8 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         _barrier_key_left = barrier_key(ShuffleId(token_left))
         _barrier_key_right = barrier_key(ShuffleId(token_right))
 
-        transfer_name_left = "hash-join-transfer-" + token_left
-        transfer_name_right = "hash-join-transfer-" + token_right
+        transfer_name_left = f"hash-join-transfer-{token_left}"
+        transfer_name_right = f"hash-join-transfer-{token_right}"
         transfer_keys_left = list()
         transfer_keys_right = list()
         func = create_assign_index_merge_transfer()
@@ -736,8 +736,8 @@ class BroadcastJoin(Merge, PartitionsFiltered):
             other = self.left._name
             other_on = self.left_on
 
-        split_name = "split-" + self._name
-        inter_name = "inter-" + self._name
+        split_name = f"split-{self._name}"
+        inter_name = f"inter-{self._name}"
         kwargs = {
             "how": self.how,
             "indicator": self.indicator,
@@ -777,14 +777,14 @@ class BroadcastJoin(Merge, PartitionsFiltered):
                     _merge_args.reverse()
 
                 inter_key = (inter_name, part_out, j)
-                dsk[(inter_name, part_out, j)] = (  # type: ignore
+                dsk[(inter_name, part_out, j)] = (  # type: ignore [assignment, index]
                     apply,
                     _merge_chunk_wrapper,
                     _merge_args,
                     kwargs,
                 )
                 _concat_list.append(inter_key)
-            dsk[(self._name, part_out)] = (_concat_wrapper, _concat_list)  # type: ignore
+            dsk[(self._name, part_out)] = (_concat_wrapper, _concat_list)  # type: ignore[assignment]
         return dsk
 
 

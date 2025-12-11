@@ -50,6 +50,11 @@ Releasing dask and distributed:
 *   AUTOMATED PATH: Wait for [conda-forge](https://conda-forge.github.io) bots to track the
     change to PyPI. This will typically happen in an hour or two.
 
+    SEMI-AUTOMATED PATH: Trigger the bot to open the PR by creating an issue with the title
+    `@conda-forge-admin, please update version` on each of the `dask-core`, `distributed`, 
+    and `dask` feedstocks. See more documentation 
+    [here](https://conda-forge.org/docs/maintainer/infrastructure/#conda-forge-admin-please-update-version).
+
     MANUAL PATH: If you don't want to wait for the bots, then follow these steps:
     *  Update conda-smithy and run conda-smithy rerender
 

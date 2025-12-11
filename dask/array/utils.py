@@ -459,6 +459,8 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if type(like).__module__.startswith("scipy.sparse"):
         # e.g. scipy.sparse.csr_matrix
         kwargs.pop("order", None)
+        if np.isscalar(a):
+            a = np.array([[a]])
         return type(like)(a, **kwargs)
 
     # Unknown namespace with no __array_function__ support.
@@ -516,11 +518,9 @@ def validate_axis(axis, ndim):
     if isinstance(axis, (tuple, list)):
         return tuple(validate_axis(ax, ndim) for ax in axis)
     if not isinstance(axis, numbers.Integral):
-        raise TypeError("Axis value must be an integer, got %s" % axis)
+        raise TypeError(f"Axis value must be an integer, got {axis}")
     if axis < -ndim or axis >= ndim:
-        raise AxisError(
-            "Axis %d is out of bounds for array of dimension %d" % (axis, ndim)
-        )
+        raise AxisError(f"Axis {axis} is out of bounds for array of dimension {ndim}")
     if axis < 0:
         axis += ndim
     return axis

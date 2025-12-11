@@ -537,7 +537,7 @@ class Literal(Expr):
 
     def _task(self, name: Key, index: int) -> Task:
         assert index == 0
-        return DataNode(name, self.value)  # type: ignore
+        return DataNode(name, self.value)  # type: ignore[return-value]
 
 
 class Blockwise(Expr):
@@ -593,7 +593,11 @@ class Blockwise(Expr):
         dependencies = self.dependencies()
         for arg in dependencies:
             if not self._broadcast_dep(arg):
-                assert arg.divisions == dependencies[0].divisions
+                assert arg.divisions == dependencies[0].divisions, (
+                    "Mismatched divisions between multiple Blockwise dependencies. "
+                    f"Expected {dependencies[0].divisions}. Got {arg.divisions}. "
+                    "This may happen when a collection is passed to `meta=`."
+                )
         return dependencies[0].divisions
 
     @functools.cached_property
@@ -602,7 +606,7 @@ class Blockwise(Expr):
             head = funcname(self.operation)
         else:
             head = funcname(type(self)).lower()
-        return head + "-" + self.deterministic_token
+        return f"{head}-{self.deterministic_token}"
 
     def _blockwise_arg(self, arg, i):
         """Return a Blockwise-task argument"""
@@ -630,9 +634,9 @@ class Blockwise(Expr):
         """
         args = [self._blockwise_arg(op, index) for op in self._args]
         if self._kwargs:
-            return Task(name, self.operation, *args, **self._kwargs)  # type: ignore
+            return Task(name, self.operation, *args, **self._kwargs)  # type: ignore[arg-type]
         else:
-            return Task(name, self.operation, *args)  # type: ignore
+            return Task(name, self.operation, *args)  # type: ignore[arg-type]
 
     def _simplify_up(self, parent, dependents):
         if self._projection_passthrough and isinstance(parent, Projection):
@@ -684,7 +688,7 @@ class MapPartitions(Blockwise):
             head = self.token
         else:
             head = funcname(self.func).lower()
-        return head + "-" + self.deterministic_token
+        return f"{head}-{self.deterministic_token}"
 
     def _broadcast_dep(self, dep: Expr):
         # Always broadcast single-partition dependencies in MapPartitions
@@ -1039,9 +1043,9 @@ class CreateOverlappingPartitions(Expr):
         return self.frame.divisions
 
     def _layer(self) -> dict:
-        dsk, prevs, nexts = {}, [], []  # type: ignore
+        dsk, prevs, nexts = {}, [], []  # type: ignore[var-annotated]
 
-        name_prepend = "overlap-prepend-" + self._name
+        name_prepend = f"overlap-prepend-{self._name}"
         if self.before:
             prevs.append(None)
             if isinstance(self.before, numbers.Integral):
@@ -1073,7 +1077,7 @@ class CreateOverlappingPartitions(Expr):
                             first = first - deltas[j]
                             j = j - 1
 
-                        dsk[(name_prepend, i)] = (  # type: ignore
+                        dsk[(name_prepend, i)] = (  # type: ignore[assignment]
                             _tail_timedelta,
                             (self.frame._name, i + 1),
                             [(self.frame._name, k) for k in range(j, i + 1)],
@@ -1082,7 +1086,7 @@ class CreateOverlappingPartitions(Expr):
                         prevs.append((name_prepend, i))
                 else:
                     for i in range(self.frame.npartitions - 1):
-                        dsk[(name_prepend, i)] = (  # type: ignore
+                        dsk[(name_prepend, i)] = (  # type: ignore[assignment]
                             _tail_timedelta,
                             (self.frame._name, i + 1),
                             [(self.frame._name, i)],
@@ -1090,9 +1094,9 @@ class CreateOverlappingPartitions(Expr):
                         )
                         prevs.append((name_prepend, i))
         else:
-            prevs.extend([None] * self.frame.npartitions)  # type: ignore
+            prevs.extend([None] * self.frame.npartitions)  # type: ignore[list-item]
 
-        name_append = "overlap-append-" + self._name
+        name_append = f"overlap-append-{self._name}"
         if self.after:
             if isinstance(self.after, numbers.Integral):
                 after = self.after
@@ -1104,7 +1108,7 @@ class CreateOverlappingPartitions(Expr):
                 # validate later.
                 after = 2 * self.after
                 for i in range(1, self.frame.npartitions):
-                    dsk[(name_append, i)] = (  # type: ignore
+                    dsk[(name_append, i)] = (  # type: ignore[assignment]
                         _head_timedelta,
                         (self.frame._name, i - 1),
                         (self.frame._name, i),
@@ -1112,13 +1116,13 @@ class CreateOverlappingPartitions(Expr):
                     )
                     nexts.append((name_append, i))
 
-            nexts.append(None)  # type: ignore
+            nexts.append(None)  # type: ignore[arg-type]
 
         else:
-            nexts.extend([None] * self.frame.npartitions)  # type: ignore
+            nexts.extend([None] * self.frame.npartitions)  # type: ignore[list-item]
 
         for i, (prev, next) in enumerate(zip(prevs, nexts)):
-            dsk[(self._name, i)] = (  # type: ignore
+            dsk[(self._name, i)] = (  # type: ignore[assignment]
                 _combined_parts,
                 prev,
                 (self.frame._name, i),
@@ -1297,7 +1301,7 @@ class Sample(Blockwise):
 
 class Query(Blockwise):
     _parameters = ["frame", "_expr", "expr_kwargs"]
-    _defaults: dict[str, Any] = {"expr_kwargs": {}}  # type: ignore
+    _defaults: dict[str, Any] = {"expr_kwargs": {}}  # type: ignore[dict-item]
     _keyword_only = ["expr_kwargs"]
     operation = M.query
 
@@ -1991,7 +1995,7 @@ class Assign(Elemwise):
             sep = "" if i == 1 else ","
             header += f"{sep} {repr(op)[1:-1]}="
         else:
-            header += f"{repr(op)}"
+            header += f"{op!r}"
         return header
 
     def _node_label_args(self):
@@ -2194,8 +2198,8 @@ class Projection(Elemwise):
     def __str__(self):
         base = str(self.frame)
         if " " in base:
-            base = "(" + base + ")"
-        return f"{base}[{repr(self.operand('columns'))}]"
+            base = f"({base})"
+        return f"{base}[{self.operand('columns')!r}]"
 
     def _divisions(self):
         if self.ndim == 0:
@@ -2363,7 +2367,7 @@ class Lengths(Expr):
             return Lengths(child)
 
     def _layer(self):
-        name = "part-" + self._name
+        name = f"part-{self._name}"
         dsk = {
             (name, i): (len, (self.frame._name, i))
             for i in range(self.frame.npartitions)
@@ -3011,7 +3015,7 @@ class Partitions(Expr):
         return tuple(divisions)
 
     def _task(self, name: Key, index: int) -> Task:
-        return Alias(name, (self.frame._name, self.partitions[index]))  # type: ignore
+        return Alias(name, (self.frame._name, self.partitions[index]))  # type: ignore[return-value]
 
     def _simplify_down(self):
         from dask.dataframe.dask_expr import SetIndexBlockwise
@@ -3100,7 +3104,7 @@ class _DelayedExpr(Expr):
     _parameters = ["obj"]
 
     def __str__(self):
-        return f"{type(self).__name__}({str(self.obj)})"
+        return f"{type(self).__name__}({self.obj})"
 
     @property
     def _name(self):
@@ -3122,11 +3126,11 @@ class _DelayedExpr(Expr):
 
 class DelayedsExpr(Expr):
     def __str__(self):
-        return f"{type(self).__name__}({str(self.operands[0])})"
+        return f"{type(self).__name__}({self.operands[0]})"
 
     @functools.cached_property
     def _name(self):
-        return "delayed-container-" + self.deterministic_token
+        return f"delayed-container-{self.deterministic_token}"
 
     def _layer(self) -> dict:
         from dask.delayed import Delayed
@@ -3357,7 +3361,7 @@ class Diff(MapOverlap):
 
     @property
     def before(self):
-        return self.periods if self.periods > 0 else 0
+        return max(0, self.periods)
 
     @property
     def after(self):
@@ -3465,7 +3469,7 @@ class Shift(MapOverlap):
 
     @property
     def before(self):
-        return self.periods if self.periods > 0 else 0
+        return max(0, self.periods)
 
     @property
     def after(self):
@@ -3808,13 +3812,13 @@ class Fused(Blockwise):
         exprs = sorted(self.exprs, key=M._depth)
         names = [expr._name.split("-")[0] for expr in exprs]
         if len(names) > 4:
-            return names[0] + "-fused-" + names[-1]
+            return f"{names[0]}-fused-{names[-1]}"
         else:
             return "-".join(names)
 
     @functools.cached_property
     def _name(self):
-        return f"{str(self)}-{self.deterministic_token}"
+        return f"{self}-{self.deterministic_token}"
 
     def _divisions(self):
         return self.exprs[0]._divisions()
@@ -3834,7 +3838,7 @@ class Fused(Blockwise):
 
             assert t.key == subname
             internal_tasks.append(t)
-        return Task.fuse(*internal_tasks, key=name)  # type: ignore
+        return Task.fuse(*internal_tasks, key=name)  # type: ignore[return-value]
 
     @staticmethod
     def _execute_internal_graph(internal_tasks, dependencies, outkey):

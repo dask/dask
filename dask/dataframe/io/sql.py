@@ -84,17 +84,19 @@ def read_sql_query(
     """
     import sqlalchemy as sa
 
+    if isinstance(sql, str):
+        raise ValueError("`sql` must be a SQLAlchemy Selectable, not a string")
+
     if not isinstance(con, str):
         raise TypeError(
-            "'con' must be of type str, not "
-            + str(type(con))
-            + "Note: Dask does not support SQLAlchemy connectables here"
+            f"'con' must be of type str, not {type(con)}"
+            "Note: Dask does not support SQLAlchemy connectables here"
         )
     if index_col is None:
         raise ValueError("Must specify index column to partition on")
     if not isinstance(index_col, (str, sa.Column, sa.sql.elements.ColumnClause)):
         raise ValueError(
-            "'index_col' must be of type str or sa.Column, not " + str(type(index_col))
+            f"'index_col' must be of type str or sa.Column, not {type(index_col)}"
         )
     if not head_rows > 0:
         if meta is None:
@@ -156,11 +158,12 @@ def read_sql_query(
                 int(round(count * bytes_per_row / parse_bytes(bytes_per_chunk))) or 1
             )
         if dtype.kind == "M":
+            freq = (maxi - mini).total_seconds() / npartitions
             divisions = methods.tolist(
                 pd.date_range(
                     start=mini,
                     end=maxi,
-                    freq="%is" % ((maxi - mini).total_seconds() / npartitions),
+                    freq=f"{int(freq)}s",
                 )
             )
             divisions[0] = mini
@@ -169,8 +172,8 @@ def read_sql_query(
             divisions = np.linspace(mini, maxi, npartitions + 1, dtype=dtype).tolist()
         else:
             raise TypeError(
-                'Provided index column is of type "{}".  If divisions is not provided the '
-                "index column type must be numeric or datetime.".format(dtype)
+                f'Provided index column is of type "{dtype}".  If divisions is not provided the '
+                "index column type must be numeric or datetime."
             )
 
     parts = []
@@ -286,22 +289,18 @@ def read_sql_table(
         con = kwargs.pop("uri")
 
     if not isinstance(table_name, str):
-        raise TypeError(
-            "`table_name` must be of type str, not " + str(type(table_name))
-        )
+        raise TypeError(f"`table_name` must be of type str, not {type(table_name)}")
     if columns is not None:
         for col in columns:
             if not isinstance(col, (sa.Column, str)):
                 raise TypeError(
-                    "`columns` must be of type List[str], and cannot contain "
-                    + str(type(col))
+                    f"`columns` must be of type List[str], and cannot contain {type(col)}"
                 )
 
     if not isinstance(con, str):
         raise TypeError(
-            "`con` must be of type str, not "
-            + str(type(con))
-            + "Note: Dask does not support SQLAlchemy connectables here"
+            f"`con` must be of type str, not {type(con)}"
+            "Note: Dask does not support SQLAlchemy connectables here"
         )
 
     engine_kwargs = {} if engine_kwargs is None else engine_kwargs
@@ -310,9 +309,7 @@ def read_sql_table(
     if isinstance(table_name, str):
         table_name = sa.Table(table_name, m, autoload_with=engine, schema=schema)
     else:
-        raise TypeError(
-            "`table_name` must be of type str, not " + str(type(table_name))
-        )
+        raise TypeError(f"`table_name` must be of type str, not {type(table_name)}")
     engine.dispose()
 
     columns = (
@@ -577,7 +574,7 @@ def to_sql(
                 d,
                 extras=meta_task,
                 **worker_kwargs,
-                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
+                dask_key_name=f"to_sql-{tokenize(d, **worker_kwargs)}",
             )
             for d in df.to_delayed()
         ]
@@ -592,7 +589,7 @@ def to_sql(
                     d,
                     extras=last,
                     **worker_kwargs,
-                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
+                    dask_key_name=f"to_sql-{tokenize(d, **worker_kwargs)}",
                 )
             )
             last = result[-1]

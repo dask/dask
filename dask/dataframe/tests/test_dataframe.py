@@ -3664,7 +3664,7 @@ def test_inplace_operators():
     "idx",
     [
         np.arange(100),
-        sorted(np.random.random(size=100)),  # type: ignore[type-var]
+        sorted(np.random.random(size=100)),
         pd.date_range("20150101", periods=100),
     ],
 )
@@ -4312,6 +4312,10 @@ def test_to_datetime(gpu):
             dd.to_datetime(arg)
 
 
+@pytest.mark.xfail(
+    condition=PANDAS_GE_300,
+    reason="https://github.com/dask/dask/issues/12178#issuecomment-3604828151",
+)
 def test_to_timedelta():
     s = pd.Series(range(10))
     ds = dd.from_pandas(s, npartitions=2)
@@ -4478,10 +4482,10 @@ def test_cumulative_multiple_columns():
 
     for d in [ddf, df]:
         for c in df.columns:
-            d[c + "cs"] = d[c].cumsum()
-            d[c + "cmin"] = d[c].cummin()
-            d[c + "cmax"] = d[c].cummax()
-            d[c + "cp"] = d[c].cumprod()
+            d[f"{c}cs"] = d[c].cumsum()
+            d[f"{c}cmin"] = d[c].cummin()
+            d[f"{c}cmax"] = d[c].cummax()
+            d[f"{c}cp"] = d[c].cumprod()
 
     assert_eq(ddf, df)
 

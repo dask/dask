@@ -36,8 +36,8 @@ def test_cpu_count_cgroups(dirname, monkeypatch):
 
     if dirname:
         paths = {
-            "/sys/fs/cgroup/%s/cpu.cfs_quota_us" % dirname: io.StringIO("2005"),
-            "/sys/fs/cgroup/%s/cpu.cfs_period_us" % dirname: io.StringIO("10"),
+            f"/sys/fs/cgroup/{dirname}/cpu.cfs_quota_us": io.StringIO("2005"),
+            f"/sys/fs/cgroup/{dirname}/cpu.cfs_period_us": io.StringIO("10"),
         }
         builtin_open = builtins.open
 
@@ -77,8 +77,8 @@ def test_cpu_count_cgroups_v2(quota, group_name, monkeypatch):
         group_name = f"{group_name}/"
 
     paths = {
-        "/proc/self/cgroup": io.StringIO("0::%s" % group_name),
-        "/sys/fs/cgroup%scpu.max" % group_name: io.StringIO("%s 10" % quota),
+        "/proc/self/cgroup": io.StringIO(f"0::{group_name}"),
+        f"/sys/fs/cgroup{group_name}cpu.max": io.StringIO(f"{quota} 10"),
     }
     builtin_open = builtins.open
 

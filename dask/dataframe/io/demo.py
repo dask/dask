@@ -173,15 +173,14 @@ def make_int(
         if "low" in handler_kwargs:
             handler_args = ()
         data = rstate.randint(*handler_args, size=n, **handler_kwargs)
+    elif isinstance(method, str):
+        # "poisson", "binomial", etc.
+        handler_args, handler_kwargs = _with_defaults(method)
+        handler = getattr(rstate, method)
+        data = handler(*handler_args, size=n, **handler_kwargs)
     else:
-        if isinstance(method, str):
-            # "poisson", "binomial", etc.
-            handler_args, handler_kwargs = _with_defaults(method)
-            handler = getattr(rstate, method)
-            data = handler(*handler_args, size=n, **handler_kwargs)
-        else:
-            # method is a Callable
-            data = method(*args, state=rstate, size=n, **kwargs)
+        # method is a Callable
+        data = method(*args, state=rstate, size=n, **kwargs)
     return data
 
 
@@ -524,7 +523,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
 
     from dask.dataframe import from_map
 
-    k = {}  # type: ignore
+    k = {}  # type: ignore[var-annotated]
 
     with warnings.catch_warnings():
         warnings.filterwarnings(

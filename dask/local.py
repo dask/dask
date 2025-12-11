@@ -189,9 +189,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None, keys=None):
         if task is None:
             if dependents[key] and not cache.get(key):
                 raise ValueError(
-                    "Missing dependency {} for dependents {}".format(
-                        key, dependents[key]
-                    )
+                    f"Missing dependency {key} for dependents {dependents[key]}"
                 )
             continue
         elif isinstance(task, DataNode):
@@ -259,7 +257,7 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
         id = get_id()
         result = dumps((result, id))
         failed = False
-    except BaseException as e:  # noqa: B036
+    except BaseException as e:
         result = pack_exception(e, dumps)
         failed = True
     return key, result, failed
@@ -578,7 +576,7 @@ class SynchronousExecutor(Executor):
         fut = Future()
         try:
             fut.set_result(fn(*args, **kwargs))
-        except BaseException as e:  # noqa: B036
+        except BaseException as e:
             fut.set_exception(e)
         return fut
 

@@ -629,7 +629,7 @@ except ImportError as e:
         "  conda install dask                 # either conda install\n"
         '  python -m pip install "dask[array]" --upgrade  # or python -m pip install'
     )
-    raise ImportError(str(e) + "\n\n" + msg) from e
+    raise ImportError(f"{e}\n\n{msg}") from e
 
 
 if _array_expr_enabled():
@@ -643,9 +643,8 @@ if _array_expr_enabled():
         return inner_func
 
     try:
-        from dask.array._array_expr import Array  # type: ignore
-        from dask.array._array_expr import _overlap as overlap  # type: ignore
-        from dask.array._array_expr import (  # type: ignore
+        from dask.array._array_expr import (  # type: ignore[assignment, no-redef]
+            Array,
             abs,
             absolute,
             add,
@@ -772,6 +771,7 @@ if _array_expr_enabled():
             zeros,
             zeros_like,
         )
+        from dask.array._array_expr import _overlap as overlap  # type: ignore[no-redef]
         from dask.array.reductions import (
             all,
             any,
@@ -917,6 +917,6 @@ if _array_expr_enabled():
         from dask.base import compute
 
     except ImportError:
-        import dask.array as da  # type: ignore
+        import dask.array as da  # type: ignore[no-redef]
 
         da = importlib.reload(da)

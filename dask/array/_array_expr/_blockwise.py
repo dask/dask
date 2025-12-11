@@ -169,8 +169,7 @@ class Blockwise(ArrayExpr):
                     and arg.ndim != len(ind)
                 ):
                     raise ValueError(
-                        "Index string %s does not match array dimension %d"
-                        % (ind, arg.ndim)
+                        f"Index string {ind} does not match array dimension {arg.ndim}"
                     )
                 # TODO(expr): this class is a confusing crutch to pass arguments to the
                 #  graph, we should write them directly into the graph

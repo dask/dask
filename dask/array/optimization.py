@@ -108,7 +108,7 @@ def _optimize_slices(dsk):
         if not (isinstance(v, Task) and v.func is _execute_subgraph):
             continue
 
-        inner_graph: dict = v.args[0]  # type: ignore
+        inner_graph: dict = v.args[0]  # type: ignore[annotation-unchecked]
 
         seen = set()
 

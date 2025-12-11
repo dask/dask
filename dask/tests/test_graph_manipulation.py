@@ -121,8 +121,8 @@ def demo_tuples(layers: bool) -> tuple[Tuple, Tuple, NodeCounter]:
         {"c": set(), "d": set()},
     )
     if not layers:
-        dsk1 = dsk1.to_dict()  # type: ignore
-        dsk2 = dsk2.to_dict()  # type: ignore
+        dsk1 = dsk1.to_dict()  # type: ignore[assignment]
+        dsk2 = dsk2.to_dict()  # type: ignore[assignment]
 
     return Tuple(dsk1, list(dsk1)), Tuple(dsk2, list(dsk2)), cnt
 

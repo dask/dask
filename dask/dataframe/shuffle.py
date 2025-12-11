@@ -47,10 +47,8 @@ class maybe_buffered_partd:
             )
         except AttributeError as e:
             raise ImportError(
-                "Not able to import and load {} as compression algorithm."
-                "Please check if the library is installed and supported by Partd.".format(
-                    self.compression
-                )
+                f"Not able to import and load {self.compression} as compression algorithm."
+                "Please check if the library is installed and supported by Partd."
             ) from e
         file = partd.File(path)
         partd.file.cleanup_files.append(path)

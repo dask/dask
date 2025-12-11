@@ -25,7 +25,7 @@ dependencies:
   - mimesis
   - numpy>=2.2  # only tested here
   - pandas
-  #- numba  # not available for py 13
+  - numba
   - flask
   - h5py
   # Temporarily removing to allow `numpy >=2` to be installed
@@ -59,18 +59,17 @@ dependencies:
   - lz4
   - psutil
   - requests
-  #- scikit-image  # not available for py 13
+  - scikit-image
   - scikit-learn
   - scipy
   - python-snappy
-  #- sparse  # not available for py 13
+  - sparse
   - cachey
   - python-graphviz
   - python-cityhash
   - python-xxhash
-  #- mmh3  # only on pypi for py 13
+  - mmh3
   - jinja2
   - pip
   - pip:
     - git+https://github.com/dask/distributed
-    - mmh3

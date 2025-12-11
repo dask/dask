@@ -22,7 +22,7 @@ except ImportError:
 try:
     import psutil
 except ImportError:
-    psutil = None  # type: ignore
+    psutil = None  # type: ignore[assignment]
 
 
 prof = Profiler()

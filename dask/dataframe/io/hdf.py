@@ -33,8 +33,6 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
         if lock:
             lock.release()
 
-    return None
-
 
 def to_hdf(
     df,
@@ -139,7 +137,7 @@ def to_hdf(
     if dask_kwargs is None:
         dask_kwargs = {}
 
-    name = "to-hdf-" + uuid.uuid1().hex
+    name = f"to-hdf-{uuid.uuid1().hex}"
 
     pd_to_hdf = df._partition_type.to_hdf
 
@@ -273,7 +271,7 @@ def to_hdf(
     else:
         keys = [(name, i) for i in range(df.npartitions)]
 
-    final_name = name + "-final"
+    final_name = f"{name}-final"
     dsk[(final_name, 0)] = (lambda x: None, keys)
     graph = HighLevelGraph.from_collections((name, 0), dsk, dependencies=[df])
 
@@ -377,7 +375,8 @@ def read_hdf(
     if lock is True:
         lock = get_scheduler_lock()
 
-    key = key if key.startswith("/") else "/" + key
+    if not key.startswith("/"):
+        key = f"/{key}"
     # Convert path-like objects to a string
     pattern = stringify_path(pattern)
 
@@ -485,8 +484,7 @@ def _one_path_one_key(path, key, start, stop, chunksize):
 
     if start >= stop:
         raise ValueError(
-            "Start row number ({}) is above or equal to stop "
-            "row number ({})".format(start, stop)
+            f"Start row number ({start}) is above or equal to stop row number ({stop})"
         )
 
     return [
@@ -533,8 +531,7 @@ def _get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
                 stops.append(storer.nrows)
             elif stop > storer.nrows:
                 raise ValueError(
-                    "Stop keyword exceeds dataset number "
-                    "of rows ({})".format(storer.nrows)
+                    f"Stop keyword exceeds dataset number of rows ({storer.nrows})"
                 )
             else:
                 stops.append(stop)

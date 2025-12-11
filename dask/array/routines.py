@@ -29,10 +29,10 @@ from dask.array.core import (
     tensordot_lookup,
 )
 from dask.array.creation import arange, diag, empty, indices, tri
-from dask.array.einsumfuncs import einsum  # noqa
+from dask.array.einsumfuncs import einsum  # noqa: F401
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.reductions import reduction
-from dask.array.ufunc import multiply, sqrt
+from dask.array.ufunc import multiply, sqrt, true_divide
 from dask.array.utils import (
     array_safe,
     asarray_safe,
@@ -222,9 +222,7 @@ def flip(m, axis=None):
         for ax in axis:
             sl[ax] = slice(None, None, -1)
     except IndexError as e:
-        raise ValueError(
-            f"`axis` of {str(axis)} invalid for {str(m.ndim)}-D array"
-        ) from e
+        raise ValueError(f"`axis` of {axis} invalid for {m.ndim}-D array") from e
     sl = tuple(sl)
 
     return m[sl]
@@ -582,7 +580,7 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
     if n == 0:
         return a
     if n < 0:
-        raise ValueError("order must be non-negative but got %d" % n)
+        raise ValueError(f"order must be non-negative but got {n}")
 
     combined = []
     if prepend is not None:
@@ -701,8 +699,8 @@ def gradient(f, *varargs, axis=None, **kwargs):
             if np.min(c) < kwargs["edge_order"] + 1:
                 raise ValueError(
                     "Chunk size must be larger than edge_order + 1. "
-                    "Minimum chunk for axis {} is {}. Rechunk to "
-                    "proceed.".format(ax, np.min(c))
+                    f"Minimum chunk for axis {ax} is {np.min(c)}. Rechunk to "
+                    "proceed."
                 )
 
         if np.isscalar(varargs[i]):
@@ -976,7 +974,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
             raise TypeError(
                 "Dask types besides Array and Delayed are not supported "
-                "for `histogram`. For argument `{}`, got: {!r}".format(argname, val)
+                f"for `histogram`. For argument `{argname}`, got: {val!r}"
             )
 
     if range is not None:
@@ -995,7 +993,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             ) from None
 
     token = tokenize(a, bins, range, weights, density)
-    name = "histogram-sum-" + token
+    name = f"histogram-sum-{token}"
 
     bins_range, deps = unpack_collections([bins, range])
 
@@ -1402,7 +1400,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
             raise TypeError(
                 "Dask types besides Array and Delayed are not supported "
-                "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
+                f"for `histogramdd`. For argument `{argname}`, got: {val!r}"
             )
 
     # Require that the chunking of the sample and weights are compatible.
@@ -1522,7 +1520,17 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
 
 
 @derived_from(np)
-def cov(m, y=None, rowvar=1, bias=0, ddof=None):
+def cov(
+    m,
+    y=None,
+    rowvar=True,
+    bias=False,
+    ddof=None,
+    fweights=None,
+    aweights=None,
+    *,
+    dtype=None,
+):
     # This was copied almost verbatim from np.cov
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
@@ -1531,47 +1539,87 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
 
     # Handles complex arrays too
     m = asarray(m)
+
     if y is None:
-        dtype = np.result_type(m, np.float64)
+        dtype = result_type(m, np.float64)
     else:
         y = asarray(y)
-        dtype = np.result_type(m, y, np.float64)
+        dtype = result_type(m, y, np.float64)
+
+    if m.ndim > 2:
+        raise ValueError("m has more than 2 dimensions")
+    if y is not None and y.ndim > 2:
+        raise ValueError("y has more than 2 dimensions")
+
     X = array(m, ndmin=2, dtype=dtype)
 
-    if X.shape[0] == 1:
-        rowvar = 1
-    if rowvar:
-        N = X.shape[1]
-        axis = 0
-    else:
-        N = X.shape[0]
-        axis = 1
-
-    # check ddof
     if ddof is None:
-        if bias == 0:
-            ddof = 1
+        ddof = 1 if bias == 0 else 0
+
+    if not rowvar and m.ndim != 1:
+        X = X.T
+    if X.shape[0] == 0:
+        return array([]).reshape(0, 0)
+    if y is not None:
+        y = array(y, ndmin=2, dtype=dtype)
+        if not rowvar and y.shape[0] != 1:
+            y = y.T
+        X = concatenate((X, y), axis=0)
+
+    # Unlike NumPy, these checks don't include:
+    #    - if fweights are all integers
+    #    - if either fweights or aweights are all non-negative
+    # These checks potientially expensive for distributed arrays.
+    w = None
+    if fweights is not None:
+        fweights = asarray(fweights, dtype=float)
+        if fweights.ndim > 1:
+            raise RuntimeError("cannot handle multidimensional fweights")
+        if fweights.shape[0] != X.shape[1]:
+            raise RuntimeError("incompatible numbers of samples and fweights")
+        w = fweights
+    if aweights is not None:
+        aweights = asarray(aweights, dtype=float)
+        if aweights.ndim > 1:
+            raise RuntimeError("cannot handle multidimensional aweights")
+        if aweights.shape[0] != X.shape[1]:
+            raise RuntimeError("incompatible numbers of samples and aweights")
+        if w is None:
+            w = aweights
         else:
-            ddof = 0
-    fact = float(N - ddof)
+            w *= aweights
+
+    avg, w_sum = average(X, axis=1, weights=w, returned=True)
+    w_sum = w_sum[0]
+
+    # Determine the normalization
+    if w is None:
+        fact = X.shape[1] - ddof
+    elif ddof == 0:
+        fact = w_sum
+    elif aweights is None:
+        fact = w_sum - ddof
+    else:
+        fact = w_sum - ddof * sum(w * aweights) / w_sum
+
     if fact <= 0:
         warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
         fact = 0.0
 
-    if y is not None:
-        y = array(y, ndmin=2, dtype=dtype)
-        X = concatenate((X, y), axis)
-
-    X = X - X.mean(axis=1 - axis, keepdims=True)
-    if not rowvar:
-        return (dot(X.T, X.conj()) / fact).squeeze()
+    X -= avg[:, None]
+    if w is None:
+        X_T = X.T
     else:
-        return (dot(X, X.T.conj()) / fact).squeeze()
+        X_T = (X * w).T
+    c = dot(X, X_T.conj())
+    c *= true_divide(1, fact)
+    return c.squeeze()
 
 
 @derived_from(np)
 def corrcoef(x, y=None, rowvar=1):
     c = cov(x, y, rowvar)
+
     if c.shape == ():
         return c / c
     d = diag(c)
@@ -1687,7 +1735,7 @@ def unique_no_structured_arr(
 
     out_parts = [out]
 
-    name = "unique-aggregate-" + out.name
+    name = f"unique-aggregate-{out.name}"
     dsk = {
         (name, 0): (
             (np.unique,)
@@ -1776,7 +1824,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     else:
         out_parts.append(None)
 
-    name = "unique-aggregate-" + out.name
+    name = f"unique-aggregate-{out.name}"
     dsk = {
         (name, 0): (
             (_unique_internal,)
@@ -2036,7 +2084,7 @@ def _asarray_isnull(values):
 def isnull(values):
     """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
-    import pandas as pd  # noqa
+    import pandas as pd  # noqa: F401
 
     return elemwise(_asarray_isnull, values, dtype="bool")
 

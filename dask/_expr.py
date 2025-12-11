@@ -82,9 +82,7 @@ class Expr:
         return self
 
     def _operands_for_repr(self):
-        return [
-            f"{param}={repr(op)}" for param, op in zip(self._parameters, self.operands)
-        ]
+        return [f"{param}={op!r}" for param, op in zip(self._parameters, self.operands)]
 
     def __str__(self):
         s = ", ".join(self._operands_for_repr())
@@ -103,7 +101,7 @@ class Expr:
 
         if repr(op) != repr(default):
             if param:
-                header += f" {param}={repr(op)}"
+                header += f" {param}={op!r}"
             else:
                 header += repr(op)
         return header
@@ -543,7 +541,7 @@ class Expr:
 
     @functools.cached_property
     def _name(self) -> str:
-        return self._funcname + "-" + self.deterministic_token
+        return f"{self._funcname}-{self.deterministic_token}"
 
     @property
     def _meta(self):
@@ -827,7 +825,7 @@ class Expr:
         assert (
             isinstance(operation, tuple)
             and all(issubclass(e, Expr) for e in operation)
-            or issubclass(operation, Expr)  # type: ignore
+            or issubclass(operation, Expr)  # type: ignore[arg-type]
         ), "`operation` must be`Expr` subclass)"
         return (expr for expr in self.walk() if isinstance(expr, operation))
 
@@ -1238,27 +1236,30 @@ class _ExprSequence(Expr):
 
         issue_warning = False
         hlgs = []
-        for op in self.operands:
-            if isinstance(op, (HLGExpr, HLGFinalizeCompute)):
-                hlgs.append(op)
-            elif isinstance(op, dict):
-                hlgs.append(
-                    HLGExpr(
-                        dsk=HighLevelGraph.from_collections(
-                            str(id(op)), op, dependencies=()
+        if any(
+            isinstance(op, (HLGExpr, HLGFinalizeCompute, dict)) for op in self.operands
+        ):
+            for op in self.operands:
+                if isinstance(op, (HLGExpr, HLGFinalizeCompute)):
+                    hlgs.append(op)
+                elif isinstance(op, dict):
+                    hlgs.append(
+                        HLGExpr(
+                            dsk=HighLevelGraph.from_collections(
+                                str(id(op)), op, dependencies=()
+                            )
                         )
                     )
-                )
-            elif hlgs:
-                issue_warning = True
-                opt = op.optimize()
-                hlgs.append(
-                    HLGExpr(
-                        dsk=HighLevelGraph.from_collections(
-                            opt._name, opt.__dask_graph__(), dependencies=()
+                else:
+                    issue_warning = True
+                    opt = op.optimize()
+                    hlgs.append(
+                        HLGExpr(
+                            dsk=HighLevelGraph.from_collections(
+                                opt._name, opt.__dask_graph__(), dependencies=()
+                            )
                         )
                     )
-                )
         if issue_warning:
             warnings.warn(
                 "Computing mixed collections that are backed by "

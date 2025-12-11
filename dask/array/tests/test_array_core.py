@@ -5,6 +5,7 @@ import copy
 import pathlib
 import re
 import xml.etree.ElementTree
+from typing import Literal
 
 import pytest
 
@@ -31,6 +32,7 @@ from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
     BlockView,
+    PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
     broadcast_shapes,
@@ -4957,6 +4959,33 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
+@pytest.mark.parametrize(
+    "chunks, shards",
+    [
+        ((3, 3), (18, 18)),  # 6 chunks per shard dimension
+        ((3, 3), (12, 12)),  # 4 chunks per shard dimension
+        ((60, 60), (60, 60)),  # Single chunk = single shard
+    ],
+)
+def test_zarr_sharding_roundtrip(tmp_path, chunks, shards):
+    """Test sharding with various chunk and shard combinations"""
+    zarr = pytest.importorskip("zarr", minversion="3.0.0")
+
+    a = da.zeros((60, 60), chunks=chunks)
+    zarr_array_kwargs = {"shards": shards}
+
+    a.to_zarr(tmp_path, zarr_array_kwargs=zarr_array_kwargs)
+
+    store = zarr.storage.FsspecStore.from_url(tmp_path)
+    z = zarr.open_array(store)
+
+    assert z.shards == shards
+
+    a2 = da.from_zarr(tmp_path)
+    assert_eq(a, a2)
+    assert a2.chunks == a.chunks
+
+
 def test_zarr_roundtrip_with_path_like():
     pytest.importorskip("zarr")
     with tmpdir() as d:
@@ -5044,12 +5073,12 @@ def test_zarr_group():
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d, component="test")
         with pytest.raises((OSError, ValueError)):
-            a.to_zarr(d, component="test", overwrite=False)
-        a.to_zarr(d, component="test", overwrite=True)
+            a.to_zarr(d, component="test", zarr_array_kwargs={"overwrite": False})
+        a.to_zarr(d, component="test", zarr_array_kwargs={"overwrite": True})
 
         # second time is fine, group exists
-        a.to_zarr(d, component="test2", overwrite=False)
-        a.to_zarr(d, component="nested/test", overwrite=False)
+        a.to_zarr(d, component="test2", zarr_array_kwargs={"overwrite": False})
+        a.to_zarr(d, component="nested/test", zarr_array_kwargs={"overwrite": False})
 
         group = zarr.open_group(store=d, mode="r")
         assert set(group) == {"nested", "test", "test2"}
@@ -5074,7 +5103,11 @@ def test_zarr_irregular_chunks(shape, chunks, expect_rechunk):
     pytest.importorskip("zarr")
     with tmpdir() as d:
         a = da.zeros(shape, chunks=chunks)  # ((2, 1, 1, 2), 1))
-        store_delayed = a.to_zarr(d, component="test", compute=False)
+        if expect_rechunk:
+            with pytest.warns(UserWarning, match="The array uses irregular chunk"):
+                store_delayed = a.to_zarr(d, component="test", compute=False)
+        else:
+            store_delayed = a.to_zarr(d, component="test", compute=False)
         assert (
             any("rechunk" in key_split(k) for k in dict(store_delayed.dask))
             is expect_rechunk
@@ -5102,6 +5135,115 @@ def test_regular_chunks(data):
     assert _check_regular_chunks(chunkset) == expected
 
 
+def test_from_array_respects_zarr_shards():
+    """
+    Test that da.from_array chooses chunks based on
+    the shard shape of a sharded Zarr array instead of the chunk shape
+    """
+    zarr = pytest.importorskip(
+        "zarr", minversion="3", reason="Zarr 3 or higher needed for sharding"
+    )
+    shape = (1000,) * 3
+    z_chunks = (101,) * 3
+    z_shards = (404,) * 3
+    z = zarr.create_array(
+        {}, shape=shape, chunks=z_chunks, shards=z_shards, dtype="uint8"
+    )
+
+    dz = da.from_array(z)
+    # Check that all elements of nominal chunksize are divisible by the respective shard shape
+    assert all(c % s == 0 for c, s in zip(dz.chunksize, z.shards))
+
+
+@pytest.mark.parametrize("region_spec", [None, "all", "half"])
+def test_zarr_to_zarr_shards(region_spec: None | Literal["all", "half"]):
+    """
+    Test that calling to_zarr with a dask array with chunks that do not match the
+    shard shape of the zarr array automatically rechunks to a multiple of the
+    shard shape to ensure safe writes.
+
+    This test is parametrized over different regions, because the rechunking logic in
+    to_zarr contains an branch depending on whether a region parameter was specified.
+    """
+    zarr = pytest.importorskip("zarr", minversion="3.0.0")
+
+    shape = (100,)
+    dask_chunks = (10,)
+    zarr_chunk_shape = (1,)
+    zarr_shard_shape = (2,)
+
+    # Create a dask array with chunks that don't align with shards
+    arr = da.arange(shape[0], chunks=dask_chunks)
+
+    # the region parameter we will pass into to_zarr
+    region: tuple[slice, ...] | None
+
+    # The region of the zarr array we will write into
+    sel: tuple[slice, ...]
+
+    if region_spec is None:
+        sel = (slice(None),)
+        region = None
+    elif region_spec == "all":
+        sel = (slice(None),)
+        region = sel
+    else:
+        sel = (slice(shape[0] // 2),)
+        region = sel
+        # crop the source data
+        arr = arr[sel]
+
+    # Create a sharded zarr array
+    # In Zarr v3: chunks = inner chunk shape, shards = shard shape
+    z = zarr.create_array(
+        store={},
+        shape=shape,
+        chunks=zarr_chunk_shape,
+        shards=zarr_shard_shape,
+        dtype=arr.dtype,
+    )
+
+    # to_zarr should automatically rechunk to a multiple of the shard shape
+    result = arr.to_zarr(z, region=region, compute=False)
+
+    # Verify the array was rechunked to the shard shape
+    assert all(c % s == 0 for c, s in zip(result.chunksize, zarr_shard_shape))
+
+    # Verify data correctness
+    result.compute()
+    assert_eq(z[sel], arr.compute())
+
+
+def test_zarr_risky_shards_warns():
+    """
+    Test that we see a performance warning when dask chooses a chunk size that will cause data loss
+    for zarr arrays.
+    """
+    zarr = pytest.importorskip("zarr", minversion="3.0.0")
+
+    shape = (100,)
+    dask_chunks = (10,)
+    zarr_chunk_shape = (3,)
+    zarr_shard_shape = (6,)
+
+    arr = da.arange(shape[0], chunks=dask_chunks)
+
+    z = zarr.create_array(
+        store={},
+        shape=shape,
+        chunks=zarr_chunk_shape,
+        shards=zarr_shard_shape,
+        dtype=arr.dtype,
+    )
+
+    with dask.config.set({"array.chunk-size": 1}):
+        with pytest.raises(
+            PerformanceWarning,
+            match="The input Dask array will be rechunked along axis",
+        ):
+            arr.to_zarr(z)
+
+
 def test_zarr_nocompute():
     pytest.importorskip("zarr")
     with tmpdir() as d:
@@ -5126,13 +5268,17 @@ def test_zarr_regions():
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
+    with pytest.warns(PerformanceWarning):
+        a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
+
     a2 = da.from_zarr(z)
     expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 0, 7, 0], [0, 0, 11, 0]]
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
+    with pytest.warns(PerformanceWarning):
+        a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
+
     a2 = da.from_zarr(z)
     expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 15, 7, 0], [0, 0, 11, 0]]
     assert_eq(a2, expected)
@@ -5355,6 +5501,30 @@ def test_dask_array_holds_scipy_sparse_containers(container):
     zz = z.compute(scheduler="single-threaded")
     assert isinstance(zz, kind)
     assert (zz == xx.T).all()
+
+
+@pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
+@pytest.mark.parametrize(
+    "container", [pytest.param("array", marks=skip_if_no_sparray()), "matrix"]
+)
+@pytest.mark.parametrize("format", ["csr", "csc"])
+def test_dask_array_setitem_singleton_sparse(container, format):
+    pytest.importorskip("scipy.sparse")
+    import scipy.sparse
+
+    cls = (
+        getattr(scipy.sparse, f"{format}_matrix")
+        if container == "matrix"
+        else getattr(scipy.sparse, f"{format}_array")
+    )
+
+    x = cls(scipy.sparse.eye(100))
+    x_dask = da.from_array(x)
+    x[slice(10), slice(10)] = 0
+    x_dask[slice(10), slice(10)] = 0
+    np.testing.assert_almost_equal(
+        x_dask.compute(scheduler="single-threaded").toarray(), x.toarray()
+    )
 
 
 @pytest.mark.parametrize(
@@ -5669,7 +5839,8 @@ def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
         with pytest.raises(ValueError, match="compute_chunk_sizes"):
             y.to_zarr(d)
         y.compute_chunk_sizes()
-        y.to_zarr(d)
+        with pytest.warns(UserWarning, match="The array uses irregular chunk"):
+            y.to_zarr(d)
 
 
 def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
