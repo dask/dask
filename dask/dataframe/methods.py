@@ -10,6 +10,7 @@ from pandas.errors import PerformanceWarning
 from tlz import partition
 
 from dask.dataframe._compat import (
+    PANDAS_GE_300,
     check_apply_dataframe_deprecation,
     check_convert_dtype_deprecation,
     check_observed_deprecation,
@@ -371,7 +372,12 @@ def value_counts_aggregate(
     if normalize:
         out /= total_length if total_length is not None else out.sum()
     if sort:
-        out = out.sort_values(ascending=ascending)
+        if PANDAS_GE_300:
+            # pandas 3.x ensures that value_counts is stable.
+            kind = "stable"
+        else:
+            kind = "quicksort"
+        out = out.sort_values(ascending=ascending, kind=kind)
     if normalize:
         out.name = "proportion"
     return out
