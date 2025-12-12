@@ -21,11 +21,13 @@ Releasing dask and distributed:
     new contributors who don't yet have a github link at the end of the file.
 
     Add any new contributors' github links to the end of the file
-    (``gh pr view <PR> --json author`` is helpful for getting their usernames).
+    (``gh pr view --json author <PR>`` is helpful for getting their usernames).
 
 *   Update the versions in all pyproject.toml
     *   distributed version in pyproject.toml of dask/dask
     *   dask version in distributed/pyproject.toml
+    *   pins should be >= the current version but < the next version to allow 
+        for development installs to resolve correctly
 
 *   Commit
 
