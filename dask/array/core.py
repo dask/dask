@@ -3425,14 +3425,30 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 def _split_up_single_chunk(
     c: int, this_chunksize_tolerance: float, max_chunk_size: int, proposed: int
 ) -> list[int]:
-    # Calculate by what factor we have to split this chunk
-    m = c / proposed
-    if math.ceil(m) / m > this_chunksize_tolerance:
-        # We want to smooth things potentially if rounding up would change the result
-        # by a lot
-        m = math.ceil(c / max_chunk_size)
+    # Guard against division by zero
+    if proposed <= 0:
+        # Fallback: use max_chunk_size to determine split factor
+        if max_chunk_size <= 0:
+            # If both are invalid, return single chunk
+            return [c]
+        m: int = int(math.ceil(c / max_chunk_size))
     else:
-        m = math.ceil(m)
+        # Calculate by what factor we have to split this chunk
+        m_float = c / proposed
+        if math.ceil(m_float) / m_float > this_chunksize_tolerance:
+            # We want to smooth things potentially if rounding up would change the result
+            # by a lot
+            if max_chunk_size <= 0:
+                # Fallback: use proposed value
+                m = int(math.ceil(m_float))
+            else:
+                m = int(math.ceil(c / max_chunk_size))
+        else:
+            m = int(math.ceil(m_float))
+
+    # Ensure m is at least 1
+    m = max(1, m)
+
     # split the chunk
     new_c, remainder = divmod(c, min(m, c))
     x = [new_c] * min(m, c)
