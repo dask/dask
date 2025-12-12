@@ -536,3 +536,26 @@ def test_map_partitions_assign_fusedio(tmpdir):
     y_pred = df.map_partitions(len)
     df["y_pred"] = y_pred
     assert_eq(df["y_pred"], pd.Series([1, 1, 1], name="y_pred"), check_index=False)
+
+
+def test_tune_optimization_disabled_from_map(tmpdir):
+    """Test that optimization.tune.active=False preserves partitions for from_map."""
+    n_partitions = 10
+    pdf = pd.DataFrame({"x": np.random.randn(1000), "y": np.random.randn(1000)})
+    dd.from_pandas(pdf, npartitions=n_partitions).to_parquet(tmpdir, write_index=False)
+    files = sorted(glob.glob(f"{tmpdir}/*.parquet"))
+
+    with config.set({"optimization.tune.active": False}):
+        result = from_map(pd.read_parquet, files)
+
+        # Verify that the number of partitions is preserved
+        assert result.npartitions == n_partitions
+
+        # Verify that map_partitions(len) gives consistent results
+        # for both the full DataFrame and a column selection
+        full_lens = result.map_partitions(len).compute()
+        col_lens = result["x"].map_partitions(len).compute()
+
+        assert len(full_lens) == n_partitions
+        assert len(col_lens) == n_partitions
+        assert_eq(full_lens, col_lens)

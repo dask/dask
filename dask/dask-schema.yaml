@@ -188,6 +188,19 @@ properties:
               disabled, then adjacent blockwise layers with different annotations
               will *not* be fused.
 
+      tune:
+        type: object
+        description: Options for Dask's partition tuning optimizations
+        properties:
+
+          active:
+            type: boolean
+            description: |
+              Enable/disable the performance-tuning optimization stage. When active,
+              the optimizer may adjust the partition count based on heuristics. Set
+              this configuration to False to prevent the partition count from changing
+              at optimization time. Default is True.
+
       fuse:
         type: object
         description: Options for Dask's task fusion optimizations
