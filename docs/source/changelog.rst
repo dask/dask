@@ -5,6 +5,62 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v5025.12.0:
+
+2025.12.0
+---------
+
+Highlights
+^^^^^^^^^^
+
+- More improvements for pandas 3.x `Tom Augspurger`_
+- Support zarr sharding through create_array (:pr:`12153`) `Wouter-Michiel Vierdag`_
+- Various improvements for project linting and type hinting `Dimitri Papadopoulos Orfanos`_
+- Add new "optimization.tune.active" configuration option to disable partition fusion (:pr:`12194`) `Richard (Rick) Zamora`_
+
+
+.. dropdown:: Additional changes
+
+  - Stable sort in Series.value_counts for pandas 3.x (:pr:`12191`) `Tom Augspurger`_
+  - Add new "optimization.tune.active" configuration option to disable partition fusion (:pr:`12194`) `Richard (Rick) Zamora`_
+  - Build llms.txt files in Sphinx documentation (:pr:`12192`) `Jacob Tomlinson`_
+  - Support zarr sharding through create_array (:pr:`12153`) `Wouter-Michiel Vierdag`_
+  - Support min/max of datetime (:pr:`12183`) `Julia Signell`_
+  - pandas 3.x compatibility (:pr:`12180`) `Tom Augspurger`_
+  - Minimal version of setuptools-scm (:pr:`12184`) `Dimitri Papadopoulos Orfanos`_
+  - Update `test_ufunc_meta` for upstream-dev failure (:pr:`12170`) `Tom Augspurger`_
+  - Upstream compat (:pr:`12165`) `Tom Augspurger`_
+  - Enforce a few more ruff rules (:pr:`12157`) `Dimitri Papadopoulos Orfanos`_
+  - Enforce ruff/refurb rules (FURB) (:pr:`12144`) `Dimitri Papadopoulos Orfanos`_
+  - DEP: bump minimal requirement on toolz (0.10.0 -> 0.12.0) (:pr:`12163`) `Clément Robert`_
+  - Fix execution stop in da.to_zarr due to (misleading) PerformanceWarning raised as exception (:pr:`12161`) `Marvin Albert`_
+  - Use f-string interpolation where possible (:pr:`12140`) `Dimitri Papadopoulos Orfanos`_
+  - pre-commit black hook: use implicit defaults (:pr:`12156`) `Dimitri Papadopoulos Orfanos`_
+  - Enforce ruff/pygrep-hooks rules (PGH) (:pr:`12143`) `Dimitri Papadopoulos Orfanos`_
+  - Apply Repo-Review rules (:pr:`12148`) `Dimitri Papadopoulos Orfanos`_
+  - Document groupby: split_every, split_out (:pr:`12135`) `Jayesh Manani`_
+  - isort → ruff (:pr:`12149`) `Dimitri Papadopoulos Orfanos`_
+  - Enforce ruff/pyupgrade rule UP031 (:pr:`12137`) `Dimitri Papadopoulos Orfanos`_
+  - Replace pre-commit hook with ruff rule (:pr:`12142`) `Dimitri Papadopoulos Orfanos`_
+  - Fix reify to handle sparse arrays and other objects without __len__ (:pr:`12103`) `Gautham Hullikunte`_
+  - Ruff supersedes absolufy-imports (:pr:`12141`) `Dimitri Papadopoulos Orfanos`_
+  - Enforce ruff/pyupgrade rule UP032 (:pr:`12136`) `Dimitri Papadopoulos Orfanos`_
+  - Typing fixes (:distributed-pr:`9159`) `Jacob Tomlinson`_
+
+  - Explicit setuptools-scm minimum version (:distributed-pr:`9160`) `Jacob Tomlinson`_
+  - Enforce ruff rules (RUF) (:distributed-pr:`9153`) `Dimitri Papadopoulos Orfanos`_
+  - Clean up `MANIFEST.in` (:distributed-pr:`9149`) `Dimitri Papadopoulos Orfanos`_
+  - isort → ruff (:distributed-pr:`9152`) `Dimitri Papadopoulos Orfanos`_
+  - Ruff supersedes absolufy-imports (:distributed-pr:`9154`) `Dimitri Papadopoulos Orfanos`_
+  - Bump minimum supported ``toolz`` to 0.12.0 (:distributed-pr:`9151`) `James Bourbeau`_
+  - flake8, bugbear, pyupgrade → ruff (:distributed-pr:`9147`) `Dimitri Papadopoulos Orfanos`_
+  - Fix typos found by codespell (:distributed-pr:`9145`) `Dimitri Papadopoulos Orfanos`_
+  - Clean up setuptools-specific configuration (:distributed-pr:`9150`) `Dimitri Papadopoulos Orfanos`_
+  - PEP 639 compliance (:distributed-pr:`9146`) `Dimitri Papadopoulos Orfanos`_
+  - Update black (:distributed-pr:`9148`) `Dimitri Papadopoulos Orfanos`_
+  - Fix empty progress bar (:distributed-pr:`9144`) `Jacob Tomlinson`_
+  - Exclude broken `tblib` versions in CI (:distributed-pr:`9141`) `Jacob Tomlinson`_
+
 .. _v2025.11.0:
 
 2025.11.0
@@ -9737,3 +9793,6 @@ Other
 .. _`Jianyu Sun`: https://github.com/csfldf
 .. _`DongWon`: https://github.com/dongwonmoon
 .. _`Simon-Martin Schröder`: https://github.com/moi90
+.. _`Wouter-Michiel Vierdag`: https://github.com/melonora
+.. _`Clément Robert`: https://github.com/neutrinoceros
+.. _`Gautham Hullikunte`: https://github.com/batcity
