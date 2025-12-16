@@ -56,7 +56,7 @@ bag = []
 dataframe = [
     "dask[array]",
     "pandas >= 2.0",
-    "pyarrow>=14.0.1",
+    "pyarrow >= 14.0.1",
 ]
 distributed = ["distributed >= 2025.12.0,<2025.12.1"]
 diagnostics = [
