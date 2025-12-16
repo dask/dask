@@ -26,7 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.10", "3.11", "3.12", "3.13"]
+        environment: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         extra: [null]
         array-expr: ["false"]
         include:
@@ -43,10 +43,10 @@ jobs:
             environment: "mindeps-optional"
           # Experimental setups
           - os: "ubuntu-latest"
-            environment: "3.12"
+            environment: "3.14"
             extra: "pandas-nightly"
           - os: "ubuntu-latest"
-            environment: "3.12"
+            environment: "3.14"
             array-expr: "true"
 
     env:
