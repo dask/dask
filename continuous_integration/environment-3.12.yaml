@@ -32,7 +32,7 @@ dependencies:
   - h5py
   - pytables
   - zarr
-  - pyspark
+  # - pyspark  # Huge package; limit where it is tested
   - tiledb-py
   - tiledb
   - xarray

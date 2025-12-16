@@ -32,7 +32,7 @@ dependencies:
   - h5py
   - pytables
   - zarr
-  - pyspark
+  - pyspark !=4.1.0  # avoid regression in Windows
   - tiledb-py
   - tiledb
   - xarray
