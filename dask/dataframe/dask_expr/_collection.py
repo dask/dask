@@ -2211,7 +2211,7 @@ Expr={expr}"""
         >>> res = ddf.x.reduction(count_greater, aggregate=lambda x: x.sum(),
         ...                       chunk_kwargs={'value': 25})
         >>> res.compute()
-        np.int64(25)
+        25
 
         Aggregate both the sum and count of a Series at the same time:
 
