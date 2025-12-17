@@ -682,6 +682,7 @@ if _array_expr_enabled():
             cosh,
             deg2rad,
             degrees,
+            diff,
             divide,
             divmod,
             dot,
@@ -779,6 +780,7 @@ if _array_expr_enabled():
             tan,
             tanh,
             tensordot,
+            vdot,
             true_divide,
             trunc,
             where,
@@ -861,7 +863,6 @@ if _array_expr_enabled():
         count_nonzero = raise_not_implemented_error("count_nonzero")
         cov = raise_not_implemented_error("cov")
         delete = raise_not_implemented_error("delete")
-        diff = raise_not_implemented_error("diff")
         digitize = raise_not_implemented_error("digitize")
         dstack = raise_not_implemented_error("dstack")
         ediff1d = raise_not_implemented_error("ediff1d")
@@ -904,7 +905,6 @@ if _array_expr_enabled():
         union1d = raise_not_implemented_error("union1d")
         unique = raise_not_implemented_error("unique")
         unravel_index = raise_not_implemented_error("unravel_index")
-        vdot = raise_not_implemented_error("vdot")
         vstack = raise_not_implemented_error("vstack")
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")

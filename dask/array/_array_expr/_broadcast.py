@@ -24,8 +24,10 @@ class BroadcastTo(ArrayExpr):
 
     @functools.cached_property
     def _meta(self):
-        if self._meta_override is not None:
-            return self._meta_override
+        meta_override = self.operand("_meta_override")
+        # Only use meta_override if it has the correct ndim
+        if meta_override is not None and hasattr(meta_override, 'ndim') and meta_override.ndim == len(self._shape):
+            return meta_override
         return meta_from_array(self.array._meta, ndim=len(self._shape))
 
     @functools.cached_property

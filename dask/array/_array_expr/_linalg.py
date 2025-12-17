@@ -152,6 +152,35 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
+@derived_from(np)
+def vdot(a, b):
+    """Return the dot product of two vectors.
+
+    The vdot function handles complex numbers differently than dot:
+    if the first argument is complex the complex conjugate of the
+    first argument is used for the calculation of the dot product.
+
+    Parameters
+    ----------
+    a : array_like
+        First argument
+    b : array_like
+        Second argument
+
+    Returns
+    -------
+    output : dask array
+
+    See Also
+    --------
+    numpy.vdot
+    dot
+    """
+    from dask.array._array_expr._collection import ravel
+
+    return dot(ravel(a).conj(), ravel(b))
+
+
 def _matmul(a, b):
     """Helper function for matmul that handles the actual numpy computation."""
     xp = np

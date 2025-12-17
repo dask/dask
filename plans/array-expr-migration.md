@@ -20,9 +20,10 @@ The array-expr system has foundational infrastructure in place:
 - UFuncs
 - Reshape, squeeze, transpose
 - __array_function__ protocol
-- Linear algebra: tensordot, matmul, dot
+- Linear algebra: tensordot, matmul, dot, vdot
 - Reductions: argmin, argmax, nanargmin, nanargmax, cumsum, cumprod, nancumsum, nancumprod
 - Shape manipulation: ravel, flatten, expand_dims, atleast_*d, broadcast_to, roll
+- Routines: diff
 
 ## Testing Infrastructure
 
@@ -48,7 +49,7 @@ Important for scientific computing users.
 | matmul | `_linalg.py` | __matmul__, np.matmul | **Done** |
 | tensordot | `_linalg.py` | Used extensively | **Done** |
 | dot | `_linalg.py` | Wraps tensordot, Array.dot() method | **Done** |
-| vdot | `_linalg.py` | Vector dot product (needs ravel) | Not started |
+| vdot | `_linalg.py` | Vector dot product (needs ravel) | **Done** |
 | einsum | `routines.py` | Einstein summation (needs asarray fix) | Not started |
 
 ### Tier 3: Indexing Completion
@@ -92,7 +93,7 @@ General array routines.
 |-----------|----------|-------|--------|
 | where | `_collection.py` | Conditional select | **Done** |
 | unique | `routines.py` | Deduplication | Not started |
-| diff | `routines.py` | Differences | Not started |
+| diff | `_collection.py` | Differences | **Done** |
 | gradient | `routines.py` | Numerical gradient | Not started |
 | histogram | `routines.py` | Binning | Not started |
 | searchsorted | `routines.py` | Binary search | Not started |
