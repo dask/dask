@@ -712,6 +712,7 @@ if _array_expr_enabled():
             greater_equal,
             gradient,
             gufunc,
+            histogram,
             hypot,
             i0,
             imag,
@@ -752,6 +753,7 @@ if _array_expr_enabled():
             not_equal,
             ones,
             ones_like,
+            outer,
             positive,
             power,
             rad2deg,
@@ -874,7 +876,6 @@ if _array_expr_enabled():
         flip = raise_not_implemented_error("flip")
         fliplr = raise_not_implemented_error("fliplr")
         flipud = raise_not_implemented_error("flipud")
-        histogram = raise_not_implemented_error("histogram")
         histogram2d = raise_not_implemented_error("histogram2d")
         histogramdd = raise_not_implemented_error("histogramdd")
         hstack = raise_not_implemented_error("hstack")
@@ -885,7 +886,6 @@ if _array_expr_enabled():
         ndim = raise_not_implemented_error("ndim")
         nonzero = raise_not_implemented_error("nonzero")
         notnull = raise_not_implemented_error("notnull")
-        outer = raise_not_implemented_error("outer")
         piecewise = raise_not_implemented_error("piecewise")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
         result_type = raise_not_implemented_error("result_type")
