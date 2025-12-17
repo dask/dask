@@ -57,7 +57,7 @@ Complete the indexing story.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| boolean indexing | `slicing.py` | Needs ravel (reshape) | Not started |
+| boolean indexing | `_slicing.py` | Dask array bool masks + 1D bool arrays | **Done** |
 | field access | `_collection.py` | Structured arrays | **Done** |
 | setitem | `_collection.py` | In-place assignment | **Done** |
 
