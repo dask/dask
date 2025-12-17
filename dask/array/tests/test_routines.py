@@ -450,7 +450,6 @@ def test_vdot(shape, chunks):
 
 
 @pytest.mark.parametrize("shape1, shape2", [((20,), (6,)), ((4, 5), (2, 3))])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_outer(shape1, shape2):
     rng = np.random.default_rng(1337)
 
@@ -783,7 +782,6 @@ def test_histogram():
     assert same_keys(da.histogram(v, bins=bins)[0], a1)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_alternative_bins_range():
     v = da.random.default_rng().random(100, chunks=10)
     (a1, b1) = da.histogram(v, bins=10, range=(0, 1))
@@ -792,7 +790,6 @@ def test_histogram_alternative_bins_range():
     assert_eq(b1, b2)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_bins_range_with_nan_array():
     # Regression test for issue #3977
     v = da.from_array(np.array([-2, np.nan, 2]), chunks=1)
@@ -802,7 +799,6 @@ def test_histogram_bins_range_with_nan_array():
     assert_eq(b1, b2)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_return_type():
     v = da.random.default_rng().random(100, chunks=10)
     bins = np.arange(0, 1.01, 0.01)
@@ -811,7 +807,6 @@ def test_histogram_return_type():
     assert_eq(da.histogram(v * 10, bins=bins)[0], np.histogram(v * 10, bins=bins)[0])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_extra_args_and_shapes():
     # Check for extra args and shapes
     bins = np.arange(0, 1.01, 0.01)
@@ -844,7 +839,6 @@ def test_histogram_extra_args_and_shapes():
         )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_normed_deprecation():
     x = da.arange(10)
     with pytest.raises(ValueError) as info:
@@ -870,7 +864,6 @@ def test_histogram_normed_deprecation():
         (da.array([[0, 1, 2]]), None),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_bin_range_raises(bins, hist_range):
     data = da.random.default_rng().random(10, chunks=2)
     with pytest.raises((ValueError, TypeError)) as info:
@@ -955,7 +948,6 @@ def test_histogram_delayed_bins(density, weighted):
     assert_eq(bins_d2, bins, check_graph=False)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_delayed_n_bins_raises_with_density():
     data = da.random.default_rng().random(10, chunks=2)
     with pytest.raises(
@@ -1769,11 +1761,6 @@ def test_take_dask_from_numpy():
     assert_eq(z, np.array([2.0, 4.0, 6.0, 6.0, 4.0, 2.0]))
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="boolean indexing with dask arrays not yet implemented",
-    strict=False,
-)
 def test_compress():
     x = np.arange(25).reshape((5, 5))
     a = da.from_array(x, chunks=(2, 2))
