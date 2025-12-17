@@ -782,10 +782,18 @@ if _array_expr_enabled():
         from dask.array.reductions import (
             all,
             any,
+            argmax,
+            argmin,
+            cumprod,
+            cumsum,
             max,
             mean,
             min,
             moment,
+            nanargmax,
+            nanargmin,
+            nancumprod,
+            nancumsum,
             nanmax,
             nanmean,
             nanmin,
@@ -831,16 +839,8 @@ if _array_expr_enabled():
         rollaxis = raise_not_implemented_error("rollaxis")
         optimize = raise_not_implemented_error("optimize")
         percentile = raise_not_implemented_error("percentile")
-        argmax = raise_not_implemented_error("argmax")
-        argmin = raise_not_implemented_error("argmin")
         argtopk = raise_not_implemented_error("argtopk")
-        cumprod = raise_not_implemented_error("cumprod")
-        cumsum = raise_not_implemented_error("cumsum")
         median = raise_not_implemented_error("median")
-        nanargmax = raise_not_implemented_error("nanargmax")
-        nanargmin = raise_not_implemented_error("nanargmin")
-        nancumprod = raise_not_implemented_error("nancumprod")
-        nancumsum = raise_not_implemented_error("nancumsum")
         nanmedian = raise_not_implemented_error("nanmedian")
         topk = raise_not_implemented_error("topk")
         trace = raise_not_implemented_error("trace")

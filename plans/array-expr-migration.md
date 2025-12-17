@@ -21,6 +21,7 @@ The array-expr system has foundational infrastructure in place:
 - Reshape, squeeze, transpose
 - __array_function__ protocol
 - Linear algebra: tensordot, matmul, dot
+- Reductions: argmin, argmax, nanargmin, nanargmax, cumsum, cumprod, nancumsum, nancumprod
 
 ## Testing Infrastructure
 
@@ -63,8 +64,8 @@ Fill out remaining reduction operations.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| argmin/argmax | `reductions.py` | Need special handling | Not started |
-| cumsum/cumprod | `reductions.py` | Cumulative ops | Not started |
+| argmin/argmax | `reductions.py` | Need special handling | **Done** |
+| cumsum/cumprod | `reductions.py` | Cumulative ops | **Done** (axis=None edge case needs work) |
 | weighted mean/average | `reductions.py` | weights parameter | Not started |
 | ptp | `reductions.py` | Peak-to-peak | Not started |
 | median/percentile | `reductions.py` | Complex shuffling | Not started |
