@@ -334,13 +334,24 @@ class Array(DaskMethodsMixin):
         # TODO(expr-soon): Not done yet, but needed for assert_eq to identify us as an Array
         raise NotImplementedError
 
-    def transpose(self, axes=None):
+    def transpose(self, *axes):
+        from collections.abc import Iterable
+
+        if not axes:
+            axes = None
+        elif len(axes) == 1 and isinstance(axes[0], Iterable):
+            axes = axes[0]
+
         if axes:
             if len(axes) != self.ndim:
                 raise ValueError("axes don't match array")
             axes = tuple(d + self.ndim if d < 0 else d for d in axes)
         else:
             axes = tuple(range(self.ndim))[::-1]
+
+        # Identity transpose - return self
+        if axes == tuple(range(self.ndim)):
+            return self
 
         return new_collection(Transpose(self, axes))
 
