@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import operator
 import warnings
 from collections.abc import Iterable
@@ -550,6 +551,66 @@ class Array(DaskMethodsMixin):
         method=None,
     ):
         return rechunk(self, chunks, threshold, block_size_limit, balance, method)
+
+    def _vindex(self, key):
+        from dask.array._array_expr._slicing import _numpy_vindex, _vindex
+        from dask.base import is_dask_collection
+
+        if not isinstance(key, tuple):
+            key = (key,)
+        if any(k is None for k in key):
+            raise IndexError(
+                f"vindex does not support indexing with None (np.newaxis), got {key}"
+            )
+        if all(isinstance(k, slice) for k in key):
+            if all(
+                k.indices(d) == slice(0, d).indices(d) for k, d in zip(key, self.shape)
+            ):
+                return self
+            raise IndexError(
+                "vindex requires at least one non-slice to vectorize over "
+                "when the slices are not over the entire array (i.e, x[:]). "
+                f"Use normal slicing instead when only using slices. Got: {key}"
+            )
+        elif any(is_dask_collection(k) for k in key):
+            if math.prod(self.numblocks) == 1 and len(key) == 1 and self.ndim == 1:
+                idxr = key[0]
+                # we can broadcast in this case
+                return idxr.map_blocks(
+                    _numpy_vindex, self, dtype=self.dtype, chunks=idxr.chunks
+                )
+            else:
+                raise IndexError(
+                    "vindex does not support indexing with dask objects. Call compute "
+                    f"on the indexer first to get an evalurated array. Got: {key}"
+                )
+        return _vindex(self, *key)
+
+    @property
+    def vindex(self):
+        """Vectorized indexing with broadcasting.
+
+        This is equivalent to numpy's advanced indexing, using arrays that are
+        broadcast against each other. This allows for pointwise indexing:
+
+        >>> import dask.array as da
+        >>> x = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        >>> x = da.from_array(x, chunks=2)
+        >>> x.vindex[[0, 1, 2], [0, 1, 2]].compute()
+        array([1, 5, 9])
+
+        Mixed basic/advanced indexing with slices/arrays is also supported. The
+        order of dimensions in the result follows those proposed for
+        `ndarray.vindex <https://github.com/numpy/numpy/pull/6256>`_:
+        the subspace spanned by arrays is followed by all slices.
+
+        Note: ``vindex`` provides more general functionality than standard
+        indexing, but it also has fewer optimizations and can be significantly
+        slower.
+        """
+        from dask.utils import IndexCallable
+
+        return IndexCallable(self._vindex)
 
     def store(self, target, **kwargs):
         """Store array in array-like object.

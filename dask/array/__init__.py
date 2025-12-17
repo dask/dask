@@ -791,6 +791,7 @@ if _array_expr_enabled():
             stack,
             subtract,
             swapaxes,
+            take,
             tan,
             tanh,
             tensordot,
@@ -898,7 +899,6 @@ if _array_expr_enabled():
         piecewise = raise_not_implemented_error("piecewise")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
         select = raise_not_implemented_error("select")
-        take = raise_not_implemented_error("take")
         tril = raise_not_implemented_error("tril")
         tril_indices = raise_not_implemented_error("tril_indices")
         tril_indices_from = raise_not_implemented_error("tril_indices_from")

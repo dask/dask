@@ -559,3 +559,45 @@ def broadcast_arrays(*args, subok=False):
         result = [broadcast_to(e, shape=shape, chunks=chunks) for e in args]
 
     return result
+
+
+@derived_from(np)
+def take(a, indices, axis=0):
+    """
+    Take elements from an array along an axis.
+
+    This docstring was copied from numpy.take.
+
+    Parameters
+    ----------
+    a : dask array
+        The source array.
+    indices : array_like
+        The indices of the values to extract.
+    axis : int, optional
+        The axis over which to select values.
+
+    Returns
+    -------
+    out : dask array
+        The returned array has the same type as a.
+    """
+    a = asarray(a)
+    axis = validate_axis(axis, a.ndim)
+
+    if isinstance(a, np.ndarray) and isinstance(indices, Array):
+        return _take_dask_array_from_numpy(a, indices, axis)
+    else:
+        return a[(slice(None),) * axis + (indices,)]
+
+
+def _take_dask_array_from_numpy(a, indices, axis):
+    """Take from a numpy array using a dask array of indices."""
+    from dask.array._array_expr._map_blocks import map_blocks
+
+    assert isinstance(a, np.ndarray)
+    assert isinstance(indices, Array)
+
+    return map_blocks(
+        lambda block: np.take(a, block, axis), indices, chunks=indices.chunks, dtype=a.dtype
+    )
