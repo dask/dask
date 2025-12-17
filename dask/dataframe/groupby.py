@@ -119,7 +119,21 @@ def _groupby_slice_apply(
     g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
-    return g.apply(func, *args, **kwargs)
+    
+    # Check if we should use parallel group processing
+    import threading
+    current_thread = threading.current_thread()
+    use_threaded_groups = (
+        current_thread.name.startswith('ThreadPoolExecutor') or
+        hasattr(current_thread, '_target')
+    )
+    
+    if use_threaded_groups:
+        # Process groups in parallel when using threaded scheduler
+        return _groupby_apply_parallel(g, func, *args, **kwargs)
+    else:
+        # Use pandas default sequential processing
+        return g.apply(func, *args, **kwargs)
 
 
 def _groupby_slice_transform(
@@ -1257,3 +1271,109 @@ def _head_chunk(series_gb, **kwargs):
 def _head_aggregate(series_gb, **kwargs):
     levels = kwargs.pop("index_levels")
     return series_gb.head(**kwargs).droplevel(list(range(levels)))
+
+
+def _groupby_apply_parallel(groupby_obj, func, *args, **kwargs):
+    """
+    Apply a function to groups in parallel when using threaded scheduler.
+    
+    This function processes pandas groupby groups in parallel using a 
+    ThreadPoolExecutor when the threaded scheduler is being used, providing
+    better performance for GIL-releasing functions.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    import pandas as pd
+    
+    # Get list of groups
+    groups_list = list(groupby_obj)
+    
+    if len(groups_list) <= 1:
+        # Not worth parallelizing for single group
+        return groupby_obj.apply(func, *args, **kwargs)
+    
+    # For simple built-in aggregation functions or certain patterns,
+    # fall back to pandas to avoid any compatibility issues
+    if (func in (len, sum, min, max) or 
+        (hasattr(func, '__name__') and func.__name__ in ('len', 'sum', 'min', 'max', 'mean', 'std', 'var', 'count')) or
+        # Skip parallelization for lambda functions that just call simple methods
+        (hasattr(func, '__code__') and hasattr(func.__code__, 'co_code') and
+         any(method_name in str(func.__code__.co_names) for method_name in ['sum', 'mean', 'std', 'var', 'min', 'max', 'count']))):
+        return groupby_obj.apply(func, *args, **kwargs)
+    
+    def apply_to_group(group_data):
+        name, group = group_data
+        # Filter out pandas-specific kwargs that user functions shouldn't receive
+        user_kwargs = {k: v for k, v in kwargs.items() 
+                      if k not in ('include_groups', 'dropna', 'observed', 'group_keys')}
+        
+        # Create a proxy that adds group.name when accessed
+        class GroupProxy:
+            def __init__(self, df, group_name):
+                object.__setattr__(self, '_df', df)
+                object.__setattr__(self, '_name', group_name)
+                
+            def __getattr__(self, attr):
+                if attr == 'name':
+                    return self._name
+                return getattr(self._df, attr)
+                
+            def __getitem__(self, key):
+                return self._df[key]
+            
+            def __setattr__(self, attr, value):
+                if attr in ('_df', '_name'):
+                    object.__setattr__(self, attr, value)
+                else:
+                    setattr(self._df, attr, value)
+                    
+            def __len__(self):
+                return len(self._df)
+                
+            def __iter__(self):
+                return iter(self._df)
+                
+            def __repr__(self):
+                return repr(self._df)
+                
+            def __str__(self):
+                return str(self._df)
+        
+        # Use proxy for all functions except built-in safe ones
+        # This ensures group.name is available when functions need it
+        if func in (len, sum, min, max):
+            group_to_use = group
+        else:
+            group_to_use = GroupProxy(group, name)
+        
+        return func(group_to_use, *args, **user_kwargs)
+    
+    # Use a reasonable number of threads for group processing
+    max_workers = min(4, len(groups_list))
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        results = list(executor.map(apply_to_group, groups_list))
+    
+    # Reconstruct the result in the same format as pandas groupby.apply
+    if not results:
+        # Empty result - fall back to pandas
+        return groupby_obj.apply(func, *args, **kwargs)
+    
+    first_result = results[0]
+    
+    if isinstance(first_result, pd.Series):
+        # Combine Series results
+        return pd.concat(results)
+    elif pd.api.types.is_scalar(first_result):
+        # Scalar results - create a Series with group names as index
+        index = [name for name, _ in groups_list]
+        return pd.Series(results, index=index)
+    elif isinstance(first_result, pd.DataFrame):
+        # DataFrame results
+        return pd.concat(results)
+    else:
+        # Other types - try to concatenate or fall back
+        try:
+            return pd.concat(results)
+        except (TypeError, ValueError):
+            # Fall back to pandas default behavior
+            return groupby_obj.apply(func, *args, **kwargs)
