@@ -75,6 +75,10 @@ DASK_ARRAY__QUERY_PLANNING=True .venv/bin/pytest dask/array/tests/test_*.py -k {
 
 Do not rely on manual testing with scripts.  We want to lean heavily on our tests.
 
+Avoid from_graph.  We want to either use our API on existing operations, or
+build new expressions.  We don't want to use from_graph; that limits future
+potential for optimizations.
+
 **Output**: Working expression class with basic tests passing.
 
 ### Phase 4: API Wiring

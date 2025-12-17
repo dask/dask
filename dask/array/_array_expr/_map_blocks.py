@@ -10,7 +10,7 @@ from toolz import concat
 from dask.array._array_expr._collection import Array, blockwise
 from dask.array.core import _pass_extra_kwargs, apply_and_enforce, apply_infer_dtype
 from dask.array.utils import compute_meta
-from dask.layers import ArrayBlockIdDep, ArrayValuesDep
+from dask.layers import ArrayBlockIdDep, ArrayBlockwiseDep, ArrayValuesDep
 from dask.utils import cached_cumsum, funcname, has_keyword
 
 
@@ -294,10 +294,16 @@ def map_blocks(
 
     arrs = [a for a in args if isinstance(a, Array)]
 
-    argpairs = [
-        (a, tuple(range(a.ndim))[::-1]) if isinstance(a, Array) else (a, None)
-        for a in args
-    ]
+    def get_argpair(a):
+        if isinstance(a, Array):
+            return (a, tuple(range(a.ndim))[::-1])
+        elif isinstance(a, ArrayBlockwiseDep):
+            # ArrayBlockwiseDep needs to be indexed like an array
+            return (a, tuple(range(len(a.numblocks)))[::-1])
+        else:
+            return (a, None)
+
+    argpairs = [get_argpair(a) for a in args]
     if arrs:
         out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
     else:

@@ -52,7 +52,6 @@ from dask.array.core import (
     normalize_chunks_cached,
     optimize,
     stack,
-    store,
 )
 from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_210
 from dask.array.reshape import _not_implemented_message
@@ -2071,7 +2070,6 @@ def test_bool():
         bool(darr == darr)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
 def test_store_kwargs():
     d = da.ones((10, 10), chunks=(2, 2))
     a = d + 1
@@ -2086,7 +2084,7 @@ def test_store_kwargs():
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    store([a], [at], scheduler=get_func, foo="test kwarg")
+    da.store([a], [at], scheduler=get_func, foo="test kwarg")
     assert called[0]
 
     called[0] = False
@@ -2096,7 +2094,7 @@ def test_store_kwargs():
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    store([a], [at], scheduler=get_func, return_stored=True, foo="test kwarg")
+    da.store([a], [at], scheduler=get_func, return_stored=True, foo="test kwarg")
     assert called[0]
 
 
@@ -2120,7 +2118,7 @@ def test_store_delayed_target():
     btd = delayed(make_target)("bt")
 
     # test not keeping result
-    st = store([a, b], [atd, btd])
+    st = da.store([a, b], [atd, btd])
 
     at = targs["at"]
     bt = targs["bt"]
@@ -2132,7 +2130,7 @@ def test_store_delayed_target():
     # test keeping result
     for st_compute in [False, True]:
         targs.clear()
-        st = store([a, b], [atd, btd], return_stored=True, compute=st_compute)
+        st = da.store([a, b], [atd, btd], return_stored=True, compute=st_compute)
         if st_compute:
             for arr in st:
                 assert_has_persisted_data(arr)
@@ -2150,12 +2148,11 @@ def test_store_delayed_target():
         assert_eq(st[0], a)
         assert_eq(st[1], b)
 
-        pytest.raises(ValueError, lambda at=at, bt=bt: store([a], [at, bt]))
-        pytest.raises(ValueError, lambda at=at: store(at, at))
-        pytest.raises(ValueError, lambda at=at, bt=bt: store([at, bt], [at, bt]))
+        pytest.raises(ValueError, lambda at=at, bt=bt: da.store([a], [at, bt]))
+        pytest.raises(ValueError, lambda at=at: da.store(at, at))
+        pytest.raises(ValueError, lambda at=at, bt=bt: da.store([at, bt], [at, bt]))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
 def test_store():
     d = da.ones((4, 4), chunks=(2, 2))
     a, b = d + 1, d + 2
@@ -2163,14 +2160,14 @@ def test_store():
     at = np.empty(shape=(4, 4))
     bt = np.empty(shape=(4, 4))
 
-    st = store([a, b], [at, bt])
+    st = da.store([a, b], [at, bt])
     assert st is None
     assert (at == 2).all()
     assert (bt == 3).all()
 
-    pytest.raises(ValueError, lambda: store([a], [at, bt]))
-    pytest.raises(ValueError, lambda: store(at, at))
-    pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
+    pytest.raises(ValueError, lambda: da.store([a], [at, bt]))
+    pytest.raises(ValueError, lambda: da.store(at, at))
+    pytest.raises(ValueError, lambda: da.store([at, bt], [at, bt]))
 
 
 @pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
@@ -2184,7 +2181,7 @@ def test_store_regions():
     # Single region:
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
-    v = store([a, b], [at, bt], regions=region, compute=False)
+    v = da.store([a, b], [at, bt], regions=region, compute=False)
     assert all([isinstance(a, Array) for a in v])
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
@@ -2196,7 +2193,7 @@ def test_store_regions():
     # Multiple regions:
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
-    v = store([a, b], [at, bt], regions=[region, region], compute=False)
+    v = da.store([a, b], [at, bt], regions=[region, region], compute=False)
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
     assert all([ev.size == 0 for ev in results])
@@ -2208,7 +2205,7 @@ def test_store_regions():
     for st_compute in [False, True]:
         at = np.zeros(shape=(8, 3, 6))
         bt = np.zeros(shape=(8, 4, 6))
-        v = store(
+        v = da.store(
             [a, b], [at, bt], regions=region, compute=st_compute, return_stored=True
         )
         assert isinstance(v, tuple)
@@ -2238,7 +2235,7 @@ def test_store_regions():
     for st_compute in [False, True]:
         at = np.zeros(shape=(8, 3, 6))
         bt = np.zeros(shape=(8, 4, 6))
-        v = store(
+        v = da.store(
             [a, b],
             [at, bt],
             regions=[region, region],
@@ -2277,7 +2274,7 @@ def test_store_compute_false():
     at = np.zeros(shape=(4, 4))
     bt = np.zeros(shape=(4, 4))
 
-    v = store([a, b], [at, bt], compute=False)
+    v = da.store([a, b], [at, bt], compute=False)
 
     assert (at == 0).all() and (bt == 0).all()
     results = dask.compute(*v)
@@ -2286,7 +2283,7 @@ def test_store_compute_false():
 
     at = np.zeros(shape=(4, 4))
     bt = np.zeros(shape=(4, 4))
-    dat, dbt = store([a, b], [at, bt], compute=False, return_stored=True)
+    dat, dbt = da.store([a, b], [at, bt], compute=False, return_stored=True)
     assert isinstance(dat, Array) and isinstance(dbt, Array)
     assert (at == 0).all() and (bt == 0).all()
     assert (dat.compute() == at).all() and (dbt.compute() == bt).all()
@@ -2294,7 +2291,7 @@ def test_store_compute_false():
 
     at = np.zeros(shape=(4, 4))
     bt = np.zeros(shape=(4, 4))
-    dat, dbt = store(
+    dat, dbt = da.store(
         [a, b], [at, bt], compute=False, return_stored=True, load_stored=False
     )
     assert isinstance(dat, Array) and isinstance(dbt, Array)
@@ -2303,7 +2300,6 @@ def test_store_compute_false():
     assert (at == 2).all() and (bt == 3).all()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
 def test_store_nocompute_regions():
     x = da.ones(10, chunks=1)
     y = np.zeros((2, 10))
@@ -2369,7 +2365,7 @@ def test_store_locks_failure_lock_released():
     lock = CounterLock()
     # Ensure same lock applies over multiple stores
     with pytest.raises(RuntimeError):
-        store(d, BrokenStore(), lock=lock, scheduler="threads")
+        da.store(d, BrokenStore(), lock=lock, scheduler="threads")
     assert lock.acquire_count == lock.release_count > 0
 
 
@@ -2384,13 +2380,13 @@ def test_store_locks():
     lock = CounterLock()
     # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
-    v = store([a, b], [at, at], lock=lock, scheduler="threads", num_workers=10)
+    v = da.store([a, b], [at, at], lock=lock, scheduler="threads", num_workers=10)
     assert lock.acquire_count == lock.release_count == a.npartitions + b.npartitions
     assert v is None
 
     # Don't assume thread safety by default
     at = NonthreadSafeStore()
-    assert store(a, at, scheduler="threads", num_workers=10) is None
+    assert da.store(a, at, scheduler="threads", num_workers=10) is None
     assert a.store(at, scheduler="threads", num_workers=10) is None
 
     # Ensure locks can be removed
@@ -2410,7 +2406,7 @@ def test_store_locks():
         bt = np.zeros(shape=(10, 10))
         lock = CounterLock()
 
-        v = store([a, b], [at, bt], lock=lock, compute=c, return_stored=True)
+        v = da.store([a, b], [at, bt], lock=lock, compute=c, return_stored=True)
         assert all(isinstance(e, Array) for e in v)
 
         da.compute(v)
@@ -2443,7 +2439,6 @@ def test_store_method_return():
                 assert isinstance(r, Array)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
 def test_store_multiprocessing_lock():
     d = da.ones((10, 10), chunks=(2, 2))
     a = d + 1
@@ -2455,7 +2450,6 @@ def test_store_multiprocessing_lock():
 
 @pytest.mark.parametrize("return_stored", [False, True])
 @pytest.mark.parametrize("delayed_target", [False, True])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
 def test_store_deterministic_keys(return_stored, delayed_target):
     a = da.ones((10, 10), chunks=(2, 2))
     at = np.zeros(shape=(10, 10))
@@ -3599,7 +3593,6 @@ def test_memmap():
                 target._mmap.close()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_to_npy not implemented")
 def test_to_npy_stack():
     x = np.arange(5 * 10 * 10).reshape((5, 10, 10))
     d = da.from_array(x, chunks=(2, 4, 4))

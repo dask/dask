@@ -551,6 +551,15 @@ class Array(DaskMethodsMixin):
     ):
         return rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
+    def store(self, target, **kwargs):
+        """Store array in array-like object.
+
+        Refer to :func:`dask.array.store` for full documentation.
+        """
+        from dask.array._array_expr._io import store
+
+        return store([self], [target], **kwargs)
+
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         """
         Return the sum of the array elements over the given axis.
