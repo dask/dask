@@ -81,7 +81,7 @@ Operations that change array structure.
 |-----------|----------|-------|--------|
 | ravel | `routines.py` | Needs reshape | Not started |
 | flatten | `routines.py` | Needs reshape | Not started |
-| squeeze | `routines.py` | Remove 1-d dims | Not started |
+| squeeze | `_slicing.py` | Remove 1-d dims | **Done** |
 | expand_dims | `routines.py` | Add dims | Not started |
 | atleast_*d | `routines.py` | Shape helpers | Not started |
 | broadcast_to | `routines.py` | Broadcasting | Not started |

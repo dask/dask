@@ -76,18 +76,21 @@ DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/test_*.py -k {operation}
 **Output**: Working expression class with basic tests passing.
 
 ### Phase 4: API Wiring
-Connect the expression class to the user-facing API.
+Connect the expression class to the user-facing API. This requires changes in 4 places:
 
-Options:
-- Add method to `Array` class in `_collection.py`
-- Add function to appropriate module (e.g., `_routines.py`)
-- Update `__init__.py` exports if needed
-
-Remove any `NotImplementedError` placeholders.
+1. **Expression module** (`_slicing.py`, `_reductions.py`, etc.) - the expression class and function
+2. **`_collection.py`** - Add `Array.{operation}()` method and/or top-level function
+3. **`_array_expr/__init__.py`** - Export the function
+4. **`dask/array/__init__.py`** - Add to imports from `_array_expr`, remove from `raise_not_implemented_error` list
 
 **Output**: Operation accessible via normal dask.array API.
 
-### Phase 5: Full Test Suite & Cleanup
+### Phase 5: Review our work for simplification and Cleanup
+
+Let's review our work and see if there is anything we should simplify or clean
+up
+
+### Phase 6: Full Test Suite & Cleanup
 Ensure all related tests pass and clean up.
 
 ```bash
