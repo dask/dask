@@ -161,7 +161,6 @@ def test_swapaxes():
 
 @pytest.mark.parametrize("funcname", ["moveaxis", "rollaxis"])
 @pytest.mark.parametrize("shape", [(), (5,), (3, 5, 7, 3)])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_moveaxis_rollaxis(funcname, shape):
     x = np.random.default_rng().random(shape)
     d = da.from_array(x, chunks=(len(shape) * (2,)))
@@ -173,7 +172,6 @@ def test_moveaxis_rollaxis(funcname, shape):
             assert_eq(np_func(x, axis1, axis2), da_func(d, axis1, axis2))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_moveaxis_rollaxis_keyword():
     x = np.random.default_rng().random((10, 12, 7))
     d = da.from_array(x, chunks=(4, 5, 2))
@@ -185,7 +183,6 @@ def test_moveaxis_rollaxis_keyword():
     assert_eq(np.rollaxis(x, start=1, axis=2), da.rollaxis(d, start=1, axis=2))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_moveaxis_rollaxis_numpy_api():
     a = da.random.default_rng().random((4, 4, 4), chunks=2)
     result = np.moveaxis(a, 2, 0)
@@ -211,7 +208,6 @@ def test_moveaxis_rollaxis_numpy_api():
     ],
 )
 @pytest.mark.parametrize("shape", [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_flip(funcname, kwargs, shape):
     axis = kwargs.get("axis")
     if axis is None:
@@ -261,7 +257,6 @@ def test_flip(funcname, kwargs, shape):
         (4, 6, 8),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_rot90(kwargs, shape):
     axes = kwargs.get("axes", (0, 1))
     np_a = np.random.default_rng().random(shape)
@@ -1666,7 +1661,6 @@ def test_squeeze_1d_array(shape):
     assert_eq(d_s, a_s)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_vstack():
     x = np.arange(5)
     y = np.ones(5)
@@ -1677,7 +1671,6 @@ def test_vstack():
     assert_eq(np.vstack((x, y[None, :])), da.vstack((a, b[None, :])))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_hstack():
     x = np.arange(5)
     y = np.ones(5)
@@ -1688,7 +1681,6 @@ def test_hstack():
     assert_eq(np.hstack((x, y)), da.hstack((a, b)))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_dstack():
     x = np.arange(5)
     y = np.ones(5)

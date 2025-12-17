@@ -684,6 +684,7 @@ if _array_expr_enabled():
             degrees,
             diff,
             divide,
+            dstack,
             divmod,
             dot,
             elemwise,
@@ -696,6 +697,9 @@ if _array_expr_enabled():
             expand_dims,
             fabs,
             fix,
+            flip,
+            fliplr,
+            flipud,
             float_power,
             floor,
             floor_divide,
@@ -712,6 +716,7 @@ if _array_expr_enabled():
             gradient,
             gufunc,
             histogram,
+            hstack,
             hypot,
             i0,
             imag,
@@ -744,6 +749,7 @@ if _array_expr_enabled():
             maximum,
             minimum,
             mod,
+            moveaxis,
             modf,
             multiply,
             nan_to_num,
@@ -769,6 +775,8 @@ if _array_expr_enabled():
             right_shift,
             rint,
             roll,
+            rollaxis,
+            rot90,
             searchsorted,
             sign,
             signbit,
@@ -781,10 +789,13 @@ if _array_expr_enabled():
             squeeze,
             stack,
             subtract,
+            swapaxes,
             tan,
             tanh,
             tensordot,
+            transpose,
             vdot,
+            vstack,
             true_divide,
             trunc,
             where,
@@ -847,8 +858,6 @@ if _array_expr_enabled():
         pad = raise_not_implemented_error("pad")
         tile = raise_not_implemented_error("tile")
         tri = raise_not_implemented_error("tri")
-        moveaxis = raise_not_implemented_error("moveaxis")
-        rollaxis = raise_not_implemented_error("rollaxis")
         optimize = raise_not_implemented_error("optimize")
         argtopk = raise_not_implemented_error("argtopk")
         topk = raise_not_implemented_error("topk")
@@ -867,17 +876,12 @@ if _array_expr_enabled():
         cov = raise_not_implemented_error("cov")
         delete = raise_not_implemented_error("delete")
         digitize = raise_not_implemented_error("digitize")
-        dstack = raise_not_implemented_error("dstack")
         ediff1d = raise_not_implemented_error("ediff1d")
         einsum = raise_not_implemented_error("einsum")
         extract = raise_not_implemented_error("extract")
         flatnonzero = raise_not_implemented_error("flatnonzero")
-        flip = raise_not_implemented_error("flip")
-        fliplr = raise_not_implemented_error("fliplr")
-        flipud = raise_not_implemented_error("flipud")
         histogram2d = raise_not_implemented_error("histogram2d")
         histogramdd = raise_not_implemented_error("histogramdd")
-        hstack = raise_not_implemented_error("hstack")
         insert = raise_not_implemented_error("insert")
         isclose = raise_not_implemented_error("isclose")
         isin = raise_not_implemented_error("isin")
@@ -888,13 +892,10 @@ if _array_expr_enabled():
         piecewise = raise_not_implemented_error("piecewise")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
         result_type = raise_not_implemented_error("result_type")
-        rot90 = raise_not_implemented_error("rot90")
         round = raise_not_implemented_error("round")
         select = raise_not_implemented_error("select")
         shape = raise_not_implemented_error("shape")
-        swapaxes = raise_not_implemented_error("swapaxes")
         take = raise_not_implemented_error("take")
-        transpose = raise_not_implemented_error("transpose")
         tril = raise_not_implemented_error("tril")
         tril_indices = raise_not_implemented_error("tril_indices")
         tril_indices_from = raise_not_implemented_error("tril_indices_from")
@@ -904,7 +905,6 @@ if _array_expr_enabled():
         union1d = raise_not_implemented_error("union1d")
         unique = raise_not_implemented_error("unique")
         unravel_index = raise_not_implemented_error("unravel_index")
-        vstack = raise_not_implemented_error("vstack")
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")
 

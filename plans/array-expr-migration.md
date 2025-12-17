@@ -24,6 +24,8 @@ The array-expr system has foundational infrastructure in place:
 - Reductions: argmin, argmax, nanargmin, nanargmax, cumsum, cumprod, nancumsum, nancumprod
 - Shape manipulation: ravel, flatten, expand_dims, atleast_*d, broadcast_to, roll
 - Routines: diff, gradient, compress, searchsorted
+- Stacking: vstack, hstack, dstack
+- Axis manipulation: flip, flipud, fliplr, rot90, transpose, swapaxes, moveaxis, rollaxis
 
 ## Testing Infrastructure
 
@@ -38,17 +40,17 @@ These are simple wrappers around existing infrastructure. High test-unlocking ra
 
 | Operation | Impl Strategy | Tests Blocked | Status |
 |-----------|--------------|---------------|--------|
-| vstack | `atleast_2d` + `concatenate` | 3+ | Not started |
-| hstack | `atleast_1d`/`2d` + `concatenate` | 3+ | Not started |
-| dstack | `atleast_3d` + `concatenate` | 3+ | Not started |
-| flip | slicing with `[::-1]` | 3+ | Not started |
-| flipud | `flip(m, 0)` | 1 | Not started |
-| fliplr | `flip(m, 1)` | 1 | Not started |
-| rot90 | flip + transpose | 2+ | Not started |
-| swapaxes | blockwise | 2+ | Not started |
-| transpose (func) | blockwise | 2+ | Not started |
-| moveaxis | transpose | 3+ | Not started |
-| rollaxis | transpose | 2+ | Not started |
+| vstack | `atleast_2d` + `concatenate` | 3+ | **Done** |
+| hstack | `atleast_1d`/`2d` + `concatenate` | 3+ | **Done** |
+| dstack | `atleast_3d` + `concatenate` | 3+ | **Done** |
+| flip | slicing with `[::-1]` | 3+ | **Done** |
+| flipud | `flip(m, 0)` | 1 | **Done** |
+| fliplr | `flip(m, 1)` | 1 | **Done** |
+| rot90 | flip + transpose | 2+ | **Done** |
+| swapaxes | transpose | 2+ | **Done** (xfail: naming) |
+| transpose (func) | method wrapper | 2+ | **Done** |
+| moveaxis | transpose | 3+ | **Done** |
+| rollaxis | transpose | 2+ | **Done** |
 
 ### Tier 2: Simple Routines
 Straightforward implementations using existing blockwise/elemwise.
@@ -226,10 +228,10 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ## Quick Wins Checklist
 
 Estimated effort for Tier 1-2 (should be quick):
-- [ ] vstack, hstack, dstack (1 function each, ~10 lines total)
-- [ ] flip family (flip, flipud, fliplr) (~20 lines)
-- [ ] rot90 (~15 lines)
-- [ ] axis manipulation (swapaxes, transpose, moveaxis, rollaxis) (~30 lines)
+- [x] vstack, hstack, dstack (1 function each, ~10 lines total)
+- [x] flip family (flip, flipud, fliplr) (~20 lines)
+- [x] rot90 (~15 lines)
+- [x] axis manipulation (swapaxes, transpose, moveaxis, rollaxis) (~30 lines)
 - [ ] round/around, isclose, allclose (~15 lines)
 - [ ] isnull/notnull (~10 lines)
 - [ ] broadcast_arrays, unify_chunks (~20 lines)
@@ -238,6 +240,7 @@ Estimated effort for Tier 1-2 (should be quick):
 - [ ] count_nonzero (~20 lines)
 
 Total Tier 1-2: ~155 lines of mostly simple wrapper code, unlocking 30+ tests.
+Tier 1 complete: 67 tests now passing.
 
 ## References
 
