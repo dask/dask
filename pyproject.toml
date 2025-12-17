@@ -43,6 +43,8 @@ dependencies = [
     # importlib.metadata has the following bugs fixed in 3.10.9 and 3.11.1
     # https://github.com/python/cpython/issues/99130
     # https://github.com/python/cpython/issues/98706
+    # Additionally, importlib.metadata.entry_points changed return type in 3.12
+    # https://docs.python.org/3/library/importlib.metadata.html#importlib.metadata.entry_points
     "importlib_metadata >= 4.13.0; python_version < '3.12' ",
 ]
 dynamic = ["version"]
