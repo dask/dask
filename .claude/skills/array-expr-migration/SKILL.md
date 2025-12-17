@@ -70,8 +70,10 @@ class {Operation}(ArrayExpr):
 
 Run tests frequently during development:
 ```bash
-DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/test_*.py -k {operation} -x -v
+DASK_ARRAY__QUERY_PLANNING=True .venv/bin/pytest dask/array/tests/test_*.py -k {operation} -x -v
 ```
+
+Do not rely on manual testing with scripts.  We want to lean heavily on our tests.
 
 **Output**: Working expression class with basic tests passing.
 

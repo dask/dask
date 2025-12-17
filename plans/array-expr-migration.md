@@ -20,6 +20,7 @@ The array-expr system has foundational infrastructure in place:
 - UFuncs
 - Reshape, squeeze, transpose
 - __array_function__ protocol
+- Linear algebra: tensordot, matmul, dot
 
 ## Testing Infrastructure
 
@@ -42,10 +43,11 @@ Important for scientific computing users.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| matmul | `routines.py` | __matmul__, np.matmul | Not started |
-| tensordot | `routines.py` | Used extensively | Not started |
-| dot | `routines.py` | Wraps tensordot | Not started |
-| einsum | `routines.py` | Einstein summation | Not started |
+| matmul | `_linalg.py` | __matmul__, np.matmul | **Done** |
+| tensordot | `_linalg.py` | Used extensively | **Done** |
+| dot | `_linalg.py` | Wraps tensordot, Array.dot() method | **Done** |
+| vdot | `_linalg.py` | Vector dot product (needs ravel) | Not started |
+| einsum | `routines.py` | Einstein summation (needs asarray fix) | Not started |
 
 ### Tier 3: Indexing Completion
 Complete the indexing story.

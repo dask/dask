@@ -679,6 +679,7 @@ if _array_expr_enabled():
             degrees,
             divide,
             divmod,
+            dot,
             elemwise,
             empty,
             empty_like,
@@ -730,6 +731,7 @@ if _array_expr_enabled():
             logical_xor,
             map_blocks,
             map_overlap,
+            matmul,
             maximum,
             minimum,
             mod,
@@ -768,6 +770,7 @@ if _array_expr_enabled():
             subtract,
             tan,
             tanh,
+            tensordot,
             true_divide,
             trunc,
             zeros,
@@ -859,7 +862,6 @@ if _array_expr_enabled():
         delete = raise_not_implemented_error("delete")
         diff = raise_not_implemented_error("diff")
         digitize = raise_not_implemented_error("digitize")
-        dot = raise_not_implemented_error("dot")
         dstack = raise_not_implemented_error("dstack")
         ediff1d = raise_not_implemented_error("ediff1d")
         einsum = raise_not_implemented_error("einsum")
@@ -878,7 +880,6 @@ if _array_expr_enabled():
         isclose = raise_not_implemented_error("isclose")
         isin = raise_not_implemented_error("isin")
         isnull = raise_not_implemented_error("isnull")
-        matmul = raise_not_implemented_error("matmul")
         ndim = raise_not_implemented_error("ndim")
         nonzero = raise_not_implemented_error("nonzero")
         notnull = raise_not_implemented_error("notnull")
@@ -896,7 +897,6 @@ if _array_expr_enabled():
         shape = raise_not_implemented_error("shape")
         swapaxes = raise_not_implemented_error("swapaxes")
         take = raise_not_implemented_error("take")
-        tensordot = raise_not_implemented_error("tensordot")
         transpose = raise_not_implemented_error("transpose")
         tril = raise_not_implemented_error("tril")
         tril_indices = raise_not_implemented_error("tril_indices")
