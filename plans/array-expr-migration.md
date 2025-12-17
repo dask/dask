@@ -19,12 +19,13 @@ The array-expr system has foundational infrastructure in place:
 - Random number generation
 - UFuncs
 - Reshape, squeeze, transpose
+- __array_function__ protocol
 
 ## Testing Infrastructure
 
 Test modules use whitelist approach (individual xfails rather than module-level skips). Each xfailed test represents work to be done. Decreasing xfails is progress.
 
-Exceptions: `test_dispatch.py` and `test_array_function.py` have module-level skips due to fundamental differences in `register_chunk_type`.
+Exception: `test_dispatch.py` has a module-level skip due to `register_chunk_type` not being implemented.
 
 ## Priority Tiers
 
@@ -34,7 +35,7 @@ These operations block many others and should be done first.
 | Operation | Location | Blocker For | Status |
 |-----------|----------|-------------|--------|
 | reshape | `_reshape.py` | boolean indexing, ravel, flatten | **Done** |
-| __array_function__ | `_collection.py:314` | np.* function support | Not started |
+| __array_function__ | `_collection.py:336` | np.* function support | **Done** |
 
 ### Tier 2: Core Linear Algebra
 Important for scientific computing users.
