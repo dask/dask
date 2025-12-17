@@ -18,8 +18,10 @@ from dask.array._array_expr._expr import (
     unify_chunks_expr,
 )
 from dask.array._array_expr._io import FromArray, FromGraph
+from dask.array.chunk_types import is_valid_chunk_type
 from dask.array.core import (
     T_IntOrNaN,
+    _HANDLED_FUNCTIONS,
     _should_delegate,
     check_if_handled_given_other,
     finalize,
@@ -29,7 +31,7 @@ from dask.array.dispatch import concatenate_lookup
 from dask.array.utils import meta_from_array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
-from dask.utils import derived_from, is_arraylike, key_split
+from dask.utils import derived_from, has_keyword, is_arraylike, key_split
 
 
 class Array(DaskMethodsMixin):
@@ -331,8 +333,60 @@ class Array(DaskMethodsMixin):
         return divmod(other, self)
 
     def __array_function__(self, func, types, args, kwargs):
-        # TODO(expr-soon): Not done yet, but needed for assert_eq to identify us as an Array
-        raise NotImplementedError
+        import dask.array as module
+
+        from dask.base import compute
+
+        def handle_nonmatching_names(func, args, kwargs):
+            if func not in _HANDLED_FUNCTIONS:
+                warnings.warn(
+                    f"The `{func.__module__}.{func.__name__}` function "
+                    "is not implemented by Dask array. "
+                    "You may want to use the da.map_blocks function "
+                    "or something similar to silence this warning. "
+                    "Your code may stop working in a future release.",
+                    FutureWarning,
+                )
+                # Need to convert to array object (e.g. numpy.ndarray or
+                # cupy.ndarray) as needed, so we can call the NumPy function
+                # again and it gets the chance to dispatch to the right
+                # implementation.
+                args, kwargs = compute(args, kwargs)
+                return func(*args, **kwargs)
+
+            return _HANDLED_FUNCTIONS[func](*args, **kwargs)
+
+        # First, verify that all types are handled by Dask. Otherwise, return NotImplemented.
+        if not all(
+            # Accept our own superclasses as recommended by NEP-13
+            # (https://numpy.org/neps/nep-0013-ufunc-overrides.html#subclass-hierarchies)
+            issubclass(type(self), type_) or is_valid_chunk_type(type_)
+            for type_ in types
+        ):
+            return NotImplemented
+
+        # Now try to find a matching function name.  If that doesn't work, we may
+        # be dealing with an alias or a function that's simply not in the Dask API.
+        # Handle aliases via the _HANDLED_FUNCTIONS dict mapping, and warn otherwise.
+        for submodule in func.__module__.split(".")[1:]:
+            try:
+                module = getattr(module, submodule)
+            except AttributeError:
+                return handle_nonmatching_names(func, args, kwargs)
+
+        if not hasattr(module, func.__name__):
+            return handle_nonmatching_names(func, args, kwargs)
+
+        da_func = getattr(module, func.__name__)
+        if da_func is func:
+            return handle_nonmatching_names(func, args, kwargs)
+
+        # If ``like`` is contained in ``da_func``'s signature, add ``like=self``
+        # to the kwargs dictionary.
+        if has_keyword(da_func, "like"):
+            kwargs["like"] = self
+
+        return da_func(*args, **kwargs)
 
     def transpose(self, *axes):
         from collections.abc import Iterable

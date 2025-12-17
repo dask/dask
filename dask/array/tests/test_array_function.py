@@ -5,39 +5,36 @@ import pytest
 from packaging.version import Version
 
 import dask.array as da
-from dask.array.tests.test_dispatch import EncapsulateNDArray, WrappedArray
+from dask.array.tests.conftest import EncapsulateNDArray, WrappedArray
 from dask.array.utils import assert_eq
-
-if da._array_expr_enabled():
-    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
 
 
 @pytest.mark.parametrize(
     "func",
     [
-        lambda x: np.append(x, x),
+        pytest.param(lambda x: np.append(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="append not implemented")),
         lambda x: np.concatenate([x, x, x]),
-        lambda x: np.cov(x, x),
-        lambda x: np.dot(x, x),
-        lambda x: np.dstack((x, x)),
-        lambda x: np.flip(x, axis=0),
-        lambda x: np.hstack((x, x)),
-        lambda x: np.matmul(x, x),
+        pytest.param(lambda x: np.cov(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="cov not implemented")),
+        pytest.param(lambda x: np.dot(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dot not implemented")),
+        pytest.param(lambda x: np.dstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dstack not implemented")),
+        pytest.param(lambda x: np.flip(x, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="flip not implemented")),
+        pytest.param(lambda x: np.hstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="hstack not implemented")),
+        pytest.param(lambda x: np.matmul(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="matmul not implemented")),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
-        lambda x: np.block([x, x]),
+        pytest.param(lambda x: np.block([x, x]), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented")),
         lambda x: np.sum(x),
         lambda x: np.var(x),
-        lambda x: np.vstack((x, x)),
-        lambda x: np.linalg.norm(x),
+        pytest.param(lambda x: np.vstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="vstack not implemented")),
+        pytest.param(lambda x: np.linalg.norm(x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="linalg not implemented")),
         lambda x: np.min(x),
         lambda x: np.amin(x),
-        lambda x: np.round(x),
-        lambda x: np.insert(x, 0, 3, axis=0),
-        lambda x: np.delete(x, 0, axis=0),
-        lambda x: np.select(
+        pytest.param(lambda x: np.round(x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="round not implemented")),
+        pytest.param(lambda x: np.insert(x, 0, 3, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="insert not implemented")),
+        pytest.param(lambda x: np.delete(x, 0, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="delete not implemented")),
+        pytest.param(lambda x: np.select(
             [x < 0.3, x < 0.6, x > 0.7], [x * 2, x, x / 2], default=0.65
-        ),
+        ), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="select not implemented")),
     ],
 )
 def test_array_function_dask(func):
@@ -50,6 +47,7 @@ def test_array_function_dask(func):
     assert_eq(res_y, res_x)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="dstack/hstack/vstack not implemented")
 @pytest.mark.parametrize(
     "func",
     [
@@ -68,6 +66,7 @@ def test_stack_functions_require_sequence_of_arrays(func):
         func(y)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="fft not implemented")
 @pytest.mark.parametrize("func", [np.fft.fft, np.fft.fft2])
 def test_array_function_fft(func):
     x = np.random.default_rng().random((100, 100))
@@ -148,18 +147,18 @@ def test_array_function_cupy_svd(chunks):
     "func",
     [
         lambda x: np.concatenate([x, x, x]),
-        lambda x: np.cov(x, x),
-        lambda x: np.dot(x, x),
-        lambda x: np.dstack((x, x)),
-        lambda x: np.flip(x, axis=0),
-        lambda x: np.hstack((x, x)),
-        lambda x: np.matmul(x, x),
+        pytest.param(lambda x: np.cov(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="cov not implemented")),
+        pytest.param(lambda x: np.dot(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dot not implemented")),
+        pytest.param(lambda x: np.dstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dstack not implemented")),
+        pytest.param(lambda x: np.flip(x, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="flip not implemented")),
+        pytest.param(lambda x: np.hstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="hstack not implemented")),
+        pytest.param(lambda x: np.matmul(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="matmul not implemented")),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
         lambda x: np.sum(x),
         lambda x: np.var(x),
-        lambda x: np.vstack((x, x)),
-        lambda x: np.linalg.norm(x),
+        pytest.param(lambda x: np.vstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="vstack not implemented")),
+        pytest.param(lambda x: np.linalg.norm(x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="linalg not implemented")),
     ],
 )
 def test_unregistered_func(func):
@@ -198,8 +197,8 @@ def test_non_existent_func():
     "func",
     [
         np.equal,
-        np.matmul,
-        np.dot,
+        pytest.param(np.matmul, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="matmul not implemented", strict=False)),
+        pytest.param(np.dot, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dot not implemented", strict=False)),
         lambda x, y: np.stack([x, y]),
     ],
 )
@@ -210,9 +209,10 @@ def test_non_existent_func():
             WrappedArray(np.random.default_rng().random((10, 10))),
             da.random.default_rng().random((10, 10), chunks=(5, 5)),
         ),
-        (
+        pytest.param(
             da.random.default_rng().random((10, 10), chunks=(5, 5)),
             EncapsulateNDArray(np.random.default_rng().random((10, 10))),
+            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="register_chunk_type not implemented"),
         ),
         (
             WrappedArray(np.random.default_rng().random((10, 10))),
@@ -230,7 +230,11 @@ def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
 
 
 @pytest.mark.parametrize("like_ns", (np, da))
-@pytest.mark.parametrize("func", [da.array, da.asarray, da.asanyarray])
+@pytest.mark.parametrize("func", [
+    da.array,
+    pytest.param(da.asarray, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="asarray like kwarg")),
+    pytest.param(da.asanyarray, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="asanyarray like kwarg")),
+])
 def test_like(func, like_ns):
     like = like_ns.array(0, dtype=np.int16)
 
@@ -248,6 +252,7 @@ def test_like(func, like_ns):
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="tri not implemented")
 @pytest.mark.parametrize("like_ns", (np, da))
 def test_tri_like(like_ns):
     like = like_ns.array(0)
