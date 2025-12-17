@@ -485,6 +485,13 @@ class Array(DaskMethodsMixin):
     def T(self):
         return self.transpose()
 
+    def swapaxes(self, axis1, axis2):
+        """Interchange two axes of an array.
+
+        Refer to :func:`dask.array.swapaxes` for full documentation.
+        """
+        return swapaxes(self, axis1, axis2)
+
     def squeeze(self, axis=None):
         """Remove axes of length one from array.
 
@@ -1464,6 +1471,208 @@ def atleast_3d(*arys):
         if NUMPY_GE_200:
             new_arys = tuple(new_arys)
         return new_arys
+
+
+def vstack(tup, allow_unknown_chunksizes=False):
+    """Stack arrays in sequence vertically (row wise).
+
+    See Also
+    --------
+    numpy.vstack
+    """
+    tup = tuple(atleast_2d(x) for x in tup)
+    return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
+
+
+def hstack(tup, allow_unknown_chunksizes=False):
+    """Stack arrays in sequence horizontally (column wise).
+
+    See Also
+    --------
+    numpy.hstack
+    """
+    if all(x.ndim == 1 for x in tup):
+        return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
+    else:
+        return concatenate(tup, axis=1, allow_unknown_chunksizes=allow_unknown_chunksizes)
+
+
+def dstack(tup, allow_unknown_chunksizes=False):
+    """Stack arrays in sequence depth wise (along third axis).
+
+    See Also
+    --------
+    numpy.dstack
+    """
+    tup = tuple(atleast_3d(x) for x in tup)
+    return concatenate(tup, axis=2, allow_unknown_chunksizes=allow_unknown_chunksizes)
+
+
+def flip(m, axis=None):
+    """Reverse element order along axis.
+
+    See Also
+    --------
+    numpy.flip
+    """
+    m = asanyarray(m)
+
+    sl = m.ndim * [slice(None)]
+    if axis is None:
+        axis = range(m.ndim)
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
+    try:
+        for ax in axis:
+            sl[ax] = slice(None, None, -1)
+    except IndexError as e:
+        raise ValueError(f"`axis` of {axis} invalid for {m.ndim}-D array") from e
+    sl = tuple(sl)
+
+    return m[sl]
+
+
+def flipud(m):
+    """Flip array in the up/down direction.
+
+    See Also
+    --------
+    numpy.flipud
+    """
+    return flip(m, 0)
+
+
+def fliplr(m):
+    """Flip array in the left/right direction.
+
+    See Also
+    --------
+    numpy.fliplr
+    """
+    return flip(m, 1)
+
+
+def transpose(a, axes=None):
+    """Reverse or permute the axes of an array.
+
+    See Also
+    --------
+    numpy.transpose
+    """
+    a = asanyarray(a)
+    if axes is not None:
+        return a.transpose(axes)
+    return a.transpose()
+
+
+def rot90(m, k=1, axes=(0, 1)):
+    """Rotate an array by 90 degrees in the plane specified by axes.
+
+    See Also
+    --------
+    numpy.rot90
+    """
+    import numpy as np
+
+    axes = tuple(axes)
+    if len(axes) != 2:
+        raise ValueError("len(axes) must be 2.")
+
+    m = asanyarray(m)
+
+    if axes[0] == axes[1] or np.absolute(axes[0] - axes[1]) == m.ndim:
+        raise ValueError("Axes must be different.")
+
+    if axes[0] >= m.ndim or axes[0] < -m.ndim or axes[1] >= m.ndim or axes[1] < -m.ndim:
+        raise ValueError(f"Axes={axes} out of range for array of ndim={m.ndim}.")
+
+    k %= 4
+
+    if k == 0:
+        return m[:]
+    if k == 2:
+        return flip(flip(m, axes[0]), axes[1])
+
+    axes_list = list(range(0, m.ndim))
+    (axes_list[axes[0]], axes_list[axes[1]]) = (axes_list[axes[1]], axes_list[axes[0]])
+
+    if k == 1:
+        return transpose(flip(m, axes[1]), axes_list)
+    else:
+        # k == 3
+        return flip(transpose(m, axes_list), axes[1])
+
+
+def swapaxes(a, axis1, axis2):
+    """Interchange two axes of an array.
+
+    See Also
+    --------
+    numpy.swapaxes
+    """
+    a = asanyarray(a)
+    if axis1 == axis2:
+        return a
+    if axis1 < 0:
+        axis1 = axis1 + a.ndim
+    if axis2 < 0:
+        axis2 = axis2 + a.ndim
+    ind = list(range(a.ndim))
+    ind[axis1], ind[axis2] = ind[axis2], ind[axis1]
+    return transpose(a, ind)
+
+
+def moveaxis(a, source, destination):
+    """Move axes of an array to new positions.
+
+    See Also
+    --------
+    numpy.moveaxis
+    """
+    from dask.array.numpy_compat import normalize_axis_tuple
+
+    a = asanyarray(a)
+    source = normalize_axis_tuple(source, a.ndim, "source")
+    destination = normalize_axis_tuple(destination, a.ndim, "destination")
+    if len(source) != len(destination):
+        raise ValueError(
+            "`source` and `destination` arguments must have "
+            "the same number of elements"
+        )
+
+    order = [n for n in range(a.ndim) if n not in source]
+
+    for dest, src in sorted(zip(destination, source)):
+        order.insert(dest, src)
+
+    return transpose(a, order)
+
+
+def rollaxis(a, axis, start=0):
+    """Roll the specified axis backwards, until it lies in a given position.
+
+    See Also
+    --------
+    numpy.rollaxis
+    """
+    from dask.array.numpy_compat import normalize_axis_index
+
+    a = asanyarray(a)
+    n = a.ndim
+    axis = normalize_axis_index(axis, n)
+    if start < 0:
+        start += n
+    msg = "'%s' arg requires %d <= %s < %d, but %d was passed in"
+    if not (0 <= start < n + 1):
+        raise ValueError(msg % ("start", -n, "start", n + 1, start))
+    if axis < start:
+        start -= 1
+    if axis == start:
+        return a[...]
+    axes = list(range(0, n))
+    axes.remove(axis)
+    axes.insert(start, axis)
+    return transpose(a, axes)
 
 
 def roll(array, shift, axis=None):
