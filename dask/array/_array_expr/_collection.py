@@ -129,9 +129,28 @@ class Array(DaskMethodsMixin):
         if isinstance(index, str) or (
             isinstance(index, list) and index and all(isinstance(i, str) for i in index)
         ):
-            # TODO(expr-soon): needs map_blocks that we don't support yet,
-            #  but implementation is trivial after we have that
-            raise NotImplementedError()
+            from dask.array.chunk import getitem
+
+            if isinstance(index, str):
+                dt = self.dtype[index]
+            else:
+                dt = np.dtype(
+                    {
+                        "names": index,
+                        "formats": [self.dtype.fields[name][0] for name in index],
+                        "offsets": [self.dtype.fields[name][1] for name in index],
+                        "itemsize": self.dtype.itemsize,
+                    }
+                )
+
+            if dt.shape:
+                new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
+                chunks = self.chunks + tuple((i,) for i in dt.shape)
+                return self.map_blocks(
+                    getitem, index, dtype=dt.base, chunks=chunks, new_axis=new_axis
+                )
+            else:
+                return self.map_blocks(getitem, index, dtype=dt)
 
         if not isinstance(index, tuple):
             index = (index,)
