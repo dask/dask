@@ -1375,7 +1375,6 @@ def test_corrcoef():
             assert_eq(da.corrcoef(d, rowvar=False), np.corrcoef(x, rowvar=False))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_round():
     x = np.random.default_rng().random(10)
     d = da.from_array(x, chunks=4)
@@ -1807,7 +1806,6 @@ def test_extract():
             assert np.isnan(res.chunks[0]).all()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isnull():
     x = np.array([1, np.nan])
     a = da.from_array(x, chunks=(2,))
@@ -1816,7 +1814,6 @@ def test_isnull():
         assert_eq(da.notnull(a), ~(np.isnan(x)))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isnull_result_is_an_array():
     # regression test for https://github.com/dask/dask/issues/3822
     arr = da.from_array(np.arange(3, dtype=np.int64), chunks=-1)
@@ -1825,7 +1822,6 @@ def test_isnull_result_is_an_array():
         assert type(result) is np.ndarray
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isclose():
     x = np.array([0, np.nan, 1, 1.5])
     y = np.array([1e-9, np.nan, 1, 2])
@@ -1834,7 +1830,6 @@ def test_isclose():
     assert_eq(da.isclose(a, b, equal_nan=True), np.isclose(x, y, equal_nan=True))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_allclose():
     n_a = np.array([0, np.nan, 1, 1.5])
     n_b = np.array([1e-9, np.nan, 1, 2])
@@ -2078,7 +2073,6 @@ def test_where_incorrect_args():
             assert "either both or neither of x and y should be given" in str(e)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2094,7 +2088,6 @@ def test_count_nonzero():
 
 
 @pytest.mark.parametrize("axis", [None, 0, (1,), (0, 1)])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero_axis(axis):
     for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2109,7 +2102,6 @@ def test_count_nonzero_axis(axis):
             assert_eq(x_c, d_c)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero_obj():
     x = np.random.default_rng().integers(10, size=(15, 16)).astype(object)
     d = da.from_array(x, chunks=(4, 5))
@@ -2124,7 +2116,6 @@ def test_count_nonzero_obj():
 
 
 @pytest.mark.parametrize("axis", [None, 0, (1,), (0, 1)])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero_obj_axis(axis):
     x = np.random.default_rng().integers(10, size=(15, 16)).astype(object)
     d = da.from_array(x, chunks=(4, 5))
@@ -2143,7 +2134,6 @@ def test_count_nonzero_obj_axis(axis):
         assert_eq(x_c.astype(np.intp), d_c)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero_str():
     # We may have behavior differences with NumPy for strings
     # with just spaces, depending on the version of NumPy.
@@ -2459,7 +2449,6 @@ def test_insert():
         da.insert(a, [3], -1, axis=-3)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_append():
     rng = np.random.default_rng()
     x = rng.integers(10, size=(10, 10))

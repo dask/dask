@@ -26,6 +26,8 @@ The array-expr system has foundational infrastructure in place:
 - Routines: diff, gradient, compress, searchsorted
 - Stacking: vstack, hstack, dstack
 - Axis manipulation: flip, flipud, fliplr, rot90, transpose, swapaxes, moveaxis, rollaxis
+- Simple routines: round/around, isclose, allclose, isnull/notnull, append, count_nonzero
+- Utilities: ndim, shape, result_type, broadcast_arrays, unify_chunks
 
 ## Testing Infrastructure
 
@@ -57,17 +59,17 @@ Straightforward implementations using existing blockwise/elemwise.
 
 | Operation | Impl Strategy | Tests Blocked | Status |
 |-----------|--------------|---------------|--------|
-| round/around | elemwise | 2+ | Not started |
-| isclose | elemwise | 2+ | Not started |
-| allclose | reduction of isclose | 1 | Not started |
-| isnull/notnull | elemwise | 3+ | Not started |
-| append | concatenate wrapper | 2+ | Not started |
-| count_nonzero | reduction | 5+ | Not started |
-| shape (func) | property access | 1 | Not started |
-| ndim (func) | property access | 1 | Not started |
-| result_type | metadata only | 1 | Not started |
-| broadcast_arrays | unify_chunks + broadcast_to | 3+ | Not started |
-| unify_chunks | already exists internally | 1 | Not started |
+| round/around | elemwise | 2+ | **Done** |
+| isclose | elemwise | 2+ | **Done** |
+| allclose | reduction of isclose | 1 | **Done** |
+| isnull/notnull | elemwise | 3+ | **Done** |
+| append | concatenate wrapper | 2+ | **Done** |
+| count_nonzero | reduction | 5+ | **Done** |
+| shape (func) | property access | 1 | **Done** |
+| ndim (func) | property access | 1 | **Done** |
+| result_type | metadata only | 1 | **Done** |
+| broadcast_arrays | unify_chunks + broadcast_to | 3+ | **Done** |
+| unify_chunks | already exists internally | 1 | **Done** |
 
 ### Tier 3: Block Assembly (~27 tests)
 Critical for array construction patterns.
