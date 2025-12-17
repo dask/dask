@@ -366,6 +366,15 @@ class Array(DaskMethodsMixin):
         """
         return squeeze(self, axis=axis)
 
+    def reshape(self, *shape, merge_chunks=True, limit=None):
+        """Reshape the array to a new shape.
+
+        Refer to :func:`dask.array.reshape` for full documentation.
+        """
+        if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
+            shape = shape[0]
+        return reshape(self, shape, merge_chunks=merge_chunks, limit=limit)
+
     def rechunk(
         self,
         chunks="auto",
@@ -1071,6 +1080,34 @@ def squeeze(a, axis=None):
     from dask.array._array_expr._slicing import squeeze as _squeeze
 
     return new_collection(_squeeze(a, axis=axis))
+
+
+def reshape(x, shape, merge_chunks=True, limit=None):
+    """Reshape array to new shape.
+
+    Parameters
+    ----------
+    x : Array
+        Input array
+    shape : int or tuple of ints
+        The new shape should be compatible with the original shape. If
+        an integer, then the result will be a 1-D array of that length.
+        One shape dimension can be -1. In this case, the value is
+        inferred from the length of the array and remaining dimensions.
+    merge_chunks : bool, default True
+        Whether to merge chunks using the logic in :meth:`dask.array.rechunk`
+        when communication is necessary given the input array chunking and
+        the output shape.
+    limit : int (optional)
+        The maximum block size to target in bytes.
+
+    Returns
+    -------
+    reshaped : Array
+    """
+    from dask.array._array_expr._reshape import reshape as _reshape
+
+    return new_collection(_reshape(x, shape, merge_chunks=merge_chunks, limit=limit))
 
 
 def from_array(
