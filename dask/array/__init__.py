@@ -857,12 +857,13 @@ if _array_expr_enabled():
         ma = raise_not_implemented_error("ma")
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
-        from_delayed = raise_not_implemented_error("from_delayed")
-        from_npy_stack = raise_not_implemented_error("from_npy_stack")
+        block = raise_not_implemented_error("block")
+        from dask.array._array_expr import from_delayed
+        from dask.array._array_expr import from_npy_stack
         from_zarr = raise_not_implemented_error("from_zarr")
-        store = raise_not_implemented_error("store")
+        from dask.array._array_expr import store
         to_hdf5 = raise_not_implemented_error("to_hdf5")
-        to_npy_stack = raise_not_implemented_error("to_npy_stack")
+        from dask.array._array_expr import to_npy_stack
         to_zarr = raise_not_implemented_error("to_zarr")
         diag = raise_not_implemented_error("diag")
         diagonal = raise_not_implemented_error("diagonal")

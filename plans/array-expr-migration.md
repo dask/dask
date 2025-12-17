@@ -28,6 +28,7 @@ The array-expr system has foundational infrastructure in place:
 - Axis manipulation: flip, flipud, fliplr, rot90, transpose, swapaxes, moveaxis, rollaxis
 - Simple routines: round/around, isclose, allclose, isnull/notnull, append, count_nonzero
 - Utilities: ndim, shape, result_type, broadcast_arrays, unify_chunks
+- IO: store, to_npy_stack, from_npy_stack, from_delayed
 
 ## Testing Infrastructure
 
@@ -83,10 +84,10 @@ Essential for practical use - saving results.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| store | _io.py | Write chunks to array-like targets | Not started |
-| to_npy_stack | _io.py | Save to numpy files | Not started |
-| from_npy_stack | _io.py | Load from numpy files | Not started |
-| from_delayed | _io.py | Create from delayed objects | Not started |
+| store | _io.py | Write chunks to array-like targets | **Done** (basic case; complex return_stored cases pending) |
+| to_npy_stack | _io.py | Save to numpy files | **Done** |
+| from_npy_stack | _io.py | Load from numpy files | **Done** |
+| from_delayed | _io.py | Create from delayed objects | **Done** |
 
 ### Tier 5: Advanced Indexing (~8 tests)
 Complete the indexing story.
@@ -234,15 +235,14 @@ Estimated effort for Tier 1-2 (should be quick):
 - [x] flip family (flip, flipud, fliplr) (~20 lines)
 - [x] rot90 (~15 lines)
 - [x] axis manipulation (swapaxes, transpose, moveaxis, rollaxis) (~30 lines)
-- [ ] round/around, isclose, allclose (~15 lines)
-- [ ] isnull/notnull (~10 lines)
-- [ ] broadcast_arrays, unify_chunks (~20 lines)
-- [ ] shape, ndim, result_type (~10 lines)
-- [ ] append (~5 lines)
-- [ ] count_nonzero (~20 lines)
+- [x] round/around, isclose, allclose (~15 lines)
+- [x] isnull/notnull (~10 lines)
+- [x] broadcast_arrays, unify_chunks (~20 lines)
+- [x] shape, ndim, result_type (~10 lines)
+- [x] append (~5 lines)
+- [x] count_nonzero (~20 lines)
 
-Total Tier 1-2: ~155 lines of mostly simple wrapper code, unlocking 30+ tests.
-Tier 1 complete: 67 tests now passing.
+Tier 1-2 complete.
 
 ## References
 
