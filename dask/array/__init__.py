@@ -773,6 +773,7 @@ if _array_expr_enabled():
             tensordot,
             true_divide,
             trunc,
+            where,
             zeros,
             zeros_like,
         )
@@ -909,7 +910,6 @@ if _array_expr_enabled():
         unravel_index = raise_not_implemented_error("unravel_index")
         vdot = raise_not_implemented_error("vdot")
         vstack = raise_not_implemented_error("vstack")
-        where = raise_not_implemented_error("where")
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")
 

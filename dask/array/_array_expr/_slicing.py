@@ -19,6 +19,7 @@ from dask.array.slicing import (
     posify_index,
     replace_ellipsis,
     sanitize_index,
+    setitem_array,
 )
 from dask.array.utils import meta_from_array
 from dask.layers import ArrayBlockwiseDep
@@ -582,3 +583,33 @@ def squeeze(a, axis=None):
     axis = validate_axis(axis, a.ndim)
 
     return Squeeze(a.expr, axis)
+
+
+class SetItem(ArrayExpr):
+    """Expression for array assignment (setitem)."""
+
+    _parameters = ["array", "index", "value"]
+
+    @functools.cached_property
+    def _name(self):
+        return f"setitem-{self.deterministic_token}"
+
+    @functools.cached_property
+    def _meta(self):
+        meta = meta_from_array(self.array._meta, ndim=self.array.ndim)
+        if np.isscalar(meta):
+            meta = np.array(meta)
+        return meta
+
+    @property
+    def chunks(self):
+        return self.array.chunks
+
+    def _layer(self) -> dict:
+        from dask.array._array_expr._collection import Array
+
+        # Wrap expressions as Array for setitem_array
+        array = Array(self.array)
+        value = Array(self.value) if hasattr(self.value, "_meta") else self.value
+
+        return setitem_array(self._name, array, self.index, value)

@@ -2034,7 +2034,6 @@ def test_argwhere_str():
     assert_eq(d_nz, x_nz)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where():
     rng = np.random.default_rng()
     x = rng.integers(10, size=(15, 14))
@@ -2060,7 +2059,6 @@ def test_where():
             assert_eq(w1, w2)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where_scalar_dtype():
     x = np.int32(3)
     y1 = np.array([4, 5, 6], dtype=np.int16)
@@ -2076,7 +2074,6 @@ def test_where_scalar_dtype():
     assert_eq(w3, w4)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where_bool_optimization():
     rng = np.random.default_rng()
     x = rng.integers(10, size=(15, 16))
@@ -2111,7 +2108,6 @@ def test_where_nonzero():
             assert_eq(d_w[i], x_w[i])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where_incorrect_args():
     a = da.ones(5, chunks=3)
 

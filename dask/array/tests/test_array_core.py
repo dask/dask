@@ -4349,7 +4349,6 @@ def test_index_array_with_array_3d_2d():
     assert_eq(x[:, ind], dx[:, dind])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_1d():
     x = np.arange(10)
     dx = da.from_array(x.copy(), chunks=(5,))
@@ -4377,7 +4376,6 @@ def test_setitem_masked():
     assert_eq(x.mask, da.ma.getmaskarray(dx))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_hardmask():
     x = np.ma.array([1, 2, 3, 4], dtype=int)
     x.harden_mask()
@@ -4394,7 +4392,6 @@ def test_setitem_hardmask():
     assert_eq(x, dx)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_slice_twice():
     x = np.array([1, 2, 3, 4, 5, 6], dtype=int)
     val = np.array([0, 0], dtype=int)
@@ -4409,7 +4406,6 @@ def test_setitem_slice_twice():
     assert_eq(x, dx)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_2d():
     x = np.arange(24).reshape((4, 6))
     dx = da.from_array(x.copy(), chunks=(2, 2))
@@ -4423,7 +4419,6 @@ def test_setitem_2d():
     assert_eq(x, dx)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_extended_API_0d():
     # 0-d array
     x = np.array(9)
@@ -4455,7 +4450,6 @@ def test_setitem_extended_API_0d():
         [slice(-4, None, -2), [14, 15, 16, 17]],
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_extended_API_1d(index, value):
     # 1-d array
     x = np.arange(10)
@@ -4509,7 +4503,6 @@ def test_setitem_extended_API_1d(index, value):
         [slice(1, None, -2), range(11, 21)],
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_extended_API_2d(index, value):
     # 2-d array
     x = np.ma.arange(60).reshape((6, 10))
@@ -4660,7 +4653,6 @@ def test_setitem_extended_API_2d_mask(index, value):
     assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_on_read_only_blocks():
     # Outputs of broadcast_trick-style functions contain read-only
     # arrays
@@ -6238,7 +6230,6 @@ def test_load_store_chunk():
     assert all(actual == expected)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_scalar_setitem():
     """After a da.Array.__getitem__ call that returns a scalar, the chunk contains a
     read-only np.generic instead of a writeable np.ndarray. This is a specific quirk of
@@ -6260,7 +6251,6 @@ def test_scalar_setitem():
     "val",
     [3.3, np.float64(3.3), np.int64(3), da.array(3.3), da.array(3, dtype=np.int64)],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_no_dtype_broadcast(idx, val):
     x = da.array([1, 2], dtype=np.int32)
     x[idx] = val

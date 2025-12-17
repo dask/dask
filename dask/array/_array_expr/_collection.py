@@ -116,6 +116,12 @@ class Array(DaskMethodsMixin):
         return self.expr.numblocks
 
     @property
+    def npartitions(self):
+        from math import prod
+
+        return prod(self.numblocks)
+
+    @property
     def size(self) -> T_IntOrNaN:
         return self.expr.size
 
@@ -181,6 +187,66 @@ class Array(DaskMethodsMixin):
 
         result = slice_array(self.expr, index2)
         return new_collection(result)
+
+    def __setitem__(self, key, value):
+        from dask.array.core import unknown_chunk_message
+
+        # Handle np.ma.masked assignment
+        if value is np.ma.masked:
+            value = np.ma.masked_all((), dtype=self.dtype)
+
+        # Check for NaN/inf in integer arrays
+        if not is_dask_collection(value) and self.dtype.kind in "iu":
+            if np.isnan(value).any():
+                raise ValueError("cannot convert float NaN to integer")
+            if np.isinf(value).any():
+                raise ValueError("cannot convert float infinity to integer")
+
+        # Suppress dtype broadcasting; __setitem__ can't change the dtype.
+        value = asanyarray(value, dtype=self.dtype)
+
+        # Handle 1D integer array index case
+        if isinstance(key, Array) and (
+            key.dtype.kind in "iu"
+            or (key.dtype == bool and key.ndim == 1 and self.ndim > 1)
+        ):
+            key = (key,)
+
+        # Use "where" method for boolean mask case
+        if isinstance(key, Array) and key.dtype == bool:
+            from dask.array.core import broadcast_to
+
+            left_shape = np.array(key.shape)
+            right_shape = np.array(self.shape)
+
+            # Treat unknown shapes as matching
+            match = left_shape == right_shape
+            match |= np.isnan(left_shape) | np.isnan(right_shape)
+
+            if not match.all():
+                raise IndexError(
+                    f"boolean index shape {key.shape} must match indexed array's "
+                    f"{self.shape}."
+                )
+
+            # If value has ndim > 0, they must be broadcastable to self.shape[idx].
+            if value.ndim:
+                value = broadcast_to(value, self[key].shape)
+
+            y = where(key, value, self)
+            self._expr = y.expr
+            return
+
+        # Check for unknown chunks
+        if np.isnan(self.shape).any():
+            raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
+
+        # Use SetItem expression for other index types
+        from dask.array._array_expr._slicing import SetItem
+
+        value_expr = value.expr if isinstance(value, Array) else value
+        y = new_collection(SetItem(self.expr, key, value_expr))
+        self._expr = y.expr
 
     def __add__(self, other):
         return elemwise(operator.add, self, other)
@@ -1175,6 +1241,63 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     from dask.array._array_expr._reshape import reshape as _reshape
 
     return new_collection(_reshape(x, shape, merge_chunks=merge_chunks, limit=limit))
+
+
+def where(condition, x=None, y=None):
+    """Return elements chosen from x or y depending on condition.
+
+    Parameters
+    ----------
+    condition : array_like, bool
+        Where True, yield x, otherwise yield y.
+    x, y : array_like
+        Values from which to choose. x, y and condition need to be
+        broadcastable to some shape.
+
+    Returns
+    -------
+    out : Array
+        An array with elements from x where condition is True,
+        and elements from y elsewhere.
+
+    See Also
+    --------
+    numpy.where
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.arange(10, chunks=5)
+    >>> da.where(x < 5, x, 10 * x).compute()  # doctest: +NORMALIZE_WHITESPACE
+    array([ 0,  1,  2,  3,  4, 50, 60, 70, 80, 90])
+    """
+    if (x is None) != (y is None):
+        raise ValueError("either both or neither of x and y should be given")
+    if (x is None) and (y is None):
+        # Single arg case - returns indices of nonzero elements
+        raise NotImplementedError(
+            "where(condition) is not yet implemented in array-expr mode. "
+            "Use da.nonzero(condition) instead."
+        )
+
+    # Optimization: for scalar conditions with matching shapes, return the chosen array directly
+    if np.isscalar(condition):
+        from dask.array.core import broadcast_shapes
+
+        x = asarray(x)
+        y = asarray(y)
+        out = x if condition else y
+
+        # If shapes match, we can return the original array (possibly cast)
+        shape = broadcast_shapes(x.shape, y.shape)
+        if out.shape == shape:
+            dtype = np.result_type(x.dtype, y.dtype)
+            if out.dtype == dtype:
+                return out
+            return out.astype(dtype)
+
+    # Use elemwise with np.where to handle all cases
+    return elemwise(np.where, condition, x, y)
 
 
 def from_array(
