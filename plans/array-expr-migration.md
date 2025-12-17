@@ -24,7 +24,7 @@ The array-expr system has foundational infrastructure in place:
 - Reductions: argmin, argmax, nanargmin, nanargmax, cumsum, cumprod, nancumsum, nancumprod
 - Shape manipulation: ravel, flatten, expand_dims, atleast_*d, broadcast_to, roll
 - Routines: diff, gradient, compress, searchsorted
-- Stacking: vstack, hstack, dstack
+- Stacking: vstack, hstack, dstack, block
 - Axis manipulation: flip, flipud, fliplr, rot90, transpose, swapaxes, moveaxis, rollaxis
 - Simple routines: round/around, isclose, allclose, isnull/notnull, append, count_nonzero
 - Utilities: ndim, shape, result_type, broadcast_arrays, unify_chunks
@@ -76,7 +76,7 @@ Critical for array construction patterns.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| block | creation.py | Recursive nested lists -> concatenate | Not started |
+| block | _collection.py | Recursive nested lists -> concatenate | **Done** |
 
 ### Tier 4: Store & IO (~12+ tests)
 Essential for practical use - saving results.

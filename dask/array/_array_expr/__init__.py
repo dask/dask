@@ -10,6 +10,7 @@ from dask.array._array_expr._collection import (
     atleast_1d,
     atleast_2d,
     atleast_3d,
+    block,
     blockwise,
     broadcast_to,
     concatenate,

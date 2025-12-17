@@ -248,7 +248,6 @@ def test_top_literals():
     }
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockwise_literals():
     x = da.ones((10, 10), chunks=(5, 5))
     z = da.blockwise(add, "ij", x, "ij", 100, None, dtype=x.dtype)
@@ -263,7 +262,6 @@ def test_blockwise_literals():
     assert_eq(z, x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockwise_1_in_shape_I():
     def test_f(a, b):
         assert 1 in b.shape
@@ -282,7 +280,6 @@ def test_blockwise_1_in_shape_I():
     arr.compute()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockwise_1_in_shape_II():
     def test_f(a, b):
         assert 1 in b.shape
@@ -300,7 +297,6 @@ def test_blockwise_1_in_shape_II():
     ).compute()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockwise_1_in_shape_III():
     def test_f(a, b):
         assert 1 in b.shape
@@ -897,7 +893,6 @@ def test_concatenate_zero_size():
     assert_eq(result_np, result_da)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_simple_row_wise():
     a1 = np.ones((2, 2))
     a2 = 2 * a1
@@ -917,7 +912,6 @@ def test_block_simple_row_wise():
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_simple_column_wise():
     a1 = np.ones((2, 2))
     a2 = 2 * a1
@@ -931,7 +925,6 @@ def test_block_simple_column_wise():
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_with_1d_arrays_row_wise():
     # # # 1-D vectors are treated as row arrays
     a1 = np.array([1, 2, 3])
@@ -952,7 +945,6 @@ def test_block_with_1d_arrays_row_wise():
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_with_1d_arrays_multiple_rows():
     a1 = np.array([1, 2, 3])
     a2 = np.array([2, 3, 4])
@@ -966,7 +958,6 @@ def test_block_with_1d_arrays_multiple_rows():
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_with_1d_arrays_column_wise():
     # # # 1-D vectors are treated as row arrays
     a1 = np.array([1, 2, 3])
@@ -981,7 +972,6 @@ def test_block_with_1d_arrays_column_wise():
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_mixed_1d_and_2d():
     a1 = np.ones((2, 2))
     a2 = np.array([2, 2])
@@ -995,7 +985,6 @@ def test_block_mixed_1d_and_2d():
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_complicated():
     # a bit more complicated
     a1 = np.array([[1, 1, 1]])
@@ -1020,7 +1009,6 @@ def test_block_complicated():
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_nested():
     a1 = np.array([1, 1, 1])
     a2 = np.array([[2, 2, 2], [2, 2, 2], [2, 2, 2]])
@@ -1044,7 +1032,6 @@ def test_block_nested():
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_3d():
     a000 = np.ones((2, 2, 2), int) * 1
 
@@ -1092,7 +1079,6 @@ def test_block_3d():
     assert_eq(expected, result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_with_mismatched_shape():
     a = np.array([0, 0])
     b = np.eye(2)
@@ -1102,13 +1088,11 @@ def test_block_with_mismatched_shape():
             da.block(arrays)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_no_lists():
     assert_eq(da.block(1), np.block(1))
     assert_eq(da.block(np.eye(3)), np.block(np.eye(3)))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_invalid_nesting():
     for arrays in [
         [1, [2]],
@@ -1122,7 +1106,6 @@ def test_block_invalid_nesting():
         e.match(r"depths are mismatched")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_empty_lists():
     for arrays in [[], [[]], [[1], []]]:
         with pytest.raises(ValueError) as e:
@@ -1130,7 +1113,6 @@ def test_block_empty_lists():
         e.match(r"empty")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_block_tuple():
     for arrays in [([1, 2], [3, 4]), [(1, 2), (3, 4)]]:
         with pytest.raises(TypeError) as e:
@@ -2068,7 +2050,6 @@ def test_dtype():
     assert d.sum().dtype == d.sum().compute().dtype  # no shape
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockdims_from_blockshape():
     assert blockdims_from_blockshape((10, 10), (4, 3)) == ((4, 4, 2), (3, 3, 3, 1))
     pytest.raises(TypeError, lambda: blockdims_from_blockshape((10,), None))
@@ -4096,7 +4077,6 @@ def test_concatenate_axes():
         concatenate_axes([x, x], axes=[0, 1, 2, 3])  # too many axes
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockwise_concatenate():
     x = da.ones((4, 4, 4), chunks=(2, 2, 2))
     y = da.ones((4, 4), chunks=(2, 2))
@@ -4807,7 +4787,6 @@ def test_zero_sized_array_rechunk():
     assert_eq(x, y)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockwise_zero_shape():
     da.blockwise(
         lambda x: x,
@@ -4822,7 +4801,6 @@ def test_blockwise_zero_shape():
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockwise_zero_shape_new_axes():
     da.blockwise(
         lambda x: np.ones(42),
@@ -4886,7 +4864,6 @@ def test_stack_errs():
     assert len(str(e.value)) < 105
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockwise_with_numpy_arrays():
     x = np.ones(10)
     y = da.ones(10, chunks=(5,))
@@ -5478,7 +5455,7 @@ def test_tiledb_multiattr():
         assert_eq(np.mean(ar2), d.mean().compute(scheduler="threads"))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="blocks property not implemented", strict=False)
 def test_blockview():
     x = da.arange(10, chunks=2)
     blockview = BlockView(x)
@@ -5531,7 +5508,7 @@ def test_blockview():
         blockview[100, 100]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="blocks property not implemented", strict=False)
 def test_blocks_indexer():
     x = da.arange(10, chunks=2)
 
@@ -5778,7 +5755,6 @@ def test_map_blocks_large_inputs_delayed():
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
 def test_blockwise_large_inputs_delayed():
     def func(a, b):
         return a
@@ -6284,7 +6260,7 @@ def test_store_sources_unoptimized_nocompute():
     assert total_calls == start.blocks.size
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="block not implemented", strict=False)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="blockwise fusion not implemented", strict=False)
 def test_blockwise_fusion():
     def custom_scheduler_get(dsk, keys, **kwargs):
         """Custom scheduler that returns the result of the first key."""
