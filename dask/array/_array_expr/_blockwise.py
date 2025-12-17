@@ -335,6 +335,29 @@ class Elemwise(Blockwise):
             )
         )
 
+    def _lower(self):
+        # Override Blockwise._lower to handle Elemwise's different operand structure.
+        # Elemwise stores just arrays in operands, but args generates (array, indices) pairs.
+        # After unifying chunks, we only pass the unified arrays (not indices) to the constructor.
+        if self.align_arrays:
+            _, arrays, changed = unify_chunks_expr(*self.args)
+            if changed:
+                # Only pass the unified arrays, not the indices
+                # The where mask is the last array if it's not True
+                if self.where is not True:
+                    new_elemwise_args = arrays[:-1]
+                    new_where = arrays[-1]
+                else:
+                    new_elemwise_args = arrays
+                    new_where = True
+                return Elemwise(
+                    self.op,
+                    self.operand("dtype"),
+                    self.operand("name"),
+                    new_where,
+                    *new_elemwise_args,
+                )
+
 
 class Transpose(Blockwise):
     _parameters = ["array", "axes"]

@@ -56,7 +56,7 @@ Complete the indexing story.
 |-----------|----------|-------|--------|
 | boolean indexing | `slicing.py` | Needs ravel (reshape) | Not started |
 | field access | `_collection.py` | Structured arrays | **Done** |
-| setitem | `slicing.py` | In-place assignment | Not started |
+| setitem | `_collection.py` | In-place assignment | **Done** |
 
 ### Tier 4: Reductions Completion
 Fill out remaining reduction operations.
@@ -88,7 +88,7 @@ General array routines.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| where | `routines.py` | Conditional select | Not started |
+| where | `_collection.py` | Conditional select | **Done** |
 | unique | `routines.py` | Deduplication | Not started |
 | diff | `routines.py` | Differences | Not started |
 | gradient | `routines.py` | Numerical gradient | Not started |

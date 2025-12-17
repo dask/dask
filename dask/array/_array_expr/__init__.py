@@ -15,6 +15,7 @@ from dask.array._array_expr._collection import (
     reshape,
     squeeze,
     stack,
+    where,
 )
 from dask.array._array_expr._creation import (
     arange,
