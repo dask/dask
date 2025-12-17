@@ -325,7 +325,6 @@ def test_rot90(kwargs, shape):
         [(3, 3, 20, 30), (3, 3, 30, 20), (1, 3, 2, 6), (1, 3, 5, 10)],
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_matmul(x_shape, y_shape, x_chunks, y_chunks):
     rng = np.random.default_rng(3732)
 
@@ -371,7 +370,6 @@ def test_tensordot():
 @pytest.mark.parametrize(
     "axes", [0, 1, (0, 1), (1, 0), ((1, 0), (2, 1)), ((1, 2), (2, 0)), ((2, 0), (1, 2))]
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tensordot_2(axes):
     x = np.arange(4 * 4 * 4).reshape((4, 4, 4))
     y = da.from_array(x, chunks=2)
@@ -380,7 +378,6 @@ def test_tensordot_2(axes):
 
 
 @pytest.mark.parametrize("chunks", ["auto", (4, 6), (2, 3), (4, 3), (2, 6)])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tensordot_double_contraction_neq2(chunks):
     # Regression test for https://github.com/dask/dask/issues/5472
     x = np.arange(24).reshape(4, 6)
@@ -388,7 +385,6 @@ def test_tensordot_double_contraction_neq2(chunks):
     assert_eq(da.tensordot(y, y, axes=2), np.tensordot(x, x, axes=2))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tensordot_double_contraction_ngt2():
     # Regression test for https://github.com/dask/dask/issues/5472
     x = np.arange(60.0).reshape(3, 4, 5)
@@ -406,7 +402,6 @@ def test_tensordot_double_contraction_ngt2():
     assert_eq(da.tensordot(u, v, axes=2), np.tensordot(x, y, axes=2))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tensordot_more_than_26_dims():
     ndim = 27
     x = np.broadcast_to(1, [2] * ndim)
@@ -414,7 +409,6 @@ def test_tensordot_more_than_26_dims():
     assert_eq(da.tensordot(dx, dx, ndim), np.array(2**ndim))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_dot_method():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 5))
@@ -424,7 +418,6 @@ def test_dot_method():
     assert_eq(a.dot(b), x.dot(y))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_dot_persist_equivalence():
     # Regression test for https://github.com/dask/dask/issues/6907
     x = da.random.default_rng().random((4, 4), chunks=(2, 2))
@@ -656,7 +649,6 @@ def test_ediff1d(shape, to_end, to_begin):
     ],
 )
 @pytest.mark.parametrize("edge_order", [1, 2])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_gradient(shape, varargs, axis, edge_order):
     a = np.random.default_rng().integers(0, 10, shape)
     d_a = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -756,7 +748,6 @@ def test_digitize():
     ],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_searchsorted(a, a_chunks, v, v_chunks, side):
     a = np.array(a)
     v = np.array(v)
@@ -1778,7 +1769,11 @@ def test_take_dask_from_numpy():
     assert_eq(z, np.array([2.0, 4.0, 6.0, 6.0, 4.0, 2.0]))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="boolean indexing with dask arrays not yet implemented",
+    strict=False,
+)
 def test_compress():
     x = np.arange(25).reshape((5, 5))
     a = da.from_array(x, chunks=(2, 2))
@@ -2924,7 +2919,6 @@ def test_average_raises():
         da.average(d_a, weights=da.zeros_like(d_a)).compute()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_iscomplexobj():
     a = da.from_array(np.array([1, 2]), 2)
     assert np.iscomplexobj(a) is False
