@@ -30,7 +30,7 @@ Test modules have been converted from blacklist (module-level skips) to whitelis
 | test_rechunk.py | Converted: 79 pass, 3 xfail |
 | test_dispatch.py | Module skip (register_chunk_type fundamental difference) |
 | test_array_function.py | Module skip (depends on test_dispatch) |
-| test_routines.py | Module skip (too many unimplemented functions) |
+| test_routines.py | Converted: 25 pass, 700 xfail, 2 xpass |
 
 Each xfailed test represents work to be done. Decreasing xfails is progress.
 
