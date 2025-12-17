@@ -374,7 +374,6 @@ def test_map_overlap_no_depth(boundary):
     assert_eq(y, x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="reshape needed")
 def test_map_overlap_multiarray():
     # Same ndim, same numblocks, same chunks
     x = da.arange(10, chunks=5)

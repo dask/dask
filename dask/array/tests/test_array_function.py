@@ -19,7 +19,7 @@ from dask.array.utils import assert_eq
         lambda x: np.dstack((x, x)),
         lambda x: np.flip(x, axis=0),
         lambda x: np.hstack((x, x)),
-        pytest.param(lambda x: np.matmul(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="matmul not implemented")),
+        lambda x: np.matmul(x, x),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
         lambda x: np.block([x, x]),
@@ -47,7 +47,6 @@ def test_array_function_dask(func):
     assert_eq(res_y, res_x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="dstack/hstack/vstack not implemented")
 @pytest.mark.parametrize(
     "func",
     [
@@ -148,16 +147,16 @@ def test_array_function_cupy_svd(chunks):
     [
         lambda x: np.concatenate([x, x, x]),
         pytest.param(lambda x: np.cov(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="cov not implemented")),
-        pytest.param(lambda x: np.dot(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dot not implemented")),
-        pytest.param(lambda x: np.dstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dstack not implemented")),
-        pytest.param(lambda x: np.flip(x, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="flip not implemented")),
-        pytest.param(lambda x: np.hstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="hstack not implemented")),
-        pytest.param(lambda x: np.matmul(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="matmul not implemented")),
+        lambda x: np.dot(x, x),
+        lambda x: np.dstack((x, x)),
+        lambda x: np.flip(x, axis=0),
+        lambda x: np.hstack((x, x)),
+        lambda x: np.matmul(x, x),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
         lambda x: np.sum(x),
         lambda x: np.var(x),
-        pytest.param(lambda x: np.vstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="vstack not implemented")),
+        lambda x: np.vstack((x, x)),
         pytest.param(lambda x: np.linalg.norm(x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="linalg not implemented")),
     ],
 )
@@ -197,8 +196,8 @@ def test_non_existent_func():
     "func",
     [
         np.equal,
-        pytest.param(np.matmul, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="matmul not implemented", strict=False)),
-        pytest.param(np.dot, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dot not implemented", strict=False)),
+        np.matmul,
+        np.dot,
         lambda x, y: np.stack([x, y]),
     ],
 )

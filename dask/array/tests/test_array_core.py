@@ -558,7 +558,6 @@ def test_array_interface_deprecated_kwargs():
 
 
 @pytest.mark.parametrize("chunks", [5, 10])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_copy(chunks):
     """Test that compute() never returns an object that shares
     a buffer with the dask graph or a process-local Worker
@@ -835,7 +834,6 @@ def test_concatenate_unknown_axes():
     assert_eq(c_x, np.concatenate([a_df.values, b_df.values], axis=1))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_concatenate_flatten needs work", strict=False)
 def test_concatenate_flatten():
     x = np.array([1, 2])
     y = np.array([[3, 4], [5, 6]])
@@ -1328,7 +1326,6 @@ def test_matmul():
     assert_eq(operator.matmul(z, a), operator.matmul(c, x))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_matmul needs work", strict=False)
 def test_matmul_array_ufunc():
     # regression test for https://github.com/dask/dask/issues/4353
     rng = np.random.default_rng()
@@ -1607,7 +1604,6 @@ def test_map_blocks2():
     assert same_keys(d.map_blocks(func, dtype="i8", c=1), out)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_block_info():
     x = da.arange(50, chunks=10)
 
@@ -1630,7 +1626,6 @@ def test_map_blocks_block_info():
     assert_eq(z, x + x + 1 + 100)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_block_info_with_new_axis():
     # https://github.com/dask/dask/issues/4298
     values = da.from_array(np.array(["a", "a", "b", "c"]), 2)
@@ -1661,7 +1656,6 @@ def test_map_blocks_block_info_with_new_axis():
     assert_eq(z, np.ones((4, 3), dtype="f8"))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_block_info_with_drop_axis():
     # https://github.com/dask/dask/issues/4584
     values = da.from_array(
@@ -1698,7 +1692,6 @@ def test_map_blocks_block_info_with_drop_axis():
     assert_eq(z, np.array([7, 56, 448, 7168], dtype="u4"))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_block_info_with_broadcast():
     expected0 = [
         {
@@ -1879,7 +1872,6 @@ def test_map_blocks_infer_newaxis():
     assert_eq(y, da.ones((1, 5, 3)))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_no_array_args():
     def func(dtype, block_info=None):
         loc = block_info[None]["array-location"]
@@ -1901,7 +1893,6 @@ def test_map_blocks_unique_name_enforce_dim():
     assert x._name != y._name
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_unique_name_chunks_dtype():
     def func(block_info=None):
         loc = block_info[None]["array-location"]
@@ -1924,7 +1915,6 @@ def test_map_blocks_unique_name_chunks_dtype():
     assert y.name != z.name
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_unique_name_drop_axis():
     def func(some_3d, block_info=None):
         if not block_info:
@@ -1943,7 +1933,6 @@ def test_map_blocks_unique_name_drop_axis():
     assert x.name != y.name
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_unique_name_new_axis():
     def func(some_2d, block_info=None):
         if not block_info:
@@ -2018,7 +2007,6 @@ def test_slicing_with_ellipsis():
     assert_eq(d[0, ..., 1], x[0, ..., 1])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_slicing_with_ndarray():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=((4, 4)))
@@ -3147,7 +3135,6 @@ def test_asarray_h5py(asarray, inline_array):
             assert not any(isinstance(v, np.ndarray) for v in dsk.values())
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_asarray_chunks():
     with dask.config.set({"array.chunk-size": "100 B"}):
         x = np.ones(1000)
@@ -3474,7 +3461,6 @@ def test_slice_with_floats():
 
 
 @pytest.mark.parametrize("dtype", [np.int32, np.int64, np.uint32, np.uint64])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_slice_with_integer_types needs work", strict=False)
 def test_slice_with_integer_types(dtype):
     x = np.arange(10)
     dx = da.from_array(x, chunks=5)
@@ -3558,7 +3544,6 @@ def test_vindex_errors():
         d.vindex[[0], [0], da.array([0])]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="vindex not implemented", strict=False)
 def test_vindex_merge():
     from dask.array.core import _vindex_merge
 
@@ -3896,7 +3881,6 @@ def test_to_delayed_optimize_graph():
     assert (d.compute() == d2.compute()).all()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_cumulative():
     rng = np.random.default_rng(0)
     x = da.arange(20, chunks=5)
@@ -4007,7 +3991,6 @@ def test_copy_mutate():
     assert memo[id(x)] is y2
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_npartitions():
     assert da.ones(5, chunks=(2,)).npartitions == 3
     assert da.ones((5, 5), chunks=(2, 3)).npartitions == 6
@@ -4021,7 +4004,6 @@ def test_map_blocks_name():
     assert da.ones(5, chunks=2).map_blocks(inc).name.startswith("inc-")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_from_array_names():
     x = np.ones(10)
     a = da.from_array(x, chunks=2)
@@ -4124,7 +4106,6 @@ def test_common_blockdim():
     assert common_blockdim([(1, 2, 2), (2, 1, 2), (2, 2, 1)]) == (1, 1, 1, 1, 1)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_uneven_chunks_that_fit_neatly():
     x = da.arange(10, chunks=((5, 5),))
     y = da.ones(10, chunks=((5, 2, 3),))
@@ -4135,7 +4116,6 @@ def test_uneven_chunks_that_fit_neatly():
     assert z.chunks == ((5, 2, 3),)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_elemwise_uneven_chunks():
     rng = da.random.default_rng()
     x = da.arange(10, chunks=((4, 6),))
@@ -4215,8 +4195,6 @@ def test_no_chunks():
     assert_eq((x + x).std(keepdims=True), (X + X).std(keepdims=True))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_no_chunks_2d():
     X = np.arange(24).reshape((4, 6))
     x = da.from_array(X, chunks=(2, 2))
@@ -4280,7 +4258,6 @@ def test_no_chunks_slicing_2d():
             op()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_index_array_with_array_1d():
     x = np.arange(10)
     dx = da.from_array(x, chunks=(5,))
@@ -4876,7 +4853,6 @@ def test_blockwise_with_numpy_arrays():
 
 @pytest.mark.parametrize("chunks", (100, 6))
 @pytest.mark.parametrize("other", [[0, 0, 1], [2, 1, 3], (0, 0, 1)])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_elemwise_with_lists needs work", strict=False)
 def test_elemwise_with_lists(chunks, other):
     x = np.arange(12).reshape((4, 3))
     d = da.arange(12, chunks=chunks).reshape((4, 3))
@@ -5727,7 +5703,6 @@ def test_scipy_sparse_asarray_like(src, func):
     assert isinstance(a.compute(), type(mtx))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_3851():
     with warnings.catch_warnings(record=True) as record:
         Y = da.random.default_rng().random((10, 10), chunks="auto")
@@ -5780,7 +5755,6 @@ def test_slice_reversed():
     assert_eq(y, np.ones(0))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_chunks():
     x = da.arange(400, chunks=(100,))
     y = da.arange(40, chunks=(10,))
@@ -5794,7 +5768,6 @@ def test_map_blocks_chunks():
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_nbytes_auto():
     chunks = normalize_chunks("800B", shape=(500,), dtype="float64")
     assert chunks == ((100, 100, 100, 100, 100),)
@@ -5844,7 +5817,6 @@ def test_auto_chunks_h5py():
                 assert x.chunks == ((256, 256, 256, 232), (512, 488))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_no_warnings_from_blockwise():
     with warnings.catch_warnings(record=True) as record:
         x = da.ones((3, 10, 10), chunks=(3, 2, 2))
@@ -6009,7 +5981,6 @@ def test_compute_chunk_sizes_warning_fixes_slicing():
     y[:3, :]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_rechunk_auto():
     x = da.ones(10, chunks=(1,))
     y = x.rechunk()
@@ -6073,7 +6044,6 @@ def test_dask_layers():
     assert b.__dask_layers__() == (b.name,)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_len_object_with_unknown_size():
     a = da.random.default_rng().random(size=(20, 2))
     b = a[a < 0.5]
