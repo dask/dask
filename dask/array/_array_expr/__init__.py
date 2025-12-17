@@ -30,6 +30,7 @@ from dask.array._array_expr._creation import (
     zeros_like,
 )
 from dask.array._array_expr._gufunc import *
+from dask.array._array_expr._linalg import dot, matmul, tensordot
 from dask.array._array_expr._map_blocks import map_blocks
 from dask.array._array_expr._overlap import map_overlap, overlap, trim_overlap
 from dask.array._array_expr._reductions import _tree_reduce, reduction

@@ -629,6 +629,19 @@ class Array(DaskMethodsMixin):
 
         return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
+    def dot(self, other):
+        """Dot product of self and other.
+
+        Refer to :func:`dask.array.tensordot` for full documentation.
+
+        See Also
+        --------
+        dask.array.dot : equivalent function
+        """
+        from dask.array._array_expr._linalg import tensordot
+
+        return tensordot(self, other, axes=((self.ndim - 1,), (other.ndim - 2,)))
+
     def astype(self, dtype, **kwargs):
         """Copy of the array, cast to a specified type.
 
