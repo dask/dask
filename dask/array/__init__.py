@@ -670,6 +670,7 @@ if _array_expr_enabled():
             bitwise_not,
             bitwise_or,
             bitwise_xor,
+            block,
             blockwise,
             broadcast_to,
             cbrt,
@@ -856,7 +857,6 @@ if _array_expr_enabled():
         ma = raise_not_implemented_error("ma")
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
-        block = raise_not_implemented_error("block")
         from_delayed = raise_not_implemented_error("from_delayed")
         from_npy_stack = raise_not_implemented_error("from_npy_stack")
         from_zarr = raise_not_implemented_error("from_zarr")
