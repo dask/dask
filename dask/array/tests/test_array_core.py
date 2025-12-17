@@ -6302,3 +6302,25 @@ def test_blockwise_fusion():
 
     a = ((da.ones(10, chunks=5) + 1) + 2).sum()
     dask.compute(a, scheduler=custom_scheduler_get)
+
+
+@pytest.mark.skipif(
+    not da._array_expr_enabled(), reason="array_expr not enabled"
+)
+def test_tree_repr():
+    """Test that tree_repr shows hierarchical expression structure."""
+    x = da.ones((10, 10), chunks=5)
+    y = (x + 1).sum()
+
+    s = y.expr.tree_repr()
+
+    # Should show multiple lines (hierarchical structure)
+    assert s.count("\n") >= 2
+
+    # Should contain key operation names
+    assert "Ones:" in s
+    assert "Elemwise:" in s
+
+    # Should have indentation showing hierarchy
+    lines = s.split("\n")
+    assert any(line.startswith("  ") for line in lines)
