@@ -763,6 +763,7 @@ if _array_expr_enabled():
             spacing,
             sqrt,
             square,
+            squeeze,
             stack,
             subtract,
             tan,
@@ -894,7 +895,6 @@ if _array_expr_enabled():
         searchsorted = raise_not_implemented_error("searchsorted")
         select = raise_not_implemented_error("select")
         shape = raise_not_implemented_error("shape")
-        squeeze = raise_not_implemented_error("squeeze")
         swapaxes = raise_not_implemented_error("swapaxes")
         take = raise_not_implemented_error("take")
         tensordot = raise_not_implemented_error("tensordot")

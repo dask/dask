@@ -348,6 +348,13 @@ class Array(DaskMethodsMixin):
     def T(self):
         return self.transpose()
 
+    def squeeze(self, axis=None):
+        """Remove axes of length one from array.
+
+        Refer to :func:`dask.array.squeeze` for full documentation.
+        """
+        return squeeze(self, axis=axis)
+
     def rechunk(
         self,
         chunks="auto",
@@ -1019,6 +1026,40 @@ def rechunk(
     return new_collection(
         x.expr.rechunk(chunks, threshold, block_size_limit, balance, method)
     )
+
+
+def squeeze(a, axis=None):
+    """Remove axes of length one from array.
+
+    Parameters
+    ----------
+    a : Array
+        Input array
+    axis : None or int or tuple of ints, optional
+        Selects a subset of entries of length one in the shape.
+        If an axis is selected with shape entry greater than one,
+        a ValueError is raised.
+
+    Returns
+    -------
+    squeezed : Array
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.ones((1, 3, 1, 5), chunks=2)
+    >>> x.shape
+    (1, 3, 1, 5)
+    >>> da.squeeze(x).shape
+    (3, 5)
+    >>> da.squeeze(x, axis=0).shape
+    (3, 1, 5)
+    >>> da.squeeze(x, axis=(0, 2)).shape
+    (3, 5)
+    """
+    from dask.array._array_expr._slicing import squeeze as _squeeze
+
+    return new_collection(_squeeze(a, axis=axis))
 
 
 def from_array(

@@ -12,6 +12,7 @@ from dask.array._array_expr._collection import (
     elemwise,
     from_array,
     rechunk,
+    squeeze,
     stack,
 )
 from dask.array._array_expr._creation import (
