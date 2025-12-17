@@ -18,11 +18,6 @@ import dask.array as da
 from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_220, AxisError
 from dask.array.utils import allclose, assert_eq, same_keys
 
-if da._array_expr_enabled():
-    pytest.skip(
-        "Many routines not yet implemented for array-expr",
-        allow_module_level=True,
-    )
 
 
 def test_array():
@@ -50,6 +45,7 @@ def test_derived_docstrings():
 
 
 @pytest.mark.parametrize("funcname", ["atleast_1d", "atleast_2d", "atleast_3d"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_atleast_nd_no_args(funcname):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
@@ -71,6 +67,7 @@ def test_atleast_nd_no_args(funcname):
         ((4, 6, 8, 10), (2, 3, 4, 5)),
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_atleast_nd_one_arg(funcname, shape, chunks):
     np_a = np.random.default_rng().random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
@@ -93,6 +90,7 @@ def test_atleast_nd_one_arg(funcname, shape, chunks):
         )
     ),
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_atleast_nd_two_args(funcname, shape1, shape2):
     np_a_1 = np.random.default_rng().random(shape1)
     da_a_1 = da.from_array(np_a_1, chunks=tuple(c // 2 for c in shape1))
@@ -117,6 +115,7 @@ def test_atleast_nd_two_args(funcname, shape1, shape2):
         assert_eq(np_r, da_r)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_transpose():
     x = np.arange(240).reshape((4, 6, 10))
     d = da.from_array(x, (2, 3, 4))
@@ -141,12 +140,14 @@ def test_transpose_negative_axes():
     assert_eq(x.transpose([-1, -2, 0, 1]), y.transpose([-1, -2, 0, 1]))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_transpose_skip_when_possible():
     x = da.ones((2, 3, 4), chunks=3)
     assert x.transpose((0, 1, 2)) is x
     assert x.transpose((-3, -2, -1)) is x
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_swapaxes():
     x = np.random.default_rng().normal(0, 10, size=(10, 12, 7))
     d = da.from_array(x, chunks=(4, 5, 2))
@@ -165,6 +166,7 @@ def test_swapaxes():
 
 @pytest.mark.parametrize("funcname", ["moveaxis", "rollaxis"])
 @pytest.mark.parametrize("shape", [(), (5,), (3, 5, 7, 3)])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_moveaxis_rollaxis(funcname, shape):
     x = np.random.default_rng().random(shape)
     d = da.from_array(x, chunks=(len(shape) * (2,)))
@@ -176,6 +178,7 @@ def test_moveaxis_rollaxis(funcname, shape):
             assert_eq(np_func(x, axis1, axis2), da_func(d, axis1, axis2))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_moveaxis_rollaxis_keyword():
     x = np.random.default_rng().random((10, 12, 7))
     d = da.from_array(x, chunks=(4, 5, 2))
@@ -187,6 +190,7 @@ def test_moveaxis_rollaxis_keyword():
     assert_eq(np.rollaxis(x, start=1, axis=2), da.rollaxis(d, start=1, axis=2))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_moveaxis_rollaxis_numpy_api():
     a = da.random.default_rng().random((4, 4, 4), chunks=2)
     result = np.moveaxis(a, 2, 0)
@@ -212,6 +216,7 @@ def test_moveaxis_rollaxis_numpy_api():
     ],
 )
 @pytest.mark.parametrize("shape", [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_flip(funcname, kwargs, shape):
     axis = kwargs.get("axis")
     if axis is None:
@@ -261,6 +266,7 @@ def test_flip(funcname, kwargs, shape):
         (4, 6, 8),
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_rot90(kwargs, shape):
     axes = kwargs.get("axes", (0, 1))
     np_a = np.random.default_rng().random(shape)
@@ -324,6 +330,7 @@ def test_rot90(kwargs, shape):
         [(3, 3, 20, 30), (3, 3, 30, 20), (1, 3, 2, 6), (1, 3, 5, 10)],
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_matmul(x_shape, y_shape, x_chunks, y_chunks):
     rng = np.random.default_rng(3732)
 
@@ -347,6 +354,7 @@ def test_matmul(x_shape, y_shape, x_chunks, y_chunks):
             assert_eq(expected, da.matmul(d1, d2))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tensordot():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 4))
@@ -368,6 +376,7 @@ def test_tensordot():
 @pytest.mark.parametrize(
     "axes", [0, 1, (0, 1), (1, 0), ((1, 0), (2, 1)), ((1, 2), (2, 0)), ((2, 0), (1, 2))]
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tensordot_2(axes):
     x = np.arange(4 * 4 * 4).reshape((4, 4, 4))
     y = da.from_array(x, chunks=2)
@@ -376,6 +385,7 @@ def test_tensordot_2(axes):
 
 
 @pytest.mark.parametrize("chunks", ["auto", (4, 6), (2, 3), (4, 3), (2, 6)])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tensordot_double_contraction_neq2(chunks):
     # Regression test for https://github.com/dask/dask/issues/5472
     x = np.arange(24).reshape(4, 6)
@@ -383,6 +393,7 @@ def test_tensordot_double_contraction_neq2(chunks):
     assert_eq(da.tensordot(y, y, axes=2), np.tensordot(x, x, axes=2))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tensordot_double_contraction_ngt2():
     # Regression test for https://github.com/dask/dask/issues/5472
     x = np.arange(60.0).reshape(3, 4, 5)
@@ -400,6 +411,7 @@ def test_tensordot_double_contraction_ngt2():
     assert_eq(da.tensordot(u, v, axes=2), np.tensordot(x, y, axes=2))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tensordot_more_than_26_dims():
     ndim = 27
     x = np.broadcast_to(1, [2] * ndim)
@@ -407,6 +419,7 @@ def test_tensordot_more_than_26_dims():
     assert_eq(da.tensordot(dx, dx, ndim), np.array(2**ndim))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_dot_method():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 5))
@@ -416,6 +429,7 @@ def test_dot_method():
     assert_eq(a.dot(b), x.dot(y))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_dot_persist_equivalence():
     # Regression test for https://github.com/dask/dask/issues/6907
     x = da.random.default_rng().random((4, 4), chunks=(2, 2))
@@ -430,6 +444,7 @@ def test_dot_persist_equivalence():
 
 
 @pytest.mark.parametrize("shape, chunks", [((20,), (6,)), ((4, 5), (2, 3))])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_vdot(shape, chunks):
     rng = np.random.default_rng(1337)
 
@@ -448,6 +463,7 @@ def test_vdot(shape, chunks):
 
 
 @pytest.mark.parametrize("shape1, shape2", [((20,), (6,)), ((4, 5), (2, 3))])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_outer(shape1, shape2):
     rng = np.random.default_rng(1337)
 
@@ -475,6 +491,7 @@ def test_outer(shape1, shape2):
     "input_shape, axis",
     [[(10, 15, 20), 0], [(10, 15, 20), 1], [(10, 15, 20), 2], [(10, 15, 20), -1]],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape, axis):
     a = np.random.default_rng().integers(0, 10, input_shape)
     d = da.from_array(a, chunks=(len(input_shape) * (5,)))
@@ -520,6 +537,7 @@ def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape
         [(10, 15, 20), (2, 0, 1)],
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_apply_over_axes(func_name, func, shape, axes):
     a = np.random.default_rng().integers(0, 10, shape)
     d = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -537,6 +555,7 @@ def test_apply_over_axes(func_name, func, shape, axes):
         [(10, 15, 20), -1],
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ptp(shape, axis):
     a = np.random.default_rng().integers(0, 10, shape)
     d = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -549,6 +568,7 @@ def test_ptp(shape, axis):
     [[(10, 15, 20), 0], [(10, 15, 20), 1], [(10, 15, 20), 2], [(10, 15, 20), -1]],
 )
 @pytest.mark.parametrize("n", [0, 1, 2])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_diff(shape, n, axis):
     x = np.random.default_rng().integers(0, 10, shape)
     a = da.from_array(x, chunks=(len(shape) * (5,)))
@@ -557,6 +577,7 @@ def test_diff(shape, n, axis):
 
 
 @pytest.mark.parametrize("n", [0, 1, 2])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_diff_prepend(n):
     x = np.arange(5) + 1
     a = da.from_array(x, chunks=2)
@@ -585,6 +606,7 @@ def test_diff_prepend(n):
 
 
 @pytest.mark.parametrize("n", [0, 1, 2])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_diff_append(n):
     x = np.arange(5) + 1
     a = da.from_array(x, chunks=2)
@@ -612,6 +634,7 @@ def test_diff_append(n):
             da.diff(a, n, append=np.zeros((3, 3)))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_diff_negative_order():
     with pytest.raises(ValueError):
         da.diff(da.arange(10), -1)
@@ -619,6 +642,7 @@ def test_diff_negative_order():
 
 @pytest.mark.parametrize("shape", [(10,), (10, 15)])
 @pytest.mark.parametrize("to_end, to_begin", [[None, None], [0, 0], [[1, 2], [3, 4]]])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ediff1d(shape, to_end, to_begin):
     x = np.random.default_rng().integers(0, 10, shape)
     a = da.from_array(x, chunks=(len(shape) * (5,)))
@@ -643,6 +667,7 @@ def test_ediff1d(shape, to_end, to_begin):
     ],
 )
 @pytest.mark.parametrize("edge_order", [1, 2])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_gradient(shape, varargs, axis, edge_order):
     a = np.random.default_rng().integers(0, 10, shape)
     d_a = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -663,6 +688,7 @@ def test_gradient(shape, varargs, axis, edge_order):
         )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_bincount():
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
@@ -686,6 +712,7 @@ def test_bincount():
         np.array([1, 2, 1, 0, 1], dtype=np.int32),
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_bincount_with_weights(weights):
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
@@ -696,6 +723,7 @@ def test_bincount_with_weights(weights):
     assert same_keys(da.bincount(d, weights=dweights, minlength=6), e)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_bincount_unspecified_minlength():
     x = np.array([1, 1, 3, 7, 0])
     d = da.from_array(x, chunks=2)
@@ -705,6 +733,7 @@ def test_bincount_unspecified_minlength():
     assert len(e.compute()) == 8  # shape is (nan,) so must compute for len()
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_digitize():
     x = np.array([2, 4, 5, 6, 1])
     bins = np.array([1, 2, 3, 4, 5])
@@ -738,6 +767,7 @@ def test_digitize():
     ],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_searchsorted(a, a_chunks, v, v_chunks, side):
     a = np.array(a)
     v = np.array(v)
@@ -757,6 +787,7 @@ def test_searchsorted_sorter_not_implemented():
         da.searchsorted(da.asarray([1, 0]), da.asarray([1]), sorter=da.asarray([1, 0]))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram():
     # Test for normal, flattened input
     n = 100
@@ -772,6 +803,7 @@ def test_histogram():
     assert same_keys(da.histogram(v, bins=bins)[0], a1)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_alternative_bins_range():
     v = da.random.default_rng().random(100, chunks=10)
     (a1, b1) = da.histogram(v, bins=10, range=(0, 1))
@@ -780,6 +812,7 @@ def test_histogram_alternative_bins_range():
     assert_eq(b1, b2)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_bins_range_with_nan_array():
     # Regression test for issue #3977
     v = da.from_array(np.array([-2, np.nan, 2]), chunks=1)
@@ -789,6 +822,7 @@ def test_histogram_bins_range_with_nan_array():
     assert_eq(b1, b2)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_return_type():
     v = da.random.default_rng().random(100, chunks=10)
     bins = np.arange(0, 1.01, 0.01)
@@ -797,6 +831,7 @@ def test_histogram_return_type():
     assert_eq(da.histogram(v * 10, bins=bins)[0], np.histogram(v * 10, bins=bins)[0])
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_extra_args_and_shapes():
     # Check for extra args and shapes
     bins = np.arange(0, 1.01, 0.01)
@@ -829,6 +864,7 @@ def test_histogram_extra_args_and_shapes():
         )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_normed_deprecation():
     x = da.arange(10)
     with pytest.raises(ValueError) as info:
@@ -854,6 +890,7 @@ def test_histogram_normed_deprecation():
         (da.array([[0, 1, 2]]), None),
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_bin_range_raises(bins, hist_range):
     data = da.random.default_rng().random(10, chunks=2)
     with pytest.raises((ValueError, TypeError)) as info:
@@ -866,6 +903,7 @@ def test_histogram_bin_range_raises(bins, hist_range):
 @pytest.mark.parametrize("weighted", [True, False])
 @pytest.mark.parametrize("non_delayed_i", [None, 0])
 @pytest.mark.parametrize("delay_n_bins", [False, True])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_delayed_range(density, weighted, non_delayed_i, delay_n_bins):
     n = 100
     v = np.random.default_rng().random(n)
@@ -900,6 +938,7 @@ def test_histogram_delayed_range(density, weighted, non_delayed_i, delay_n_bins)
 
 @pytest.mark.parametrize("density", [True, False])
 @pytest.mark.parametrize("weighted", [True, False])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_delayed_bins(density, weighted):
     n = 100
     v = np.random.default_rng().random(n)
@@ -936,6 +975,7 @@ def test_histogram_delayed_bins(density, weighted):
     assert_eq(bins_d2, bins, check_graph=False)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_delayed_n_bins_raises_with_density():
     data = da.random.default_rng().random(10, chunks=2)
     with pytest.raises(
@@ -947,6 +987,7 @@ def test_histogram_delayed_n_bins_raises_with_density():
 @pytest.mark.parametrize("weights", [True, False])
 @pytest.mark.parametrize("density", [True, False])
 @pytest.mark.parametrize("bins", [(5, 6), 5])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram2d(weights, density, bins):
     rng = da.random.default_rng()
     n = 800
@@ -979,6 +1020,7 @@ def test_histogram2d(weights, density, bins):
 
 @pytest.mark.parametrize("weights", [True, False])
 @pytest.mark.parametrize("density", [True, False])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram2d_array_bins(weights, density):
     rng = da.random.default_rng()
     n = 800
@@ -1009,6 +1051,7 @@ def test_histogram2d_array_bins(weights, density):
     assert a1.compute().shape == a3.shape
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd():
     n1, n2 = 800, 3
     x = da.random.default_rng().uniform(0, 1, size=(n1, n2), chunks=(200, 3))
@@ -1024,6 +1067,7 @@ def test_histogramdd():
     assert a1.compute().shape == a3.shape
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_seq_of_arrays():
     rng = da.random.default_rng()
     n1 = 800
@@ -1038,6 +1082,7 @@ def test_histogramdd_seq_of_arrays():
     assert_eq(a1, a3)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_alternative_bins_range():
     # test for normal input
     n1, n2 = 600, 3
@@ -1061,6 +1106,7 @@ def test_histogramdd_alternative_bins_range():
     assert same_keys(da.histogramdd(x, bins=bins, range=ranges)[0], a1)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_weighted():
     rng = da.random.default_rng()
     # test for normal input
@@ -1082,6 +1128,7 @@ def test_histogramdd_weighted():
     assert_eq(a1, a3)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_density():
     n1, n2 = 800, 3
     x = da.random.default_rng().uniform(0, 1, size=(n1, n2), chunks=(200, 3))
@@ -1096,6 +1143,7 @@ def test_histogramdd_density():
     assert same_keys(da.histogramdd(x, bins=bins, density=True)[0], a1)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_weighted_density():
     rng = da.random.default_rng()
     n1, n2 = 1200, 4
@@ -1110,6 +1158,7 @@ def test_histogramdd_weighted_density():
     assert_eq(a1, a3)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raises_incompat_sample_chunks():
     data = da.random.default_rng().random(size=(10, 3), chunks=(5, 1))
     with pytest.raises(
@@ -1118,6 +1167,7 @@ def test_histogramdd_raises_incompat_sample_chunks():
         da.histogramdd(data, bins=10, range=((0, 1),) * 3)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raises_incompat_multiarg_chunks():
     rng = da.random.default_rng()
     x = rng.random(size=(10,), chunks=2)
@@ -1129,6 +1179,7 @@ def test_histogramdd_raises_incompat_multiarg_chunks():
         da.histogramdd((x, y, z), bins=(3,) * 3, range=((0, 1),) * 3)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raises_incompat_weight_chunks():
     rng = da.random.default_rng()
     x = rng.random(size=(10,), chunks=2)
@@ -1147,6 +1198,7 @@ def test_histogramdd_raises_incompat_weight_chunks():
         da.histogramdd(z, bins=(3,) * 2, range=((0, 1),) * 2, weights=w)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raises_incompat_bins_or_range():
     data = da.random.default_rng().random(size=(10, 4), chunks=(5, 4))
     bins = (2, 3, 4, 5)
@@ -1176,6 +1228,7 @@ def test_histogramdd_raises_incompat_bins_or_range():
         da.histogramdd(data, bins=bins, range=((0, 1), (0, 1, 2), 3, 5))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raise_normed_and_density():
     data = da.random.default_rng().random(size=(10, 3), chunks=(5, 3))
     bins = (4, 5, 6)
@@ -1184,6 +1237,7 @@ def test_histogramdd_raise_normed_and_density():
         da.histogramdd(data, bins=bins, range=ranges, normed=True, density=True)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raise_incompat_shape():
     # 1D
     data = da.random.default_rng().random(size=(10,), chunks=(2,))
@@ -1199,6 +1253,7 @@ def test_histogramdd_raise_incompat_shape():
         da.histogramdd(data, bins=4, range=((-3, 3),))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_edges():
     data = da.random.default_rng().random(size=(10, 3), chunks=(5, 3))
     edges = [
@@ -1218,6 +1273,7 @@ def test_histogramdd_edges():
         assert_eq(ib1, ib2)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_cov():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(4, 4))
@@ -1243,6 +1299,7 @@ def test_cov():
 @pytest.mark.skipif(
     not NUMPY_GE_220, reason="fweights is not an kwarg prior to numpy 2.2"
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_cov_fweights():
     x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
     res1 = da.array([[1.0, -1.0], [-1.0, 1.0]])
@@ -1272,6 +1329,7 @@ def test_cov_fweights():
 @pytest.mark.skipif(
     not NUMPY_GE_220, reason="aweights is not an kwarg prior to numpy 2.2"
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_cov_aweights():
     x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
     res1 = da.array([[1.0, -1.0], [-1.0, 1.0]])
@@ -1307,6 +1365,7 @@ def test_cov_aweights():
 @pytest.mark.skipif(
     not NUMPY_GE_220, reason="fweights and aweights are not kwargs prior to numpy 2.2"
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_cov_fweights_aweights_combined():
     x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
 
@@ -1326,6 +1385,7 @@ def test_cov_fweights_aweights_combined():
     assert not allclose(result, result_a_only)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_corrcoef():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(4, 4))
@@ -1348,6 +1408,7 @@ def test_corrcoef():
             assert_eq(da.corrcoef(d, rowvar=False), np.corrcoef(x, rowvar=False))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_round():
     x = np.random.default_rng().random(10)
     d = da.from_array(x, chunks=4)
@@ -1361,6 +1422,7 @@ def test_round():
 @pytest.mark.parametrize("return_index", [False, True])
 @pytest.mark.parametrize("return_inverse", [False, True])
 @pytest.mark.parametrize("return_counts", [False, True])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_unique_kwargs(return_index, return_inverse, return_counts):
     kwargs = dict(
         return_index=return_index,
@@ -1396,6 +1458,7 @@ def test_unique_kwargs(return_index, return_inverse, return_counts):
     "shape, chunks",
     [[(10,), (5,)], [(10,), (3,)], [(4, 5), (3, 2)], [(20, 20), (4, 5)]],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_unique_rand(seed, shape, chunks):
     rng = np.random.default_rng(seed)
 
@@ -1422,6 +1485,7 @@ def test_unique_rand(seed, shape, chunks):
     [[(10,), (5,)], [(10,), (3,)], [(4, 5), (3, 2)], [(20, 20), (4, 5)]],
 )
 @pytest.mark.parametrize("invert", [True, False])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isin_rand(
     seed, low, high, elements_shape, elements_chunks, test_shape, test_chunks, invert
 ):
@@ -1441,6 +1505,7 @@ def test_isin_rand(
 
 
 @pytest.mark.parametrize("assume_unique", [True, False])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isin_assume_unique(assume_unique):
     a1 = np.arange(10)
     d1 = da.from_array(a1, chunks=(5,))
@@ -1461,6 +1526,7 @@ def _maybe_len(l):
 @pytest.mark.parametrize("chunks", [(4, 6), (2, 6)])
 @pytest.mark.parametrize("shift", [3, 7, 9, (3, 9), (7, 2)])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1, (0, 1), (1, 0)])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_roll(chunks, shift, axis):
     x = np.random.default_rng().integers(10, size=(4, 6))
     a = da.from_array(x, chunks=chunks)
@@ -1472,12 +1538,14 @@ def test_roll(chunks, shift, axis):
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_roll_always_results_in_a_new_array():
     x = da.arange(2, 3)
     y = da.roll(x, 1)
     assert y is not x
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_roll_works_even_if_shape_is_0():
     expected = np.roll(np.zeros(0), 0)
     actual = da.roll(da.zeros(0), 0)
@@ -1485,6 +1553,7 @@ def test_roll_works_even_if_shape_is_0():
 
 
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_shape_and_ndim(shape):
     x = da.random.default_rng().random(shape)
     assert np.shape(x) == shape
@@ -1497,6 +1566,7 @@ def test_shape_and_ndim(shape):
     "shape", [((12,), (12,)), ((4, 3), (3, 4)), ((12,), (1, 6, 2))]
 )
 @pytest.mark.parametrize("reverse", [True, False])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_union1d(shape, reverse):
     s1, s2 = shape
     x1 = np.arange(12).reshape(s1)
@@ -1516,6 +1586,7 @@ def test_union1d(shape, reverse):
     assert_eq(result, expected)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel():
     x = np.random.default_rng().integers(10, size=(4, 6))
 
@@ -1542,6 +1613,7 @@ def test_ravel():
     assert_eq(np.ravel(x), da.ravel(a))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_1D_no_op():
     x = np.random.default_rng().integers(10, size=100)
     dx = da.from_array(x, chunks=10)
@@ -1551,6 +1623,7 @@ def test_ravel_1D_no_op():
     assert_eq(dx[dx > 2].ravel(), x[x > 2].ravel())
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_with_array_like():
     # int
     assert_eq(np.ravel(0), da.ravel(0))
@@ -1570,6 +1643,7 @@ def test_ravel_with_array_like():
 
 
 @pytest.mark.parametrize("axis", [None, 0, 1, -1, (0, 1), (0, 2), (1, 2), 2])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_expand_dims(axis):
     a = np.arange(10)
     d = da.from_array(a, chunks=(3,))
@@ -1626,6 +1700,7 @@ def test_squeeze_1d_array(shape):
     assert_eq(d_s, a_s)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_vstack():
     x = np.arange(5)
     y = np.ones(5)
@@ -1636,6 +1711,7 @@ def test_vstack():
     assert_eq(np.vstack((x, y[None, :])), da.vstack((a, b[None, :])))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_hstack():
     x = np.arange(5)
     y = np.ones(5)
@@ -1646,6 +1722,7 @@ def test_hstack():
     assert_eq(np.hstack((x, y)), da.hstack((a, b)))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_dstack():
     x = np.arange(5)
     y = np.ones(5)
@@ -1664,6 +1741,7 @@ def test_dstack():
     "np_func,dsk_func,nan_chunk",
     [(np.hstack, da.hstack, 0), (np.dstack, da.dstack, 1), (np.vstack, da.vstack, 2)],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_stack_unknown_chunk_sizes(np_func, dsk_func, nan_chunk):
     shape = (100, 100, 100)
     x = da.ones(shape, chunks=(50, 50, 50))
@@ -1681,6 +1759,7 @@ def test_stack_unknown_chunk_sizes(np_func, dsk_func, nan_chunk):
     assert_eq(np_stacked, dsk_stacked)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_take():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 5))
@@ -1694,6 +1773,7 @@ def test_take():
     assert same_keys(da.take(a, [3, 4, 5], axis=-1), da.take(a, [3, 4, 5], axis=-1))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_take_large():
     a = da.arange(1_000_000_000_000, chunks=(200_000_000,), dtype="int64")
 
@@ -1704,6 +1784,7 @@ def test_take_large():
     assert_eq(da.take(a, x, axis=0), x)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_take_dask_from_numpy():
     x = np.arange(5).astype("f8")
     y = da.from_array(np.array([1, 2, 3, 3, 2, 1]), chunks=3)
@@ -1714,6 +1795,7 @@ def test_take_dask_from_numpy():
     assert_eq(z, np.array([2.0, 4.0, 6.0, 6.0, 4.0, 2.0]))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compress():
     x = np.arange(25).reshape((5, 5))
     a = da.from_array(x, chunks=(2, 2))
@@ -1749,6 +1831,7 @@ def test_compress():
         da.compress([[True], [False]], a, axis=100)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_extract():
     x = np.arange(25).reshape((5, 5))
     a = da.from_array(x, chunks=(2, 2))
@@ -1767,6 +1850,7 @@ def test_extract():
             assert np.isnan(res.chunks[0]).all()
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isnull():
     x = np.array([1, np.nan])
     a = da.from_array(x, chunks=(2,))
@@ -1775,6 +1859,7 @@ def test_isnull():
         assert_eq(da.notnull(a), ~(np.isnan(x)))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isnull_result_is_an_array():
     # regression test for https://github.com/dask/dask/issues/3822
     arr = da.from_array(np.arange(3, dtype=np.int64), chunks=-1)
@@ -1783,6 +1868,7 @@ def test_isnull_result_is_an_array():
         assert type(result) is np.ndarray
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isclose():
     x = np.array([0, np.nan, 1, 1.5])
     y = np.array([1e-9, np.nan, 1, 2])
@@ -1791,6 +1877,7 @@ def test_isclose():
     assert_eq(da.isclose(a, b, equal_nan=True), np.isclose(x, y, equal_nan=True))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_allclose():
     n_a = np.array([0, np.nan, 1, 1.5])
     n_b = np.array([1e-9, np.nan, 1, 2])
@@ -1804,6 +1891,7 @@ def test_allclose():
     assert_eq(np.array(n_r)[()], d_r)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_choose():
     # test choose function
     x = np.random.default_rng().integers(10, size=(15, 16))
@@ -1826,6 +1914,7 @@ def test_choose():
     assert_eq(np.choose(indices_np, choices_np), da.choose(indices_da, choices_da))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_piecewise():
     rng = np.random.default_rng(1337)
 
@@ -1838,6 +1927,7 @@ def test_piecewise():
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_piecewise_otherwise():
     rng = np.random.default_rng(1337)
 
@@ -1862,6 +1952,7 @@ def test_piecewise_otherwise():
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_select():
     conditions = [
         np.array([False, False, False, False]),
@@ -1878,6 +1969,7 @@ def test_select():
     assert_eq(np.select(conditions, choices), da.select(d_conditions, d_choices))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_select_multidimension():
     x = np.random.default_rng().random((100, 50, 2))
     y = da.from_array(x, chunks=(50, 50, 1))
@@ -1887,6 +1979,7 @@ def test_select_multidimension():
     assert_eq(res_y, res_x)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_select_return_dtype():
     d = np.array([1, 2, 3, np.nan, 5, 7])
     m = np.isnan(d)
@@ -1906,6 +1999,7 @@ def test_select_broadcasting():
     assert_eq(np.select([True], [0], default=[0]), da.select([True], [0], default=[0]))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_argwhere():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -1917,6 +2011,7 @@ def test_argwhere():
         assert_eq(d_nz, x_nz)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_argwhere_obj():
     x = np.random.default_rng().integers(10, size=(15, 16)).astype(object)
     d = da.from_array(x, chunks=(4, 5))
@@ -1927,6 +2022,7 @@ def test_argwhere_obj():
     assert_eq(d_nz, x_nz)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_argwhere_str():
     # We may have behavior differences with NumPy for strings
     # with just spaces, depending on the version of NumPy.
@@ -1940,6 +2036,7 @@ def test_argwhere_str():
     assert_eq(d_nz, x_nz)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where():
     rng = np.random.default_rng()
     x = rng.integers(10, size=(15, 14))
@@ -1965,6 +2062,7 @@ def test_where():
             assert_eq(w1, w2)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where_scalar_dtype():
     x = np.int32(3)
     y1 = np.array([4, 5, 6], dtype=np.int16)
@@ -1980,6 +2078,7 @@ def test_where_scalar_dtype():
     assert_eq(w3, w4)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where_bool_optimization():
     rng = np.random.default_rng()
     x = rng.integers(10, size=(15, 16))
@@ -1998,6 +2097,7 @@ def test_where_bool_optimization():
         assert w1 is ex_w1
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where_nonzero():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2013,6 +2113,7 @@ def test_where_nonzero():
             assert_eq(d_w[i], x_w[i])
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where_incorrect_args():
     a = da.ones(5, chunks=3)
 
@@ -2024,6 +2125,7 @@ def test_where_incorrect_args():
             assert "either both or neither of x and y should be given" in str(e)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2039,6 +2141,7 @@ def test_count_nonzero():
 
 
 @pytest.mark.parametrize("axis", [None, 0, (1,), (0, 1)])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero_axis(axis):
     for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2053,6 +2156,7 @@ def test_count_nonzero_axis(axis):
             assert_eq(x_c, d_c)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero_obj():
     x = np.random.default_rng().integers(10, size=(15, 16)).astype(object)
     d = da.from_array(x, chunks=(4, 5))
@@ -2067,6 +2171,7 @@ def test_count_nonzero_obj():
 
 
 @pytest.mark.parametrize("axis", [None, 0, (1,), (0, 1)])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero_obj_axis(axis):
     x = np.random.default_rng().integers(10, size=(15, 16)).astype(object)
     d = da.from_array(x, chunks=(4, 5))
@@ -2085,6 +2190,7 @@ def test_count_nonzero_obj_axis(axis):
         assert_eq(x_c.astype(np.intp), d_c)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_count_nonzero_str():
     # We may have behavior differences with NumPy for strings
     # with just spaces, depending on the version of NumPy.
@@ -2098,6 +2204,7 @@ def test_count_nonzero_str():
     assert x_c == d_c.compute()
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_flatnonzero():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2109,6 +2216,7 @@ def test_flatnonzero():
         assert_eq(d_fnz, x_fnz)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_nonzero():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2124,6 +2232,7 @@ def test_nonzero():
             assert_eq(d_nz[i], x_nz[i])
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_nonzero_method():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2139,6 +2248,7 @@ def test_nonzero_method():
             assert_eq(d_nz[i], x_nz[i])
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_unravel_index_empty():
     shape = tuple()
     findices = np.array(0, dtype=int)
@@ -2151,6 +2261,7 @@ def test_unravel_index_empty():
     assert len(d_indices) == len(indices) == 0
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_unravel_index():
     rng = np.random.default_rng()
     for nindices, shape, order in [
@@ -2211,6 +2322,7 @@ def test_unravel_index():
         ([1, [2, 3], [[1, 2], [3, 4], [5, 6], [7, 8]]], None, dict(dims=(8, 9, 10))),
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index(asarray, arr, chunks, kwargs):
     if any(np.isscalar(x) for x in arr) and asarray in (np.asarray, da.from_array):
         pytest.skip()
@@ -2227,6 +2339,7 @@ def test_ravel_multi_index(asarray, arr, chunks, kwargs):
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index_unknown_shape():
     multi_index = da.from_array([[3, 6, 6], [4, 5, 1], [-1, -1, -1]])
     multi_index = multi_index[(multi_index > 0).all(axis=1)]
@@ -2240,6 +2353,7 @@ def test_ravel_multi_index_unknown_shape():
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index_unknown_shape_fails():
     multi_index1 = da.from_array([2, -1, 3, -1], chunks=2)
     multi_index1 = multi_index1[multi_index1 > 0]
@@ -2259,11 +2373,13 @@ def test_ravel_multi_index_unknown_shape_fails():
 
 @pytest.mark.parametrize("dims", [da.from_array([5, 10]), delayed([5, 10], nout=2)])
 @pytest.mark.parametrize("wrap_in_list", [False, True])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index_delayed_dims(dims, wrap_in_list):
     with pytest.raises(NotImplementedError, match="Dask types are not supported"):
         da.ravel_multi_index((2, 1), [dims[0], dims[1]] if wrap_in_list else dims)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index_non_int_dtype():
     with pytest.raises(TypeError, match="only int indices permitted"):
         da.ravel_multi_index(
@@ -2272,6 +2388,7 @@ def test_ravel_multi_index_non_int_dtype():
         )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_coarsen():
     x = np.random.default_rng().integers(10, size=(24, 24))
     d = da.from_array(x, chunks=(4, 8))
@@ -2288,6 +2405,7 @@ def test_coarsen():
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_coarsen_with_excess():
     x = da.arange(10, chunks=5)
     assert_eq(da.coarsen(np.min, x, {0: 5}, trim_excess=True), np.array([0, 5]))
@@ -2298,6 +2416,7 @@ def test_coarsen_with_excess():
 
 
 @pytest.mark.parametrize("chunks", [(x,) * 3 for x in range(16, 32)])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_coarsen_bad_chunks(chunks):
     x1 = da.arange(np.sum(chunks), chunks=5)
     x2 = x1.rechunk(tuple(chunks))
@@ -2346,6 +2465,7 @@ def test_aligned_coarsen_chunks(chunks, divisor):
         assert any_remainders[-1] == 1
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_insert():
     rng = np.random.default_rng()
     x = rng.integers(10, size=(10, 10))
@@ -2386,6 +2506,7 @@ def test_insert():
         da.insert(a, [3], -1, axis=-3)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_append():
     rng = np.random.default_rng()
     x = rng.integers(10, size=(10, 10))
@@ -2435,6 +2556,7 @@ def test_append():
         da.append(a, (0,) * 10, axis=0)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_multi_insert():
     z = np.random.default_rng().integers(10, size=(1, 2))
     c = da.from_array(z, chunks=(1, 2))
@@ -2444,6 +2566,7 @@ def test_multi_insert():
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_delete():
     x = np.random.default_rng().integers(10, size=(10, 10))
     a = da.from_array(x, chunks=(5, 5))
@@ -2471,6 +2594,7 @@ def test_delete():
         da.delete(a, [3], axis=-3)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_result_type():
     a = da.from_array(np.ones(5, np.float32), chunks=(3,))
     b = da.from_array(np.ones(5, np.int16), chunks=(3,))
@@ -2574,6 +2698,7 @@ def _numpy_and_dask_inputs(input_sigs):
         "fff,fae,bef,def->abd",
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum(einsum_signature):
     input_sigs = einsum_signature.split("->")[0].replace("...", "*").split(",")
 
@@ -2587,6 +2712,7 @@ def test_einsum(einsum_signature):
         )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_chunksizes():
     arr1 = da.random.random((1024, 8, 8, 8, 8), chunks=(256, 8, 8, 8, 8))
     arr2 = da.random.random((1024, 8, 8, 8, 8), chunks=(256, 8, 8, 8, 8))
@@ -2635,6 +2761,7 @@ def test_einsum_chunksizes():
 @pytest.mark.parametrize(
     "optimize_opts", [(True, False), ("greedy", False), ("optimal", False)]
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_optimize(optimize_opts):
     sig = "ea,fb,abcd,gc,hd->efgh"
     input_sigs = sig.split("->")[0].split(",")
@@ -2654,6 +2781,7 @@ def test_einsum_optimize(optimize_opts):
 
 
 @pytest.mark.parametrize("order", ["C", "F", "A", "K"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_order(order):
     sig = "ea,fb,abcd,gc,hd->efgh"
     input_sigs = sig.split("->")[0].split(",")
@@ -2665,6 +2793,7 @@ def test_einsum_order(order):
 
 
 @pytest.mark.parametrize("casting", ["no", "equiv", "safe", "same_kind", "unsafe"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_casting(casting):
     sig = "ea,fb,abcd,gc,hd->efgh"
     input_sigs = sig.split("->")[0].split(",")
@@ -2677,6 +2806,7 @@ def test_einsum_casting(casting):
 
 
 @pytest.mark.parametrize("split_every", [None, 2])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_split_every(split_every):
     np_inputs, da_inputs = _numpy_and_dask_inputs("a")
     assert_eq(
@@ -2684,12 +2814,14 @@ def test_einsum_split_every(split_every):
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_invalid_args():
     _, da_inputs = _numpy_and_dask_inputs("a")
     with pytest.raises(TypeError):
         da.einsum("a", *da_inputs, foo=1, bar=2)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_broadcasting_contraction():
     rng = np.random.default_rng()
     a = rng.random((1, 5, 4))
@@ -2714,6 +2846,7 @@ def test_einsum_broadcasting_contraction():
     assert_eq(np_res, mul_res)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_broadcasting_contraction2():
     rng = np.random.default_rng()
     a = rng.random((1, 1, 5, 4))
@@ -2738,6 +2871,7 @@ def test_einsum_broadcasting_contraction2():
     assert_eq(np_res, mul_res)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_broadcasting_contraction3():
     rng = np.random.default_rng()
     a = rng.random((1, 5, 4))
@@ -2755,6 +2889,7 @@ def test_einsum_broadcasting_contraction3():
     assert_eq(np_res, da_res)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_empty_dimension():
     arr = np.random.random((10, 10))
     darr = da.from_array(arr, chunks=(5, 5))
@@ -2765,6 +2900,7 @@ def test_einsum_empty_dimension():
 
 @pytest.mark.parametrize("a", [np.arange(11), np.arange(6).reshape((3, 2))])
 @pytest.mark.parametrize("returned", [True, False])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_average(a, returned):
     d_a = da.from_array(a, chunks=2)
 
@@ -2775,6 +2911,7 @@ def test_average(a, returned):
 
 
 @pytest.mark.parametrize("a", [np.arange(11), np.arange(6).reshape((3, 2))])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_average_keepdims(a):
     d_a = da.from_array(a, chunks=2)
 
@@ -2785,6 +2922,7 @@ def test_average_keepdims(a):
 
 
 @pytest.mark.parametrize("keepdims", [False, True])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_average_weights(keepdims):
     a = np.arange(6).reshape((3, 2))
     d_a = da.from_array(a, chunks=2)
@@ -2797,6 +2935,7 @@ def test_average_weights(keepdims):
     assert_eq(da_avg, np.average(a, weights=weights, axis=1, keepdims=keepdims))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_average_raises():
     d_a = da.arange(11, chunks=2)
 
@@ -2807,6 +2946,7 @@ def test_average_raises():
         da.average(d_a, weights=da.zeros_like(d_a)).compute()
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_iscomplexobj():
     a = da.from_array(np.array([1, 2]), 2)
     assert np.iscomplexobj(a) is False
@@ -2815,6 +2955,7 @@ def test_iscomplexobj():
     assert np.iscomplexobj(a) is True
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tril_triu():
     A = np.random.default_rng().standard_normal((20, 20))
     for chk in [5, 4]:
@@ -2851,12 +2992,14 @@ def test_tril_triu():
             assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tril_ndims():
     A = np.random.default_rng().integers(0, 11, (10, 10, 10))
     dA = da.from_array(A, chunks=(5, 5, 5))
     assert_eq(da.triu(dA), np.triu(A))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tril_triu_non_square_arrays():
     A = np.random.default_rng().integers(0, 11, (30, 35))
     dA = da.from_array(A, chunks=(5, 5))
@@ -2868,6 +3011,7 @@ def test_tril_triu_non_square_arrays():
     "n, k, m, chunks",
     [(3, 0, 3, "auto"), (3, 1, 3, "auto"), (3, -1, 3, "auto"), (5, 0, 5, 1)],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tril_triu_indices(n, k, m, chunks):
     actual = da.tril_indices(n=n, k=k, m=m, chunks=chunks)[0]
     expected = np.tril_indices(n=n, k=k, m=m)[0]
@@ -2892,6 +3036,7 @@ def test_tril_triu_indices(n, k, m, chunks):
         assert_eq(actual, expected)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_pickle_vectorized_routines():
     """Test that graphs that internally use np.vectorize can be pickled"""
     a = da.from_array(["foo", "bar", ""])
