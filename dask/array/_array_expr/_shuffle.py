@@ -53,7 +53,7 @@ class Shuffle(ArrayExpr):
 
     @functools.cached_property
     def _name(self):
-        return f"{self.operand('name')}-{self._token}"
+        return f"{self.operand('name')}-{self.deterministic_token}"
 
     @functools.cached_property
     def chunks(self):

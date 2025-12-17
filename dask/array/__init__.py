@@ -674,6 +674,7 @@ if _array_expr_enabled():
             cbrt,
             ceil,
             clip,
+            compress,
             concatenate,
             conj,
             copysign,
@@ -708,6 +709,7 @@ if _array_expr_enabled():
             full_like,
             greater,
             greater_equal,
+            gradient,
             gufunc,
             hypot,
             i0,
@@ -765,6 +767,7 @@ if _array_expr_enabled():
             right_shift,
             rint,
             roll,
+            searchsorted,
             sign,
             signbit,
             sin,
@@ -857,7 +860,6 @@ if _array_expr_enabled():
         bincount = raise_not_implemented_error("bincount")
         choose = raise_not_implemented_error("choose")
         coarsen = raise_not_implemented_error("coarsen")
-        compress = raise_not_implemented_error("compress")
         corrcoef = raise_not_implemented_error("corrcoef")
         count_nonzero = raise_not_implemented_error("count_nonzero")
         cov = raise_not_implemented_error("cov")
@@ -871,7 +873,6 @@ if _array_expr_enabled():
         flip = raise_not_implemented_error("flip")
         fliplr = raise_not_implemented_error("fliplr")
         flipud = raise_not_implemented_error("flipud")
-        gradient = raise_not_implemented_error("gradient")
         histogram = raise_not_implemented_error("histogram")
         histogram2d = raise_not_implemented_error("histogram2d")
         histogramdd = raise_not_implemented_error("histogramdd")
@@ -889,7 +890,6 @@ if _array_expr_enabled():
         result_type = raise_not_implemented_error("result_type")
         rot90 = raise_not_implemented_error("rot90")
         round = raise_not_implemented_error("round")
-        searchsorted = raise_not_implemented_error("searchsorted")
         select = raise_not_implemented_error("select")
         shape = raise_not_implemented_error("shape")
         swapaxes = raise_not_implemented_error("swapaxes")

@@ -23,7 +23,7 @@ The array-expr system has foundational infrastructure in place:
 - Linear algebra: tensordot, matmul, dot, vdot
 - Reductions: argmin, argmax, nanargmin, nanargmax, cumsum, cumprod, nancumsum, nancumprod
 - Shape manipulation: ravel, flatten, expand_dims, atleast_*d, broadcast_to, roll
-- Routines: diff
+- Routines: diff, gradient, compress, searchsorted
 
 ## Testing Infrastructure
 
@@ -94,11 +94,11 @@ General array routines.
 | where | `_collection.py` | Conditional select | **Done** |
 | unique | `routines.py` | Deduplication | Not started |
 | diff | `_collection.py` | Differences | **Done** |
-| gradient | `routines.py` | Numerical gradient | Not started |
+| gradient | `_routines.py` | Numerical gradient (uses map_overlap) | **Done** |
 | histogram | `routines.py` | Binning | Not started |
-| searchsorted | `routines.py` | Binary search | Not started |
+| searchsorted | `_routines.py` | Binary search | **Done** |
 | insert/delete | `routines.py` | Array modification | Not started |
-| compress | `routines.py` | Boolean select | Not started |
+| compress | `_routines.py` | Boolean select (partial - dask array conditions need boolean indexing) | **Done** |
 
 ### Tier 7: Advanced
 Lower priority advanced operations.
