@@ -115,7 +115,6 @@ def test_atleast_nd_two_args(funcname, shape1, shape2):
         assert_eq(np_r, da_r)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_transpose():
     x = np.arange(240).reshape((4, 6, 10))
     d = da.from_array(x, (2, 3, 4))
@@ -140,7 +139,6 @@ def test_transpose_negative_axes():
     assert_eq(x.transpose([-1, -2, 0, 1]), y.transpose([-1, -2, 0, 1]))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_transpose_skip_when_possible():
     x = da.ones((2, 3, 4), chunks=3)
     assert x.transpose((0, 1, 2)) is x
