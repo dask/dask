@@ -495,6 +495,26 @@ class Array(DaskMethodsMixin):
             shape = shape[0]
         return reshape(self, shape, merge_chunks=merge_chunks, limit=limit)
 
+    def flatten(self):
+        """Return a copy of the array collapsed into one dimension.
+
+        Returns
+        -------
+        dask Array
+            A 1-D array with the same data as self.
+        """
+        return reshape(self, (self.size,))
+
+    def ravel(self):
+        """Return a flattened array.
+
+        Returns
+        -------
+        dask Array
+            A 1-D array with the same data as self.
+        """
+        return reshape(self, (self.size,))
+
     def rechunk(
         self,
         chunks="auto",
@@ -694,6 +714,62 @@ class Array(DaskMethodsMixin):
         from dask.array.reductions import max
 
         return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
+
+    def argmin(self, axis=None, *, keepdims=False, split_every=None, out=None):
+        """Return indices of the minimum values along the given axis.
+
+        Refer to :func:`dask.array.argmin` for full documentation.
+
+        See Also
+        --------
+        dask.array.argmin : equivalent function
+        """
+        from dask.array.reductions import argmin
+
+        return argmin(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
+
+    def argmax(self, axis=None, *, keepdims=False, split_every=None, out=None):
+        """Return indices of the maximum values along the given axis.
+
+        Refer to :func:`dask.array.argmax` for full documentation.
+
+        See Also
+        --------
+        dask.array.argmax : equivalent function
+        """
+        from dask.array.reductions import argmax
+
+        return argmax(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
+
+    def cumsum(self, axis, dtype=None, out=None, *, method="sequential"):
+        """Return the cumulative sum of the elements along the given axis.
+
+        Refer to :func:`dask.array.cumsum` for full documentation.
+
+        See Also
+        --------
+        dask.array.cumsum : equivalent function
+        """
+        from dask.array.reductions import cumsum
+
+        return cumsum(self, axis=axis, dtype=dtype, out=out, method=method)
+
+    def cumprod(self, axis, dtype=None, out=None, *, method="sequential"):
+        """Return the cumulative product of the elements along the given axis.
+
+        Refer to :func:`dask.array.cumprod` for full documentation.
+
+        See Also
+        --------
+        dask.array.cumprod : equivalent function
+        """
+        from dask.array.reductions import cumprod
+
+        return cumprod(self, axis=axis, dtype=dtype, out=out, method=method)
 
     def dot(self, other):
         """Dot product of self and other.
