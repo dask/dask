@@ -1715,7 +1715,6 @@ def test_stack_unknown_chunk_sizes(np_func, dsk_func, nan_chunk):
     assert_eq(np_stacked, dsk_stacked)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_take():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 5))
@@ -1729,7 +1728,6 @@ def test_take():
     assert same_keys(da.take(a, [3, 4, 5], axis=-1), da.take(a, [3, 4, 5], axis=-1))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_take_large():
     a = da.arange(1_000_000_000_000, chunks=(200_000_000,), dtype="int64")
 
@@ -1740,7 +1738,6 @@ def test_take_large():
     assert_eq(da.take(a, x, axis=0), x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_take_dask_from_numpy():
     x = np.arange(5).astype("f8")
     y = da.from_array(np.array([1, 2, 3, 3, 2, 1]), chunks=3)

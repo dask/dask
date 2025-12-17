@@ -29,6 +29,7 @@ The array-expr system has foundational infrastructure in place:
 - Simple routines: round/around, isclose, allclose, isnull/notnull, append, count_nonzero
 - Utilities: ndim, shape, result_type, broadcast_arrays, unify_chunks
 - IO: store, to_npy_stack, from_npy_stack, from_delayed
+- Advanced indexing: vindex, take
 
 ## Testing Infrastructure
 
@@ -94,11 +95,11 @@ Complete the indexing story.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| vindex | _slicing.py | Point-wise vectorized indexing | Not started |
-| take | _slicing.py | Index along axis | Not started |
-| nonzero | _routines.py | Returns indices of non-zero elements | Not started |
-| argwhere | _routines.py | Returns indices where condition is true | Not started |
-| flatnonzero | _routines.py | nonzero on flattened array | Not started |
+| vindex | _slicing.py | Point-wise vectorized indexing | **Done** |
+| take | _routines.py | Index along axis | **Done** |
+| nonzero | _routines.py | Returns indices of non-zero elements | Blocked (needs indices) |
+| argwhere | _routines.py | Returns indices where condition is true | Blocked (needs indices) |
+| flatnonzero | _routines.py | nonzero on flattened array | Blocked (needs indices) |
 
 ### Tier 6: Creation Functions
 Array construction.

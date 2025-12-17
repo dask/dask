@@ -74,6 +74,7 @@ from dask.array._array_expr._routines import (
     round,
     searchsorted,
     shape,
+    take,
     unify_chunks,
 )
 from dask.array._array_expr._ufunc import *

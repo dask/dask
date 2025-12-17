@@ -3470,7 +3470,6 @@ def test_index_with_integer_types(cls):
     assert_eq(dx[inds], x[inds])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="vindex not implemented")
 def test_vindex_basic():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(3, 4))
@@ -3486,7 +3485,6 @@ def test_vindex_basic():
     assert_eq(result, x[:2, ::-1])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="vindex not implemented")
 def test_vindex_nd():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(3, 4))
@@ -3502,7 +3500,6 @@ def test_vindex_nd():
 
 
 @pytest.mark.parametrize("size", [0, 1])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="vindex not implemented")
 def test_vindex_preserve_chunksize(size):
     np_arr = np.random.rand(10_000 * 40).reshape(100, 100, 40)
     arr = da.from_array(np_arr, chunks=(50, 50, 20))
@@ -3517,7 +3514,6 @@ def test_vindex_preserve_chunksize(size):
     assert_eq(result, np_arr[idx1, idx2, :])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="vindex not implemented")
 def test_vindex_negative():
     x = np.arange(10)
     d = da.from_array(x, chunks=(5, 5))
@@ -3526,7 +3522,6 @@ def test_vindex_negative():
     assert_eq(result, x[np.array([0, -1])])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="vindex not implemented")
 def test_vindex_errors():
     d = da.ones((5, 5, 5), chunks=(3, 3, 3))
     pytest.raises(IndexError, lambda: d.vindex[np.newaxis])
@@ -3550,7 +3545,6 @@ def test_vindex_merge():
     ).all()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="vindex not implemented")
 def test_vindex_identity():
     rng = da.random.default_rng(42)
     a, b = 10, 20
