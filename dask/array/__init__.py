@@ -833,6 +833,22 @@ if _array_expr_enabled():
             var,
         )
 
+        from dask.array._array_expr import (
+            allclose,
+            append,
+            around,
+            broadcast_arrays,
+            count_nonzero,
+            isclose,
+            isnull,
+            ndim,
+            notnull,
+            result_type,
+            round,
+            shape,
+            unify_chunks,
+        )
+
         backends = raise_not_implemented_error("backends")
         fft = raise_not_implemented_error("fft")
         lib = raise_not_implemented_error("lib")
@@ -841,7 +857,6 @@ if _array_expr_enabled():
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
         block = raise_not_implemented_error("block")
-        broadcast_arrays = raise_not_implemented_error("broadcast_arrays")
         from_delayed = raise_not_implemented_error("from_delayed")
         from_npy_stack = raise_not_implemented_error("from_npy_stack")
         from_zarr = raise_not_implemented_error("from_zarr")
@@ -849,7 +864,6 @@ if _array_expr_enabled():
         to_hdf5 = raise_not_implemented_error("to_hdf5")
         to_npy_stack = raise_not_implemented_error("to_npy_stack")
         to_zarr = raise_not_implemented_error("to_zarr")
-        unify_chunks = raise_not_implemented_error("unify_chunks")
         diag = raise_not_implemented_error("diag")
         diagonal = raise_not_implemented_error("diagonal")
         eye = raise_not_implemented_error("eye")
@@ -863,17 +877,13 @@ if _array_expr_enabled():
         argtopk = raise_not_implemented_error("argtopk")
         topk = raise_not_implemented_error("topk")
         trace = raise_not_implemented_error("trace")
-        allclose = raise_not_implemented_error("allclose")
-        append = raise_not_implemented_error("append")
         apply_along_axis = raise_not_implemented_error("apply_along_axis")
         apply_over_axes = raise_not_implemented_error("apply_over_axes")
         argwhere = raise_not_implemented_error("argwhere")
-        around = raise_not_implemented_error("around")
         bincount = raise_not_implemented_error("bincount")
         choose = raise_not_implemented_error("choose")
         coarsen = raise_not_implemented_error("coarsen")
         corrcoef = raise_not_implemented_error("corrcoef")
-        count_nonzero = raise_not_implemented_error("count_nonzero")
         cov = raise_not_implemented_error("cov")
         delete = raise_not_implemented_error("delete")
         digitize = raise_not_implemented_error("digitize")
@@ -884,18 +894,11 @@ if _array_expr_enabled():
         histogram2d = raise_not_implemented_error("histogram2d")
         histogramdd = raise_not_implemented_error("histogramdd")
         insert = raise_not_implemented_error("insert")
-        isclose = raise_not_implemented_error("isclose")
         isin = raise_not_implemented_error("isin")
-        isnull = raise_not_implemented_error("isnull")
-        ndim = raise_not_implemented_error("ndim")
         nonzero = raise_not_implemented_error("nonzero")
-        notnull = raise_not_implemented_error("notnull")
         piecewise = raise_not_implemented_error("piecewise")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
-        result_type = raise_not_implemented_error("result_type")
-        round = raise_not_implemented_error("round")
         select = raise_not_implemented_error("select")
-        shape = raise_not_implemented_error("shape")
         take = raise_not_implemented_error("take")
         tril = raise_not_implemented_error("tril")
         tril_indices = raise_not_implemented_error("tril_indices")

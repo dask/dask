@@ -5,10 +5,20 @@ from numbers import Integral, Real
 
 import numpy as np
 
-from dask.array._array_expr._collection import Array, asarray
+from functools import partial
+
+from dask.array._array_expr._collection import (
+    Array,
+    asarray,
+    asanyarray,
+    concatenate,
+    elemwise,
+    ravel,
+)
 from dask.array._array_expr._overlap import map_overlap
 from dask.array.utils import validate_axis
 from dask.base import is_dask_collection
+from dask.utils import derived_from
 
 
 def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
@@ -337,3 +347,215 @@ def outer(a, b):
     dtype = np.outer(a.dtype.type(), b.dtype.type()).dtype
 
     return blockwise(np.outer, "ij", a, "i", b, "j", dtype=dtype)
+
+
+@derived_from(np)
+def round(a, decimals=0):
+    """Round an array to the given number of decimals."""
+    a = asarray(a)
+    return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
+
+
+@derived_from(np)
+def around(x, decimals=0):
+    """Evenly round to the given number of decimals."""
+    return round(x, decimals=decimals)
+
+
+def _asarray_isnull(values):
+    import pandas as pd
+
+    return np.asarray(pd.isnull(values))
+
+
+def isnull(values):
+    """pandas.isnull for dask arrays"""
+    # eagerly raise ImportError, if pandas isn't available
+    import pandas as pd  # noqa: F401
+
+    return elemwise(_asarray_isnull, values, dtype="bool")
+
+
+def notnull(values):
+    """pandas.notnull for dask arrays"""
+    return ~isnull(values)
+
+
+@derived_from(np)
+def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
+    """Returns a boolean array where two arrays are element-wise equal within a tolerance."""
+    func = partial(np.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    return elemwise(func, arr1, arr2, dtype="bool")
+
+
+@derived_from(np)
+def allclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
+    """Returns True if two arrays are element-wise equal within a tolerance."""
+    return isclose(arr1, arr2, rtol=rtol, atol=atol, equal_nan=equal_nan).all()
+
+
+@derived_from(np)
+def append(arr, values, axis=None):
+    """Append values to the end of an array."""
+    arr = asanyarray(arr)
+    if axis is None:
+        if arr.ndim != 1:
+            arr = ravel(arr)
+        values = ravel(asanyarray(values))
+        axis = arr.ndim - 1
+    return concatenate((arr, values), axis=axis)
+
+
+def _isnonzero_vec(v):
+    return bool(np.count_nonzero(v))
+
+
+_isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
+
+
+def _isnonzero(a):
+    # Output of np.vectorize can't be pickled
+    return _isnonzero_vec(a)
+
+
+def isnonzero(a):
+    """Handle special cases where conversion to bool does not work correctly.
+    xref: https://github.com/numpy/numpy/issues/9479
+    """
+    try:
+        np.zeros([], dtype=a.dtype).astype(bool)
+    except ValueError:
+        return a.map_blocks(_isnonzero, dtype=bool)
+    else:
+        return a.astype(bool)
+
+
+@derived_from(np)
+def count_nonzero(a, axis=None):
+    """Counts the number of non-zero values in the array."""
+    return isnonzero(asarray(a)).astype(np.intp).sum(axis=axis)
+
+
+@derived_from(np)
+def ndim(a):
+    """Return the number of dimensions of an array."""
+    a = asarray(a)
+    return a.ndim
+
+
+@derived_from(np)
+def shape(a):
+    """Return the shape of an array."""
+    a = asarray(a)
+    return a.shape
+
+
+def result_type(*arrays_and_dtypes):
+    """Returns the type that results from applying the NumPy type promotion rules."""
+    args = []
+    for a in arrays_and_dtypes:
+        if isinstance(a, Array):
+            args.append(a.dtype)
+        else:
+            args.append(a)
+    return np.result_type(*args)
+
+
+def unify_chunks(*args, **kwargs):
+    """
+    Unify chunks across a sequence of arrays
+
+    This utility function is used within other common operations like
+    :func:`dask.array.core.map_blocks` and :func:`dask.array.core.blockwise`.
+    It is not commonly used by end-users directly.
+
+    Parameters
+    ----------
+    *args: sequence of Array, index pairs
+        Sequence like (x, 'ij', y, 'jk', z, 'i')
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.ones(10, chunks=((5, 2, 3),))
+    >>> y = da.ones(10, chunks=((2, 3, 5),))
+    >>> chunkss, arrays = unify_chunks(x, 'i', y, 'i')
+    >>> chunkss
+    {'i': (2, 3, 2, 3)}
+
+    Returns
+    -------
+    chunkss : dict
+        Map like {index: chunks}.
+    arrays : list
+        List of rechunked arrays.
+    """
+    from dask._collections import new_collection
+    from dask.array._array_expr._expr import unify_chunks_expr
+    from toolz import partition
+
+    if not args:
+        return {}, []
+
+    arginds = [
+        (asanyarray(a) if ind is not None else a, ind) for a, ind in partition(2, args)
+    ]
+
+    arrays, inds = zip(*arginds)
+    if all(ind is None for ind in inds):
+        return {}, list(arrays)
+
+    # Convert to expression-level args
+    expr_args = []
+    for a, ind in arginds:
+        if ind is not None:
+            expr_args.extend([a.expr, ind])
+        else:
+            expr_args.extend([a, ind])
+
+    chunkss, expr_arrays, _ = unify_chunks_expr(*expr_args)
+
+    # Convert back to collections
+    result_arrays = []
+    for a, orig_a_ind in zip(expr_arrays, arginds):
+        orig_a, ind = orig_a_ind
+        if ind is None:
+            result_arrays.append(orig_a)
+        else:
+            result_arrays.append(new_collection(a))
+
+    return chunkss, result_arrays
+
+
+@derived_from(np)
+def broadcast_arrays(*args, subok=False):
+    """Broadcast any number of arrays against each other."""
+    from dask.array._array_expr._collection import broadcast_to
+    from dask.array.core import broadcast_shapes, broadcast_chunks
+    from dask.array.numpy_compat import NUMPY_GE_200
+    from toolz import concat
+
+    subok = bool(subok)
+
+    to_array = asanyarray if subok else asarray
+    args = tuple(to_array(e) for e in args)
+
+    if not args:
+        if NUMPY_GE_200:
+            return ()
+        return []
+
+    # Unify uneven chunking
+    inds = [list(reversed(range(x.ndim))) for x in args]
+    uc_args = list(concat(zip(args, inds)))
+    _, args = unify_chunks(*uc_args, warn=False)
+
+    shape = broadcast_shapes(*(e.shape for e in args))
+    chunks = broadcast_chunks(*(e.chunks for e in args))
+
+    if NUMPY_GE_200:
+        result = tuple(broadcast_to(e, shape=shape, chunks=chunks) for e in args)
+    else:
+        result = [broadcast_to(e, shape=shape, chunks=chunks) for e in args]
+
+    return result

@@ -1424,7 +1424,6 @@ def test_broadcast_to_chunks():
         broadcast_to(a, (5, 2, 6), chunks=((3, 2), (3,), (3, 3)))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_broadcast_arrays needs work", strict=False)
 def test_broadcast_arrays():
     assert np.broadcast_arrays() == da.broadcast_arrays()
 

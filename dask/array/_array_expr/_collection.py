@@ -528,6 +528,19 @@ class Array(DaskMethodsMixin):
         """
         return reshape(self, (self.size,))
 
+    def round(self, decimals=0):
+        """Return array with each element rounded to the given number of decimals.
+
+        Refer to :func:`dask.array.round` for full documentation.
+
+        See Also
+        --------
+        dask.array.round : equivalent function
+        """
+        from dask.array._array_expr._routines import round
+
+        return round(self, decimals=decimals)
+
     def rechunk(
         self,
         chunks="auto",

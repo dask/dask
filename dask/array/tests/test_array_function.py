@@ -12,10 +12,10 @@ from dask.array.utils import assert_eq
 @pytest.mark.parametrize(
     "func",
     [
-        pytest.param(lambda x: np.append(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="append not implemented")),
+        lambda x: np.append(x, x),
         lambda x: np.concatenate([x, x, x]),
         pytest.param(lambda x: np.cov(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="cov not implemented")),
-        pytest.param(lambda x: np.dot(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dot not implemented")),
+        lambda x: np.dot(x, x),
         pytest.param(lambda x: np.dstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="dstack not implemented")),
         pytest.param(lambda x: np.flip(x, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="flip not implemented")),
         pytest.param(lambda x: np.hstack((x, x)), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="hstack not implemented")),
@@ -29,7 +29,7 @@ from dask.array.utils import assert_eq
         pytest.param(lambda x: np.linalg.norm(x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="linalg not implemented")),
         lambda x: np.min(x),
         lambda x: np.amin(x),
-        pytest.param(lambda x: np.round(x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="round not implemented")),
+        lambda x: np.round(x),
         pytest.param(lambda x: np.insert(x, 0, 3, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="insert not implemented")),
         pytest.param(lambda x: np.delete(x, 0, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="delete not implemented")),
         pytest.param(lambda x: np.select(

@@ -55,5 +55,23 @@ from dask.array._array_expr._map_blocks import map_blocks
 from dask.array._array_expr._overlap import map_overlap, overlap, trim_overlap
 from dask.array._array_expr._reductions import _tree_reduce, arg_reduction, reduction
 from dask.array._array_expr._histogram import histogram
-from dask.array._array_expr._routines import compress, gradient, outer, searchsorted
+from dask.array._array_expr._routines import (
+    allclose,
+    append,
+    around,
+    broadcast_arrays,
+    compress,
+    count_nonzero,
+    gradient,
+    isclose,
+    isnull,
+    ndim,
+    notnull,
+    outer,
+    result_type,
+    round,
+    searchsorted,
+    shape,
+    unify_chunks,
+)
 from dask.array._array_expr._ufunc import *
