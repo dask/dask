@@ -31,163 +31,213 @@ Test modules use whitelist approach (individual xfails rather than module-level 
 
 Exception: `test_dispatch.py` has a module-level skip due to `register_chunk_type` not being implemented.
 
-## Priority Tiers
+## Priority Tiers (Revised)
 
-### Tier 1: Blocking Foundation
-These operations block many others and should be done first.
+### Tier 1: Quick Wins - Stacking & Axis Manipulation
+These are simple wrappers around existing infrastructure. High test-unlocking ratio.
 
-| Operation | Location | Blocker For | Status |
-|-----------|----------|-------------|--------|
-| reshape | `_reshape.py` | boolean indexing, ravel, flatten | **Done** |
-| __array_function__ | `_collection.py:336` | np.* function support | **Done** |
+| Operation | Impl Strategy | Tests Blocked | Status |
+|-----------|--------------|---------------|--------|
+| vstack | `atleast_2d` + `concatenate` | 3+ | Not started |
+| hstack | `atleast_1d`/`2d` + `concatenate` | 3+ | Not started |
+| dstack | `atleast_3d` + `concatenate` | 3+ | Not started |
+| flip | slicing with `[::-1]` | 3+ | Not started |
+| flipud | `flip(m, 0)` | 1 | Not started |
+| fliplr | `flip(m, 1)` | 1 | Not started |
+| rot90 | flip + transpose | 2+ | Not started |
+| swapaxes | blockwise | 2+ | Not started |
+| transpose (func) | blockwise | 2+ | Not started |
+| moveaxis | transpose | 3+ | Not started |
+| rollaxis | transpose | 2+ | Not started |
 
-### Tier 2: Core Linear Algebra
-Important for scientific computing users.
+### Tier 2: Simple Routines
+Straightforward implementations using existing blockwise/elemwise.
+
+| Operation | Impl Strategy | Tests Blocked | Status |
+|-----------|--------------|---------------|--------|
+| round/around | elemwise | 2+ | Not started |
+| isclose | elemwise | 2+ | Not started |
+| allclose | reduction of isclose | 1 | Not started |
+| isnull/notnull | elemwise | 3+ | Not started |
+| append | concatenate wrapper | 2+ | Not started |
+| count_nonzero | reduction | 5+ | Not started |
+| shape (func) | property access | 1 | Not started |
+| ndim (func) | property access | 1 | Not started |
+| result_type | metadata only | 1 | Not started |
+| broadcast_arrays | unify_chunks + broadcast_to | 3+ | Not started |
+| unify_chunks | already exists internally | 1 | Not started |
+
+### Tier 3: Block Assembly (~27 tests)
+Critical for array construction patterns.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| matmul | `_linalg.py` | __matmul__, np.matmul | **Done** |
-| tensordot | `_linalg.py` | Used extensively | **Done** |
-| dot | `_linalg.py` | Wraps tensordot, Array.dot() method | **Done** |
-| vdot | `_linalg.py` | Vector dot product (needs ravel) | **Done** |
-| einsum | `routines.py` | Einstein summation (needs asarray fix) | Not started |
+| block | creation.py | Recursive nested lists -> concatenate | Not started |
 
-### Tier 3: Indexing Completion
+### Tier 4: Store & IO (~12+ tests)
+Essential for practical use - saving results.
+
+| Operation | Location | Notes | Status |
+|-----------|----------|-------|--------|
+| store | _io.py | Write chunks to array-like targets | Not started |
+| to_npy_stack | _io.py | Save to numpy files | Not started |
+| from_npy_stack | _io.py | Load from numpy files | Not started |
+| from_delayed | _io.py | Create from delayed objects | Not started |
+
+### Tier 5: Advanced Indexing (~8 tests)
 Complete the indexing story.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| boolean indexing | `_slicing.py` | Dask array bool masks + 1D bool arrays | **Done** |
-| field access | `_collection.py` | Structured arrays | **Done** |
-| setitem | `_collection.py` | In-place assignment | **Done** |
+| vindex | _slicing.py | Point-wise vectorized indexing | Not started |
+| take | _slicing.py | Index along axis | Not started |
+| nonzero | _routines.py | Returns indices of non-zero elements | Not started |
+| argwhere | _routines.py | Returns indices where condition is true | Not started |
+| flatnonzero | _routines.py | nonzero on flattened array | Not started |
 
-### Tier 4: Reductions Completion
-Fill out remaining reduction operations.
+### Tier 6: Creation Functions
+Array construction.
 
-| Operation | Location | Notes | Status |
-|-----------|----------|-------|--------|
-| argmin/argmax | `reductions.py` | Need special handling | **Done** |
-| cumsum/cumprod | `reductions.py` | Cumulative ops | **Done** (axis=None edge case needs work) |
-| weighted mean/average | `routines.py` | weights parameter | **Done** (weights/returned need broadcast_to) |
-| ptp | `routines.py` | Peak-to-peak | **Done** |
-| median/percentile | `reductions.py`, `percentile.py` | Uses rechunk + map_blocks | **Done** |
+| Operation | Impl Strategy | Status |
+|-----------|--------------|--------|
+| eye | diagonal ones | Not started |
+| diag | extract/construct diagonal | Not started |
+| diagonal | extract diagonal | Not started |
+| tri | lower triangle mask | Not started |
+| tril/triu | mask operations | Not started |
+| fromfunction | map_blocks | Not started |
+| indices | similar to meshgrid | Not started |
+| meshgrid | stack + broadcast | Not started |
+| pad | boundary handling | Not started |
+| tile | repeat + reshape | Not started |
 
-### Tier 5: Shape Manipulation
-Operations that change array structure.
+### Tier 7: Statistics & Histograms
+Used in data analysis workflows.
 
-| Operation | Location | Notes | Status |
-|-----------|----------|-------|--------|
-| ravel | `_collection.py` | Uses reshape | **Done** |
-| flatten | `_collection.py` | Uses reshape | **Done** |
-| squeeze | `_slicing.py` | Remove 1-d dims | **Done** |
-| expand_dims | `_collection.py` | Add dims | **Done** |
-| atleast_*d | `_collection.py` | Shape helpers | **Done** |
-| broadcast_to | `_collection.py`, `_broadcast.py` | Broadcasting | **Done** |
-| tile | `creation.py` | Repetition, needs block | Not started |
-| roll | `_collection.py` | Circular shift | **Done** |
+| Operation | Notes | Status |
+|-----------|-------|--------|
+| histogram | binning | Not started |
+| histogram2d | 2D binning | Not started |
+| histogramdd | N-D binning | Not started |
+| bincount | counting | Not started |
+| unique | deduplication | Not started |
+| cov | covariance | Not started |
+| corrcoef | correlation | Not started |
+| digitize | bin indices | Not started |
 
-### Tier 6: Routines
-General array routines.
+### Tier 8: Selection & Conditional
+Conditional operations.
 
-| Operation | Location | Notes | Status |
-|-----------|----------|-------|--------|
-| where | `_collection.py` | Conditional select | **Done** |
-| unique | `routines.py` | Deduplication | Not started |
-| diff | `_collection.py` | Differences | **Done** |
-| gradient | `_routines.py` | Numerical gradient (uses map_overlap) | **Done** |
-| histogram | `routines.py` | Binning | Not started |
-| searchsorted | `_routines.py` | Binary search | **Done** |
-| insert/delete | `routines.py` | Array modification | Not started |
-| compress | `_routines.py` | Boolean select (partial - dask array conditions need boolean indexing) | **Done** |
+| Operation | Notes | Status |
+|-----------|-------|--------|
+| select | multi-condition select | Not started |
+| piecewise | piecewise functions | Not started |
+| choose | index-based selection | Not started |
+| extract | condition-based extraction | Not started |
+| isin | membership test | Not started |
 
-### Tier 7: Advanced
-Lower priority advanced operations.
+### Tier 9: Linear Algebra Extensions
+Beyond basic linalg.
 
-| Operation | Location | Notes | Status |
-|-----------|----------|-------|--------|
-| P2P rechunking | `_rechunk.py` | Distributed method | Not started |
-| coarsen | `slicing.py` | Downsampling | Not started |
-| block views | `core.py` | Block iteration | Not started |
+| Operation | Notes | Status |
+|-----------|-------|--------|
+| einsum | Einstein summation | Not started |
+| outer | outer product | Not started |
+| trace | diagonal sum | Not started |
+| tril_indices | triangle indices | Not started |
+| triu_indices | triangle indices | Not started |
 
-## Testing Strategy
+### Tier 10: Submodules (Large Scope)
+Full submodule implementations.
 
-### Test Markers
-- `@pytest.mark.array_expr`: Tests specific to array-expr
-- `@pytest.mark.xfail(da._array_expr_enabled(), reason="...")`: Known failures
+| Submodule | Notes | Status |
+|-----------|-------|--------|
+| fft | FFT operations | Not started |
+| linalg | Full linalg submodule | Not started |
+| ma | Masked arrays | Not started |
 
-### Running Tests
+### Tier 11: Advanced/Specialized
+Lower priority operations.
+
+| Operation | Notes | Status |
+|-----------|-------|--------|
+| coarsen | downsampling | Not started |
+| argtopk/topk | partial sort | Not started |
+| apply_along_axis | axis application | Not started |
+| apply_over_axes | multiple axes | Not started |
+| insert/delete | array modification | Not started |
+| union1d | set operations | Not started |
+| ediff1d | differences | Not started |
+| ravel_multi_index | index conversion | Not started |
+| unravel_index | index conversion | Not started |
+
+### Zarr/TileDB IO (Separate Track)
+External format support.
+
+| Operation | Notes | Status |
+|-----------|-------|--------|
+| to_zarr | Zarr output | Not started |
+| from_zarr | Zarr input | Not started |
+| to_tiledb | TileDB output | Not started |
+| from_tiledb | TileDB input | Not started |
+
+## Implementation Notes
+
+### Tier 1-2 Pattern (Simple Wrappers)
+These operations typically just need to be added to `_collection.py` or `_routines.py`:
+```python
+def vstack(tup, allow_unknown_chunksizes=False):
+    tup = tuple(atleast_2d(x) for x in tup)
+    return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
+```
+
+### Tier 3-4 Pattern (New Expression Classes)
+Create expression class with `_layer()` method in appropriate `_*.py` file.
+
+### Testing Strategy
+
 ```bash
 # Test array-expr specifically
 DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/
 
-# Test traditional mode
-DASK_ARRAY__QUERY_PLANNING=False pytest dask/array/tests/
-```
-
-### Test Patterns
-1. Basic functionality with assert_eq
-2. Various chunk patterns (single chunk, many chunks, uneven)
-3. Edge cases (empty, scalar, nan chunks)
-4. Integration with other operations
-
-## Migration Workflow (TDD-First)
-
-The existing test suite guides development. Tests define behavior we must match.
-
-**Skill available**: `.claude/skills/array-expr-migration/SKILL.md`
-
-### Phase 1: Test Discovery
-```bash
-# Find tests for target operation
-grep -l "{operation}" dask/array/tests/*.py
-grep -n "def test.*{operation}" dask/array/tests/test_*.py
-```
-
-### Phase 2: Study Traditional Implementation
-```bash
-# Find the current implementation
-grep -n "def {operation}" dask/array/*.py
-```
-
-Understand: metadata computation, chunking logic, graph construction.
-
-### Phase 3: Implement Expression Class
-Create class in `dask/array/_array_expr/_*.py`.
-
-**Run tests iteratively during development**:
-```bash
-DASK_ARRAY__QUERY_PLANNING=True pytest -k {operation} -x -v
-```
-
-Tests are your guide - run them frequently as you build.
-
-### Phase 4: Wire API & Clean Up
-- Add to `_collection.py` if needed
-- Remove `NotImplementedError` placeholders
-- Remove xfail markers from tests
-- Update this plan with status
-
-### Quick Reference
-```bash
 # Quick check - stop on first failure
 DASK_ARRAY__QUERY_PLANNING=True pytest -k {operation} -x
-
-# Verbose for debugging
-DASK_ARRAY__QUERY_PLANNING=True pytest -k {operation} -v --tb=short
-
-# Full test file
-DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/test_routines.py -v
 
 # Find xfail markers
 grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
 
-## Open Questions
+### Current Test Failure Summary
+- `test_array_core.py`: ~157 xfails (block: 27, store: 12, vindex: 7, other: 111)
+- `test_routines.py`: ~115 xfails
+- `test_array_function.py`: ~30 xfails
+- `test_overlap.py`: ~5 xfails
+- `test_gufunc.py`: ~1 xfail
 
-1. **__array_function__ approach**: Full protocol or shim?
-2. **P2P rechunking**: When to default to p2p vs tasks?
-3. **Simplification rules**: What algebraic simplifications are valuable for arrays?
-4. **Fusion strategy**: How aggressively to fuse blockwise operations?
+## Migration Workflow
+
+1. **Test Discovery**: Find tests for target operation
+2. **Study Traditional Implementation**: Understand chunking, metadata logic
+3. **Implement**: Add to array-expr (function or expression class)
+4. **Wire API**: Export from `__init__.py`
+5. **Remove xfails**: Clean up test markers
+6. **Update this plan**: Mark status
+
+## Quick Wins Checklist
+
+Estimated effort for Tier 1-2 (should be quick):
+- [ ] vstack, hstack, dstack (1 function each, ~10 lines total)
+- [ ] flip family (flip, flipud, fliplr) (~20 lines)
+- [ ] rot90 (~15 lines)
+- [ ] axis manipulation (swapaxes, transpose, moveaxis, rollaxis) (~30 lines)
+- [ ] round/around, isclose, allclose (~15 lines)
+- [ ] isnull/notnull (~10 lines)
+- [ ] broadcast_arrays, unify_chunks (~20 lines)
+- [ ] shape, ndim, result_type (~10 lines)
+- [ ] append (~5 lines)
+- [ ] count_nonzero (~20 lines)
+
+Total Tier 1-2: ~155 lines of mostly simple wrapper code, unlocking 30+ tests.
 
 ## References
 
