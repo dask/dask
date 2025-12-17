@@ -19,7 +19,10 @@ from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_220, AxisError
 from dask.array.utils import allclose, assert_eq, same_keys
 
 if da._array_expr_enabled():
-    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
+    pytest.skip(
+        "Many routines not yet implemented for array-expr",
+        allow_module_level=True,
+    )
 
 
 def test_array():

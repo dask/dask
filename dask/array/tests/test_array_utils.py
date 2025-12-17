@@ -25,10 +25,6 @@ except ImportError:
     pass
 
 
-if da._array_expr_enabled():
-    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
-
-
 @pytest.mark.parametrize("asarray", asarrays)
 def test_meta_from_array(asarray):
     x = np.array(1)
@@ -65,6 +61,10 @@ def test_meta_from_array_literal(meta, dtype):
         )
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="array-expr Array constructor doesn't accept graph directly",
+)
 def test_meta_from_array_type_inputs():
     x = meta_from_array(np.ndarray, ndim=2, dtype=np.float32)
     assert isinstance(x, np.ndarray)
@@ -120,7 +120,14 @@ def test_assert_eq_checks_dtype(a, b):
     [
         (1.0, 1.0),
         ([1, 2], [1, 2]),
-        (da.array([1, 2]), da.array([1, 2])),
+        pytest.param(
+            da.array([1, 2]),
+            da.array([1, 2]),
+            marks=pytest.mark.xfail(
+                da._array_expr_enabled(),
+                reason="isinstance check uses wrong Array class",
+            ),
+        ),
     ],
 )
 def test_assert_eq_scheduler(a, b):

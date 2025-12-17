@@ -27,10 +27,6 @@ from dask.array.rechunk import (
 from dask.array.utils import assert_eq
 from dask.utils import funcname
 
-if da._array_expr_enabled():
-    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
-
-
 def test_rechunk_internals_1():
     """Test the cumdims_label and _breakpoints and
     _intersect_1d internal funcs to rechunk."""
@@ -911,6 +907,10 @@ def test_rechunk_auto_3d():
     assert y.chunks[1] == (10, 10)  # even split
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="array-expr rechunk auto computes different chunk sizes",
+)
 @pytest.mark.parametrize("n", [100, 1000])
 def test_rechunk_auto_image_stack(n):
     with dask.config.set({"array.chunk-size": "10MiB"}):
@@ -1232,6 +1232,10 @@ def test_old_to_new_with_zero():
     assert result == expected
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="coarsen not implemented for array-expr",
+)
 def test_rechunk_non_perfect_slicing_of_dimensions():
     # GH#7859
     # this matters -- 1060 and 1058 work
