@@ -18,21 +18,13 @@ The array-expr system has foundational infrastructure in place:
 - Map blocks/overlap
 - Random number generation
 - UFuncs
+- Reshape, squeeze, transpose
 
 ## Testing Infrastructure
 
-Test modules have been converted from blacklist (module-level skips) to whitelist (individual xfails):
+Test modules use whitelist approach (individual xfails rather than module-level skips). Each xfailed test represents work to be done. Decreasing xfails is progress.
 
-| Module | Status |
-|--------|--------|
-| test_array_core.py | Converted: 221 pass, 240 xfail, 44 xpass |
-| test_array_utils.py | Converted: 30 pass, 2 xfail |
-| test_rechunk.py | Converted: 79 pass, 3 xfail |
-| test_dispatch.py | Module skip (register_chunk_type fundamental difference) |
-| test_array_function.py | Module skip (depends on test_dispatch) |
-| test_routines.py | Converted: 25 pass, 700 xfail, 2 xpass |
-
-Each xfailed test represents work to be done. Decreasing xfails is progress.
+Exceptions: `test_dispatch.py` and `test_array_function.py` have module-level skips due to fundamental differences in `register_chunk_type`.
 
 ## Priority Tiers
 
@@ -41,7 +33,7 @@ These operations block many others and should be done first.
 
 | Operation | Location | Blocker For | Status |
 |-----------|----------|-------------|--------|
-| reshape | `core.py:2100+` | boolean indexing, ravel, flatten | Not started |
+| reshape | `_reshape.py` | boolean indexing, ravel, flatten | **Done** |
 | __array_function__ | `_collection.py:314` | np.* function support | Not started |
 
 ### Tier 2: Core Linear Algebra

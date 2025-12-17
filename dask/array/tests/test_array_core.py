@@ -1528,7 +1528,6 @@ def test_broadcast_operator(u_shape, v_shape):
         ((2, 0, 2), (0,), (4, 4, 4)),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="reshape not implemented", strict=False)
 def test_reshape(original_shape, new_shape, chunks):
     x = np.random.default_rng().integers(10, size=original_shape)
     a = from_array(x, chunks=chunks)
@@ -1542,7 +1541,6 @@ def test_reshape(original_shape, new_shape, chunks):
     assert_eq(xr, ar)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="reshape not implemented", strict=False)
 def test_reshape_exceptions():
     x = np.random.default_rng().integers(10, size=(5,))
     a = from_array(x, chunks=(2,))
@@ -1550,13 +1548,11 @@ def test_reshape_exceptions():
         da.reshape(a, (100,))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="reshape not implemented", strict=False)
 def test_reshape_splat():
     x = da.ones((5, 5), chunks=(2, 2))
     assert_eq(x.reshape((25,)), x.reshape(25))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="reshape not implemented", strict=False)
 def test_reshape_not_implemented_error():
     a = da.ones((4, 5, 6), chunks=(2, 2, 3))
     for new_shape in [(2, 10, 6), (5, 4, 6), (6, 5, 4)]:
@@ -1566,7 +1562,6 @@ def test_reshape_not_implemented_error():
             a.reshape(new_shape)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="reshape not implemented", strict=False)
 def test_reshape_unknown_dimensions():
     for original_shape in [(24,), (2, 12), (2, 3, 4)]:
         for new_shape in [(-1,), (2, -1), (-1, 3, 4)]:

@@ -81,7 +81,9 @@ Connect the expression class to the user-facing API. This requires changes in 4 
 1. **Expression module** (`_slicing.py`, `_reductions.py`, etc.) - the expression class and function
 2. **`_collection.py`** - Add `Array.{operation}()` method and/or top-level function
 3. **`_array_expr/__init__.py`** - Export the function
-4. **`dask/array/__init__.py`** - Add to imports from `_array_expr`, remove from `raise_not_implemented_error` list
+4. **`dask/array/__init__.py`** - Two changes needed:
+   - Add to the imports from `_array_expr` (around line 750)
+   - Remove from `raise_not_implemented_error` fallback list (around line 840)
 
 **Output**: Operation accessible via normal dask.array API.
 
@@ -101,9 +103,14 @@ DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/test_routines.py -v
 grep -n "xfail.*{operation}" dask/array/tests/*.py
 ```
 
-Update `plans/array-expr-migration.md` with status.
+**Output**: All tests passing, xfail markers removed.
 
-**Output**: All tests passing, xfail markers removed, plan updated.
+### Phase 7: Update Plan
+Update `plans/array-expr-migration.md`:
+- Mark operation as **Done** in the appropriate tier table
+- Add to "Current Status" list if it's a significant capability
+
+**Output**: Plan reflects current state for future agents.
 
 ## Key Patterns
 
@@ -138,6 +145,7 @@ DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/test_routines.py::test_{
 
 ## Reference Locations
 
+- **Examples to study**: Browse `dask/array/_array_expr/` for completed implementations. Read a few before starting.
 - Base class: `dask/array/_array_expr/_expr.py` (ArrayExpr)
 - Collection: `dask/array/_array_expr/_collection.py` (Array wrapper)
 - Blockwise: `dask/array/_array_expr/_blockwise.py`

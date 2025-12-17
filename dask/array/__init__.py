@@ -748,6 +748,7 @@ if _array_expr_enabled():
             random,
             real,
             rechunk,
+            reshape,
             reciprocal,
             reduction,
             remainder,
@@ -838,7 +839,6 @@ if _array_expr_enabled():
         nanmedian = raise_not_implemented_error("nanmedian")
         topk = raise_not_implemented_error("topk")
         trace = raise_not_implemented_error("trace")
-        reshape = raise_not_implemented_error("reshape")
         allclose = raise_not_implemented_error("allclose")
         append = raise_not_implemented_error("append")
         apply_along_axis = raise_not_implemented_error("apply_along_axis")
