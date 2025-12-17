@@ -61,9 +61,10 @@ class Array(DaskMethodsMixin):
         if meta is None:
             # Fallback to synthetic meta if original is also None
             meta = np.empty((0,) * state.ndim, dtype=state.dtype)
+        # Use self.chunks to preserve nan chunks for unknown-sized operations
         return from_graph, (
             meta,
-            state.chunks,
+            self.chunks,
             # FIXME: This is using keys of the unoptimized graph
             list(flatten(state.__dask_keys__())),
             key_split(state._name),
@@ -183,9 +184,9 @@ class Array(DaskMethodsMixin):
         if any(isinstance(i, Array) and i.dtype.kind in "iu" for i in index2):
             self, index2 = slice_with_int_dask_array(self, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
-            # TODO(expr-soon): This is simple but needs ravel which needs reshape,
-            # which is not simple. Trivial to add after we have reshape
-            raise NotImplementedError
+            from dask.array._array_expr._slicing import slice_with_bool_dask_array
+
+            self, index2 = slice_with_bool_dask_array(self, index2)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
             return self

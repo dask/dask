@@ -321,6 +321,10 @@ class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
         if self.arr.numblocks in ((), (1,)):
             return self.arr
         else:
+            # For arrays with unknown chunk sizes, use ConcatenateFinalize
+            # instead of rechunking (which requires known shapes)
+            if any(np.isnan(s) for s in self.arr.shape):
+                return ConcatenateFinalize(self.arr)
             from dask.array._array_expr._rechunk import Rechunk
 
             return Rechunk(
@@ -328,3 +332,91 @@ class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
                 tuple(-1 for _ in range(self.arr.ndim)),
                 method="tasks",
             )
+
+
+class ConcatenateFinalize(ArrayExpr):
+    """Finalize array computation by concatenating all blocks.
+
+    This is used for arrays with unknown chunk sizes where rechunking
+    is not possible.
+    """
+
+    _parameters = ["arr"]
+
+    @functools.cached_property
+    def _name(self):
+        return f"concatenate-finalize-{self.deterministic_token}"
+
+    @functools.cached_property
+    def _meta(self):
+        return self.arr._meta
+
+    @functools.cached_property
+    def chunks(self):
+        # Output is a single chunk with unknown size
+        return tuple((np.nan,) for _ in range(self.arr.ndim))
+
+    @functools.cached_property
+    def numblocks(self):
+        return tuple(1 for _ in range(self.arr.ndim))
+
+    @functools.cached_property
+    def _cached_keys(self):
+        from dask._task_spec import List, TaskRef
+
+        return List(TaskRef((self._name,) + (0,) * self.arr.ndim))
+
+    def _layer(self) -> dict:
+        from dask._task_spec import List, Task, TaskRef
+        from dask.array.core import concatenate3
+
+        # Get all keys from the input array in nested list structure
+        arr_keys = self.arr.__dask_keys__()
+
+        # Convert nested key structure to TaskRefs
+        def convert_keys(keys):
+            if isinstance(keys, list):
+                return List(*[convert_keys(k) for k in keys])
+            return TaskRef(keys)
+
+        keys_list = convert_keys(arr_keys)
+
+        out_key = (self._name,) + (0,) * self.arr.ndim
+        return {
+            out_key: Task(out_key, concatenate3, keys_list)
+        }
+
+
+class ChunksOverride(ArrayExpr):
+    """Override chunks metadata for an array expression.
+
+    This creates an alias layer while preserving the underlying computation.
+    Useful when the actual output chunk sizes differ from what the expression
+    system infers (e.g., boolean indexing produces unknown chunk sizes).
+    """
+
+    _parameters = ["array", "_chunks"]
+
+    @functools.cached_property
+    def _name(self):
+        return f"chunks-override-{self.deterministic_token}"
+
+    @functools.cached_property
+    def _meta(self):
+        return self.array._meta
+
+    @functools.cached_property
+    def chunks(self):
+        return self._chunks
+
+    def _layer(self) -> dict:
+        from dask._task_spec import Alias
+        from itertools import product
+
+        dsk = {}
+        chunk_ranges = [range(len(c)) for c in self._chunks]
+        for idx in product(*chunk_ranges):
+            out_key = (self._name,) + idx
+            in_key = (self.array._name,) + idx
+            dsk[out_key] = Alias(out_key, in_key)
+        return dsk
