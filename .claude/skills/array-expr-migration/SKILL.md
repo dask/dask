@@ -105,6 +105,9 @@ DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/test_routines.py -v
 grep -n "xfail.*{operation}" dask/array/tests/*.py
 ```
 
+If there are new tests that are XPASS then clean up the xfail markers (assuming
+that they're related to our changes).
+
 **Output**: All tests passing, xfail markers removed.
 
 ### Phase 7: Update Plan

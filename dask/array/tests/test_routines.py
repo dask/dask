@@ -1516,7 +1516,6 @@ def test_roll_works_even_if_shape_is_0():
 
 
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_shape_and_ndim(shape):
     x = da.random.default_rng().random(shape)
     assert np.shape(x) == shape
@@ -2536,7 +2535,6 @@ def test_delete():
         da.delete(a, [3], axis=-3)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_result_type():
     a = da.from_array(np.ones(5, np.float32), chunks=(3,))
     b = da.from_array(np.ones(5, np.int16), chunks=(3,))
