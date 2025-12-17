@@ -439,7 +439,6 @@ def test_dot_persist_equivalence():
 
 
 @pytest.mark.parametrize("shape, chunks", [((20,), (6,)), ((4, 5), (2, 3))])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_vdot(shape, chunks):
     rng = np.random.default_rng(1337)
 
@@ -562,7 +561,6 @@ def test_ptp(shape, axis):
     [[(10, 15, 20), 0], [(10, 15, 20), 1], [(10, 15, 20), 2], [(10, 15, 20), -1]],
 )
 @pytest.mark.parametrize("n", [0, 1, 2])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_diff(shape, n, axis):
     x = np.random.default_rng().integers(0, 10, shape)
     a = da.from_array(x, chunks=(len(shape) * (5,)))
@@ -571,7 +569,6 @@ def test_diff(shape, n, axis):
 
 
 @pytest.mark.parametrize("n", [0, 1, 2])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_diff_prepend(n):
     x = np.arange(5) + 1
     a = da.from_array(x, chunks=2)
@@ -600,7 +597,6 @@ def test_diff_prepend(n):
 
 
 @pytest.mark.parametrize("n", [0, 1, 2])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_diff_append(n):
     x = np.arange(5) + 1
     a = da.from_array(x, chunks=2)
@@ -628,7 +624,6 @@ def test_diff_append(n):
             da.diff(a, n, append=np.zeros((3, 3)))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_diff_negative_order():
     with pytest.raises(ValueError):
         da.diff(da.arange(10), -1)
