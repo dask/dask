@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import re
 from bisect import bisect
 from functools import cached_property, reduce
 from itertools import product
@@ -16,13 +17,52 @@ from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
 from dask.layers import ArrayBlockwiseDep
-from dask.utils import cached_cumsum
+from dask.utils import cached_cumsum, funcname
+
+_OBJECT_AT_PATTERN = re.compile(r"<.+? at 0x[0-9a-fA-F]+>")
+
+
+def _simplify_repr(op):
+    """Simplify operand representation for tree_repr display."""
+    if isinstance(op, np.ndarray):
+        return "<array>"
+    if isinstance(op, np.dtype):
+        return str(op)
+    if callable(op):
+        return funcname(op)
+    # Simplify objects that show "object at 0x..." in repr
+    r = repr(op)
+    if " object at 0x" in r:
+        return f"<{type(op).__name__}>"
+    return op
+
+
+def _clean_header(header):
+    """Clean up any remaining verbose patterns in the header string."""
+    # Replace "<function foo at 0x...>" or "<X object at 0x...>" with "..."
+    return _OBJECT_AT_PATTERN.sub("...", header)
 
 
 class ArrayExpr(SingletonExpr):
 
     def _operands_for_repr(self):
         return []
+
+    def _tree_repr_lines(self, indent=0, recursive=True):
+        header = funcname(type(self)) + ":"
+        lines = []
+        for i, op in enumerate(self.operands):
+            if isinstance(op, ArrayExpr):
+                if recursive:
+                    lines.extend(op._tree_repr_lines(2))
+            else:
+                op = _simplify_repr(op)
+                header = self._tree_repr_argument_construction(i, op, header)
+
+        header = _clean_header(header)
+        lines = [header] + lines
+        lines = [" " * indent + line for line in lines]
+        return lines
 
     @cached_property
     def shape(self) -> tuple[T_IntOrNaN, ...]:
