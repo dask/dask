@@ -56,8 +56,13 @@ class Array(DaskMethodsMixin):
 
     def __dask_postpersist__(self):
         state = self.expr.lower_completely()
+        # Use original array's meta like legacy implementation
+        meta = self._meta
+        if meta is None:
+            # Fallback to synthetic meta if original is also None
+            meta = np.empty((0,) * state.ndim, dtype=state.dtype)
         return from_graph, (
-            state._meta,
+            meta,
             state.chunks,
             # FIXME: This is using keys of the unoptimized graph
             list(flatten(state.__dask_keys__())),

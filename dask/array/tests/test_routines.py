@@ -553,7 +553,6 @@ def test_apply_over_axes(func_name, func, shape, axes):
         [(10, 15, 20), -1],
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ptp(shape, axis):
     a = np.random.default_rng().integers(0, 10, shape)
     d = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -2894,8 +2893,9 @@ def test_einsum_empty_dimension():
 
 @pytest.mark.parametrize("a", [np.arange(11), np.arange(6).reshape((3, 2))])
 @pytest.mark.parametrize("returned", [True, False])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_average(a, returned):
+    if da._array_expr_enabled() and returned:
+        pytest.xfail("returned=True requires broadcast_to for array-expr")
     d_a = da.from_array(a, chunks=2)
 
     np_avg = np.average(a, returned=returned)
@@ -2905,7 +2905,6 @@ def test_average(a, returned):
 
 
 @pytest.mark.parametrize("a", [np.arange(11), np.arange(6).reshape((3, 2))])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_average_keepdims(a):
     d_a = da.from_array(a, chunks=2)
 
@@ -2916,7 +2915,7 @@ def test_average_keepdims(a):
 
 
 @pytest.mark.parametrize("keepdims", [False, True])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="weights requires broadcast_to/swapaxes for array-expr", strict=False)
 def test_average_weights(keepdims):
     a = np.arange(6).reshape((3, 2))
     d_a = da.from_array(a, chunks=2)
@@ -2929,7 +2928,6 @@ def test_average_weights(keepdims):
     assert_eq(da_avg, np.average(a, weights=weights, axis=1, keepdims=keepdims))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_average_raises():
     d_a = da.arange(11, chunks=2)
 
