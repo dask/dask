@@ -66,9 +66,9 @@ Fill out remaining reduction operations.
 |-----------|----------|-------|--------|
 | argmin/argmax | `reductions.py` | Need special handling | **Done** |
 | cumsum/cumprod | `reductions.py` | Cumulative ops | **Done** (axis=None edge case needs work) |
-| weighted mean/average | `reductions.py` | weights parameter | Not started |
-| ptp | `reductions.py` | Peak-to-peak | Not started |
-| median/percentile | `reductions.py` | Complex shuffling | Not started |
+| weighted mean/average | `routines.py` | weights parameter | **Done** (weights/returned need broadcast_to) |
+| ptp | `routines.py` | Peak-to-peak | **Done** |
+| median/percentile | `reductions.py`, `percentile.py` | Uses rechunk + map_blocks | **Done** |
 
 ### Tier 5: Shape Manipulation
 Operations that change array structure.

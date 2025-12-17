@@ -4,6 +4,7 @@ import warnings
 from itertools import product
 from numbers import Number
 
+import numpy as np
 from toolz import concat
 
 from dask.array._array_expr._collection import Array, blockwise
@@ -311,6 +312,10 @@ def map_blocks(
             pass
 
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
+
+    # Create synthetic meta if compute_meta failed but we have dtype
+    if meta is None and dtype is not None:
+        meta = np.empty((0,) * len(out_ind), dtype=dtype)
 
     if drop_axis:
         ndim_out = len(out_ind)
