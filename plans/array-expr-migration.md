@@ -22,6 +22,7 @@ The array-expr system has foundational infrastructure in place:
 - __array_function__ protocol
 - Linear algebra: tensordot, matmul, dot
 - Reductions: argmin, argmax, nanargmin, nanargmax, cumsum, cumprod, nancumsum, nancumprod
+- Shape manipulation: ravel, flatten, expand_dims, atleast_*d, broadcast_to, roll
 
 ## Testing Infrastructure
 
@@ -75,14 +76,14 @@ Operations that change array structure.
 
 | Operation | Location | Notes | Status |
 |-----------|----------|-------|--------|
-| ravel | `routines.py` | Needs reshape | Not started |
-| flatten | `routines.py` | Needs reshape | Not started |
+| ravel | `_collection.py` | Uses reshape | **Done** |
+| flatten | `_collection.py` | Uses reshape | **Done** |
 | squeeze | `_slicing.py` | Remove 1-d dims | **Done** |
-| expand_dims | `routines.py` | Add dims | Not started |
-| atleast_*d | `routines.py` | Shape helpers | Not started |
-| broadcast_to | `routines.py` | Broadcasting | Not started |
-| tile | `routines.py` | Repetition | Not started |
-| roll | `routines.py` | Circular shift | Not started |
+| expand_dims | `_collection.py` | Add dims | **Done** |
+| atleast_*d | `_collection.py` | Shape helpers | **Done** |
+| broadcast_to | `_collection.py`, `_broadcast.py` | Broadcasting | **Done** |
+| tile | `creation.py` | Repetition, needs block | Not started |
+| roll | `_collection.py` | Circular shift | **Done** |
 
 ### Tier 6: Routines
 General array routines.

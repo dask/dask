@@ -132,7 +132,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
             raise ValueError("can only specify one unknown dimension")
         # Fastpath for x.reshape(-1) on 1D arrays
         if len(shape) == 1 and x.ndim == 1:
-            return x
+            return x.expr
         missing_size = sanitize_index(x.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
@@ -147,10 +147,15 @@ def reshape(x, shape, merge_chunks=True, limit=None):
 
     # Identity reshape
     if x.shape == shape:
-        return x
+        return x.expr
+
+    # Single partition case: use simple blockwise reshape
+    expr = x.expr
+    npartitions = reduce(mul, (len(c) for c in expr.chunks), 1)
+    if npartitions == 1:
+        return ReshapeLowered(expr, shape, tuple((d,) for d in shape))
 
     # Handle merge_chunks=False: pre-rechunk to size-1 chunks in early dimensions
-    expr = x.expr
     if not merge_chunks and x.ndim > len(shape):
         pre_rechunk = dict.fromkeys(range(x.ndim - len(shape)), 1)
         expr = expr.rechunk(pre_rechunk)

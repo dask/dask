@@ -1324,6 +1324,292 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     return new_collection(_reshape(x, shape, merge_chunks=merge_chunks, limit=limit))
 
 
+def ravel(array_like):
+    """Return a flattened array.
+
+    Parameters
+    ----------
+    array_like : array_like
+        Input array. Non-array inputs are converted to arrays.
+
+    Returns
+    -------
+    raveled : Array
+        A 1-D array containing the elements of the input.
+
+    See Also
+    --------
+    numpy.ravel
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.ones((2, 3), chunks=2)
+    >>> da.ravel(x).compute()
+    array([1., 1., 1., 1., 1., 1.])
+    """
+    return asanyarray(array_like).reshape((-1,))
+
+
+def atleast_1d(*arys):
+    """Convert inputs to arrays with at least one dimension.
+
+    Parameters
+    ----------
+    arys : array_like
+        One or more array-like sequences. Non-array inputs are converted
+        to arrays. Arrays that already have one or more dimensions are
+        preserved.
+
+    Returns
+    -------
+    ret : Array or tuple of Arrays
+        An array, or tuple of arrays, each with a.ndim >= 1.
+
+    See Also
+    --------
+    numpy.atleast_1d
+    """
+    from dask.array.numpy_compat import NUMPY_GE_200
+
+    new_arys = []
+    for x in arys:
+        x = asanyarray(x)
+        if x.ndim == 0:
+            x = x[None]
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
+    else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
+        return new_arys
+
+
+def atleast_2d(*arys):
+    """View inputs as arrays with at least two dimensions.
+
+    Parameters
+    ----------
+    arys : array_like
+        One or more array-like sequences. Non-array inputs are converted
+        to arrays. Arrays that already have two or more dimensions are
+        preserved.
+
+    Returns
+    -------
+    ret : Array or tuple of Arrays
+        An array, or tuple of arrays, each with a.ndim >= 2.
+
+    See Also
+    --------
+    numpy.atleast_2d
+    """
+    from dask.array.numpy_compat import NUMPY_GE_200
+
+    new_arys = []
+    for x in arys:
+        x = asanyarray(x)
+        if x.ndim == 0:
+            x = x[None, None]
+        elif x.ndim == 1:
+            x = x[None, :]
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
+    else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
+        return new_arys
+
+
+def atleast_3d(*arys):
+    """View inputs as arrays with at least three dimensions.
+
+    Parameters
+    ----------
+    arys : array_like
+        One or more array-like sequences. Non-array inputs are converted
+        to arrays. Arrays that already have three or more dimensions are
+        preserved.
+
+    Returns
+    -------
+    ret : Array or tuple of Arrays
+        An array, or tuple of arrays, each with a.ndim >= 3.
+
+    See Also
+    --------
+    numpy.atleast_3d
+    """
+    from dask.array.numpy_compat import NUMPY_GE_200
+
+    new_arys = []
+    for x in arys:
+        x = asanyarray(x)
+        if x.ndim == 0:
+            x = x[None, None, None]
+        elif x.ndim == 1:
+            x = x[None, :, None]
+        elif x.ndim == 2:
+            x = x[:, :, None]
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
+    else:
+        if NUMPY_GE_200:
+            new_arys = tuple(new_arys)
+        return new_arys
+
+
+def roll(array, shift, axis=None):
+    """Roll array elements along a given axis.
+
+    Elements that roll beyond the last position are re-introduced at the first.
+
+    Parameters
+    ----------
+    array : array_like
+        Input array.
+    shift : int or tuple of ints
+        The number of places by which elements are shifted.
+    axis : int or tuple of ints, optional
+        Axis or axes along which elements are shifted. By default, the
+        array is flattened before shifting, after which the original shape
+        is restored.
+
+    Returns
+    -------
+    result : Array
+        Array with the same shape as array.
+
+    See Also
+    --------
+    numpy.roll
+    """
+    from numbers import Integral
+
+    result = array
+
+    if axis is None:
+        result = ravel(result)
+
+        if not isinstance(shift, Integral):
+            raise TypeError(
+                "Expect `shift` to be an instance of Integral when `axis` is None."
+            )
+
+        shift = (shift,)
+        axis = (0,)
+    else:
+        try:
+            len(shift)
+        except TypeError:
+            shift = (shift,)
+        try:
+            len(axis)
+        except TypeError:
+            axis = (axis,)
+
+    if len(shift) != len(axis):
+        raise ValueError("Must have the same number of shifts as axes.")
+
+    for i, s in zip(axis, shift):
+        shape = result.shape[i]
+        s = 0 if shape == 0 else -s % shape
+
+        sl1 = result.ndim * [slice(None)]
+        sl2 = result.ndim * [slice(None)]
+
+        sl1[i] = slice(s, None)
+        sl2[i] = slice(None, s)
+
+        sl1 = tuple(sl1)
+        sl2 = tuple(sl2)
+
+        result = concatenate([result[sl1], result[sl2]], axis=i)
+
+    result = result.reshape(array.shape)
+    # Ensure that the output is always a new array object
+    result = result.copy() if result is array else result
+
+    return result
+
+
+def broadcast_to(x, shape, chunks=None, meta=None):
+    """Broadcast an array to a new shape.
+
+    Parameters
+    ----------
+    x : array_like
+        The array to broadcast.
+    shape : tuple
+        The shape of the desired array.
+    chunks : tuple, optional
+        If provided, then the result will use these chunks instead of the same
+        chunks as the source array. Setting chunks explicitly as part of
+        broadcast_to is more efficient than rechunking afterwards. Chunks are
+        only allowed to differ from the original shape along dimensions that
+        are new on the result or have size 1 the input array.
+    meta : empty ndarray, optional
+        empty ndarray created with same NumPy backend, ndim and dtype as the
+        Dask Array being created (overrides dtype)
+
+    Returns
+    -------
+    broadcast : Array
+
+    See Also
+    --------
+    numpy.broadcast_to
+    """
+    from dask.array._array_expr._broadcast import broadcast_to as _broadcast_to
+
+    return new_collection(_broadcast_to(x, shape, chunks=chunks, meta=meta))
+
+
+def expand_dims(a, axis):
+    """Expand the shape of an array.
+
+    Insert a new axis that will appear at the axis position in the expanded
+    array shape.
+
+    Parameters
+    ----------
+    a : array_like
+        Input array.
+    axis : int or tuple of ints
+        Position in the expanded axes where the new axis (or axes) is placed.
+
+    Returns
+    -------
+    result : Array
+        Array with the number of dimensions increased.
+
+    See Also
+    --------
+    numpy.expand_dims
+    """
+    from dask.array.utils import validate_axis
+
+    if axis is None:
+        raise TypeError("axis must be an integer, not None")
+
+    if type(axis) not in (tuple, list):
+        axis = (axis,)
+
+    out_ndim = len(axis) + a.ndim
+    axis = validate_axis(axis, out_ndim)
+
+    shape_it = iter(a.shape)
+    shape = [1 if ax in axis else next(shape_it) for ax in range(out_ndim)]
+
+    return a.reshape(shape)
+
+
 def where(condition, x=None, y=None):
     """Return elements chosen from x or y depending on condition.
 

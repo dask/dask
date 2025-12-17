@@ -663,11 +663,15 @@ if _array_expr_enabled():
             as_gufunc,
             asanyarray,
             asarray,
+            atleast_1d,
+            atleast_2d,
+            atleast_3d,
             bitwise_and,
             bitwise_not,
             bitwise_or,
             bitwise_xor,
             blockwise,
+            broadcast_to,
             cbrt,
             ceil,
             clip,
@@ -688,6 +692,7 @@ if _array_expr_enabled():
             exp,
             exp2,
             expm1,
+            expand_dims,
             fabs,
             fix,
             float_power,
@@ -749,6 +754,7 @@ if _array_expr_enabled():
             rad2deg,
             radians,
             random,
+            ravel,
             real,
             rechunk,
             reshape,
@@ -758,6 +764,7 @@ if _array_expr_enabled():
             repeat,
             right_shift,
             rint,
+            roll,
             sign,
             signbit,
             sin,
@@ -817,7 +824,6 @@ if _array_expr_enabled():
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
         block = raise_not_implemented_error("block")
         broadcast_arrays = raise_not_implemented_error("broadcast_arrays")
-        broadcast_to = raise_not_implemented_error("broadcast_to")
         from_delayed = raise_not_implemented_error("from_delayed")
         from_npy_stack = raise_not_implemented_error("from_npy_stack")
         from_zarr = raise_not_implemented_error("from_zarr")
@@ -847,9 +853,6 @@ if _array_expr_enabled():
         apply_over_axes = raise_not_implemented_error("apply_over_axes")
         argwhere = raise_not_implemented_error("argwhere")
         around = raise_not_implemented_error("around")
-        atleast_1d = raise_not_implemented_error("atleast_1d")
-        atleast_2d = raise_not_implemented_error("atleast_2d")
-        atleast_3d = raise_not_implemented_error("atleast_3d")
         bincount = raise_not_implemented_error("bincount")
         choose = raise_not_implemented_error("choose")
         coarsen = raise_not_implemented_error("coarsen")
@@ -863,7 +866,6 @@ if _array_expr_enabled():
         dstack = raise_not_implemented_error("dstack")
         ediff1d = raise_not_implemented_error("ediff1d")
         einsum = raise_not_implemented_error("einsum")
-        expand_dims = raise_not_implemented_error("expand_dims")
         extract = raise_not_implemented_error("extract")
         flatnonzero = raise_not_implemented_error("flatnonzero")
         flip = raise_not_implemented_error("flip")
@@ -883,10 +885,8 @@ if _array_expr_enabled():
         notnull = raise_not_implemented_error("notnull")
         outer = raise_not_implemented_error("outer")
         piecewise = raise_not_implemented_error("piecewise")
-        ravel = raise_not_implemented_error("ravel")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
         result_type = raise_not_implemented_error("result_type")
-        roll = raise_not_implemented_error("roll")
         rot90 = raise_not_implemented_error("rot90")
         round = raise_not_implemented_error("round")
         searchsorted = raise_not_implemented_error("searchsorted")

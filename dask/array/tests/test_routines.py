@@ -45,7 +45,6 @@ def test_derived_docstrings():
 
 
 @pytest.mark.parametrize("funcname", ["atleast_1d", "atleast_2d", "atleast_3d"])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_atleast_nd_no_args(funcname):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
@@ -67,7 +66,6 @@ def test_atleast_nd_no_args(funcname):
         ((4, 6, 8, 10), (2, 3, 4, 5)),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_atleast_nd_one_arg(funcname, shape, chunks):
     np_a = np.random.default_rng().random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
@@ -90,7 +88,6 @@ def test_atleast_nd_one_arg(funcname, shape, chunks):
         )
     ),
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_atleast_nd_two_args(funcname, shape1, shape2):
     np_a_1 = np.random.default_rng().random(shape1)
     da_a_1 = da.from_array(np_a_1, chunks=tuple(c // 2 for c in shape1))
@@ -1523,7 +1520,6 @@ def _maybe_len(l):
 @pytest.mark.parametrize("chunks", [(4, 6), (2, 6)])
 @pytest.mark.parametrize("shift", [3, 7, 9, (3, 9), (7, 2)])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1, (0, 1), (1, 0)])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_roll(chunks, shift, axis):
     x = np.random.default_rng().integers(10, size=(4, 6))
     a = da.from_array(x, chunks=chunks)
@@ -1535,14 +1531,12 @@ def test_roll(chunks, shift, axis):
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_roll_always_results_in_a_new_array():
     x = da.arange(2, 3)
     y = da.roll(x, 1)
     assert y is not x
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_roll_works_even_if_shape_is_0():
     expected = np.roll(np.zeros(0), 0)
     actual = da.roll(da.zeros(0), 0)
@@ -1583,7 +1577,6 @@ def test_union1d(shape, reverse):
     assert_eq(result, expected)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel():
     x = np.random.default_rng().integers(10, size=(4, 6))
 
@@ -1620,27 +1613,25 @@ def test_ravel_1D_no_op():
     assert_eq(dx[dx > 2].ravel(), x[x > 2].ravel())
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_with_array_like():
     # int
     assert_eq(np.ravel(0), da.ravel(0))
-    assert isinstance(da.ravel(0), da.core.Array)
+    assert isinstance(da.ravel(0), da.Array)
 
     # list
     assert_eq(np.ravel([0, 0]), da.ravel([0, 0]))
-    assert isinstance(da.ravel([0, 0]), da.core.Array)
+    assert isinstance(da.ravel([0, 0]), da.Array)
 
     # tuple
     assert_eq(np.ravel((0, 0)), da.ravel((0, 0)))
-    assert isinstance(da.ravel((0, 0)), da.core.Array)
+    assert isinstance(da.ravel((0, 0)), da.Array)
 
     # nested i.e. tuples in list
     assert_eq(np.ravel([(0,), (0,)]), da.ravel([(0,), (0,)]))
-    assert isinstance(da.ravel([(0,), (0,)]), da.core.Array)
+    assert isinstance(da.ravel([(0,), (0,)]), da.Array)
 
 
 @pytest.mark.parametrize("axis", [None, 0, 1, -1, (0, 1), (0, 2), (1, 2), 2])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_expand_dims(axis):
     a = np.arange(10)
     d = da.from_array(a, chunks=(3,))
