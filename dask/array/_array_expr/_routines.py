@@ -658,7 +658,6 @@ def digitize(a, bins, right=False):
         Output array of indices.
     """
     from dask.array._array_expr._map_blocks import map_blocks
-    from dask.array.utils import meta_from_array
 
     bins = np.asarray(bins)
     if bins.ndim != 1:
@@ -666,3 +665,114 @@ def digitize(a, bins, right=False):
 
     dtype = np.digitize(np.asarray([0], like=bins), bins, right=right).dtype
     return map_blocks(np.digitize, a, dtype=dtype, bins=bins, right=right)
+
+
+def _variadic_choose(a, *choices):
+    return np.choose(a, choices)
+
+
+@derived_from(np)
+def choose(a, choices):
+    a = asarray(a)
+    choices = [asarray(c) for c in choices]
+    return elemwise(_variadic_choose, a, *choices)
+
+
+@derived_from(np)
+def extract(condition, arr):
+    condition = asarray(condition).astype(bool)
+    arr = asarray(arr)
+    return compress(condition.ravel(), arr.ravel())
+
+
+def _int_piecewise(x, *condlist, **kwargs):
+    return np.piecewise(
+        x, list(condlist), kwargs["funclist"], *kwargs["func_args"], **kwargs["func_kw"]
+    )
+
+
+@derived_from(np)
+def piecewise(x, condlist, funclist, *args, **kw):
+    from dask.array._array_expr._map_blocks import map_blocks
+
+    x = asarray(x)
+    return map_blocks(
+        _int_piecewise,
+        x,
+        *condlist,
+        dtype=x.dtype,
+        name="piecewise",
+        funclist=funclist,
+        func_args=args,
+        func_kw=kw,
+    )
+
+
+def _select(*args, **kwargs):
+    split_at = len(args) // 2
+    condlist = args[:split_at]
+    choicelist = args[split_at:]
+    return np.select(condlist, choicelist, **kwargs)
+
+
+@derived_from(np)
+def select(condlist, choicelist, default=0):
+    from dask.array._array_expr._collection import blockwise
+
+    if len(condlist) != len(choicelist):
+        raise ValueError("list of cases must be same length as list of conditions")
+
+    if len(condlist) == 0:
+        raise ValueError("select with an empty condition list is not possible")
+
+    choicelist = [asarray(choice) for choice in choicelist]
+
+    try:
+        intermediate_dtype = result_type(*choicelist)
+    except TypeError as e:
+        msg = "Choicelist elements do not have a common dtype."
+        raise TypeError(msg) from e
+
+    blockwise_shape = tuple(range(choicelist[0].ndim))
+    condargs = [arg for elem in condlist for arg in (elem, blockwise_shape)]
+    choiceargs = [arg for elem in choicelist for arg in (elem, blockwise_shape)]
+
+    return blockwise(
+        _select,
+        blockwise_shape,
+        *condargs,
+        *choiceargs,
+        dtype=intermediate_dtype,
+        default=default,
+    )
+
+
+def _isin_kernel(element, test_elements, assume_unique=False):
+    values = np.isin(element.ravel(), test_elements, assume_unique=assume_unique)
+    return values.reshape(element.shape + (1,) * test_elements.ndim)
+
+
+@derived_from(np)
+def isin(element, test_elements, assume_unique=False, invert=False):
+    from dask.array._array_expr._collection import blockwise
+
+    element = asarray(element)
+    test_elements = asarray(test_elements)
+    element_axes = tuple(range(element.ndim))
+    test_axes = tuple(i + element.ndim for i in range(test_elements.ndim))
+    mapped = blockwise(
+        _isin_kernel,
+        element_axes + test_axes,
+        element,
+        element_axes,
+        test_elements,
+        test_axes,
+        adjust_chunks={axis: lambda _: 1 for axis in test_axes},
+        dtype=bool,
+        assume_unique=assume_unique,
+    )
+
+    result = mapped.any(axis=test_axes)
+    if invert:
+        result = ~result
+    return result

@@ -854,13 +854,18 @@ if _array_expr_enabled():
             append,
             around,
             broadcast_arrays,
+            choose,
             count_nonzero,
+            extract,
             isclose,
+            isin,
             isnull,
             ndim,
             notnull,
+            piecewise,
             result_type,
             round,
+            select,
             shape,
             unify_chunks,
         )
@@ -887,21 +892,16 @@ if _array_expr_enabled():
         apply_over_axes = raise_not_implemented_error("apply_over_axes")
         argwhere = raise_not_implemented_error("argwhere")
         bincount = raise_not_implemented_error("bincount")
-        choose = raise_not_implemented_error("choose")
         coarsen = raise_not_implemented_error("coarsen")
         corrcoef = raise_not_implemented_error("corrcoef")
         cov = raise_not_implemented_error("cov")
         delete = raise_not_implemented_error("delete")
         ediff1d = raise_not_implemented_error("ediff1d")
         from dask.array._array_expr import einsum
-        extract = raise_not_implemented_error("extract")
         flatnonzero = raise_not_implemented_error("flatnonzero")
         insert = raise_not_implemented_error("insert")
-        isin = raise_not_implemented_error("isin")
         nonzero = raise_not_implemented_error("nonzero")
-        piecewise = raise_not_implemented_error("piecewise")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
-        select = raise_not_implemented_error("select")
         tril_indices = raise_not_implemented_error("tril_indices")
         tril_indices_from = raise_not_implemented_error("tril_indices_from")
         triu_indices = raise_not_implemented_error("triu_indices")

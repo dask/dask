@@ -32,6 +32,7 @@ The array-expr system has foundational infrastructure in place:
 - Advanced indexing: vindex, take
 - Creation: eye, diag, diagonal, tri, tril, triu, fromfunction, indices, meshgrid, pad, tile
 - Statistics: histogram, histogram2d, histogramdd, digitize
+- Selection & conditional: select, piecewise, choose, extract, isin
 
 ## Testing Infrastructure
 
@@ -138,11 +139,11 @@ Conditional operations.
 
 | Operation | Notes | Status |
 |-----------|-------|--------|
-| select | multi-condition select | Not started |
-| piecewise | piecewise functions | Not started |
-| choose | index-based selection | Not started |
-| extract | condition-based extraction | Not started |
-| isin | membership test | Not started |
+| select | multi-condition select | **Done** |
+| piecewise | piecewise functions | **Done** |
+| choose | index-based selection | **Done** |
+| extract | condition-based extraction | **Done** |
+| isin | membership test | **Done** |
 
 ### Tier 9: Linear Algebra Extensions
 Beyond basic linalg.
@@ -150,7 +151,7 @@ Beyond basic linalg.
 | Operation | Notes | Status |
 |-----------|-------|--------|
 | einsum | Einstein summation | **Done** |
-| outer | outer product | **Done** (already existed) |
+| outer | outer product | **Done** |
 | trace | diagonal sum | **Done** |
 | tril_indices | triangle indices | Blocked (needs nonzero) |
 | triu_indices | triangle indices | Blocked (needs nonzero) |
