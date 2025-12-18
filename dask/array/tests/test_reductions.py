@@ -550,7 +550,6 @@ def test_0d_array():
     assert type(x) == type(y)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="scalar reduction not implemented for array-expr", strict=False)
 def test_reduction_on_scalar():
     x = da.from_array(np.array(1.0), chunks=())
     assert (x == x).all()

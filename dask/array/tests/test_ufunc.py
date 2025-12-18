@@ -183,7 +183,6 @@ def test_unary_ufunc(ufunc):
 
 
 @pytest.mark.parametrize("ufunc", binary_ufuncs)
-@pytest.mark.xfail(da._array_expr_enabled(), reason="ldexp dtype issue in array-expr", strict=False)
 def test_binary_ufunc(ufunc):
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
