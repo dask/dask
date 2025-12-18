@@ -360,7 +360,7 @@ def outer(a, b):
 def round(a, decimals=0):
     """Round an array to the given number of decimals."""
     a = asarray(a)
-    return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
+    return elemwise(np.round, a, dtype=a.dtype, decimals=decimals)
 
 
 @derived_from(np)
@@ -432,7 +432,7 @@ def isnonzero(a):
     try:
         np.zeros([], dtype=a.dtype).astype(bool)
     except ValueError:
-        return a.map_blocks(_isnonzero, dtype=bool)
+        return elemwise(_isnonzero, a, dtype=bool)
     else:
         return a.astype(bool)
 
@@ -598,16 +598,17 @@ def take(a, indices, axis=0):
         return a[(slice(None),) * axis + (indices,)]
 
 
+def _take_constant(indices, a, axis):
+    """Take from a constant array using indices."""
+    return np.take(a, indices, axis)
+
+
 def _take_dask_array_from_numpy(a, indices, axis):
     """Take from a numpy array using a dask array of indices."""
-    from dask.array._array_expr._map_blocks import map_blocks
-
     assert isinstance(a, np.ndarray)
     assert isinstance(indices, Array)
 
-    return map_blocks(
-        lambda block: np.take(a, block, axis), indices, chunks=indices.chunks, dtype=a.dtype
-    )
+    return elemwise(_take_constant, indices, dtype=a.dtype, a=a, axis=axis)
 
 
 @derived_from(np)
@@ -664,14 +665,12 @@ def digitize(a, bins, right=False):
     indices : dask array of ints
         Output array of indices.
     """
-    from dask.array._array_expr._map_blocks import map_blocks
-
     bins = np.asarray(bins)
     if bins.ndim != 1:
         raise ValueError("bins must be 1-dimensional")
 
     dtype = np.digitize(np.asarray([0], like=bins), bins, right=right).dtype
-    return map_blocks(np.digitize, a, dtype=dtype, bins=bins, right=right)
+    return elemwise(np.digitize, a, dtype=dtype, bins=bins, right=right)
 
 
 def _variadic_choose(a, *choices):
@@ -692,18 +691,14 @@ def extract(condition, arr):
     return compress(condition.ravel(), arr.ravel())
 
 
-def _int_piecewise(x, *condlist, **kwargs):
-    return np.piecewise(
-        x, list(condlist), kwargs["funclist"], *kwargs["func_args"], **kwargs["func_kw"]
-    )
+def _int_piecewise(x, *condlist, funclist=None, func_args=(), func_kw=None):
+    return np.piecewise(x, list(condlist), funclist, *func_args, **(func_kw or {}))
 
 
 @derived_from(np)
 def piecewise(x, condlist, funclist, *args, **kw):
-    from dask.array._array_expr._map_blocks import map_blocks
-
     x = asarray(x)
-    return map_blocks(
+    return elemwise(
         _int_piecewise,
         x,
         *condlist,

@@ -6,6 +6,7 @@ import operator
 import numpy as np
 import toolz
 
+from dask._task_spec import Alias, List, Task, TaskRef
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array.core import concatenate3
 from dask.array.rechunk import (
@@ -132,18 +133,24 @@ class TasksRechunk(Rechunk):
         return toolz.merge(*layers)
 
 
+def _convert_to_task_refs(obj):
+    """Recursively convert nested lists of keys to TaskRefs."""
+    if isinstance(obj, list):
+        return List(*[_convert_to_task_refs(item) for item in obj])
+    elif isinstance(obj, tuple):
+        # Keys are tuples like (name, i, j, ...)
+        return TaskRef(obj)
+    else:
+        return obj
+
+
 def _compute_rechunk(old_name, old_chunks, chunks, level, name):
     """Compute the rechunk of *x* to the given *chunks*."""
-    # TODO: redo this logic
-    # if x.size == 0:
-    #     # Special case for empty array, as the algorithm below does not behave correctly
-    #     return empty(x.shape, chunks=chunks, dtype=x.dtype)
-
     ndim = len(old_chunks)
     crossed = intersect_chunks(old_chunks, chunks)
-    x2 = dict()
-    intermediates = dict()
-    # token = tokenize(old_name, chunks)
+    x2 = {}
+    intermediates = {}
+
     if level != 0:
         merge_name = name.replace("rechunk-merge-", f"rechunk-merge-{level}-")
         split_name = name.replace("rechunk-merge-", f"rechunk-split-{level}-")
@@ -152,8 +159,7 @@ def _compute_rechunk(old_name, old_chunks, chunks, level, name):
         split_name = name.replace("rechunk-merge-", "rechunk-split-")
     split_name_suffixes = itertools.count()
 
-    # Pre-allocate old block references, to allow reuse and reduce the
-    # graph's memory footprint a bit.
+    # Pre-allocate old block references
     old_blocks = np.empty([len(c) for c in old_chunks], dtype="O")
     for index in np.ndindex(old_blocks.shape):
         old_blocks[index] = (old_name,) + index
@@ -172,28 +178,34 @@ def _compute_rechunk(old_name, old_chunks, chunks, level, name):
         # Iterate over the old blocks required to build the new block
         for rec_cat_index, ind_slices in enumerate(cross1):
             old_block_index, slices = zip(*ind_slices)
-            name = (split_name, next(split_name_suffixes))
+            intermediate_name = (split_name, next(split_name_suffixes))
             old_index = old_blocks[old_block_index][1:]
             if all(
                 slc.start == 0 and slc.stop == old_chunks[i][ind]
                 for i, (slc, ind) in enumerate(zip(slices, old_index))
             ):
+                # No slicing needed - use old block directly
                 rec_cat_arg_flat[rec_cat_index] = old_blocks[old_block_index]
             else:
-                intermediates[name] = (
+                # Need to slice the old block
+                intermediates[intermediate_name] = Task(
+                    intermediate_name,
                     operator.getitem,
-                    old_blocks[old_block_index],
+                    TaskRef(old_blocks[old_block_index]),
                     slices,
                 )
-                rec_cat_arg_flat[rec_cat_index] = name
+                rec_cat_arg_flat[rec_cat_index] = intermediate_name
 
         assert rec_cat_index == rec_cat_arg.size - 1
 
         # New block is formed by concatenation of sliced old blocks
         if all(d == 1 for d in rec_cat_arg.shape):
-            x2[key] = rec_cat_arg.flat[0]
+            # Single source block - alias to it
+            source_key = rec_cat_arg.flat[0]
+            x2[key] = Alias(key, source_key)
         else:
-            x2[key] = (concatenate3, rec_cat_arg.tolist())
+            # Multiple source blocks - concatenate
+            x2[key] = Task(key, concatenate3, _convert_to_task_refs(rec_cat_arg.tolist()))
 
     del old_blocks, new_index
 

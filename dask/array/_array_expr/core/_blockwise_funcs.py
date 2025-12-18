@@ -223,6 +223,8 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         A unique key name to use when building the backing dask graph. If not
         provided, one will be automatically generated based on the input
         arguments.
+    **kwargs : dict
+        Additional keyword arguments to pass to `op`.
 
     Examples
     --------
@@ -250,4 +252,6 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     # Scalars are kept as-is to preserve proper dtype behavior (e.g., 2.0 * float32_array = float32)
     args = [asanyarray(a) if not is_scalar_for_elemwise(a) else a for a in args]
 
-    return new_collection(Elemwise(op, dtype, name, where, *args))
+    user_kwargs = dict(kwargs) if kwargs else None
+
+    return new_collection(Elemwise(op, dtype, name, where, user_kwargs, *args))

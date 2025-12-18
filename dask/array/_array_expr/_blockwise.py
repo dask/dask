@@ -212,16 +212,21 @@ class Blockwise(ArrayExpr):
 
 
 class Elemwise(Blockwise):
-    _parameters = ["op", "dtype", "name", "where"]
+    _parameters = ["op", "dtype", "name", "where", "_user_kwargs"]
     _defaults = {
         "dtype": None,
         "name": None,
         "where": True,
+        "_user_kwargs": None,
     }
     align_arrays = True
     new_axes: dict = {}
     adjust_chunks = None
     concatenate = None
+
+    @property
+    def user_kwargs(self):
+        return self.operand("_user_kwargs") or {}
 
     @cached_property
     def _meta(self):
@@ -275,7 +280,7 @@ class Elemwise(Blockwise):
             ]
             try:
                 dtype = apply_infer_dtype(
-                    self.op, vals, {}, "elemwise", suggest_dtype=False
+                    self.op, vals, self.user_kwargs, "elemwise", suggest_dtype=False
                 )
             except Exception:
                 raise NotImplementedError
@@ -311,7 +316,8 @@ class Elemwise(Blockwise):
 
     @property
     def kwargs(self):
-        return self._info[2]
+        # Merge user kwargs with internal kwargs (dtype enforcement, where handling)
+        return {**self.user_kwargs, **self._info[2]}
 
     @property
     def token(self):
@@ -355,6 +361,7 @@ class Elemwise(Blockwise):
                     self.operand("dtype"),
                     self.operand("name"),
                     new_where,
+                    self.operand("_user_kwargs"),
                     *new_elemwise_args,
                 )
 
