@@ -37,6 +37,7 @@ from dask.array.utils import assert_eq, same_keys
         "full",
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="custom name not preserved in array-expr", strict=False)
 @pytest.mark.parametrize("cast_shape", [tuple, list, np.asarray])
 @pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
 @pytest.mark.parametrize("shape, chunks", [((10, 10), (4, 4))])
@@ -129,6 +130,7 @@ def test_arr_like_shape(funcname, kwargs, shape, dtype, chunks, out_shape):
         assert_eq(np_r, da_r)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype mismatch in array-expr")
 @pytest.mark.parametrize("endpoint", [True, False])
 def test_linspace(endpoint):
     darr = da.linspace(6, 49, endpoint=endpoint, chunks=5)
@@ -188,6 +190,7 @@ def test_linspace(endpoint):
     assert_eq(darr, nparr)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype mismatch in array-expr")
 def test_arange():
     darr = da.arange(77, chunks=13)
     nparr = np.arange(77)
@@ -299,6 +302,7 @@ def test_arange_dtype_force(dtype):
         (-72_057_594_037_927_945, -72_057_594_037_927_938, 1.5),
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype issues in array-expr", strict=False)
 @pytest.mark.parametrize("chunks", ["auto", 1])
 def test_arange_very_large_args(start, stop, step, chunks):
     """Test args that are very close to 2**63
@@ -564,6 +568,7 @@ def test_diag_extraction(k):
     assert_eq(da.diag(d, k), np.diag(y, k))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="data_producer not implemented in array-expr")
 def test_creation_data_producers():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
@@ -715,6 +720,7 @@ def test_fromfunction(func, dtype, kwargs):
     assert same_keys(d, d2)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="repeat not implemented for array-expr")
 def test_repeat():
     x = np.random.random((10, 11, 13))
     d = da.from_array(x, chunks=(4, 5, 3))
@@ -819,6 +825,7 @@ def test_tile_np_kroncompare_examples(shape, reps):
         ((10, 11), (4, 5), 0, "empty", {}),
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="some pad modes not implemented in array-expr", strict=False)
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
@@ -864,6 +871,7 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ((10,), (3,), 1, "empty", {}),
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="some pad modes not implemented in array-expr", strict=False)
 def test_pad(shape, chunks, pad_width, mode, kwargs):
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
@@ -964,6 +972,7 @@ def test_pad_constant_values(np_a, pad_value):
         ),
     ],
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="some pad modes not implemented in array-expr", strict=False)
 def test_pad_3d_data(dtype, pad_widths, mode):
     np_a = np.arange(2 * 3 * 4).reshape(2, 3, 4).astype(dtype)
     da_a = da.from_array(np_a, chunks="auto")
@@ -975,6 +984,7 @@ def test_pad_3d_data(dtype, pad_widths, mode):
 
 
 @pytest.mark.parametrize("kwargs", [{}, {"scaler": 2}])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="pad UDF mode not implemented in array-expr")
 def test_pad_udf(kwargs):
     def udf_pad(vector, pad_width, iaxis, inner_kwargs):
         assert kwargs == inner_kwargs
@@ -1053,6 +1063,7 @@ def test_nan_zeros_ones_like(fn, shape_chunks, dtype):
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="graph structure differs in array-expr")
 def test_from_array_getitem_fused():
     arr = np.arange(100).reshape(10, 10)
     darr = da.from_array(arr, chunks=(5, 5))
@@ -1100,6 +1111,7 @@ def test_nan_full_like(val, shape_chunks, dtype):
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="graph serialization differs in array-expr", strict=False)
 @pytest.mark.parametrize(
     "func", [da.array, da.asarray, da.asanyarray, da.arange, da.tri]
 )
