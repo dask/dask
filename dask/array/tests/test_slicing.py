@@ -383,6 +383,7 @@ def test_slicing_and_chunks():
     assert t.chunks == ((8, 8), (6, 6))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr")
 def test_slicing_and_unknown_chunks():
     a = da.ones((10, 5), chunks=5)
     a._chunks = ((np.nan, np.nan), (5,))
@@ -639,6 +640,7 @@ def test_oob_check():
         x[0, 0]
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 @pytest.mark.parametrize("idx_chunks", [None, 3, 2, 1])
 @pytest.mark.parametrize("x_chunks", [None, (3, 5), (2, 3), (1, 2), (1, 1)])
 def test_index_with_int_dask_array(x_chunks, idx_chunks):
@@ -670,6 +672,7 @@ def test_index_with_int_dask_array_0d(chunks):
     assert_eq(x[:, idx0], x[:, 1])
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="nonzero not implemented for array-expr")
 @pytest.mark.parametrize("chunks", [1, 2, 3, 4, 5])
 def test_index_with_int_dask_array_nanchunks(chunks):
     # Slice by array with nan-sized chunks
@@ -707,6 +710,7 @@ def test_index_with_int_dask_array_dtypes(dtype):
     assert_eq(a[idx], np.array([20, 30]))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr")
 def test_index_with_int_dask_array_nocompute():
     """Test that when the indices are a dask array
     they are not accidentally computed
@@ -947,6 +951,7 @@ def test_pathological_unsorted_slicing():
     assert_eq(x[index], x.compute()[index])
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr")
 @pytest.mark.parametrize("params", [(2, 2, 1), (5, 3, 2)])
 def test_setitem_with_different_chunks_preserves_shape(params):
     """Reproducer for https://github.com/dask/dask/issues/3730.
@@ -1001,6 +1006,7 @@ def test_shuffle_slice(size, chunks):
     assert_eq(a, b)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="flatnonzero not implemented for array-expr")
 def test_unknown_chunks_length_one():
     a = np.arange(256, dtype=int)
     arr = da.from_array(a, chunks=(256,))
@@ -1111,6 +1117,7 @@ def test_vindex_with_dask_array():
         darr.vindex[(dindexer, None)]
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr")
 def test_positional_indexer_newaxis():
     arr = da.array([0, 1, 2])
     new = arr[[True, True, False], np.newaxis]

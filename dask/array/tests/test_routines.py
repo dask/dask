@@ -1709,6 +1709,7 @@ def test_take():
     assert same_keys(da.take(a, [3, 4, 5], axis=-1), da.take(a, [3, 4, 5], axis=-1))
 
 
+@pytest.mark.skipif(da._array_expr_enabled(), reason="hangs - lazy evaluation issue")
 def test_take_large():
     a = da.arange(1_000_000_000_000, chunks=(200_000_000,), dtype="int64")
 
