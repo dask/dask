@@ -48,6 +48,7 @@ class Array(DaskMethodsMixin):
         named_schedulers.get("threads", named_schedulers["sync"])
     )
     __dask_optimize__ = staticmethod(lambda dsk, keys, **kwargs: dsk)
+    __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
     def __init__(self, expr):
         self._expr = expr
@@ -714,6 +715,29 @@ class Array(DaskMethodsMixin):
         c = self.copy()
         memo[id(self)] = c
         return c
+
+    def to_delayed(self, optimize_graph=True):
+        """Convert into an array of :class:`dask.delayed.Delayed` objects, one per chunk.
+
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            :class:`dask.delayed.Delayed` objects.
+
+        See Also
+        --------
+        dask.array.from_delayed
+        """
+        from dask.delayed import Delayed
+        from dask.utils import ndeepmap
+
+        keys = self.__dask_keys__()
+        graph = self.__dask_graph__()
+        if optimize_graph:
+            graph = self.__dask_optimize__(graph, keys)
+        L = ndeepmap(self.ndim, lambda k: Delayed(k, graph), keys)
+        return np.array(L, dtype=object)
 
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         """
