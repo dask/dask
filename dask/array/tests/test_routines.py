@@ -663,7 +663,6 @@ def test_gradient(shape, varargs, axis, edge_order):
         )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_bincount():
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
@@ -687,7 +686,6 @@ def test_bincount():
         np.array([1, 2, 1, 0, 1], dtype=np.int32),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_bincount_with_weights(weights):
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
@@ -698,7 +696,6 @@ def test_bincount_with_weights(weights):
     assert same_keys(da.bincount(d, weights=dweights, minlength=6), e)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_bincount_unspecified_minlength():
     x = np.array([1, 1, 3, 7, 0])
     d = da.from_array(x, chunks=2)
@@ -1223,7 +1220,6 @@ def test_histogramdd_edges():
         assert_eq(ib1, ib2)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_cov():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(4, 4))
@@ -1249,7 +1245,6 @@ def test_cov():
 @pytest.mark.skipif(
     not NUMPY_GE_220, reason="fweights is not an kwarg prior to numpy 2.2"
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_cov_fweights():
     x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
     res1 = da.array([[1.0, -1.0], [-1.0, 1.0]])
@@ -1279,7 +1274,6 @@ def test_cov_fweights():
 @pytest.mark.skipif(
     not NUMPY_GE_220, reason="aweights is not an kwarg prior to numpy 2.2"
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_cov_aweights():
     x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
     res1 = da.array([[1.0, -1.0], [-1.0, 1.0]])
@@ -1315,7 +1309,6 @@ def test_cov_aweights():
 @pytest.mark.skipif(
     not NUMPY_GE_220, reason="fweights and aweights are not kwargs prior to numpy 2.2"
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_cov_fweights_aweights_combined():
     x1 = da.array([[0, 2], [1, 1], [2, 0]]).T
 
@@ -1335,7 +1328,6 @@ def test_cov_fweights_aweights_combined():
     assert not allclose(result, result_a_only)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_corrcoef():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(4, 4))
@@ -2795,8 +2787,6 @@ def test_einsum_empty_dimension():
 @pytest.mark.parametrize("a", [np.arange(11), np.arange(6).reshape((3, 2))])
 @pytest.mark.parametrize("returned", [True, False])
 def test_average(a, returned):
-    if da._array_expr_enabled() and returned:
-        pytest.xfail("returned=True requires broadcast_to for array-expr")
     d_a = da.from_array(a, chunks=2)
 
     np_avg = np.average(a, returned=returned)
@@ -2816,7 +2806,6 @@ def test_average_keepdims(a):
 
 
 @pytest.mark.parametrize("keepdims", [False, True])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="weights requires broadcast_to/swapaxes for array-expr", strict=False)
 def test_average_weights(keepdims):
     a = np.arange(6).reshape((3, 2))
     d_a = da.from_array(a, chunks=2)

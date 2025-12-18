@@ -668,6 +668,8 @@ if _array_expr_enabled():
             atleast_1d,
             atleast_2d,
             atleast_3d,
+            average,
+            bincount,
             bitwise_and,
             bitwise_not,
             bitwise_or,
@@ -682,8 +684,10 @@ if _array_expr_enabled():
             concatenate,
             conj,
             copysign,
+            corrcoef,
             cos,
             cosh,
+            cov,
             deg2rad,
             degrees,
             diag,
@@ -897,10 +901,7 @@ if _array_expr_enabled():
         from dask.array._array_expr import trace
         apply_along_axis = raise_not_implemented_error("apply_along_axis")
         apply_over_axes = raise_not_implemented_error("apply_over_axes")
-        bincount = raise_not_implemented_error("bincount")
         coarsen = raise_not_implemented_error("coarsen")
-        corrcoef = raise_not_implemented_error("corrcoef")
-        cov = raise_not_implemented_error("cov")
         delete = raise_not_implemented_error("delete")
         ediff1d = raise_not_implemented_error("ediff1d")
         from dask.array._array_expr import einsum
