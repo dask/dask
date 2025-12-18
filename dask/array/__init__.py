@@ -882,7 +882,7 @@ if _array_expr_enabled():
         optimize = raise_not_implemented_error("optimize")
         argtopk = raise_not_implemented_error("argtopk")
         topk = raise_not_implemented_error("topk")
-        trace = raise_not_implemented_error("trace")
+        from dask.array._array_expr import trace
         apply_along_axis = raise_not_implemented_error("apply_along_axis")
         apply_over_axes = raise_not_implemented_error("apply_over_axes")
         argwhere = raise_not_implemented_error("argwhere")
@@ -893,7 +893,7 @@ if _array_expr_enabled():
         cov = raise_not_implemented_error("cov")
         delete = raise_not_implemented_error("delete")
         ediff1d = raise_not_implemented_error("ediff1d")
-        einsum = raise_not_implemented_error("einsum")
+        from dask.array._array_expr import einsum
         extract = raise_not_implemented_error("extract")
         flatnonzero = raise_not_implemented_error("flatnonzero")
         insert = raise_not_implemented_error("insert")

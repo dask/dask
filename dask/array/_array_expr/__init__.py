@@ -61,10 +61,16 @@ from dask.array._array_expr._creation import (
 )
 from dask.array._array_expr._gufunc import *
 from dask.array._array_expr._io import from_delayed, from_npy_stack, store, to_npy_stack
+from dask.array._array_expr._einsum import einsum
 from dask.array._array_expr._linalg import dot, matmul, tensordot, vdot
 from dask.array._array_expr._map_blocks import map_blocks
 from dask.array._array_expr._overlap import map_overlap, overlap, trim_overlap
-from dask.array._array_expr._reductions import _tree_reduce, arg_reduction, reduction
+from dask.array._array_expr._reductions import (
+    _tree_reduce,
+    arg_reduction,
+    reduction,
+    trace,
+)
 from dask.array._array_expr._histogram import histogram, histogram2d, histogramdd
 from dask.array._array_expr._routines import (
     allclose,

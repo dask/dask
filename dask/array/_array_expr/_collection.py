@@ -887,6 +887,19 @@ class Array(DaskMethodsMixin):
 
         return cumprod(self, axis=axis, dtype=dtype, out=out, method=method)
 
+    def trace(self, offset=0, axis1=0, axis2=1, dtype=None):
+        """Return the sum along diagonals of the array.
+
+        Refer to :func:`dask.array.trace` for full documentation.
+
+        See Also
+        --------
+        dask.array.trace : equivalent function
+        """
+        from dask.array._array_expr._reductions import trace
+
+        return trace(self, offset=offset, axis1=axis1, axis2=axis2, dtype=dtype)
+
     def dot(self, other):
         """Dot product of self and other.
 
