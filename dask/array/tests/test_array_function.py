@@ -14,7 +14,7 @@ from dask.array.utils import assert_eq
     [
         lambda x: np.append(x, x),
         lambda x: np.concatenate([x, x, x]),
-        pytest.param(lambda x: np.cov(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="cov not implemented")),
+        lambda x: np.cov(x, x),
         lambda x: np.dot(x, x),
         lambda x: np.dstack((x, x)),
         lambda x: np.flip(x, axis=0),
@@ -148,7 +148,7 @@ def test_array_function_cupy_svd(chunks):
     "func",
     [
         lambda x: np.concatenate([x, x, x]),
-        pytest.param(lambda x: np.cov(x, x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="cov not implemented")),
+        lambda x: np.cov(x, x),
         lambda x: np.dot(x, x),
         lambda x: np.dstack((x, x)),
         lambda x: np.flip(x, axis=0),

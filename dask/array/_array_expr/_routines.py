@@ -1,23 +1,28 @@
 from __future__ import annotations
 
 import math
+import warnings
+from functools import cached_property, partial
 from numbers import Integral, Real
 
 import numpy as np
 
-from functools import partial
-
+from dask._task_spec import Task, TaskRef
 from dask.array._array_expr._collection import (
     Array,
+    array,
     asarray,
     asanyarray,
+    broadcast_to,
     concatenate,
     elemwise,
+    new_collection,
     ravel,
     stack,
 )
+from dask.array._array_expr._expr import ArrayExpr
 from dask.array._array_expr._overlap import map_overlap
-from dask.array.utils import validate_axis
+from dask.array.utils import meta_from_array, validate_axis
 from dask.base import is_dask_collection
 from dask.utils import derived_from
 
@@ -811,3 +816,267 @@ def nonzero(a):
         return tuple(ind[:, i] for i in range(ind.shape[1]))
     else:
         return (ind,)
+
+
+def _bincount_chunk(x, weights, minlength):
+    """Apply bincount to a single chunk, wrapping result in extra dimension."""
+    if weights is not None:
+        result = np.bincount(x, weights=weights, minlength=minlength)
+    else:
+        result = np.bincount(x, minlength=minlength)
+    # Add outer dimension for stacking/summing
+    return result[np.newaxis]
+
+
+def _bincount_sum(bincounts, axis, keepdims, dtype=None):
+    """Sum bincount results, handling variable lengths when minlength=0."""
+    # bincounts is a list of 2D arrays, each with shape (1, varying_length)
+    if not isinstance(bincounts, list):
+        bincounts = [bincounts]
+
+    # Handle variable-length outputs when minlength=0
+    n = max(b.shape[1] for b in bincounts)
+    out = np.zeros((1, n), dtype=bincounts[0].dtype)
+    for b in bincounts:
+        out[0, :b.shape[1]] += b[0]
+
+    if not keepdims:
+        return out[0]
+    return out
+
+
+class BincountChunked(ArrayExpr):
+    """Expression for per-chunk bincount computation.
+
+    Creates a 2D array of shape (nchunks, output_size) where each row
+    is the bincount of one input chunk. Use .sum(axis=0) or tree reduce
+    to get the final result.
+    """
+
+    _parameters = ["x", "weights", "minlength", "output_size", "meta_provided"]
+    _defaults = {"weights": None}
+
+    @cached_property
+    def _meta(self):
+        return np.empty((0, 0), dtype=self.meta_provided.dtype)
+
+    @cached_property
+    def chunks(self):
+        nchunks = len(self.x.chunks[0])
+        return ((1,) * nchunks, (self.output_size,))
+
+    @cached_property
+    def _name(self):
+        return f"bincount-{self.deterministic_token}"
+
+    def _layer(self):
+        dsk = {}
+        minlen = self.minlength
+        for i in range(len(self.x.chunks[0])):
+            key = (self._name, i, 0)
+            x_ref = TaskRef((self.x._name, i))
+            w_ref = TaskRef((self.weights._name, i)) if self.weights is not None else None
+            dsk[key] = Task(key, _bincount_chunk, x_ref, w_ref, minlen)
+        return dsk
+
+    @property
+    def _dependencies(self):
+        deps = [self.x]
+        if self.weights is not None:
+            deps.append(self.weights)
+        return deps
+
+
+@derived_from(np)
+def bincount(x, weights=None, minlength=0, split_every=None):
+    """Count number of occurrences of each value in array of non-negative ints."""
+    from dask.array._array_expr._reductions import _tree_reduce
+
+    x = asarray(x)
+    if x.ndim != 1:
+        raise ValueError("Input array must be one dimensional. Try using x.ravel()")
+    if weights is not None:
+        weights = asarray(weights)
+        if weights.chunks != x.chunks:
+            raise ValueError("Chunks of input array x and weights must match.")
+
+    if weights is not None:
+        meta = np.bincount([1], weights=np.array([1], dtype=weights.dtype))
+    else:
+        meta = np.bincount([])
+
+    if minlength == 0:
+        output_size = np.nan
+    else:
+        output_size = minlength
+
+    chunked_counts = new_collection(BincountChunked(x, weights, minlength, output_size, meta_provided=meta))
+
+    # Use sum along axis 0 to combine chunk results
+    # For minlength>0 this works directly; for minlength=0 we need tree reduce
+    if minlength > 0:
+        return chunked_counts.sum(axis=0)
+    else:
+        # For unknown output size, use tree reduce with custom aggregation
+        return _tree_reduce(
+            chunked_counts,
+            aggregate=partial(_bincount_sum, dtype=meta.dtype),
+            axis=(0,),
+            keepdims=False,
+            dtype=meta.dtype,
+            split_every=split_every,
+            concatenate=False,
+        )
+
+
+def average(a, axis=None, weights=None, returned=False, keepdims=False):
+    """Compute the weighted average along the specified axis."""
+    a = asanyarray(a)
+
+    if weights is None:
+        avg = a.mean(axis, keepdims=keepdims)
+        scl = avg.dtype.type(a.size / avg.size)
+    else:
+        wgt = asanyarray(weights)
+
+        if issubclass(a.dtype.type, (np.integer, np.bool_)):
+            result_dtype = result_type(a.dtype, wgt.dtype, "f8")
+        else:
+            result_dtype = result_type(a.dtype, wgt.dtype)
+
+        if a.shape != wgt.shape:
+            if axis is None:
+                raise TypeError(
+                    "Axis must be specified when shapes of a and weights differ."
+                )
+            if wgt.ndim != 1:
+                raise TypeError(
+                    "1D weights expected when shapes of a and weights differ."
+                )
+            if wgt.shape[0] != a.shape[axis]:
+                raise ValueError(
+                    "Length of weights not compatible with specified axis."
+                )
+
+            wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
+            wgt = wgt.swapaxes(-1, axis)
+
+        scl = wgt.sum(axis=axis, dtype=result_dtype, keepdims=keepdims)
+        from dask.array._array_expr._ufunc import multiply
+
+        avg = multiply(a, wgt, dtype=result_dtype).sum(axis, keepdims=keepdims) / scl
+
+    if returned:
+        if scl.shape != avg.shape:
+            scl = broadcast_to(scl, avg.shape)
+        return avg, scl
+    else:
+        return avg
+
+
+@derived_from(np)
+def cov(
+    m,
+    y=None,
+    rowvar=True,
+    bias=False,
+    ddof=None,
+    fweights=None,
+    aweights=None,
+    *,
+    dtype=None,
+):
+    """Estimate a covariance matrix."""
+    from dask.array._array_expr._linalg import dot
+    from dask.array._array_expr._ufunc import true_divide
+
+    if ddof is not None and ddof != int(ddof):
+        raise ValueError("ddof must be integer")
+
+    m = asarray(m)
+
+    if y is None:
+        dtype = result_type(m, np.float64)
+    else:
+        y = asarray(y)
+        dtype = result_type(m, y, np.float64)
+
+    if m.ndim > 2:
+        raise ValueError("m has more than 2 dimensions")
+    if y is not None and y.ndim > 2:
+        raise ValueError("y has more than 2 dimensions")
+
+    X = array(m, ndmin=2, dtype=dtype)
+
+    if ddof is None:
+        ddof = 1 if bias == 0 else 0
+
+    if not rowvar and m.ndim != 1:
+        X = X.T
+    if X.shape[0] == 0:
+        return array([]).reshape(0, 0)
+    if y is not None:
+        y = array(y, ndmin=2, dtype=dtype)
+        if not rowvar and y.shape[0] != 1:
+            y = y.T
+        X = concatenate((X, y), axis=0)
+
+    w = None
+    if fweights is not None:
+        fweights = asarray(fweights, dtype=float)
+        if fweights.ndim > 1:
+            raise RuntimeError("cannot handle multidimensional fweights")
+        if fweights.shape[0] != X.shape[1]:
+            raise RuntimeError("incompatible numbers of samples and fweights")
+        w = fweights
+    if aweights is not None:
+        aweights = asarray(aweights, dtype=float)
+        if aweights.ndim > 1:
+            raise RuntimeError("cannot handle multidimensional aweights")
+        if aweights.shape[0] != X.shape[1]:
+            raise RuntimeError("incompatible numbers of samples and aweights")
+        if w is None:
+            w = aweights
+        else:
+            w *= aweights
+
+    avg, w_sum = average(X, axis=1, weights=w, returned=True)
+    w_sum = w_sum[0]
+
+    if w is None:
+        fact = X.shape[1] - ddof
+    elif ddof == 0:
+        fact = w_sum
+    elif aweights is None:
+        fact = w_sum - ddof
+    else:
+        fact = w_sum - ddof * (w * aweights).sum() / w_sum
+
+    if fact <= 0:
+        warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
+        fact = 0.0
+
+    X -= avg[:, None]
+    if w is None:
+        X_T = X.T
+    else:
+        X_T = (X * w).T
+    c = dot(X, X_T.conj())
+    c *= true_divide(1, fact)
+    return c.squeeze()
+
+
+@derived_from(np)
+def corrcoef(x, y=None, rowvar=1):
+    """Return Pearson product-moment correlation coefficients."""
+    from dask.array._array_expr._creation import diag
+    from dask.array._array_expr._ufunc import sqrt
+
+    c = cov(x, y, rowvar)
+
+    if c.shape == ():
+        return c / c
+    d = diag(c)
+    d = d.reshape((d.shape[0], 1))
+    sqr_d = sqrt(d)
+    return (c / sqr_d) / sqr_d.T

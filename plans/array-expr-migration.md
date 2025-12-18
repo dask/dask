@@ -31,7 +31,7 @@ The array-expr system has foundational infrastructure in place:
 - IO: store, to_npy_stack, from_npy_stack, from_delayed
 - Advanced indexing: vindex, take, nonzero, argwhere, flatnonzero
 - Creation: eye, diag, diagonal, tri, tril, triu, fromfunction, indices, meshgrid, pad, tile
-- Statistics: histogram, histogram2d, histogramdd, digitize
+- Statistics: histogram, histogram2d, histogramdd, digitize, bincount, cov, corrcoef, average
 - Selection & conditional: select, piecewise, choose, extract, isin
 - FFT: fft, ifft, fft2, ifft2, fftn, ifftn, rfft, irfft, rfft2, irfft2, rfftn, irfftn, hfft, ihfft, fftfreq, rfftfreq, fftshift, ifftshift, fft_wrap
 
@@ -129,10 +129,10 @@ Used in data analysis workflows.
 | histogram | binning | **Done** |
 | histogram2d | 2D binning | **Done** |
 | histogramdd | N-D binning | **Done** |
-| bincount | counting | Not started (complex reduction) |
-| unique | deduplication | Not started |
-| cov | covariance | Not started |
-| corrcoef | correlation | Not started |
+| bincount | counting | **Done** |
+| unique | deduplication | Not started (complex, uses structured arrays) |
+| cov | covariance | **Done** |
+| corrcoef | correlation | **Done** |
 | digitize | bin indices | **Done** |
 
 ### Tier 8: Selection & Conditional
