@@ -472,7 +472,6 @@ def test_outer(shape1, shape2):
     "input_shape, axis",
     [[(10, 15, 20), 0], [(10, 15, 20), 1], [(10, 15, 20), 2], [(10, 15, 20), -1]],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape, axis):
     a = np.random.default_rng().integers(0, 10, input_shape)
     d = da.from_array(a, chunks=(len(input_shape) * (5,)))
@@ -518,7 +517,6 @@ def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape
         [(10, 15, 20), (2, 0, 1)],
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_apply_over_axes(func_name, func, shape, axes):
     a = np.random.default_rng().integers(0, 10, shape)
     d = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -618,7 +616,6 @@ def test_diff_negative_order():
 
 @pytest.mark.parametrize("shape", [(10,), (10, 15)])
 @pytest.mark.parametrize("to_end, to_begin", [[None, None], [0, 0], [[1, 2], [3, 4]]])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ediff1d(shape, to_end, to_begin):
     x = np.random.default_rng().integers(0, 10, shape)
     a = da.from_array(x, chunks=(len(shape) * (5,)))

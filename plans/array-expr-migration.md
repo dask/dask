@@ -195,12 +195,12 @@ Lower priority operations.
 | Operation | Notes | Status |
 |-----------|-------|--------|
 | coarsen | downsampling | **Done** |
-| argtopk/topk | partial sort | Not started |
-| apply_along_axis | axis application | Not started |
-| apply_over_axes | multiple axes | Not started |
+| argtopk/topk | partial sort | Blocked (needs output_size in reduction()) |
+| apply_along_axis | axis application | **Done** |
+| apply_over_axes | multiple axes | **Done** |
 | insert/delete | array modification | Not started |
-| union1d | set operations | Not started |
-| ediff1d | differences | Not started |
+| union1d | set operations | Blocked (needs unique) |
+| ediff1d | differences | **Done** |
 | ravel_multi_index | index conversion | **Done** |
 | unravel_index | index conversion | **Done** |
 
