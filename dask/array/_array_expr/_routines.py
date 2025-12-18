@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import math
 import warnings
 from functools import cached_property, partial
@@ -1103,3 +1104,222 @@ def corrcoef(x, y=None, rowvar=1):
     d = d.reshape((d.shape[0], 1))
     sqr_d = sqrt(d)
     return (c / sqr_d) / sqr_d.T
+
+
+def _unravel_index_kernel(indices, func_kwargs):
+    return np.stack(np.unravel_index(indices, **func_kwargs))
+
+
+@derived_from(np)
+def unravel_index(indices, shape, order="C"):
+    from dask.array._array_expr._creation import empty
+
+    indices = asarray(indices)
+    if shape and indices.size:
+        unraveled_indices = tuple(
+            indices.map_blocks(
+                _unravel_index_kernel,
+                dtype=np.intp,
+                chunks=(((len(shape),),) + indices.chunks),
+                new_axis=0,
+                func_kwargs={"shape": shape, "order": order},
+            )
+        )
+    else:
+        unraveled_indices = tuple(empty((0,), dtype=np.intp, chunks=1) for i in shape)
+
+    return unraveled_indices
+
+
+@derived_from(np)
+def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
+    if np.isscalar(dims):
+        dims = (dims,)
+    if is_dask_collection(dims) or any(is_dask_collection(d) for d in dims):
+        raise NotImplementedError(
+            f"Dask types are not supported in the `dims` argument: {dims!r}"
+        )
+
+    if hasattr(multi_index, "ndim") and multi_index.ndim > 0:
+        # It's an array-like
+        index_stack = asarray(multi_index)
+    else:
+        multi_index_arrs = broadcast_arrays(*multi_index)
+        index_stack = stack(multi_index_arrs)
+
+    if not np.isnan(index_stack.shape).any() and len(index_stack) != len(dims):
+        raise ValueError(
+            f"parameter multi_index must be a sequence of length {len(dims)}"
+        )
+    if not np.issubdtype(index_stack.dtype, np.signedinteger):
+        raise TypeError("only int indices permitted")
+    return index_stack.map_blocks(
+        np.ravel_multi_index,
+        dtype=np.intp,
+        chunks=index_stack.chunks[1:],
+        drop_axis=0,
+        dims=dims,
+        mode=mode,
+        order=order,
+    )
+
+
+def _partition(n, size):
+    """Partition n into evenly distributed sizes, returning quotients and remainder.
+
+    Examples
+    --------
+    >>> _partition(10, 3)
+    ([3, 3, 3], [1])
+    >>> _partition(9, 3)
+    ([3, 3, 3], [])
+    >>> _partition(7, 3)
+    ([3, 3], [1])
+    """
+    quotient, remainder = divmod(n, size)
+    return [size] * quotient, [remainder] if remainder else []
+
+
+def aligned_coarsen_chunks(chunks, multiple):
+    """Returns a new chunking aligned with the coarsening multiple.
+
+    Any excess is at the end of the array.
+
+    Examples
+    --------
+    >>> aligned_coarsen_chunks(chunks=(1, 2, 3), multiple=4)
+    (4, 2)
+    >>> aligned_coarsen_chunks(chunks=(1, 20, 3, 4), multiple=4)
+    (4, 20, 4)
+    >>> aligned_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multiple=10)
+    (20, 10, 20, 20, 20, 2)
+    """
+    chunks = np.asarray(chunks)
+    overflow = chunks % multiple
+    excess = overflow.sum()
+    new_chunks = chunks - overflow
+    # valid chunks are those that are already factorizable by `multiple`
+    chunk_validity = new_chunks == chunks
+    valid_inds, invalid_inds = np.where(chunk_validity)[0], np.where(~chunk_validity)[0]
+    # sort the invalid chunks by size (ascending), then concatenate the results of
+    # sorting the valid chunks by size (ascending)
+    chunk_modification_order = [
+        *invalid_inds[np.argsort(new_chunks[invalid_inds])],
+        *valid_inds[np.argsort(new_chunks[valid_inds])],
+    ]
+    partitioned_excess, remainder = _partition(excess, multiple)
+    # add elements the partitioned excess to the smallest invalid chunks,
+    # then smallest valid chunks if needed.
+    for idx, extra in enumerate(partitioned_excess):
+        new_chunks[chunk_modification_order[idx]] += extra
+    # create excess chunk with remainder, if any remainder exists
+    new_chunks = np.array([*new_chunks, *remainder])
+    # remove 0-sized chunks
+    new_chunks = new_chunks[new_chunks > 0]
+    return tuple(new_chunks)
+
+
+class Coarsen(ArrayExpr):
+    """Expression class for coarsen operation.
+
+    x should already be rechunked to align with coarsening factors.
+    """
+
+    _parameters = ["x", "reduction", "axes", "trim_excess", "kwargs"]
+    _defaults = {"trim_excess": False, "kwargs": None}
+
+    @cached_property
+    def _reduction(self):
+        """Get the numpy reduction function."""
+        reduction = self.reduction
+        if reduction.__module__.startswith("dask."):
+            return getattr(np, reduction.__name__)
+        return reduction
+
+    @cached_property
+    def _kwargs(self):
+        return self.kwargs or {}
+
+    @cached_property
+    def _meta(self):
+        x = self.x
+        meta = self._reduction(np.empty((1,) * x.ndim, dtype=x.dtype), **self._kwargs)
+        return meta_from_array(meta, ndim=x.ndim)
+
+    @cached_property
+    def chunks(self):
+        x = self.x
+        axes = self.axes
+        coarsen_dim = lambda dim, ax: int(dim // axes.get(ax, 1))
+        return tuple(
+            tuple(coarsen_dim(bd, i) for bd in bds if coarsen_dim(bd, i) > 0)
+            for i, bds in enumerate(x.chunks)
+        )
+
+    def _layer(self):
+        from dask.array import chunk
+
+        x = self.x
+        axes = self.axes
+
+        name = self._name
+        dsk = {}
+
+        # Create one task for each input block (matching traditional implementation)
+        # The chunks property will filter out 0-sized outputs
+        in_ranges = [range(len(c)) for c in x.chunks]
+
+        for in_idx in itertools.product(*in_ranges):
+            in_key = (x._name,) + in_idx
+            out_key = (name,) + in_idx
+
+            # Use partial to bind all non-data arguments
+            func = partial(
+                chunk.coarsen,
+                self._reduction,
+                axes=axes,
+                trim_excess=self.trim_excess,
+                **self._kwargs,
+            )
+            dsk[out_key] = Task(out_key, func, TaskRef(in_key))
+
+        return dsk
+
+
+def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
+    """Coarsen array by applying reduction to fixed size neighborhoods.
+
+    Parameters
+    ----------
+    reduction : callable
+        Function like np.sum, np.mean, etc.
+    x : dask array
+        Array to be coarsened.
+    axes : dict
+        Mapping of axis to coarsening factor.
+    trim_excess : bool, optional
+        If True, trim any excess elements that don't fit evenly.
+    **kwargs
+        Additional arguments passed to the reduction function.
+
+    Returns
+    -------
+    dask array
+        Coarsened array.
+    """
+    x = asarray(x)
+
+    if not trim_excess and not all(x.shape[i] % div == 0 for i, div in axes.items()):
+        msg = f"Coarsening factors {axes} do not align with array shape {x.shape}."
+        raise ValueError(msg)
+
+    # Rechunk to align with coarsening factors before creating expression
+    new_chunks = {}
+    for i, div in axes.items():
+        aligned = aligned_coarsen_chunks(x.chunks[i], div)
+        if aligned != x.chunks[i]:
+            new_chunks[i] = aligned
+    if new_chunks:
+        x = x.rechunk(new_chunks)
+
+    return new_collection(Coarsen(x, reduction, axes, trim_excess, kwargs or None))

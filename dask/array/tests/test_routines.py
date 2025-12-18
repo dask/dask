@@ -2147,7 +2147,6 @@ def test_nonzero_method():
             assert_eq(d_nz[i], x_nz[i])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_unravel_index_empty():
     shape = tuple()
     findices = np.array(0, dtype=int)
@@ -2160,7 +2159,6 @@ def test_unravel_index_empty():
     assert len(d_indices) == len(indices) == 0
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_unravel_index():
     rng = np.random.default_rng()
     for nindices, shape, order in [
@@ -2221,7 +2219,6 @@ def test_unravel_index():
         ([1, [2, 3], [[1, 2], [3, 4], [5, 6], [7, 8]]], None, dict(dims=(8, 9, 10))),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index(asarray, arr, chunks, kwargs):
     if any(np.isscalar(x) for x in arr) and asarray in (np.asarray, da.from_array):
         pytest.skip()
@@ -2238,7 +2235,6 @@ def test_ravel_multi_index(asarray, arr, chunks, kwargs):
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index_unknown_shape():
     multi_index = da.from_array([[3, 6, 6], [4, 5, 1], [-1, -1, -1]])
     multi_index = multi_index[(multi_index > 0).all(axis=1)]
@@ -2252,7 +2248,6 @@ def test_ravel_multi_index_unknown_shape():
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index_unknown_shape_fails():
     multi_index1 = da.from_array([2, -1, 3, -1], chunks=2)
     multi_index1 = multi_index1[multi_index1 > 0]
@@ -2272,13 +2267,11 @@ def test_ravel_multi_index_unknown_shape_fails():
 
 @pytest.mark.parametrize("dims", [da.from_array([5, 10]), delayed([5, 10], nout=2)])
 @pytest.mark.parametrize("wrap_in_list", [False, True])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index_delayed_dims(dims, wrap_in_list):
     with pytest.raises(NotImplementedError, match="Dask types are not supported"):
         da.ravel_multi_index((2, 1), [dims[0], dims[1]] if wrap_in_list else dims)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_ravel_multi_index_non_int_dtype():
     with pytest.raises(TypeError, match="only int indices permitted"):
         da.ravel_multi_index(
@@ -2287,7 +2280,6 @@ def test_ravel_multi_index_non_int_dtype():
         )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_coarsen():
     x = np.random.default_rng().integers(10, size=(24, 24))
     d = da.from_array(x, chunks=(4, 8))
@@ -2304,7 +2296,6 @@ def test_coarsen():
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_coarsen_with_excess():
     x = da.arange(10, chunks=5)
     assert_eq(da.coarsen(np.min, x, {0: 5}, trim_excess=True), np.array([0, 5]))
@@ -2315,7 +2306,6 @@ def test_coarsen_with_excess():
 
 
 @pytest.mark.parametrize("chunks", [(x,) * 3 for x in range(16, 32)])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_coarsen_bad_chunks(chunks):
     x1 = da.arange(np.sum(chunks), chunks=5)
     x2 = x1.rechunk(tuple(chunks))
