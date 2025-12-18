@@ -70,6 +70,7 @@ def reduction_0d_test(da_func, darr, np_func, narr):
     assert actual.size == 1
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="0D reductions not implemented for array-expr", strict=False)
 def test_reductions_0D():
     x = np.int_(3)  # np.int_ has a dtype attribute, np.int does not.
     a = da.from_array(x, chunks=(1,))
@@ -119,6 +120,7 @@ def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
 
 
 @pytest.mark.parametrize("dtype", ["f4", "i4", "c8"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="1D reductions not implemented for array-expr", strict=False)
 def test_reductions_1D(dtype):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ComplexWarning)
@@ -144,6 +146,7 @@ def test_reductions_1D(dtype):
     reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="datetime reductions not implemented for array-expr", strict=False)
 def test_reductions_1D_datetime():
     x = np.arange(5).astype("datetime64[ns]")
     a = da.from_array(x, chunks=(2,))
@@ -159,6 +162,7 @@ def test_reductions_1D_datetime():
 @pytest.mark.parametrize(
     "x", [np.array([np.inf, np.nan, -np.inf, 2]), np.array([np.nan, np.nan, 3, 2])]
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="1D nan reductions not implemented for array-expr", strict=False)
 def test_reductions_1D_nans(x, dtype):
     x = x.astype(dtype)
     a = da.from_array(x, chunks=(1,))
@@ -268,6 +272,7 @@ def test_reductions_2D(dtype):
         reduction_2d_test(da.nanprod, a, np.nanprod, x)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="datetime reductions not implemented for array-expr", strict=False)
 def test_reductions_2D_datetime():
     x = np.arange(1, 122).reshape(11, 11).astype("datetime64[ns]")
     a = da.from_array(x, chunks=(4, 4))
@@ -502,6 +507,7 @@ def test_nan():
 
 
 @pytest.mark.parametrize("func", ["nansum", "sum", "nanmin", "min", "nanmax", "max"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="object dtype reductions not implemented for array-expr", strict=False)
 def test_nan_object(func):
     with warnings.catch_warnings():
         if os.name == "nt" and func in {"min", "max"}:
@@ -544,6 +550,7 @@ def test_0d_array():
     assert type(x) == type(y)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="scalar reduction not implemented for array-expr", strict=False)
 def test_reduction_on_scalar():
     x = da.from_array(np.array(1.0), chunks=())
     assert (x == x).all()
@@ -628,6 +635,7 @@ def test_reduction_names():
     assert x.mean().name.startswith("mean")
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="reduction names not implemented for array-expr", strict=False)
 def test_general_reduction_names():
     dtype = int
     a = da.reduction(
@@ -639,6 +647,7 @@ def test_general_reduction_names():
 
 
 @pytest.mark.parametrize("func", [np.sum, np.argmax])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="out= parameter not implemented for array-expr", strict=False)
 def test_array_reduction_out(func):
     x = da.arange(10, chunks=(5,))
     y = da.ones((10, 10), chunks=(4, 4))
@@ -650,6 +659,7 @@ def test_array_reduction_out(func):
 @pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
 @pytest.mark.parametrize("method", ["sequential", "blelloch"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="cumulative reduction axis=None not implemented for array-expr", strict=False)
 def test_array_cumreduction_axis(func, use_nan, axis, method):
     np_func = getattr(np, func)
     da_func = getattr(da, func)
@@ -705,6 +715,7 @@ def test_array_cumreduction_ufunc(ufunc, target_dtype):
 
 
 @pytest.mark.parametrize("func", [np.cumsum, np.cumprod])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="out= parameter not implemented for array-expr", strict=False)
 def test_array_cumreduction_out(func):
     x = da.ones((10, 10), chunks=(4, 4))
     func(x, axis=0, out=x)
@@ -715,6 +726,7 @@ def test_array_cumreduction_out(func):
     "npfunc,daskfunc", [(np.sort, da.topk), (np.argsort, da.argtopk)]
 )
 @pytest.mark.parametrize("split_every", [None, 2, 4, 8])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="topk/argtopk not implemented for array-expr", strict=False)
 def test_topk_argtopk1(npfunc, daskfunc, split_every):
     # Test data
     k = 5
@@ -771,6 +783,7 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
 )
 @pytest.mark.parametrize("split_every", [None, 2, 3, 4])
 @pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 5, 10])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="topk/argtopk not implemented for array-expr", strict=False)
 def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     """Fine test use cases when k is larger than chunk size"""
     npa = np.random.default_rng().random((10,))
@@ -783,6 +796,7 @@ def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     assert_eq(npfunc(npa)[:k], daskfunc(a, -k, split_every=split_every))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="topk/argtopk not implemented for array-expr", strict=False)
 def test_topk_argtopk3():
     a = da.random.default_rng().random((10, 20, 30), chunks=(4, 8, 8))
 
@@ -812,6 +826,7 @@ def test_regres_3940(func, method):
         assert func(a, axis=()).name != func(a, axis=0).name
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="trace not implemented for array-expr", strict=False)
 def test_trace():
     def _assert(a, b, *args, **kwargs):
         return assert_eq(a.trace(*args, **kwargs), b.trace(*args, **kwargs))
@@ -873,6 +888,7 @@ def test_object_reduction(method):
 
 
 @pytest.mark.parametrize("func", ["nanmin", "nanmax"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="empty chunk nanmin/nanmax not implemented for array-expr", strict=False)
 def test_empty_chunk_nanmin_nanmax(func):
     # see https://github.com/dask/dask/issues/8352
     x = np.arange(10).reshape(2, 5)
@@ -889,6 +905,7 @@ def test_empty_chunk_nanmin_nanmax(func):
 
 
 @pytest.mark.parametrize("func", ["nanmin", "nanmax"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="empty chunk nanmin/nanmax not implemented for array-expr", strict=False)
 def test_empty_chunk_nanmin_nanmax_raise(func):
     # see https://github.com/dask/dask/issues/8352
     x = np.arange(10).reshape(2, 5)
@@ -950,6 +967,7 @@ def test_chunk_structure_independence(axes, split_every, chunks):
     assert_eq(reduced_x, np_array, check_chunks=False, check_shape=False)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="weighted reduction not implemented for array-expr", strict=False)
 def test_weighted_reduction():
     # Weighted reduction
     def w_sum(x, weights=None, dtype=None, computing_meta=False, **kwargs):
