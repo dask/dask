@@ -162,6 +162,10 @@ def blockwise(
     """
     new_axes = new_axes or {}
 
+    # Normalize dtype to numpy dtype (handles cases like dtype=float)
+    if dtype is not None:
+        dtype = np.dtype(dtype)
+
     # Input Validation
     if len(set(out_ind)) != len(out_ind):
         raise ValueError(
@@ -237,14 +241,15 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     blockwise
     """
     # Lazy import to avoid circular dependency
+    from dask.array._array_expr._collection import Array
     from dask.array._array_expr.core import asanyarray
 
     if where is not True:
         # TODO(expr-soon): Need asarray for this
         where = True
 
-    if out is not None:
-        raise NotImplementedError("elemwise does not support out=")
+    # Normalize out parameter
+    out = _normalize_out(out)
 
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
@@ -254,4 +259,46 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
 
     user_kwargs = dict(kwargs) if kwargs else None
 
-    return new_collection(Elemwise(op, dtype, name, where, user_kwargs, *args))
+    result = new_collection(Elemwise(op, dtype, name, where, user_kwargs, *args))
+
+    return _handle_out(out, result)
+
+
+def _normalize_out(out):
+    """Normalize out parameter for elemwise operations."""
+    from dask.array._array_expr._collection import Array
+
+    if isinstance(out, tuple):
+        if len(out) == 1:
+            out = out[0]
+        elif len(out) > 1:
+            raise NotImplementedError("The out parameter is not fully supported")
+        else:
+            out = None
+    if not (out is None or isinstance(out, Array)):
+        raise NotImplementedError(
+            f"The out parameter is not fully supported."
+            f" Received type {type(out).__name__}, expected Dask Array"
+        )
+    return out
+
+
+def _handle_out(out, result):
+    """Handle out parameters for array-expr.
+
+    If out is a dask Array then this overwrites the contents of that array with
+    the result by replacing its internal expression.
+    """
+    from dask.array._array_expr._collection import Array
+
+    if isinstance(out, Array):
+        if out.shape != result.shape:
+            raise ValueError(
+                "Mismatched shapes between result and out parameter. "
+                f"out={out.shape}, result={result.shape}"
+            )
+        # Modify the out array in-place by replacing its expression
+        out._expr = result._expr
+        return out
+    else:
+        return result

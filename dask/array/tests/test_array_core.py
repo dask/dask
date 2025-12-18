@@ -261,7 +261,6 @@ def test_blockwise_literals():
     assert_eq(z, x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype=float not supported")
 def test_blockwise_1_in_shape_I():
     def test_f(a, b):
         assert 1 in b.shape
@@ -280,7 +279,6 @@ def test_blockwise_1_in_shape_I():
     arr.compute()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype=float not supported")
 def test_blockwise_1_in_shape_II():
     def test_f(a, b):
         assert 1 in b.shape
@@ -298,7 +296,6 @@ def test_blockwise_1_in_shape_II():
     ).compute()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype=float not supported")
 def test_blockwise_1_in_shape_III():
     def test_f(a, b):
         assert 1 in b.shape
@@ -5418,7 +5415,6 @@ def test_tiledb_multiattr():
         assert_eq(np.mean(ar2), d.mean().compute(scheduler="threads"))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="blocks property not implemented", strict=False)
 def test_blockview():
     x = da.arange(10, chunks=2)
     blockview = BlockView(x)
@@ -5471,7 +5467,6 @@ def test_blockview():
         blockview[100, 100]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="blocks property not implemented", strict=False)
 def test_blocks_indexer():
     x = da.arange(10, chunks=2)
 

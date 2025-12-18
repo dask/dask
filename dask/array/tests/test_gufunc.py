@@ -117,7 +117,6 @@ def test__validate_normalize_axes_03():
         _validate_normalize_axes([(0,), (0,)], None, True, [("i",), ("j",)], ())
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="gufunc not fully implemented for array-expr")
 def test_apply_gufunc_01():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1)
@@ -130,7 +129,6 @@ def test_apply_gufunc_01():
     assert std.compute().shape == (10, 20)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="gufunc not fully implemented for array-expr")
 def test_apply_gufunc_01b():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1)
@@ -154,7 +152,6 @@ def test_apply_gufunc_output_dtypes_string(vectorize):
 
 
 @pytest.mark.parametrize("vectorize", [False, True])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="gufunc not fully implemented for array-expr")
 def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1), np.min(x, axis=-1)
@@ -217,7 +214,6 @@ def test_apply_gufunc_elemwise_01b():
         apply_gufunc(add, "(),()->()", a, b, output_dtypes=a.dtype)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="gufunc not fully implemented for array-expr")
 def test_apply_gufunc_elemwise_02():
     def addmul(x, y):
         assert x.shape in ((2,), (1,))
@@ -269,7 +265,6 @@ def test_apply_gufunc_elemwise_core():
 #     assert x.compute() == 1
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="gufunc not fully implemented for array-expr")
 def test_apply_gufunc_two_scalar_output():
     def foo():
         return 1, 2
@@ -279,7 +274,6 @@ def test_apply_gufunc_two_scalar_output():
     assert y.compute() == 2
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="gufunc not fully implemented for array-expr")
 def test_apply_gufunc_two_mixed_outputs():
     def foo():
         return 1, np.ones((2, 3), dtype=float)
@@ -395,7 +389,6 @@ def test_as_gufunc():
     assert valy.shape == (10,)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="gufunc not fully implemented for array-expr")
 def test_apply_gufunc_broadcasting_loopdims():
     def foo(x, y):
         assert len(x.shape) == 2
@@ -454,7 +447,6 @@ def test_apply_gufunc_check_inhomogeneous_chunksize():
     assert "with different chunksize present" in str(excinfo.value)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="gufunc not fully implemented for array-expr")
 def test_apply_gufunc_infer_dtype():
     x = np.arange(50).reshape((5, 10))
     y = np.arange(10)
@@ -679,7 +671,6 @@ def test_preserve_meta_type():
     assert_eq(mean, mean)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="gufunc not fully implemented for array-expr")
 def test_apply_gufunc_with_meta():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1, dtype=np.float32)

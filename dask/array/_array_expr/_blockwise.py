@@ -64,6 +64,12 @@ class Blockwise(ArrayExpr):
     @cached_property
     def _meta(self):
         if self._meta_provided is not None:
+            # Handle tuple metas for multi-output functions (e.g., from apply_gufunc)
+            if isinstance(self._meta_provided, (tuple, list)):
+                return tuple(
+                    meta_from_array(m, ndim=m.ndim, dtype=m.dtype)
+                    for m in self._meta_provided
+                )
             return meta_from_array(
                 self._meta_provided, ndim=self.ndim, dtype=self._meta_provided.dtype
             )

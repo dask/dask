@@ -142,6 +142,16 @@ class Array(DaskMethodsMixin):
         return prod(self.numblocks)
 
     @property
+    def _key_array(self):
+        return np.array(self.__dask_keys__(), dtype=object)
+
+    @property
+    def blocks(self):
+        from dask.array.core import BlockView
+
+        return BlockView(self)
+
+    @property
     def size(self) -> T_IntOrNaN:
         return self.expr.size
 
@@ -678,6 +688,32 @@ class Array(DaskMethodsMixin):
         from dask.array._array_expr._io import store
 
         return store([self], [target], **kwargs)
+
+    def to_svg(self, size=500):
+        """Convert chunks from Dask Array into an SVG Image
+
+        Parameters
+        ----------
+        size : int
+            Rough size of the image
+
+        Returns
+        -------
+        str
+            An svg string depicting the array as a grid of chunks
+        """
+        from dask.array.svg import svg
+
+        return svg(self.chunks, size=size)
+
+    def copy(self):
+        """Copy array. This is a no-op for dask arrays, which are immutable."""
+        return Array(self._expr)
+
+    def __deepcopy__(self, memo):
+        c = self.copy()
+        memo[id(self)] = c
+        return c
 
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         """
