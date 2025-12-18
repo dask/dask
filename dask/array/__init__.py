@@ -905,11 +905,11 @@ if _array_expr_enabled():
         argtopk = raise_not_implemented_error("argtopk")
         topk = raise_not_implemented_error("topk")
         from dask.array._array_expr import trace
-        apply_along_axis = raise_not_implemented_error("apply_along_axis")
-        apply_over_axes = raise_not_implemented_error("apply_over_axes")
+        from dask.array._array_expr import apply_along_axis
+        from dask.array._array_expr import apply_over_axes
         from dask.array._array_expr import coarsen, aligned_coarsen_chunks
         delete = raise_not_implemented_error("delete")
-        ediff1d = raise_not_implemented_error("ediff1d")
+        from dask.array._array_expr import ediff1d
         from dask.array._array_expr import einsum
         insert = raise_not_implemented_error("insert")
         from dask.array._array_expr import ravel_multi_index
