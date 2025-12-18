@@ -826,7 +826,6 @@ def test_regres_3940(func, method):
         assert func(a, axis=()).name != func(a, axis=0).name
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="trace not implemented for array-expr", strict=False)
 def test_trace():
     def _assert(a, b, *args, **kwargs):
         return assert_eq(a.trace(*args, **kwargs), b.trace(*args, **kwargs))

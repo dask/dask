@@ -2618,7 +2618,6 @@ def _numpy_and_dask_inputs(input_sigs):
         "fff,fae,bef,def->abd",
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum(einsum_signature):
     input_sigs = einsum_signature.split("->")[0].replace("...", "*").split(",")
 
@@ -2632,7 +2631,6 @@ def test_einsum(einsum_signature):
         )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_chunksizes():
     arr1 = da.random.random((1024, 8, 8, 8, 8), chunks=(256, 8, 8, 8, 8))
     arr2 = da.random.random((1024, 8, 8, 8, 8), chunks=(256, 8, 8, 8, 8))
@@ -2681,7 +2679,6 @@ def test_einsum_chunksizes():
 @pytest.mark.parametrize(
     "optimize_opts", [(True, False), ("greedy", False), ("optimal", False)]
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_optimize(optimize_opts):
     sig = "ea,fb,abcd,gc,hd->efgh"
     input_sigs = sig.split("->")[0].split(",")
@@ -2701,7 +2698,6 @@ def test_einsum_optimize(optimize_opts):
 
 
 @pytest.mark.parametrize("order", ["C", "F", "A", "K"])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_order(order):
     sig = "ea,fb,abcd,gc,hd->efgh"
     input_sigs = sig.split("->")[0].split(",")
@@ -2713,7 +2709,6 @@ def test_einsum_order(order):
 
 
 @pytest.mark.parametrize("casting", ["no", "equiv", "safe", "same_kind", "unsafe"])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_casting(casting):
     sig = "ea,fb,abcd,gc,hd->efgh"
     input_sigs = sig.split("->")[0].split(",")
@@ -2726,7 +2721,6 @@ def test_einsum_casting(casting):
 
 
 @pytest.mark.parametrize("split_every", [None, 2])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_split_every(split_every):
     np_inputs, da_inputs = _numpy_and_dask_inputs("a")
     assert_eq(
@@ -2734,14 +2728,12 @@ def test_einsum_split_every(split_every):
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_invalid_args():
     _, da_inputs = _numpy_and_dask_inputs("a")
     with pytest.raises(TypeError):
         da.einsum("a", *da_inputs, foo=1, bar=2)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_broadcasting_contraction():
     rng = np.random.default_rng()
     a = rng.random((1, 5, 4))
@@ -2766,7 +2758,6 @@ def test_einsum_broadcasting_contraction():
     assert_eq(np_res, mul_res)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_broadcasting_contraction2():
     rng = np.random.default_rng()
     a = rng.random((1, 1, 5, 4))
@@ -2791,7 +2782,6 @@ def test_einsum_broadcasting_contraction2():
     assert_eq(np_res, mul_res)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_broadcasting_contraction3():
     rng = np.random.default_rng()
     a = rng.random((1, 5, 4))
@@ -2809,7 +2799,6 @@ def test_einsum_broadcasting_contraction3():
     assert_eq(np_res, da_res)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_einsum_empty_dimension():
     arr = np.random.random((10, 10))
     darr = da.from_array(arr, chunks=(5, 5))

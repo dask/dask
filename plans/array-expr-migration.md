@@ -20,7 +20,7 @@ The array-expr system has foundational infrastructure in place:
 - UFuncs
 - Reshape, squeeze, transpose
 - __array_function__ protocol
-- Linear algebra: tensordot, matmul, dot, vdot
+- Linear algebra: tensordot, matmul, dot, vdot, outer, trace, einsum
 - Reductions: argmin, argmax, nanargmin, nanargmax, cumsum, cumprod, nancumsum, nancumprod
 - Shape manipulation: ravel, flatten, expand_dims, atleast_*d, broadcast_to, roll
 - Routines: diff, gradient, compress, searchsorted
@@ -149,11 +149,11 @@ Beyond basic linalg.
 
 | Operation | Notes | Status |
 |-----------|-------|--------|
-| einsum | Einstein summation | Not started |
-| outer | outer product | Not started |
-| trace | diagonal sum | Not started |
-| tril_indices | triangle indices | Not started |
-| triu_indices | triangle indices | Not started |
+| einsum | Einstein summation | **Done** |
+| outer | outer product | **Done** (already existed) |
+| trace | diagonal sum | **Done** |
+| tril_indices | triangle indices | Blocked (needs nonzero) |
+| triu_indices | triangle indices | Blocked (needs nonzero) |
 
 ### Tier 10: Submodules (Large Scope)
 Full submodule implementations.
