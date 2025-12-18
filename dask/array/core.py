@@ -4050,7 +4050,7 @@ def to_zarr(
     if kwargs:
         warnings.warn(
             "Passing storage-related arguments via **kwargs is deprecated. "
-            "Please use the 'zarr_store_kwargs' parameter instead. **kwargs will be "
+            "Please use the 'zarr_read_kwargs' parameter instead. **kwargs will be "
             "removed in a future version.",
             FutureWarning,
             stacklevel=2,
