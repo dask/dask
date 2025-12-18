@@ -199,7 +199,7 @@ Lower priority operations.
 | apply_along_axis | axis application | **Done** |
 | apply_over_axes | multiple axes | **Done** |
 | insert/delete | array modification | Not started |
-| union1d | set operations | Blocked (needs unique) |
+| union1d | set operations | **Done** |
 | ediff1d | differences | **Done** |
 | ravel_multi_index | index conversion | **Done** |
 | unravel_index | index conversion | **Done** |

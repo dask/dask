@@ -1496,7 +1496,6 @@ def test_shape_and_ndim(shape):
     "shape", [((12,), (12,)), ((4, 3), (3, 4)), ((12,), (1, 6, 2))]
 )
 @pytest.mark.parametrize("reverse", [True, False])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_union1d(shape, reverse):
     s1, s2 = shape
     x1 = np.arange(12).reshape(s1)
