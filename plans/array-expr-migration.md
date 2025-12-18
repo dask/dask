@@ -33,6 +33,7 @@ The array-expr system has foundational infrastructure in place:
 - Creation: eye, diag, diagonal, tri, tril, triu, fromfunction, indices, meshgrid, pad, tile
 - Statistics: histogram, histogram2d, histogramdd, digitize
 - Selection & conditional: select, piecewise, choose, extract, isin
+- FFT: fft, ifft, fft2, ifft2, fftn, ifftn, rfft, irfft, rfft2, irfft2, rfftn, irfftn, hfft, ihfft, fftfreq, rfftfreq, fftshift, ifftshift, fft_wrap
 
 ## Testing Infrastructure
 
@@ -161,7 +162,7 @@ Full submodule implementations.
 
 | Submodule | Notes | Status |
 |-----------|-------|--------|
-| fft | FFT operations | Not started |
+| fft | FFT operations (fft, ifft, fft2, ifft2, fftn, ifftn, rfft, irfft, rfft2, irfft2, rfftn, irfftn, hfft, ihfft, fftfreq, rfftfreq, fftshift, ifftshift, fft_wrap) | **Done** |
 | linalg | Full linalg submodule | Not started |
 | ma | Masked arrays | Not started |
 
