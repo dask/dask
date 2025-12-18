@@ -164,7 +164,7 @@ Full submodule implementations.
 | Submodule | Notes | Status |
 |-----------|-------|--------|
 | fft | FFT operations | **Done** |
-| linalg | Full linalg submodule | **Partial** (304/391 tests pass) |
+| linalg | Full linalg submodule | **Done** (330/391 tests pass, 61 skipped) |
 | ma | Masked arrays | Not started |
 
 #### Linalg Status Detail
@@ -181,12 +181,12 @@ Native expression classes for TSQR algorithm (tall-skinny QR) and derived operat
 | dot | **Done** (in _linalg.py) |
 | vdot | **Done** (in _linalg.py) |
 | matmul | **Done** (in _linalg.py) |
-| lu | Not started |
-| solve | Not started |
-| solve_triangular | Not started |
-| inv | Not started |
-| cholesky | Not started |
-| lstsq | Not started |
+| lu | **Done** |
+| solve | **Done** |
+| solve_triangular | **Done** |
+| inv | **Done** |
+| cholesky | **Done** |
+| lstsq | **Done** |
 | svd_compressed | **Done** |
 
 ### Tier 11: Advanced/Specialized

@@ -1155,13 +1155,934 @@ def svd_compressed(
     return u, s, v
 
 
+def _solve_triangular_lower(a, b):
+    """Solve triangular system with lower triangular matrix."""
+    from dask.array.utils import solve_triangular_safe
+
+    return solve_triangular_safe(a, b, lower=True)
+
+
+def _solve_triangular_upper(a, b):
+    """Solve triangular system with upper triangular matrix."""
+    from dask.array.utils import solve_triangular_safe
+
+    return solve_triangular_safe(a, b, lower=False)
+
+
+def _scipy_lu(a):
+    """Compute LU decomposition using scipy."""
+    import scipy.linalg
+
+    return scipy.linalg.lu(a)
+
+
+def _transpose(x):
+    """Transpose a matrix (used for P_inv and U.T)."""
+    return x.T
+
+
+class LU(ArrayExpr):
+    """Block LU decomposition returning (P, L, U) tuple.
+
+    Uses scipy.linalg.lu for diagonal blocks and propagates through
+    off-diagonal blocks with forward/backward substitution.
+    """
+
+    _parameters = ["array"]
+
+    @functools.cached_property
+    def _meta(self):
+        import scipy.linalg
+
+        pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=self.array.dtype))
+        arr_meta = self.array._meta
+        return (
+            meta_from_array(arr_meta, ndim=2, dtype=pp.dtype),
+            meta_from_array(arr_meta, ndim=2, dtype=ll.dtype),
+            meta_from_array(arr_meta, ndim=2, dtype=uu.dtype),
+        )
+
+    @functools.cached_property
+    def chunks(self):
+        return self.array.chunks
+
+    @functools.cached_property
+    def _name(self):
+        return f"lu-{self.deterministic_token}"
+
+    def _layer(self):
+        vdim = len(self.array.chunks[0])
+        hdim = len(self.array.chunks[1])
+
+        name_lu = f"lu-lu-{self.deterministic_token}"
+        name_p = f"lu-p-{self.deterministic_token}"
+        name_l = f"lu-l-{self.deterministic_token}"
+        name_u = f"lu-u-{self.deterministic_token}"
+        name_transpose = f"lu-p-inv-{self.deterministic_token}"
+        name_l_permuted = f"lu-l-permute-{self.deterministic_token}"
+        name_transposed = f"lu-u-transpose-{self.deterministic_token}"
+        name_plu_dot = f"lu-plu-dot-{self.deterministic_token}"
+        name_lu_dot = f"lu-lu-dot-{self.deterministic_token}"
+
+        dsk = {}
+
+        for i in range(min(vdim, hdim)):
+            # Target for diagonal block
+            target = TaskRef((self.array._name, i, i))
+            if i > 0:
+                # Subtract products from previous blocks
+                prevs = []
+                for p in range(i):
+                    prev = (name_plu_dot, i, p, p, i)
+                    dsk[prev] = Task(
+                        prev,
+                        np.dot,
+                        TaskRef((name_l_permuted, i, p)),
+                        TaskRef((name_u, p, i)),
+                    )
+                    prevs.append(TaskRef(prev))
+                target = Task(
+                    None, operator.sub, target, Task(None, sum, List(*prevs))
+                )
+            # Diagonal block LU
+            dsk[(name_lu, i, i)] = Task((name_lu, i, i), _scipy_lu, target)
+
+            # Sweep horizontal (compute U blocks)
+            for j in range(i + 1, hdim):
+                target_h = Task(
+                    None,
+                    np.dot,
+                    TaskRef((name_transpose, i, i)),
+                    TaskRef((self.array._name, i, j)),
+                )
+                if i > 0:
+                    prevs = []
+                    for p in range(i):
+                        prev = (name_lu_dot, i, p, p, j)
+                        dsk[prev] = Task(
+                            prev,
+                            np.dot,
+                            TaskRef((name_l, i, p)),
+                            TaskRef((name_u, p, j)),
+                        )
+                        prevs.append(TaskRef(prev))
+                    target_h = Task(
+                        None, operator.sub, target_h, Task(None, sum, List(*prevs))
+                    )
+                dsk[(name_lu, i, j)] = Task(
+                    (name_lu, i, j),
+                    _solve_triangular_lower,
+                    TaskRef((name_l, i, i)),
+                    target_h,
+                )
+
+            # Sweep vertical (compute L blocks)
+            for k in range(i + 1, vdim):
+                target_v = TaskRef((self.array._name, k, i))
+                if i > 0:
+                    prevs = []
+                    for p in range(i):
+                        prev = (name_plu_dot, k, p, p, i)
+                        dsk[prev] = Task(
+                            prev,
+                            np.dot,
+                            TaskRef((name_l_permuted, k, p)),
+                            TaskRef((name_u, p, i)),
+                        )
+                        prevs.append(TaskRef(prev))
+                    target_v = Task(
+                        None, operator.sub, target_v, Task(None, sum, List(*prevs))
+                    )
+                # Solving x.dot(u) = target is equal to u.T.dot(x.T) = target.T
+                dsk[(name_lu, k, i)] = Task(
+                    (name_lu, k, i),
+                    np.transpose,
+                    Task(
+                        None,
+                        _solve_triangular_lower,
+                        TaskRef((name_transposed, i, i)),
+                        Task(None, np.transpose, target_v),
+                    ),
+                )
+
+        # Extract P, L, U from diagonal blocks; set zeros for off-diagonal
+        for i in range(min(vdim, hdim)):
+            for j in range(min(vdim, hdim)):
+                if i == j:
+                    # Diagonal: extract from LU result
+                    dsk[(name_p, i, j)] = Task(
+                        (name_p, i, j),
+                        operator.getitem,
+                        TaskRef((name_lu, i, j)),
+                        0,
+                    )
+                    dsk[(name_l, i, j)] = Task(
+                        (name_l, i, j),
+                        operator.getitem,
+                        TaskRef((name_lu, i, j)),
+                        1,
+                    )
+                    dsk[(name_u, i, j)] = Task(
+                        (name_u, i, j),
+                        operator.getitem,
+                        TaskRef((name_lu, i, j)),
+                        2,
+                    )
+                    dsk[(name_l_permuted, i, j)] = Task(
+                        (name_l_permuted, i, j),
+                        np.dot,
+                        TaskRef((name_p, i, j)),
+                        TaskRef((name_l, i, j)),
+                    )
+                    dsk[(name_transposed, i, j)] = Task(
+                        (name_transposed, i, j),
+                        _transpose,
+                        TaskRef((name_u, i, j)),
+                    )
+                    dsk[(name_transpose, i, j)] = Task(
+                        (name_transpose, i, j),
+                        _transpose,
+                        TaskRef((name_p, i, j)),
+                    )
+                elif i > j:
+                    # Below diagonal: L has values, P and U are zeros
+                    chunk_shape = (
+                        self.array.chunks[0][i],
+                        self.array.chunks[1][j],
+                    )
+                    dsk[(name_p, i, j)] = Task(
+                        (name_p, i, j), np.zeros, chunk_shape
+                    )
+                    dsk[(name_l, i, j)] = Task(
+                        (name_l, i, j),
+                        np.dot,
+                        TaskRef((name_transpose, i, i)),
+                        TaskRef((name_lu, i, j)),
+                    )
+                    dsk[(name_u, i, j)] = Task(
+                        (name_u, i, j), np.zeros, chunk_shape
+                    )
+                    dsk[(name_l_permuted, i, j)] = TaskRef((name_lu, i, j))
+                else:
+                    # Above diagonal: U has values, P and L are zeros
+                    chunk_shape = (
+                        self.array.chunks[0][i],
+                        self.array.chunks[1][j],
+                    )
+                    dsk[(name_p, i, j)] = Task(
+                        (name_p, i, j), np.zeros, chunk_shape
+                    )
+                    dsk[(name_l, i, j)] = Task(
+                        (name_l, i, j), np.zeros, chunk_shape
+                    )
+                    dsk[(name_u, i, j)] = TaskRef((name_lu, i, j))
+
+        return dsk
+
+
+class LUGetP(ArrayExpr):
+    """Extract P from LU decomposition."""
+
+    _parameters = ["lu"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.lu._meta[0]
+
+    @functools.cached_property
+    def chunks(self):
+        return self.lu.chunks
+
+    @functools.cached_property
+    def _name(self):
+        return f"lu-p-{self.lu.deterministic_token}"
+
+    def _layer(self):
+        # The LU class already creates the tasks with name_p keys
+        return {}
+
+
+class LUGetL(ArrayExpr):
+    """Extract L from LU decomposition."""
+
+    _parameters = ["lu"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.lu._meta[1]
+
+    @functools.cached_property
+    def chunks(self):
+        return self.lu.chunks
+
+    @functools.cached_property
+    def _name(self):
+        return f"lu-l-{self.lu.deterministic_token}"
+
+    def _layer(self):
+        return {}
+
+
+class LUGetU(ArrayExpr):
+    """Extract U from LU decomposition."""
+
+    _parameters = ["lu"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.lu._meta[2]
+
+    @functools.cached_property
+    def chunks(self):
+        return self.lu.chunks
+
+    @functools.cached_property
+    def _name(self):
+        return f"lu-u-{self.lu.deterministic_token}"
+
+    def _layer(self):
+        return {}
+
+
+def lu(a):
+    """Compute the LU decomposition of a matrix.
+
+    Examples
+    --------
+    >>> p, l, u = da.linalg.lu(x)  # doctest: +SKIP
+
+    Returns
+    -------
+    p : Array, permutation matrix
+    l : Array, lower triangular matrix with unit diagonal.
+    u : Array, upper triangular matrix
+    """
+    from dask.array._array_expr.core import asanyarray
+
+    a = asanyarray(a)
+
+    if a.ndim != 2:
+        raise ValueError("Dimension must be 2 to perform lu decomposition")
+
+    xdim, ydim = a.shape
+    if xdim != ydim:
+        raise ValueError("Input must be a square matrix to perform lu decomposition")
+    if len(set(a.chunks[0] + a.chunks[1])) != 1:
+        msg = (
+            "All chunks must be a square matrix to perform lu decomposition. "
+            "Use .rechunk method to change the size of chunks."
+        )
+        raise ValueError(msg)
+
+    lu_expr = LU(a.expr)
+    p_expr = LUGetP(lu_expr)
+    l_expr = LUGetL(lu_expr)
+    u_expr = LUGetU(lu_expr)
+
+    return new_collection(p_expr), new_collection(l_expr), new_collection(u_expr)
+
+
+def _cholesky_lower(a):
+    """Compute Cholesky decomposition (lower triangular)."""
+    return np.linalg.cholesky(a)
+
+
+def _zeros_like_shape(arr_meta, shape):
+    """Create zeros with specific shape, dtype from arr_meta."""
+    return np.zeros(shape, dtype=arr_meta.dtype)
+
+
+class Cholesky(ArrayExpr):
+    """Block Cholesky decomposition.
+
+    Computes both lower and upper triangular factors.
+    """
+
+    _parameters = ["array"]
+
+    @functools.cached_property
+    def _meta(self):
+        from dask.array.utils import array_safe
+
+        arr_meta = meta_from_array(self.array._meta)
+        cho = np.linalg.cholesky(array_safe([[1, 2], [2, 5]], dtype=self.array.dtype, like=arr_meta))
+        return meta_from_array(self.array._meta, dtype=cho.dtype)
+
+    @functools.cached_property
+    def chunks(self):
+        return self.array.chunks
+
+    @functools.cached_property
+    def _name(self):
+        return f"cholesky-{self.deterministic_token}"
+
+    def _layer(self):
+        vdim = len(self.array.chunks[0])
+        hdim = len(self.array.chunks[1])
+
+        name = self._name
+        name_upper = f"cholesky-upper-{self.deterministic_token}"
+        name_lt_dot = f"cholesky-lt-dot-{self.deterministic_token}"
+
+        dsk = {}
+
+        # Process in column-major order to ensure dependencies are created first
+        for j in range(hdim):
+            for i in range(vdim):
+                if i < j:
+                    # Above diagonal: zeros
+                    chunk_shape = (
+                        self.array.chunks[0][i],
+                        self.array.chunks[1][j],
+                    )
+                    dsk[(name, i, j)] = Task(
+                        (name, i, j),
+                        _zeros_like_shape,
+                        self.array._meta,
+                        chunk_shape,
+                    )
+                    dsk[(name_upper, j, i)] = TaskRef((name, i, j))
+                elif i == j:
+                    # Diagonal: Cholesky of (A_ii - sum of L_ip @ L_ip.T)
+                    target = TaskRef((self.array._name, i, j))
+                    if i > 0:
+                        prevs = []
+                        for p in range(i):
+                            prev = (name_lt_dot, i, p, i, p)
+                            dsk[prev] = Task(
+                                prev,
+                                np.dot,
+                                TaskRef((name, i, p)),
+                                TaskRef((name_upper, p, i)),
+                            )
+                            prevs.append(TaskRef(prev))
+                        target = Task(
+                            None, operator.sub, target, Task(None, sum, List(*prevs))
+                        )
+                    dsk[(name, i, i)] = Task((name, i, i), _cholesky_lower, target)
+                    dsk[(name_upper, i, i)] = Task(
+                        (name_upper, i, i), np.transpose, TaskRef((name, i, i))
+                    )
+                else:
+                    # Below diagonal (i > j):
+                    # Solving x.dot(L_jj.T) = (A_ji - sum) is equivalent to
+                    # L_jj.dot(x.T) = (A_ji - sum).T = A_ij - sum
+                    target = TaskRef((self.array._name, j, i))
+                    if j > 0:
+                        prevs = []
+                        for p in range(j):
+                            prev = (name_lt_dot, j, p, i, p)
+                            dsk[prev] = Task(
+                                prev,
+                                np.dot,
+                                TaskRef((name, j, p)),
+                                TaskRef((name_upper, p, i)),
+                            )
+                            prevs.append(TaskRef(prev))
+                        target = Task(
+                            None, operator.sub, target, Task(None, sum, List(*prevs))
+                        )
+                    dsk[(name_upper, j, i)] = Task(
+                        (name_upper, j, i),
+                        _solve_triangular_lower,
+                        TaskRef((name, j, j)),
+                        target,
+                    )
+                    dsk[(name, i, j)] = Task(
+                        (name, i, j), np.transpose, TaskRef((name_upper, j, i))
+                    )
+
+        return dsk
+
+
+class CholeskyLower(ArrayExpr):
+    """Extract lower triangular from Cholesky.
+
+    This is a view into the lower triangular portion of the Cholesky
+    factorization. It uses Alias tasks to reference the parent Cholesky's
+    tasks.
+    """
+
+    _parameters = ["chol"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.chol._meta
+
+    @functools.cached_property
+    def chunks(self):
+        return self.chol.chunks
+
+    @functools.cached_property
+    def _name(self):
+        return f"cholesky-lower-{self.chol.deterministic_token}"
+
+    def _layer(self):
+        from dask._task_spec import Alias
+
+        vdim = len(self.chol.chunks[0])
+        hdim = len(self.chol.chunks[1])
+        parent_name = self.chol._name
+
+        dsk = {}
+        for i in range(vdim):
+            for j in range(hdim):
+                out_key = (self._name, i, j)
+                in_key = (parent_name, i, j)
+                dsk[out_key] = Alias(out_key, in_key)
+        return dsk
+
+
+class CholeskyUpper(ArrayExpr):
+    """Extract upper triangular from Cholesky.
+
+    This is a view into the upper triangular portion of the Cholesky
+    factorization. It uses Alias tasks to reference the parent Cholesky's
+    tasks.
+    """
+
+    _parameters = ["chol"]
+
+    @functools.cached_property
+    def _meta(self):
+        return self.chol._meta
+
+    @functools.cached_property
+    def chunks(self):
+        return self.chol.chunks
+
+    @functools.cached_property
+    def _name(self):
+        return f"cholesky-upper-view-{self.chol.deterministic_token}"
+
+    def _layer(self):
+        from dask._task_spec import Alias
+
+        vdim = len(self.chol.chunks[0])
+        hdim = len(self.chol.chunks[1])
+        parent_name = f"cholesky-upper-{self.chol.deterministic_token}"
+
+        dsk = {}
+        for i in range(vdim):
+            for j in range(hdim):
+                out_key = (self._name, i, j)
+                in_key = (parent_name, i, j)
+                dsk[out_key] = Alias(out_key, in_key)
+        return dsk
+
+
+def _cholesky(a):
+    """Private function to compute both L and U Cholesky factors."""
+    from dask.array._array_expr.core import asanyarray
+
+    a = asanyarray(a)
+
+    if a.ndim != 2:
+        raise ValueError("Dimension must be 2 to perform cholesky decomposition")
+
+    xdim, ydim = a.shape
+    if xdim != ydim:
+        raise ValueError(
+            "Input must be a square matrix to perform cholesky decomposition"
+        )
+    if len(set(a.chunks[0] + a.chunks[1])) != 1:
+        msg = (
+            "All chunks must be a square matrix to perform cholesky decomposition. "
+            "Use .rechunk method to change the size of chunks."
+        )
+        raise ValueError(msg)
+
+    chol_expr = Cholesky(a.expr)
+    lower_expr = CholeskyLower(chol_expr)
+    upper_expr = CholeskyUpper(chol_expr)
+
+    return new_collection(lower_expr), new_collection(upper_expr)
+
+
+def cholesky(a, lower=False):
+    """Returns the Cholesky decomposition of a Hermitian positive-definite matrix.
+
+    Parameters
+    ----------
+    a : (M, M) array_like
+        Matrix to be decomposed
+    lower : bool, optional
+        Whether to compute the upper or lower triangular Cholesky
+        factorization. Default is upper-triangular.
+
+    Returns
+    -------
+    c : (M, M) Array
+        Upper- or lower-triangular Cholesky factor of `a`.
+    """
+    l, u = _cholesky(a)
+    if lower:
+        return l
+    else:
+        return u
+
+
+class SolveTriangular(ArrayExpr):
+    """Blocked triangular solve: solve a @ x = b for x.
+
+    Uses forward or backward substitution depending on `lower`.
+    """
+
+    _parameters = ["a", "b", "lower"]
+    _defaults = {"lower": False}
+
+    @functools.cached_property
+    def _meta(self):
+        from dask.array.utils import array_safe, meta_from_array
+
+        a_meta = meta_from_array(self.a._meta)
+        b_meta = meta_from_array(self.b._meta)
+        res = _solve_triangular_lower(
+            array_safe([[1, 0], [1, 2]], dtype=self.a.dtype, like=a_meta),
+            array_safe([0, 1], dtype=self.b.dtype, like=b_meta),
+        )
+        return meta_from_array(self.a._meta, self.b.ndim, dtype=res.dtype)
+
+    @functools.cached_property
+    def chunks(self):
+        return self.b.chunks
+
+    @functools.cached_property
+    def _name(self):
+        return f"solve-triangular-{self.deterministic_token}"
+
+    def _layer(self):
+        vchunks = len(self.a.chunks[1])
+        hchunks = 1 if self.b.ndim == 1 else len(self.b.chunks[1])
+        name_mdot = f"solve-tri-dot-{self.deterministic_token}"
+
+        def _b_init(i, j):
+            if self.b.ndim == 1:
+                return (self.b._name, i)
+            else:
+                return (self.b._name, i, j)
+
+        def _key(i, j):
+            if self.b.ndim == 1:
+                return (self._name, i)
+            else:
+                return (self._name, i, j)
+
+        dsk = {}
+        if self.lower:
+            # Forward substitution
+            for i in range(vchunks):
+                for j in range(hchunks):
+                    target = TaskRef(_b_init(i, j))
+                    if i > 0:
+                        # Subtract previous products
+                        prevs = []
+                        for k in range(i):
+                            prev_key = (name_mdot, i, k, k, j)
+                            dsk[prev_key] = Task(
+                                prev_key,
+                                np.dot,
+                                TaskRef((self.a._name, i, k)),
+                                TaskRef(_key(k, j)),
+                            )
+                            prevs.append(TaskRef(prev_key))
+                        target = Task(
+                            None,
+                            operator.sub,
+                            target,
+                            Task(None, sum, List(*prevs)),
+                        )
+                    dsk[_key(i, j)] = Task(
+                        _key(i, j),
+                        _solve_triangular_lower,
+                        TaskRef((self.a._name, i, i)),
+                        target,
+                    )
+        else:
+            # Backward substitution
+            for i in range(vchunks - 1, -1, -1):
+                for j in range(hchunks):
+                    target = TaskRef(_b_init(i, j))
+                    if i < vchunks - 1:
+                        # Subtract subsequent products
+                        prevs = []
+                        for k in range(i + 1, vchunks):
+                            prev_key = (name_mdot, i, k, k, j)
+                            dsk[prev_key] = Task(
+                                prev_key,
+                                np.dot,
+                                TaskRef((self.a._name, i, k)),
+                                TaskRef(_key(k, j)),
+                            )
+                            prevs.append(TaskRef(prev_key))
+                        target = Task(
+                            None,
+                            operator.sub,
+                            target,
+                            Task(None, sum, List(*prevs)),
+                        )
+                    dsk[_key(i, j)] = Task(
+                        _key(i, j),
+                        _solve_triangular_upper,
+                        TaskRef((self.a._name, i, i)),
+                        target,
+                    )
+
+        return dsk
+
+
+def solve_triangular(a, b, lower=False):
+    """Solve the equation `a x = b` for `x`, assuming a is a triangular matrix.
+
+    Parameters
+    ----------
+    a : (M, M) array_like
+        A triangular matrix
+    b : (M,) or (M, N) array_like
+        Right-hand side matrix in `a x = b`
+    lower : bool, optional
+        Use only data contained in the lower triangle of `a`.
+        Default is to use upper triangle.
+
+    Returns
+    -------
+    x : (M,) or (M, N) array
+        Solution to the system `a x = b`. Shape of return matches `b`.
+    """
+    from dask.array._array_expr.core import asanyarray
+
+    a = asanyarray(a)
+    b = asanyarray(b)
+
+    if a.ndim != 2:
+        raise ValueError("a must be 2 dimensional")
+    if b.ndim <= 2:
+        if a.shape[1] != b.shape[0]:
+            raise ValueError("a.shape[1] and b.shape[0] must be equal")
+        if a.chunks[1] != b.chunks[0]:
+            msg = (
+                "a.chunks[1] and b.chunks[0] must be equal. "
+                "Use .rechunk method to change the size of chunks."
+            )
+            raise ValueError(msg)
+    else:
+        raise ValueError("b must be 1 or 2 dimensional")
+
+    expr = SolveTriangular(a.expr, b.expr, lower)
+    return new_collection(expr)
+
+
+def solve(a, b, sym_pos=None, assume_a="gen"):
+    """Solve the equation ``a x = b`` for ``x``.
+
+    By default, use LU decomposition and forward / backward substitutions.
+    When ``assume_a = "pos"`` use Cholesky decomposition.
+
+    Parameters
+    ----------
+    a : (M, M) array_like
+        A square matrix.
+    b : (M,) or (M, N) array_like
+        Right-hand side matrix in ``a x = b``.
+    sym_pos : bool, optional
+        Assume a is symmetric and positive definite. If ``True``, use Cholesky
+        decomposition.
+
+        .. note::
+            ``sym_pos`` is deprecated and will be removed in a future version.
+            Use ``assume_a = 'pos'`` instead.
+
+    assume_a : {'gen', 'pos'}, optional
+        Type of data matrix. It is used to choose the dedicated solver.
+        Note that Dask does not support 'her' and 'sym' types.
+
+    Returns
+    -------
+    x : (M,) or (M, N) Array
+        Solution to the system ``a x = b``. Shape of the return matches the
+        shape of `b`.
+
+    See Also
+    --------
+    scipy.linalg.solve
+    """
+    import warnings
+
+    from dask.array._array_expr.core import asanyarray
+
+    if sym_pos is not None:
+        warnings.warn(
+            "The sym_pos keyword is deprecated and should be replaced by using "
+            "``assume_a = 'pos'``. ``sym_pos`` will be removed in a future version.",
+            category=FutureWarning,
+        )
+        if sym_pos:
+            assume_a = "pos"
+
+    if assume_a == "pos":
+        l, u = _cholesky(a)
+    elif assume_a == "gen":
+        p, l, u = lu(a)
+        b = asanyarray(b)
+        b = p.T.dot(b)
+    else:
+        raise ValueError(
+            f"{assume_a = } is not a recognized matrix structure, "
+            "valid structures in Dask are 'pos' and 'gen'."
+        )
+
+    uy = solve_triangular(l, b, lower=True)
+    return solve_triangular(u, uy)
+
+
+def inv(a):
+    """Compute the inverse of a matrix with LU decomposition.
+
+    Parameters
+    ----------
+    a : array_like
+        Square matrix to be inverted.
+
+    Returns
+    -------
+    ainv : Array
+        Inverse of the matrix `a`.
+    """
+    from dask.array._array_expr._creation import eye
+    from dask.array._array_expr.core import asanyarray
+
+    a = asanyarray(a)
+    return solve(a, eye(a.shape[0], chunks=a.chunks[0][0]))
+
+
+def lstsq(a, b):
+    """Return the least-squares solution to a linear matrix equation using QR.
+
+    Solves the equation `a x = b` by computing a vector `x` that
+    minimizes the Euclidean 2-norm `|| b - a x ||^2`. The equation may
+    be under-, well-, or over- determined (i.e., the number of
+    linearly independent rows of `a` can be less than, equal to, or
+    greater than its number of linearly independent columns). If `a`
+    is square and of full rank, then `x` (but for round-off error) is
+    the "exact" solution of the equation.
+
+    Parameters
+    ----------
+    a : (M, N) array_like
+        "Coefficient" matrix.
+    b : {(M,), (M, K)} array_like
+        Ordinate or "dependent variable" values.
+
+    Returns
+    -------
+    x : {(N,), (N, K)} Array
+        Least-squares solution.
+    residuals : {(1,), (K,)} Array
+        Sums of residuals; squared Euclidean 2-norm for each column in
+        ``b - a*x``.
+    rank : Array
+        Rank of matrix `a`.
+    s : (min(M, N),) Array
+        Singular values of `a`.
+    """
+    from dask.array._array_expr.core import asanyarray
+
+    a = asanyarray(a)
+    b = asanyarray(b)
+
+    q, r = qr(a)
+    x = solve_triangular(r, q.T.conj().dot(b))
+    residuals = b - a.dot(x)
+    residuals = abs(residuals**2).sum(axis=0, keepdims=b.ndim == 1)
+
+    # Compute rank and singular values from r
+    # r must be a triangular with single block
+    rank_expr = LstsqRank(r.expr)
+    s_expr = LstsqSingular(r.expr)
+
+    return x, residuals, new_collection(rank_expr), new_collection(s_expr)
+
+
+class LstsqRank(ArrayExpr):
+    """Compute matrix rank from R factor."""
+
+    _parameters = ["r"]
+
+    @functools.cached_property
+    def _meta(self):
+        # Rank is always an integer scalar
+        return np.array(0, dtype=int)
+
+    @functools.cached_property
+    def chunks(self):
+        return ()
+
+    @functools.cached_property
+    def _name(self):
+        return f"lstsq-rank-{self.deterministic_token}"
+
+    def _layer(self):
+        r_key = (self.r._name, 0, 0)
+        out_key = (self._name,)
+        return {out_key: Task(out_key, np.linalg.matrix_rank, TaskRef(r_key))}
+
+
+def _lstsq_singular(rt, r):
+    """Compute singular values from R'R eigenvalues."""
+    return np.sqrt(np.linalg.eigvalsh(np.dot(rt, r)))[::-1]
+
+
+class LstsqSingular(ArrayExpr):
+    """Compute singular values from R factor."""
+
+    _parameters = ["r"]
+
+    @functools.cached_property
+    def _meta(self):
+        # Singular values are always real, even for complex input
+        # Get the real dtype corresponding to input (complex128 -> float64)
+        input_dtype = self.r.dtype
+        if np.issubdtype(input_dtype, np.complexfloating):
+            # Get the real component type (complex128 -> float64, complex64 -> float32)
+            dtype = np.finfo(input_dtype).dtype
+        else:
+            dtype = input_dtype
+        # Create a fresh empty array to avoid complex->real casting warning
+        return np.empty((0,), dtype=dtype)
+
+    @functools.cached_property
+    def chunks(self):
+        return ((self.r.shape[0],),)
+
+    @functools.cached_property
+    def _name(self):
+        return f"lstsq-singular-{self.deterministic_token}"
+
+    def _layer(self):
+        r_key = (self.r._name, 0, 0)
+        out_key = (self._name, 0)
+        # Need to compute R.T.conj() @ R and get eigenvalues
+        # This creates a task that references rt (r transposed conjugate)
+        rt_key = (f"lstsq-rt-{self.deterministic_token}", 0, 0)
+        return {
+            rt_key: Task(rt_key, lambda x: x.T.conj(), TaskRef(r_key)),
+            out_key: Task(out_key, _lstsq_singular, TaskRef(rt_key), TaskRef(r_key)),
+        }
+
+
 # Export all functions
 __all__ = [
+    "cholesky",
     "compression_level",
     "compression_matrix",
+    "inv",
+    "lstsq",
+    "lu",
     "norm",
     "qr",
     "sfqr",
+    "solve",
+    "solve_triangular",
     "svd",
     "svd_compressed",
     "tsqr",
