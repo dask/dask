@@ -86,6 +86,19 @@ class Rechunk(ArrayExpr):
 
         return chunks
 
+    def _simplify_down(self):
+        # Rechunk(Rechunk(x)) -> single Rechunk to final chunks
+        # Only match Rechunk, not TasksRechunk (which is already lowered)
+        if type(self.array) is Rechunk:
+            return Rechunk(
+                self.array.array,
+                self._chunks,
+                self.threshold,
+                self.block_size_limit,
+                self.balance or self.array.balance,
+                self.method,
+            )
+
     def _lower(self):
 
         if not self.balance and (self.chunks == self.array.chunks):
