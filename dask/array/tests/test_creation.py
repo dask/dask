@@ -302,7 +302,6 @@ def test_arange_dtype_force(dtype):
         (-72_057_594_037_927_945, -72_057_594_037_927_938, 1.5),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype issues in array-expr", strict=False)
 @pytest.mark.parametrize("chunks", ["auto", 1])
 def test_arange_very_large_args(start, stop, step, chunks):
     """Test args that are very close to 2**63

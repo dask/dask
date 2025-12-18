@@ -33,14 +33,11 @@ class Arange(ArrayExpr):
 
     @functools.cached_property
     def dtype(self):
-        return (
-            self.operand("dtype")
-            or np.arange(
-                self.start,
-                self.stop,
-                self.step * self.num_rows if self.num_rows else self.step,
-            ).dtype
-        )
+        # Use type(x)(0) to determine dtype without overflow issues
+        # when start/stop are very large integers
+        return self.operand("dtype") or np.arange(
+            type(self.start)(0), type(self.stop)(0), self.step
+        ).dtype
 
     @functools.cached_property
     def _meta(self):
@@ -676,6 +673,13 @@ def arange(start=0, stop=None, step=1, *, chunks="auto", like=None, dtype=None):
     if stop is None:
         stop = start
         start = 0
+
+    # Avoid loss of precision calculating blockstart and blockstop
+    # when start is a very large int (~2**63) and step is a small float
+    if start != 0 and not np.isclose(start + step - start, step, atol=0):
+        r = arange(0, stop - start, step, chunks=chunks, dtype=dtype, like=like)
+        return r + start
+
     return new_collection(Arange(start, stop, step, chunks, like, dtype))
 
 
