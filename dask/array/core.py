@@ -4109,10 +4109,11 @@ def to_zarr(
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     array_name = component or zarr_array_kwargs.pop("name", None)
+    if mode == "w":
+        zarr_array_kwargs["overwrite"] = True
+
     if _zarr_v3():
         root = zarr.open_group(store=zarr_store, mode=mode) if array_name else None
-        if mode == "w":
-            zarr_array_kwargs["overwrite"] = True
         if array_name:
             z = root.create_array(name=array_name, **zarr_array_kwargs)
         else:
