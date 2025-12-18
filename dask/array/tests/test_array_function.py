@@ -26,7 +26,7 @@ from dask.array.utils import assert_eq
         lambda x: np.sum(x),
         lambda x: np.var(x),
         lambda x: np.vstack((x, x)),
-        pytest.param(lambda x: np.linalg.norm(x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="linalg not implemented")),
+        lambda x: np.linalg.norm(x),
         lambda x: np.min(x),
         lambda x: np.amin(x),
         lambda x: np.round(x),
@@ -37,7 +37,6 @@ from dask.array.utils import assert_eq
         ),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="array function not fully implemented for array-expr", strict=False)
 def test_array_function_dask(func):
     x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
@@ -159,10 +158,9 @@ def test_array_function_cupy_svd(chunks):
         lambda x: np.sum(x),
         lambda x: np.var(x),
         lambda x: np.vstack((x, x)),
-        pytest.param(lambda x: np.linalg.norm(x), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="linalg not implemented")),
+        lambda x: np.linalg.norm(x),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="unregistered func handling differs for array-expr", strict=False)
 def test_unregistered_func(func):
     # Wrap a procol-based encapsulated ndarray
     x = EncapsulateNDArray(np.random.default_rng().random((100, 100)))
@@ -223,7 +221,6 @@ def test_non_existent_func():
         ),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="type precedence differs for array-expr", strict=False)
 def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
     """Test proper dispatch on binary NumPy functions"""
     assert (
