@@ -73,6 +73,7 @@ from dask.array._array_expr._reductions import (
 )
 from dask.array._array_expr._histogram import histogram, histogram2d, histogramdd
 from dask.array._array_expr._routines import (
+    aligned_coarsen_chunks,
     allclose,
     append,
     argwhere,
@@ -81,6 +82,7 @@ from dask.array._array_expr._routines import (
     bincount,
     broadcast_arrays,
     choose,
+    coarsen,
     compress,
     corrcoef,
     count_nonzero,
@@ -97,6 +99,7 @@ from dask.array._array_expr._routines import (
     notnull,
     outer,
     piecewise,
+    ravel_multi_index,
     result_type,
     round,
     searchsorted,
@@ -110,5 +113,6 @@ from dask.array._array_expr._routines import (
     triu_indices,
     triu_indices_from,
     unify_chunks,
+    unravel_index,
 )
 from dask.array._array_expr._ufunc import *

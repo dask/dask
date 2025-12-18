@@ -194,15 +194,15 @@ Lower priority operations.
 
 | Operation | Notes | Status |
 |-----------|-------|--------|
-| coarsen | downsampling | Not started |
+| coarsen | downsampling | **Done** |
 | argtopk/topk | partial sort | Not started |
 | apply_along_axis | axis application | Not started |
 | apply_over_axes | multiple axes | Not started |
 | insert/delete | array modification | Not started |
 | union1d | set operations | Not started |
 | ediff1d | differences | Not started |
-| ravel_multi_index | index conversion | Not started |
-| unravel_index | index conversion | Not started |
+| ravel_multi_index | index conversion | **Done** |
+| unravel_index | index conversion | **Done** |
 
 ### Zarr/TileDB IO (Separate Track)
 External format support.

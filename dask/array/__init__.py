@@ -907,15 +907,15 @@ if _array_expr_enabled():
         from dask.array._array_expr import trace
         apply_along_axis = raise_not_implemented_error("apply_along_axis")
         apply_over_axes = raise_not_implemented_error("apply_over_axes")
-        coarsen = raise_not_implemented_error("coarsen")
+        from dask.array._array_expr import coarsen, aligned_coarsen_chunks
         delete = raise_not_implemented_error("delete")
         ediff1d = raise_not_implemented_error("ediff1d")
         from dask.array._array_expr import einsum
         insert = raise_not_implemented_error("insert")
-        ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
+        from dask.array._array_expr import ravel_multi_index
         union1d = raise_not_implemented_error("union1d")
         unique = raise_not_implemented_error("unique")
-        unravel_index = raise_not_implemented_error("unravel_index")
+        from dask.array._array_expr import unravel_index
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")
 
