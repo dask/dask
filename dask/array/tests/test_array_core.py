@@ -444,7 +444,6 @@ def test_Array_computation():
 
 
 @pytest.mark.parametrize("asarray", [np.asarray, np.asanyarray, np.array])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_numpy_asarray_dtype(asarray):
     """Test dtype= parameter of np.*array()"""
     x = da.arange(10, dtype="i2")
@@ -1192,7 +1191,6 @@ def test_elemwise_differently_chunked():
 
 
 @pytest.mark.filterwarnings("ignore:overflow encountered in cast")  # numpy >=2.0
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_elemwise_dtype():
     values = [
         da.from_array(np.ones(5, np.float32), chunks=3),
@@ -2514,7 +2512,6 @@ def test_to_dask_dataframe():
     assert isinstance(d, dd.DataFrame)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_np_array_with_zero_dimensions():
     d = da.ones((4, 4), chunks=(2, 2))
     assert_eq(np.array(d.sum()), np.array(d.compute().sum()))
@@ -2615,7 +2612,6 @@ def test_astype_gh9316():
     assert result_a.flags.f_contiguous == result_b.flags.f_contiguous
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_arithmetic():
     x = np.arange(5).astype("f4") + 2
     y = np.arange(5).astype("i8") + 2
@@ -3072,7 +3068,6 @@ def test_asarray(asarray):
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_asarray_array_dtype(asarray):
     # test array input
     x = asarray([1, 2])
@@ -4120,7 +4115,6 @@ def test_elemwise_uneven_chunks():
     assert z.chunks == ((2, 2), (4, 2, 4), (2, 3, 2, 3))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_uneven_chunks_blockwise():
     rng = da.random.default_rng()
     x = rng.random((10, 10), chunks=((2, 3, 2, 3), (5, 5)))

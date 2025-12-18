@@ -884,7 +884,9 @@ if _array_expr_enabled():
         # Make dask.array.fft resolve to the array-expr fft module
         sys.modules["dask.array.fft"] = fft
         lib = raise_not_implemented_error("lib")
-        linalg = raise_not_implemented_error("linalg")
+        from dask.array._array_expr import linalg
+
+        sys.modules["dask.array.linalg"] = linalg
         ma = raise_not_implemented_error("ma")
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")

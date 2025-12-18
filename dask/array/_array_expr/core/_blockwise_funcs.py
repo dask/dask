@@ -7,6 +7,7 @@ import toolz
 
 from dask._collections import new_collection
 from dask.array._array_expr._blockwise import Blockwise, Elemwise
+from dask.array.core import is_scalar_for_elemwise
 
 
 def blockwise(
@@ -245,7 +246,8 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
 
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
-    # TODO(expr-soon): We should probably go through blockwise here
-    args = [asanyarray(a) for a in args]
+    # Only convert non-scalar arguments to dask arrays
+    # Scalars are kept as-is to preserve proper dtype behavior (e.g., 2.0 * float32_array = float32)
+    args = [asanyarray(a) if not is_scalar_for_elemwise(a) else a for a in args]
 
     return new_collection(Elemwise(op, dtype, name, where, *args))

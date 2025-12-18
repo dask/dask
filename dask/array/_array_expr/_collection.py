@@ -160,6 +160,10 @@ class Array(DaskMethodsMixin):
             )
         return bool(self.compute())
 
+    def __array__(self, dtype=None, copy=None, **kwargs):
+        x = self.compute()
+        return np.asarray(x, dtype=dtype)
+
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if isinstance(index, str) or (
@@ -242,7 +246,8 @@ class Array(DaskMethodsMixin):
 
         # Use "where" method for boolean mask case
         if isinstance(key, Array) and key.dtype == bool:
-            from dask.array.core import broadcast_to
+            from dask.array._array_expr._broadcast import broadcast_to
+            from dask.array._array_expr.routines import where
 
             left_shape = np.array(key.shape)
             right_shape = np.array(self.shape)
@@ -408,13 +413,15 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __matmul__(self, other):
-        # TODO(expr-soon)
-        raise NotImplementedError
+        from dask.array._array_expr._linalg import matmul
+
+        return matmul(self, other)
 
     @check_if_handled_given_other
     def __rmatmul__(self, other):
-        # TODO(expr-soon)
-        raise NotImplementedError
+        from dask.array._array_expr._linalg import matmul
+
+        return matmul(other, self)
 
     @check_if_handled_given_other
     def __divmod__(self, other):
@@ -1047,7 +1054,7 @@ class Array(DaskMethodsMixin):
 
         if method == "__call__":
             if numpy_ufunc is np.matmul:
-                from dask.array.routines import matmul
+                from dask.array._array_expr._linalg import matmul
 
                 # special case until apply_gufunc handles optional dimensions
                 return matmul(*inputs, **kwargs)
