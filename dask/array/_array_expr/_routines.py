@@ -14,6 +14,7 @@ from dask.array._array_expr._collection import (
     concatenate,
     elemwise,
     ravel,
+    stack,
 )
 from dask.array._array_expr._overlap import map_overlap
 from dask.array.utils import validate_axis
@@ -606,8 +607,8 @@ def _take_dask_array_from_numpy(a, indices, axis):
 
 @derived_from(np)
 def tril(m, k=0):
-    from dask.array._array_expr.routines._where import where
     from dask.array._array_expr._creation import tri
+    from dask.array._array_expr.routines._where import where
     from dask.array.utils import meta_from_array
 
     m = asarray(m)
@@ -624,8 +625,8 @@ def tril(m, k=0):
 
 @derived_from(np)
 def triu(m, k=0):
-    from dask.array._array_expr.routines._where import where
     from dask.array._array_expr._creation import tri
+    from dask.array._array_expr.routines._where import where
     from dask.array.utils import meta_from_array
 
     m = asarray(m)
@@ -777,3 +778,36 @@ def isin(element, test_elements, assume_unique=False, invert=False):
     if invert:
         result = ~result
     return result
+
+
+@derived_from(np)
+def argwhere(a):
+    """Find the indices of array elements that are non-zero."""
+    from dask.array._array_expr._creation import indices
+
+    a = asarray(a)
+
+    nz = isnonzero(a).flatten()
+
+    ind = indices(a.shape, dtype=np.intp, chunks=a.chunks)
+    if ind.ndim > 1:
+        ind = stack([ind[i].ravel() for i in range(len(ind))], axis=1)
+    ind = compress(nz, ind, axis=0)
+
+    return ind
+
+
+@derived_from(np)
+def flatnonzero(a):
+    """Return indices that are non-zero in the flattened array."""
+    return argwhere(asarray(a).ravel())[:, 0]
+
+
+@derived_from(np)
+def nonzero(a):
+    """Return the indices of the elements that are non-zero."""
+    ind = argwhere(a)
+    if ind.ndim > 1:
+        return tuple(ind[:, i] for i in range(ind.shape[1]))
+    else:
+        return (ind,)

@@ -1922,7 +1922,6 @@ def test_select_broadcasting():
     assert_eq(np.select([True], [0], default=[0]), da.select([True], [0], default=[0]))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_argwhere():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -1934,7 +1933,6 @@ def test_argwhere():
         assert_eq(d_nz, x_nz)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_argwhere_obj():
     x = np.random.default_rng().integers(10, size=(15, 16)).astype(object)
     d = da.from_array(x, chunks=(4, 5))
@@ -1945,7 +1943,6 @@ def test_argwhere_obj():
     assert_eq(d_nz, x_nz)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_argwhere_str():
     # We may have behavior differences with NumPy for strings
     # with just spaces, depending on the version of NumPy.
@@ -2017,7 +2014,6 @@ def test_where_bool_optimization():
         assert w1 is ex_w1
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_where_nonzero():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2118,7 +2114,6 @@ def test_count_nonzero_str():
     assert x_c == d_c.compute()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_flatnonzero():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2130,7 +2125,6 @@ def test_flatnonzero():
         assert_eq(d_fnz, x_fnz)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_nonzero():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2146,7 +2140,6 @@ def test_nonzero():
             assert_eq(d_nz[i], x_nz[i])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_nonzero_method():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.default_rng().integers(10, size=shape)
@@ -2932,7 +2925,6 @@ def test_tril_triu_indices(n, k, m, chunks):
         assert_eq(actual, expected)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_pickle_vectorized_routines():
     """Test that graphs that internally use np.vectorize can be pickled"""
     a = da.from_array(["foo", "bar", ""])
