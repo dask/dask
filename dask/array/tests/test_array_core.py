@@ -4989,7 +4989,7 @@ def test_zarr_sharding_roundtrip(tmp_path, chunks, shards):
     with pytest.raises(ValueError, match="Cannot use"):
         b.to_zarr(tmp_path, mode="r")
 
-    b.to_zarr(tmp_path, zarr_array_kwargs=zarr_array_kwargs, mode="a")
+    b.to_zarr(tmp_path, zarr_array_kwargs=zarr_array_kwargs, mode="w")
 
     b2 = da.from_zarr(tmp_path)
     assert_eq(b, b2)

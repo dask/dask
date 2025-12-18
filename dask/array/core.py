@@ -4110,7 +4110,9 @@ def to_zarr(
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     array_name = component or zarr_array_kwargs.pop("name", None)
+    lock = False
     if mode == "w":
+        lock = True
         zarr_array_kwargs["overwrite"] = True
 
     if _zarr_v3():
@@ -4128,9 +4130,10 @@ def to_zarr(
             path=array_name,
             **zarr_array_kwargs,
         )
-    # TODO discuss whether we should lock only when we overwrite. If we do not, we get errors when overwriting, but it
-    # would be good to discuss potential penalties for having lock as True when mode is not w so we are not overwriting.
-    return arr.store(z, lock=True, compute=compute, return_stored=return_stored)
+
+    # TODO discuss problem with lock is False when overwriting. We get a checksum error in that case. This is fixed
+    # by setting it to True. Bug in zarr?
+    return arr.store(z, lock=lock, compute=compute, return_stored=return_stored)
 
 
 def _get_zarr_write_chunks(zarr_array) -> tuple[int, ...]:
