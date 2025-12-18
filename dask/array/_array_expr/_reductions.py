@@ -140,11 +140,6 @@ def reduction(
         remove them.
 
     """
-    if output_size != 1:
-        # TODO(expr-soon): i am not convinced that this is actually used. We don't have a single
-        # test for this as far as I can tell. If we want to keep this, we will most likely need
-        # different arguments for chunk and aggregate to handle differing behaviors
-        raise NotImplementedError("output_size != 1 is not yet supported")
     if axis is None:
         axis = tuple(range(x.ndim))
     if isinstance(axis, Integral):
@@ -173,6 +168,15 @@ def reduction(
     tmp = blockwise(
         chunk, inds, *args, axis=axis, keepdims=True, token=name, dtype=dtype or float
     )
+    # Override chunks along reduced axes to output_size
+    if output_size != 1:
+        from dask.array._array_expr._expr import ChunksOverride
+
+        new_chunks = tuple(
+            (output_size,) * len(c) if i in axis else c
+            for i, c in enumerate(tmp.chunks)
+        )
+        tmp = ChunksOverride(tmp, new_chunks)
     if meta is None and hasattr(x, "_meta"):
         try:
             reduced_meta = compute_meta(
@@ -199,6 +203,15 @@ def reduction(
         concatenate=concatenate,
         reduced_meta=reduced_meta if reduced_meta is not None else meta,
     )
+    # Override final chunks for output_size != 1
+    if keepdims and output_size != 1:
+        from dask.array._array_expr._expr import ChunksOverride
+
+        final_chunks = tuple(
+            (output_size,) if i in axis else c
+            for i, c in enumerate(result.chunks)
+        )
+        result = new_collection(ChunksOverride(result.expr, final_chunks))
     return result
 
 
@@ -350,9 +363,15 @@ class PartialReduce(ArrayExpr):
                     # min/max functions have no identity, don't apply function to meta
                     if "zero-size array to reduction operation" in str(e):
                         meta = self.reduced_meta
+                except IndexError:
+                    # argtopk and similar can't handle empty arrays
+                    meta = self.reduced_meta
             # when no work can be computed on the empty array (e.g., func is a ufunc)
             except ValueError:
                 pass
+            except IndexError:
+                # argtopk and similar can't handle empty arrays
+                meta = self.reduced_meta
 
         # some functions can't compute empty arrays (those for which reduced_meta
         # fall into the ValueError exception) and we have to rely on reshaping

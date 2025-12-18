@@ -959,6 +959,32 @@ class Array(DaskMethodsMixin):
             self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
         )
 
+    def topk(self, k, axis=-1, split_every=None):
+        """The top k elements of an array.
+
+        Refer to :func:`dask.array.topk` for full documentation.
+
+        See Also
+        --------
+        dask.array.topk : equivalent function
+        """
+        from dask.array._array_expr._routines import topk
+
+        return topk(self, k, axis=axis, split_every=split_every)
+
+    def argtopk(self, k, axis=-1, split_every=None):
+        """The indices of the top k elements of an array.
+
+        Refer to :func:`dask.array.argtopk` for full documentation.
+
+        See Also
+        --------
+        dask.array.argtopk : equivalent function
+        """
+        from dask.array._array_expr._routines import argtopk
+
+        return argtopk(self, k, axis=axis, split_every=split_every)
+
     def cumsum(self, axis, dtype=None, out=None, *, method="sequential"):
         """Return the cumulative sum of the elements along the given axis.
 

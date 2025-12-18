@@ -726,7 +726,6 @@ def test_array_cumreduction_out(func):
     "npfunc,daskfunc", [(np.sort, da.topk), (np.argsort, da.argtopk)]
 )
 @pytest.mark.parametrize("split_every", [None, 2, 4, 8])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="topk/argtopk not implemented for array-expr", strict=False)
 def test_topk_argtopk1(npfunc, daskfunc, split_every):
     # Test data
     k = 5
@@ -783,7 +782,6 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
 )
 @pytest.mark.parametrize("split_every", [None, 2, 3, 4])
 @pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 5, 10])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="topk/argtopk not implemented for array-expr", strict=False)
 def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     """Fine test use cases when k is larger than chunk size"""
     npa = np.random.default_rng().random((10,))
@@ -796,7 +794,6 @@ def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     assert_eq(npfunc(npa)[:k], daskfunc(a, -k, split_every=split_every))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="topk/argtopk not implemented for array-expr", strict=False)
 def test_topk_argtopk3():
     a = da.random.default_rng().random((10, 20, 30), chunks=(4, 8, 8))
 
