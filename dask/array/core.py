@@ -3945,9 +3945,8 @@ def to_zarr(
     region=None,
     compute=True,
     return_stored=False,
-    zarr_array_kwargs=None,
     mode="a",
-    **kwargs,
+    **zarr_array_kwargs,
 ):
     """Save array to the zarr storage format
 
@@ -3980,7 +3979,23 @@ def to_zarr(
         See :func:`~dask.array.store` for more details.
     return_stored: bool
         See :func:`~dask.array.store` for more details.
-    zarr_array_kwargs: dict or None
+    mode: Literal["r+", "a", "w", "w-"]
+        Keyword argument `mode` passed to the storage backend when creating a zarr
+        store from a URL string. Only used when ``url`` is a string (not when
+        ``url`` is already a zarr.Array or MutableMapping instance).
+
+        Common options include:
+            - ``'r+'``: Read/write, must exist
+            - ``'a'``: Read/write, create if doesn't exist (default)
+            - ``'w'``: Create, remove existing data if present
+            - ``'w-'``: Create, fail if exists
+    **zarr_array_kwargs:
+        .. deprecated:: 2025.12.0
+            Passing storage io-related arguments via **kwargs is deprecated.
+            Please use the ``mode`` parameter instead when using
+            **kwargs with the `mode` keys and corresponding values. `read_only` is not allowed anymore
+            and will not have an effect.
+
         Keyword arguments passed to :func:`zarr.create_array` (for zarr v3) or
         :func:`zarr.create` (for zarr v2). This function automatically sets
         ``shape``, ``chunks``, and ``dtype`` based on the dask array, but these
@@ -3998,25 +4013,6 @@ def to_zarr(
 
         - zarr v3: https://zarr.readthedocs.io/en/stable/api/zarr/index.html#zarr.create_array
         - zarr v2: https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create
-    mode: Literal["r+", "a", "w", "w-"]
-        Keyword argument `mode` passed to the storage backend when creating a zarr
-        store from a URL string. Only used when ``url`` is a string (not when
-        ``url`` is already a zarr.Array or MutableMapping instance).
-
-        Common options include:
-            - ``'r+'``: Read/write, must exist
-            - ``'a'``: Read/write, create if doesn't exist (default)
-            - ``'w'``: Create, remove existing data if present
-            - ``'w-'``: Create, fail if exists
-    **kwargs:
-        .. deprecated:: 2025.12.0
-            Passing storage io-related arguments and/or array creation arguments via **kwargs is deprecated.
-            Please use the ``mode`` parameter instead when using
-            **kwargs with the `mode` keys and corresponding values. `read_only` is not allowed anymore
-            and will not have an effect.
-            If keys are specified that were previously passed to :func:`zarr.creation.create`
-            use `zarr_array_kwargs` instead. Please check the docstring for that argument to see
-            which arguments are supported for the zarr version you have installed.
 
     Raises
     ------
@@ -4046,34 +4042,25 @@ def to_zarr(
             "zarr_array_kwargs"
         )
 
-    if kwargs:
+    if zarr_array_kwargs:
         io_store_args = {"mode", "readonly"}
-        io_store_related = {k: v for k, v in kwargs.items() if k in io_store_args}
-        array_creation_args = {
-            k: v for k, v in kwargs.items() if k not in io_store_args
+        io_store_related = {
+            k: v for k, v in zarr_array_kwargs.items() if k in io_store_args
         }
-        warnings.warn(
-            "Passing opening/reading zarr store related arguments via **kwargs is deprecated. "
-            "Please use the 'zarr_read_kwargs' parameter instead. **kwargs will be "
-            "removed in a future version.",
-            FutureWarning,
-            stacklevel=2,
-        )
-
-        mode = mode if not io_store_related.get("mode") else io_store_related["mode"]
-
-        if array_creation_args:
+        array_creation_args = {
+            k: v for k, v in zarr_array_kwargs.items() if k not in io_store_args
+        }
+        if io_store_related:
             warnings.warn(
-                "Passing array creation arguments via **kwargs is deprecated. "
-                "Please use the 'zarr_array_kwargs' parameter instead. **kwargs will be "
+                "Passing opening/reading zarr store related arguments via **kwargs is deprecated. "
+                "Please use the 'zarr_read_kwargs' parameter instead. **kwargs will be "
                 "removed in a future version.",
                 FutureWarning,
                 stacklevel=2,
             )
-            if zarr_array_kwargs is None:
-                zarr_array_kwargs = array_creation_args
-            else:
-                zarr_array_kwargs = {**array_creation_args, **zarr_array_kwargs}
+
+        mode = mode if not io_store_related.get("mode") else io_store_related["mode"]
+        zarr_array_kwargs = array_creation_args
 
     if _zarr_v3():
         zarr_mem_store_types = (zarr.storage.MemoryStore,)
