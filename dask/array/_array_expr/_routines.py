@@ -601,3 +601,39 @@ def _take_dask_array_from_numpy(a, indices, axis):
     return map_blocks(
         lambda block: np.take(a, block, axis), indices, chunks=indices.chunks, dtype=a.dtype
     )
+
+
+@derived_from(np)
+def tril(m, k=0):
+    from dask.array._array_expr._collection import where
+    from dask.array._array_expr._creation import tri
+    from dask.array.utils import meta_from_array
+
+    m = asarray(m)
+    mask = tri(
+        *m.shape[-2:],
+        k=k,
+        dtype=bool,
+        chunks=m.chunks[-2:],
+        like=meta_from_array(m),
+    )
+
+    return where(mask, m, np.zeros_like(m._meta, shape=(1,)))
+
+
+@derived_from(np)
+def triu(m, k=0):
+    from dask.array._array_expr._collection import where
+    from dask.array._array_expr._creation import tri
+    from dask.array.utils import meta_from_array
+
+    m = asarray(m)
+    mask = tri(
+        *m.shape[-2:],
+        k=k - 1,
+        dtype=bool,
+        chunks=m.chunks[-2:],
+        like=meta_from_array(m),
+    )
+
+    return where(mask, np.zeros_like(m._meta, shape=(1,)), m)

@@ -2890,7 +2890,6 @@ def test_iscomplexobj():
     assert np.iscomplexobj(a) is True
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tril_triu():
     A = np.random.default_rng().standard_normal((20, 20))
     for chk in [5, 4]:
@@ -2927,14 +2926,12 @@ def test_tril_triu():
             assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tril_ndims():
     A = np.random.default_rng().integers(0, 11, (10, 10, 10))
     dA = da.from_array(A, chunks=(5, 5, 5))
     assert_eq(da.triu(dA), np.triu(A))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tril_triu_non_square_arrays():
     A = np.random.default_rng().integers(0, 11, (30, 35))
     dA = da.from_array(A, chunks=(5, 5))

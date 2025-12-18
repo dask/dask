@@ -30,6 +30,7 @@ The array-expr system has foundational infrastructure in place:
 - Utilities: ndim, shape, result_type, broadcast_arrays, unify_chunks
 - IO: store, to_npy_stack, from_npy_stack, from_delayed
 - Advanced indexing: vindex, take
+- Creation: eye, diag, diagonal, tri, tril, triu, fromfunction, indices, meshgrid, pad, tile
 
 ## Testing Infrastructure
 
@@ -106,16 +107,16 @@ Array construction.
 
 | Operation | Impl Strategy | Status |
 |-----------|--------------|--------|
-| eye | diagonal ones | Not started |
-| diag | extract/construct diagonal | Not started |
-| diagonal | extract diagonal | Not started |
-| tri | lower triangle mask | Not started |
-| tril/triu | mask operations | Not started |
-| fromfunction | map_blocks | Not started |
-| indices | similar to meshgrid | Not started |
-| meshgrid | stack + broadcast | Not started |
-| pad | boundary handling | Not started |
-| tile | repeat + reshape | Not started |
+| eye | Eye expression class | **Done** |
+| diag | Diag1D/Diag2DSimple expressions | **Done** |
+| diagonal | Diagonal expression class | **Done** |
+| tri | arange + reshape + greater_equal | **Done** |
+| tril/triu | tri + where | **Done** |
+| fromfunction | meshgrid + blockwise | **Done** |
+| indices | arange + meshgrid + stack | **Done** |
+| meshgrid | asarray + slicing + broadcast_arrays | **Done** |
+| pad | concatenate + broadcast_to (constant/edge/linear_ramp/empty modes) | **Done** (stat modes pending) |
+| tile | block | **Done** |
 
 ### Tier 7: Statistics & Histograms
 Used in data analysis workflows.

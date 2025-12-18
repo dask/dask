@@ -39,14 +39,23 @@ from dask.array._array_expr._collection import (
 )
 from dask.array._array_expr._creation import (
     arange,
+    diag,
+    diagonal,
     empty,
     empty_like,
+    eye,
+    fromfunction,
     full,
     full_like,
+    indices,
     linspace,
+    meshgrid,
     ones,
     ones_like,
+    pad,
     repeat,
+    tile,
+    tri,
     zeros,
     zeros_like,
 )
@@ -75,6 +84,8 @@ from dask.array._array_expr._routines import (
     searchsorted,
     shape,
     take,
+    tril,
+    triu,
     unify_chunks,
 )
 from dask.array._array_expr._ufunc import *
