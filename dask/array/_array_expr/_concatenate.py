@@ -12,7 +12,7 @@ from tlz import accumulate
 from toolz import concat
 
 from dask._collections import new_collection
-from dask._task_spec import List, Task, TaskRef
+from dask._task_spec import Alias, List, Task, TaskRef
 from dask.array._array_expr._expr import ArrayExpr, unify_chunks_expr
 from dask.array.core import concatenate3
 from dask.array.dispatch import concatenate_lookup
@@ -50,15 +50,18 @@ class Concatenate(ArrayExpr):
         keys = list(product([self._name], *[range(len(bd)) for bd in self.chunks]))
         names = [a.name for a in self.args]
 
-        values = [
-            (names[bisect(cum_dims, key[axis + 1]) - 1],)
-            + key[1 : axis + 1]
-            + (key[axis + 1] - cum_dims[bisect(cum_dims, key[axis + 1]) - 1],)
-            + key[axis + 2 :]
-            for key in keys
-        ]
+        dsk = {}
+        for key in keys:
+            source_name = names[bisect(cum_dims, key[axis + 1]) - 1]
+            source_key = (
+                (source_name,)
+                + key[1 : axis + 1]
+                + (key[axis + 1] - cum_dims[bisect(cum_dims, key[axis + 1]) - 1],)
+                + key[axis + 2 :]
+            )
+            dsk[key] = Alias(key, source_key)
 
-        return dict(zip(keys, values))
+        return dsk
 
 
 class ConcatenateFinalize(ArrayExpr):

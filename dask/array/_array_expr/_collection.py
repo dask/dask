@@ -996,7 +996,7 @@ class Array(DaskMethodsMixin):
                 f"Cannot cast array from {self.dtype!r} to {dtype!r} "
                 f"according to the rule {casting!r}"
             )
-        return self.map_blocks(chunk.astype, dtype=dtype, astype_dtype=dtype, **kwargs)
+        return elemwise(chunk.astype, self, dtype=dtype, astype_dtype=dtype, **kwargs)
 
     def map_blocks(self, func, *args, **kwargs):
         from dask.array._array_expr._map_blocks import map_blocks
