@@ -34,6 +34,7 @@ The array-expr system has foundational infrastructure in place:
 - Statistics: histogram, histogram2d, histogramdd, digitize, bincount, cov, corrcoef, average
 - Selection & conditional: select, piecewise, choose, extract, isin
 - FFT: fft, ifft, fft2, ifft2, fftn, ifftn, rfft, irfft, rfft2, irfft2, rfftn, irfftn, hfft, ihfft, fftfreq, rfftfreq, fftshift, ifftshift, fft_wrap
+- Linalg submodule: tsqr, qr, svd, svd_flip, norm
 
 ## Testing Infrastructure
 
@@ -162,9 +163,31 @@ Full submodule implementations.
 
 | Submodule | Notes | Status |
 |-----------|-------|--------|
-| fft | FFT operations (fft, ifft, fft2, ifft2, fftn, ifftn, rfft, irfft, rfft2, irfft2, rfftn, irfftn, hfft, ihfft, fftfreq, rfftfreq, fftshift, ifftshift, fft_wrap) | **Done** |
-| linalg | Full linalg submodule | Not started |
+| fft | FFT operations | **Done** |
+| linalg | Full linalg submodule | **Partial** (304/391 tests pass) |
 | ma | Masked arrays | Not started |
+
+#### Linalg Status Detail
+Native expression classes for TSQR algorithm (tall-skinny QR) and derived operations.
+
+| Operation | Status |
+|-----------|--------|
+| tsqr | **Done** |
+| qr | **Done** |
+| svd | **Done** |
+| svd_flip | **Done** |
+| norm | **Done** |
+| tensordot | **Done** (in _linalg.py) |
+| dot | **Done** (in _linalg.py) |
+| vdot | **Done** (in _linalg.py) |
+| matmul | **Done** (in _linalg.py) |
+| lu | Not started |
+| solve | Not started |
+| solve_triangular | Not started |
+| inv | Not started |
+| cholesky | Not started |
+| lstsq | Not started |
+| svd_compressed | **Done** |
 
 ### Tier 11: Advanced/Specialized
 Lower priority operations.
