@@ -583,7 +583,6 @@ def test_Array_numpy_gufunc_call__array_ufunc__01():
     assert_eq(ny, y)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_Array_numpy_gufunc_call__array_ufunc__02():
     x = da.random.default_rng().normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
@@ -3011,7 +3010,6 @@ def test_from_array_minus_one():
 
 
 @pytest.mark.parametrize("chunks", [-1, 2])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_array_copy_noop(chunks):
     # Regression test for https://github.com/dask/dask/issues/9533
     # Which is a revert of the solution for https://github.com/dask/dask/issues/3751
@@ -3826,7 +3824,6 @@ def test_timedelta_op():
     assert a.compute() == x / y
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_to_delayed():
     x = da.random.default_rng().random((4, 4), chunks=(2, 2))
     y = x + 10
@@ -3955,7 +3952,6 @@ def test_A_property():
     assert x.A is x
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_copy_mutate():
     x = da.arange(5, chunks=(2,))
     y = x.copy()
@@ -6185,7 +6181,6 @@ def test_setitem_no_dtype_broadcast(idx, val):
     assert_eq(x, da.array([3, 2], dtype=np.int32))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
 def test_store_sources_unoptimized_nocompute():
     """Test that two sources can be optimized and share tasks after storing."""
     total_calls = 0

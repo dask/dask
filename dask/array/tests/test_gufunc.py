@@ -683,7 +683,6 @@ def test_apply_gufunc_with_meta():
     assert_eq(expected[1], result[1])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="Create our Own Scalar Class")
 def test_as_gufunc_with_meta():
     stack = da.ones((1, 50, 60), chunks=(1, -1, -1))
     expected = (stack, stack.max())
