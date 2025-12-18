@@ -261,6 +261,8 @@ class Array(DaskMethodsMixin):
             if value.ndim:
                 value = broadcast_to(value, self[key].shape)
 
+            from dask.array._array_expr.routines._where import where
+
             y = where(key, value, self)
             self._expr = y.expr
             return
