@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import builtins
 import importlib
+import sys
 import warnings
 
 # The "array.query-planning" config can only be processed once
@@ -871,7 +872,10 @@ if _array_expr_enabled():
         )
 
         backends = raise_not_implemented_error("backends")
-        fft = raise_not_implemented_error("fft")
+        from dask.array._array_expr import fft
+
+        # Make dask.array.fft resolve to the array-expr fft module
+        sys.modules["dask.array.fft"] = fft
         lib = raise_not_implemented_error("lib")
         linalg = raise_not_implemented_error("linalg")
         ma = raise_not_implemented_error("ma")

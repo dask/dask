@@ -8,8 +8,6 @@ import pytest
 
 import dask.array as da
 
-if da._array_expr_enabled():
-    pytest.skip("fft not implemented for array-expr", allow_module_level=True)
 
 import dask.array.fft
 from dask.array.core import normalize_chunks
@@ -30,12 +28,10 @@ all_nd_funcnames = [
     "irfftn",
 ]
 
-if not da._array_expr_enabled():
-
-    nparr = np.arange(100).reshape(10, 10)
-    darr = da.from_array(nparr, chunks=(1, 10))
-    darr2 = da.from_array(nparr, chunks=(10, 1))
-    darr3 = da.from_array(nparr, chunks=(10, 10))
+nparr = np.arange(100).reshape(10, 10)
+darr = da.from_array(nparr, chunks=(1, 10))
+darr2 = da.from_array(nparr, chunks=(10, 1))
+darr3 = da.from_array(nparr, chunks=(10, 10))
 
 
 @pytest.mark.parametrize("funcname", all_1d_funcnames)
