@@ -8,6 +8,7 @@ import toolz
 
 from dask._collections import new_collection
 from dask.array import chunk
+from dask.array.chunk_types import is_valid_chunk_type
 from dask.array._array_expr.manipulation._transpose import Transpose
 from dask.array._array_expr._expr import ArrayExpr
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
@@ -548,6 +549,21 @@ class Array(DaskMethodsMixin):
             A 1-D array with the same data as self.
         """
         return reshape(self, (self.size,))
+
+    flatten = ravel
+
+    def choose(self, choices):
+        """Use an index array to construct a new array from a set of choices.
+
+        Refer to :func:`dask.array.choose` for full documentation.
+
+        See Also
+        --------
+        dask.array.choose : equivalent function
+        """
+        from dask.array._array_expr._routines import choose
+
+        return choose(self, choices)
 
     def round(self, decimals=0):
         """Return array with each element rounded to the given number of decimals.

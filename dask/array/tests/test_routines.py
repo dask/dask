@@ -1434,7 +1434,6 @@ def test_unique_rand(seed, shape, chunks):
     [[(10,), (5,)], [(10,), (3,)], [(4, 5), (3, 2)], [(20, 20), (4, 5)]],
 )
 @pytest.mark.parametrize("invert", [True, False])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isin_rand(
     seed, low, high, elements_shape, elements_chunks, test_shape, test_chunks, invert
 ):
@@ -1454,7 +1453,6 @@ def test_isin_rand(
 
 
 @pytest.mark.parametrize("assume_unique", [True, False])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_isin_assume_unique(assume_unique):
     a1 = np.arange(10)
     d1 = da.from_array(a1, chunks=(5,))
@@ -1766,7 +1764,6 @@ def test_compress():
         da.compress([[True], [False]], a, axis=100)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_extract():
     x = np.arange(25).reshape((5, 5))
     a = da.from_array(x, chunks=(2, 2))
@@ -1822,7 +1819,6 @@ def test_allclose():
     assert_eq(np.array(n_r)[()], d_r)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_choose():
     # test choose function
     x = np.random.default_rng().integers(10, size=(15, 16))
@@ -1845,7 +1841,6 @@ def test_choose():
     assert_eq(np.choose(indices_np, choices_np), da.choose(indices_da, choices_da))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_piecewise():
     rng = np.random.default_rng(1337)
 
@@ -1858,7 +1853,6 @@ def test_piecewise():
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_piecewise_otherwise():
     rng = np.random.default_rng(1337)
 
@@ -1883,7 +1877,6 @@ def test_piecewise_otherwise():
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_select():
     conditions = [
         np.array([False, False, False, False]),
@@ -1900,7 +1893,6 @@ def test_select():
     assert_eq(np.select(conditions, choices), da.select(d_conditions, d_choices))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_select_multidimension():
     x = np.random.default_rng().random((100, 50, 2))
     y = da.from_array(x, chunks=(50, 50, 1))
@@ -1910,7 +1902,6 @@ def test_select_multidimension():
     assert_eq(res_y, res_x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_select_return_dtype():
     d = np.array([1, 2, 3, np.nan, 5, 7])
     m = np.isnan(d)

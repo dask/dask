@@ -32,9 +32,9 @@ from dask.array.utils import assert_eq
         lambda x: np.round(x),
         pytest.param(lambda x: np.insert(x, 0, 3, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="insert not implemented")),
         pytest.param(lambda x: np.delete(x, 0, axis=0), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="delete not implemented")),
-        pytest.param(lambda x: np.select(
+        lambda x: np.select(
             [x < 0.3, x < 0.6, x > 0.7], [x * 2, x, x / 2], default=0.65
-        ), marks=pytest.mark.xfail(da._array_expr_enabled(), reason="select not implemented")),
+        ),
     ],
 )
 def test_array_function_dask(func):
