@@ -908,10 +908,10 @@ if _array_expr_enabled():
         from dask.array._array_expr import apply_along_axis
         from dask.array._array_expr import apply_over_axes
         from dask.array._array_expr import coarsen, aligned_coarsen_chunks
-        delete = raise_not_implemented_error("delete")
+        from dask.array._array_expr import delete
         from dask.array._array_expr import ediff1d
         from dask.array._array_expr import einsum
-        insert = raise_not_implemented_error("insert")
+        from dask.array._array_expr import insert
         from dask.array._array_expr import ravel_multi_index
         from dask.array._array_expr import union1d
         from dask.array._array_expr import unique
