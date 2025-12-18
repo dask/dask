@@ -4023,6 +4023,7 @@ def to_zarr(
     ValueError
         If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
         If ``region`` is specified and ``url`` is not a zarr.Array
+        If ``mode`` is specified as `r`.
 
     See Also
     --------
@@ -4127,8 +4128,9 @@ def to_zarr(
             path=array_name,
             **zarr_array_kwargs,
         )
-
-    return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
+    # TODO discuss whether we should lock only when we overwrite. If we do not, we get errors when overwriting, but it
+    # would be good to discuss potential penalties for having lock as True when mode is not w so we are not overwriting.
+    return arr.store(z, lock=True, compute=compute, return_stored=return_stored)
 
 
 def _get_zarr_write_chunks(zarr_array) -> tuple[int, ...]:
