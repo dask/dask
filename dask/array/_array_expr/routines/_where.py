@@ -41,10 +41,9 @@ def where(condition, x=None, y=None):
         raise ValueError("either both or neither of x and y should be given")
     if (x is None) and (y is None):
         # Single arg case - returns indices of nonzero elements
-        raise NotImplementedError(
-            "where(condition) is not yet implemented in array-expr mode. "
-            "Use da.nonzero(condition) instead."
-        )
+        from dask.array._array_expr._routines import nonzero
+
+        return nonzero(condition)
 
     # Optimization: for scalar conditions with matching shapes, return the chosen array directly
     if np.isscalar(condition):

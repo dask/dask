@@ -567,6 +567,19 @@ class Array(DaskMethodsMixin):
 
         return choose(self, choices)
 
+    def nonzero(self):
+        """Return the indices of the elements that are non-zero.
+
+        Refer to :func:`dask.array.nonzero` for full documentation.
+
+        See Also
+        --------
+        dask.array.nonzero : equivalent function
+        """
+        from dask.array._array_expr._routines import nonzero
+
+        return nonzero(self)
+
     def round(self, decimals=0):
         """Return array with each element rounded to the given number of decimals.
 

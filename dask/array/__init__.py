@@ -660,6 +660,7 @@ if _array_expr_enabled():
             arctan,
             arctan2,
             arctanh,
+            argwhere,
             array,
             as_gufunc,
             asanyarray,
@@ -704,6 +705,7 @@ if _array_expr_enabled():
             expand_dims,
             fabs,
             fix,
+            flatnonzero,
             flip,
             fliplr,
             flipud,
@@ -767,6 +769,7 @@ if _array_expr_enabled():
             nan_to_num,
             negative,
             nextafter,
+            nonzero,
             not_equal,
             ones,
             ones_like,
@@ -894,7 +897,6 @@ if _array_expr_enabled():
         from dask.array._array_expr import trace
         apply_along_axis = raise_not_implemented_error("apply_along_axis")
         apply_over_axes = raise_not_implemented_error("apply_over_axes")
-        argwhere = raise_not_implemented_error("argwhere")
         bincount = raise_not_implemented_error("bincount")
         coarsen = raise_not_implemented_error("coarsen")
         corrcoef = raise_not_implemented_error("corrcoef")
@@ -902,9 +904,7 @@ if _array_expr_enabled():
         delete = raise_not_implemented_error("delete")
         ediff1d = raise_not_implemented_error("ediff1d")
         from dask.array._array_expr import einsum
-        flatnonzero = raise_not_implemented_error("flatnonzero")
         insert = raise_not_implemented_error("insert")
-        nonzero = raise_not_implemented_error("nonzero")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
         tril_indices = raise_not_implemented_error("tril_indices")
         tril_indices_from = raise_not_implemented_error("tril_indices_from")

@@ -29,7 +29,7 @@ The array-expr system has foundational infrastructure in place:
 - Simple routines: round/around, isclose, allclose, isnull/notnull, append, count_nonzero
 - Utilities: ndim, shape, result_type, broadcast_arrays, unify_chunks
 - IO: store, to_npy_stack, from_npy_stack, from_delayed
-- Advanced indexing: vindex, take
+- Advanced indexing: vindex, take, nonzero, argwhere, flatnonzero
 - Creation: eye, diag, diagonal, tri, tril, triu, fromfunction, indices, meshgrid, pad, tile
 - Statistics: histogram, histogram2d, histogramdd, digitize
 - Selection & conditional: select, piecewise, choose, extract, isin
@@ -101,9 +101,9 @@ Complete the indexing story.
 |-----------|----------|-------|--------|
 | vindex | _slicing.py | Point-wise vectorized indexing | **Done** |
 | take | _routines.py | Index along axis | **Done** |
-| nonzero | _routines.py | Returns indices of non-zero elements | Blocked (needs indices) |
-| argwhere | _routines.py | Returns indices where condition is true | Blocked (needs indices) |
-| flatnonzero | _routines.py | nonzero on flattened array | Blocked (needs indices) |
+| nonzero | _routines.py | Returns indices of non-zero elements | **Done** |
+| argwhere | _routines.py | Returns indices where condition is true | **Done** |
+| flatnonzero | _routines.py | nonzero on flattened array | **Done** |
 
 ### Tier 6: Creation Functions
 Array construction.
