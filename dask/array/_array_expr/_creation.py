@@ -19,6 +19,7 @@ from dask.array.utils import meta_from_array
 from dask.array.wrap import _parse_wrap_args, broadcast_trick
 from dask.blockwise import blockwise as core_blockwise
 from dask.layers import ArrayChunkShapeDep
+from dask.base import tokenize
 from dask.utils import cached_cumsum, derived_from
 
 
@@ -158,6 +159,444 @@ class Empty(BroadcastTrick):
 
 class Full(BroadcastTrick):
     func = staticmethod(np.full_like)
+
+
+class Eye(ArrayExpr):
+    _parameters = ["N", "M", "k", "dtype", "chunks"]
+    _defaults = {"M": None, "k": 0, "dtype": float, "chunks": "auto"}
+
+    @functools.cached_property
+    def _M(self):
+        return self.M if self.M is not None else self.N
+
+    @functools.cached_property
+    def dtype(self):
+        return np.dtype(self.operand("dtype") or float)
+
+    @functools.cached_property
+    def _meta(self):
+        return np.empty((0, 0), dtype=self.dtype)
+
+    @functools.cached_property
+    def chunks(self):
+        vchunks, hchunks = normalize_chunks(
+            self.operand("chunks"), shape=(self.N, self._M), dtype=self.dtype
+        )
+        return (vchunks, hchunks)
+
+    @functools.cached_property
+    def _chunk_size(self):
+        # Use the first vertical chunk size for diagonal positioning logic
+        return self.chunks[0][0]
+
+    def _layer(self) -> dict:
+        dsk = {}
+        vchunks, hchunks = self.chunks
+        chunk_size = self._chunk_size
+        k = self.k
+        dtype = self.dtype
+
+        for i, vchunk in enumerate(vchunks):
+            for j, hchunk in enumerate(hchunks):
+                key = (self._name, i, j)
+                # Check if this block contains part of the k-diagonal
+                if (j - i - 1) * chunk_size <= k <= (j - i + 1) * chunk_size:
+                    local_k = k - (j - i) * chunk_size
+                    task = Task(
+                        key,
+                        np.eye,
+                        vchunk,
+                        hchunk,
+                        local_k,
+                        dtype,
+                    )
+                else:
+                    task = Task(key, np.zeros, (vchunk, hchunk), dtype)
+                dsk[key] = task
+        return dsk
+
+
+class Diag1D(ArrayExpr):
+    """Create a diagonal matrix from a 1D array (k=0 case only)."""
+
+    _parameters = ["x"]
+
+    @functools.cached_property
+    def _meta(self):
+        return meta_from_array(self.x, ndim=2)
+
+    @functools.cached_property
+    def dtype(self):
+        return self.x.dtype
+
+    @functools.cached_property
+    def chunks(self):
+        chunks_1d = self.x.chunks[0]
+        return (chunks_1d, chunks_1d)
+
+    def _layer(self) -> dict:
+        from dask._task_spec import TaskRef
+
+        dsk = {}
+        x = self.x
+        chunks_1d = x.chunks[0]
+        meta = self._meta
+
+        for i, m in enumerate(chunks_1d):
+            for j, n in enumerate(chunks_1d):
+                key = (self._name, i, j)
+                if i == j:
+                    dsk[key] = Task(key, np.diag, TaskRef((x._name, i)))
+                else:
+                    dsk[key] = Task(key, np.zeros_like, meta, shape=(m, n))
+        return dsk
+
+
+class Diag2DSimple(ArrayExpr):
+    """Extract diagonal from a 2D array with square chunks (k=0 case only)."""
+
+    _parameters = ["x"]
+
+    @functools.cached_property
+    def _meta(self):
+        return meta_from_array(self.x, ndim=1)
+
+    @functools.cached_property
+    def dtype(self):
+        return self.x.dtype
+
+    @functools.cached_property
+    def chunks(self):
+        return (self.x.chunks[0],)
+
+    def _layer(self) -> dict:
+        from dask._task_spec import TaskRef
+
+        dsk = {}
+        x = self.x
+        x_keys = x.__dask_keys__()
+
+        for i, row in enumerate(x_keys):
+            key = (self._name, i)
+            dsk[key] = Task(key, np.diag, TaskRef(row[i]))
+        return dsk
+
+
+class Diagonal(ArrayExpr):
+    """Extract a diagonal from a multi-dimensional array."""
+
+    _parameters = ["x", "offset", "axis1", "axis2"]
+    _defaults = {"offset": 0, "axis1": 0, "axis2": 1}
+
+    @functools.cached_property
+    def _axis1_normalized(self):
+        axis = self.axis1
+        if axis < 0:
+            axis = self.x.ndim + axis
+        return axis
+
+    @functools.cached_property
+    def _axis2_normalized(self):
+        axis = self.axis2
+        if axis < 0:
+            axis = self.x.ndim + axis
+        return axis
+
+    @functools.cached_property
+    def _effective_axes(self):
+        """Return (axis1, axis2, k) with axis1 < axis2."""
+        axis1, axis2 = self._axis1_normalized, self._axis2_normalized
+        k = self.offset
+        if axis1 > axis2:
+            axis1, axis2 = axis2, axis1
+            k = -self.offset
+        return axis1, axis2, k
+
+    @functools.cached_property
+    def _diag_info(self):
+        """Compute diagonal metadata."""
+        from itertools import product
+
+        x = self.x
+        axis1, axis2, k = self._effective_axes
+
+        kdiag_row_start = max(0, -k)
+        kdiag_col_start = max(0, k)
+        kdiag_row_stop = min(x.shape[axis1], x.shape[axis2] - k)
+        len_kdiag = kdiag_row_stop - kdiag_row_start
+
+        free_axes = set(range(x.ndim)) - {axis1, axis2}
+        free_indices = list(product(*(range(x.numblocks[i]) for i in free_axes)))
+        ndims_free = len(free_axes)
+
+        return {
+            "axis1": axis1,
+            "axis2": axis2,
+            "k": k,
+            "len_kdiag": len_kdiag,
+            "kdiag_row_start": kdiag_row_start,
+            "kdiag_col_start": kdiag_col_start,
+            "kdiag_row_stop": kdiag_row_stop,
+            "free_axes": free_axes,
+            "free_indices": free_indices,
+            "ndims_free": ndims_free,
+        }
+
+    @functools.cached_property
+    def _meta(self):
+        return meta_from_array(self.x, ndim=self._diag_info["ndims_free"] + 1)
+
+    @functools.cached_property
+    def dtype(self):
+        return self.x.dtype
+
+    @functools.cached_property
+    def chunks(self):
+        info = self._diag_info
+        x = self.x
+        axis1, axis2 = info["axis1"], info["axis2"]
+
+        def pop_axes(chunks, axis1, axis2):
+            chunks = list(chunks)
+            chunks.pop(axis2)
+            chunks.pop(axis1)
+            return tuple(chunks)
+
+        if info["len_kdiag"] <= 0:
+            return pop_axes(x.chunks, axis1, axis2) + ((0,),)
+
+        # Compute diagonal chunks by following the diagonal through blocks
+        k = info["k"]
+        kdiag_row_start = info["kdiag_row_start"]
+        kdiag_col_start = info["kdiag_col_start"]
+
+        row_stops_ = np.cumsum(x.chunks[axis1])
+        row_starts = np.roll(row_stops_, 1)
+        row_starts[0] = 0
+
+        col_stops_ = np.cumsum(x.chunks[axis2])
+        col_starts = np.roll(col_stops_, 1)
+        col_starts[0] = 0
+
+        row_blockid = np.arange(x.numblocks[axis1])
+        col_blockid = np.arange(x.numblocks[axis2])
+
+        row_filter = (row_starts <= kdiag_row_start) & (kdiag_row_start < row_stops_)
+        col_filter = (col_starts <= kdiag_col_start) & (kdiag_col_start < col_stops_)
+        (I,) = row_blockid[row_filter]
+        (J,) = col_blockid[col_filter]
+
+        kdiag_chunks = ()
+        kdiag_r_start = kdiag_row_start
+        kdiag_c_start = kdiag_col_start
+        curr_I, curr_J = I, J
+
+        while kdiag_r_start < x.shape[axis1] and kdiag_c_start < x.shape[axis2]:
+            nrows, ncols = x.chunks[axis1][curr_I], x.chunks[axis2][curr_J]
+            local_r_start = kdiag_r_start - row_starts[curr_I]
+            local_c_start = kdiag_c_start - col_starts[curr_J]
+            local_k = -local_r_start if local_r_start > 0 else local_c_start
+            kdiag_row_end = min(nrows, ncols - local_k)
+            kdiag_len = kdiag_row_end - local_r_start
+            kdiag_chunks += (kdiag_len,)
+
+            kdiag_r_start = kdiag_row_end + row_starts[curr_I]
+            kdiag_c_start = min(ncols, nrows + local_k) + col_starts[curr_J]
+            curr_I = curr_I + 1 if kdiag_r_start == row_stops_[curr_I] else curr_I
+            curr_J = curr_J + 1 if kdiag_c_start == col_stops_[curr_J] else curr_J
+
+        return pop_axes(x.chunks, axis1, axis2) + (kdiag_chunks,)
+
+    def _layer(self) -> dict:
+        from dask._task_spec import TaskRef
+        from dask.array.utils import is_cupy_type
+
+        dsk = {}
+        info = self._diag_info
+        x = self.x
+        axis1, axis2, k = info["axis1"], info["axis2"], info["k"]
+        free_indices = info["free_indices"]
+        ndims_free = info["ndims_free"]
+
+        if info["len_kdiag"] <= 0:
+            xp = np
+            if is_cupy_type(x._meta):
+                import cupy
+                xp = cupy
+
+            out_chunks = self.chunks
+            for free_idx in free_indices:
+                shape = tuple(
+                    out_chunks[axis][free_idx[axis]] for axis in range(ndims_free)
+                )
+                key = (self._name,) + free_idx + (0,)
+                dsk[key] = Task(key, partial(xp.empty, dtype=x.dtype), shape + (0,))
+            return dsk
+
+        # Follow k-diagonal through chunks
+        kdiag_row_start = info["kdiag_row_start"]
+        kdiag_col_start = info["kdiag_col_start"]
+
+        row_stops_ = np.cumsum(x.chunks[axis1])
+        row_starts = np.roll(row_stops_, 1)
+        row_starts[0] = 0
+
+        col_stops_ = np.cumsum(x.chunks[axis2])
+        col_starts = np.roll(col_stops_, 1)
+        col_starts[0] = 0
+
+        row_blockid = np.arange(x.numblocks[axis1])
+        col_blockid = np.arange(x.numblocks[axis2])
+
+        row_filter = (row_starts <= kdiag_row_start) & (kdiag_row_start < row_stops_)
+        col_filter = (col_starts <= kdiag_col_start) & (kdiag_col_start < col_stops_)
+        (I,) = row_blockid[row_filter]
+        (J,) = col_blockid[col_filter]
+
+        i = 0
+        kdiag_r_start = kdiag_row_start
+        kdiag_c_start = kdiag_col_start
+
+        while kdiag_r_start < x.shape[axis1] and kdiag_c_start < x.shape[axis2]:
+            nrows, ncols = x.chunks[axis1][I], x.chunks[axis2][J]
+            local_r_start = kdiag_r_start - row_starts[I]
+            local_c_start = kdiag_c_start - col_starts[J]
+            local_k = -local_r_start if local_r_start > 0 else local_c_start
+            kdiag_row_end = min(nrows, ncols - local_k)
+
+            for free_idx in free_indices:
+                input_idx = (
+                    free_idx[:axis1]
+                    + (I,)
+                    + free_idx[axis1 : axis2 - 1]
+                    + (J,)
+                    + free_idx[axis2 - 1 :]
+                )
+                output_idx = free_idx + (i,)
+                key = (self._name,) + output_idx
+                dsk[key] = Task(
+                    key,
+                    np.diagonal,
+                    TaskRef((x._name,) + input_idx),
+                    local_k,
+                    axis1,
+                    axis2,
+                )
+
+            i += 1
+            kdiag_r_start = kdiag_row_end + row_starts[I]
+            kdiag_c_start = min(ncols, nrows + local_k) + col_starts[J]
+            I = I + 1 if kdiag_r_start == row_stops_[I] else I
+            J = J + 1 if kdiag_c_start == col_stops_[J] else J
+
+        return dsk
+
+
+@derived_from(np)
+def diag(v, k=0):
+    from dask.array._array_expr._collection import Array
+
+    if not isinstance(v, np.ndarray) and not isinstance(v, Array):
+        raise TypeError(f"v must be a dask array or numpy array, got {type(v)}")
+
+    # Handle numpy arrays - wrap and return
+    if isinstance(v, np.ndarray) or (
+        hasattr(v, "__array_function__") and not isinstance(v, Array)
+    ):
+        if v.ndim == 1:
+            m = abs(k)
+            result = np.diag(v, k)
+            return asarray(result)
+        elif v.ndim == 2:
+            result = np.diag(v, k)
+            return asarray(result)
+        else:
+            raise ValueError("Array must be 1d or 2d only")
+
+    v = asarray(v)
+
+    if v.ndim != 1:
+        if v.ndim != 2:
+            raise ValueError("Array must be 1d or 2d only")
+        # 2D case: extract diagonal
+        if k == 0 and v.chunks[0] == v.chunks[1]:
+            return new_collection(Diag2DSimple(v.expr))
+        else:
+            return diagonal(v, k)
+
+    # 1D case: create diagonal matrix
+    if k == 0:
+        return new_collection(Diag1D(v.expr))
+    elif k > 0:
+        return pad(diag(v), [[0, k], [k, 0]], mode="constant")
+    else:  # k < 0
+        return pad(diag(v), [[-k, 0], [0, -k]], mode="constant")
+
+
+@derived_from(np)
+def diagonal(a, offset=0, axis1=0, axis2=1):
+    from dask.array.numpy_compat import AxisError
+
+    if a.ndim < 2:
+        raise ValueError("diag requires an array of at least two dimensions")
+
+    def _axis_fmt(axis, name, ndim):
+        if axis < 0:
+            t = ndim + axis
+            if t < 0:
+                msg = "{}: axis {} is out of bounds for array of dimension {}"
+                raise AxisError(msg.format(name, axis, ndim))
+            axis = t
+        return axis
+
+    axis1_norm = _axis_fmt(axis1, "axis1", a.ndim)
+    axis2_norm = _axis_fmt(axis2, "axis2", a.ndim)
+
+    if axis1_norm == axis2_norm:
+        raise ValueError("axis1 and axis2 cannot be the same")
+
+    a = asarray(a)
+    return new_collection(Diagonal(a.expr, offset, axis1, axis2))
+
+
+def eye(N, chunks="auto", M=None, k=0, dtype=float):
+    """
+    Return a 2-D Array with ones on the diagonal and zeros elsewhere.
+
+    Parameters
+    ----------
+    N : int
+      Number of rows in the output.
+    chunks : int, str
+        How to chunk the array. Must be one of the following forms:
+
+        -   A blocksize like 1000.
+        -   A size in bytes, like "100 MiB" which will choose a uniform
+            block-like shape
+        -   The word "auto" which acts like the above, but uses a configuration
+            value ``array.chunk-size`` for the chunk size
+    M : int, optional
+      Number of columns in the output. If None, defaults to `N`.
+    k : int, optional
+      Index of the diagonal: 0 (the default) refers to the main diagonal,
+      a positive value refers to an upper diagonal, and a negative value
+      to a lower diagonal.
+    dtype : data-type, optional
+      Data-type of the returned array.
+
+    Returns
+    -------
+    I : Array of shape (N,M)
+      An array where all elements are equal to zero, except for the `k`-th
+      diagonal, whose values are equal to one.
+    """
+    if dtype is None:
+        dtype = float
+
+    if not isinstance(chunks, (int, str)):
+        raise ValueError("chunks must be an int or string")
+
+    return new_collection(Eye(N, M, k, dtype, chunks))
 
 
 def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
@@ -581,3 +1020,303 @@ def repeat(a, repeats, axis=None):
         out.append(result)
 
     return concatenate(out, axis=axis)
+
+
+@derived_from(np)
+def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
+    from dask.array._array_expr._ufunc import greater_equal
+    from dask.array.core import normalize_chunks
+
+    if M is None:
+        M = N
+
+    chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
+
+    m = greater_equal(
+        arange(N, chunks=chunks[0][0], like=like).reshape(1, N).T,
+        arange(-k, M - k, chunks=chunks[1][0], like=like),
+    )
+
+    # Avoid making a copy if the requested type is already bool
+    m = m.astype(dtype, copy=False)
+
+    return m
+
+
+@derived_from(np)
+def meshgrid(*xi, sparse=False, indexing="xy", **kwargs):
+    from dask.array._array_expr._routines import broadcast_arrays
+    from dask.array.numpy_compat import NUMPY_GE_200
+
+    sparse = bool(sparse)
+
+    if "copy" in kwargs:
+        raise NotImplementedError("`copy` not supported")
+
+    if kwargs:
+        raise TypeError("unsupported keyword argument(s) provided")
+
+    if indexing not in ("ij", "xy"):
+        raise ValueError("`indexing` must be `'ij'` or `'xy'`")
+
+    xi = [asarray(e) for e in xi]
+    xi = [e.flatten() for e in xi]
+
+    if indexing == "xy" and len(xi) > 1:
+        xi[0], xi[1] = xi[1], xi[0]
+
+    grid = []
+    for i in range(len(xi)):
+        s = len(xi) * [None]
+        s[i] = slice(None)
+        s = tuple(s)
+
+        r = xi[i][s]
+
+        grid.append(r)
+
+    if not sparse:
+        grid = broadcast_arrays(*grid)
+
+    if indexing == "xy" and len(xi) > 1:
+        grid = (grid[1], grid[0], *grid[2:])
+
+    out_type = tuple if NUMPY_GE_200 else list
+    return out_type(grid)
+
+
+def indices(dimensions, dtype=int, chunks="auto"):
+    """
+    Implements NumPy's ``indices`` for Dask Arrays.
+
+    Generates a grid of indices covering the dimensions provided.
+
+    The final array has the shape ``(len(dimensions), *dimensions)``. The
+    chunks are used to specify the chunking for axis 1 up to
+    ``len(dimensions)``. The 0th axis always has chunks of length 1.
+
+    Parameters
+    ----------
+    dimensions : sequence of ints
+        The shape of the index grid.
+    dtype : dtype, optional
+        Type to use for the array. Default is ``int``.
+    chunks : sequence of ints, str
+        The size of each block.  Must be one of the following forms:
+
+        - A blocksize like (500, 1000)
+        - A size in bytes, like "100 MiB" which will choose a uniform
+          block-like shape
+        - The word "auto" which acts like the above, but uses a configuration
+          value ``array.chunk-size`` for the chunk size
+
+        Note that the last block will have fewer samples if ``len(array) % chunks != 0``.
+
+    Returns
+    -------
+    grid : dask array
+    """
+    from dask.array._array_expr._collection import stack
+    from dask.array.core import normalize_chunks
+
+    dimensions = tuple(dimensions)
+    dtype = np.dtype(dtype)
+    chunks = normalize_chunks(chunks, shape=dimensions, dtype=dtype)
+
+    if len(dimensions) != len(chunks):
+        raise ValueError("Need same number of chunks as dimensions.")
+
+    xi = []
+    for i in range(len(dimensions)):
+        xi.append(arange(dimensions[i], dtype=dtype, chunks=(chunks[i],)))
+
+    grid = []
+    if all(dimensions):
+        grid = meshgrid(*xi, indexing="ij")
+
+    if grid:
+        grid = stack(grid)
+    else:
+        grid = empty((len(dimensions),) + dimensions, dtype=dtype, chunks=(1,) + chunks)
+
+    return grid
+
+
+@derived_from(np)
+def fromfunction(func, chunks="auto", shape=None, dtype=None, **kwargs):
+    import itertools
+
+    from dask.array._array_expr._collection import blockwise
+    from dask.array.core import normalize_chunks
+
+    dtype = dtype or float
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
+
+    inds = tuple(range(len(shape)))
+
+    arrs = [arange(s, dtype=dtype, chunks=c) for s, c in zip(shape, chunks)]
+    arrs = meshgrid(*arrs, indexing="ij")
+
+    args = sum(zip(arrs, itertools.repeat(inds)), ())
+
+    res = blockwise(func, inds, *args, token="fromfunction", **kwargs)
+
+    return res
+
+
+@derived_from(np)
+def tile(A, reps):
+    from dask.array._array_expr._collection import block
+
+    try:
+        tup = tuple(reps)
+    except TypeError:
+        tup = (reps,)
+    if any(i < 0 for i in tup):
+        raise ValueError("Negative `reps` are not allowed.")
+    c = asarray(A)
+
+    if all(tup):
+        for nrep in tup[::-1]:
+            c = nrep * [c]
+        return block(c)
+
+    d = len(tup)
+    if d < c.ndim:
+        tup = (1,) * (c.ndim - d) + tup
+    if c.ndim < d:
+        shape = (1,) * (d - c.ndim) + c.shape
+    else:
+        shape = c.shape
+    shape_out = tuple(s * t for s, t in zip(shape, tup))
+    return empty(shape=shape_out, dtype=c.dtype)
+
+
+# Import helpers from traditional pad implementation
+from dask.array.creation import (
+    expand_pad_value,
+    get_pad_shapes_chunks,
+    linear_ramp_chunk,
+    pad_udf,
+    pad_stats,
+    pad_reuse,
+)
+
+
+def _pad_edge_expr(array, pad_width, mode, **kwargs):
+    """
+    Helper function for padding edges - array-expr version.
+
+    Handles the cases where the only the values on the edge are needed.
+    """
+    from dask.array._array_expr._collection import broadcast_to
+    from dask.array.utils import asarray_safe
+
+    kwargs = {k: expand_pad_value(array, v) for k, v in kwargs.items()}
+
+    result = array
+    for d in range(array.ndim):
+        pad_shapes, pad_chunks = get_pad_shapes_chunks(
+            result, pad_width, (d,), mode=mode
+        )
+        pad_arrays = [result, result]
+
+        if mode == "constant":
+            constant_values = kwargs["constant_values"][d]
+            constant_values = [
+                asarray_safe(c, like=meta_from_array(array), dtype=result.dtype)
+                for c in constant_values
+            ]
+
+            pad_arrays = [
+                broadcast_to(v, s, c)
+                for v, s, c in zip(constant_values, pad_shapes, pad_chunks)
+            ]
+        elif mode in ["edge", "linear_ramp"]:
+            pad_slices = [result.ndim * [slice(None)], result.ndim * [slice(None)]]
+            pad_slices[0][d] = slice(None, 1, None)
+            pad_slices[1][d] = slice(-1, None, None)
+            pad_slices = [tuple(sl) for sl in pad_slices]
+
+            pad_arrays = [result[sl] for sl in pad_slices]
+
+            if mode == "edge":
+                pad_arrays = [
+                    broadcast_to(a, s, c)
+                    for a, s, c in zip(pad_arrays, pad_shapes, pad_chunks)
+                ]
+            elif mode == "linear_ramp":
+                end_values = kwargs["end_values"][d]
+
+                pad_arrays = [
+                    a.map_blocks(
+                        linear_ramp_chunk,
+                        ev,
+                        pw,
+                        chunks=c,
+                        dtype=result.dtype,
+                        dim=d,
+                        step=(2 * i - 1),
+                    )
+                    for i, (a, ev, pw, c) in enumerate(
+                        zip(pad_arrays, end_values, pad_width[d], pad_chunks)
+                    )
+                ]
+        elif mode == "empty":
+            pad_arrays = [
+                empty_like(array, shape=s, dtype=array.dtype, chunks=c)
+                for s, c in zip(pad_shapes, pad_chunks)
+            ]
+
+        result = concatenate([pad_arrays[0], result, pad_arrays[1]], axis=d)
+
+    return result
+
+
+@derived_from(np)
+def pad(array, pad_width, mode="constant", **kwargs):
+    array = asarray(array)
+
+    pad_width = expand_pad_value(array, pad_width)
+
+    if callable(mode):
+        return pad_udf(array, pad_width, mode, **kwargs)
+
+    # Make sure that no unsupported keywords were passed for the current mode
+    allowed_kwargs = {
+        "empty": [],
+        "edge": [],
+        "wrap": [],
+        "constant": ["constant_values"],
+        "linear_ramp": ["end_values"],
+        "maximum": ["stat_length"],
+        "mean": ["stat_length"],
+        "median": ["stat_length"],
+        "minimum": ["stat_length"],
+        "reflect": ["reflect_type"],
+        "symmetric": ["reflect_type"],
+    }
+    try:
+        unsupported_kwargs = set(kwargs) - set(allowed_kwargs[mode])
+    except KeyError as e:
+        raise ValueError(f"mode '{mode}' is not supported") from e
+    if unsupported_kwargs:
+        raise ValueError(
+            f"unsupported keyword arguments for mode '{mode}': {unsupported_kwargs}"
+        )
+
+    if mode in {"maximum", "mean", "median", "minimum"}:
+        stat_length = kwargs.get("stat_length", tuple((n, n) for n in array.shape))
+        return pad_stats(array, pad_width, mode, stat_length)
+    elif mode == "constant":
+        kwargs.setdefault("constant_values", 0)
+        return _pad_edge_expr(array, pad_width, mode, **kwargs)
+    elif mode == "linear_ramp":
+        kwargs.setdefault("end_values", 0)
+        return _pad_edge_expr(array, pad_width, mode, **kwargs)
+    elif mode in {"edge", "empty"}:
+        return _pad_edge_expr(array, pad_width, mode)
+    elif mode in ["reflect", "symmetric", "wrap"]:
+        return pad_reuse(array, pad_width, mode, **kwargs)
+
+    raise RuntimeError("unreachable")

@@ -684,6 +684,8 @@ if _array_expr_enabled():
             cosh,
             deg2rad,
             degrees,
+            diag,
+            diagonal,
             diff,
             divide,
             dstack,
@@ -693,6 +695,7 @@ if _array_expr_enabled():
             empty,
             empty_like,
             equal,
+            eye,
             exp,
             exp2,
             expm1,
@@ -710,6 +713,7 @@ if _array_expr_enabled():
             fmod,
             frexp,
             from_array,
+            fromfunction,
             frompyfunc,
             full,
             full_like,
@@ -722,6 +726,7 @@ if _array_expr_enabled():
             hypot,
             i0,
             imag,
+            indices,
             invert,
             iscomplex,
             isfinite,
@@ -749,6 +754,7 @@ if _array_expr_enabled():
             map_overlap,
             matmul,
             maximum,
+            meshgrid,
             minimum,
             mod,
             moveaxis,
@@ -761,6 +767,7 @@ if _array_expr_enabled():
             ones,
             ones_like,
             outer,
+            pad,
             positive,
             power,
             rad2deg,
@@ -796,7 +803,11 @@ if _array_expr_enabled():
             tan,
             tanh,
             tensordot,
+            tile,
             transpose,
+            tri,
+            tril,
+            triu,
             vdot,
             vstack,
             true_divide,
@@ -865,15 +876,6 @@ if _array_expr_enabled():
         to_hdf5 = raise_not_implemented_error("to_hdf5")
         from dask.array._array_expr import to_npy_stack
         to_zarr = raise_not_implemented_error("to_zarr")
-        diag = raise_not_implemented_error("diag")
-        diagonal = raise_not_implemented_error("diagonal")
-        eye = raise_not_implemented_error("eye")
-        fromfunction = raise_not_implemented_error("fromfunction")
-        indices = raise_not_implemented_error("indices")
-        meshgrid = raise_not_implemented_error("meshgrid")
-        pad = raise_not_implemented_error("pad")
-        tile = raise_not_implemented_error("tile")
-        tri = raise_not_implemented_error("tri")
         optimize = raise_not_implemented_error("optimize")
         argtopk = raise_not_implemented_error("argtopk")
         topk = raise_not_implemented_error("topk")
@@ -900,10 +902,8 @@ if _array_expr_enabled():
         piecewise = raise_not_implemented_error("piecewise")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
         select = raise_not_implemented_error("select")
-        tril = raise_not_implemented_error("tril")
         tril_indices = raise_not_implemented_error("tril_indices")
         tril_indices_from = raise_not_implemented_error("tril_indices_from")
-        triu = raise_not_implemented_error("triu")
         triu_indices = raise_not_implemented_error("triu_indices")
         triu_indices_from = raise_not_implemented_error("triu_indices_from")
         union1d = raise_not_implemented_error("union1d")
