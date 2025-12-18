@@ -13,6 +13,7 @@ def parses(text):
     assert xml.etree.ElementTree.fromstring(cleaned) is not None  # parses cleanly
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="to_svg not implemented for array-expr")
 def test_basic():
     parses(da.ones(10).to_svg())
     parses(da.ones((10, 10)).to_svg())
@@ -33,6 +34,7 @@ def test_repr_html():
     assert da.ones((10, 10, 10, 10))._repr_html_()
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="to_svg not implemented for array-expr")
 def test_errors():
     # empty arrays
     with pytest.raises(NotImplementedError) as excpt:
@@ -85,6 +87,7 @@ def test_draw_sizes():
     assert b < c * 5
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="to_svg not implemented for array-expr")
 def test_too_many_lines_fills_sides_darker():
     data = da.ones((16000, 2400, 3600), chunks=(1, 2400, 3600))
     text = data.to_svg()
@@ -92,6 +95,7 @@ def test_too_many_lines_fills_sides_darker():
     assert text.count("\n") < 300
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="to_svg not implemented for array-expr")
 def test_3d():
     text = da.ones((10, 10, 10, 10, 10)).to_svg()
     assert text.count("<svg") == 1

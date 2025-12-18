@@ -183,6 +183,7 @@ def test_unary_ufunc(ufunc):
 
 
 @pytest.mark.parametrize("ufunc", binary_ufuncs)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="ldexp dtype issue in array-expr", strict=False)
 def test_binary_ufunc(ufunc):
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
@@ -327,6 +328,7 @@ def test_ufunc_2results(ufunc):
     assert_eq(res2, exp2)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="clip not fully implemented for array-expr")
 def test_clip():
     x = np.random.normal(0, 10, size=(10, 10))
     d = da.from_array(x, chunks=(3, 4))
@@ -371,6 +373,7 @@ def test_non_ufunc_others(func):
     assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="frompyfunc not implemented for array-expr")
 def test_frompyfunc():
     myadd = da.frompyfunc(add, 2, 1)
     np_myadd = np.frompyfunc(add, 2, 1)
@@ -441,6 +444,7 @@ def test_array_ufunc_binop():
         assert_eq(func.outer(d, d), func.outer(x, x))
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="elemwise out= not implemented for array-expr")
 def test_array_ufunc_out():
     x = da.arange(10, chunks=(5,))
     np.sin(x, out=x)
@@ -454,6 +458,7 @@ def test_unsupported_ufunc_methods():
         assert np.add.reduce(x)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="elemwise out= not implemented for array-expr")
 def test_out_numpy():
     x = da.arange(10, chunks=(5,))
     empty = np.empty(10, dtype=x.dtype)
@@ -464,6 +469,7 @@ def test_out_numpy():
     assert "Array" in str(info.value)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="elemwise out= not implemented for array-expr")
 def test_out_shape_mismatch():
     x = da.arange(10, chunks=(5,))
     y = da.arange(15, chunks=(5,))
@@ -519,6 +525,7 @@ def test_dtype_kwarg(dt):
 @pytest.mark.parametrize("left_is_da", [False, True])
 @pytest.mark.parametrize("right_is_da", [False, True])
 @pytest.mark.parametrize("where_kind", [True, False, "numpy", "dask"])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="elemwise out= not implemented for array-expr")
 def test_ufunc_where(dtype, left_is_da, right_is_da, where_kind):
     left = np.arange(12).reshape((3, 4))
     right = np.arange(4)
@@ -544,6 +551,7 @@ def test_ufunc_where(dtype, left_is_da, right_is_da, where_kind):
 @pytest.mark.parametrize("left_is_da", [False, True])
 @pytest.mark.parametrize("right_is_da", [False, True])
 @pytest.mark.parametrize("where_is_da", [False, True])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="elemwise out= not implemented for array-expr")
 def test_ufunc_where_broadcasts(left_is_da, right_is_da, where_is_da):
     left = np.arange(4)
     right = np.arange(4, 8)
@@ -561,6 +569,7 @@ def test_ufunc_where_broadcasts(left_is_da, right_is_da, where_is_da):
     assert_eq(expected, result)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="ufunc where not fully implemented for array-expr")
 def test_ufunc_where_no_out():
     left = np.arange(4)
     right = np.arange(4, 8)
@@ -586,6 +595,7 @@ def test_ufunc_where_no_out():
     assert not np.equal(result.compute(), expected_no_where).all()
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="elemwise out= not implemented for array-expr")
 def test_ufunc_where_doesnt_mutate_out():
     """Dask array's are immutable, ensure that the backing numpy array for
     `out` isn't actually mutated"""

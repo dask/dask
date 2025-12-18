@@ -8,7 +8,10 @@ pytest.importorskip("numpy")
 
 DA_EXPORTED_SUBMODULES = {"backends", "fft", "lib", "linalg", "ma", "overlap", "random"}
 
+import dask.array as da
 
+
+@pytest.mark.xfail(da._array_expr_enabled(), reason="API differs for array-expr")
 def test_api():
     """Tests that `dask.array.__all__` is correct"""
     import dask.array as da
