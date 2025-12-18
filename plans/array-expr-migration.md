@@ -155,8 +155,8 @@ Beyond basic linalg.
 | einsum | Einstein summation | **Done** |
 | outer | outer product | **Done** |
 | trace | diagonal sum | **Done** |
-| tril_indices | triangle indices | Blocked (needs nonzero) |
-| triu_indices | triangle indices | Blocked (needs nonzero) |
+| tril_indices | triangle indices | **Done** |
+| triu_indices | triangle indices | **Done** |
 
 ### Tier 10: Submodules (Large Scope)
 Full submodule implementations.

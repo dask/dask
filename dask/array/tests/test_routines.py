@@ -2889,7 +2889,6 @@ def test_tril_triu_non_square_arrays():
     "n, k, m, chunks",
     [(3, 0, 3, "auto"), (3, 1, 3, "auto"), (3, -1, 3, "auto"), (5, 0, 5, 1)],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_tril_triu_indices(n, k, m, chunks):
     actual = da.tril_indices(n=n, k=k, m=m, chunks=chunks)[0]
     expected = np.tril_indices(n=n, k=k, m=m)[0]

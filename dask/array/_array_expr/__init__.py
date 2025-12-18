@@ -104,7 +104,11 @@ from dask.array._array_expr._routines import (
     shape,
     take,
     tril,
+    tril_indices,
+    tril_indices_from,
     triu,
+    triu_indices,
+    triu_indices_from,
     unify_chunks,
 )
 from dask.array._array_expr._ufunc import *

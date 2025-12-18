@@ -818,7 +818,11 @@ if _array_expr_enabled():
             transpose,
             tri,
             tril,
+            tril_indices,
+            tril_indices_from,
             triu,
+            triu_indices,
+            triu_indices_from,
             vdot,
             vstack,
             true_divide,
@@ -909,10 +913,6 @@ if _array_expr_enabled():
         from dask.array._array_expr import einsum
         insert = raise_not_implemented_error("insert")
         ravel_multi_index = raise_not_implemented_error("ravel_multi_index")
-        tril_indices = raise_not_implemented_error("tril_indices")
-        tril_indices_from = raise_not_implemented_error("tril_indices_from")
-        triu_indices = raise_not_implemented_error("triu_indices")
-        triu_indices_from = raise_not_implemented_error("triu_indices_from")
         union1d = raise_not_implemented_error("union1d")
         unique = raise_not_implemented_error("unique")
         unravel_index = raise_not_implemented_error("unravel_index")
