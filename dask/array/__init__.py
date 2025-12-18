@@ -857,7 +857,6 @@ if _array_expr_enabled():
         ma = raise_not_implemented_error("ma")
         atop = raise_not_implemented_error("atop")
         register_chunk_type = raise_not_implemented_error("register_chunk_type")
-        block = raise_not_implemented_error("block")
         from dask.array._array_expr import from_delayed
         from dask.array._array_expr import from_npy_stack
         from_zarr = raise_not_implemented_error("from_zarr")

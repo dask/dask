@@ -7,6 +7,10 @@ import numpy as np
 import pytest
 
 import dask.array as da
+
+if da._array_expr_enabled():
+    pytest.skip("fft not implemented for array-expr", allow_module_level=True)
+
 import dask.array.fft
 from dask.array.core import normalize_chunks
 from dask.array.fft import fft_wrap

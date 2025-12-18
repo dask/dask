@@ -9,6 +9,10 @@ import numpy as np
 import pytest
 
 import dask.array as da
+
+if da._array_expr_enabled():
+    pytest.skip("ma (masked arrays) not implemented for array-expr", allow_module_level=True)
+
 from dask.array.numpy_compat import ComplexWarning
 from dask.array.utils import assert_eq
 from dask.base import tokenize

@@ -3574,7 +3574,6 @@ def test_empty_array():
     assert_eq(np.arange(0), da.arange(0, chunks=5))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_memmap():
     with tmpfile("npy") as fn_1:
         with tmpfile("npy") as fn_2:
