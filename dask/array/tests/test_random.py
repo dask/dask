@@ -84,6 +84,7 @@ def test_generator_consistent_names(generator_class):
     ) == sorted(state2.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr")
 def test_random(generator_class):
     a = generator_class().random((10, 10), chunks=(5, 5))
     assert isinstance(a, Array)
@@ -96,6 +97,7 @@ def test_random(generator_class):
     assert len(x) > 90
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr")
 def test_parametrized_random_function(generator_class):
     a = generator_class().exponential(1000, (10, 10), chunks=(5, 5))
     assert isinstance(a, Array)
@@ -110,6 +112,7 @@ def test_parametrized_random_function(generator_class):
     assert len(y) > 90
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr")
 def test_kwargs(generator_class):
     a = generator_class().normal(loc=10.0, scale=0.1, size=(10, 10), chunks=(5, 5))
     assert isinstance(a, Array)
@@ -156,6 +159,7 @@ def test_consistent_across_sizes(generator_class):
 
 
 @pytest.mark.parametrize("sz", [None, 5, (2, 2)], ids=type)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr", strict=False)
 def test_random_all(sz):
     da.random.beta(1, 2, size=sz, chunks=3).compute()
     da.random.binomial(10, 0.5, size=sz, chunks=3).compute()
@@ -205,6 +209,7 @@ def test_RandomState_only_funcs():
 
 
 @pytest.mark.parametrize("sz", [None, 5, (2, 2)], ids=type)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr", strict=False)
 def test_Generator_only_funcs(sz):
     da.random.default_rng().integers(5, high=15, size=sz, chunks=3).compute()
     da.random.default_rng().multivariate_hypergeometric(
@@ -213,6 +218,7 @@ def test_Generator_only_funcs(sz):
 
 
 @pytest.mark.parametrize("sz", [None, 5, (2, 2)], ids=type)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr", strict=False)
 def test_random_all_with_class_methods(generator_class, sz):
     def rnd_test(func, *args, **kwargs):
         a = func(*args, **kwargs)
@@ -257,6 +263,7 @@ def test_random_all_with_class_methods(generator_class, sz):
 @pytest.mark.skipif(
     not hasattr(np, "broadcast_to"), reason='requires numpy 1.10 method "broadcast_to"'
 )
+@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr")
 def test_array_broadcasting(generator_class):
     arr = np.arange(6).reshape((2, 3))
     daones = da.ones((2, 3, 4), chunks=3)
@@ -295,6 +302,7 @@ def test_array_broadcasting(generator_class):
     assert 0.8 < z.mean().compute() / x.mean() < 1.2
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="multinomial not fully implemented for array-expr")
 def test_multinomial(generator_class):
     for size, chunks in [(5, 3), ((5, 4), (2, 3))]:
         x = generator_class().multinomial(20, [1 / 6.0] * 6, size=size, chunks=chunks)
@@ -303,6 +311,7 @@ def test_multinomial(generator_class):
         assert x.shape == y.shape == x.compute().shape
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="choice not fully implemented for array-expr")
 def test_choice(generator_class):
     np_generator = {
         da.random.RandomState: np.random.RandomState,
@@ -388,6 +397,7 @@ def test_names():
     assert len(key_split(name)) < 10
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="permutation not fully implemented for array-expr", strict=False)
 def test_permutation(generator_class):
     x = da.arange(12, chunks=3)
     y = generator_class().permutation(x)

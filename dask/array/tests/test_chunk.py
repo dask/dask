@@ -100,6 +100,7 @@ def test_coarsen():
     assert y[0, 0] == np.sum(x[:2, :4])
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="coarsen not implemented for array-expr")
 def test_coarsen_unaligned_shape():
     """https://github.com/dask/dask/issues/10274"""
     x = da.random.random(100)

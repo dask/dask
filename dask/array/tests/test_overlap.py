@@ -479,7 +479,6 @@ def test_map_overlap_multiarray_block_broadcast():
     assert_eq(z.sum(), 4.0 * (10 * 8 + 8))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="__array_function__ needed")
 def test_map_overlap_multiarray_variadic():
     # Test overlapping row slices from 3D arrays
     xs = [

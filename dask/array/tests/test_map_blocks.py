@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 import dask.array as da
 from dask.base import collections_to_expr
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="block_id fusion not implemented for array-expr")
 def test_map_blocks_block_id_fusion():
     arr = da.ones((20, 10), chunks=(2, 5))
 
