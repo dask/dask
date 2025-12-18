@@ -131,7 +131,7 @@ Used in data analysis workflows.
 | histogram2d | 2D binning | **Done** |
 | histogramdd | N-D binning | **Done** |
 | bincount | counting | **Done** |
-| unique | deduplication | Not started (complex, uses structured arrays) |
+| unique | deduplication | **Done** |
 | cov | covariance | **Done** |
 | corrcoef | correlation | **Done** |
 | digitize | bin indices | **Done** |

@@ -1360,7 +1360,6 @@ def test_round():
 @pytest.mark.parametrize("return_index", [False, True])
 @pytest.mark.parametrize("return_inverse", [False, True])
 @pytest.mark.parametrize("return_counts", [False, True])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_unique_kwargs(return_index, return_inverse, return_counts):
     kwargs = dict(
         return_index=return_index,
@@ -1396,7 +1395,6 @@ def test_unique_kwargs(return_index, return_inverse, return_counts):
     "shape, chunks",
     [[(10,), (5,)], [(10,), (3,)], [(4, 5), (3, 2)], [(20, 20), (4, 5)]],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_unique_rand(seed, shape, chunks):
     rng = np.random.default_rng(seed)
 
