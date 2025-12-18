@@ -914,7 +914,7 @@ if _array_expr_enabled():
         insert = raise_not_implemented_error("insert")
         from dask.array._array_expr import ravel_multi_index
         union1d = raise_not_implemented_error("union1d")
-        unique = raise_not_implemented_error("unique")
+        from dask.array._array_expr import unique
         from dask.array._array_expr import unravel_index
         from_tiledb = raise_not_implemented_error("from_tiledb")
         to_tiledb = raise_not_implemented_error("to_tiledb")

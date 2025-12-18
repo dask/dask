@@ -8,7 +8,7 @@ from numbers import Integral, Real
 
 import numpy as np
 
-from dask._task_spec import Task, TaskRef
+from dask._task_spec import List, Task, TaskRef
 from dask.array._array_expr._collection import (
     Array,
     array,
@@ -1343,6 +1343,60 @@ def ediff1d(ary, to_end=None, to_begin=None):
     return r
 
 
+def _unique_internal(ar, indices, counts, return_inverse=False):
+    """
+    Helper/wrapper function for np.unique.
+
+    Uses np.unique to find the unique values for the array chunk.
+    Given this chunk may not represent the whole array, also take the
+    indices and counts that are in 1-to-1 correspondence to ar
+    and reduce them in the same fashion as ar is reduced. Namely sum
+    any counts that correspond to the same value and take the smallest
+    index that corresponds to the same value.
+
+    To handle the inverse mapping from the unique values to the original
+    array, simply return a NumPy array created with arange with enough
+    values to correspond 1-to-1 to the unique values. While there is more
+    work needed to be done to create the full inverse mapping for the
+    original array, this provides enough information to generate the
+    inverse mapping in Dask.
+
+    Given Dask likes to have one array returned from functions like
+    blockwise, some formatting is done to stuff all of the resulting arrays
+    into one big NumPy structured array. Dask is then able to handle this
+    object and can split it apart into the separate results on the Dask side,
+    which then can be passed back to this function in concatenated chunks for
+    further reduction or can be return to the user to perform other forms of
+    analysis.
+    """
+    return_index = indices is not None
+    return_counts = counts is not None
+
+    u = np.unique(ar)
+
+    dt = [("values", u.dtype)]
+    if return_index:
+        dt.append(("indices", np.intp))
+    if return_inverse:
+        dt.append(("inverse", np.intp))
+    if return_counts:
+        dt.append(("counts", np.intp))
+
+    r = np.empty(u.shape, dtype=dt)
+    r["values"] = u
+    if return_inverse:
+        r["inverse"] = np.arange(len(r), dtype=np.intp)
+    if return_index or return_counts:
+        for i, v in enumerate(r["values"]):
+            m = ar == v
+            if return_index:
+                indices[m].min(keepdims=True, out=r["indices"][i : i + 1])
+            if return_counts:
+                counts[m].sum(keepdims=True, out=r["counts"][i : i + 1])
+
+    return r
+
+
 def _inner_apply_along_axis(arr, func1d, func1d_axis, func1d_args, func1d_kwargs):
     return np.apply_along_axis(func1d, func1d_axis, arr, *func1d_args, **func1d_kwargs)
 
@@ -1422,3 +1476,225 @@ def apply_over_axes(func, a, axes):
             )
 
     return result
+
+
+class UniqueChunked(ArrayExpr):
+    """Expression for per-chunk unique computation.
+
+    Creates a 1D structured array of unique values (and optionally indices/counts)
+    for each chunk. Use UniqueAggregate to combine chunk results.
+    """
+
+    _parameters = ["x", "indices", "counts", "out_dtype"]
+    _defaults = {"indices": None, "counts": None}
+
+    @cached_property
+    def _meta(self):
+        return np.empty((0,), dtype=self.out_dtype)
+
+    @cached_property
+    def chunks(self):
+        # Unknown chunk sizes since unique output length varies
+        nchunks = len(self.x.chunks[0])
+        return ((np.nan,) * nchunks,)
+
+    @cached_property
+    def _name(self):
+        return f"unique-chunk-{self.deterministic_token}"
+
+    def _layer(self):
+        dsk = {}
+        for i in range(len(self.x.chunks[0])):
+            key = (self._name, i)
+            x_ref = TaskRef((self.x._name, i))
+            idx_ref = TaskRef((self.indices._name, i)) if self.indices is not None else None
+            cnt_ref = TaskRef((self.counts._name, i)) if self.counts is not None else None
+            dsk[key] = Task(key, _unique_internal, x_ref, idx_ref, cnt_ref, False)
+        return dsk
+
+    @property
+    def _dependencies(self):
+        deps = [self.x]
+        if self.indices is not None:
+            deps.append(self.indices)
+        if self.counts is not None:
+            deps.append(self.counts)
+        return deps
+
+
+class UniqueAggregate(ArrayExpr):
+    """Expression for aggregating unique results from all chunks.
+
+    Concatenates all chunk results and runs _unique_internal to get final unique values.
+    """
+
+    _parameters = ["chunked", "return_inverse", "out_dtype"]
+    _defaults = {"return_inverse": False}
+
+    @cached_property
+    def _meta(self):
+        return np.empty((0,), dtype=self.out_dtype)
+
+    @cached_property
+    def chunks(self):
+        return ((np.nan,),)
+
+    @cached_property
+    def _name(self):
+        return f"unique-aggregate-{self.deterministic_token}"
+
+    def _layer(self):
+        # Gather all chunk keys and concatenate + aggregate in one task
+        chunk_keys = [(self.chunked._name, i) for i in range(len(self.chunked.chunks[0]))]
+        key = (self._name, 0)
+        # Use List from task_spec to wrap TaskRefs so they get resolved
+        chunks_list = List(*[TaskRef(k) for k in chunk_keys])
+        dsk = {
+            key: Task(
+                key,
+                _unique_aggregate_func,
+                chunks_list,
+                self.return_inverse,
+            )
+        }
+        return dsk
+
+    @property
+    def _dependencies(self):
+        return [self.chunked]
+
+
+def _unique_aggregate_func(chunks, return_inverse):
+    """Aggregate unique results from multiple chunks."""
+    # Concatenate all structured arrays
+    combined = np.concatenate(chunks)
+
+    # Run unique_internal on the combined result
+    return_index = "indices" in combined.dtype.names
+    return_counts = "counts" in combined.dtype.names
+
+    return _unique_internal(
+        combined["values"],
+        combined["indices"] if return_index else None,
+        combined["counts"] if return_counts else None,
+        return_inverse=return_inverse,
+    )
+
+
+def unique_no_structured_arr(
+    ar, return_index=False, return_inverse=False, return_counts=False
+):
+    """Simplified version of unique for array types that don't support structured arrays."""
+    from dask.array._array_expr._blockwise import Blockwise
+    from dask.array._array_expr._reductions import _tree_reduce
+
+    if (
+        return_index is not False
+        or return_inverse is not False
+        or return_counts is not False
+    ):
+        raise ValueError(
+            "dask.array.unique does not support `return_index`, `return_inverse` "
+            "or `return_counts` with array types that don't support structured "
+            "arrays."
+        )
+
+    ar = ravel(ar)
+
+    # Per-chunk unique via blockwise
+    out = Blockwise(
+        np.unique,
+        "i",
+        ar,
+        "i",
+        dtype=ar.dtype,
+    )
+    chunked = new_collection(out)
+    # Override chunks to unknown
+    from dask.array._array_expr._expr import ChunksOverride
+    chunked = new_collection(ChunksOverride(chunked.expr, ((np.nan,) * len(ar.chunks[0]),)))
+
+    def _unique_agg(arrays, axis, keepdims):
+        if not isinstance(arrays, list):
+            arrays = [arrays]
+        return np.unique(np.concatenate(arrays))
+
+    result = _tree_reduce(
+        chunked.expr,
+        aggregate=_unique_agg,
+        axis=(0,),
+        keepdims=False,
+        dtype=ar.dtype,
+        concatenate=False,
+    )
+    return result
+
+
+@derived_from(np)
+def unique(ar, return_index=False, return_inverse=False, return_counts=False):
+    """Find the unique elements of an array."""
+    from dask.array._array_expr._creation import arange, ones
+    from dask.array.numpy_compat import NUMPY_GE_200
+
+    # Test whether the downstream library supports structured arrays
+    try:
+        meta = meta_from_array(ar)
+        np.empty_like(meta, dtype=[("a", int), ("b", float)])
+    except TypeError:
+        return unique_no_structured_arr(
+            ar,
+            return_index=return_index,
+            return_inverse=return_inverse,
+            return_counts=return_counts,
+        )
+
+    orig_shape = ar.shape
+    ar = ravel(ar)
+
+    # Build output dtype and prepare indices/counts arrays
+    out_dtype = [("values", ar.dtype)]
+    indices_arr = None
+    counts_arr = None
+
+    if return_index:
+        indices_arr = arange(ar.shape[0], dtype=np.intp, chunks=ar.chunks[0])
+        out_dtype.append(("indices", np.intp))
+    if return_counts:
+        counts_arr = ones((ar.shape[0],), dtype=np.intp, chunks=ar.chunks[0])
+        out_dtype.append(("counts", np.intp))
+
+    out_dtype = np.dtype(out_dtype)
+
+    # Create chunked unique expression
+    chunked = UniqueChunked(
+        ar.expr,
+        indices_arr.expr if indices_arr is not None else None,
+        counts_arr.expr if counts_arr is not None else None,
+        out_dtype,
+    )
+
+    # Build final dtype (with inverse field if requested)
+    final_dtype = out_dtype if not return_inverse else np.dtype(list(out_dtype.descr) + [("inverse", np.intp)])
+
+    # Aggregate all chunks into final result
+    aggregated = new_collection(UniqueAggregate(chunked, return_inverse, final_dtype))
+
+    # Extract results from structured array
+    result = [aggregated["values"]]
+    if return_index:
+        result.append(aggregated["indices"])
+    if return_inverse:
+        # Compute inverse: broadcast compare ar with unique values, multiply by inverse indices, sum
+        matches = (ar[:, None] == aggregated["values"][None, :]).astype(np.intp)
+        inverse = (matches * aggregated["inverse"]).sum(axis=1)
+        if NUMPY_GE_200:
+            from dask.array._array_expr._reshape import reshape
+            inverse = reshape(inverse, orig_shape)
+        result.append(inverse)
+    if return_counts:
+        result.append(aggregated["counts"])
+
+    if len(result) == 1:
+        return result[0]
+    else:
+        return tuple(result)
