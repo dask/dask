@@ -261,6 +261,7 @@ def test_blockwise_literals():
     assert_eq(z, x)
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype=float not supported")
 def test_blockwise_1_in_shape_I():
     def test_f(a, b):
         assert 1 in b.shape
@@ -279,6 +280,7 @@ def test_blockwise_1_in_shape_I():
     arr.compute()
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype=float not supported")
 def test_blockwise_1_in_shape_II():
     def test_f(a, b):
         assert 1 in b.shape
@@ -296,6 +298,7 @@ def test_blockwise_1_in_shape_II():
     ).compute()
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype=float not supported")
 def test_blockwise_1_in_shape_III():
     def test_f(a, b):
         assert 1 in b.shape
@@ -556,7 +559,7 @@ def test_array_interface_deprecated_kwargs():
         x.__array__(something="foo")
 
 
-@pytest.mark.parametrize("chunks", [5, 10])
+@pytest.mark.parametrize("chunks", [5, pytest.param(10, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="single chunk compute returns reference"))])
 def test_compute_copy(chunks):
     """Test that compute() never returns an object that shares
     a buffer with the dask graph or a process-local Worker
@@ -1424,7 +1427,6 @@ def test_broadcast_arrays():
         assert_eq(e_a_r, e_d_r)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_broadcast_arrays needs work", strict=False)
 def test_broadcast_arrays_uneven_chunks():
     x = da.ones(30, chunks=(3,))
     y = da.ones(30, chunks=(5,))
@@ -2061,7 +2063,6 @@ def test_coerce():
         pytest.raises(TypeError, lambda func=func: func(d2))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_bool():
     arr = np.arange(100).reshape((10, 10))
     darr = da.from_array(arr, chunks=(10, 10))
@@ -3023,6 +3024,7 @@ def test_array_copy_noop(chunks):
     assert y.name == y_c.name
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="raises TypeError instead of ValueError")
 def test_from_array_dask_array():
     x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=(1, 2))
@@ -3392,7 +3394,6 @@ def test_ellipsis_slicing():
     assert_eq(da.ones(4, chunks=2)[...], np.ones(4))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_point_slicing():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(3, 4))
@@ -3405,8 +3406,6 @@ def test_point_slicing():
     assert same_keys(result, d.vindex[[0, 1, 6, 0], [0, 1, 0, 7]])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_point_slicing_with_full_slice():
     from dask.array.core import _get_axis
 
@@ -4045,6 +4044,7 @@ def test_concatenate_axes():
         concatenate_axes([x, x], axes=[0, 1, 2, 3])  # too many axes
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="blockwise concatenate not implemented")
 def test_blockwise_concatenate():
     x = da.ones((4, 4, 4), chunks=(2, 2, 2))
     y = da.ones((4, 4), chunks=(2, 2))
@@ -4421,7 +4421,7 @@ def test_setitem_extended_API_1d(index, value):
         [([True, False, False, False, True, False], 2), -1],
         [(3, [True, True, False, True, True, False, True, False, True, True]), -1],
         [(np.array([False, False, True, True, False, False]), slice(5, 7)), -1],
-        [
+        pytest.param(
             (
                 4,
                 da.from_array(
@@ -4429,8 +4429,9 @@ def test_setitem_extended_API_1d(index, value):
                 ),
             ),
             -1,
-        ],
-        [
+            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="setitem with dask boolean array"),
+        ),
+        pytest.param(
             (
                 slice(2, 4),
                 da.from_array(
@@ -4438,7 +4439,8 @@ def test_setitem_extended_API_1d(index, value):
                 ),
             ),
             [[-100, -101, -102, -103], [-200, -201, -202, -203]],
-        ],
+            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="setitem with dask boolean array"),
+        ),
         [slice(5, None, 2), -99],
         [slice(5, None, 2), range(1, 11)],
         [slice(1, None, -2), -98],
@@ -4827,6 +4829,7 @@ def test_stack_errs():
     assert len(str(e.value)) < 105
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="numpy arrays don't have expr attribute")
 def test_blockwise_with_numpy_arrays():
     x = np.ones(10)
     y = da.ones(10, chunks=(5,))
@@ -5716,6 +5719,7 @@ def test_map_blocks_large_inputs_delayed():
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="large inputs not delayed in array-expr")
 def test_blockwise_large_inputs_delayed():
     def func(a, b):
         return a

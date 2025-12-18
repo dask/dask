@@ -266,7 +266,8 @@ def searchsorted(a, v, side="left", sorter=None):
         Array of insertion points with the same shape as `v`,
         or an integer if `v` is a scalar.
     """
-    from dask.array._array_expr._collection import blockwise, where
+    from dask.array._array_expr._collection import blockwise
+    from dask.array._array_expr.routines._where import where
     from dask.array.utils import meta_from_array
 
     if a.ndim != 1:
@@ -605,7 +606,7 @@ def _take_dask_array_from_numpy(a, indices, axis):
 
 @derived_from(np)
 def tril(m, k=0):
-    from dask.array._array_expr._collection import where
+    from dask.array._array_expr.routines._where import where
     from dask.array._array_expr._creation import tri
     from dask.array.utils import meta_from_array
 
@@ -623,7 +624,7 @@ def tril(m, k=0):
 
 @derived_from(np)
 def triu(m, k=0):
-    from dask.array._array_expr._collection import where
+    from dask.array._array_expr.routines._where import where
     from dask.array._array_expr._creation import tri
     from dask.array.utils import meta_from_array
 

@@ -44,7 +44,6 @@ class Concatenate(ArrayExpr):
     def _name(self):
         return "stack-" + self.deterministic_token
 
-    @functools.cached_property
     def _layer(self) -> dict:
         axis = self.axis
         cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in self.args]))
