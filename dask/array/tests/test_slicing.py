@@ -672,7 +672,6 @@ def test_index_with_int_dask_array_0d(chunks):
     assert_eq(x[:, idx0], x[:, 1])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="nonzero not implemented for array-expr")
 @pytest.mark.parametrize("chunks", [1, 2, 3, 4, 5])
 def test_index_with_int_dask_array_nanchunks(chunks):
     # Slice by array with nan-sized chunks

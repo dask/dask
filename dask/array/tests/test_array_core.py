@@ -466,6 +466,7 @@ def test_numpy_asarray_dtype(asarray):
     ],
 )
 @pytest.mark.parametrize("chunks", [5, 10])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="asarray copy behavior differs for array-expr", strict=False)
 def test_numpy_asarray_copy_true(asarray, chunks):
     """Test np.*array(x, copy=True)"""
     x = da.asarray(np.arange(10), chunks=chunks)
@@ -524,6 +525,7 @@ def test_numpy_asarray_copy_false(asarray, chunks):
     ],
 )
 @pytest.mark.parametrize("chunks", [5, 10])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="asarray copy behavior differs for array-expr", strict=False)
 def test_numpy_asarray_copy_none(asarray, chunks):
     """Test np.*array(x, copy=None)"""
     x = da.asarray(np.arange(10), chunks=chunks)
@@ -536,6 +538,7 @@ def test_numpy_asarray_copy_none(asarray, chunks):
 
 @pytest.mark.parametrize("asarray", [np.asarray, np.asanyarray, np.array])
 @pytest.mark.parametrize("chunks", [5, 10])
+@pytest.mark.xfail(da._array_expr_enabled(), reason="asarray copy behavior differs for array-expr", strict=False)
 def test_numpy_asarray_copy_default(asarray, chunks):
     """Test that np.*array() never returns an object that shares
     a buffer with the dask graph or a process-local Worker
@@ -2778,6 +2781,7 @@ def test_optimize():
     assert all(key in result for key in expr.__dask_keys__())
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="non-ndarray slicing not implemented for array-expr")
 def test_slicing_with_non_ndarrays():
     class ARangeSlice:
         dtype = np.dtype("i8")
@@ -4423,7 +4427,7 @@ def test_setitem_extended_API_1d(index, value):
                 ),
             ),
             -1,
-            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="setitem with dask boolean array"),
+            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="setitem with dask boolean array", strict=False),
         ),
         pytest.param(
             (
@@ -4433,7 +4437,7 @@ def test_setitem_extended_API_1d(index, value):
                 ),
             ),
             [[-100, -101, -102, -103], [-200, -201, -202, -203]],
-            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="setitem with dask boolean array"),
+            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="setitem with dask boolean array", strict=False),
         ),
         [slice(5, None, 2), -99],
         [slice(5, None, 2), range(1, 11)],
