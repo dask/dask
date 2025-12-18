@@ -31,6 +31,7 @@ The array-expr system has foundational infrastructure in place:
 - IO: store, to_npy_stack, from_npy_stack, from_delayed
 - Advanced indexing: vindex, take
 - Creation: eye, diag, diagonal, tri, tril, triu, fromfunction, indices, meshgrid, pad, tile
+- Statistics: histogram, histogram2d, histogramdd, digitize
 
 ## Testing Infrastructure
 
@@ -123,14 +124,14 @@ Used in data analysis workflows.
 
 | Operation | Notes | Status |
 |-----------|-------|--------|
-| histogram | binning | Not started |
-| histogram2d | 2D binning | Not started |
-| histogramdd | N-D binning | Not started |
-| bincount | counting | Not started |
+| histogram | binning | **Done** |
+| histogram2d | 2D binning | **Done** |
+| histogramdd | N-D binning | **Done** |
+| bincount | counting | Not started (complex reduction) |
 | unique | deduplication | Not started |
 | cov | covariance | Not started |
 | corrcoef | correlation | Not started |
-| digitize | bin indices | Not started |
+| digitize | bin indices | **Done** |
 
 ### Tier 8: Selection & Conditional
 Conditional operations.
