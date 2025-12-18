@@ -1232,10 +1232,6 @@ def test_old_to_new_with_zero():
     assert result == expected
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="coarsen not implemented for array-expr",
-)
 def test_rechunk_non_perfect_slicing_of_dimensions():
     # GH#7859
     # this matters -- 1060 and 1058 work

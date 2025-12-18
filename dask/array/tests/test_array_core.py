@@ -5657,6 +5657,10 @@ def test_scipy_sparse_concatenate(axis, container):
     assert (z != z_expected).nnz == 0
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="scipy.sparse like= not implemented for array-expr",
+)
 @pytest.mark.parametrize("func", [da.asarray, da.asanyarray])
 @pytest.mark.parametrize("src", [[[1, 2]], np.asarray([[1, 2]]), da.asarray([[1, 2]])])
 def test_scipy_sparse_asarray_like(src, func):
