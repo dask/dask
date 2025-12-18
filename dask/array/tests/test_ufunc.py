@@ -328,7 +328,6 @@ def test_ufunc_2results(ufunc):
     assert_eq(res2, exp2)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="clip not fully implemented for array-expr")
 def test_clip():
     x = np.random.normal(0, 10, size=(10, 10))
     d = da.from_array(x, chunks=(3, 4))

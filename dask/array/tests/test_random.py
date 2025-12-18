@@ -84,7 +84,6 @@ def test_generator_consistent_names(generator_class):
     ) == sorted(state2.normal(size=100, loc=4.5, scale=5.0, chunks=10).dask)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr")
 def test_random(generator_class):
     a = generator_class().random((10, 10), chunks=(5, 5))
     assert isinstance(a, Array)
@@ -97,7 +96,6 @@ def test_random(generator_class):
     assert len(x) > 90
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr")
 def test_parametrized_random_function(generator_class):
     a = generator_class().exponential(1000, (10, 10), chunks=(5, 5))
     assert isinstance(a, Array)
@@ -112,7 +110,6 @@ def test_parametrized_random_function(generator_class):
     assert len(y) > 90
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr")
 def test_kwargs(generator_class):
     a = generator_class().normal(loc=10.0, scale=0.1, size=(10, 10), chunks=(5, 5))
     assert isinstance(a, Array)
