@@ -443,7 +443,6 @@ def test_array_ufunc_binop():
         assert_eq(func.outer(d, d), func.outer(x, x))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="elemwise out= not implemented for array-expr")
 def test_array_ufunc_out():
     x = da.arange(10, chunks=(5,))
     np.sin(x, out=x)
@@ -457,7 +456,6 @@ def test_unsupported_ufunc_methods():
         assert np.add.reduce(x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="elemwise out= not implemented for array-expr")
 def test_out_numpy():
     x = da.arange(10, chunks=(5,))
     empty = np.empty(10, dtype=x.dtype)
@@ -468,7 +466,6 @@ def test_out_numpy():
     assert "Array" in str(info.value)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="elemwise out= not implemented for array-expr")
 def test_out_shape_mismatch():
     x = da.arange(10, chunks=(5,))
     y = da.arange(15, chunks=(5,))

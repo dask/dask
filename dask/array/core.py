@@ -6230,6 +6230,21 @@ class BlockView:
         graph: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
         hlg = HighLevelGraph.from_collections(name, graph, dependencies=[self._array])
+
+        # Return the appropriate Array type based on whether array-expr is enabled
+        from dask.array import _array_expr_enabled
+
+        if _array_expr_enabled():
+            from dask.array._array_expr.core._from_graph import from_graph
+            from dask.core import flatten
+
+            return from_graph(
+                hlg,
+                self._array._meta,
+                chunks,
+                list(flatten([(name,) + key for key in product(*(range(len(c)) for c in chunks))])),
+                "blocks",
+            )
         return Array(hlg, name, chunks, meta=self._array)
 
     def __eq__(self, other: object) -> bool:
