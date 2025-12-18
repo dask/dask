@@ -9,6 +9,8 @@ import dask.array as da
 from dask import is_dask_collection
 from dask.array import Array, assert_eq
 from dask.array._array_expr._rechunk import Rechunk
+from dask.array._array_expr._slicing import Slice
+from dask.array._array_expr.manipulation._transpose import Transpose
 
 
 @pytest.fixture()
@@ -149,3 +151,105 @@ def test_field_access_with_shape():
     assert_eq(x[["col1"]], data[["col1"]])
     assert_eq(x["col2"], data["col2"])
     assert_eq(x[["col1", "col2"]], data[["col1", "col2"]])
+
+
+# =============================================================================
+# Optimization tests (ported from dask-expr prototype)
+# =============================================================================
+
+
+def test_transpose_optimize():
+    """Test that transpose of transpose simplifies."""
+    a = np.random.random((10, 20))
+    b = da.from_array(a, chunks=(2, 5))
+
+    # T.T should be identity
+    assert b.T.T.expr.optimize()._name == b.expr.optimize()._name
+    assert_eq(b.T.T, a)
+
+    # Explicit axes composition
+    c = da.from_array(np.random.random((3, 4, 5)), chunks=(1, 2, 3))
+    d = c.transpose((2, 0, 1)).transpose((1, 2, 0))  # Should compose to (0, 1, 2) = identity
+    assert_eq(d, c)
+
+
+def test_rechunk_optimize():
+    """Test that rechunk of rechunk simplifies to single rechunk."""
+    a = np.random.random((10, 10))
+    b = da.from_array(a, chunks=(4, 4))
+
+    c = b.rechunk((2, 5)).rechunk((5, 2))
+    d = b.rechunk((5, 2))
+
+    # Double rechunk should simplify to single rechunk
+    assert c.expr.optimize()._name == d.expr.optimize()._name
+    assert_eq(c, a)
+
+
+def test_slicing_optimize_identity():
+    """Test that no-op slice simplifies to identity."""
+    a = np.random.random((10, 20))
+    b = da.from_array(a, chunks=(2, 5))
+
+    # b[:] should simplify to b
+    assert b[:].expr.optimize()._name == b.expr._name
+    assert_eq(b[:], a)
+
+
+def test_slicing_optimize_fusion():
+    """Test that slice of slice fuses into single slice."""
+    a = np.random.random((10, 20))
+    b = da.from_array(a, chunks=(2, 5))
+
+    # Slice fusion: b[5:, 4][::2] should equal b[5::2, 4]
+    result = b[5:, 4][::2]
+    expected = b[5::2, 4]
+    assert result.expr.optimize()._name == expected.expr.optimize()._name
+    assert_eq(result, a[5::2, 4])
+
+
+def test_slicing_pushdown_elemwise():
+    """Test that slice pushes through elemwise."""
+    a = np.random.random((10, 20))
+    b = da.from_array(a, chunks=(2, 5))
+
+    # (b + 1)[:5] should become (b[:5] + 1)
+    result = (b + 1)[:5]
+    expected = b[:5] + 1
+    assert result.expr.optimize()._name == expected.expr.optimize()._name
+    assert_eq(result, (a + 1)[:5])
+
+    # Test with integer index that reduces dimension
+    result2 = (b + 1)[5]
+    expected2 = b[5] + 1
+    assert result2.expr.optimize()._name == expected2.expr.optimize()._name
+    assert_eq(result2, (a + 1)[5])
+
+
+def test_slicing_pushdown_elemwise_broadcast():
+    """Test slice pushdown through elemwise with broadcasting."""
+    a = np.random.random((10, 20))
+    c = np.random.random((20,))  # broadcasts on axis 0
+    aa = da.from_array(a, chunks=(2, 5))
+    cc = da.from_array(c, chunks=(5,))
+
+    # (aa + cc)[:5] should become (aa[:5] + cc)
+    # cc doesn't get sliced because axis 0 is broadcast
+    result = (aa + cc)[:5]
+    assert_eq(result, (a + c)[:5])
+
+    # (aa + cc)[:, ::2] should become (aa[:, ::2] + cc[::2])
+    result2 = (aa + cc)[:, ::2]
+    assert_eq(result2, (a + c)[:, ::2])
+
+
+def test_slicing_pushdown_transpose():
+    """Test slice pushdown through transpose."""
+    a = np.random.random((10, 20))
+    b = da.from_array(a, chunks=(2, 5))
+
+    # b.T[5:] should become b[:, 5:].T
+    result = b.T[5:]
+    expected = b[:, 5:].T
+    assert result.expr.optimize()._name == expected.expr.optimize()._name
+    assert_eq(result, a.T[5:])

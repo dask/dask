@@ -43,6 +43,15 @@ class Transpose(Blockwise):
     def args(self):
         return (self.array, tuple(range(self.array.ndim)))
 
+    def _simplify_down(self):
+        # Transpose(Transpose(x)) -> single Transpose with composed axes
+        if isinstance(self.array, Transpose):
+            axes = tuple(self.array.axes[i] for i in self.axes)
+            return Transpose(self.array.array, axes)
+        # Identity transpose -> return the array
+        if self.axes == tuple(range(self.array.ndim)):
+            return self.array
+
 
 def transpose(a, axes=None):
     """Reverse or permute the axes of an array.

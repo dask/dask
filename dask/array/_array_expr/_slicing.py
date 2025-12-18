@@ -20,6 +20,7 @@ from dask.array.core import (
     interleave_none,
     keyname,
 )
+from dask.array.optimization import fuse_slice
 from dask.array.slicing import (
     _slice_1d,
     check_index,
@@ -392,6 +393,103 @@ class Slice(ArrayExpr):
 
 class SliceSlicesIntegers(Slice):
     _parameters = ["array", "index", "allow_getitem_optimization"]
+
+    def _simplify_down(self):
+        # Slice(Slice(x)) -> single Slice with fused indices
+        if isinstance(self.array, SliceSlicesIntegers):
+            fused = fuse_slice(self.array.index, self.index)
+            # Normalize the fused index
+            normalized = tuple(
+                normalize_slice(idx, dim) if isinstance(idx, slice) else idx
+                for idx, dim in zip(fused, self.array.array.shape)
+            )
+            return SliceSlicesIntegers(
+                self.array.array, normalized, self.allow_getitem_optimization
+            )
+
+        # Slice(Elemwise) -> Elemwise(sliced inputs)
+        from dask.array._array_expr._blockwise import Elemwise, is_scalar_for_elemwise
+
+        if isinstance(self.array, Elemwise):
+            return self._pushdown_through_elemwise()
+
+        # Slice(Transpose) -> Transpose(sliced input)
+        from dask.array._array_expr.manipulation._transpose import Transpose
+
+        if isinstance(self.array, Transpose):
+            return self._pushdown_through_transpose()
+
+    def _pushdown_through_elemwise(self):
+        """Push slice through elemwise by slicing each input appropriately."""
+        from dask.array._array_expr._blockwise import Elemwise, is_scalar_for_elemwise
+        from dask.array._array_expr._collection import new_collection
+
+        elemwise = self.array
+        out_ind = elemwise.out_ind
+        index = self.index
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (len(out_ind) - len(index))
+
+        # Build sliced inputs
+        new_args = []
+        for arg in elemwise.elemwise_args:
+            if is_scalar_for_elemwise(arg):
+                new_args.append(arg)
+            else:
+                # Map output slice to this input's dimensions
+                # arg has indices tuple(range(arg.ndim)[::-1])
+                arg_ind = tuple(range(arg.ndim)[::-1])
+
+                # For each dimension of arg, find where its index appears in out_ind
+                # and get the corresponding slice
+                arg_slices = []
+                for dim_idx in arg_ind:
+                    # Find position of this index in out_ind
+                    try:
+                        out_pos = out_ind.index(dim_idx)
+                        arg_slices.append(full_index[out_pos])
+                    except ValueError:
+                        # Index not in output (shouldn't happen for elemwise)
+                        arg_slices.append(slice(None))
+
+                sliced_arg = new_collection(arg)[tuple(arg_slices)]
+                new_args.append(sliced_arg.expr)
+
+        return Elemwise(
+            elemwise.op,
+            elemwise.operand("dtype"),
+            elemwise.operand("name"),
+            elemwise.where,
+            elemwise.operand("_user_kwargs"),
+            *new_args,
+        )
+
+    def _pushdown_through_transpose(self):
+        """Push slice through transpose by reordering slice indices."""
+        from dask.array._array_expr._collection import new_collection
+        from dask.array._array_expr.manipulation._transpose import Transpose
+
+        transpose = self.array
+        axes = transpose.axes
+        index = self.index
+
+        # Don't handle dimension-changing slices (integers, None/newaxis)
+        if any(isinstance(idx, Integral) or idx is None for idx in index):
+            return None
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (transpose.ndim - len(index))
+
+        # Map output slice through transpose axes to get input slice
+        # axes[i] tells us which input axis becomes output axis i
+        # So output axis i gets slice full_index[i], which should go to input axis axes[i]
+        input_index = [slice(None)] * len(axes)
+        for out_axis, in_axis in enumerate(axes):
+            input_index[in_axis] = full_index[out_axis]
+
+        sliced_input = new_collection(transpose.array)[tuple(input_index)]
+        return Transpose(sliced_input.expr, axes)
 
     @functools.cached_property
     def chunks(self):
