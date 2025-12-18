@@ -4985,6 +4985,16 @@ def test_zarr_sharding_roundtrip(tmp_path, chunks, shards):
     assert_eq(a, a2)
     assert a2.chunks == a.chunks
 
+    b = da.ones((60, 60), chunks=chunks)
+    with pytest.raises(ValueError, match="Cannot use"):
+        b.to_zarr(tmp_path, mode="r")
+
+    b.to_zarr(tmp_path, zarr_array_kwargs=zarr_array_kwargs, mode="a")
+
+    b2 = da.from_zarr(tmp_path)
+    assert_eq(b, b2)
+    assert b2.chunks == b.chunks
+
 
 def test_zarr_roundtrip_with_path_like():
     pytest.importorskip("zarr")
