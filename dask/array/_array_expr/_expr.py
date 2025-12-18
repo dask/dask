@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import functools
 import re
-from bisect import bisect
 from functools import cached_property, reduce
 from itertools import product
-from operator import add, mul
+from operator import mul
 
 import numpy as np
 import toolz
-from tlz import accumulate
 
 from dask._expr import FinalizeCompute, SingletonExpr
 from dask._task_spec import List, Task, TaskRef
-from dask.array.chunk import getitem
 from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
 from dask.layers import ArrayBlockwiseDep
@@ -221,94 +218,9 @@ def unify_chunks_expr(*args):
     return chunkss, arrays, changed
 
 
-class Stack(ArrayExpr):
-    _parameters = ["array", "axis", "meta"]
-
-    @functools.cached_property
-    def args(self):
-        return [self.array] + self.operands[len(self._parameters) :]
-
-    @functools.cached_property
-    def _meta(self):
-        return self.operand("meta")
-
-    @functools.cached_property
-    def chunks(self):
-        n = len(self.args)
-        return (
-            self.array.chunks[: self.axis]
-            + ((1,) * n,)
-            + self.array.chunks[self.axis :]
-        )
-
-    @functools.cached_property
-    def _name(self):
-        return "stack-" + self.deterministic_token
-
-    def _layer(self) -> dict:
-        keys = list(product([self._name], *[range(len(bd)) for bd in self.chunks]))
-        names = [a.name for a in self.args]
-        axis = self.axis
-        ndim = self._meta.ndim - 1
-
-        inputs = [
-            (names[key[axis + 1]],) + key[1 : axis + 1] + key[axis + 2 :]
-            for key in keys
-        ]
-        values = [
-            Task(
-                key,
-                getitem,
-                TaskRef(inp),
-                (slice(None, None, None),) * axis
-                + (None,)
-                + (slice(None, None, None),) * (ndim - axis),
-            )
-            for key, inp in zip(keys, inputs)
-        ]
-        return dict(zip(keys, values))
-
-
-class Concatenate(ArrayExpr):
-    _parameters = ["array", "axis", "meta"]
-
-    @functools.cached_property
-    def args(self):
-        return [self.array] + self.operands[len(self._parameters) :]
-
-    @functools.cached_property
-    def _meta(self):
-        return self.operand("meta")
-
-    @functools.cached_property
-    def chunks(self):
-        bds = [a.chunks for a in self.args]
-        chunks = (
-            bds[0][: self.axis]
-            + (sum((bd[self.axis] for bd in bds), ()),)
-            + bds[0][self.axis + 1 :]
-        )
-        return chunks
-
-    @functools.cached_property
-    def _name(self):
-        return "stack-" + self.deterministic_token
-
-    def _layer(self) -> dict:
-        axis = self.axis
-        cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in self.args]))
-        keys = list(product([self._name], *[range(len(bd)) for bd in self.chunks]))
-        names = [a.name for a in self.args]
-
-        values = [
-            (names[bisect(cum_dims, key[axis + 1]) - 1],)
-            + key[1 : axis + 1]
-            + (key[axis + 1] - cum_dims[bisect(cum_dims, key[axis + 1]) - 1],)
-            + key[axis + 2 :]
-            for key in keys
-        ]
-
-        return dict(zip(keys, values))
+# Import Stack, Concatenate, and ConcatenateFinalize from their modules
+from dask.array._array_expr._stack import Stack
+from dask.array._array_expr._concatenate import Concatenate, ConcatenateFinalize
 
 
 class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
@@ -332,59 +244,6 @@ class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
                 tuple(-1 for _ in range(self.arr.ndim)),
                 method="tasks",
             )
-
-
-class ConcatenateFinalize(ArrayExpr):
-    """Finalize array computation by concatenating all blocks.
-
-    This is used for arrays with unknown chunk sizes where rechunking
-    is not possible.
-    """
-
-    _parameters = ["arr"]
-
-    @functools.cached_property
-    def _name(self):
-        return f"concatenate-finalize-{self.deterministic_token}"
-
-    @functools.cached_property
-    def _meta(self):
-        return self.arr._meta
-
-    @functools.cached_property
-    def chunks(self):
-        # Output is a single chunk with unknown size
-        return tuple((np.nan,) for _ in range(self.arr.ndim))
-
-    @functools.cached_property
-    def numblocks(self):
-        return tuple(1 for _ in range(self.arr.ndim))
-
-    @functools.cached_property
-    def _cached_keys(self):
-        from dask._task_spec import List, TaskRef
-
-        return List(TaskRef((self._name,) + (0,) * self.arr.ndim))
-
-    def _layer(self) -> dict:
-        from dask._task_spec import List, Task, TaskRef
-        from dask.array.core import concatenate3
-
-        # Get all keys from the input array in nested list structure
-        arr_keys = self.arr.__dask_keys__()
-
-        # Convert nested key structure to TaskRefs
-        def convert_keys(keys):
-            if isinstance(keys, list):
-                return List(*[convert_keys(k) for k in keys])
-            return TaskRef(keys)
-
-        keys_list = convert_keys(arr_keys)
-
-        out_key = (self._name,) + (0,) * self.arr.ndim
-        return {
-            out_key: Task(out_key, concatenate3, keys_list)
-        }
 
 
 class ChunksOverride(ArrayExpr):

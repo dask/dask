@@ -72,8 +72,9 @@ def broadcast_to(x, shape, chunks=None, meta=None):
 
     Returns
     -------
-    BroadcastTo expression
+    Array
     """
+    from dask._collections import new_collection
     from dask.array._array_expr._collection import asarray
 
     x = asarray(x)
@@ -84,7 +85,7 @@ def broadcast_to(x, shape, chunks=None, meta=None):
 
     # Identity case
     if x.shape == shape and (chunks is None or chunks == x.chunks):
-        return x.expr
+        return new_collection(x.expr)
 
     ndim_new = len(shape) - x.ndim
     if ndim_new < 0 or any(
@@ -109,4 +110,4 @@ def broadcast_to(x, shape, chunks=None, meta=None):
                     "dimension or a dimension of size 1"
                 )
 
-    return BroadcastTo(x.expr, shape, chunks, meta)
+    return new_collection(BroadcastTo(x.expr, shape, chunks, meta))

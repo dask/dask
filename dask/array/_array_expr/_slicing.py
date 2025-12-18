@@ -580,6 +580,7 @@ def squeeze(a, axis=None):
     -------
     squeezed : Array
     """
+    from dask._collections import new_collection
     from dask.array.utils import validate_axis
 
     if axis is None:
@@ -592,7 +593,7 @@ def squeeze(a, axis=None):
 
     axis = validate_axis(axis, a.ndim)
 
-    return Squeeze(a.expr, axis)
+    return new_collection(Squeeze(a.expr, axis))
 
 
 class SetItem(ArrayExpr):
