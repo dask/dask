@@ -2348,7 +2348,6 @@ def test_aligned_coarsen_chunks(chunks, divisor):
         assert any_remainders[-1] == 1
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_insert():
     rng = np.random.default_rng()
     x = rng.integers(10, size=(10, 10))
@@ -2438,7 +2437,6 @@ def test_append():
         da.append(a, (0,) * 10, axis=0)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_multi_insert():
     z = np.random.default_rng().integers(10, size=(1, 2))
     c = da.from_array(z, chunks=(1, 2))
@@ -2448,7 +2446,6 @@ def test_multi_insert():
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_delete():
     x = np.random.default_rng().integers(10, size=(10, 10))
     a = da.from_array(x, chunks=(5, 5))
