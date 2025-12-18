@@ -14,7 +14,6 @@ from dask.array._array_expr._collection import (
     blockwise,
     broadcast_to,
     concatenate,
-    diff,
     dstack,
     elemwise,
     expand_dims,
@@ -35,8 +34,9 @@ from dask.array._array_expr._collection import (
     swapaxes,
     transpose,
     vstack,
-    where,
 )
+from dask.array._array_expr.routines._diff import diff
+from dask.array._array_expr.routines._where import where
 from dask.array._array_expr._creation import (
     arange,
     diag,

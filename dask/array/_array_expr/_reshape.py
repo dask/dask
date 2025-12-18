@@ -120,6 +120,8 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     -------
     reshaped : Array
     """
+    from dask._collections import new_collection
+
     # Normalize shape
     if isinstance(shape, int):
         shape = (shape,)
@@ -132,7 +134,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
             raise ValueError("can only specify one unknown dimension")
         # Fastpath for x.reshape(-1) on 1D arrays
         if len(shape) == 1 and x.ndim == 1:
-            return x.expr
+            return new_collection(x.expr)
         missing_size = sanitize_index(x.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
@@ -147,17 +149,46 @@ def reshape(x, shape, merge_chunks=True, limit=None):
 
     # Identity reshape
     if x.shape == shape:
-        return x.expr
+        return new_collection(x.expr)
 
     # Single partition case: use simple blockwise reshape
     expr = x.expr
     npartitions = reduce(mul, (len(c) for c in expr.chunks), 1)
     if npartitions == 1:
-        return ReshapeLowered(expr, shape, tuple((d,) for d in shape))
+        return new_collection(ReshapeLowered(expr, shape, tuple((d,) for d in shape)))
 
     # Handle merge_chunks=False: pre-rechunk to size-1 chunks in early dimensions
     if not merge_chunks and x.ndim > len(shape):
         pre_rechunk = dict.fromkeys(range(x.ndim - len(shape)), 1)
         expr = expr.rechunk(pre_rechunk)
 
-    return Reshape(expr, shape)
+    return new_collection(Reshape(expr, shape))
+
+
+def ravel(array_like):
+    """Return a flattened array.
+
+    Parameters
+    ----------
+    array_like : array_like
+        Input array. Non-array inputs are converted to arrays.
+
+    Returns
+    -------
+    raveled : Array
+        A 1-D array containing the elements of the input.
+
+    See Also
+    --------
+    numpy.ravel
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.ones((2, 3), chunks=2)
+    >>> da.ravel(x).compute()
+    array([1., 1., 1., 1., 1., 1.])
+    """
+    from dask.array._array_expr.core import asanyarray
+
+    return asanyarray(array_like).reshape((-1,))

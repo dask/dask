@@ -113,6 +113,81 @@ When migrating an operation from traditional to expression-based:
 - Graph generation deferred until `_layer()` called
 - Tokenization must be deterministic for singleton deduplication
 
+## File Organization
+
+The codebase is organized for clarity and AI agent development. Each operation
+should be self-contained in a single file.
+
+### Pattern: Expression + Function Together
+
+Each module should contain both the expression class AND its collection-level
+function. This keeps related code together and makes it easy to understand and
+modify specific operations.
+
+```python
+# _reshape.py - both expr and function in same file
+
+class Reshape(ArrayExpr):
+    _parameters = ["array", "_shape"]
+    # ... expression implementation
+
+def reshape(x, shape, merge_chunks=True, limit=None):
+    """Reshape array to new shape."""
+    # ... validation
+    return new_collection(Reshape(expr, shape))
+```
+
+### File Naming Convention
+
+- `_foo.py` - Contains `Foo` expression class and `foo()` function
+- Underscore prefix indicates internal module (public API via `__init__.py`)
+
+### Examples
+
+| File | Expression Class | Collection Function |
+|------|------------------|---------------------|
+| `_stack.py` | `Stack` | `stack()` |
+| `_concatenate.py` | `Concatenate`, `ConcatenateFinalize` | `concatenate()` |
+| `_reshape.py` | `Reshape`, `ReshapeLowered` | `reshape()`, `ravel()` |
+| `_rechunk.py` | `Rechunk`, `TasksRechunk` | `rechunk()` |
+| `_broadcast.py` | `BroadcastTo` | `broadcast_to()` |
+| `manipulation/_transpose.py` | `Transpose` | `transpose()`, `swapaxes()`, etc. |
+
+### Subdirectories
+
+Group related functions into subdirectories when there are multiple:
+
+- `manipulation/` - transpose, flip, roll, expand
+- `stacking/` - block, vstack, hstack, dstack
+- `routines/` - diff, where, and other NumPy-like routines
+- `core/` - conversion functions (asarray, from_array, etc.)
+
+Each subdirectory has an `__init__.py` that exports public names.
+
+### The Collection Module
+
+`_collection.py` contains:
+- `Array` class (the user-facing wrapper)
+- Imports from operation modules to establish public API
+
+`_collection.py` should NOT contain function implementations - those belong
+in their respective operation modules.
+
+### Avoiding Circular Imports
+
+Use lazy imports inside functions when needed:
+
+```python
+def my_function(arr):
+    # Import inside function to avoid circular dependency
+    from dask.array._array_expr.core import asarray
+    arr = asarray(arr)
+    ...
+```
+
+For `__init__.py` files, use `__getattr__` for lazy loading when circular
+imports are unavoidable.
+
 ## Array-Specific Considerations
 
 Unlike DataFrames, arrays have:
