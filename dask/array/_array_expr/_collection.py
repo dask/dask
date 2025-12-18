@@ -39,6 +39,7 @@ from dask.array.core import (
     check_if_handled_given_other,
     finalize,
 )
+from dask.array.chunk_types import is_valid_chunk_type
 
 
 class Array(DaskMethodsMixin):
@@ -121,6 +122,11 @@ class Array(DaskMethodsMixin):
         return self.expr.chunks
 
     @property
+    def chunksize(self) -> tuple:
+        from dask.array.core import cached_max
+        return tuple(cached_max(c) for c in self.chunks)
+
+    @property
     def ndim(self):
         return self.expr.ndim
 
@@ -144,6 +150,14 @@ class Array(DaskMethodsMixin):
 
     def __len__(self):
         return self.expr.__len__()
+
+    def __bool__(self):
+        if self.size > 1:
+            raise ValueError(
+                f"The truth value of a {self.__class__.__name__} is ambiguous. "
+                "Use a.any() or a.all()."
+            )
+        return bool(self.compute())
 
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]

@@ -708,7 +708,6 @@ def test_bincount_unspecified_minlength():
     assert len(e.compute()) == 8  # shape is (nan,) so must compute for len()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_digitize():
     x = np.array([2, 4, 5, 6, 1])
     bins = np.array([1, 2, 3, 4, 5])
@@ -761,7 +760,6 @@ def test_searchsorted_sorter_not_implemented():
         da.searchsorted(da.asarray([1, 0]), da.asarray([1]), sorter=da.asarray([1, 0]))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram():
     # Test for normal, flattened input
     n = 100
@@ -954,7 +952,6 @@ def test_histogram_delayed_n_bins_raises_with_density():
 @pytest.mark.parametrize("weights", [True, False])
 @pytest.mark.parametrize("density", [True, False])
 @pytest.mark.parametrize("bins", [(5, 6), 5])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram2d(weights, density, bins):
     rng = da.random.default_rng()
     n = 800
@@ -987,7 +984,6 @@ def test_histogram2d(weights, density, bins):
 
 @pytest.mark.parametrize("weights", [True, False])
 @pytest.mark.parametrize("density", [True, False])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram2d_array_bins(weights, density):
     rng = da.random.default_rng()
     n = 800
@@ -1018,7 +1014,6 @@ def test_histogram2d_array_bins(weights, density):
     assert a1.compute().shape == a3.shape
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd():
     n1, n2 = 800, 3
     x = da.random.default_rng().uniform(0, 1, size=(n1, n2), chunks=(200, 3))
@@ -1034,7 +1029,6 @@ def test_histogramdd():
     assert a1.compute().shape == a3.shape
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_seq_of_arrays():
     rng = da.random.default_rng()
     n1 = 800
@@ -1049,7 +1043,6 @@ def test_histogramdd_seq_of_arrays():
     assert_eq(a1, a3)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_alternative_bins_range():
     # test for normal input
     n1, n2 = 600, 3
@@ -1073,7 +1066,6 @@ def test_histogramdd_alternative_bins_range():
     assert same_keys(da.histogramdd(x, bins=bins, range=ranges)[0], a1)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_weighted():
     rng = da.random.default_rng()
     # test for normal input
@@ -1095,7 +1087,6 @@ def test_histogramdd_weighted():
     assert_eq(a1, a3)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_density():
     n1, n2 = 800, 3
     x = da.random.default_rng().uniform(0, 1, size=(n1, n2), chunks=(200, 3))
@@ -1110,7 +1101,6 @@ def test_histogramdd_density():
     assert same_keys(da.histogramdd(x, bins=bins, density=True)[0], a1)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_weighted_density():
     rng = da.random.default_rng()
     n1, n2 = 1200, 4
@@ -1125,7 +1115,6 @@ def test_histogramdd_weighted_density():
     assert_eq(a1, a3)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raises_incompat_sample_chunks():
     data = da.random.default_rng().random(size=(10, 3), chunks=(5, 1))
     with pytest.raises(
@@ -1134,7 +1123,6 @@ def test_histogramdd_raises_incompat_sample_chunks():
         da.histogramdd(data, bins=10, range=((0, 1),) * 3)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raises_incompat_multiarg_chunks():
     rng = da.random.default_rng()
     x = rng.random(size=(10,), chunks=2)
@@ -1146,7 +1134,6 @@ def test_histogramdd_raises_incompat_multiarg_chunks():
         da.histogramdd((x, y, z), bins=(3,) * 3, range=((0, 1),) * 3)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raises_incompat_weight_chunks():
     rng = da.random.default_rng()
     x = rng.random(size=(10,), chunks=2)
@@ -1165,7 +1152,6 @@ def test_histogramdd_raises_incompat_weight_chunks():
         da.histogramdd(z, bins=(3,) * 2, range=((0, 1),) * 2, weights=w)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raises_incompat_bins_or_range():
     data = da.random.default_rng().random(size=(10, 4), chunks=(5, 4))
     bins = (2, 3, 4, 5)
@@ -1195,7 +1181,6 @@ def test_histogramdd_raises_incompat_bins_or_range():
         da.histogramdd(data, bins=bins, range=((0, 1), (0, 1, 2), 3, 5))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raise_normed_and_density():
     data = da.random.default_rng().random(size=(10, 3), chunks=(5, 3))
     bins = (4, 5, 6)
@@ -1204,7 +1189,6 @@ def test_histogramdd_raise_normed_and_density():
         da.histogramdd(data, bins=bins, range=ranges, normed=True, density=True)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_raise_incompat_shape():
     # 1D
     data = da.random.default_rng().random(size=(10,), chunks=(2,))
@@ -1220,7 +1204,6 @@ def test_histogramdd_raise_incompat_shape():
         da.histogramdd(data, bins=4, range=((-3, 3),))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogramdd_edges():
     data = da.random.default_rng().random(size=(10, 3), chunks=(5, 3))
     edges = [

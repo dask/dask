@@ -637,3 +637,32 @@ def triu(m, k=0):
     )
 
     return where(mask, np.zeros_like(m._meta, shape=(1,)), m)
+
+
+@derived_from(np)
+def digitize(a, bins, right=False):
+    """Return the indices of the bins to which each value in input array belongs.
+
+    Parameters
+    ----------
+    a : dask array
+        Input array to be binned.
+    bins : array_like
+        Array of bins. Must be 1-dimensional and monotonic.
+    right : bool, optional
+        Indicating whether the intervals include the right or left bin edge.
+
+    Returns
+    -------
+    indices : dask array of ints
+        Output array of indices.
+    """
+    from dask.array._array_expr._map_blocks import map_blocks
+    from dask.array.utils import meta_from_array
+
+    bins = np.asarray(bins)
+    if bins.ndim != 1:
+        raise ValueError("bins must be 1-dimensional")
+
+    dtype = np.digitize(np.asarray([0], like=bins), bins, right=right).dtype
+    return map_blocks(np.digitize, a, dtype=dtype, bins=bins, right=right)

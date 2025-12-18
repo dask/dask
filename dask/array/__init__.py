@@ -686,6 +686,7 @@ if _array_expr_enabled():
             diag,
             diagonal,
             diff,
+            digitize,
             divide,
             dstack,
             divmod,
@@ -721,6 +722,8 @@ if _array_expr_enabled():
             gradient,
             gufunc,
             histogram,
+            histogram2d,
+            histogramdd,
             hstack,
             hypot,
             i0,
@@ -888,13 +891,10 @@ if _array_expr_enabled():
         corrcoef = raise_not_implemented_error("corrcoef")
         cov = raise_not_implemented_error("cov")
         delete = raise_not_implemented_error("delete")
-        digitize = raise_not_implemented_error("digitize")
         ediff1d = raise_not_implemented_error("ediff1d")
         einsum = raise_not_implemented_error("einsum")
         extract = raise_not_implemented_error("extract")
         flatnonzero = raise_not_implemented_error("flatnonzero")
-        histogram2d = raise_not_implemented_error("histogram2d")
-        histogramdd = raise_not_implemented_error("histogramdd")
         insert = raise_not_implemented_error("insert")
         isin = raise_not_implemented_error("isin")
         nonzero = raise_not_implemented_error("nonzero")
