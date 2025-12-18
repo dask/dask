@@ -4,7 +4,7 @@ import itertools
 import math
 import warnings
 from functools import cached_property, partial
-from numbers import Integral, Real
+from numbers import Integral, Number, Real
 
 import numpy as np
 
@@ -1706,3 +1706,106 @@ def union1d(ar1, ar2):
     ar1 = asarray(ar1)
     ar2 = asarray(ar2)
     return unique(concatenate((ravel(ar1), ravel(ar2))))
+
+
+def topk(a, k, axis=-1, split_every=None):
+    """Extract the k largest elements from a on the given axis.
+
+    Returns them sorted from largest to smallest. If k is negative,
+    extract the -k smallest elements instead, and return them sorted
+    from smallest to largest.
+
+    Parameters
+    ----------
+    a : Array
+        Data being sorted
+    k : int
+        Number of elements to extract
+    axis : int, optional
+        Axis along which to find topk elements
+    split_every : int >= 2, optional
+        Controls depth of recursive aggregation
+
+    Returns
+    -------
+    Array with size abs(k) along the given axis
+    """
+    from dask.array import chunk
+    from dask.array._array_expr._reductions import reduction
+
+    a = asarray(a)
+    axis = validate_axis(axis, a.ndim)
+
+    chunk_combine = partial(chunk.topk, k=k)
+    aggregate = partial(chunk.topk_aggregate, k=k)
+
+    return reduction(
+        a,
+        chunk=chunk_combine,
+        combine=chunk_combine,
+        aggregate=aggregate,
+        axis=axis,
+        keepdims=True,
+        dtype=a.dtype,
+        split_every=split_every,
+        output_size=abs(k),
+    )
+
+
+def argtopk(a, k, axis=-1, split_every=None):
+    """Extract the indices of the k largest elements from a on the given axis.
+
+    Returns them sorted from largest to smallest. If k is negative,
+    extract the indices of the -k smallest elements instead, and return
+    them sorted from smallest to largest.
+
+    Parameters
+    ----------
+    a : Array
+        Data being sorted
+    k : int
+        Number of elements to extract
+    axis : int, optional
+        Axis along which to find topk elements
+    split_every : int >= 2, optional
+        Controls depth of recursive aggregation
+
+    Returns
+    -------
+    Array of np.intp indices with size abs(k) along the given axis
+    """
+    from dask.array import chunk
+    from dask.array._array_expr._creation import arange
+    from dask.array._array_expr._reductions import reduction
+
+    a = asarray(a)
+    axis = validate_axis(axis, a.ndim)
+
+    # Generate nodes where every chunk is a tuple of (a, original index of a)
+    idx = arange(a.shape[axis], chunks=(a.chunks[axis],), dtype=np.intp)
+    idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(a.ndim))]
+    a_plus_idx = a.map_blocks(chunk.argtopk_preprocess, idx, dtype=object)
+
+    chunk_combine = partial(chunk.argtopk, k=k)
+    aggregate = partial(chunk.argtopk_aggregate, k=k)
+
+    if isinstance(axis, Number):
+        naxis = 1
+    else:
+        naxis = len(axis)
+
+    meta = a._meta.astype(np.intp).reshape((0,) * (a.ndim - naxis + 1))
+
+    return reduction(
+        a_plus_idx,
+        chunk=chunk_combine,
+        combine=chunk_combine,
+        aggregate=aggregate,
+        axis=axis,
+        keepdims=True,
+        dtype=np.intp,
+        split_every=split_every,
+        concatenate=False,
+        output_size=abs(k),
+        meta=meta,
+    )

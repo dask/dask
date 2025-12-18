@@ -195,7 +195,7 @@ Lower priority operations.
 | Operation | Notes | Status |
 |-----------|-------|--------|
 | coarsen | downsampling | **Done** |
-| argtopk/topk | partial sort | Blocked (needs output_size in reduction()) |
+| argtopk/topk | partial sort | **Done** |
 | apply_along_axis | axis application | **Done** |
 | apply_over_axes | multiple axes | **Done** |
 | insert/delete | array modification | Not started |

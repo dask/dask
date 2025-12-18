@@ -902,8 +902,8 @@ if _array_expr_enabled():
         from dask.array._array_expr import to_npy_stack
         to_zarr = raise_not_implemented_error("to_zarr")
         optimize = raise_not_implemented_error("optimize")
-        argtopk = raise_not_implemented_error("argtopk")
-        topk = raise_not_implemented_error("topk")
+        from dask.array._array_expr import argtopk
+        from dask.array._array_expr import topk
         from dask.array._array_expr import trace
         from dask.array._array_expr import apply_along_axis
         from dask.array._array_expr import apply_over_axes
