@@ -1698,3 +1698,11 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         return result[0]
     else:
         return tuple(result)
+
+
+@derived_from(np)
+def union1d(ar1, ar2):
+    """Find the union of two arrays."""
+    ar1 = asarray(ar1)
+    ar2 = asarray(ar2)
+    return unique(concatenate((ravel(ar1), ravel(ar2))))

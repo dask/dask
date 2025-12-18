@@ -117,6 +117,7 @@ from dask.array._array_expr._routines import (
     triu_indices_from,
     unify_chunks,
     unique,
+    union1d,
     unravel_index,
 )
 from dask.array._array_expr._ufunc import *
