@@ -28,7 +28,7 @@ The array-expr system has foundational infrastructure in place:
 - Axis manipulation: flip, flipud, fliplr, rot90, transpose, swapaxes, moveaxis, rollaxis
 - Simple routines: round/around, isclose, allclose, isnull/notnull, append, count_nonzero
 - Utilities: ndim, shape, result_type, broadcast_arrays, unify_chunks
-- IO: store, to_npy_stack, from_npy_stack, from_delayed
+- IO: store, to_npy_stack, from_npy_stack, from_delayed, from_zarr, to_zarr, from_tiledb, to_tiledb
 - Advanced indexing: vindex, take, nonzero, argwhere, flatnonzero
 - Creation: eye, diag, diagonal, tri, tril, triu, fromfunction, indices, meshgrid, pad, tile
 - Statistics: histogram, histogram2d, histogramdd, digitize, bincount, cov, corrcoef, average
@@ -237,10 +237,21 @@ External format support.
 
 | Operation | Notes | Status |
 |-----------|-------|--------|
-| to_zarr | Zarr output | Not started |
-| from_zarr | Zarr input | Not started |
-| to_tiledb | TileDB output | Not started |
-| from_tiledb | TileDB input | Not started |
+| to_zarr | Zarr output | **Done** |
+| from_zarr | Zarr input | **Done** |
+| to_tiledb | TileDB output | **Done** |
+| from_tiledb | TileDB input | **Done** |
+
+**Implementation Notes:**
+- `from_zarr`/`to_zarr`: Re-exported from `core.py` since they use `arr.store()`/`arr.rechunk()` which work with array-expr.
+- `from_tiledb`/`to_tiledb`: Use `dask.array.from_array` and `darray.store()`. In `tiledb_io.py`.
+- `Array.to_zarr()` and `Array.to_tiledb()` methods added to `_collection.py`.
+
+**Test Results (30 zarr tests, 2 tiledb tests):**
+- 29/30 zarr tests pass
+- 2/2 tiledb tests pass
+- 1 failing zarr test is pre-existing `from_array` issue:
+  - `test_from_array_respects_zarr_shards`: `from_array` shard handling in array-expr
 
 ## Implementation Notes
 

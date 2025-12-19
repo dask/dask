@@ -531,3 +531,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
             _name_prefix=name,
         )
     )
+
+
+# Zarr functions - import from core since they use arr.store()/arr.rechunk() which work with array-expr
+from dask.array.core import from_zarr, to_zarr

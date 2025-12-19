@@ -56,7 +56,7 @@ from dask.array.core import (
 from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_210
 from dask.array.reshape import _not_implemented_message
 from dask.array.utils import assert_eq, same_keys
-from dask.base import collections_to_expr, compute_as_if_collection, tokenize
+from dask.base import collections_to_expr, compute_as_if_collection, is_dask_collection, tokenize
 from dask.blockwise import (
     _make_blockwise_graph,
     broadcast_dimensions,
@@ -5043,7 +5043,7 @@ def test_zarr_return_stored(compute):
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
         a2 = a.to_zarr(d, compute=compute, return_stored=True)
-        assert isinstance(a2, Array)
+        assert is_dask_collection(a2)
         assert_eq(a, a2, check_graph=False)
         assert a2.chunks == a.chunks
 
@@ -5282,7 +5282,7 @@ def test_zarr_nocompute():
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
         out = a.to_zarr(d, compute=False)
-        assert isinstance(out, Array)
+        assert is_dask_collection(out)
         dask.compute(out)
         a2 = da.from_zarr(d)
         assert_eq(a, a2)

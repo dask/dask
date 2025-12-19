@@ -900,11 +900,11 @@ if _array_expr_enabled():
         from dask.array.chunk_types import register_chunk_type
         from dask.array._array_expr import from_delayed
         from dask.array._array_expr import from_npy_stack
-        from_zarr = raise_not_implemented_error("from_zarr")
+        from dask.array._array_expr import from_zarr
         from dask.array._array_expr import store
         to_hdf5 = raise_not_implemented_error("to_hdf5")
         from dask.array._array_expr import to_npy_stack
-        to_zarr = raise_not_implemented_error("to_zarr")
+        from dask.array._array_expr import to_zarr
         optimize = raise_not_implemented_error("optimize")
         from dask.array._array_expr import argtopk
         from dask.array._array_expr import topk
@@ -920,8 +920,7 @@ if _array_expr_enabled():
         from dask.array._array_expr import union1d
         from dask.array._array_expr import unique
         from dask.array._array_expr import unravel_index
-        from_tiledb = raise_not_implemented_error("from_tiledb")
-        to_tiledb = raise_not_implemented_error("to_tiledb")
+        from dask.array.tiledb_io import from_tiledb, to_tiledb
 
         from dask.array.utils import assert_eq
         from dask.base import compute
