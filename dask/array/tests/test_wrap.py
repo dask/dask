@@ -37,14 +37,14 @@ def test_kwargs():
     assert (x == np.ones(10, dtype="i4")).all()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="full name pattern differs for array-expr")
 def test_full():
     a = da.full((3, 3), 100, chunks=(2, 2), dtype="i8")
 
     assert (a.compute() == 100).all()
     assert a.dtype == a.compute(scheduler="sync").dtype == "i8"
 
-    assert a.name.startswith("full_like-")
+    # Traditional implementation uses full_like internally, array-expr uses full
+    assert a.name.startswith("full_like-") or a.name.startswith("full-")
 
 
 def test_full_error_nonscalar_fill_value():
@@ -52,7 +52,6 @@ def test_full_error_nonscalar_fill_value():
         da.full((3, 3), [100, 100], chunks=(2, 2), dtype="i8")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="warning behavior differs for array-expr")
 def test_full_detects_da_dtype():
     x = da.from_array(100)
     with pytest.warns(FutureWarning, match="not implemented by Dask array") as record:

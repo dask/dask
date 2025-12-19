@@ -267,11 +267,19 @@ def asarray(
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
     else:
+        from functools import partial
+
+        from dask.array.utils import asarray_safe
+
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
-            return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
+            # Use partial to pass dtype to asarray_safe, not to map_blocks
+            # (map_blocks' dtype parameter controls output metadata, not the function call)
+            return a.map_blocks(
+                partial(asarray_safe, like=like_meta, dtype=dtype, order=order)
+            )
         else:
-            a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
+            a = asarray_safe(a, like=like_meta, dtype=dtype, order=order)
 
     a = from_array(a, getitem=getter_inline, **kwargs)
     return _as_dtype(a, dtype)
@@ -347,11 +355,19 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
     else:
+        from functools import partial
+
+        from dask.array.utils import asanyarray_safe
+
         like_meta = meta_from_array(like)
         if isinstance(a, Array):
-            return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
+            # Use partial to pass dtype to asanyarray_safe, not to map_blocks
+            # (map_blocks' dtype parameter controls output metadata, not the function call)
+            return a.map_blocks(
+                partial(asanyarray_safe, like=like_meta, dtype=dtype, order=order)
+            )
         else:
-            a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
+            a = asanyarray_safe(a, like=like_meta, dtype=dtype, order=order)
 
     a = from_array(
         a,
