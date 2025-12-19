@@ -416,39 +416,51 @@ class Array(DaskMethodsMixin):
         y = new_collection(SetItem(self.expr, key, value_expr))
         self._expr = y.expr
 
+    @check_if_handled_given_other
     def __add__(self, other):
         return elemwise(operator.add, self, other)
 
+    @check_if_handled_given_other
     def __radd__(self, other):
         return elemwise(operator.add, other, self)
 
+    @check_if_handled_given_other
     def __mul__(self, other):
         return elemwise(operator.mul, self, other)
 
+    @check_if_handled_given_other
     def __rmul__(self, other):
         return elemwise(operator.mul, other, self)
 
+    @check_if_handled_given_other
     def __sub__(self, other):
         return elemwise(operator.sub, self, other)
 
+    @check_if_handled_given_other
     def __rsub__(self, other):
         return elemwise(operator.sub, other, self)
 
+    @check_if_handled_given_other
     def __pow__(self, other):
         return elemwise(operator.pow, self, other)
 
+    @check_if_handled_given_other
     def __rpow__(self, other):
         return elemwise(operator.pow, other, self)
 
+    @check_if_handled_given_other
     def __truediv__(self, other):
         return elemwise(operator.truediv, self, other)
 
+    @check_if_handled_given_other
     def __rtruediv__(self, other):
         return elemwise(operator.truediv, other, self)
 
+    @check_if_handled_given_other
     def __floordiv__(self, other):
         return elemwise(operator.floordiv, self, other)
 
+    @check_if_handled_given_other
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
 

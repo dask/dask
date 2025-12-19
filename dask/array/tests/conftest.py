@@ -132,6 +132,5 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
         self.arr[key] = value
 
 
-# Register EncapsulateNDArray as a valid chunk type (only when not using array-expr)
-if not da._array_expr_enabled():
-    da.register_chunk_type(EncapsulateNDArray)
+# Register EncapsulateNDArray as a valid chunk type
+da.register_chunk_type(EncapsulateNDArray)

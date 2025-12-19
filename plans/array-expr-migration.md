@@ -361,15 +361,19 @@ Histogram with delayed range and bins.
 
 **Implementation:** Added `LinspaceDelayed` and `HistogramBinnedDelayed` expression classes that properly handle delayed bins/range by creating task dependencies. For delayed range, creates linspace at compute time. For delayed bins array, rechunks to single chunk for histogram computation.
 
-### Stream H: register_chunk_type (4+ tests) 🔴
+### Stream H: register_chunk_type (71+ tests) 🟢 **DONE**
 Custom chunk type registration for dispatching.
 
-| Tests | Notes |
-|-------|-------|
-| test_dispatch.py (entire module) | Module-level skip |
-| test_binary_function_type_precedence | 4 tests in test_array_function.py |
+| Tests | Status |
+|-------|--------|
+| test_dispatch.py (67 tests) | ✅ All pass |
+| test_binary_function_type_precedence (4 tests) | ✅ All pass |
 
-**Implementation:** Add `register_chunk_type()` function and type precedence logic.
+**Implementation:**
+- Exported `register_chunk_type` from `chunk_types.py` in array-expr branch of `__init__.py`
+- Added `@check_if_handled_given_other` decorator to arithmetic dunder methods (`__add__`, `__mul__`, etc.) in `_collection.py` for proper type precedence
+- Removed module-level skip from `test_dispatch.py`
+- Updated `conftest.py` to register `EncapsulateNDArray` for array-expr mode
 
 ### Stream I: Empty Chunk nanmin/nanmax (4 tests) 🟡
 Handle empty chunks in nanmin/nanmax.
