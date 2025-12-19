@@ -863,7 +863,6 @@ def test_histogram_bin_range_raises(bins, hist_range):
 @pytest.mark.parametrize("weighted", [True, False])
 @pytest.mark.parametrize("non_delayed_i", [None, 0])
 @pytest.mark.parametrize("delay_n_bins", [False, True])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_delayed_range(density, weighted, non_delayed_i, delay_n_bins):
     n = 100
     v = np.random.default_rng().random(n)
@@ -898,7 +897,6 @@ def test_histogram_delayed_range(density, weighted, non_delayed_i, delay_n_bins)
 
 @pytest.mark.parametrize("density", [True, False])
 @pytest.mark.parametrize("weighted", [True, False])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_histogram_delayed_bins(density, weighted):
     n = 100
     v = np.random.default_rng().random(n)
