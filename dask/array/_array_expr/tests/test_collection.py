@@ -18,7 +18,6 @@ def arr():
     return da.random.random((10, 10), chunks=(5, 6))
 
 
-@pytest.mark.array_expr
 @pytest.mark.parametrize(
     "op",
     [
@@ -42,14 +41,12 @@ def test_arithmetic_ops(arr, op):
     assert_eq(result, expected)
 
 
-@pytest.mark.array_expr
 def test_rechunk(arr):
     result = arr.rechunk((7, 3))
     expected = arr.compute()
     assert_eq(result, expected)
 
 
-@pytest.mark.array_expr
 def test_blockwise():
     x = da.random.random((10, 10), chunks=(5, 5))
     z = da.blockwise(operator.add, "ij", x, "ij", 100, None, dtype=x.dtype)
@@ -108,7 +105,6 @@ def test_from_array():
     assert d.chunks == ((5, 5), (5, 5))
 
 
-@pytest.mark.array_expr
 def test_is_dask_collection_doesnt_materialize():
     class ArrayTest(Array):
         def __dask_graph__(self):

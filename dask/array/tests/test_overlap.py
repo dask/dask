@@ -42,8 +42,6 @@ else:
 
 from dask.array.utils import assert_eq, same_keys
 
-pytestmark = pytest.mark.normal_and_array_expr
-
 
 def test_overlap_internal():
     x = np.arange(64).reshape((8, 8))
