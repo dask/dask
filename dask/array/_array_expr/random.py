@@ -11,10 +11,10 @@ import numpy as np
 
 from dask._collections import new_collection
 from dask._task_spec import TaskRef
-from dask.array._array_expr._collection import Array, asarray
-from dask.array._array_expr._expr import ArrayExpr
+from dask.array._array_expr._collection import Array
 from dask.array._array_expr._io import IO
 from dask.array.backends import array_creation_dispatch
+from dask.array._array_expr.core._conversion import asarray
 from dask.array.core import broadcast_shapes, normalize_chunks
 from dask.array.creation import arange
 from dask.array.utils import asarray_safe
@@ -128,42 +128,20 @@ class Generator:
         shuffle=True,
         chunks="auto",
     ):
-        # Keep original a and p for expression creation
-        original_a = a
-        original_p = p
         (
-            a,
+            a_val,
+            a_expr,
             size,
             replace,
-            p,
+            p_expr,
             axis,
             chunks,
             meta,
-            dependencies,
         ) = _choice_validate_params(self, a, size, replace, p, axis, chunks)
-
-        # Handle int vs array case for a
-        if isinstance(original_a, Integral):
-            array_arg = original_a
-        else:
-            # For array input, pass the rechunked expression
-            arr = asarray(original_a)
-            arr = arr.rechunk(arr.shape)
-            array_arg = arr._expr
-
-        # Handle array case for p
-        if original_p is not None and hasattr(original_p, '__dask_keys__'):
-            # p is a dask array, convert to expression
-            p_arr = asarray(original_p)
-            p_arr = p_arr.rechunk(p_arr.shape)
-            p_arg = p_arr._expr
-        else:
-            # p is None or a numpy array (already converted by validation)
-            p_arg = original_p
 
         return new_collection(
             RandomChoiceGenerator(
-                array_arg, chunks, meta, self._bit_generator, replace, p_arg, axis, shuffle
+                a_val, a_expr, chunks, meta, self._bit_generator, replace, p_expr, axis, shuffle
             )
         )
 
@@ -558,41 +536,19 @@ class RandomState:
 
         @derived_from(np.random.RandomState, skipblocks=1)
         def choice(self, a, size=None, replace=True, p=None, chunks="auto"):
-            # Keep original a and p for expression creation
-            original_a = a
-            original_p = p
             (
-                a,
+                a_val,
+                a_expr,
                 size,
                 replace,
-                p,
+                p_expr,
                 axis,  # np.random.RandomState.choice does not use axis
                 chunks,
                 meta,
-                dependencies,
             ) = _choice_validate_params(self, a, size, replace, p, 0, chunks)
 
-            # Handle int vs array case for a
-            if isinstance(original_a, Integral):
-                array_arg = original_a
-            else:
-                # For array input, pass the rechunked expression
-                arr = asarray(original_a)
-                arr = arr.rechunk(arr.shape)
-                array_arg = arr._expr
-
-            # Handle array case for p
-            if original_p is not None and hasattr(original_p, '__dask_keys__'):
-                # p is a dask array, convert to expression
-                p_arr = asarray(original_p)
-                p_arr = p_arr.rechunk(p_arr.shape)
-                p_arg = p_arr._expr
-            else:
-                # p is None or a numpy array (already converted by validation)
-                p_arg = original_p
-
             return new_collection(
-                RandomChoice(array_arg, chunks, meta, self._numpy_state, replace, p_arg)
+                RandomChoice(a_val, a_expr, chunks, meta, self._numpy_state, replace, p_expr)
             )
 
     @derived_from(np.random.RandomState, skipblocks=1)
@@ -806,11 +762,14 @@ def _rng_from_bitgen(bitgen):
 
 
 def _shuffle(bit_generator, x, axis=0):
+    """Shuffle array in place and advance bit generator state."""
     state_data = bit_generator.state
-    bit_generator = type(bit_generator)()
-    bit_generator.state = state_data
-    state = _rng_from_bitgen(bit_generator)
-    return state.shuffle(x, axis=axis)
+    new_bitgen = type(bit_generator)()
+    new_bitgen.state = state_data
+    state = _rng_from_bitgen(new_bitgen)
+    state.shuffle(x, axis=axis)
+    # Copy advanced state back to original so subsequent calls get different results
+    bit_generator.state = new_bitgen.state
 
 
 def _spawn_bitgens(bitgen, n_bitgens):
@@ -848,7 +807,10 @@ def _choice_rs(state_data, a, size, replace, p):
 
 
 def _choice_validate_params(state, a, size, replace, p, axis, chunks):
-    dependencies = []
+    """Validate and normalize parameters for choice.
+
+    Returns expressions for array/p (or int/None) so they participate in lowering.
+    """
     # Normalize and validate `a`
     if isinstance(a, Integral):
         if isinstance(state, Generator):
@@ -867,6 +829,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
         len_a = a
         if a < 0:
             raise ValueError("a must be greater than 0")
+        a_expr = None  # No expression for int a
     else:
         a = asarray(a)
         a = a.rechunk(a.shape)
@@ -874,10 +837,10 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
         if a.ndim != 1:
             raise ValueError("a must be one dimensional")
         len_a = len(a)
-        dependencies.append(a)
-        a = a.__dask_keys__()[0]
+        a_expr = a.expr  # Store expression so it gets lowered
 
     # Normalize and validate `p`
+    p_expr = None
     if p is not None:
         if not isinstance(p, Array):
             # If p is not a dask array, first check the sum is close
@@ -894,8 +857,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
         if len(p) != len_a:
             raise ValueError("a and p must have the same size")
 
-        dependencies.append(p)
-        p = p.__dask_keys__()[0]
+        p_expr = p.expr  # Store expression so it gets lowered
 
     if size is None:
         size = ()
@@ -914,7 +876,9 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
         )
         raise NotImplementedError(err_msg)
 
-    return a, size, replace, p, axis, chunks, meta, dependencies
+    # For int a, return the int value; for array a, return None (use a_expr)
+    a_val = a if isinstance(a, Integral) else None
+    return a_val, a_expr, size, replace, p_expr, axis, chunks, meta
 
 
 def _wrap_func(
@@ -922,6 +886,19 @@ def _wrap_func(
 ):
     if size is not None and not isinstance(size, (tuple, list)):
         size = (size,)
+
+    # If size is None, infer from broadcast shape of array arguments
+    if size is None:
+        shapes = []
+        for arg in args:
+            if isinstance(arg, (np.ndarray, Array)) and arg.shape:
+                shapes.append(arg.shape)
+        for v in kwargs.values():
+            if isinstance(v, (np.ndarray, Array)) and v.shape:
+                shapes.append(v.shape)
+        if shapes:
+            size = np.broadcast_shapes(*shapes)
+
     return new_collection(
         Random(rng, funcname, size, chunks, extra_chunks, args, kwargs)
     )
@@ -1020,24 +997,39 @@ class Random(IO):
         bitgens, name, sizes, gen, func_applier = self._info
         size = self.operand("size")
         meta_size = (0,) * len(size) if size is not None else ()
+
+        # Convert array arguments to scalars for meta computation
+        def to_scalar(x):
+            if isinstance(x, Array):
+                # Dask array - use dtype to create a scalar
+                return x.dtype.type(1)
+            elif isinstance(x, np.ndarray):
+                # Numpy array
+                return x.flat[0]
+            return x
+
+        meta_args = tuple(to_scalar(arg) for arg in self.args)
+        meta_kwargs = {k: to_scalar(v) for k, v in self.kwargs.items()}
+
         return func_applier(
             gen,
             self.distribution,
             bitgens[0],
             meta_size,
-            self.args,
-            self.kwargs,
+            meta_args,
+            meta_kwargs,
         )
 
 
 class RandomChoice(IO):
     _parameters = [
-        "array",
+        "a_val",        # int value of a (or None if a is an array)
+        "a_expr",       # expression for a (or None if a is an int)
         "chunks",
         "_meta",
         "_state",
         "replace",
-        "p",
+        "p_expr",       # expression for p (or None)
         "axis",
         "shuffle",
     ]
@@ -1060,40 +1052,33 @@ class RandomChoice(IO):
     def _meta(self):
         return self.operand("_meta")
 
+    # No custom dependencies() needed - base class finds Expr operands automatically
+    # (a_expr and p_expr are included when they're expressions, excluded when None)
+
+    @property
+    def _a_arg(self):
+        """Value to pass to choice: int or TaskRef to single-chunk array."""
+        if self.a_val is not None:
+            return self.a_val
+        return TaskRef((self.a_expr._name, 0))
+
+    @property
+    def _p_arg(self):
+        """Value to pass to choice: None or TaskRef to single-chunk array."""
+        if self.p_expr is None:
+            return None
+        return TaskRef((self.p_expr._name, 0))
+
     def _layer(self) -> dict:
-        # Handle both int and ArrayExpr cases for array
-        if isinstance(self.array, ArrayExpr):
-            # For array input, use TaskRef to the single rechunked block
-            array_ref = TaskRef((self.array._name,) + (0,) * self.array.ndim)
-        else:
-            # For int input, use directly
-            array_ref = self.array
-
-        # Handle ArrayExpr case for p
-        if isinstance(self.p, ArrayExpr):
-            p_ref = TaskRef((self.p._name,) + (0,) * self.p.ndim)
-        else:
-            p_ref = self.p
-
-        # Generate keys using product of chunk ranges
-        chunk_ranges = [range(len(c)) for c in self.chunks]
-        keys = [(self._name,) + idx for idx in product(*chunk_ranges)]
+        keys = product([self._name], *[range(len(bd)) for bd in self.chunks])
         return {
-            k: (_choice_rs, state, array_ref, size, self.replace, p_ref)
+            k: (_choice_rs, state, self._a_arg, size, self.replace, self._p_arg)
             for k, state, size in zip(keys, self.state_data, self.sizes)
         }
 
-    @property
-    def _dependencies(self):
-        deps = []
-        if isinstance(self.array, ArrayExpr):
-            deps.append(self.array)
-        if isinstance(self.p, ArrayExpr):
-            deps.append(self.p)
-        return deps
-
 
 class RandomChoiceGenerator(RandomChoice):
+    # Keep axis and shuffle as required parameters (no defaults)
     _defaults = {}
 
     @cached_property
@@ -1101,31 +1086,15 @@ class RandomChoiceGenerator(RandomChoice):
         return _spawn_bitgens(self._state, len(self.sizes))
 
     def _layer(self) -> dict:
-        # Handle both int and ArrayExpr cases for array
-        if isinstance(self.array, ArrayExpr):
-            # For array input, use TaskRef to the single rechunked block
-            array_ref = TaskRef((self.array._name,) + (0,) * self.array.ndim)
-        else:
-            # For int input, use directly
-            array_ref = self.array
-
-        # Handle ArrayExpr case for p
-        if isinstance(self.p, ArrayExpr):
-            p_ref = TaskRef((self.p._name,) + (0,) * self.p.ndim)
-        else:
-            p_ref = self.p
-
-        # Generate keys using product of chunk ranges
-        chunk_ranges = [range(len(c)) for c in self.chunks]
-        keys = [(self._name,) + idx for idx in product(*chunk_ranges)]
+        keys = product([self._name], *[range(len(bd)) for bd in self.chunks])
         return {
             k: (
                 _choice_rng,
                 bitgen,
-                array_ref,
+                self._a_arg,
                 size,
                 self.replace,
-                p_ref,
+                self._p_arg,
                 self.axis,
                 self.shuffle,
             )

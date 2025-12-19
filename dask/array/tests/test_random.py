@@ -389,11 +389,7 @@ def test_names():
     assert len(key_split(name)) < 10
 
 
-def test_permutation(generator_class, request):
-    if generator_class is da.random.default_rng and da._array_expr_enabled():
-        request.applymarker(
-            pytest.mark.xfail(reason="permutation not fully implemented for array-expr with default_rng")
-        )
+def test_permutation(generator_class):
     x = da.arange(12, chunks=3)
     y = generator_class().permutation(x)
 

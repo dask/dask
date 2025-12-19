@@ -31,6 +31,11 @@ OptimizerStage: TypeAlias = Literal[
 
 
 def _unpack_collections(o):
+    """Unwrap collections to their underlying expressions.
+
+    If a collection (e.g., Array, DataFrame) has an `.expr` attribute,
+    extract it.
+    """
     from dask.delayed import Delayed
 
     if isinstance(o, Expr):
@@ -38,8 +43,8 @@ def _unpack_collections(o):
 
     if hasattr(o, "expr") and not isinstance(o, Delayed):
         return o.expr
-    else:
-        return o
+
+    return o
 
 
 class Expr:
