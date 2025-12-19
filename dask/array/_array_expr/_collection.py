@@ -157,6 +157,16 @@ class Array(DaskMethodsMixin):
         return self.expr.size
 
     @property
+    def nbytes(self) -> T_IntOrNaN:
+        """Number of bytes in array"""
+        return self.size * self.dtype.itemsize
+
+    @property
+    def itemsize(self) -> int:
+        """Length of one array element in bytes"""
+        return self.dtype.itemsize
+
+    @property
     def name(self):
         return self.expr.name
 
@@ -170,6 +180,24 @@ class Array(DaskMethodsMixin):
                 "Use a.any() or a.all()."
             )
         return bool(self.compute())
+
+    def _scalarfunc(self, cast_type):
+        if self.size > 1:
+            raise TypeError("Only length-1 arrays can be converted to Python scalars")
+        else:
+            return cast_type(self.compute().item())
+
+    def __int__(self):
+        return self._scalarfunc(int)
+
+    def __float__(self):
+        return self._scalarfunc(float)
+
+    def __complex__(self):
+        return self._scalarfunc(complex)
+
+    def __index__(self):
+        return self._scalarfunc(operator.index)
 
     def __array__(self, dtype=None, copy=None, **kwargs):
         x = self.compute()
@@ -1140,6 +1168,55 @@ class Array(DaskMethodsMixin):
         from dask.array._array_expr._ufunc import clip
 
         return clip(self, min, max)
+
+    def view(self, dtype=None, order="C"):
+        """Get a view of the array as a new data type
+
+        Parameters
+        ----------
+        dtype:
+            The dtype by which to view the array.
+            The default, None, results in the view having the same data-type
+            as the original array.
+        order: string
+            'C' or 'F' (Fortran) ordering
+
+        This reinterprets the bytes of the array under a new dtype.  If that
+        dtype does not have the same size as the original array then the shape
+        will change.
+
+        Beware that both numpy and dask.array can behave oddly when taking
+        shape-changing views of arrays under Fortran ordering.  Under some
+        versions of NumPy this function will fail when taking shape-changing
+        views of Fortran ordered arrays if the first dimension has chunks of
+        size one.
+        """
+        if dtype is None:
+            dtype = self.dtype
+        else:
+            dtype = np.dtype(dtype)
+        mult = self.dtype.itemsize / dtype.itemsize
+
+        def _ensure_int(f):
+            i = int(f)
+            if i != f:
+                raise ValueError(f"Could not coerce {f:f} to integer")
+            return i
+
+        if order == "C":
+            chunks = self.chunks[:-1] + (
+                tuple(_ensure_int(c * mult) for c in self.chunks[-1]),
+            )
+        elif order == "F":
+            chunks = (
+                tuple(_ensure_int(c * mult) for c in self.chunks[0]),
+            ) + self.chunks[1:]
+        else:
+            raise ValueError("Order must be one of 'C' or 'F'")
+
+        return self.map_blocks(
+            chunk.view, dtype, order=order, dtype=dtype, chunks=chunks
+        )
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())

@@ -462,8 +462,7 @@ def test_numpy_asarray_dtype(asarray):
         ),
     ],
 )
-@pytest.mark.parametrize("chunks", [5, 10])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="asarray copy behavior differs for array-expr", strict=False)
+@pytest.mark.parametrize("chunks", [5, pytest.param(10, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="single chunk compute returns reference", strict=False))])
 def test_numpy_asarray_copy_true(asarray, chunks):
     """Test np.*array(x, copy=True)"""
     x = da.asarray(np.arange(10), chunks=chunks)
@@ -521,8 +520,7 @@ def test_numpy_asarray_copy_false(asarray, chunks):
         ),
     ],
 )
-@pytest.mark.parametrize("chunks", [5, 10])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="asarray copy behavior differs for array-expr", strict=False)
+@pytest.mark.parametrize("chunks", [5, pytest.param(10, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="single chunk compute returns reference", strict=False))])
 def test_numpy_asarray_copy_none(asarray, chunks):
     """Test np.*array(x, copy=None)"""
     x = da.asarray(np.arange(10), chunks=chunks)
@@ -534,8 +532,7 @@ def test_numpy_asarray_copy_none(asarray, chunks):
 
 
 @pytest.mark.parametrize("asarray", [np.asarray, np.asanyarray, np.array])
-@pytest.mark.parametrize("chunks", [5, 10])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="asarray copy behavior differs for array-expr", strict=False)
+@pytest.mark.parametrize("chunks", [5, pytest.param(10, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="single chunk compute returns reference", strict=False))])
 def test_numpy_asarray_copy_default(asarray, chunks):
     """Test that np.*array() never returns an object that shares
     a buffer with the dask graph or a process-local Worker
@@ -2043,7 +2040,6 @@ def test_blockdims_from_blockshape():
     assert blockdims_from_blockshape((np.int8(10),), (5,)) == ((5, 5),)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_coerce():
     d0 = da.from_array(np.array(1), chunks=(1,))
     d1 = da.from_array(np.array([1]), chunks=(1,))
@@ -2824,13 +2820,11 @@ def test_size():
     assert isinstance(x.size, int)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_nbytes():
     x = da.ones((10, 2), chunks=(3, 1))
     assert x.nbytes == np.array(x).nbytes
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_itemsize():
     x = da.ones((10, 2), chunks=(3, 1))
     assert x.itemsize == 8
@@ -3019,7 +3013,6 @@ def test_array_copy_noop(chunks):
     assert y.name == y_c.name
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="raises TypeError instead of ValueError")
 def test_from_array_dask_array():
     x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=(1, 2))
@@ -3593,7 +3586,6 @@ def test_to_npy_stack():
         assert_eq(d, e)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_view needs work", strict=False)
 def test_view():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(2, 3))
@@ -3616,7 +3608,6 @@ def test_view():
         d.view("i4", order="asdf")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_view needs work", strict=False)
 def test_view_fortran():
     x = np.asfortranarray(np.arange(64).reshape((8, 8)))
     d = da.from_array(x, chunks=(2, 3))
@@ -4412,7 +4403,7 @@ def test_setitem_extended_API_1d(index, value):
         [([True, False, False, False, True, False], 2), -1],
         [(3, [True, True, False, True, True, False, True, False, True, True]), -1],
         [(np.array([False, False, True, True, False, False]), slice(5, 7)), -1],
-        pytest.param(
+        [
             (
                 4,
                 da.from_array(
@@ -4420,9 +4411,8 @@ def test_setitem_extended_API_1d(index, value):
                 ),
             ),
             -1,
-            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="setitem with dask boolean array", strict=False),
-        ),
-        pytest.param(
+        ],
+        [
             (
                 slice(2, 4),
                 da.from_array(
@@ -4430,8 +4420,7 @@ def test_setitem_extended_API_1d(index, value):
                 ),
             ),
             [[-100, -101, -102, -103], [-200, -201, -202, -203]],
-            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="setitem with dask boolean array", strict=False),
-        ),
+        ],
         [slice(5, None, 2), -99],
         [slice(5, None, 2), range(1, 11)],
         [slice(1, None, -2), -98],
@@ -4891,7 +4880,6 @@ def test_empty_chunks_in_array_len():
 
 
 @pytest.mark.parametrize("dtype", [None, [("a", "f4"), ("b", object)]])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_meta(dtype):
     a = da.zeros((1,), chunks=(1,))
     assert a._meta.dtype == a.dtype
