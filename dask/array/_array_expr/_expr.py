@@ -173,6 +173,19 @@ class ArrayExpr(SingletonExpr):
             return self
 
         from dask.array._array_expr._rechunk import Rechunk
+        from dask.array.core import normalize_chunks
+
+        # Pre-resolve chunks="auto" to avoid singleton caching issues
+        # (config-dependent values would otherwise produce same expression)
+        # Only handle the simple case where chunks is exactly "auto" string
+        if chunks == "auto":
+            chunks = normalize_chunks(
+                chunks,
+                self.shape,
+                limit=block_size_limit,
+                dtype=self.dtype,
+                previous_chunks=self.chunks,
+            )
 
         result = Rechunk(self, chunks, threshold, block_size_limit, balance, method)
         # Ensure that chunks are compatible

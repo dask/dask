@@ -302,7 +302,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | ~~AC: Masked tensordot~~ | 4 | 🟡 Medium | **DONE** - explicit meta in tensordot |
 | ~~S: Setitem edge~~ | 1 | 🟡 Medium | **DONE** - all 18 sub-tests pass |
 | ~~AD: Masked average~~ | 2 | 🟡 Medium | **DONE** - late import of broadcast_to |
-| X: Rechunk auto | 2 | 🟢 Low | May be test adjustment |
+| ~~X: Rechunk auto~~ | 2 | 🟢 Low | **DONE** - pre-resolve auto chunks |
 | Y: Random broadcast | 2 | 🟡 Low | Niche use case |
 | W: Blockwise concat | 1 | 🟡 Low | Niche use case |
 | AE: Linspace scalars | 2 | 🟡 Low | Dask scalar inputs |
@@ -311,12 +311,12 @@ These work streams can be executed in parallel by agents. Each is independent.
 | AF: Overlap | 3 | 🔴 Deferred | Needs fusion/push |
 | Z: Misc | ~27 | 🟢 Varies | Mixed bag |
 
-**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V
+**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V, X
 
 **Recommended next targets:**
-1. Stream X (rechunk auto) - 2 tests
-2. Stream Y (random broadcast) - 2 tests
-3. Stream W (blockwise concat) - 1 test
+1. Stream Y (random broadcast) - 2 tests
+2. Stream W (blockwise concat) - 1 test
+3. Stream AE (linspace scalars) - 2 tests
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -636,15 +636,17 @@ The `concatenate=True` parameter in blockwise.
 
 **Notes:** When `concatenate=True`, blockwise should concatenate chunks along specified axes before applying the function.
 
-### Stream X: Rechunk Auto (2 tests) 🟢
+### Stream X: Rechunk Auto (2 tests) 🟢 **DONE**
 Automatic chunk size calculation differences.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_rechunk_auto_image_stack[100] | Different chunk sizes | ⏳ |
-| test_rechunk_auto_image_stack[1000] | Different chunk sizes | ⏳ |
+| test_rechunk_auto_image_stack[100] | Different chunk sizes | ✅ |
+| test_rechunk_auto_image_stack[1000] | Different chunk sizes | ✅ |
 
-**Notes:** Array-expr computes slightly different chunk sizes for `chunks="auto"`. May just need test adjustment if results are still valid.
+**Root Cause:** The singleton pattern was caching `Rechunk` expressions by name. When `chunks="auto"`, the same expression name was produced regardless of the config value for `array.chunk-size`, causing cached results from one config to be reused for another.
+
+**Fix:** Pre-resolve `chunks="auto"` in `ArrayExpr.rechunk()` before creating the `Rechunk` expression. This ensures different config values produce different expressions with different names.
 
 ### Stream Y: Random Broadcasting (2 tests) 🟡
 Random arrays with broadcasted shapes.
