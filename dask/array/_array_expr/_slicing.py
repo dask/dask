@@ -352,14 +352,15 @@ def slice_slices_and_integers(x, index, allow_getitem_optimization=False):
 
 
 def take(x, index, axis=0):
-    from dask.array._array_expr._collection import Array
+    from dask.base import is_dask_collection
 
     if not np.isnan(x.chunks[axis]).any():
         from dask.array._array_expr._shuffle import _shuffle
         from dask.array.utils import arange_safe, asarray_safe
 
         # No-op check only for numpy arrays (dask array comparison triggers warnings)
-        if not isinstance(index, Array):
+        # Use is_dask_collection to catch both array-expr and legacy dask Arrays
+        if not is_dask_collection(index):
             arange = arange_safe(np.sum(x.chunks[axis]), like=index)
             if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
                 return x

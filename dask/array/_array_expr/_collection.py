@@ -352,6 +352,7 @@ class Array(DaskMethodsMixin):
         from dask.array.slicing import normalize_index
 
         index2 = normalize_index(index, self.shape)
+
         dependencies = {self.name}
         for i in index2:
             if isinstance(i, Array):
@@ -394,8 +395,8 @@ class Array(DaskMethodsMixin):
         ):
             key = (key,)
 
-        # Use "where" method for boolean mask case
-        if isinstance(key, Array) and key.dtype == bool:
+        # Use "where" method for any dask Array key (matches legacy behavior)
+        if isinstance(key, Array):
             from dask.array._array_expr._broadcast import broadcast_to
             from dask.array._array_expr.routines import where
 

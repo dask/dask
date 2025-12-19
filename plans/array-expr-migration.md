@@ -305,7 +305,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | ~~P: Int dask indexing~~ | ~~4~~ | ~~🟢 Medium~~ | **DONE** (20/20 pass, 1 xfail for dict constructor) |
 | ~~Q: from_array features~~ | ~~6~~ | ~~🟡 Medium~~ | **DONE** (5/6 pass, 1 xfail for Task spec data_producer) |
 | ~~O: Unknown chunks~~ | ~~6~~ | ~~🟡 Medium~~ | **DONE** |
-| S: Setitem edge | 3 | 🟡 Medium | Nearly complete (67/68 pass) |
+| S: Setitem edge | 3 | 🟡 Medium | **PARTIAL** (4/5 pass, 1 needs reimplementation) |
 | ~~R: Boolean mask unknown~~ | ~~4~~ | ~~🟡 Medium~~ | **DONE** (+3 bonus tests fixed) |
 | X: Rechunk auto | 2 | 🟢 Low | May be test adjustment |
 | ~~U: Array pickling~~ | ~~2~~ | ~~🟢 Low~~ | **DONE** (fixed by Stream R) |
@@ -315,7 +315,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | V: Fusion | 4 | 🔴 Deferred | Architectural change |
 | Z: Misc | ~36 | 🟢 Varies | Mixed bag (-1 fixed by Stream R) |
 
-**Recommended next targets:** Stream M (store completeness), Stream O (unknown chunks), Stream S (setitem edge cases)
+**Recommended next targets:** Stream M (store completeness), Stream S (setitem edge remaining test)
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -560,16 +560,23 @@ Boolean masking when mask has unknown shape.
 - `test_array_picklable` (2 tests) now pass due to from_delayed fix
 - `test_delayed_array_key_hygeine` now passes due to from_delayed fix
 
-### Stream S: Setitem Edge Cases (3 tests) 🟡
+### Stream S: Setitem Edge Cases (3 tests) 🟡 **PARTIAL**
 Remaining setitem issues.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_setitem_extended_API_2d_rhs_func_of_lhs | RHS depends on LHS | ⏳ |
-| test_setitem_with_different_chunks_preserves_shape | 2 variants | ⏳ |
-| test_setitem_extended_API_2d_mask (FAILED) | RuntimeWarning in numpy | 🔴 |
+| test_setitem_extended_API_2d_rhs_func_of_lhs | RHS depends on LHS, dask array indices | ⏳ |
+| test_setitem_with_different_chunks_preserves_shape | 2 variants | ✅ |
+| test_setitem_extended_API_2d_mask | RuntimeWarning in numpy | ✅ |
 
-**Notes:** 67/68 setitem tests pass. The FAILED test has a numpy RuntimeWarning about invalid cast.
+**Implementation (4/5 tests passing):**
+- Fixed `take()` in `_slicing.py` to use `is_dask_collection` instead of `isinstance(index, Array)` to catch both legacy and array-expr Arrays in the no-op check.
+- Fixed `__setitem__` to handle any dask Array key (not just boolean dtype) via the `where` path, matching legacy behavior.
+- Moved `persist()` inside warning filter in test for masked array dtype casting warning (numpy issue).
+
+**Remaining work:**
+- `test_setitem_extended_API_2d_rhs_func_of_lhs` needs native array-expr reimplementation of `setitem_array`. The current implementation creates legacy Arrays internally via `concatenate_array_chunks`, which cannot be properly integrated with array-expr operations. A clean solution requires reimplementing the value slicing logic using array-expr constructs.
+- Related: `test_index_with_int_dask_array_nocompute` uses legacy Array constructor directly.
 
 ### Stream T: Graph Construction (5 tests) 🔴
 Direct graph/dict construction with Array class.
