@@ -268,18 +268,23 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
 
 ### Current Test Status (December 2025)
-- **3645 passed**, 211 xfailed, 24 xpassed, 612 skipped
-- 3 flaky failures (intermittent, likely timing-related)
+- **3852 passed**, 97 xfailed, 1 failed, 611 skipped
+- Significant progress from earlier (was 211 xfails)
 
-**XFails by file:**
-- `test_array_core.py`: 76 xfails
-- `test_ufunc.py`: 39 xfails
-- `test_reductions.py`: 25 xfails
-- `test_routines.py`: 21 xfails
-- `test_array_function.py`: 15 xfails
-- `test_slicing.py`: 14 xfails
-- `test_creation.py`: 9 xfails
-- Other files: ~12 xfails combined
+**XFails by category (97 total):**
+- UFunc dtype parameter: 16 xfails
+- Store advanced features: 6 xfails
+- Unknown chunks handling: 6 xfails
+- from_array features: 6 xfails
+- Graph construction: 5 xfails
+- Fusion (architectural): 4 xfails
+- Boolean mask unknown shapes: 4 xfails
+- Integer dask array indexing: 4 xfails
+- Setitem edge cases: 3 xfails
+- Rechunk auto: 2 xfails
+- Random broadcasting: 2 xfails
+- Array pickling: 2 xfails
+- Misc single tests: ~37 xfails
 
 ## Remaining Work Streams (Parallelizable)
 
@@ -289,6 +294,27 @@ These work streams can be executed in parallel by agents. Each is independent.
 - 🟢 Quick Win - Simple, low-risk
 - 🟡 Medium - Moderate complexity
 - 🔴 Complex - Architectural changes needed
+
+### Priority Summary for New Streams
+
+| Stream | Tests | Priority | Notes |
+|--------|-------|----------|-------|
+| N: UFunc dtype | 16 | 🟡 High | Single fix unlocks many tests |
+| M: Store advanced | 6 | 🟡 High | Practical importance |
+| P: Int dask indexing | 4 | 🟢 Medium | Nearly complete (17/20 pass) |
+| Q: from_array features | 6 | 🟡 Medium | API completeness |
+| O: Unknown chunks | 6 | 🟡 Medium | Edge case handling |
+| S: Setitem edge | 3 | 🟡 Medium | Nearly complete (67/68 pass) |
+| R: Boolean mask unknown | 4 | 🟡 Medium | Depends on unknown chunks |
+| X: Rechunk auto | 2 | 🟢 Low | May be test adjustment |
+| U: Array pickling | 2 | 🟢 Low | May be test pattern |
+| Y: Random broadcast | 2 | 🟡 Low | Niche use case |
+| W: Blockwise concat | 1 | 🟡 Low | Niche use case |
+| T: Graph construction | 5 | 🔴 Low | Different paradigm |
+| V: Fusion | 4 | 🔴 Deferred | Architectural change |
+| Z: Misc | ~37 | 🟢 Varies | Mixed bag |
+
+**Recommended next targets:** Stream N (16 tests with one fix), Stream M (store completeness), Stream P (nearly done)
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -438,6 +464,191 @@ Smaller independent fixes.
 - Added Array type check to vstack/hstack/dstack in `stacking/_simple.py`
 - Fixed asarray/asanyarray `like` kwarg by using `asarray_safe`/`asanyarray_safe` with `partial`
 - Updated tests to be mode-agnostic where appropriate
+
+### Stream M: Store Advanced Features (6 tests) 🟡
+Store with complex options like delayed targets, regions, compute=False.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_store_delayed_target | Delayed objects as targets | ⏳ |
+| test_store_regions | Region slicing for partial writes | ⏳ |
+| test_store_compute_false | compute=False return delayed | ⏳ |
+| test_store_locks | Lock handling during store | ⏳ |
+| test_store_locks_failure_lock_released | Lock release on failure | ⏳ |
+| test_store_method_return | return_stored=True | ⏳ |
+
+**Notes:** Basic store works. These tests require handling delayed targets, region slicing, and return_stored cases.
+
+### Stream N: UFunc dtype Parameter (16 tests) 🟡
+The `dtype=` parameter in ufunc calls when combined with `where=`.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_ufunc_where[*-f8] | 16 variants with dtype='f8' | ⏳ |
+
+**Notes:** The `where` parameter works, but explicit `dtype` casting fails. Need to handle `dtype` in Elemwise when `where` is also specified.
+
+### Stream O: Unknown Chunks Handling (6 tests) 🟡
+Operations on arrays with NaN (unknown) chunk sizes.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_no_chunks | Direct graph construction with NaN chunks | ⏳ |
+| test_no_chunks_yes_chunks | Mixed known/unknown chunks | ⏳ |
+| test_no_chunks_slicing_2d | 2D slicing with unknown chunks | ⏳ |
+| test_raise_informative_errors_no_chunks | Error messages for unknown chunks | ⏳ |
+| test_slicing_and_unknown_chunks | Slicing with unknown chunks | ⏳ |
+| test_unknown_chunks_length_one | flatnonzero with unknown chunks | ⏳ |
+
+**Notes:** These tests construct arrays with `chunks=((np.nan, np.nan),)` directly. The array-expr Array constructor may need to accept this pattern.
+
+### Stream P: Integer Dask Array Indexing (4 tests) 🟢
+Indexing with dask arrays as indices.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_index_with_int_dask_array[x_chunks2-1] | Specific chunk configuration | ⏳ |
+| test_index_with_int_dask_array[x_chunks3-2] | Specific chunk configuration | ⏳ |
+| test_index_with_int_dask_array[x_chunks4-2] | Specific chunk configuration | ⏳ |
+| test_index_with_int_dask_array_nocompute | Indices should not be computed eagerly | ⏳ |
+
+**Notes:** 17 of 20 variants pass. Specific chunk configurations fail. May be related to how chunked indices interact with chunked data.
+
+### Stream Q: from_array Features (6 tests) 🟡
+Various from_array parameters and edge cases.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_from_array_with_lock | Lock parameter (2 variants) | ⏳ |
+| test_from_array_inline | inline_array parameter | ⏳ |
+| test_from_array_name | Custom name parameter | ⏳ |
+| test_from_array_raises_on_bad_chunks | Error on invalid chunks | ⏳ |
+| test_creation_data_producers | data_producer argument | ⏳ |
+
+**Notes:** Basic from_array works. These test specific parameters.
+
+### Stream R: Boolean Mask with Unknown Shapes (4 tests) 🟡
+Boolean masking when mask has unknown shape.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_boolean_mask_with_unknown_shape[shapes0] | from_delayed case | ⏳ |
+| test_boolean_mask_with_unknown_shape[shapes1] | from_delayed case | ⏳ |
+| test_boolean_mask_with_unknown_shape[shapes2] | Other case | ⏳ |
+| test_boolean_mask_with_unknown_shape[shapes3] | Other case | ⏳ |
+
+**Notes:** Boolean masking with known shapes works. These involve unknown shape arrays created via from_delayed or boolean indexing.
+
+### Stream S: Setitem Edge Cases (3 tests) 🟡
+Remaining setitem issues.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_setitem_extended_API_2d_rhs_func_of_lhs | RHS depends on LHS | ⏳ |
+| test_setitem_with_different_chunks_preserves_shape | 2 variants | ⏳ |
+| test_setitem_extended_API_2d_mask (FAILED) | RuntimeWarning in numpy | 🔴 |
+
+**Notes:** 67/68 setitem tests pass. The FAILED test has a numpy RuntimeWarning about invalid cast.
+
+### Stream T: Graph Construction (5 tests) 🔴
+Direct graph/dict construction with Array class.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_dont_fuse_outputs | Direct graph construction | ⏳ |
+| test_dont_dealias_outputs | Graph aliasing | ⏳ |
+| test_dask_layers | __dask_layers__() method | ⏳ |
+| test_chunks_error | from_array error checking | ⏳ |
+| test_constructor_plugin | Constructor plugin | ⏳ |
+
+**Notes:** These tests construct Array directly from dicts, which array-expr doesn't support in the same way. May need to create FromGraph expression or similar.
+
+### Stream U: Array Pickling (2 tests) 🟢
+Pickle serialization of arrays.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_array_picklable[array0] | Basic pickling | ⏳ |
+| test_array_picklable[array1] | Basic pickling | ⏳ |
+
+**Notes:** The test creates arrays via dict constructor. May pass if using standard creation functions.
+
+### Stream V: Fusion (4 tests) 🔴
+Blockwise fusion optimization.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_blockwise_fusion | Basic fusion | ⏳ (architectural) |
+| test_map_blocks_block_id_fusion | block_id fusion | ⏳ (architectural) |
+| test_trim_internal | Requires fusion | ⏳ (architectural) |
+| test_map_blocks_optimize_blockwise | 2 variants | ⏳ (architectural) |
+
+**Notes:** Fusion is not yet implemented in array-expr. This is a larger architectural change. Low priority for now.
+
+### Stream W: Blockwise concatenate (1 test) 🟡
+The `concatenate=True` parameter in blockwise.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_blockwise_concatenate | concatenate=True | ⏳ |
+
+**Notes:** When `concatenate=True`, blockwise should concatenate chunks along specified axes before applying the function.
+
+### Stream X: Rechunk Auto (2 tests) 🟢
+Automatic chunk size calculation differences.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_rechunk_auto_image_stack[100] | Different chunk sizes | ⏳ |
+| test_rechunk_auto_image_stack[1000] | Different chunk sizes | ⏳ |
+
+**Notes:** Array-expr computes slightly different chunk sizes for `chunks="auto"`. May just need test adjustment if results are still valid.
+
+### Stream Y: Random Broadcasting (2 tests) 🟡
+Random arrays with broadcasted shapes.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_array_broadcasting[RandomState] | RandomState with broadcasting | ⏳ |
+| test_array_broadcasting[default_rng] | default_rng with broadcasting | ⏳ |
+
+**Notes:** Random number generation mostly works. These test broadcasting of shape parameters.
+
+### Stream Z: Misc Single Tests (~37 tests) 🟢
+Various individual tests.
+
+| Test | Notes | Status |
+|------|-------|--------|
+| test_elemwise_on_scalars | 0-D dask scalars in elemwise | ⏳ |
+| test_matmul | Specific matmul issue | ⏳ |
+| test_astype_gh9316 | GitHub issue #9316 | ⏳ |
+| test_slicing_with_non_ndarrays | Custom types in slicing | ⏳ |
+| test_map_blocks3 | map_blocks edge case | ⏳ |
+| test_raise_on_bad_kwargs | from_array kwargs checking | ⏳ |
+| test_warn_bad_rechunking | Warning message | ⏳ |
+| test_map_blocks_delayed | Returns dict not HLG | ⏳ (by design) |
+| test_to_delayed_optimize_graph | Optimization | ⏳ |
+| test_index_array_with_array_2d | 2D array indexing | ⏳ |
+| test_index_array_with_array_3d_2d | Chunking alignment | ⏳ |
+| test_normalize_chunks_object_dtype | 2 variants | ⏳ |
+| test_pandas_from_dask_array | Pandas conversion | ⏳ |
+| test_partitions_indexer | .partitions property | ⏳ |
+| test_chunk_assignment_invalidates_cached_properties | Property caching | ⏳ |
+| test_delayed_array_key_hygeine | Key hygiene | ⏳ |
+| test_to_backend | Backend switching | ⏳ |
+| test_linspace | 2 variants - dask scalar inputs | ⏳ |
+| test_arange_cast_float_int_step | Float-to-int casting | ⏳ (by design) |
+| test_nan_full_like | 2 variants - unsigned int edge case | ⏳ |
+| test_like_forgets_graph | 2 remaining variants | ⏳ |
+| test_gufunc_chunksizes_adjustment | Array.copy | ⏳ |
+| test_cull | Graph culling | ⏳ |
+| test_positional_indexer_newaxis | Newaxis in indexer | ⏳ |
+| test_frompyfunc | Custom ufunc tokenization | ⏳ |
+| test_weighted_reduction | Weighted reductions | ⏳ |
+| test_select_broadcasting | Broadcasting in select() | ⏳ |
+| test_meta_from_array_type_inputs | meta_from_array | ⏳ |
+| test_assert_eq_scheduler | Test utility issue | ⏳ |
+| test_map_blocks_dataframe | DataFrame output | ⏳ |
 
 ## Migration Workflow
 
