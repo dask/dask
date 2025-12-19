@@ -876,7 +876,6 @@ def test_object_reduction(method):
 
 
 @pytest.mark.parametrize("func", ["nanmin", "nanmax"])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="empty chunk nanmin/nanmax not implemented for array-expr", strict=False)
 def test_empty_chunk_nanmin_nanmax(func):
     # see https://github.com/dask/dask/issues/8352
     x = np.arange(10).reshape(2, 5)
@@ -893,7 +892,6 @@ def test_empty_chunk_nanmin_nanmax(func):
 
 
 @pytest.mark.parametrize("func", ["nanmin", "nanmax"])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="empty chunk nanmin/nanmax not implemented for array-expr", strict=False)
 def test_empty_chunk_nanmin_nanmax_raise(func):
     # see https://github.com/dask/dask/issues/8352
     x = np.arange(10).reshape(2, 5)
