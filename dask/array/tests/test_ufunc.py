@@ -521,10 +521,6 @@ def test_dtype_kwarg(dt):
 @pytest.mark.parametrize("right_is_da", [False, True])
 @pytest.mark.parametrize("where_kind", [True, False, "numpy", "dask"])
 def test_ufunc_where(dtype, left_is_da, right_is_da, where_kind, request):
-    # In array-expr mode, dtype parameter not fully implemented
-    if da._array_expr_enabled():
-        if dtype is not None:
-            request.applymarker(pytest.mark.xfail(reason="elemwise dtype parameter not fully implemented for array-expr"))
     left = np.arange(12).reshape((3, 4))
     right = np.arange(4)
     out = np.zeros_like(left, dtype=dtype)
