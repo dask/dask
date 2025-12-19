@@ -893,7 +893,9 @@ if _array_expr_enabled():
         from dask.array._array_expr import linalg
 
         sys.modules["dask.array.linalg"] = linalg
-        ma = raise_not_implemented_error("ma")
+        from dask.array import ma
+
+        sys.modules["dask.array.ma"] = ma
         atop = raise_not_implemented_error("atop")
         from dask.array.chunk_types import register_chunk_type
         from dask.array._array_expr import from_delayed

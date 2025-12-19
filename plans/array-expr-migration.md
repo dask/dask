@@ -339,17 +339,22 @@ Output array pre-allocation for reductions.
 
 **Implementation:** Used `_handle_out` from `_blockwise_funcs.py` in `reduction()` and `_cumreduction_expr()` functions. This properly sets `out._expr = result._expr` for array-expr mode.
 
-### Stream F: setitem (7 tests) 🔴
+### Stream F: setitem (7 tests) 🟡 **IN PROGRESS**
 `__setitem__` implementation for array assignment.
 
-| Tests | Notes |
-|-------|-------|
-| test_setitem_masked | Masked assignment |
-| test_setitem_extended_API_2d_* | 2D setitem variants |
-| test_setitem_errs | Error handling |
-| test_setitem_bool_index_errs | Boolean index errors |
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_setitem_masked | Masked assignment | ✅ Fixed - exported da.ma module |
+| test_setitem_extended_API_2d_mask | 2D masked setitem | ⚠️ 1 variant fails - numpy RuntimeWarning |
+| test_setitem_errs | Error handling | ✅ Fixed - eager validation |
+| test_setitem_bool_index_errs | Boolean index errors | ✅ Fixed - eager validation |
+| test_setitem_extended_API_2d_rhs_func_of_lhs | RHS function of LHS | ⏳ Needs investigation |
 
-**Notes:** setitem is fundamentally imperative. Needs to create new expression with updated values.
+**Implementation:**
+- Fixed `da.ma` module export in array-expr `__init__.py`
+- Fixed `take()` function to handle dask array indices without warnings
+- Added eager validation in `__setitem__` using `parse_assignment_indices` to validate value shape vs implied shape before creating SetItem expression
+- 67/68 setitem tests now pass (excluding the numpy warning issue)
 
 ### Stream G: Histogram Delayed Inputs (20 tests) 🟢 ✅ DONE
 Histogram with delayed range and bins.

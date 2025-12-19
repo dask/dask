@@ -4279,7 +4279,6 @@ def test_setitem_1d():
     assert_eq(x, dx)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_masked():
     # Test np.ma.masked assignment to object-type arrays
     x = np.ma.array(["a", 1, 3.14], dtype=object)
@@ -4550,7 +4549,6 @@ def test_setitem_extended_API_2d_rhs_func_of_lhs():
         [(slice(1, 5, 2), [7, 5]), np.ma.masked_all((2, 2))],
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_extended_API_2d_mask(index, value):
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.data, chunks=(2, 3))
@@ -4581,7 +4579,6 @@ def test_setitem_on_read_only_blocks():
     assert_eq(dx[0, 0], 88.0)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_errs():
     x = da.ones((4, 4), chunks=(2, 2))
 
@@ -4674,7 +4671,6 @@ def test_setitem_errs():
 
 
 @pytest.mark.parametrize("idx_namespace", [np, da])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
 def test_setitem_bool_index_errs(idx_namespace):
     x = da.ones((3, 4), chunks=(2, 2))
     y = da.ones(4, chunks=2)
