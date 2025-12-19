@@ -75,11 +75,11 @@ def slice_with_int_dask_array(x, index):
         if isinstance(idx, Array) and idx.dtype.kind in "iu":
             if idx.ndim == 0:
                 idx = idx[np.newaxis]
-                x = slice_with_int_dask_array_on_axis(x, idx, out_axis, in_axis)
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
                 x = x[tuple(0 if i == out_axis else slice(None) for i in range(x.ndim))]
                 dropped_axis_cnt += 1
             elif idx.ndim == 1:
-                x = slice_with_int_dask_array_on_axis(x, idx, out_axis, in_axis)
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
                 out_index.append(slice(None))
             else:
                 raise NotImplementedError(
@@ -160,7 +160,7 @@ def normalize_index(idx, shape):
     return idx
 
 
-def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
+def slice_with_int_dask_array_on_axis(x, idx, axis):
     """Slice a ND dask array with a 1D dask arrays of ints along the given
     axis.
 
@@ -178,13 +178,14 @@ def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
         )
     x_axes = tuple(range(x.ndim))
     idx_axes = (x.ndim,)  # arbitrary index not already in x_axes
+    offset_axes = (axis,)
 
     # Calculate the offset at which each chunk starts along axis
     # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
     offset = np.roll(np.cumsum(np.asarray(x.chunks[axis], like=x._meta)), 1)
     offset[0] = 0
-    offset = ArrayOffsetDep(x.chunks, offset, in_axis)
-    # Define axis labels for blockwise
+    # ArrayOffsetDep needs 1D chunks matching x.chunks[axis], not full x.chunks
+    offset = ArrayOffsetDep((x.chunks[axis],), offset)
 
     p_axes = x_axes[: axis + 1] + idx_axes + x_axes[axis + 1 :]
     y_axes = x_axes[:axis] + idx_axes + x_axes[axis + 1 :]
@@ -198,7 +199,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
         idx,
         idx_axes,
         offset,
-        p_axes,
+        offset_axes,
         x_size=x.shape[axis],
         axis=axis,
         dtype=x.dtype,
@@ -223,15 +224,14 @@ def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
 
 
 class ArrayOffsetDep(ArrayBlockwiseDep):
-    def __init__(
-        self, chunks: tuple[tuple[int, ...], ...], values: np.ndarray | dict, axis: int
-    ):
+    """1D BlockwiseDep that provides chunk offset values."""
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...], values: np.ndarray | dict):
         super().__init__(chunks)
         self.values = values
-        self.axis = axis
 
     def __getitem__(self, idx: tuple):
-        return self.values[idx[self.axis]]
+        return self.values[idx[0]]
 
 
 def slice_array(x, index):
