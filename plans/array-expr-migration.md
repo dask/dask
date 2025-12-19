@@ -267,13 +267,151 @@ DASK_ARRAY__QUERY_PLANNING=True pytest -k {operation} -x
 grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
 
-### Current Test Failure Summary
-- `test_reductions.py`: 25 xfails (out=: 4, weights: 1, compute_chunk_sizes: 4, cumulative axis=None: 16)
-- `test_array_core.py`: ~157 xfails (block: 27, store: 12, vindex: 7, other: 111)
-- `test_routines.py`: ~115 xfails
-- `test_array_function.py`: ~30 xfails
-- `test_overlap.py`: ~5 xfails
-- `test_gufunc.py`: ~1 xfail
+### Current Test Status (December 2025)
+- **3645 passed**, 211 xfailed, 24 xpassed, 612 skipped
+- 3 flaky failures (intermittent, likely timing-related)
+
+**XFails by file:**
+- `test_array_core.py`: 76 xfails
+- `test_ufunc.py`: 39 xfails
+- `test_reductions.py`: 25 xfails
+- `test_routines.py`: 21 xfails
+- `test_array_function.py`: 15 xfails
+- `test_slicing.py`: 14 xfails
+- `test_creation.py`: 9 xfails
+- Other files: ~12 xfails combined
+
+## Remaining Work Streams (Parallelizable)
+
+These work streams can be executed in parallel by agents. Each is independent.
+
+**Priority Guide:**
+- 🟢 Quick Win - Simple, low-risk
+- 🟡 Medium - Moderate complexity
+- 🔴 Complex - Architectural changes needed
+
+### Stream A: Cleanup XPASSed Tests (24 tests) 🟢
+Tests that now pass but still have xfail markers. Just remove the markers.
+
+| Test File | Tests | Issue |
+|-----------|-------|-------|
+| test_creation.py | 3 | test_like_forgets_graph now passes |
+| test_slicing.py | 17 | test_index_with_int_dask_array (most variants pass) |
+| test_ufunc.py | 4 | test_ufunc_where with dtype=None passes |
+
+### Stream B: compute_chunk_sizes() (9 tests) 🟡
+Method to compute unknown chunk sizes after boolean indexing.
+
+| Tests | Notes |
+|-------|-------|
+| test_compute_chunk_sizes | Basic implementation |
+| test_compute_chunk_sizes_2d_array | 2D arrays |
+| test_compute_chunk_sizes_3d_array | 3D arrays |
+| test_compute_chunk_sizes_warning_fixes_* | 6 warning tests |
+
+**Implementation:** Add `compute_chunk_sizes()` method to Array class that computes chunk sizes by executing the graph.
+
+### Stream C: Cumulative Reduction axis=None (16 tests) 🔴
+cumsum/cumprod/nancumsum/nancumprod with axis=None.
+
+| Functions | Issue |
+|-----------|-------|
+| cumsum, cumprod, nancumsum, nancumprod | axis=None requires flatten + cumulative, then reshape |
+
+**Notes:** Currently fails due to HLG dependency issues when combining flatten with cumulative operations.
+
+### Stream D: UFunc where Parameter (24 tests) 🔴
+Array masks for ufunc `where=` parameter.
+
+| Issue | Tests |
+|-------|-------|
+| where=array mask | 24 tests (4 with dtype=None now pass) |
+
+**Notes:** `where=True` works; actual array masks fail in compute path. Requires propagating mask through blockwise operations.
+
+### Stream E: out= Parameter (13 tests) 🔴
+Output array pre-allocation for elemwise and reductions.
+
+| Category | Tests | Notes |
+|----------|-------|-------|
+| Elemwise out= | 9 | test_ufunc_where_broadcasts, test_ufunc_where_doesnt_mutate_out |
+| Reduction out= | 4 | test_array_reduction_out, test_array_cumreduction_out |
+
+**Notes:** Imperative concept that doesn't fit expression model. Currently uses `_handle_out` at collection level.
+
+### Stream F: setitem (7 tests) 🔴
+`__setitem__` implementation for array assignment.
+
+| Tests | Notes |
+|-------|-------|
+| test_setitem_masked | Masked assignment |
+| test_setitem_extended_API_2d_* | 2D setitem variants |
+| test_setitem_errs | Error handling |
+| test_setitem_bool_index_errs | Boolean index errors |
+
+**Notes:** setitem is fundamentally imperative. Needs to create new expression with updated values.
+
+### Stream G: Histogram Delayed Inputs (20 tests) 🟡
+Histogram with delayed range and bins.
+
+| Tests | Notes |
+|-------|-------|
+| test_histogram_delayed_range | 16 tests - delayed range parameter |
+| test_histogram_delayed_bins | 4 tests - delayed bins parameter |
+
+**Implementation:** Handle Delayed objects in histogram range/bins by computing them first.
+
+### Stream H: register_chunk_type (4+ tests) 🔴
+Custom chunk type registration for dispatching.
+
+| Tests | Notes |
+|-------|-------|
+| test_dispatch.py (entire module) | Module-level skip |
+| test_binary_function_type_precedence | 4 tests in test_array_function.py |
+
+**Implementation:** Add `register_chunk_type()` function and type precedence logic.
+
+### Stream I: Empty Chunk nanmin/nanmax (4 tests) 🟡
+Handle empty chunks in nanmin/nanmax.
+
+| Tests | Notes |
+|-------|-------|
+| test_empty_chunk_nanmin_nanmax | 2 tests |
+| test_empty_chunk_nanmin_nanmax_raise | 2 tests |
+
+**Implementation:** Propagate warnings and handle edge cases for empty chunks.
+
+### Stream J: map_blocks Enhancements (5 tests) 🟡
+Various map_blocks improvements.
+
+| Tests | Notes |
+|-------|-------|
+| test_map_blocks_delayed | Delayed inputs |
+| test_map_blocks_large_inputs_delayed | Large inputs as delayed |
+| test_map_blocks_custom_name | Custom naming |
+| test_map_blocks_unique_name_enforce_dim | Unique naming |
+| test_map_blocks_dataframe | DataFrame output |
+
+### Stream K: Single Chunk Compute Behavior (10 tests) 🟡
+Single chunk arrays returning references vs copies.
+
+| Tests | Notes |
+|-------|-------|
+| test_array_picklable | 2 tests |
+| Various core tests | 8 tests |
+
+**Notes:** When array has single chunk, compute may return reference to underlying data.
+
+### Stream L: Miscellaneous (20+ tests) 🟢
+Smaller independent fixes.
+
+| Category | Tests | Notes |
+|----------|-------|-------|
+| Warning behavior | 5 | Warning messages differ |
+| Graph structure | 5 | Graph serialization differs |
+| Naming patterns | 3 | Name patterns differ |
+| API differences | 4 | Error messages, etc. |
+| Fusion | 3 | blockwise_fusion, block_id fusion |
 
 ## Migration Workflow
 
