@@ -68,6 +68,10 @@ from dask.array._array_expr._overlap import map_overlap, overlap, trim_overlap
 from dask.array._array_expr._reductions import (
     _tree_reduce,
     arg_reduction,
+    cumprod,
+    cumsum,
+    nancumprod,
+    nancumsum,
     reduction,
     trace,
 )

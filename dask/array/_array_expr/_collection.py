@@ -1129,7 +1129,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.cumsum : equivalent function
         """
-        from dask.array.reductions import cumsum
+        from dask.array._array_expr._reductions import cumsum
 
         return cumsum(self, axis=axis, dtype=dtype, out=out, method=method)
 
@@ -1142,7 +1142,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.cumprod : equivalent function
         """
-        from dask.array.reductions import cumprod
+        from dask.array._array_expr._reductions import cumprod
 
         return cumprod(self, axis=axis, dtype=dtype, out=out, method=method)
 

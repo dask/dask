@@ -836,16 +836,12 @@ if _array_expr_enabled():
             any,
             argmax,
             argmin,
-            cumprod,
-            cumsum,
             max,
             mean,
             min,
             moment,
             nanargmax,
             nanargmin,
-            nancumprod,
-            nancumsum,
             nanmax,
             nanmean,
             nanmin,
@@ -858,6 +854,12 @@ if _array_expr_enabled():
             std,
             sum,
             var,
+        )
+        from dask.array._array_expr import (
+            cumprod,
+            cumsum,
+            nancumprod,
+            nancumsum,
         )
 
         from dask.array._array_expr import (
