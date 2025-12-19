@@ -129,6 +129,46 @@ class Blockwise(ArrayExpr):
     def dtype(self):
         return super().dtype
 
+    def _idx_to_block(self, block_id: tuple[int, ...]) -> dict:
+        """Map symbolic indices to output block coordinates."""
+        idx_to_block = {idx: block_id[dim] for dim, idx in enumerate(self.out_ind)}
+        for idx in self.new_axes:
+            idx_to_block[idx] = 0
+        return idx_to_block
+
+    def _task(self, key, block_id: tuple[int, ...]):
+        """Generate task for a specific output block."""
+        from dask._task_spec import Task, TaskRef
+        from dask.layers import ArrayBlockwiseDep
+
+        if self.concatenate:
+            raise NotImplementedError("Blockwise with concatenate not supported for fusion")
+
+        idx_to_block = self._idx_to_block(block_id)
+
+        args = []
+        for arr, ind in toolz.partition(2, self.args):
+            if ind is None:
+                args.append(arr)
+            elif isinstance(arr, ArrayBlockwiseDep):
+                input_block_id = tuple(idx_to_block[i] for i in ind)
+                args.append(arr[input_block_id])
+            else:
+                input_block_id = tuple(idx_to_block[i] for i in ind)
+                args.append(TaskRef((arr._name, *input_block_id)))
+
+        return Task(key, self.func, *args, **self.kwargs)
+
+    def _input_block_id(self, dep, block_id: tuple[int, ...]) -> tuple[int, ...]:
+        """Map output block_id to input block_id for a dependency."""
+        idx_to_block = self._idx_to_block(block_id)
+
+        for arr, ind in toolz.partition(2, self.args):
+            if ind is not None and hasattr(arr, '_name') and arr._name == dep._name:
+                return tuple(idx_to_block[i] for i in ind)
+
+        return block_id
+
     def __dask_tokenize__(self):
         if not self._determ_token:
             # TODO: Is there an actual need to overwrite this?
@@ -479,17 +519,22 @@ def _broadcast_block_id(numblocks: tuple[int, ...], block_id: tuple[int, ...]) -
 def is_fusable_blockwise(expr):
     """Check if an expression is a fusable Blockwise operation.
 
-    Returns True for Elemwise, Transpose, and creation operations (Ones, Zeros, etc.).
+    Returns True for Blockwise operations that don't use concatenate.
+    Also includes creation operations (Ones, Zeros, etc.).
     Excludes IO operations like FromArray and FromDelayed.
     """
     # Import here to avoid circular imports
     from dask.array._array_expr._creation import BroadcastTrick
     from dask.array._array_expr._io import FromArray, FromDelayed
-    from dask.array._array_expr.manipulation._transpose import Transpose
 
     if isinstance(expr, (FromArray, FromDelayed)):
         return False
-    return isinstance(expr, (Elemwise, Transpose, BroadcastTrick))
+    if isinstance(expr, BroadcastTrick):
+        return True
+    if isinstance(expr, Blockwise):
+        # Blockwise with concatenate requires special handling
+        return not expr.concatenate
+    return False
 
 
 # Alias for internal use
