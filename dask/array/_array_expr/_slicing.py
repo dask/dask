@@ -395,11 +395,13 @@ class SliceSlicesIntegers(Slice):
     _parameters = ["array", "index", "allow_getitem_optimization"]
 
     def _simplify_down(self):
+        from dask.array._array_expr._blockwise import Elemwise
+        from dask.array._array_expr.manipulation._transpose import Transpose
+
         # Slice(Slice(x)) -> single Slice with fused indices
         if isinstance(self.array, SliceSlicesIntegers):
             try:
                 fused = fuse_slice(self.array.index, self.index)
-                # Normalize the fused index
                 normalized = tuple(
                     normalize_slice(idx, dim) if isinstance(idx, slice) else idx
                     for idx, dim in zip(fused, self.array.array.shape)
@@ -412,14 +414,10 @@ class SliceSlicesIntegers(Slice):
                 pass
 
         # Slice(Elemwise) -> Elemwise(sliced inputs)
-        from dask.array._array_expr._blockwise import Elemwise, is_scalar_for_elemwise
-
         if isinstance(self.array, Elemwise):
             return self._pushdown_through_elemwise()
 
         # Slice(Transpose) -> Transpose(sliced input)
-        from dask.array._array_expr.manipulation._transpose import Transpose
-
         if isinstance(self.array, Transpose):
             return self._pushdown_through_transpose()
 

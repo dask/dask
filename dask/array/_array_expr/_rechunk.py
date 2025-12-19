@@ -87,6 +87,9 @@ class Rechunk(ArrayExpr):
         return chunks
 
     def _simplify_down(self):
+        from dask.array._array_expr._blockwise import Elemwise
+        from dask.array._array_expr.manipulation._transpose import Transpose
+
         # Rechunk(Rechunk(x)) -> single Rechunk to final chunks
         # Only match Rechunk, not TasksRechunk (which is already lowered)
         if type(self.array) is Rechunk:
@@ -98,6 +101,78 @@ class Rechunk(ArrayExpr):
                 self.balance or self.array.balance,
                 self.method,
             )
+
+        # Rechunk(Transpose) -> Transpose(rechunked input)
+        if isinstance(self.array, Transpose):
+            return self._pushdown_through_transpose()
+
+        # Rechunk(Elemwise) -> Elemwise(rechunked inputs)
+        if isinstance(self.array, Elemwise) and isinstance(self._chunks, tuple):
+            return self._pushdown_through_elemwise()
+
+    def _pushdown_through_transpose(self):
+        """Push rechunk through transpose by reordering chunk spec."""
+        from dask.array._array_expr.manipulation._transpose import Transpose
+
+        transpose = self.array
+        axes = transpose.axes
+        chunks = self._chunks
+
+        if isinstance(chunks, tuple):
+            # Map output chunks back through transpose axes to get input chunks
+            # axes[i] tells us which input axis becomes output axis i
+            # So output axis i has chunks[i], which should go to input axis axes[i]
+            new_chunks = tuple(chunks[i] for i in axes)
+        elif isinstance(chunks, dict):
+            # Map dict keys through axes
+            new_chunks = {}
+            for out_axis, chunk_spec in chunks.items():
+                in_axis = axes[out_axis]
+                new_chunks[in_axis] = chunk_spec
+        else:
+            return None
+
+        rechunked_input = transpose.array.rechunk(new_chunks)
+        return Transpose(rechunked_input, axes)
+
+    def _pushdown_through_elemwise(self):
+        """Push rechunk through elemwise by rechunking each input."""
+        from dask.array._array_expr._blockwise import Elemwise, is_scalar_for_elemwise
+
+        elemwise = self.array
+        out_ind = elemwise.out_ind
+        chunks = self._chunks
+
+        new_args = []
+        for arg in elemwise.elemwise_args:
+            if is_scalar_for_elemwise(arg):
+                new_args.append(arg)
+            else:
+                # Map output chunks to this input's dimensions
+                # arg has indices tuple(range(arg.ndim)[::-1])
+                arg_ind = tuple(range(arg.ndim)[::-1])
+
+                # For each dimension of arg, find where its index appears in out_ind
+                arg_chunks = []
+                for dim_idx in arg_ind:
+                    try:
+                        out_pos = out_ind.index(dim_idx)
+                        arg_chunks.append(chunks[out_pos])
+                    except ValueError:
+                        # Index not in output (shouldn't happen for elemwise)
+                        arg_chunks.append(-1)  # auto
+
+                rechunked_arg = arg.rechunk(tuple(arg_chunks))
+                new_args.append(rechunked_arg)
+
+        return Elemwise(
+            elemwise.op,
+            elemwise.operand("dtype"),
+            elemwise.operand("name"),
+            elemwise.where,
+            elemwise.operand("_user_kwargs"),
+            *new_args,
+        )
 
     def _lower(self):
 
