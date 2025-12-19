@@ -21,6 +21,16 @@ from dask.utils import cached_cumsum, funcname
 _OBJECT_AT_PATTERN = re.compile(r"<.+? at 0x[0-9a-fA-F]+>")
 
 
+def _collect_cached_property_names(cls):
+    """Collect all cached_property names from a class and its parents."""
+    names = set()
+    for parent in cls.__mro__:
+        for k, v in parent.__dict__.items():
+            if isinstance(v, functools.cached_property):
+                names.add(k)
+    return frozenset(names)
+
+
 def _simplify_repr(op):
     """Simplify operand representation for tree_repr display."""
     if isinstance(op, np.ndarray):
@@ -47,6 +57,31 @@ class ArrayExpr(SingletonExpr):
     # Whether this expression can be fused with other blockwise operations.
     # Override to True in subclasses that support fusion (Blockwise, Random, etc.)
     _is_blockwise_fusable = False
+
+    # Pre-computed set of cached_property names for efficient serialization
+    _cached_property_names: frozenset[str] = frozenset()
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls._cached_property_names = _collect_cached_property_names(cls)
+
+    def __reduce__(self):
+        import dask
+        from dask._expr import Expr
+
+        if dask.config.get("dask-expr-no-serialize", False):
+            raise RuntimeError(f"Serializing a {type(self)} object")
+        cache = {}
+        if type(self)._pickle_functools_cache:
+            for k in type(self)._cached_property_names:
+                if k in self.__dict__:
+                    cache[k] = self.__dict__[k]
+        return Expr._reconstruct, (
+            type(self),
+            *self.operands,
+            self.deterministic_token,
+            cache,
+        )
 
     def _operands_for_repr(self):
         return []

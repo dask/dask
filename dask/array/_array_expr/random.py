@@ -881,24 +881,62 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
     return a_val, a_expr, size, replace, p_expr, axis, chunks, meta
 
 
+def _broadcast_array_arg(arg, size, target_chunks):
+    """Broadcast and rechunk an array argument to match output shape."""
+    from dask.array._array_expr._broadcast import broadcast_to
+    from dask.array._array_expr.core._conversion import from_array
+
+    if isinstance(arg, np.ndarray) and arg.shape:
+        arg = from_array(arg, chunks=arg.shape)
+        arg = broadcast_to(arg, size).rechunk(target_chunks)
+    elif isinstance(arg, Array):
+        arg = broadcast_to(arg, size).rechunk(target_chunks)
+    return arg
+
+
 def _wrap_func(
     rng, funcname, *args, size=None, chunks="auto", extra_chunks=(), **kwargs
 ):
     if size is not None and not isinstance(size, (tuple, list)):
         size = (size,)
 
-    # If size is None, infer from broadcast shape of array arguments
-    if size is None:
-        shapes = []
-        for arg in args:
-            if isinstance(arg, (np.ndarray, Array)) and arg.shape:
-                shapes.append(arg.shape)
-        for v in kwargs.values():
-            if isinstance(v, (np.ndarray, Array)) and v.shape:
-                shapes.append(v.shape)
-        if shapes:
-            size = np.broadcast_shapes(*shapes)
+    # Collect shapes from array arguments for broadcasting
+    shapes = []
+    for arg in args:
+        if isinstance(arg, (np.ndarray, Array)) and arg.shape:
+            shapes.append(arg.shape)
+    for v in kwargs.values():
+        if isinstance(v, (np.ndarray, Array)) and v.shape:
+            shapes.append(v.shape)
 
+    # Validate that all shapes can be broadcast together with size
+    if size is not None and shapes:
+        np.broadcast_shapes(*shapes, size)  # Raises ValueError if incompatible
+    elif size is None and shapes:
+        size = np.broadcast_shapes(*shapes)
+
+    # Broadcast and rechunk array arguments to match output shape/chunks
+    if size is not None and shapes:
+        target_chunks = normalize_chunks(
+            chunks, size, dtype=kwargs.get("dtype", np.float64)
+        )
+        args = tuple(_broadcast_array_arg(arg, size, target_chunks) for arg in args)
+        kwargs = {k: _broadcast_array_arg(v, size, target_chunks) for k, v in kwargs.items()}
+
+    # Dispatch to specific subclass if available
+    if funcname == "normal":
+        loc = kwargs.pop("loc", args[0] if len(args) > 0 else 0.0)
+        scale = kwargs.pop("scale", args[1] if len(args) > 1 else 1.0)
+        return new_collection(
+            RandomNormal(rng, size, chunks, extra_chunks, loc, scale)
+        )
+    elif funcname == "poisson":
+        lam = args[0] if len(args) > 0 else kwargs.pop("lam", 1.0)
+        return new_collection(
+            RandomPoisson(rng, size, chunks, extra_chunks, lam)
+        )
+
+    # Fallback: use generic Random with args/kwargs tuples
     return new_collection(
         Random(rng, funcname, size, chunks, extra_chunks, args, kwargs)
     )
@@ -988,8 +1026,36 @@ class Random(IO):
 
     def _task(self, key, block_id: tuple[int, ...]) -> Task:
         """Generate task for a specific output block."""
+        from dask._task_spec import Dict as TaskDict, Tuple as TaskTuple
+        from dask.array._array_expr._expr import ArrayExpr
+
         bitgens, name, sizes, gen, func_applier = self._info
         flat_idx = self._block_id_to_flat_index(block_id)
+
+        # Convert array expressions to TaskRefs
+        task_args = []
+        has_array_args = False
+        for arg in self.args:
+            if isinstance(arg, ArrayExpr):
+                # Reference the corresponding block of the dependency
+                task_args.append(TaskRef((arg._name,) + block_id))
+                has_array_args = True
+            else:
+                task_args.append(arg)
+
+        task_kwargs = {}
+        has_array_kwargs = False
+        for k, v in self.kwargs.items():
+            if isinstance(v, ArrayExpr):
+                task_kwargs[k] = TaskRef((v._name,) + block_id)
+                has_array_kwargs = True
+            else:
+                task_kwargs[k] = v
+
+        # Use TaskTuple/TaskDict to properly track dependencies inside containers
+        args_container = TaskTuple(*task_args) if has_array_args else tuple(task_args)
+        kwargs_container = TaskDict(task_kwargs) if has_array_kwargs else task_kwargs
+
         return Task(
             key,
             func_applier,
@@ -997,24 +1063,39 @@ class Random(IO):
             self.distribution,
             bitgens[flat_idx],
             sizes[flat_idx],
-            self.args,
-            self.kwargs,
+            args_container,
+            kwargs_container,
         )
 
+    def dependencies(self):
+        """Return array expression dependencies."""
+        from dask.array._array_expr._expr import ArrayExpr
+
+        deps = []
+        for arg in self.args:
+            if isinstance(arg, ArrayExpr):
+                deps.append(arg)
+        for v in self.kwargs.values():
+            if isinstance(v, ArrayExpr):
+                deps.append(v)
+        return deps
+
     def _input_block_id(self, dep, block_id: tuple[int, ...]) -> tuple[int, ...]:
-        """Random has no array dependencies, so this is never called."""
+        """Map output block_id to input block_id for dependencies."""
         return block_id
 
     @cached_property
     def _meta(self):
+        from dask.array._array_expr._expr import ArrayExpr
+
         bitgens, name, sizes, gen, func_applier = self._info
         size = self.operand("size")
         meta_size = (0,) * len(size) if size is not None else ()
 
         # Convert array arguments to scalars for meta computation
         def to_scalar(x):
-            if isinstance(x, Array):
-                # Dask array - use dtype to create a scalar
+            if isinstance(x, ArrayExpr):
+                # Array expression - use dtype to create a scalar
                 return x.dtype.type(1)
             elif isinstance(x, np.ndarray):
                 # Numpy array
@@ -1032,6 +1113,39 @@ class Random(IO):
             meta_args,
             meta_kwargs,
         )
+
+
+# Distribution-specific subclasses with explicit parameters
+# These avoid storing array dependencies inside tuple operands
+
+class RandomNormal(Random):
+    """Normal distribution with explicit loc and scale parameters."""
+    _parameters = ["rng", "size", "chunks", "extra_chunks", "loc", "scale"]
+    _defaults = {"extra_chunks": (), "loc": 0.0, "scale": 1.0}
+    distribution = "normal"
+
+    @property
+    def args(self):
+        return (self.loc, self.scale)
+
+    @property
+    def kwargs(self):
+        return {}
+
+
+class RandomPoisson(Random):
+    """Poisson distribution with explicit lam parameter."""
+    _parameters = ["rng", "size", "chunks", "extra_chunks", "lam"]
+    _defaults = {"extra_chunks": (), "lam": 1.0}
+    distribution = "poisson"
+
+    @property
+    def args(self):
+        return (self.lam,)
+
+    @property
+    def kwargs(self):
+        return {}
 
 
 class RandomChoice(IO):
