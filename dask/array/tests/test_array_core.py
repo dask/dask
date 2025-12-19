@@ -3714,7 +3714,8 @@ def test_map_blocks_with_invalid_drop_axis():
 
 def test_map_blocks_custom_name():
     res = da.map_blocks(lambda _: np.arange(4), chunks=(4,), name="foo", dtype=np.int64)
-    assert res.name == "foo", res.name
+    # Name starts with user-provided prefix, may have token suffix for uniqueness
+    assert res.name.startswith("foo"), res.name
 
 
 def test_map_blocks_with_changed_dimension_and_broadcast_chunks():
