@@ -224,6 +224,20 @@ class Array(DaskMethodsMixin):
         return self._scalarfunc(operator.index)
 
     def __array__(self, dtype=None, copy=None, **kwargs):
+        import warnings
+
+        if kwargs:
+            warnings.warn(
+                f"Extra keyword arguments {kwargs} are ignored and won't be "
+                "accepted in the future",
+                FutureWarning,
+            )
+        if copy is False:
+            warnings.warn(
+                "Can't acquire a memory view of a Dask array. "
+                "This will raise in the future.",
+                FutureWarning,
+            )
         x = self.compute()
         return np.asarray(x, dtype=dtype)
 
