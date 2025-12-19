@@ -330,14 +330,14 @@ Array masks for ufunc `where=` parameter.
 
 **Implementation:** Added `out` parameter to `Elemwise` class, updated `args` property to include both `where` and `out` when `where` is not True. Fixed meta computation to include `where` and `out` args. Updated `_pushdown_through_elemwise` to rechunk `where` and `out` arrays.
 
-### Stream E: out= Parameter (4 tests) 🔴
+### Stream E: out= Parameter (4 tests) ✅
 Output array pre-allocation for reductions.
 
 | Category | Tests | Notes |
 |----------|-------|-------|
 | Reduction out= | 4 | test_array_reduction_out, test_array_cumreduction_out |
 
-**Notes:** Elemwise `out=` now works via `_handle_out` at collection level. Reduction `out=` still pending.
+**Implementation:** Used `_handle_out` from `_blockwise_funcs.py` in `reduction()` and `_cumreduction_expr()` functions. This properly sets `out._expr = result._expr` for array-expr mode.
 
 ### Stream F: setitem (7 tests) 🔴
 `__setitem__` implementation for array assignment.
