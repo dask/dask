@@ -4115,7 +4115,6 @@ def test_warn_bad_rechunking():
         x + y
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="unify_chunks_expr warning calculation bug", strict=False)
 def test_concatenate_stack_dont_warn():
     with warnings.catch_warnings(record=True) as record:
         da.concatenate([da.ones(2, chunks=1)] * 62)
@@ -5606,7 +5605,7 @@ def test_scipy_sparse_indexing(index, sparse_module_path, container):
     ).sum()
 
 
-@pytest.mark.parametrize("axis", [pytest.param(0, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="unify_chunks_expr warning calculation bug", strict=False)), 1])
+@pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize(
     "container", [pytest.param("array", marks=skip_if_no_sparray()), "matrix"]
 )

@@ -521,7 +521,10 @@ def unify_chunks(*args, **kwargs):
         else:
             expr_args.extend([a, ind])
 
-    chunkss, expr_arrays, _ = unify_chunks_expr(*expr_args)
+    warn = kwargs.pop("warn", True)
+    if kwargs:
+        raise TypeError(f"Unexpected keyword arguments: {kwargs}")
+    chunkss, expr_arrays, _ = unify_chunks_expr(*expr_args, warn=warn)
 
     # Convert back to collections
     result_arrays = []

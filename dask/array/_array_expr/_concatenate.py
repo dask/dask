@@ -229,5 +229,5 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     seq_tmp = [s.expr for s in seq2]
     uc_args = list(concat((s, i) for s, i in zip(seq_tmp, inds)))
-    _, seq2, _ = unify_chunks_expr(*uc_args)
+    _, seq2, _ = unify_chunks_expr(*uc_args, warn=False)
     return new_collection(Concatenate(seq2[0], axis, meta, *seq2[1:]))
