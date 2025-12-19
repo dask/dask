@@ -284,7 +284,10 @@ def map_blocks(
         )
         name = token
 
-    name = f"{name or funcname(func)}"
+    # Track if user provided explicit name (should be used exactly)
+    # vs auto-generated token prefix
+    user_provided_name = name is not None
+    token_prefix = f"{name or funcname(func)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -364,7 +367,8 @@ def map_blocks(
             *concat(argpairs),
             expected_ndim=len(out_ind),
             _func=func,
-            token=name,
+            name=name if user_provided_name else None,
+            token=token_prefix,
             new_axes=new_axes,
             dtype=dtype,
             concatenate=True,
@@ -378,7 +382,8 @@ def map_blocks(
             func,
             out_ind,
             *concat(argpairs),
-            token=name,
+            name=name if user_provided_name else None,
+            token=token_prefix,
             new_axes=new_axes,
             dtype=dtype,
             concatenate=True,
@@ -478,10 +483,8 @@ def map_blocks(
         extra_names.append("block_info")
 
     if extra_argpairs:
-        # Rewrite the Blockwise layer. It would be nice to find a way to
-        # avoid doing it twice, but it's currently needed to determine
-        # out.chunks from the first pass. Since it constructs a Blockwise
-        # rather than an expanded graph, it shouldn't be too expensive.
+        # Rewrite the Blockwise layer to inject block_info/block_id.
+        # Use token=out.name to preserve name prefix from first blockwise.
         out = blockwise(
             _pass_extra_kwargs,
             out_ind,
@@ -491,6 +494,7 @@ def map_blocks(
             None,
             *concat(extra_argpairs),
             *concat(argpairs),
+            token=out.name,
             dtype=out.dtype,
             concatenate=True,
             align_arrays=False,
