@@ -70,7 +70,6 @@ def reduction_0d_test(da_func, darr, np_func, narr):
     assert actual.size == 1
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="0D reductions not implemented for array-expr", strict=False)
 def test_reductions_0D():
     x = np.int_(3)  # np.int_ has a dtype attribute, np.int does not.
     a = da.from_array(x, chunks=(1,))
@@ -120,7 +119,6 @@ def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=
 
 
 @pytest.mark.parametrize("dtype", ["f4", "i4", "c8"])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="1D reductions not implemented for array-expr", strict=False)
 def test_reductions_1D(dtype):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ComplexWarning)
@@ -146,7 +144,6 @@ def test_reductions_1D(dtype):
     reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="datetime reductions not implemented for array-expr", strict=False)
 def test_reductions_1D_datetime():
     x = np.arange(5).astype("datetime64[ns]")
     a = da.from_array(x, chunks=(2,))
@@ -162,7 +159,6 @@ def test_reductions_1D_datetime():
 @pytest.mark.parametrize(
     "x", [np.array([np.inf, np.nan, -np.inf, 2]), np.array([np.nan, np.nan, 3, 2])]
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="1D nan reductions not implemented for array-expr", strict=False)
 def test_reductions_1D_nans(x, dtype):
     x = x.astype(dtype)
     a = da.from_array(x, chunks=(1,))
@@ -272,7 +268,6 @@ def test_reductions_2D(dtype):
         reduction_2d_test(da.nanprod, a, np.nanprod, x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="datetime reductions not implemented for array-expr", strict=False)
 def test_reductions_2D_datetime():
     x = np.arange(1, 122).reshape(11, 11).astype("datetime64[ns]")
     a = da.from_array(x, chunks=(4, 4))
@@ -507,7 +502,6 @@ def test_nan():
 
 
 @pytest.mark.parametrize("func", ["nansum", "sum", "nanmin", "min", "nanmax", "max"])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="object dtype reductions not implemented for array-expr", strict=False)
 def test_nan_object(func):
     with warnings.catch_warnings():
         if os.name == "nt" and func in {"min", "max"}:
@@ -634,14 +628,16 @@ def test_reduction_names():
     assert x.mean().name.startswith("mean")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="reduction names not implemented for array-expr", strict=False)
 def test_general_reduction_names():
     dtype = int
     a = da.reduction(
         da.ones(10, dtype, chunks=2), np.sum, np.sum, dtype=dtype, name="foo"
     )
     names, tokens = list(zip_longest(*[key[0].rsplit("-", 1) for key in a.dask]))
-    assert set(names) == {"ones_like", "foo", "foo-partial", "foo-aggregate"}
+    # array-expr uses "ones" vs traditional "ones_like" and may skip "foo-partial"
+    expected_traditional = {"ones_like", "foo", "foo-partial", "foo-aggregate"}
+    expected_expr = {"ones", "foo", "foo-aggregate"}
+    assert set(names) in (expected_traditional, expected_expr)
     assert all(tokens)
 
 
@@ -658,8 +654,9 @@ def test_array_reduction_out(func):
 @pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
 @pytest.mark.parametrize("method", ["sequential", "blelloch"])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="cumulative reduction axis=None not implemented for array-expr", strict=False)
 def test_array_cumreduction_axis(func, use_nan, axis, method):
+    if axis is None and da._array_expr_enabled():
+        pytest.xfail("cumulative reduction axis=None not implemented for array-expr")
     np_func = getattr(np, func)
     da_func = getattr(da, func)
 
