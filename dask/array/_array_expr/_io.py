@@ -143,9 +143,16 @@ class FromGraph(IO):
         # The name may not actually match the layer's name therefore rewrite this
         # using an alias. Use the actual keys from the layer dict since they may
         # differ from self.operand("keys") (e.g., after persist() with optimization).
+        #
+        # Only process keys from our layer, skip dependency keys from HLG.
+        our_layer_names = {k[0] for k in self.operand("keys") if isinstance(k, tuple)}
+
         for k in list(dsk.keys()):
             if not isinstance(k, tuple):
                 raise TypeError(f"Expected tuple, got {type(k)}")
+            # Only process keys from our layer, skip dependency keys
+            if k[0] not in our_layer_names:
+                continue
             orig = dsk[k]
             if not istask(orig):
                 del dsk[k]
