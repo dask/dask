@@ -1103,9 +1103,27 @@ def test_nan_full_like(val, shape_chunks, dtype):
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="graph serialization differs in array-expr", strict=False)
 @pytest.mark.parametrize(
-    "func", [da.array, da.asarray, da.asanyarray, da.arange, da.tri]
+    "func",
+    [
+        da.array,
+        da.asarray,
+        da.asanyarray,
+        pytest.param(
+            da.arange,
+            marks=pytest.mark.xfail(
+                da._array_expr_enabled(),
+                reason="graph serialization differs in array-expr",
+            ),
+        ),
+        pytest.param(
+            da.tri,
+            marks=pytest.mark.xfail(
+                da._array_expr_enabled(),
+                reason="graph serialization differs in array-expr",
+            ),
+        ),
+    ],
 )
 def test_like_forgets_graph(func):
     """Test that array creation functions with like=x do not
