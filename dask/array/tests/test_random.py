@@ -257,7 +257,6 @@ def test_random_all_with_class_methods(generator_class, sz):
 @pytest.mark.skipif(
     not hasattr(np, "broadcast_to"), reason='requires numpy 1.10 method "broadcast_to"'
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr")
 def test_array_broadcasting(generator_class):
     arr = np.arange(6).reshape((2, 3))
     daones = da.ones((2, 3, 4), chunks=3)
