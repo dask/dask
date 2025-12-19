@@ -1875,7 +1875,6 @@ def test_map_blocks_no_array_args():
     assert_eq(x, np.arange(8, dtype=np.float32))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_unique_name_enforce_dim():
     def func(some_3d, block_info=None):
         return some_3d
@@ -3713,7 +3712,6 @@ def test_map_blocks_with_invalid_drop_axis():
             )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_custom_name():
     res = da.map_blocks(lambda _: np.arange(4), chunks=(4,), name="foo", dtype=np.int64)
     assert res.name == "foo", res.name
@@ -4125,7 +4123,7 @@ def test_concatenate_stack_dont_warn():
     assert not record
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict, not HLG with validate()", strict=False)
 def test_map_blocks_delayed():
     x = da.ones((10, 10), chunks=(5, 5))
     y = np.ones((5, 5))
@@ -5677,7 +5675,6 @@ def test_3925():
     assert (x[0] == x[0]).compute(scheduler="sync")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_map_blocks_large_inputs_delayed():
     a = da.ones(10, chunks=(5,))
     b = np.ones(1000000)
@@ -5692,7 +5689,6 @@ def test_map_blocks_large_inputs_delayed():
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="large inputs not delayed in array-expr")
 def test_blockwise_large_inputs_delayed():
     def func(a, b):
         return a

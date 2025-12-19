@@ -205,7 +205,12 @@ class Blockwise(ArrayExpr):
             concatenate=self.concatenate,
             **kwargs2,
         )
-        return dict(graph)
+        result = dict(graph)
+        # Merge in dependency graphs (from delayed objects, etc.)
+        for dep in dependencies:
+            if is_dask_collection(dep):
+                result.update(dep.__dask_graph__())
+        return result
 
     def _lower(self):
         if self.align_arrays:
