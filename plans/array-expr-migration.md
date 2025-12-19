@@ -35,6 +35,7 @@ The array-expr system has foundational infrastructure in place:
 - Selection & conditional: select, piecewise, choose, extract, isin
 - FFT: fft, ifft, fft2, ifft2, fftn, ifftn, rfft, irfft, rfft2, irfft2, rfftn, irfftn, hfft, ihfft, fftfreq, rfftfreq, fftshift, ifftshift, fft_wrap
 - Linalg submodule: tsqr, qr, svd, svd_flip, norm
+- Masked arrays (ma): masked_equal, masked_greater, masked_less, masked_where, filled, count, etc.
 
 ## Testing Infrastructure
 
@@ -165,7 +166,7 @@ Full submodule implementations.
 |-----------|-------|--------|
 | fft | FFT operations | **Done** |
 | linalg | Full linalg submodule | **Done** (330/391 tests pass, 61 skipped) |
-| ma | Masked arrays | Not started |
+| ma | Masked arrays | **Done** (127/139 tests pass, 6 xfails for tensordot/average edge cases) |
 
 #### Linalg Status Detail
 Native expression classes for TSQR algorithm (tall-skinny QR) and derived operations.

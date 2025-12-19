@@ -160,6 +160,8 @@ def blockwise(
     array([[1235, 1236],
            [1237, 1238]])
     """
+    from dask.array._array_expr.core import asanyarray
+
     new_axes = new_axes or {}
 
     # Normalize dtype to numpy dtype (handles cases like dtype=float)
@@ -180,6 +182,14 @@ def blockwise(
     if new:
         raise ValueError("Unknown dimension", new)
 
+    # Convert scalars with empty tuple index to 0-d dask arrays
+    # This mirrors what traditional unify_chunks does
+    normalized_args = []
+    for arg, ind in toolz.partition(2, args):
+        if ind == () and not hasattr(arg, "chunks"):
+            arg = asanyarray(arg)
+        normalized_args.extend([arg, ind])
+
     return new_collection(
         Blockwise(
             func,
@@ -193,7 +203,7 @@ def blockwise(
             concatenate,
             meta,
             kwargs,
-            *args,
+            *normalized_args,
         )
     )
 

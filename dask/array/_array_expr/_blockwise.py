@@ -167,6 +167,7 @@ class Blockwise(ArrayExpr):
 
         for arg, ind in arginds:
             if ind is None:
+                # Literal argument (not an array) - normalize it
                 arg = normalize_arg(arg)
                 arg, collections = unpack_collections(arg)
                 dependencies.extend(collections)

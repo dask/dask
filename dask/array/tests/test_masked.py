@@ -9,10 +9,6 @@ import numpy as np
 import pytest
 
 import dask.array as da
-
-if da._array_expr_enabled():
-    pytest.skip("ma (masked arrays) not implemented for array-expr", allow_module_level=True)
-
 from dask.array.numpy_compat import ComplexWarning
 from dask.array.utils import assert_eq
 from dask.base import tokenize
@@ -69,9 +65,30 @@ functions = [
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
     lambda x: x.sum(),
-    lambda x: x.dot(np.arange(x.shape[-1])),
-    lambda x: x.dot(np.eye(x.shape[-1])),
-    lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
+    pytest.param(
+        lambda x: x.dot(np.arange(x.shape[-1])),
+        marks=pytest.mark.xfail(
+            da._array_expr_enabled(),
+            reason="tensordot loses masked array meta in array-expr",
+            strict=False,  # Some tests using this function may still pass
+        ),
+    ),
+    pytest.param(
+        lambda x: x.dot(np.eye(x.shape[-1])),
+        marks=pytest.mark.xfail(
+            da._array_expr_enabled(),
+            reason="tensordot loses masked array meta in array-expr",
+            strict=False,  # Some tests using this function may still pass
+        ),
+    ),
+    pytest.param(
+        lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
+        marks=pytest.mark.xfail(
+            da._array_expr_enabled(),
+            reason="tensordot loses masked array meta in array-expr",
+            strict=False,  # Some tests using this function may still pass
+        ),
+    ),
     lambda x: x.sum(axis=0),
     lambda x: x.max(axis=0),
     lambda x: x.sum(axis=(1, 2)),
@@ -103,6 +120,10 @@ def test_basic(func):
         assert isinstance(zz, np.ma.masked_array)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="tensordot loses masked array meta in array-expr",
+)
 def test_tensordot():
     rng = da.random.default_rng()
     x = rng.random((2, 3, 4), chunks=(1, 2, 2))
@@ -380,6 +401,11 @@ def test_set_fill_value():
 
 
 @pytest.mark.parametrize("keepdims", [False, True])
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="_average function uses traditional routines.py which warns on dask array input",
+    strict=False,
+)
 def test_average_weights_with_masked_array(keepdims):
     mask = np.array([[True, False], [True, True], [False, True]])
     data = np.arange(6).reshape((3, 2))
