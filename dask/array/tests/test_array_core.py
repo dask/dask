@@ -6169,23 +6169,26 @@ def test_store_sources_unoptimized_nocompute():
     assert total_calls == start.blocks.size
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="blockwise fusion not implemented", strict=False)
 def test_blockwise_fusion():
-    def custom_scheduler_get(dsk, keys, **kwargs):
-        """Custom scheduler that returns the result of the first key."""
-        dsk = dsk.__dask_graph__()
-        # two sum
-        # one sum agg
-        # one finalize Alias
-        assert len(dsk) == 4, "False number of tasks"
-        return [42 for _ in keys]
-
-    # First test that this mocking stuff works as expecged
-    with pytest.raises(AssertionError, match="False number of tasks"):
-        dask.compute(da.ones(10), scheduler=custom_scheduler_get)
-
     a = ((da.ones(10, chunks=5) + 1) + 2).sum()
-    dask.compute(a, scheduler=custom_scheduler_get)
+
+    if da._array_expr_enabled():
+        # array-expr: 2 fused (ones+add+add+sum) + 1 aggregate = 3 tasks
+        optimized = a.optimize()
+        graph = dict(optimized.__dask_graph__())
+        assert len(graph) == 3, f"Expected 3 tasks, got {len(graph)}"
+    else:
+        def custom_scheduler_get(dsk, keys, **kwargs):
+            dsk = dsk.__dask_graph__()
+            # HLG: 2 sum + 1 agg + 1 finalize = 4 tasks
+            assert len(dsk) == 4, f"Expected 4 tasks, got {len(dsk)}"
+            return [42 for _ in keys]
+
+        # First test that this mocking stuff works as expected
+        with pytest.raises(AssertionError):
+            dask.compute(da.ones(10), scheduler=custom_scheduler_get)
+
+        dask.compute(a, scheduler=custom_scheduler_get)
 
 
 @pytest.mark.skipif(
