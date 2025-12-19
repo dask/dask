@@ -253,3 +253,145 @@ def test_slicing_pushdown_transpose():
     expected = b[:, 5:].T
     assert result.expr.optimize()._name == expected.expr.optimize()._name
     assert_eq(result, a.T[5:])
+
+
+def test_rechunk_pushdown_transpose():
+    """Test rechunk pushdown through transpose."""
+    a = np.random.random((10, 20))
+    b = da.from_array(a, chunks=(2, 5))
+
+    # b.T.rechunk((10, 5)) should become Transpose(Rechunk(...))
+    # not Rechunk(Transpose(...))
+    result = b.T.rechunk((10, 5))
+    opt = result.expr.optimize()
+    # Should be Transpose at top level (rechunk pushed inside)
+    assert type(opt).__name__ == "Transpose"
+    assert_eq(result, a.T)
+
+
+def test_rechunk_pushdown_elemwise():
+    """Test rechunk pushdown through elemwise."""
+    a = np.random.random((10, 10))
+    b = da.from_array(a, chunks=(4, 4))
+
+    # (b + 1).rechunk((5, 5)) should become Elemwise at top level
+    # not Rechunk(Elemwise(...))
+    result = (b + 1).rechunk((5, 5))
+    opt = result.expr.optimize()
+    # Should be Elemwise at top level (rechunk pushed inside)
+    assert type(opt).__name__ == "Elemwise"
+    assert_eq(result, a + 1)
+
+
+def test_rechunk_pushdown_elemwise_broadcast():
+    """Test rechunk pushdown through elemwise with broadcasting."""
+    a = np.random.random((10,))
+    aa = da.from_array(a)
+    b = np.random.random((10, 10))
+    bb = da.from_array(b)
+
+    # (aa + bb).rechunk((5, 2)) should become Elemwise at top level
+    c = (aa + bb).rechunk((5, 2))
+    opt = c.expr.optimize()
+    # Should be Elemwise at top level (rechunk pushed inside)
+    assert type(opt).__name__ == "Elemwise"
+    assert_eq(c, a + b)
+
+
+# =============================================================================
+# Optimization correctness and safety tests
+# =============================================================================
+
+
+def test_optimization_correctness_various_chains():
+    """Verify optimized expressions produce correct results."""
+    np.random.seed(42)
+    a = da.random.random((15, 25), chunks=(3, 7))
+    a_np = a.compute()
+
+    # Various operation chains - verify correctness
+    assert_eq(a.T.T, a_np)
+    assert_eq(a.T[5:].T, a_np[:, 5:])
+    assert_eq((a + 1).rechunk((5, 5))[:10], (a_np + 1)[:10])
+    assert_eq(a.rechunk((5, 5)).rechunk((3, 3)), a_np)
+    assert_eq(a[::2, 1:][::2], a_np[::2, 1:][::2])
+    assert_eq((a * 2)[:, 10:][5:], (a_np * 2)[:, 10:][5:])
+
+
+def test_optimize_empty_array():
+    """Verify optimizations handle empty arrays."""
+    a = da.zeros((0, 10), chunks=(1, 5))
+    result = (a + 1)[:, :5]
+    assert result.shape == (0, 5)
+    assert_eq(result, np.zeros((0, 5)))
+
+
+def test_optimize_3d_transpose():
+    """Verify transpose composition works for 3D arrays."""
+    np.random.seed(42)
+    a = da.random.random((4, 5, 6), chunks=2)
+
+    # (2,0,1) then (1,2,0) should compose to identity
+    result = a.transpose((2, 0, 1)).transpose((1, 2, 0))
+    opt = result.expr.optimize()
+    # Should simplify to original (no Transpose at top)
+    assert type(opt).__name__ != "Transpose" or opt.axes == tuple(range(3))
+    assert_eq(result, a)
+
+
+def test_optimize_scalar_in_elemwise():
+    """Verify scalar handling in elemwise pushdown."""
+    np.random.seed(42)
+    b = da.random.random((10, 10), chunks=5)
+    b_np = b.compute()
+
+    # Scalar + array, then slice
+    result = (5 + b)[:5]
+    assert_eq(result, (5 + b_np)[:5])
+
+    # Slice then rechunk with scalar
+    result = (b * 2).rechunk((5, 5))
+    assert_eq(result, b_np * 2)
+
+
+def test_chunks_preserved_after_optimization():
+    """Verify chunk structure is correct after optimization."""
+    a = da.random.random((20, 20), chunks=(4, 5))
+
+    # Transpose then rechunk
+    result = a.T.rechunk((10, 10))
+    assert result.chunks == ((10, 10), (10, 10))
+
+    # Elemwise then slice
+    result = (a + 1)[:10, :15]
+    assert result.chunks == ((4, 4, 2), (5, 5, 5))
+
+    # Slice then rechunk
+    result = a[:12, :8].rechunk((6, 4))
+    assert result.chunks == ((6, 6), (4, 4))
+
+
+def test_pushdown_broadcast_both_arrays():
+    """Test pushdown when both arrays broadcast to output shape."""
+    # (10, 1) + (1, 20) -> (10, 20)
+    a = da.from_array(np.random.random((10, 1)), chunks=(5, 1))
+    b = da.from_array(np.random.random((1, 20)), chunks=(1, 10))
+    a_np, b_np = a.compute(), b.compute()
+
+    # Slice pushdown - each input sliced on its non-broadcast dimension
+    result = (a + b)[:5, :10]
+    opt = result.expr.optimize()
+    assert type(opt).__name__ == "Elemwise"
+    # Input shapes should be sliced appropriately
+    assert opt.elemwise_args[0].shape == (5, 1)
+    assert opt.elemwise_args[1].shape == (1, 10)
+    assert_eq(result, (a_np + b_np)[:5, :10])
+
+    # Rechunk pushdown - each input rechunked on its non-broadcast dimension
+    result = (a + b).rechunk((2, 5))
+    opt = result.expr.optimize()
+    assert type(opt).__name__ == "Elemwise"
+    # Input chunks should be rechunked appropriately
+    assert opt.elemwise_args[0].chunks == ((2, 2, 2, 2, 2), (1,))
+    assert opt.elemwise_args[1].chunks == ((1,), (5, 5, 5, 5))
+    assert_eq(result, a_np + b_np)
