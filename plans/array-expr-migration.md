@@ -269,16 +269,11 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
 
 ### Current Test Status (December 2025)
-- **4460 passed**, 57 xfailed, 0 failed, 610 skipped, 6 xpassed
-- Significant progress from earlier (was 211 xfails, now 57)
+- **4464 passed**, 53 xfailed, 0 failed, 610 skipped
+- Significant progress from earlier (was 211 xfails, now 53)
 
-**XPassed Tests (6 - expected with strict=False):**
-- `test_mixed_concatenate[<lambda>13/14/15]` - tensordot with masked arrays works in some contexts
-- `test_mixed_random[<lambda>13/14/15]` - tensordot with masked arrays works in some contexts
-
-**XFails by category (57 total):**
+**XFails by category (53 total):**
 - Store advanced features: 3 xfails (regions, locks)
-- Masked array tensordot: 4 xfails (test_basic lambdas, test_tensordot)
 - Masked array average: 2 xfails (test_average_weights_with_masked_array)
 - Fusion (architectural): 4 xfails (blockwise_fusion, block_id_fusion, trim_internal, map_blocks_optimize)
 - Overlap: 3 xfails (trim_internal, push, xarray)
@@ -304,8 +299,8 @@ These work streams can be executed in parallel by agents. Each is independent.
 | ~~AA: XPASS cleanup~~ | 6 | 🟢 Quick | Expected with strict=False |
 | ~~AB: Failed test fixes~~ | 2 | 🟡 Medium | **DONE** |
 | ~~M: Store advanced~~ | 6 | 🟡 High | **PARTIAL** (3/6 pass) |
+| ~~AC: Masked tensordot~~ | 4 | 🟡 Medium | **DONE** - explicit meta in tensordot |
 | S: Setitem edge | 1 | 🟡 Medium | test_setitem_extended_API_2d_rhs_func_of_lhs |
-| AC: Masked tensordot | 4 | 🟡 Medium | test_basic lambdas + test_tensordot |
 | AD: Masked average | 2 | 🟡 Medium | _average uses traditional routines.py |
 | X: Rechunk auto | 2 | 🟢 Low | May be test adjustment |
 | Y: Random broadcast | 2 | 🟡 Low | Niche use case |
@@ -316,12 +311,12 @@ These work streams can be executed in parallel by agents. Each is independent.
 | AF: Overlap | 3 | 🔴 Deferred | Needs fusion/push |
 | Z: Misc | ~27 | 🟢 Varies | Mixed bag |
 
-**Completed streams:** N, P, Q, O, R, U, AB, M (partial)
+**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC
 
 **Recommended next targets:**
-1. Stream AC (masked tensordot) - 4 tests
-2. Stream S (setitem edge) - 1 test remaining
-3. Stream AD (masked average) - 2 tests
+1. Stream S (setitem edge) - 1 test remaining
+2. Stream AD (masked average) - 2 tests
+3. Stream X (rechunk auto) - 2 tests
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -677,17 +672,17 @@ Fixed failing tests.
 - `test_ravel_multi_index_unknown_shape_fails`: Updated test regex from `"Arrays' chunk sizes"` to `"[Cc]hunk"` to match actual error message.
 - Also fixed `common_blockdim` in `dask/array/core.py` to validate that arrays with unknown chunks have compatible chunk counts.
 
-### Stream AC: Masked Array Tensordot (4 tests) 🟡
+### Stream AC: Masked Array Tensordot (4 tests) ✅
 Tensordot operations that lose masked array meta.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_basic[<lambda>13] | x.dot(np.arange(x.shape[-1])) | ⏳ |
-| test_basic[<lambda>14] | x.dot(np.eye(x.shape[-1])) | ⏳ |
-| test_basic[<lambda>15] | da.tensordot with axes | ⏳ |
-| test_tensordot | Direct tensordot test | ⏳ |
+| test_basic[<lambda>13] | x.dot(np.arange(x.shape[-1])) | ✅ |
+| test_basic[<lambda>14] | x.dot(np.eye(x.shape[-1])) | ✅ |
+| test_basic[<lambda>15] | da.tensordot with axes | ✅ |
+| test_tensordot | Direct tensordot test | ✅ |
 
-**Notes:** Tensordot in array-expr mode loses the masked array metadata. Need to propagate meta properly through the tensordot expression.
+**Fix:** Added explicit meta computation in `tensordot` (`dask/array/_array_expr/_linalg.py`). When either input is a masked array, we create an explicit masked array meta with the correct ndim. This bypasses the `compute_meta` failure caused by numpy's tensordot failing to reshape 0-element masked arrays.
 
 ### Stream AD: Masked Array Average (2 tests) 🟡
 Average function with masked array weights.
