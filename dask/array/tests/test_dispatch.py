@@ -11,9 +11,6 @@ from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
 from dask.array.tests.conftest import EncapsulateNDArray, WrappedArray
 from dask.array.utils import assert_eq
 
-if da._array_expr_enabled():
-    pytest.skip("register_chunk_type not implemented for array-expr", allow_module_level=True)
-
 
 @pytest.mark.parametrize(
     "op",

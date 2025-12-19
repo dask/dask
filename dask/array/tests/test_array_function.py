@@ -210,10 +210,9 @@ def test_non_existent_func():
             WrappedArray(np.random.default_rng().random((10, 10))),
             da.random.default_rng().random((10, 10), chunks=(5, 5)),
         ),
-        pytest.param(
+        (
             da.random.default_rng().random((10, 10), chunks=(5, 5)),
             EncapsulateNDArray(np.random.default_rng().random((10, 10))),
-            marks=pytest.mark.xfail(da._array_expr_enabled(), reason="register_chunk_type not implemented"),
         ),
         (
             WrappedArray(np.random.default_rng().random((10, 10))),
