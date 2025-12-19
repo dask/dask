@@ -493,7 +493,6 @@ def test_numpy_asarray_copy_true(asarray, chunks):
     ],
 )
 @pytest.mark.parametrize("chunks", [5, 10])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_numpy_asarray_copy_false(asarray, chunks):
     """Test that np.*array(x, copy=False) is forbidden"""
     x = da.asarray(np.arange(10), chunks=chunks)
@@ -548,7 +547,6 @@ def test_numpy_asarray_copy_default(asarray, chunks):
     assert x[0].compute() == 0
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_array_interface_deprecated_kwargs():
     x = da.ones(10)
     with pytest.warns(FutureWarning, match="ignored"):
