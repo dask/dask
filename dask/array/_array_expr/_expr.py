@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import functools
+import math
 import re
+import warnings
 from functools import cached_property, reduce
 from itertools import product
 from operator import mul
@@ -11,7 +13,7 @@ import toolz
 
 from dask._expr import FinalizeCompute, SingletonExpr
 from dask._task_spec import List, Task, TaskRef
-from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
+from dask.array.core import PerformanceWarning, T_IntOrNaN, common_blockdim, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
 from dask.layers import ArrayBlockwiseDep
 from dask.utils import cached_cumsum, funcname
@@ -169,7 +171,7 @@ class ArrayExpr(SingletonExpr):
         return FinalizeComputeArray(self)
 
 
-def unify_chunks_expr(*args):
+def unify_chunks_expr(*args, warn=True):
     # TODO(expr): This should probably be a dedicated expression
     # This is the implementation that expects the inputs to be expressions, the public facing
     # variant needs to sanitize the inputs
@@ -186,14 +188,24 @@ def unify_chunks_expr(*args):
 
     nameinds = []
     blockdim_dict = dict()
+    max_parts = 0
     for a, ind in arginds:
         if ind is not None and not isinstance(a, ArrayBlockwiseDep):
             nameinds.append((a.name, ind))
             blockdim_dict[a.name] = a.chunks
+            max_parts = max(max_parts, math.prod(a.numblocks))
         else:
             nameinds.append((a, ind))
 
     chunkss = broadcast_dimensions(nameinds, blockdim_dict, consolidate=common_blockdim)
+    nparts = math.prod(map(len, chunkss.values())) if chunkss else 0
+
+    if warn and nparts and nparts >= max_parts * 10:
+        warnings.warn(
+            f"Increasing number of chunks by factor of {int(nparts / max_parts)}",
+            PerformanceWarning,
+            stacklevel=3,
+        )
 
     arrays = []
     changed = False
