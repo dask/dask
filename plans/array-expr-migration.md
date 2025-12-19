@@ -351,15 +351,15 @@ Output array pre-allocation for reductions.
 
 **Notes:** setitem is fundamentally imperative. Needs to create new expression with updated values.
 
-### Stream G: Histogram Delayed Inputs (20 tests) 🟡
+### Stream G: Histogram Delayed Inputs (20 tests) 🟢 ✅ DONE
 Histogram with delayed range and bins.
 
-| Tests | Notes |
-|-------|-------|
-| test_histogram_delayed_range | 16 tests - delayed range parameter |
-| test_histogram_delayed_bins | 4 tests - delayed bins parameter |
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_histogram_delayed_range | 16 tests - delayed range parameter | ✅ |
+| test_histogram_delayed_bins | 4 tests - delayed bins parameter | ✅ |
 
-**Implementation:** Handle Delayed objects in histogram range/bins by computing them first.
+**Implementation:** Added `LinspaceDelayed` and `HistogramBinnedDelayed` expression classes that properly handle delayed bins/range by creating task dependencies. For delayed range, creates linspace at compute time. For delayed bins array, rechunks to single chunk for histogram computation.
 
 ### Stream H: register_chunk_type (4+ tests) 🔴
 Custom chunk type registration for dispatching.

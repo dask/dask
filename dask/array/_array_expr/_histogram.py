@@ -19,74 +19,132 @@ def _block_hist(x, bins_range, weights=None):
     return np.histogram(x, bins, range=range_, weights=weights)[0][np.newaxis]
 
 
-class HistogramBinned(ArrayExpr):
-    """Expression for mapped histogram computation.
-
-    This creates a 2D array of shape (nchunks, nbins) where each row
-    is the histogram of one input chunk. Use .sum(axis=0) to get the
-    final histogram.
-    """
-    _parameters = ["array", "bins", "range", "weights"]
-    _defaults = {"range": None, "weights": None}
-
-    @cached_property
-    def _meta(self):
-        dtype = np.histogram([])[0].dtype
-        if self.weights is not None:
-            dtype = self.weights._meta.dtype
-        # Meta should be 2D with shape (0, 0) to match chunks structure
-        return np.empty((0, 0), dtype=dtype)
-
-    @cached_property
-    def chunks(self):
-        # Compute total number of chunks from numblocks
-        nchunks = reduce(mul, self.array.numblocks, 1)
-        nbins = len(self.bins) - 1
-        return ((1,) * nchunks, (nbins,))
-
-    @cached_property
-    def _name(self):
-        return f"histogram-{self.deterministic_token}"
-
-    def _layer(self) -> dict:
-        dsk = {}
-        bins_range = (self.bins, self.range)
-
-        # Flatten the input array's keys
-        array_keys = list(_flatten_keys(self.array))
-
-        if self.weights is None:
-            for i, k in enumerate(array_keys):
-                dsk[(self._name, i, 0)] = Task(
-                    (self._name, i, 0),
-                    _block_hist,
-                    TaskRef(k),
-                    bins_range,
-                )
-        else:
-            weight_keys = list(_flatten_keys(self.weights))
-            for i, (k, w) in enumerate(zip(array_keys, weight_keys)):
-                dsk[(self._name, i, 0)] = Task(
-                    (self._name, i, 0),
-                    _block_hist,
-                    TaskRef(k),
-                    bins_range,
-                    TaskRef(w),
-                )
-        return dsk
-
-    @property
-    def _dependencies(self):
-        deps = [self.array]
-        if self.weights is not None:
-            deps.append(self.weights)
-        return deps
+def _linspace_from_range(bins_range):
+    """Create bin edges from (num_bins, (start, stop)) at compute time."""
+    bins, (start, stop) = bins_range
+    return np.linspace(start, stop, num=int(bins) + 1)
 
 
 def _flatten_keys(arr):
     """Flatten array keys in C order."""
     for idx in np.ndindex(arr.numblocks):
         yield (arr._name,) + idx
+
+
+def _to_ref(val):
+    """Convert value to TaskRef if it's an ArrayExpr, otherwise return as-is."""
+    if isinstance(val, ArrayExpr):
+        return TaskRef((val._name,))
+    return val
+
+
+class HistogramBinned(ArrayExpr):
+    """Expression for mapped histogram computation.
+
+    Creates a 2D array of shape (nchunks, nbins) where each row is the
+    histogram of one input chunk. Use .sum(axis=0) to get the final histogram.
+
+    Handles both concrete and delayed bins/range.
+    """
+    _parameters = ["array", "bins", "range_start", "range_stop", "weights", "nbins"]
+    _defaults = {"range_start": None, "range_stop": None, "weights": None, "nbins": None}
+
+    @cached_property
+    def _meta(self):
+        dtype = np.histogram([])[0].dtype
+        if self.weights is not None:
+            dtype = self.weights._meta.dtype
+        return np.empty((0, 0), dtype=dtype)
+
+    @cached_property
+    def chunks(self):
+        nchunks = reduce(mul, self.array.numblocks, 1)
+        if self.nbins is not None:
+            nbins = self.nbins
+        elif isinstance(self.bins, ArrayExpr):
+            nbins = None
+        else:
+            nbins = len(self.bins) - 1
+
+        if nbins is None or isinstance(nbins, ArrayExpr):
+            return ((1,) * nchunks, (np.nan,))
+        return ((1,) * nchunks, (int(nbins),))
+
+    @cached_property
+    def _name(self):
+        return f"histogram-{self.deterministic_token}"
+
+    def _layer(self) -> dict:
+        from dask._task_spec import List as TaskList
+
+        dsk = {}
+        array_keys = list(_flatten_keys(self.array))
+
+        # Build bins reference (may be multi-dimensional array)
+        if isinstance(self.bins, ArrayExpr):
+            bins_ref = TaskRef((self.bins._name,) + (0,) * self.bins.ndim)
+        else:
+            bins_ref = self.bins
+
+        # Build bins_range tuple
+        range_tuple = TaskList(_to_ref(self.range_start), _to_ref(self.range_stop))
+        bins_range = TaskList(bins_ref, range_tuple)
+
+        if self.weights is None:
+            for i, k in enumerate(array_keys):
+                dsk[(self._name, i, 0)] = Task(
+                    (self._name, i, 0), _block_hist, TaskRef(k), bins_range,
+                )
+        else:
+            weight_keys = list(_flatten_keys(self.weights))
+            for i, (k, w) in enumerate(zip(array_keys, weight_keys)):
+                dsk[(self._name, i, 0)] = Task(
+                    (self._name, i, 0), _block_hist, TaskRef(k), bins_range, TaskRef(w),
+                )
+        return dsk
+
+    @property
+    def _dependencies(self):
+        deps = [self.array]
+        for attr in (self.bins, self.range_start, self.range_stop, self.weights):
+            if isinstance(attr, ArrayExpr):
+                deps.append(attr)
+        return deps
+
+
+class LinspaceDelayed(ArrayExpr):
+    """Expression for linspace with delayed start/stop values."""
+    _parameters = ["num_bins", "range_start", "range_stop"]
+
+    @cached_property
+    def _meta(self):
+        return np.linspace(0, 1, 2)
+
+    @cached_property
+    def chunks(self):
+        if isinstance(self.num_bins, ArrayExpr):
+            return ((np.nan,),)
+        return ((int(self.num_bins) + 1,),)
+
+    @cached_property
+    def _name(self):
+        return f"linspace-delayed-{self.deterministic_token}"
+
+    def _layer(self) -> dict:
+        from dask._task_spec import List as TaskList
+
+        bins_range = TaskList(
+            _to_ref(self.num_bins),
+            TaskList(_to_ref(self.range_start), _to_ref(self.range_stop))
+        )
+        return {
+            (self._name, 0): Task((self._name, 0), _linspace_from_range, bins_range)
+        }
+
+    @property
+    def _dependencies(self):
+        return [v for v in (self.range_start, self.range_stop, self.num_bins)
+                if isinstance(v, ArrayExpr)]
 
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
@@ -166,15 +224,89 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
     # Handle delayed bins/range
     range_has_dask = range is not None and any(is_dask_collection(r) for r in range)
-    if is_dask_collection(bins) or range_has_dask:
-        # For delayed bins/range, we need to compute them first or handle specially
-        # For now, raise NotImplementedError for complex cases
-        if is_dask_collection(bins) and not isinstance(bins, Array):
-            raise NotImplementedError("Delayed bins not yet supported in array-expr")
-        if range_has_dask:
-            raise NotImplementedError("Delayed range not yet supported in array-expr")
+    bins_is_dask_array = isinstance(bins, Array)
 
-    # Convert scalar bins + range to bin edges
+    if is_dask_collection(bins) and not bins_is_dask_array:
+        raise NotImplementedError(
+            "Delayed bins (non-Array) not yet supported in array-expr. "
+            "Use a dask Array instead."
+        )
+
+    # Extract range values
+    range_start = range[0] if range is not None else None
+    range_stop = range[1] if range is not None else None
+
+    # Convert range to expressions if they're Arrays
+    if isinstance(range_start, Array):
+        range_start_expr = range_start.expr
+    else:
+        range_start_expr = range_start
+
+    if isinstance(range_stop, Array):
+        range_stop_expr = range_stop.expr
+    else:
+        range_stop_expr = range_stop
+
+    if range_has_dask or bins_is_dask_array:
+        # Delayed bins and/or range
+        if scalar_bins:
+            # Scalar bins + delayed range: create linspace expression
+            if isinstance(bins, Array):
+                nbins_expr = bins.expr
+            else:
+                nbins_expr = int(bins)
+
+            # Create linspace expression for bin edges
+            linspace_expr = LinspaceDelayed(nbins_expr, range_start_expr, range_stop_expr)
+            bins_edges = new_collection(linspace_expr)
+
+            hist_expr = HistogramBinned(
+                a.expr,
+                linspace_expr,
+                range_start_expr,
+                range_stop_expr,
+                weights.expr if weights is not None else None,
+                nbins_expr,
+            )
+        else:
+            # bins is a dask Array of bin edges
+            if not isinstance(bins, Array):
+                bins = asarray(bins)
+            if bins.ndim != 1:
+                raise ValueError(
+                    f"bins must be a 1-dimensional array or sequence, got shape {bins.ndim}D"
+                )
+
+            # Rechunk bins to a single chunk for numpy.histogram
+            bins_rechunked = bins.rechunk(-1)
+
+            # nbins is len(bins) - 1, but bins may have unknown size
+            if np.isnan(bins.shape[0]):
+                nbins_expr = bins.expr
+            else:
+                nbins_expr = int(bins.shape[0]) - 1
+
+            hist_expr = HistogramBinned(
+                a.expr,
+                bins_rechunked.expr,
+                range_start_expr,
+                range_stop_expr,
+                weights.expr if weights is not None else None,
+                nbins_expr,
+            )
+            bins_edges = bins
+
+        mapped = new_collection(hist_expr)
+        n = mapped.sum(axis=0)
+
+        if density:
+            db = bins_edges[1:] - bins_edges[:-1]
+            db = db.astype(float)
+            n = n / db / n.sum()
+
+        return n, bins_edges
+
+    # Non-delayed case: convert scalar bins + range to bin edges
     if scalar_bins:
         bins = np.linspace(range[0], range[1], num=int(bins) + 1)
     else:
@@ -185,8 +317,11 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                 f"bins must be a 1-dimensional array or sequence, got shape {bins.shape}"
             )
 
-    # Create the histogram expression
-    hist_expr = HistogramBinned(a.expr, bins, range, weights.expr if weights is not None else None)
+    # Create the histogram expression (concrete bins)
+    hist_expr = HistogramBinned(
+        a.expr, bins, range_start_expr, range_stop_expr,
+        weights.expr if weights is not None else None,
+    )
     mapped = new_collection(hist_expr)
 
     # Sum over chunks to get the final histogram
