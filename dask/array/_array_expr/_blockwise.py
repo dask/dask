@@ -145,13 +145,15 @@ class Blockwise(ArrayExpr):
 
     @cached_property
     def _name(self):
-        if "name" in self._parameters and self.operand("name"):
-            return self.operand("name")
-        else:
-            return (
-                f"{self.token or funcname(self.func).strip('_')}-"
-                + self.deterministic_token
-            )
+        # Always include deterministic_token suffix to ensure:
+        # 1. Different expressions with same user-provided name are distinguishable
+        # 2. lower_completely can detect when operands change (via name change)
+        prefix = (
+            self.operand("name")
+            if "name" in self._parameters and self.operand("name")
+            else (self.token or funcname(self.func).strip("_"))
+        )
+        return f"{prefix}-{self.deterministic_token}"
 
     def _layer(self):
         arginds = [(a, i) for (a, i) in toolz.partition(2, self.args)]
