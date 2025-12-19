@@ -320,24 +320,24 @@ cumsum/cumprod/nancumsum/nancumprod with axis=None.
 
 **Notes:** Currently fails due to HLG dependency issues when combining flatten with cumulative operations.
 
-### Stream D: UFunc where Parameter (24 tests) 🔴
+### Stream D: UFunc where Parameter 🟢 **DONE**
 Array masks for ufunc `where=` parameter.
 
-| Issue | Tests |
-|-------|-------|
-| where=array mask | 24 tests (4 with dtype=None now pass) |
+| Status | Tests |
+|--------|-------|
+| ✅ Fixed | 26 tests now pass (all `dtype=None` combinations) |
+| ⏳ Remaining | 16 tests fail due to `dtype` parameter issue (separate from `where`) |
 
-**Notes:** `where=True` works; actual array masks fail in compute path. Requires propagating mask through blockwise operations.
+**Implementation:** Added `out` parameter to `Elemwise` class, updated `args` property to include both `where` and `out` when `where` is not True. Fixed meta computation to include `where` and `out` args. Updated `_pushdown_through_elemwise` to rechunk `where` and `out` arrays.
 
-### Stream E: out= Parameter (13 tests) 🔴
-Output array pre-allocation for elemwise and reductions.
+### Stream E: out= Parameter (4 tests) 🔴
+Output array pre-allocation for reductions.
 
 | Category | Tests | Notes |
 |----------|-------|-------|
-| Elemwise out= | 9 | test_ufunc_where_broadcasts, test_ufunc_where_doesnt_mutate_out |
 | Reduction out= | 4 | test_array_reduction_out, test_array_cumreduction_out |
 
-**Notes:** Imperative concept that doesn't fit expression model. Currently uses `_handle_out` at collection level.
+**Notes:** Elemwise `out=` now works via `_handle_out` at collection level. Reduction `out=` still pending.
 
 ### Stream F: setitem (7 tests) 🔴
 `__setitem__` implementation for array assignment.

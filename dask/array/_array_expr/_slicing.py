@@ -463,6 +463,7 @@ class SliceSlicesIntegers(Slice):
             elemwise.operand("dtype"),
             elemwise.operand("name"),
             elemwise.where,
+            elemwise.out,
             elemwise.operand("_user_kwargs"),
             *new_args,
         )
