@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array.utils import assert_eq
 
 pytestmark = pytest.mark.skipif(
     not da._array_expr_enabled(), reason="array_expr not enabled"
@@ -20,9 +21,7 @@ def test_simple_chain_fusion():
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
     assert len(expr.exprs) == 3  # ones + two elemwise ops
-    result = y.compute()
-    expected = (np.ones(10) + 1) * 2
-    assert np.allclose(result, expected)
+    assert_eq(y, (np.ones(10) + 1) * 2)
 
 
 def test_diamond_fusion():
@@ -36,9 +35,7 @@ def test_diamond_fusion():
     expr = c.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
     assert len(expr.exprs) == 4  # ones + three elemwise ops
-    result = c.compute()
-    expected = (np.ones(10) + 1) + (np.ones(10) * 2)
-    assert np.allclose(result, expected)
+    assert_eq(c, (np.ones(10) + 1) + (np.ones(10) * 2))
 
 
 def test_no_fusion_single_op():
@@ -75,9 +72,7 @@ def test_broadcast_fusion():
     z = (x + y) * 2
     expr = z.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    result = z.compute()
-    expected = (np.ones((10, 10)) + np.ones(10)) * 2
-    assert np.allclose(result, expected)
+    assert_eq(z, (np.ones((10, 10)) + np.ones(10)) * 2)
 
 
 def test_longer_chain():
@@ -89,9 +84,7 @@ def test_longer_chain():
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
     assert len(expr.exprs) == 6  # ones + five elemwise ops
-    result = y.compute()
-    expected = ((((np.ones(10) + 1) * 2) - 3) / 4) + 5
-    assert np.allclose(result, expected)
+    assert_eq(y, ((((np.ones(10) + 1) * 2) - 3) / 4) + 5)
 
 
 def test_fusion_with_different_chunks():
@@ -104,9 +97,7 @@ def test_fusion_with_different_chunks():
     z = (x + y) * 2
     expr = z.expr.optimize(fuse=True)
     # May or may not fuse depending on chunk unification, but should compute correctly
-    result = z.compute()
-    expected = (np.ones(12) + np.ones(12)) * 2
-    assert np.allclose(result, expected)
+    assert_eq(z, (np.ones(12) + np.ones(12)) * 2)
 
 
 def test_optimize_with_fuse_false():
@@ -127,9 +118,7 @@ def test_fusion_correctness_random():
     y = ((x + 1) * 2 - 3) / 4
 
     # Just verify the result is correct
-    result = y.compute()
-    expected = ((data + 1) * 2 - 3) / 4
-    assert np.allclose(result, expected)
+    assert_eq(y, ((data + 1) * 2 - 3) / 4)
 
 
 def test_transpose_elemwise_fusion():
@@ -141,10 +130,8 @@ def test_transpose_elemwise_fusion():
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
     assert len(expr.exprs) == 3  # ones + transpose + elemwise
-    result = y.compute()
-    expected = np.ones((6, 8)).T + 1
-    assert np.allclose(result, expected)
-    assert result.shape == (8, 6)
+    assert_eq(y, np.ones((6, 8)).T + 1)
+    assert y.shape == (8, 6)
 
 
 def test_elemwise_transpose_elemwise_fusion():
@@ -156,9 +143,7 @@ def test_elemwise_transpose_elemwise_fusion():
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
     assert len(expr.exprs) == 4  # ones + add + transpose + mul
-    result = y.compute()
-    expected = ((np.ones((6, 8)) + 1).T * 2)
-    assert np.allclose(result, expected)
+    assert_eq(y, (np.ones((6, 8)) + 1).T * 2)
 
 
 def test_swapaxes_fusion():
@@ -169,9 +154,7 @@ def test_swapaxes_fusion():
     y = da.swapaxes(x, 0, 2) + 1
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    result = y.compute()
-    expected = np.swapaxes(np.ones((6, 8, 4)), 0, 2) + 1
-    assert np.allclose(result, expected)
+    assert_eq(y, np.swapaxes(np.ones((6, 8, 4)), 0, 2) + 1)
 
 
 def test_transpose_broadcast_fusion():
@@ -183,9 +166,7 @@ def test_transpose_broadcast_fusion():
     z = ((x + 1).T + b) * 2
     expr = z.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    result = z.compute()
-    expected = ((np.ones((6, 8)) + 1).T + np.ones(6)) * 2
-    assert np.allclose(result, expected)
+    assert_eq(z, ((np.ones((6, 8)) + 1).T + np.ones(6)) * 2)
 
 
 def test_creation_fusion():
@@ -198,18 +179,45 @@ def test_creation_fusion():
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
     assert len(expr.exprs) == 2  # ones + add
-    assert np.allclose(y.compute(), np.ones(10) + 1)
+    assert_eq(y, np.ones(10) + 1)
 
     # zeros fuses too
     x = da.zeros((10,), chunks=5)
     y = x + 1
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    assert np.allclose(y.compute(), np.zeros(10) + 1)
+    assert_eq(y, np.zeros(10) + 1)
 
     # full fuses too
     x = da.full((10,), 5, chunks=5)
     y = x * 2
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    assert np.allclose(y.compute(), np.full(10, 5) * 2)
+    assert_eq(y, np.full(10, 5) * 2)
+
+
+def test_same_array_different_patterns():
+    """Same array accessed with different index patterns (a + a.T)."""
+    from dask.array._array_expr._blockwise import FusedBlockwise
+
+    # a + a.T - same array, different access patterns
+    a = da.ones((8, 8), chunks=4)
+    b = a + a.T
+    assert_eq(b, np.ones((8, 8)) + np.ones((8, 8)).T)
+
+    # Check that add+transpose are fused, but ones stays separate
+    expr = b.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    # Should have 2 exprs (add + transpose), not 3 (ones excluded due to conflict)
+    assert len(expr.exprs) == 2
+
+    # Verify graph structure
+    graph = dict(expr.__dask_graph__())
+    # 4 fused tasks + 4 ones tasks = 8 total
+    assert len(graph) == 8
+
+    # a * a.T - same pattern with multiplication
+    a = da.arange(16, chunks=4).reshape((4, 4))
+    b = a * a.T
+    expected = np.arange(16).reshape((4, 4)) * np.arange(16).reshape((4, 4)).T
+    assert_eq(b, expected)
