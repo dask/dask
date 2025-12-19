@@ -279,7 +279,7 @@ class Elemwise(Blockwise):
     def _info(self):
         if self.operand("dtype") is not None:
             need_enforce_dtype = True
-            dtype = self.operand("dtype")
+            dtype = np.dtype(self.operand("dtype"))
         else:
             # We follow NumPy's rules for dtype promotion, which special cases
             # scalars and 0d ndarrays (which it considers equivalent) by using

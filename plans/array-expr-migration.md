@@ -268,11 +268,11 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
 
 ### Current Test Status (December 2025)
-- **3852 passed**, 97 xfailed, 1 failed, 611 skipped
+- **3868 passed**, 81 xfailed, 1 failed, 611 skipped
 - Significant progress from earlier (was 211 xfails)
 
-**XFails by category (97 total):**
-- UFunc dtype parameter: 16 xfails
+**XFails by category (81 total):**
+- ~~UFunc dtype parameter: 16 xfails~~ **DONE**
 - Store advanced features: 6 xfails
 - Unknown chunks handling: 6 xfails
 - from_array features: 6 xfails
@@ -299,7 +299,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 
 | Stream | Tests | Priority | Notes |
 |--------|-------|----------|-------|
-| N: UFunc dtype | 16 | 🟡 High | Single fix unlocks many tests |
+| ~~N: UFunc dtype~~ | ~~16~~ | ~~🟡 High~~ | **DONE** |
 | M: Store advanced | 6 | 🟡 High | Practical importance |
 | P: Int dask indexing | 4 | 🟢 Medium | Nearly complete (17/20 pass) |
 | Q: from_array features | 6 | 🟡 Medium | API completeness |
@@ -479,14 +479,14 @@ Store with complex options like delayed targets, regions, compute=False.
 
 **Notes:** Basic store works. These tests require handling delayed targets, region slicing, and return_stored cases.
 
-### Stream N: UFunc dtype Parameter (16 tests) 🟡
+### Stream N: UFunc dtype Parameter (16 tests) 🟢 **DONE**
 The `dtype=` parameter in ufunc calls when combined with `where=`.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_ufunc_where[*-f8] | 16 variants with dtype='f8' | ⏳ |
+| test_ufunc_where[*-f8] | 16 variants with dtype='f8' | ✅ |
 
-**Notes:** The `where` parameter works, but explicit `dtype` casting fails. Need to handle `dtype` in Elemwise when `where` is also specified.
+**Implementation:** Fixed `Elemwise._info` to normalize user-provided dtype using `np.dtype()`. The issue was that dtype strings like `'f8'` were not being normalized to `np.dtype('f8')` (which displays as `float64`), causing `assert_eq` to fail on dtype comparison.
 
 ### Stream O: Unknown Chunks Handling (6 tests) 🟡
 Operations on arrays with NaN (unknown) chunk sizes.
