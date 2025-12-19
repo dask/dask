@@ -709,7 +709,7 @@ def test_index_with_int_dask_array_dtypes(dtype):
 
 @pytest.mark.xfail(
     da._array_expr_enabled(),
-    reason="Test relies on legacy graph construction",
+    reason="Test uses legacy Array constructor; needs array-expr reimplementation",
 )
 def test_index_with_int_dask_array_nocompute():
     """Test that when the indices are a dask array
@@ -952,7 +952,6 @@ def test_pathological_unsorted_slicing():
     assert_eq(x[index], x.compute()[index])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr")
 @pytest.mark.parametrize("params", [(2, 2, 1), (5, 3, 2)])
 def test_setitem_with_different_chunks_preserves_shape(params):
     """Reproducer for https://github.com/dask/dask/issues/3730.

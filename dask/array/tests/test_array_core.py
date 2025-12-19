@@ -4423,7 +4423,10 @@ def test_setitem_extended_API_2d(index, value):
     assert_eq(x, dx.compute())
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="setitem not implemented")
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="setitem with dask array indices needs array-expr reimplementation",
+)
 def test_setitem_extended_API_2d_rhs_func_of_lhs():
     # Cases:
     # * RHS and/or indices are a function of the LHS
@@ -4550,6 +4553,9 @@ def test_setitem_extended_API_2d_mask(index, value):
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.data, chunks=(2, 3))
     # See https://github.com/numpy/numpy/issues/23000 for the `RuntimeWarning`
+    # In array-expr mode, the warning happens at compute time when the masked
+    # array is cast to the target dtype, so we need to include persist/compute
+    # inside the warning filter.
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
@@ -4558,9 +4564,9 @@ def test_setitem_extended_API_2d_mask(index, value):
         )
         x[index] = value
         dx[index] = value
-    dx = dx.persist()
-    assert_eq(x, dx.compute())
-    assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
+        dx = dx.persist()
+        assert_eq(x, dx.compute())
+        assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
 
 def test_setitem_on_read_only_blocks():
