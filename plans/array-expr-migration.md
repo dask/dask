@@ -301,7 +301,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 |--------|-------|----------|-------|
 | ~~N: UFunc dtype~~ | ~~16~~ | ~~🟡 High~~ | **DONE** |
 | M: Store advanced | 6 | 🟡 High | Practical importance |
-| P: Int dask indexing | 4 | 🟢 Medium | Nearly complete (17/20 pass) |
+| ~~P: Int dask indexing~~ | ~~4~~ | ~~🟢 Medium~~ | **DONE** (20/20 pass, 1 xfail for dict constructor) |
 | Q: from_array features | 6 | 🟡 Medium | API completeness |
 | O: Unknown chunks | 6 | 🟡 Medium | Edge case handling |
 | S: Setitem edge | 3 | 🟡 Medium | Nearly complete (67/68 pass) |
@@ -314,7 +314,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | V: Fusion | 4 | 🔴 Deferred | Architectural change |
 | Z: Misc | ~37 | 🟢 Varies | Mixed bag |
 
-**Recommended next targets:** Stream N (16 tests with one fix), Stream M (store completeness), Stream P (nearly done)
+**Recommended next targets:** Stream M (store completeness), Stream Q (from_array features), Stream S (setitem edge cases)
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -502,17 +502,17 @@ Operations on arrays with NaN (unknown) chunk sizes.
 
 **Notes:** These tests construct arrays with `chunks=((np.nan, np.nan),)` directly. The array-expr Array constructor may need to accept this pattern.
 
-### Stream P: Integer Dask Array Indexing (4 tests) 🟢
+### Stream P: Integer Dask Array Indexing (4 tests) 🟢 **DONE**
 Indexing with dask arrays as indices.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_index_with_int_dask_array[x_chunks2-1] | Specific chunk configuration | ⏳ |
-| test_index_with_int_dask_array[x_chunks3-2] | Specific chunk configuration | ⏳ |
-| test_index_with_int_dask_array[x_chunks4-2] | Specific chunk configuration | ⏳ |
-| test_index_with_int_dask_array_nocompute | Indices should not be computed eagerly | ⏳ |
+| test_index_with_int_dask_array[x_chunks2-1] | Specific chunk configuration | ✅ |
+| test_index_with_int_dask_array[x_chunks3-2] | Specific chunk configuration | ✅ |
+| test_index_with_int_dask_array[x_chunks4-2] | Specific chunk configuration | ✅ |
+| test_index_with_int_dask_array_nocompute | Indices should not be computed eagerly | ⏳ xfail - relies on dict Array constructor |
 
-**Notes:** 17 of 20 variants pass. Specific chunk configurations fail. May be related to how chunked indices interact with chunked data.
+**Implementation:** Fixed `ArrayOffsetDep` to use 1D chunks `(x.chunks[axis],)` instead of full `x.chunks`, and pass it with `offset_axes = (axis,)` instead of `p_axes`. The bug was causing shape alignment errors in blockwise when the transpose dimension didn't match the original axis dimension.
 
 ### Stream Q: from_array Features (6 tests) 🟡
 Various from_array parameters and edge cases.

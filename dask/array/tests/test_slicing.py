@@ -643,18 +643,6 @@ def test_oob_check():
 @pytest.mark.parametrize("idx_chunks", [None, 3, 2, 1])
 @pytest.mark.parametrize("x_chunks", [None, (3, 5), (2, 3), (1, 2), (1, 1)])
 def test_index_with_int_dask_array(x_chunks, idx_chunks, request):
-    # Some combinations fail in array-expr mode
-    if da._array_expr_enabled():
-        # x_chunks2-1 => x_chunks=(2,3), idx_chunks=1
-        # x_chunks3-2 => x_chunks=(1,2), idx_chunks=2
-        # x_chunks4-2 => x_chunks=(1,1), idx_chunks=2
-        failing = (
-            (x_chunks == (2, 3) and idx_chunks == 1) or
-            (x_chunks == (1, 2) and idx_chunks == 2) or
-            (x_chunks == (1, 1) and idx_chunks == 2)
-        )
-        if failing:
-            request.applymarker(pytest.mark.xfail(reason="not implemented for array-expr"))
     # test data is crafted to stress use cases:
     # - pick from different chunks of x out of order
     # - a chunk of x contains no matches
