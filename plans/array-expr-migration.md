@@ -269,10 +269,10 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
 
 ### Current Test Status (December 2025)
-- **4464 passed**, 53 xfailed, 0 failed, 610 skipped
-- Significant progress from earlier (was 211 xfails, now 53)
+- **4471 passed**, 52 xfailed, 0 failed, 610 skipped
+- Significant progress from earlier (was 211 xfails, now 52)
 
-**XFails by category (53 total):**
+**XFails by category (52 total):**
 - Store advanced features: 3 xfails (regions, locks)
 - Masked array average: 2 xfails (test_average_weights_with_masked_array)
 - Fusion (architectural): 4 xfails (blockwise_fusion, block_id_fusion, trim_internal, map_blocks_optimize)
@@ -300,7 +300,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | ~~AB: Failed test fixes~~ | 2 | 🟡 Medium | **DONE** |
 | ~~M: Store advanced~~ | 6 | 🟡 High | **PARTIAL** (3/6 pass) |
 | ~~AC: Masked tensordot~~ | 4 | 🟡 Medium | **DONE** - explicit meta in tensordot |
-| S: Setitem edge | 1 | 🟡 Medium | test_setitem_extended_API_2d_rhs_func_of_lhs |
+| ~~S: Setitem edge~~ | 1 | 🟡 Medium | **DONE** - all 18 sub-tests pass |
 | AD: Masked average | 2 | 🟡 Medium | _average uses traditional routines.py |
 | X: Rechunk auto | 2 | 🟢 Low | May be test adjustment |
 | Y: Random broadcast | 2 | 🟡 Low | Niche use case |
@@ -311,12 +311,12 @@ These work streams can be executed in parallel by agents. Each is independent.
 | AF: Overlap | 3 | 🔴 Deferred | Needs fusion/push |
 | Z: Misc | ~27 | 🟢 Varies | Mixed bag |
 
-**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC
+**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S (mostly)
 
 **Recommended next targets:**
-1. Stream S (setitem edge) - 1 test remaining
-2. Stream AD (masked average) - 2 tests
-3. Stream X (rechunk auto) - 2 tests
+1. Stream AD (masked average) - 2 tests
+2. Stream X (rechunk auto) - 2 tests
+3. Stream Y (random broadcast) - 2 tests
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -567,23 +567,20 @@ Boolean masking when mask has unknown shape.
 - `test_array_picklable` (2 tests) now pass due to from_delayed fix
 - `test_delayed_array_key_hygeine` now passes due to from_delayed fix
 
-### Stream S: Setitem Edge Cases (3 tests) 🟡 **PARTIAL**
+### Stream S: Setitem Edge Cases (3 tests) ✅ **DONE**
 Remaining setitem issues.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_setitem_extended_API_2d_rhs_func_of_lhs | RHS depends on LHS, dask array indices | ⏳ |
+| test_setitem_extended_API_2d_rhs_func_of_lhs | RHS depends on LHS, dask array indices | ✅ All 18 sub-tests pass |
 | test_setitem_with_different_chunks_preserves_shape | 2 variants | ✅ |
 | test_setitem_extended_API_2d_mask | RuntimeWarning in numpy | ✅ |
 
-**Implementation (4/5 tests passing):**
+**Implementation:**
 - Fixed `take()` in `_slicing.py` to use `is_dask_collection` instead of `isinstance(index, Array)` to catch both legacy and array-expr Arrays in the no-op check.
 - Fixed `__setitem__` to handle any dask Array key (not just boolean dtype) via the `where` path, matching legacy behavior.
-- Moved `persist()` inside warning filter in test for masked array dtype casting warning (numpy issue).
-
-**Remaining work:**
-- `test_setitem_extended_API_2d_rhs_func_of_lhs` needs native array-expr reimplementation of `setitem_array`. The current implementation creates legacy Arrays internally via `concatenate_array_chunks`, which cannot be properly integrated with array-expr operations. A clean solution requires reimplementing the value slicing logic using array-expr constructs.
-- Related: `test_index_with_int_dask_array_nocompute` uses legacy Array constructor directly.
+- Added `_slice_with_int_dask_array_on_axis()` for lazy blockwise handling of dask array indices in getitem, matching legacy behavior.
+- Added eager index computation in `SetItem._layer()` since `setitem_array` needs concrete indices to distribute values across blocks.
 
 ### Stream T: Graph Construction (5 tests) 🔴
 Direct graph/dict construction with Array class.
