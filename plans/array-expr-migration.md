@@ -375,15 +375,15 @@ Custom chunk type registration for dispatching.
 - Removed module-level skip from `test_dispatch.py`
 - Updated `conftest.py` to register `EncapsulateNDArray` for array-expr mode
 
-### Stream I: Empty Chunk nanmin/nanmax (4 tests) 🟡
+### Stream I: Empty Chunk nanmin/nanmax (4 tests) 🟢 **DONE**
 Handle empty chunks in nanmin/nanmax.
 
-| Tests | Notes |
-|-------|-------|
-| test_empty_chunk_nanmin_nanmax | 2 tests |
-| test_empty_chunk_nanmin_nanmax_raise | 2 tests |
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_empty_chunk_nanmin_nanmax | 2 tests | ✅ |
+| test_empty_chunk_nanmin_nanmax_raise | 2 tests | ✅ |
 
-**Implementation:** Propagate warnings and handle edge cases for empty chunks.
+**Implementation:** Already working due to `compute_chunk_sizes()` implementation in Stream B. Removed stale xfail markers.
 
 ### Stream J: map_blocks Enhancements (5 tests) 🟢 **DONE**
 Various map_blocks improvements.
