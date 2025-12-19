@@ -136,6 +136,22 @@ class Array(DaskMethodsMixin):
         )
 
     @property
+    def _chunks(self):
+        """Internal access to chunks (for compatibility with tests)."""
+        return self.expr.chunks
+
+    @_chunks.setter
+    def _chunks(self, chunks):
+        """Set chunks by wrapping the expression with ChunksOverride.
+
+        This is primarily for internal use and testing when simulating
+        arrays with unknown chunk sizes.
+        """
+        from dask.array._array_expr._expr import ChunksOverride
+
+        self._expr = ChunksOverride(self._expr, chunks)
+
+    @property
     def chunksize(self) -> tuple:
         from dask.array.core import cached_max
         return tuple(cached_max(c) for c in self.chunks)

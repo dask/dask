@@ -275,17 +275,17 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 **XFails by category (81 total):**
 - ~~UFunc dtype parameter: 16 xfails~~ **DONE**
 - Store advanced features: 6 xfails
-- Unknown chunks handling: 6 xfails
+- ~~Unknown chunks handling: 6 xfails~~ **DONE**
 - from_array features: 6 xfails
 - Graph construction: 5 xfails
 - Fusion (architectural): 4 xfails
 - Boolean mask unknown shapes: 4 xfails
-- Integer dask array indexing: 4 xfails
+- Integer dask array indexing: 3 xfails (was 4)
 - Setitem edge cases: 3 xfails
 - Rechunk auto: 2 xfails
 - Random broadcasting: 2 xfails
-- Array pickling: 2 xfails
-- Misc single tests: ~37 xfails
+- ~~Array pickling: 2 xfails~~ (passing now, see Stream O)
+- Misc single tests: ~38 xfails
 
 ## Remaining Work Streams (Parallelizable)
 
@@ -304,7 +304,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | M: Store advanced | 6 | 🟡 High | Practical importance |
 | ~~P: Int dask indexing~~ | ~~4~~ | ~~🟢 Medium~~ | **DONE** (20/20 pass, 1 xfail for dict constructor) |
 | ~~Q: from_array features~~ | ~~6~~ | ~~🟡 Medium~~ | **DONE** (5/6 pass, 1 xfail for Task spec data_producer) |
-| O: Unknown chunks | 6 | 🟡 Medium | Edge case handling |
+| ~~O: Unknown chunks~~ | ~~6~~ | ~~🟡 Medium~~ | **DONE** |
 | S: Setitem edge | 3 | 🟡 Medium | Nearly complete (67/68 pass) |
 | ~~R: Boolean mask unknown~~ | ~~4~~ | ~~🟡 Medium~~ | **DONE** (+3 bonus tests fixed) |
 | X: Rechunk auto | 2 | 🟢 Low | May be test adjustment |
@@ -489,19 +489,24 @@ The `dtype=` parameter in ufunc calls when combined with `where=`.
 
 **Implementation:** Fixed `Elemwise._info` to normalize user-provided dtype using `np.dtype()`. The issue was that dtype strings like `'f8'` were not being normalized to `np.dtype('f8')` (which displays as `float64`), causing `assert_eq` to fail on dtype comparison.
 
-### Stream O: Unknown Chunks Handling (6 tests) 🟡
+### Stream O: Unknown Chunks Handling (6 tests) 🟢 **DONE**
 Operations on arrays with NaN (unknown) chunk sizes.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_no_chunks | Direct graph construction with NaN chunks | ⏳ |
-| test_no_chunks_yes_chunks | Mixed known/unknown chunks | ⏳ |
-| test_no_chunks_slicing_2d | 2D slicing with unknown chunks | ⏳ |
-| test_raise_informative_errors_no_chunks | Error messages for unknown chunks | ⏳ |
-| test_slicing_and_unknown_chunks | Slicing with unknown chunks | ⏳ |
-| test_unknown_chunks_length_one | flatnonzero with unknown chunks | ⏳ |
+| test_no_chunks | Unknown chunk operations | ✅ |
+| test_no_chunks_yes_chunks | Mixed known/unknown chunks | ✅ |
+| test_no_chunks_slicing_2d | 2D slicing with unknown chunks | ✅ |
+| test_raise_informative_errors_no_chunks | Error messages for unknown chunks | ✅ |
+| test_slicing_and_unknown_chunks | Slicing with unknown chunks | ✅ |
+| test_unknown_chunks_length_one | flatnonzero with unknown chunks | ✅ |
 
-**Notes:** These tests construct arrays with `chunks=((np.nan, np.nan),)` directly. The array-expr Array constructor may need to accept this pattern.
+**Implementation:**
+- Added `_chunks` property and setter to `Array` class using `ChunksOverride` expression
+- Updated tests to use `da.from_array` + `_chunks` setter instead of legacy graph construction
+- Lazy chunk validation for binary ops (access `.chunks` to trigger error)
+- Bonus: `test_index_array_with_array_2d` and `test_chunk_assignment_invalidates_cached_properties` also now pass
+- Note: `test_index_with_int_dask_array_nocompute` remains xfailed (relies on legacy graph construction)
 
 ### Stream P: Integer Dask Array Indexing (4 tests) 🟢 **DONE**
 Indexing with dask arrays as indices.

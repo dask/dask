@@ -383,7 +383,6 @@ def test_slicing_and_chunks():
     assert t.chunks == ((8, 8), (6, 6))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr")
 def test_slicing_and_unknown_chunks():
     a = da.ones((10, 5), chunks=5)
     a._chunks = ((np.nan, np.nan), (5,))
@@ -708,17 +707,21 @@ def test_index_with_int_dask_array_dtypes(dtype):
     assert_eq(a[idx], np.array([20, 30]))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr")
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="Test relies on legacy graph construction",
+)
 def test_index_with_int_dask_array_nocompute():
     """Test that when the indices are a dask array
     they are not accidentally computed
     """
+    from dask.array.core import Array
 
     def crash():
         raise NotImplementedError()
 
     x = da.arange(5, chunks=-1)
-    idx = da.Array({("x", 0): (crash,)}, name="x", chunks=((2,),), dtype=np.int64)
+    idx = Array({("x", 0): (crash,)}, name="x", chunks=((2,),), dtype=np.int64)
     result = x[idx]
     with pytest.raises(NotImplementedError):
         result.compute()
@@ -1004,7 +1007,6 @@ def test_shuffle_slice(size, chunks):
     assert_eq(a, b)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="flatnonzero not implemented for array-expr")
 def test_unknown_chunks_length_one():
     a = np.arange(256, dtype=int)
     arr = da.from_array(a, chunks=(256,))

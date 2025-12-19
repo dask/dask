@@ -4144,11 +4144,10 @@ def test_map_blocks_delayed():
     assert yy.key in zz.dask
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_no_chunks():
     X = np.arange(11)
-    dsk = {("x", 0): np.arange(5), ("x", 1): np.arange(5, 11)}
-    x = Array(dsk, "x", ((np.nan, np.nan),), np.arange(1).dtype)
+    x = da.from_array(X, chunks=(5, 6))
+    x._chunks = ((np.nan, np.nan),)  # Simulate unknown chunk sizes
     assert_eq(x + 1, X + 1)
     assert_eq(x.sum(), X.sum())
     assert_eq((x + 1).std(), (X + 1).std())
@@ -4170,8 +4169,6 @@ def test_no_chunks_2d():
     assert_eq(x.dot(x.T + 1), X.dot(X.T + 1))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_no_chunks_yes_chunks():
     X = np.arange(24).reshape((4, 6))
     x = da.from_array(X, chunks=(2, 2))
@@ -4182,7 +4179,6 @@ def test_no_chunks_yes_chunks():
     assert (x.dot(x.T)).chunks == ((2, 2), (2, 2))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_raise_informative_errors_no_chunks():
     X = np.arange(10)
     a = da.from_array(X, chunks=(5, 5))
@@ -4191,8 +4187,10 @@ def test_raise_informative_errors_no_chunks():
     b = da.from_array(X, chunks=(4, 4, 2))
     b._chunks = ((np.nan, np.nan, np.nan),)
 
+    # In array-expr mode, chunk validation for binary ops happens lazily
+    # when .chunks is accessed, so access it to trigger the error
     for op in [
-        lambda: a + b,
+        lambda: (a + b).chunks,
         lambda: a[1],
         lambda: a[::2],
         lambda: a[-5],
@@ -4205,8 +4203,6 @@ def test_raise_informative_errors_no_chunks():
             op()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_no_chunks_slicing_2d():
     X = np.arange(24).reshape((4, 6))
     x = da.from_array(X, chunks=(2, 2))
@@ -4233,7 +4229,6 @@ def test_index_array_with_array_1d():
         dx[dy > 5]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_index_array_with_array_2d():
     x = np.arange(24).reshape((4, 6))
     dx = da.from_array(x, chunks=(2, 2))
@@ -5928,7 +5923,6 @@ def test_rechunk_auto():
     assert y.npartitions == 1
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_chunk_assignment_invalidates_cached_properties():
     x = da.ones((4,), chunks=(1,))
     y = x.copy()
