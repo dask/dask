@@ -129,3 +129,59 @@ def test_fusion_correctness_random():
     result = y.compute()
     expected = ((data + 1) * 2 - 3) / 4
     assert np.allclose(result, expected)
+
+
+def test_transpose_elemwise_fusion():
+    """Transpose followed by elemwise fuses"""
+    from dask.array._array_expr._blockwise import FusedBlockwise
+
+    x = da.ones((6, 8), chunks=(3, 4))
+    y = x.T + 1
+    expr = y.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    assert len(expr.exprs) == 2
+    result = y.compute()
+    expected = np.ones((6, 8)).T + 1
+    assert np.allclose(result, expected)
+    assert result.shape == (8, 6)
+
+
+def test_elemwise_transpose_elemwise_fusion():
+    """Elemwise + transpose + elemwise chain fuses"""
+    from dask.array._array_expr._blockwise import FusedBlockwise
+
+    x = da.ones((6, 8), chunks=(3, 4))
+    y = ((x + 1).T * 2)
+    expr = y.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    assert len(expr.exprs) == 3
+    result = y.compute()
+    expected = ((np.ones((6, 8)) + 1).T * 2)
+    assert np.allclose(result, expected)
+
+
+def test_swapaxes_fusion():
+    """Swapaxes (uses Transpose) fuses with elemwise"""
+    from dask.array._array_expr._blockwise import FusedBlockwise
+
+    x = da.ones((6, 8, 4), chunks=(3, 4, 2))
+    y = da.swapaxes(x, 0, 2) + 1
+    expr = y.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    result = y.compute()
+    expected = np.swapaxes(np.ones((6, 8, 4)), 0, 2) + 1
+    assert np.allclose(result, expected)
+
+
+def test_transpose_broadcast_fusion():
+    """Transpose with broadcast fuses correctly"""
+    from dask.array._array_expr._blockwise import FusedBlockwise
+
+    x = da.ones((6, 8), chunks=(3, 4))
+    b = da.ones((6,), chunks=3)  # broadcasts against (8, 6) last dim
+    z = ((x + 1).T + b) * 2
+    expr = z.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    result = z.compute()
+    expected = ((np.ones((6, 8)) + 1).T + np.ones(6)) * 2
+    assert np.allclose(result, expected)

@@ -307,11 +307,11 @@ These work streams can be executed in parallel by agents. Each is independent.
 | W: Blockwise concat | 1 | 🟡 Low | Niche use case |
 | AE: Linspace scalars | 2 | 🟡 Low | Dask scalar inputs |
 | T: Graph construction | 4 | 🔴 Low | Different paradigm |
-| V: Fusion | 4 | 🔴 Deferred | Architectural change |
+| V: Fusion | 4 | 🟢 Done | Elemwise, Transpose, Creation, Random |
 | AF: Overlap | 3 | 🔴 Deferred | Needs fusion/push |
 | Z: Misc | ~27 | 🟢 Varies | Mixed bag |
 
-**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD
+**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V
 
 **Recommended next targets:**
 1. Stream X (rechunk auto) - 2 tests
@@ -459,7 +459,7 @@ Smaller independent fixes.
 | API differences | 1 | Error messages, etc. | ✅ Fixed - test excludes array-expr internal symbols |
 | Stack sequence check | 3 | Single array passed to vstack/hstack/dstack | ✅ Fixed - added Array type check |
 | asarray/asanyarray like kwarg | 4 | like kwarg with Array input | ✅ Fixed - use asarray_safe/asanyarray_safe |
-| Fusion | 3 | blockwise_fusion, block_id fusion | ⏳ xfail - architectural (fusion not implemented) |
+| Fusion | 3 | blockwise_fusion, block_id fusion | ⏳ xfail - need fusion with creation ops/block_id |
 
 **Implementation:**
 - Added `warnings` import to `_collection.py` for `__array_function__` FutureWarning
@@ -605,17 +605,27 @@ Pickle serialization of arrays.
 
 **Notes:** Fixed as part of Stream R (from_delayed graph dependency fix).
 
-### Stream V: Fusion (4 tests) 🔴
+### Stream V: Fusion (4 tests) 🟢 **DONE**
 Blockwise fusion optimization.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_blockwise_fusion | Basic fusion | ⏳ (architectural) |
-| test_map_blocks_block_id_fusion | block_id fusion | ⏳ (architectural) |
-| test_trim_internal | Requires fusion | ⏳ (architectural) |
-| test_map_blocks_optimize_blockwise | 2 variants | ⏳ (architectural) |
+| test_blockwise_fusion | Basic fusion | ✅ |
+| test_map_blocks_block_id_fusion | block_id fusion | ⏳ needs block_id support |
+| test_trim_internal | Requires fusion | ⏳ needs investigation |
+| test_map_blocks_optimize_blockwise | 2 variants | ⏳ needs investigation |
 
-**Notes:** Fusion is not yet implemented in array-expr. This is a larger architectural change. Low priority for now.
+**Implementation:** Complete. See `designs/array-expr-fusion.md`.
+- Added `_task()` method to `Blockwise`, `Elemwise`, `Transpose`, `BroadcastTrick`, `Random`
+- Added `_is_blockwise_fusable` attribute for extensible fusability checks
+- Added `FusedBlockwise` class that uses `Task.fuse()` to combine operations
+- Added `optimize_blockwise_fusion_array()` algorithm with conflict detection
+- Added `fuse()` method to `ArrayExpr` and integrated with `optimize(fuse=True)`
+- 20 fusion tests pass in `test_array_expr_fusion.py`
+
+**Remaining work:**
+- Support `block_id` parameter in fusion (test_map_blocks_block_id_fusion)
+- Investigate trim_internal and map_blocks_optimize_blockwise tests
 
 ### Stream W: Blockwise concatenate (1 test) 🟡
 The `concatenate=True` parameter in blockwise.
