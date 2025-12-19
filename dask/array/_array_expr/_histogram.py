@@ -165,12 +165,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             ) from None
 
     # Handle delayed bins/range
-    if is_dask_collection(bins) or is_dask_collection(range):
+    range_has_dask = range is not None and any(is_dask_collection(r) for r in range)
+    if is_dask_collection(bins) or range_has_dask:
         # For delayed bins/range, we need to compute them first or handle specially
         # For now, raise NotImplementedError for complex cases
         if is_dask_collection(bins) and not isinstance(bins, Array):
             raise NotImplementedError("Delayed bins not yet supported in array-expr")
-        if is_dask_collection(range):
+        if range_has_dask:
             raise NotImplementedError("Delayed range not yet supported in array-expr")
 
     # Convert scalar bins + range to bin edges

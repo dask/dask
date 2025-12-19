@@ -558,7 +558,7 @@ class Array(DaskMethodsMixin):
         dask Array
             A 1-D array with the same data as self.
         """
-        return reshape(self, (self.size,))
+        return reshape(self, (-1,))
 
     def ravel(self):
         """Return a flattened array.
@@ -568,7 +568,7 @@ class Array(DaskMethodsMixin):
         dask Array
             A 1-D array with the same data as self.
         """
-        return reshape(self, (self.size,))
+        return reshape(self, (-1,))
 
     flatten = ravel
 
