@@ -130,7 +130,7 @@ def test_arr_like_shape(funcname, kwargs, shape, dtype, chunks, out_shape):
         assert_eq(np_r, da_r)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype mismatch in array-expr")
+@pytest.mark.xfail(da._array_expr_enabled(), reason="dask scalar inputs not supported in array-expr", strict=False)
 @pytest.mark.parametrize("endpoint", [True, False])
 def test_linspace(endpoint):
     darr = da.linspace(6, 49, endpoint=endpoint, chunks=5)
@@ -190,7 +190,6 @@ def test_linspace(endpoint):
     assert_eq(darr, nparr)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="dtype mismatch in array-expr")
 def test_arange():
     darr = da.arange(77, chunks=13)
     nparr = np.arange(77)

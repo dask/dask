@@ -35,9 +35,10 @@ class Arange(ArrayExpr):
     def dtype(self):
         # Use type(x)(0) to determine dtype without overflow issues
         # when start/stop are very large integers
-        return self.operand("dtype") or np.arange(
-            type(self.start)(0), type(self.stop)(0), self.step
-        ).dtype
+        dt = self.operand("dtype")
+        if dt is not None:
+            return np.dtype(dt)
+        return np.arange(type(self.start)(0), type(self.stop)(0), self.step).dtype
 
     @functools.cached_property
     def _meta(self):
@@ -84,7 +85,10 @@ class Linspace(Arange):
 
     @functools.cached_property
     def dtype(self):
-        return self.operand("dtype") or np.linspace(0, 1, 1).dtype
+        dt = self.operand("dtype")
+        if dt is not None:
+            return np.dtype(dt)
+        return np.linspace(0, 1, 1).dtype
 
     @functools.cached_property
     def step(self):
@@ -633,7 +637,10 @@ empty = wrap(wrap_func_shape_as_first_arg, klass=Empty, dtype="f8")
 _full = wrap(wrap_func_shape_as_first_arg, klass=Full, dtype="f8")
 
 
-def arange(start=0, stop=None, step=1, *, chunks="auto", like=None, dtype=None):
+_arange_sentinel = object()
+
+
+def arange(start=_arange_sentinel, stop=None, step=1, *, chunks="auto", like=None, dtype=None):
     """
     Return evenly spaced values from `start` to `stop` with step size `step`.
 
@@ -670,7 +677,13 @@ def arange(start=0, stop=None, step=1, *, chunks="auto", like=None, dtype=None):
     --------
     dask.array.linspace
     """
-    if stop is None:
+    if start is _arange_sentinel:
+        if stop is None:
+            raise TypeError("arange() requires stop to be specified.")
+        # Only stop was provided as a keyword argument
+        start = 0
+    elif stop is None:
+        # Only start was provided, treat it as stop
         stop = start
         start = 0
 

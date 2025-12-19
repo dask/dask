@@ -140,9 +140,10 @@ class FromGraph(IO):
 
     def _layer(self):
         dsk = dict(self.operand("layer"))
-        # The name may not actually match the layers name therefore rewrite this
-        # using an alias
-        for k in self.operand("keys"):
+        # The name may not actually match the layer's name therefore rewrite this
+        # using an alias. Use the actual keys from the layer dict since they may
+        # differ from self.operand("keys") (e.g., after persist() with optimization).
+        for k in list(dsk.keys()):
             if not isinstance(k, tuple):
                 raise TypeError(f"Expected tuple, got {type(k)}")
             orig = dsk[k]
