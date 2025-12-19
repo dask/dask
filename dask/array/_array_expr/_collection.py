@@ -409,6 +409,62 @@ class Array(DaskMethodsMixin):
         if np.isnan(self.shape).any():
             raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
 
+        # Validate indices and value shape eagerly (before creating lazy expression)
+        import math
+
+        from dask.array.slicing import parse_assignment_indices
+
+        indices, implied_shape, _, implied_shape_positions = parse_assignment_indices(
+            key, self.shape
+        )
+        value_shape = value.shape
+
+        # Validate value shape vs implied shape (from setitem_array validation)
+        if 0 in implied_shape and value_shape and max(value_shape) > 1:
+            raise ValueError(
+                f"shape mismatch: value array of shape {value_shape} "
+                "could not be broadcast to indexing result "
+                f"of shape {tuple(implied_shape)}"
+            )
+
+        value_ndim = len(value_shape)
+        offset = len(implied_shape) - value_ndim
+        if offset >= 0:
+            array_common_shape = implied_shape[offset:]
+            value_common_shape = value_shape
+            implied_positions = implied_shape_positions[offset:]
+        else:
+            value_offset = -offset
+            array_common_shape = implied_shape
+            value_common_shape = value_shape[value_offset:]
+            implied_positions = implied_shape_positions
+            # All extra leading dimensions must have size 1
+            if value_shape[:value_offset] != (1,) * value_offset:
+                raise ValueError(
+                    "could not broadcast input array from shape"
+                    f"{value_shape} into shape {tuple(implied_shape)}"
+                )
+
+        # Check shape compatibility for each dimension
+        for i, (a, b, j) in enumerate(
+            zip(array_common_shape, value_common_shape, implied_positions)
+        ):
+            index = indices[j]
+            if is_dask_collection(index) and getattr(index, "dtype", None) == bool:
+                # For dask boolean index, value size must not exceed index size
+                if not math.isnan(b) and b > index.size:
+                    raise ValueError(
+                        f"shape mismatch: value array dimension size of {b} is "
+                        "greater then corresponding boolean index size of "
+                        f"{index.size}"
+                    )
+            elif b != 1 and a != b and not math.isnan(a):
+                raise ValueError(
+                    f"shape mismatch: value array of shape {value_shape} "
+                    "could not be broadcast to indexing result of shape "
+                    f"{tuple(implied_shape)}"
+                )
+
         # Use SetItem expression for other index types
         from dask.array._array_expr._slicing import SetItem
 

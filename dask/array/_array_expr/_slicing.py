@@ -352,14 +352,17 @@ def slice_slices_and_integers(x, index, allow_getitem_optimization=False):
 
 
 def take(x, index, axis=0):
+    from dask.array._array_expr._collection import Array
+
     if not np.isnan(x.chunks[axis]).any():
         from dask.array._array_expr._shuffle import _shuffle
         from dask.array.utils import arange_safe, asarray_safe
 
-        arange = arange_safe(np.sum(x.chunks[axis]), like=index)
-        if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
-            # no-op
-            return x
+        # No-op check only for numpy arrays (dask array comparison triggers warnings)
+        if not isinstance(index, Array):
+            arange = arange_safe(np.sum(x.chunks[axis]), like=index)
+            if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
+                return x
 
         average_chunk_size = int(sum(x.chunks[axis]) / len(x.chunks[axis]))
 
