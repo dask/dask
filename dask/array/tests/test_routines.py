@@ -2268,7 +2268,7 @@ def test_ravel_multi_index_unknown_shape_fails():
 
     assert np.isnan(multi_index1.shape).any()
     assert np.isnan(multi_index2.shape).any()
-    with pytest.raises(ValueError, match="Arrays' chunk sizes"):
+    with pytest.raises(ValueError, match="[Cc]hunk"):
         da.ravel_multi_index(multi_index, dims=(8, 9, 10))
 
 

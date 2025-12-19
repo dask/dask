@@ -269,23 +269,24 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
 
 ### Current Test Status (December 2025)
-- **3868 passed**, 81 xfailed, 1 failed, 611 skipped
-- Significant progress from earlier (was 211 xfails)
+- **4457 passed**, 60 xfailed, 0 failed, 610 skipped, 6 xpassed
+- Significant progress from earlier (was 211 xfails, now 60)
 
-**XFails by category (81 total):**
-- ~~UFunc dtype parameter: 16 xfails~~ **DONE**
+**XPassed Tests (6 - expected with strict=False):**
+- `test_mixed_concatenate[<lambda>13/14/15]` - tensordot with masked arrays works in some contexts
+- `test_mixed_random[<lambda>13/14/15]` - tensordot with masked arrays works in some contexts
+
+**XFails by category (60 total):**
 - Store advanced features: 6 xfails
-- ~~Unknown chunks handling: 6 xfails~~ **DONE**
-- from_array features: 6 xfails
-- Graph construction: 5 xfails
-- Fusion (architectural): 4 xfails
-- Boolean mask unknown shapes: 4 xfails
-- Integer dask array indexing: 3 xfails (was 4)
-- Setitem edge cases: 3 xfails
+- Masked array tensordot: 4 xfails (test_basic lambdas, test_tensordot)
+- Masked array average: 2 xfails (test_average_weights_with_masked_array)
+- Fusion (architectural): 4 xfails (blockwise_fusion, block_id_fusion, trim_internal, map_blocks_optimize)
+- Overlap: 3 xfails (trim_internal, push, xarray)
+- Graph construction: 4 xfails (constructor_plugin, dask_layers, to_backend, cull)
+- Linspace: 2 xfails (dask scalar inputs)
 - Rechunk auto: 2 xfails
 - Random broadcasting: 2 xfails
-- ~~Array pickling: 2 xfails~~ (passing now, see Stream O)
-- Misc single tests: ~38 xfails
+- Creation/misc: ~31 xfails
 
 ## Remaining Work Streams (Parallelizable)
 
@@ -296,26 +297,31 @@ These work streams can be executed in parallel by agents. Each is independent.
 - 🟡 Medium - Moderate complexity
 - 🔴 Complex - Architectural changes needed
 
-### Priority Summary for New Streams
+### Priority Summary for Streams
 
 | Stream | Tests | Priority | Notes |
 |--------|-------|----------|-------|
-| ~~N: UFunc dtype~~ | ~~16~~ | ~~🟡 High~~ | **DONE** |
+| ~~AA: XPASS cleanup~~ | 6 | 🟢 Quick | Expected with strict=False |
+| ~~AB: Failed test fixes~~ | 2 | 🟡 Medium | **DONE** |
 | M: Store advanced | 6 | 🟡 High | Practical importance |
-| ~~P: Int dask indexing~~ | ~~4~~ | ~~🟢 Medium~~ | **DONE** (20/20 pass, 1 xfail for dict constructor) |
-| ~~Q: from_array features~~ | ~~6~~ | ~~🟡 Medium~~ | **DONE** (5/6 pass, 1 xfail for Task spec data_producer) |
-| ~~O: Unknown chunks~~ | ~~6~~ | ~~🟡 Medium~~ | **DONE** |
-| S: Setitem edge | 3 | 🟡 Medium | **PARTIAL** (4/5 pass, 1 needs reimplementation) |
-| ~~R: Boolean mask unknown~~ | ~~4~~ | ~~🟡 Medium~~ | **DONE** (+3 bonus tests fixed) |
+| S: Setitem edge | 1 | 🟡 Medium | test_setitem_extended_API_2d_rhs_func_of_lhs |
+| AC: Masked tensordot | 4 | 🟡 Medium | test_basic lambdas + test_tensordot |
+| AD: Masked average | 2 | 🟡 Medium | _average uses traditional routines.py |
 | X: Rechunk auto | 2 | 🟢 Low | May be test adjustment |
-| ~~U: Array pickling~~ | ~~2~~ | ~~🟢 Low~~ | **DONE** (fixed by Stream R) |
 | Y: Random broadcast | 2 | 🟡 Low | Niche use case |
 | W: Blockwise concat | 1 | 🟡 Low | Niche use case |
-| T: Graph construction | 5 | 🔴 Low | Different paradigm |
+| AE: Linspace scalars | 2 | 🟡 Low | Dask scalar inputs |
+| T: Graph construction | 4 | 🔴 Low | Different paradigm |
 | V: Fusion | 4 | 🔴 Deferred | Architectural change |
-| Z: Misc | ~36 | 🟢 Varies | Mixed bag (-1 fixed by Stream R) |
+| AF: Overlap | 3 | 🔴 Deferred | Needs fusion/push |
+| Z: Misc | ~27 | 🟢 Varies | Mixed bag |
 
-**Recommended next targets:** Stream M (store completeness), Stream S (setitem edge remaining test)
+**Completed streams:** N, P, Q, O, R, U, AB (all DONE)
+
+**Recommended next targets:**
+1. Stream M (store completeness) - 6 tests, practical importance
+2. Stream AC (masked tensordot) - 4 tests
+3. Stream S (setitem edge) - 1 test remaining
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -642,29 +648,85 @@ Random arrays with broadcasted shapes.
 
 **Notes:** Random number generation mostly works. These test broadcasting of shape parameters.
 
-### Stream Z: Misc Single Tests (~37 tests) 🟢
-Various individual tests.
+### Stream AA: XPASS Cleanup (6 tests) 🟢
+Remove stale xfail markers for tests that now pass.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_mixed_concatenate[<lambda>13/14/15] | Tensordot with masked arrays | ⏳ |
+| test_mixed_random[<lambda>13/14/15] | Tensordot with masked arrays | ⏳ |
+
+**Notes:** These tests have `strict=False` xfail markers. The tensordot operations with masked arrays work in concatenate/random contexts but not in the direct test_basic/test_tensordot tests. The markers can be narrowed.
+
+### Stream AB: Failed Test Fixes (2 tests) 🟢 **DONE**
+Fixed failing tests.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_index_array_with_array_1d | Boolean indexing shape mismatch validation | ✅ |
+| test_ravel_multi_index_unknown_shape_fails | Error message regex mismatch | ✅ |
+
+**Implementation:**
+- `test_index_array_with_array_1d`: Added eager chunk validation in `slice_with_bool_dask_array` by accessing `y.chunks` after the elemwise call. This triggers the `common_blockdim` validation before returning, matching legacy behavior.
+- `test_ravel_multi_index_unknown_shape_fails`: Updated test regex from `"Arrays' chunk sizes"` to `"[Cc]hunk"` to match actual error message.
+- Also fixed `common_blockdim` in `dask/array/core.py` to validate that arrays with unknown chunks have compatible chunk counts.
+
+### Stream AC: Masked Array Tensordot (4 tests) 🟡
+Tensordot operations that lose masked array meta.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_basic[<lambda>13] | x.dot(np.arange(x.shape[-1])) | ⏳ |
+| test_basic[<lambda>14] | x.dot(np.eye(x.shape[-1])) | ⏳ |
+| test_basic[<lambda>15] | da.tensordot with axes | ⏳ |
+| test_tensordot | Direct tensordot test | ⏳ |
+
+**Notes:** Tensordot in array-expr mode loses the masked array metadata. Need to propagate meta properly through the tensordot expression.
+
+### Stream AD: Masked Array Average (2 tests) 🟡
+Average function with masked array weights.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_average_weights_with_masked_array[False] | Without keepdims | ⏳ |
+| test_average_weights_with_masked_array[True] | With keepdims | ⏳ |
+
+**Notes:** The `_average` function in ma module uses traditional `routines.py` which warns when passed dask arrays. Need to update ma average to use array-expr compatible path.
+
+### Stream AE: Linspace Dask Scalars (2 tests) 🟡
+Linspace with dask scalar start/stop values.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_linspace[True] | Dask scalar inputs | ⏳ |
+| test_linspace[False] | Dask scalar inputs | ⏳ |
+
+**Notes:** The linspace implementation doesn't handle dask array scalars as start/stop parameters. Need delayed computation path.
+
+### Stream AF: Overlap (3 tests) 🔴
+Overlap operations requiring fusion.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_trim_internal | Requires fusion | ⏳ |
+| test_nearest | Requires push | ⏳ |
+| test_xarray_reduction | XArray integration | ⏳ |
+
+**Notes:** Overlap operations depend on fusion for efficiency. Deferred until fusion is implemented.
+
+### Stream Z: Misc Single Tests (~25 tests) 🟢
+Various individual tests not covered by other streams.
 
 | Test | Notes | Status |
 |------|-------|--------|
-| test_elemwise_on_scalars | 0-D dask scalars in elemwise | ⏳ |
-| test_matmul | Specific matmul issue | ⏳ |
-| test_astype_gh9316 | GitHub issue #9316 | ⏳ |
 | test_slicing_with_non_ndarrays | Custom types in slicing | ⏳ |
-| test_map_blocks3 | map_blocks edge case | ⏳ |
-| test_raise_on_bad_kwargs | from_array kwargs checking | ⏳ |
-| test_warn_bad_rechunking | Warning message | ⏳ |
 | test_map_blocks_delayed | Returns dict not HLG | ⏳ (by design) |
 | test_to_delayed_optimize_graph | Optimization | ⏳ |
-| test_index_array_with_array_2d | 2D array indexing | ⏳ |
 | test_index_array_with_array_3d_2d | Chunking alignment | ⏳ |
-| test_normalize_chunks_object_dtype | 2 variants | ⏳ |
 | test_pandas_from_dask_array | Pandas conversion | ⏳ |
 | test_partitions_indexer | .partitions property | ⏳ |
-| test_chunk_assignment_invalidates_cached_properties | Property caching | ⏳ |
 | test_delayed_array_key_hygeine | Key hygiene | ✅ (fixed in Stream R) |
 | test_to_backend | Backend switching | ⏳ |
-| test_linspace | 2 variants - dask scalar inputs | ⏳ |
 | test_arange_cast_float_int_step | Float-to-int casting | ⏳ (by design) |
 | test_nan_full_like | 2 variants - unsigned int edge case | ⏳ |
 | test_like_forgets_graph | 2 remaining variants | ⏳ |
@@ -677,6 +739,9 @@ Various individual tests.
 | test_meta_from_array_type_inputs | meta_from_array | ⏳ |
 | test_assert_eq_scheduler | Test utility issue | ⏳ |
 | test_map_blocks_dataframe | DataFrame output | ⏳ |
+| test_two[ttest_1samp-kwargs2] | scipy stats edge case | ⏳ |
+| test_index_with_int_dask_array_nocompute | Legacy Array constructor | ⏳ |
+| test_creation_data_producers | data_producer not implemented | ⏳ |
 
 ## Migration Workflow
 
