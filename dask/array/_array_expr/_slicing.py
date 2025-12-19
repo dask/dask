@@ -792,6 +792,9 @@ def slice_with_bool_dask_array(x, index):
             )
         # Use elemwise to apply getitem across blocks
         y = elemwise(getitem, x, index[0], dtype=x.dtype)
+        # Trigger eager chunk validation to match legacy behavior
+        # This will raise if x and index have incompatible chunks
+        _ = y.chunks
         result = BooleanIndexFlattened(y.expr)
         return new_collection(result), out_index
 

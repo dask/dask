@@ -4285,6 +4285,15 @@ def common_blockdim(blockdims):
     # (we can't verify alignment at graph-build time)
     unknown_dims = [d for d in blockdims if np.isnan(sum(d))]
     if unknown_dims:
+        # All arrays (both known and unknown) must have the same number of chunks
+        # to be alignable. We can't verify chunk sizes at graph-build time for
+        # unknown chunks, but we can verify the count matches.
+        all_lengths = {len(d) for d in blockdims}
+        if len(all_lengths) > 1:
+            raise ValueError(
+                f"Chunks are unknown or misaligned along dimensions with missing values.\n\n"
+                f"A possible solution:\n  x.compute_chunk_sizes()"
+            )
         return first(unknown_dims)
 
     non_trivial_dims = {d for d in blockdims if len(d) > 1}
