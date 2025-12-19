@@ -10,7 +10,7 @@ from threading import Lock
 import numpy as np
 
 from dask._collections import new_collection
-from dask._task_spec import TaskRef
+from dask._task_spec import Task, TaskRef
 from dask.array._array_expr._collection import Array
 from dask.array._array_expr._io import IO
 from dask.array.backends import array_creation_dispatch
@@ -915,6 +915,7 @@ class Random(IO):
         "kwargs",
     ]
     _defaults = {"extra_chunks": ()}
+    _is_blockwise_fusable = True
 
     @cached_property
     def kwargs(self):
@@ -968,29 +969,41 @@ class Random(IO):
         return self._info[0]
 
     def _layer(self):
-        bitgens, name, sizes, gen, func_applier = self._info
+        result = {}
+        for block_id in product(*[range(len(bd)) for bd in self.chunks]):
+            key = (self._name, *block_id)
+            result[key] = self._task(key, block_id)
+        return result
 
-        keys = product(
-            [name],
-            *([range(len(bd)) for bd in self._base_chunks] + [[0]] * len(self.extra_chunks)),
+    def _block_id_to_flat_index(self, block_id: tuple[int, ...]) -> int:
+        """Convert N-D block_id to flat index for bitgens/sizes lookup."""
+        # Only use base_chunks dimensions (exclude extra_chunks which are always 0)
+        base_block_id = block_id[:len(self._base_chunks)]
+        flat_idx = 0
+        stride = 1
+        for i in reversed(range(len(base_block_id))):
+            flat_idx += base_block_id[i] * stride
+            stride *= len(self._base_chunks[i])
+        return flat_idx
+
+    def _task(self, key, block_id: tuple[int, ...]) -> Task:
+        """Generate task for a specific output block."""
+        bitgens, name, sizes, gen, func_applier = self._info
+        flat_idx = self._block_id_to_flat_index(block_id)
+        return Task(
+            key,
+            func_applier,
+            gen,
+            self.distribution,
+            bitgens[flat_idx],
+            sizes[flat_idx],
+            self.args,
+            self.kwargs,
         )
 
-        vals = []
-        # TODO: handle non-trivial args/kwargs (arrays, dask or otherwise)
-        for bitgen, size in zip(bitgens, sizes):
-            vals.append(
-                (
-                    func_applier,
-                    gen,
-                    self.distribution,
-                    bitgen,
-                    size,
-                    self.args,
-                    self.kwargs,
-                )
-            )
-
-        return dict(zip(keys, vals))
+    def _input_block_id(self, dep, block_id: tuple[int, ...]) -> tuple[int, ...]:
+        """Random has no array dependencies, so this is never called."""
+        return block_id
 
     @cached_property
     def _meta(self):

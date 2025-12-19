@@ -173,6 +173,28 @@ def test_creation_fusion():
     assert_eq(y, np.full(10, 5) * 2)
 
 
+def test_random_fusion():
+    """Random arrays fuse with elemwise operations."""
+    rng = da.random.default_rng(42)
+    x = rng.random((10, 10), chunks=5)
+    y = x + 1
+
+    expr = y.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    assert len(expr.exprs) == 2  # elemwise + random
+
+    # Verify correctness - values should be in [1, 2)
+    result = y.compute()
+    assert result.min() >= 1.0
+    assert result.max() < 2.0
+
+    # Multiple operations chain
+    z = (x * 2 + 1) / 3
+    expr = z.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    assert len(expr.exprs) == 4  # 3 elemwise + random
+
+
 def test_same_array_different_patterns():
     """Same array accessed with different index patterns (a + a.T)."""
     # a + a.T - same array, different access patterns
