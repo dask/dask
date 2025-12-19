@@ -299,7 +299,7 @@ Converted blanket xfail markers to targeted ones for passing variants.
 | test_slicing.py | 17 | ✅ test_index_with_int_dask_array (17 of 20 variants pass) |
 | test_ufunc.py | 4 | ✅ test_ufunc_where with where=True and dtype=None pass |
 
-### Stream B: compute_chunk_sizes() (9 tests) 🟡
+### Stream B: compute_chunk_sizes() (9 tests) 🟡 ✅ DONE
 Method to compute unknown chunk sizes after boolean indexing.
 
 | Tests | Notes |
@@ -309,7 +309,7 @@ Method to compute unknown chunk sizes after boolean indexing.
 | test_compute_chunk_sizes_3d_array | 3D arrays |
 | test_compute_chunk_sizes_warning_fixes_* | 6 warning tests |
 
-**Implementation:** Add `compute_chunk_sizes()` method to Array class that computes chunk sizes by executing the graph.
+**Implementation:** Added `compute_chunk_sizes()` method to Array class in `_collection.py`. Uses `map_blocks` to get chunk shapes, computes them, then wraps the expression with `ChunksOverride` to set the new chunks.
 
 ### Stream C: Cumulative Reduction axis=None (16 tests) 🔴
 cumsum/cumprod/nancumsum/nancumprod with axis=None.

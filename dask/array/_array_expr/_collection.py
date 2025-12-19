@@ -153,6 +153,62 @@ class Array(DaskMethodsMixin):
 
         return prod(self.numblocks)
 
+    def compute_chunk_sizes(self):
+        """
+        Compute the chunk sizes for a Dask array. This is especially useful
+        when the chunk sizes are unknown (e.g., when indexing one Dask array
+        with another).
+
+        Notes
+        -----
+        This function modifies the Dask array in-place.
+
+        Examples
+        --------
+        >>> import dask.array as da
+        >>> import numpy as np
+        >>> x = da.from_array([-2, -1, 0, 1, 2], chunks=2)
+        >>> x.chunks
+        ((2, 2, 1),)
+        >>> y = x[x <= 0]
+        >>> y.chunks
+        ((nan, nan, nan),)
+        >>> y.compute_chunk_sizes()  # in-place computation
+        dask.array<getitem, shape=(3,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>
+        >>> y.chunks
+        ((2, 1, 0),)
+        """
+        from dask.array.core import _get_chunk_shape
+        from dask.base import compute
+
+        chunk_shapes = self.map_blocks(
+            _get_chunk_shape,
+            dtype=int,
+            chunks=tuple(len(c) * (1,) for c in self.chunks) + ((self.ndim,),),
+            new_axis=self.ndim,
+        )
+
+        c = []
+        for i in range(self.ndim):
+            s = self.ndim * [0] + [i]
+            s[i] = slice(None)
+            s = tuple(s)
+
+            c.append(tuple(chunk_shapes[s]))
+
+        # `map_blocks` assigns numpy dtypes
+        # cast chunk dimensions back to python int before returning
+        new_chunks = tuple(
+            tuple(int(chunk) for chunk in chunks) for chunks in compute(tuple(c))[0]
+        )
+
+        # In the expression system, wrap with ChunksOverride to set the new chunks
+        from dask.array._array_expr._expr import ChunksOverride
+
+        self._expr = ChunksOverride(self._expr, new_chunks)
+
+        return self
+
     @property
     def _key_array(self):
         return np.array(self.__dask_keys__(), dtype=object)

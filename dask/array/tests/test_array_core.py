@@ -492,7 +492,7 @@ def test_numpy_asarray_copy_true(asarray, chunks):
         ),
     ],
 )
-@pytest.mark.parametrize("chunks", [5, 10])
+@pytest.mark.parametrize("chunks", [5, pytest.param(10, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="single chunk compute returns reference", strict=False))])
 def test_numpy_asarray_copy_false(asarray, chunks):
     """Test that np.*array(x, copy=False) is forbidden"""
     x = da.asarray(np.arange(10), chunks=chunks)
@@ -5805,7 +5805,6 @@ def test_from_array_meta():
     assert isinstance(y._meta, sparse.COO)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes():
     x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
     y = x[x < 0]
@@ -5821,7 +5820,6 @@ def test_compute_chunk_sizes():
     assert isinstance(z.chunks[0][0], int)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes_2d_array():
     X = np.linspace(-1, 1, num=9 * 4).reshape(9, 4)
     X = da.from_array(X, chunks=(3, 4))
@@ -5838,7 +5836,6 @@ def test_compute_chunk_sizes_2d_array():
     assert Z.shape == (4, 4)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes_3d_array(N=8):
     X = np.linspace(-1, 2, num=8 * 8 * 8).reshape(8, 8, 8)
     X = da.from_array(X, chunks=(4, 4, 4))
@@ -5873,7 +5870,6 @@ def unknown():
     return y
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
     y = unknown
     with pytest.raises(ValueError, match="compute_chunk_sizes"):
@@ -5882,7 +5878,6 @@ def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
     y.rechunk("auto")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
     pytest.importorskip("zarr")
     y = unknown
@@ -5894,7 +5889,6 @@ def test_compute_chunk_sizes_warning_fixes_to_zarr(unknown):
             y.to_zarr(d)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
     y = unknown
     with pytest.raises(NotImplementedError, match="compute_chunk_sizes"):
@@ -5903,7 +5897,6 @@ def test_compute_chunk_sizes_warning_fixes_to_svg(unknown):
     y.to_svg()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes_warning_fixes_concatenate():
     x = _known(num=100).reshape(10, 10)
     idx = x.sum(axis=0) > 0
@@ -5916,7 +5909,6 @@ def test_compute_chunk_sizes_warning_fixes_concatenate():
     da.concatenate((y1, y2), axis=1)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes_warning_fixes_reduction(unknown):
     y = unknown
     with pytest.raises(ValueError, match="compute_chunk_sizes"):
@@ -5925,7 +5917,6 @@ def test_compute_chunk_sizes_warning_fixes_reduction(unknown):
     da.argmin(y)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes_warning_fixes_reshape(unknown):
     y = unknown
     with pytest.raises(ValueError, match="compute_chunk_sizes"):
@@ -5934,7 +5925,6 @@ def test_compute_chunk_sizes_warning_fixes_reshape(unknown):
     da.reshape(y, (5, 5))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_compute_chunk_sizes_warning_fixes_slicing():
     x = _known(num=100).reshape(10, 10)
     y = x[x.sum(axis=0) < 0]
