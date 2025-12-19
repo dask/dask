@@ -303,7 +303,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | ~~N: UFunc dtype~~ | ~~16~~ | ~~🟡 High~~ | **DONE** |
 | M: Store advanced | 6 | 🟡 High | Practical importance |
 | ~~P: Int dask indexing~~ | ~~4~~ | ~~🟢 Medium~~ | **DONE** (20/20 pass, 1 xfail for dict constructor) |
-| Q: from_array features | 6 | 🟡 Medium | API completeness |
+| ~~Q: from_array features~~ | ~~6~~ | ~~🟡 Medium~~ | **DONE** (5/6 pass, 1 xfail for Task spec data_producer) |
 | O: Unknown chunks | 6 | 🟡 Medium | Edge case handling |
 | S: Setitem edge | 3 | 🟡 Medium | Nearly complete (67/68 pass) |
 | ~~R: Boolean mask unknown~~ | ~~4~~ | ~~🟡 Medium~~ | **DONE** (+3 bonus tests fixed) |
@@ -315,7 +315,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | V: Fusion | 4 | 🔴 Deferred | Architectural change |
 | Z: Misc | ~36 | 🟢 Varies | Mixed bag (-1 fixed by Stream R) |
 
-**Recommended next targets:** Stream M (store completeness), Stream Q (from_array features), Stream S (setitem edge cases)
+**Recommended next targets:** Stream M (store completeness), Stream O (unknown chunks), Stream S (setitem edge cases)
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -515,18 +515,25 @@ Indexing with dask arrays as indices.
 
 **Implementation:** Fixed `ArrayOffsetDep` to use 1D chunks `(x.chunks[axis],)` instead of full `x.chunks`, and pass it with `offset_axes = (axis,)` instead of `p_axes`. The bug was causing shape alignment errors in blockwise when the transpose dimension didn't match the original axis dimension.
 
-### Stream Q: from_array Features (6 tests) 🟡
+### Stream Q: from_array Features (6 tests) 🟢 **DONE**
 Various from_array parameters and edge cases.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_from_array_with_lock | Lock parameter (2 variants) | ⏳ |
-| test_from_array_inline | inline_array parameter | ⏳ |
-| test_from_array_name | Custom name parameter | ⏳ |
-| test_from_array_raises_on_bad_chunks | Error on invalid chunks | ⏳ |
-| test_creation_data_producers | data_producer argument | ⏳ |
+| test_from_array_with_lock | Lock parameter (2 variants) | ✅ |
+| test_from_array_inline | inline_array parameter | ✅ |
+| test_from_array_name | Custom name parameter | ✅ |
+| test_from_array_raises_on_bad_chunks | Error on invalid chunks | ✅ |
+| test_chunks_error | Error on invalid chunks (2D) | ✅ (bonus) |
+| test_creation_data_producers | data_producer argument | ⏳ xfail - needs Task spec data_producer |
 
-**Notes:** Basic from_array works. These test specific parameters.
+**Implementation:**
+- Added `_name_override` parameter to `FromArray` expression class to support custom names
+- Added custom `__dask_tokenize__` to `FromArray` to avoid tokenizing non-serializable locks
+- Modified `from_array()` to normalize chunks early (validates before expression creation)
+- Modified `from_array()` to generate name/token before creating expression (handles `name=str`, `name=False`, `name=True`)
+- Normalize `lock=True` to `SerializableLock()` in `from_array()` before passing to expression
+- Also fixed: `test_array_picklable`, `test_normalize_chunks_object_dtype`, `test_scipy_sparse_asarray_like` (bonus XPASSes cleaned up)
 
 ### Stream R: Boolean Mask with Unknown Shapes (4 tests) 🟢 **DONE**
 Boolean masking when mask has unknown shape.
@@ -567,7 +574,7 @@ Direct graph/dict construction with Array class.
 | test_dont_fuse_outputs | Direct graph construction | ⏳ |
 | test_dont_dealias_outputs | Graph aliasing | ⏳ |
 | test_dask_layers | __dask_layers__() method | ⏳ |
-| test_chunks_error | from_array error checking | ⏳ |
+| test_chunks_error | from_array error checking | ✅ (fixed in Stream Q) |
 | test_constructor_plugin | Constructor plugin | ⏳ |
 
 **Notes:** These tests construct Array directly from dicts, which array-expr doesn't support in the same way. May need to create FromGraph expression or similar.

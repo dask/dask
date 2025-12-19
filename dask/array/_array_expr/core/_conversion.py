@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import uuid
 import warnings
 from collections.abc import Iterable
 
 import numpy as np
 
-from dask.array.core import getter_inline
+from dask.array.core import getter_inline, normalize_chunks
 from dask.array.utils import meta_from_array
-from dask.base import is_dask_collection
+from dask.base import is_dask_collection, tokenize
+from dask.utils import SerializableLock
 
 
 def _as_dtype(a, dtype):
@@ -179,16 +181,37 @@ def from_array(
     if is_arraylike(x) and hasattr(x, "copy"):
         x = x.copy()
 
+    # Normalize chunks early to validate and catch errors
+    normalized_chunks = normalize_chunks(
+        chunks, x.shape, dtype=x.dtype
+    )
+
+    # Generate name/token for the expression
+    # We tokenize all the user-provided parameters to get a consistent hash
+    # Note: we tokenize the original lock (before normalization) for consistency
+    if name in (None, True):
+        token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
+        final_name = f"array-{token}"
+    elif name is False:
+        final_name = f"array-{uuid.uuid1()}"
+    else:
+        final_name = name
+
+    # Normalize lock=True to SerializableLock() for actual use
+    if lock is True:
+        lock = SerializableLock()
+
     return new_collection(
         FromArray(
             x,
-            chunks,
+            normalized_chunks,
             lock=lock,
             asarray=asarray,
             fancy=fancy,
             getitem=getitem,
             meta=meta,
             inline_array=inline_array,
+            _name_override=final_name,
         )
     )
 

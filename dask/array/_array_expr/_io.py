@@ -172,6 +172,7 @@ class FromArray(IO):
         "meta",
         "asarray",
         "fancy",
+        "_name_override",
     ]
     _defaults = {
         "getitem": None,
@@ -180,13 +181,31 @@ class FromArray(IO):
         "asarray": None,
         "fancy": True,
         "lock": False,
+        "_name_override": None,
     }
+
+    @functools.cached_property
+    def _name(self):
+        name_override = self.operand("_name_override")
+        if name_override is not None:
+            return name_override
+        return f"fromarray-{self.deterministic_token}"
+
+    def __dask_tokenize__(self):
+        # When _name_override is provided, use it as the token to avoid
+        # tokenizing potentially non-serializable objects like custom locks.
+        # The name_override already contains a unique token computed from
+        # all the parameters in from_array().
+        name_override = self.operand("_name_override")
+        if name_override is not None:
+            return (type(self).__name__, name_override)
+        # Fall back to default behavior
+        return super().__dask_tokenize__()
 
     @property
     def chunks(self):
-        return normalize_chunks(
-            self.operand("chunks"), self.array.shape, dtype=self.array.dtype
-        )
+        # chunks are already normalized when passed from from_array()
+        return self.operand("chunks")
 
     @functools.cached_property
     def _meta(self):
@@ -203,8 +222,7 @@ class FromArray(IO):
 
     def _layer(self):
         lock = self.operand("lock")
-        if lock is True:
-            lock = SerializableLock()
+        # Note: lock=True is already normalized to SerializableLock() in from_array()
 
         is_ndarray = type(self.array) in (np.ndarray, np.ma.core.MaskedArray)
         is_single_block = all(len(c) == 1 for c in self.chunks)

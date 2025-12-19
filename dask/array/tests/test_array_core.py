@@ -2836,7 +2836,6 @@ def test_Array_normalizes_dtype():
 
 
 @pytest.mark.parametrize("inline_array", [True, False])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_from_array_with_lock needs work", strict=False)
 def test_from_array_with_lock(inline_array):
     x = np.arange(10)
 
@@ -3034,7 +3033,6 @@ def test_from_array_dask_collection_warns():
         da.array(x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_from_array_inline():
     class MyArray(np.ndarray):
         pass
@@ -3774,7 +3772,6 @@ def test_broadcast_chunks():
         broadcast_chunks(a, b)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_chunks_error():
     x = np.ones((10, 10))
     with pytest.raises(ValueError):
@@ -3992,7 +3989,6 @@ def test_array_picklable(array):
     assert isinstance(a4._meta, np.ma.MaskedArray)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_from_array_raises_on_bad_chunks():
     x = np.ones(10)
 
@@ -4761,7 +4757,6 @@ def test_broadcast_against_zero_shape():
     assert_eq(da.ones((5, 5), chunks=(2, 3))[:, :0] + 0.1, np.ones((5, 5))[:, :0] + 0.1)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_from_array_name():
     x = np.array([1, 2, 3, 4, 5])
     chunks = x.shape
@@ -4942,7 +4937,6 @@ def test_from_array_chunks_dict():
 
 
 @pytest.mark.parametrize("dtype", [object, [("a", object), ("b", int)]])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_normalize_chunks_object_dtype(dtype):
     x = np.array(["a", "abc"], dtype=object)
     with pytest.raises(NotImplementedError):
@@ -5636,10 +5630,6 @@ def test_scipy_sparse_concatenate(axis, container):
     assert (z != z_expected).nnz == 0
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="scipy.sparse like= not implemented for array-expr",
-)
 @pytest.mark.parametrize("func", [da.asarray, da.asanyarray])
 @pytest.mark.parametrize("src", [[[1, 2]], np.asarray([[1, 2]]), da.asarray([[1, 2]])])
 def test_scipy_sparse_asarray_like(src, func):
