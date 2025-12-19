@@ -137,20 +137,34 @@ class BroadcastTrick(ArrayExpr):
             self.operand("meta"), ndim=self.ndim, dtype=self.operand("dtype")
         )
 
-    def _layer(self) -> dict:
+    @functools.cached_property
+    def _wrapped_func(self):
+        """Cache the wrapped broadcast function."""
         func = broadcast_trick(self.func)
         k = self.kwargs.copy()
         k.pop("meta", None)
-        func = partial(func, meta=self._meta, dtype=self.dtype, **k)
+        return partial(func, meta=self._meta, dtype=self.dtype, **k)
+
+    def _layer(self) -> dict:
         out_ind = dep_ind = tuple(range(len(self.shape)))
         return core_blockwise(
-            func,
+            self._wrapped_func,
             self._name,
             out_ind,
             ArrayChunkShapeDep(self.chunks),
             dep_ind,
             numblocks={},
         )
+
+    def _task(self, key, block_id: tuple[int, ...]) -> Task:
+        """Generate task for a specific output block."""
+        # Compute chunk shape for this block
+        chunk_shape = tuple(self.chunks[i][block_id[i]] for i in range(len(block_id)))
+        return Task(key, self._wrapped_func, chunk_shape)
+
+    def _input_block_id(self, dep, block_id: tuple[int, ...]) -> tuple[int, ...]:
+        """BroadcastTrick has no dependencies, so this is never called."""
+        return block_id
 
 
 class Ones(BroadcastTrick):
