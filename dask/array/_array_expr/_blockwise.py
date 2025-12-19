@@ -547,11 +547,14 @@ def _remove_conflicting_exprs(group):
     When the same expression is accessed via multiple paths with different
     index transformations (e.g., a + a.T), we can't fuse it - each output
     block would need different source blocks from the same expression.
+
+    Also removes expressions that become unreachable after conflict removal.
     """
     if len(group) <= 1:
         return group
 
     expr_names = {e._name for e in group}
+    expr_map = {e._name: e for e in group}
     root = group[0]
     # Use non-diagonal sample to detect transpose conflicts
     sample_block_id = tuple(range(root.ndim))
@@ -573,9 +576,22 @@ def _remove_conflicting_exprs(group):
                 else:
                     block_ids[dep._name] = dep_block_id
 
-    if conflicts:
-        return [e for e in group if e._name not in conflicts]
-    return group
+    if not conflicts:
+        return group
+
+    # Remove conflicts and find reachable expressions
+    remaining = {e._name for e in group if e._name not in conflicts}
+    reachable = {root._name}
+    stack = [root]
+
+    while stack:
+        expr = stack.pop()
+        for dep in expr.dependencies():
+            if dep._name in remaining and dep._name not in reachable:
+                reachable.add(dep._name)
+                stack.append(expr_map[dep._name])
+
+    return [e for e in group if e._name in reachable]
 
 
 def optimize_blockwise_fusion_array(expr):
