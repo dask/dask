@@ -146,8 +146,16 @@ class ArrayExpr(SingletonExpr):
     def __hash__(self):
         return hash(self._name)
 
-    def optimize(self):
-        return self.simplify().lower_completely()
+    def optimize(self, fuse: bool = True):
+        expr = self.simplify().lower_completely()
+        if fuse:
+            expr = expr.fuse()
+        return expr
+
+    def fuse(self):
+        from dask.array._array_expr._blockwise import optimize_blockwise_fusion_array
+
+        return optimize_blockwise_fusion_array(self)
 
     def rechunk(
         self,
