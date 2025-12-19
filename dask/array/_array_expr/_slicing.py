@@ -543,6 +543,11 @@ class SliceSlicesIntegers(Slice):
 class SlicesWrapNone(SliceSlicesIntegers):
     _parameters = ["array", "index", "allow_getitem_optimization", "where_none"]
 
+    def _simplify_down(self):
+        # Disable inherited simplification - SlicesWrapNone adds dimensions via
+        # None indexing and the parent class's simplifications don't preserve this
+        return None
+
     @functools.cached_property
     def chunks(self):
         return self.expand(super().chunks, (1,))

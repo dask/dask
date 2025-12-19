@@ -197,6 +197,10 @@ class TasksRechunk(Rechunk):
     def chunks(self):
         return self.operand("_chunks")
 
+    def _simplify_down(self):
+        # TasksRechunk is already lowered - don't apply parent's simplifications
+        return None
+
     def _lower(self):
         return
 
