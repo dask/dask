@@ -163,9 +163,8 @@ def from_array(
     from dask.array._array_expr._collection import Array
 
     if isinstance(x, Array):
-        raise TypeError(
-            "from_array called on a dask.array object. "
-            "This would result in an array-of-array."
+        raise ValueError(
+            "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
         )
 
     elif is_dask_collection(x):
