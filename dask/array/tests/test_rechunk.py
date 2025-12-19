@@ -907,10 +907,6 @@ def test_rechunk_auto_3d():
     assert y.chunks[1] == (10, 10)  # even split
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="array-expr rechunk auto computes different chunk sizes",
-)
 @pytest.mark.parametrize("n", [100, 1000])
 def test_rechunk_auto_image_stack(n):
     with dask.config.set({"array.chunk-size": "10MiB"}):
