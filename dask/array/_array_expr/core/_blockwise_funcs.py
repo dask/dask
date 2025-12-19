@@ -244,9 +244,14 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     from dask.array._array_expr._collection import Array
     from dask.array._array_expr.core import asanyarray
 
-    if where is not True:
-        # TODO(expr-soon): Need asarray for this
-        where = True
+    # Normalize where parameter
+    if where is True:
+        pass  # keep as True
+    elif where is False or where is None:
+        where = False
+    else:
+        # Convert to dask array
+        where = asanyarray(where)
 
     # Normalize out parameter
     out = _normalize_out(out)
@@ -259,7 +264,7 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
 
     user_kwargs = dict(kwargs) if kwargs else None
 
-    result = new_collection(Elemwise(op, dtype, name, where, user_kwargs, *args))
+    result = new_collection(Elemwise(op, dtype, name, where, out, user_kwargs, *args))
 
     return _handle_out(out, result)
 

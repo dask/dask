@@ -218,11 +218,12 @@ class Blockwise(ArrayExpr):
 
 
 class Elemwise(Blockwise):
-    _parameters = ["op", "dtype", "name", "where", "_user_kwargs"]
+    _parameters = ["op", "dtype", "name", "where", "out", "_user_kwargs"]
     _defaults = {
         "dtype": None,
         "name": None,
         "where": True,
+        "out": None,
         "_user_kwargs": None,
     }
     align_arrays = True
@@ -236,9 +237,12 @@ class Elemwise(Blockwise):
 
     @cached_property
     def _meta(self):
-        return compute_meta(
-            self._info[0], self.dtype, *self.elemwise_args, **self.kwargs
-        )
+        # When where is not True, _info[0] is _elemwise_handle_where which
+        # expects args to end with (where, out)
+        args = list(self.elemwise_args)
+        if self.where is not True:
+            args.extend([self.where, self.out])
+        return compute_meta(self._info[0], self.dtype, *args, **self.kwargs)
 
     @property
     def elemwise_args(self):
@@ -255,6 +259,8 @@ class Elemwise(Blockwise):
             shapes.append(shape)
         if isinstance(self.where, ArrayExpr):
             shapes.append(self.where.shape)
+        if isinstance(self.out, ArrayExpr):
+            shapes.append(self.out.shape)
 
         shapes = [s if isinstance(s, Iterable) else () for s in shapes]
         out_ndim = len(
@@ -332,6 +338,11 @@ class Elemwise(Blockwise):
     @property
     def args(self):
         # for Blockwise rather than Elemwise
+        # When where is an array, append [where, out] for _elemwise_handle_where
+        extra_args = []
+        if self.where is not True:
+            extra_args.append(self.where)
+            extra_args.append(self.out)
         return tuple(
             toolz.concat(
                 (
@@ -342,8 +353,7 @@ class Elemwise(Blockwise):
                         else None
                     ),
                 )
-                for a in self.elemwise_args
-                + ([self.where] if self.where is not True else [])
+                for a in self.elemwise_args + extra_args
             )
         )
 
@@ -355,18 +365,21 @@ class Elemwise(Blockwise):
             _, arrays, changed = unify_chunks_expr(*self.args)
             if changed:
                 # Only pass the unified arrays, not the indices
-                # The where mask is the last array if it's not True
+                # When where is an array, the last two arrays are where and out
                 if self.where is not True:
-                    new_elemwise_args = arrays[:-1]
-                    new_where = arrays[-1]
+                    new_elemwise_args = arrays[:-2]
+                    new_where = arrays[-2]
+                    new_out = arrays[-1]
                 else:
                     new_elemwise_args = arrays
                     new_where = True
+                    new_out = None
                 return Elemwise(
                     self.op,
                     self.operand("dtype"),
                     self.operand("name"),
                     new_where,
+                    new_out,
                     self.operand("_user_kwargs"),
                     *new_elemwise_args,
                 )

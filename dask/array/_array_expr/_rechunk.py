@@ -138,38 +138,51 @@ class Rechunk(ArrayExpr):
     def _pushdown_through_elemwise(self):
         """Push rechunk through elemwise by rechunking each input."""
         from dask.array._array_expr._blockwise import Elemwise, is_scalar_for_elemwise
+        from dask.array._array_expr._expr import ArrayExpr
 
         elemwise = self.array
         out_ind = elemwise.out_ind
         chunks = self._chunks
 
-        new_args = []
-        for arg in elemwise.elemwise_args:
+        def rechunk_array_arg(arg):
+            """Rechunk an array argument to match target output chunks."""
             if is_scalar_for_elemwise(arg):
-                new_args.append(arg)
-            else:
-                # Map output chunks to this input's dimensions
-                # arg has indices tuple(range(arg.ndim)[::-1])
-                arg_ind = tuple(range(arg.ndim)[::-1])
+                return arg
+            if not isinstance(arg, ArrayExpr):
+                return arg
+            # Map output chunks to this input's dimensions
+            # arg has indices tuple(range(arg.ndim)[::-1])
+            arg_ind = tuple(range(arg.ndim)[::-1])
 
-                # For each dimension of arg, find where its index appears in out_ind
-                arg_chunks = []
-                for dim_idx in arg_ind:
-                    try:
-                        out_pos = out_ind.index(dim_idx)
-                        arg_chunks.append(chunks[out_pos])
-                    except ValueError:
-                        # Index not in output (shouldn't happen for elemwise)
-                        arg_chunks.append(-1)  # auto
+            # For each dimension of arg, find where its index appears in out_ind
+            arg_chunks = []
+            for dim_idx in arg_ind:
+                try:
+                    out_pos = out_ind.index(dim_idx)
+                    arg_chunks.append(chunks[out_pos])
+                except ValueError:
+                    # Index not in output (shouldn't happen for elemwise)
+                    arg_chunks.append(-1)  # auto
 
-                rechunked_arg = arg.rechunk(tuple(arg_chunks))
-                new_args.append(rechunked_arg)
+            return arg.rechunk(tuple(arg_chunks))
+
+        new_args = [rechunk_array_arg(arg) for arg in elemwise.elemwise_args]
+
+        # Also rechunk where and out if they are arrays
+        new_where = elemwise.where
+        if isinstance(new_where, ArrayExpr):
+            new_where = rechunk_array_arg(new_where)
+
+        new_out = elemwise.out
+        if isinstance(new_out, ArrayExpr):
+            new_out = rechunk_array_arg(new_out)
 
         return Elemwise(
             elemwise.op,
             elemwise.operand("dtype"),
             elemwise.operand("name"),
-            elemwise.where,
+            new_where,
+            new_out,
             elemwise.operand("_user_kwargs"),
             *new_args,
         )
