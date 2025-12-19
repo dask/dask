@@ -444,6 +444,14 @@ class Elemwise(Blockwise):
         """Adjust block_id for broadcasting."""
         return _broadcast_block_id(arr.numblocks, block_id)
 
+    def _input_block_id(self, dep, block_id: tuple[int, ...]) -> tuple[int, ...]:
+        """Map output block_id to input block_id for a dependency.
+
+        For Elemwise, this handles broadcasting - same block_id adjusted
+        for arrays with fewer dimensions or single-block dimensions.
+        """
+        return self._broadcast_block_id(dep, block_id)
+
 
 def _broadcast_block_id(numblocks: tuple[int, ...], block_id: tuple[int, ...]) -> tuple[int, ...]:
     """Adjust block_id for broadcasting.
@@ -468,12 +476,23 @@ def _broadcast_block_id(numblocks: tuple[int, ...], block_id: tuple[int, ...]) -
     return tuple(result)
 
 
-def is_fusable_elemwise(expr):
-    """Check if an expression is a fusable Elemwise operation."""
+def is_fusable_blockwise(expr):
+    """Check if an expression is a fusable Blockwise operation.
+
+    Returns True for Elemwise and Transpose operations.
+    Excludes IO operations like FromArray and FromDelayed.
+    """
     # Import here to avoid circular imports
     from dask.array._array_expr._io import FromArray, FromDelayed
+    from dask.array._array_expr.manipulation._transpose import Transpose
 
-    return isinstance(expr, Elemwise) and not isinstance(expr, (FromArray, FromDelayed))
+    if isinstance(expr, (FromArray, FromDelayed)):
+        return False
+    return isinstance(expr, (Elemwise, Transpose))
+
+
+# Alias for internal use
+is_fusable_elemwise = is_fusable_blockwise
 
 
 def optimize_blockwise_fusion_array(expr):
@@ -624,20 +643,39 @@ class FusedBlockwise(ArrayExpr):
 
     def _task(self, key, block_id: tuple[int, ...]) -> Task:
         """Generate a fused task for a specific output block."""
+        # Compute block_id for each expression by tracing through dependencies
+        # Each expression type (Elemwise, Transpose) has its own block mapping
+        expr_block_ids = self._compute_block_ids(block_id)
+
+        # Generate tasks in dependency order (leaves first for Task.fuse)
         internal_tasks = []
-        for expr in self.exprs:
-            # Adjust block_id for expressions with different shapes (broadcasting)
-            expr_block_id = self._adjust_block_id(expr, block_id)
+        for expr in reversed(self.exprs):
+            expr_block_id = expr_block_ids[expr._name]
             subname = (expr._name, *expr_block_id)
             t = expr._task(subname, expr_block_id)
             internal_tasks.append(t)
         return Task.fuse(*internal_tasks, key=key)
 
-    def _adjust_block_id(self, expr, block_id: tuple[int, ...]) -> tuple[int, ...]:
-        """Adjust block_id for an expression that may have different shape."""
-        if expr.numblocks == self.numblocks:
-            return block_id
-        return _broadcast_block_id(expr.numblocks, block_id)
+    def _compute_block_ids(self, output_block_id: tuple[int, ...]) -> dict:
+        """Compute block_id for each expression given the output block_id.
+
+        Traces through the expression chain, using each expression's
+        _input_block_id method to map output to input block coordinates.
+        """
+        expr_names = {e._name for e in self.exprs}
+        expr_block_ids = {self.exprs[0]._name: output_block_id}
+
+        # Process expressions in order (root to leaves)
+        for expr in self.exprs:
+            my_block_id = expr_block_ids[expr._name]
+            # Find dependencies that are in our fused group
+            for dep in expr.dependencies():
+                if dep._name in expr_names and dep._name not in expr_block_ids:
+                    # Use the expression's _input_block_id to compute dependency's block_id
+                    dep_block_id = expr._input_block_id(dep, my_block_id)
+                    expr_block_ids[dep._name] = dep_block_id
+
+        return expr_block_ids
 
     def __str__(self):
         names = [expr._name.split("-")[0] for expr in self.exprs]

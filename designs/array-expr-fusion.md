@@ -405,10 +405,19 @@ def optimize_blockwise_fusion_array(expr):
     return expr
 ```
 
-### Phase 2: Simple Blockwise Fusion
+### Phase 2: Simple Blockwise Fusion ✓
 Extend to `Blockwise` where output indices match input indices (permutations ok).
 
 **Covers:** Transpose chains, axis swaps
+
+**Implementation:**
+- Added `_task()` and `_input_block_id()` methods to `Transpose` class
+- `_input_block_id()` computes inverse permutation to map output block_id to input block_id
+- Updated `is_fusable_blockwise()` to include `Transpose`
+- Updated `FusedBlockwise._task()` to use `_compute_block_ids()` which traces
+  through the expression chain calling each expression's `_input_block_id()` method
+
+**Tests:** 4 new tests for transpose fusion in `test_array_expr_fusion.py`
 
 ### Phase 3: Full Index Substitution
 Implement symbolic index renaming for contracted dimensions.

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 
+from dask._task_spec import Task, TaskRef
 from dask.array._array_expr._blockwise import Blockwise
 
 
@@ -42,6 +45,25 @@ class Transpose(Blockwise):
     @property
     def args(self):
         return (self.array, tuple(range(self.array.ndim)))
+
+    @functools.cached_property
+    def _inverse_axes(self):
+        """Inverse permutation of axes."""
+        inv = [0] * len(self.axes)
+        for i, a in enumerate(self.axes):
+            inv[a] = i
+        return tuple(inv)
+
+    def _task(self, key, block_id: tuple[int, ...]) -> Task:
+        """Generate task for a specific output block."""
+        # Map output block_id to input block_id using inverse permutation
+        # For axes=(1,0), output block (i,j) needs input block (j,i)
+        input_block_id = self._input_block_id(self.array, block_id)
+        return Task(key, self.func, TaskRef((self.array._name, *input_block_id)), **self.kwargs)
+
+    def _input_block_id(self, dep, block_id: tuple[int, ...]) -> tuple[int, ...]:
+        """Map output block_id to input block_id using inverse permutation."""
+        return tuple(block_id[self._inverse_axes[d]] for d in range(len(block_id)))
 
     def _simplify_down(self):
         # Transpose(Transpose(x)) -> single Transpose with composed axes
