@@ -541,6 +541,43 @@ def is_fusable_blockwise(expr):
 is_fusable_elemwise = is_fusable_blockwise
 
 
+def _remove_conflicting_exprs(group):
+    """Remove expressions accessed with conflicting block patterns.
+
+    When the same expression is accessed via multiple paths with different
+    index transformations (e.g., a + a.T), we can't fuse it - each output
+    block would need different source blocks from the same expression.
+    """
+    if len(group) <= 1:
+        return group
+
+    expr_names = {e._name for e in group}
+    root = group[0]
+    # Use non-diagonal sample to detect transpose conflicts
+    sample_block_id = tuple(range(root.ndim))
+
+    block_ids = {root._name: sample_block_id}
+    conflicts = set()
+
+    for expr in group:
+        if expr._name not in block_ids:
+            continue
+        my_block_id = block_ids[expr._name]
+
+        for dep in expr.dependencies():
+            if dep._name in expr_names:
+                dep_block_id = expr._input_block_id(dep, my_block_id)
+                if dep._name in block_ids:
+                    if block_ids[dep._name] != dep_block_id:
+                        conflicts.add(dep._name)
+                else:
+                    block_ids[dep._name] = dep_block_id
+
+    if conflicts:
+        return [e for e in group if e._name not in conflicts]
+    return group
+
+
 def optimize_blockwise_fusion_array(expr):
     """Traverse the expression graph and apply fusion.
 
@@ -620,9 +657,12 @@ def optimize_blockwise_fusion_array(expr):
 
             # Replace fusable sub-group
             if len(group) > 1:
-                fused = FusedBlockwise(tuple(group))
-                new_expr = expr.substitute(group[0], fused)
-                return new_expr, not roots
+                # Check for conflicting block patterns before fusing
+                group = _remove_conflicting_exprs(group)
+                if len(group) > 1:
+                    fused = FusedBlockwise(tuple(group))
+                    new_expr = expr.substitute(group[0], fused)
+                    return new_expr, not roots
 
         # No fusable groups found
         return expr, True
@@ -711,13 +751,10 @@ class FusedBlockwise(ArrayExpr):
         expr_names = {e._name for e in self.exprs}
         expr_block_ids = {self.exprs[0]._name: output_block_id}
 
-        # Process expressions in order (root to leaves)
         for expr in self.exprs:
             my_block_id = expr_block_ids[expr._name]
-            # Find dependencies that are in our fused group
             for dep in expr.dependencies():
                 if dep._name in expr_names and dep._name not in expr_block_ids:
-                    # Use the expression's _input_block_id to compute dependency's block_id
                     dep_block_id = expr._input_block_id(dep, my_block_id)
                     expr_block_ids[dep._name] = dep_block_id
 
