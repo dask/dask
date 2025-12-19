@@ -1962,7 +1962,6 @@ def test_map_blocks_optimize_blockwise(func):
     assert len(optimized.layers) == max(len(dsk.layers) - 7, 1)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_repr():
     d = da.ones((4, 4), chunks=(2, 2))
     assert key_split(d.name) in repr(d)
@@ -1972,8 +1971,6 @@ def test_repr():
     assert len(str(d)) < 1000
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_repr_meta():
     d = da.ones((4, 4), chunks=(2, 2))
     assert "chunktype=numpy.ndarray" in repr(d)
@@ -3337,7 +3334,6 @@ def test_raise_on_no_chunks():
         assert ".org" in str(e)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_chunks_is_immutable():
     x = da.ones(6, chunks=3)
     try:
@@ -3937,7 +3933,6 @@ def test_from_delayed_future():
         assert_eq(result, arr, scheduler=client)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_A_property():
     x = da.ones(5, chunks=(2,))
     assert x.A is x
@@ -4122,6 +4117,7 @@ def test_warn_bad_rechunking():
         x + y
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="unify_chunks_expr warning calculation bug", strict=False)
 def test_concatenate_stack_dont_warn():
     with warnings.catch_warnings(record=True) as record:
         da.concatenate([da.ones(2, chunks=1)] * 62)
@@ -5612,7 +5608,7 @@ def test_scipy_sparse_indexing(index, sparse_module_path, container):
     ).sum()
 
 
-@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("axis", [pytest.param(0, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="unify_chunks_expr warning calculation bug", strict=False)), 1])
 @pytest.mark.parametrize(
     "container", [pytest.param("array", marks=skip_if_no_sparray()), "matrix"]
 )

@@ -123,6 +123,17 @@ class Array(DaskMethodsMixin):
     def chunks(self):
         return self.expr.chunks
 
+    @chunks.setter
+    def chunks(self, chunks):
+        raise TypeError(
+            "Can not set chunks directly\n\n"
+            "Please use the rechunk method instead:\n"
+            f"  x.rechunk({chunks})\n\n"
+            "Documentation\n"
+            "-------------\n"
+            "https://docs.dask.org/en/latest/generated/dask.array.rechunk.html"
+        )
+
     @property
     def chunksize(self) -> tuple:
         from dask.array.core import cached_max
@@ -172,6 +183,19 @@ class Array(DaskMethodsMixin):
 
     def __len__(self):
         return self.expr.__len__()
+
+    def __repr__(self):
+        name = self.name.rsplit("-", 1)[0]
+        return (
+            "dask.array<{}, shape={}, dtype={}, chunksize={}, chunktype={}.{}>".format(
+                name,
+                self.shape,
+                self.dtype,
+                self.chunksize,
+                type(self._meta).__module__.split(".")[0],
+                type(self._meta).__name__,
+            )
+        )
 
     def __bool__(self):
         if self.size > 1:
@@ -554,6 +578,10 @@ class Array(DaskMethodsMixin):
     @property
     def T(self):
         return self.transpose()
+
+    @property
+    def A(self):
+        return self
 
     def swapaxes(self, axis1, axis2):
         """Interchange two axes of an array.
