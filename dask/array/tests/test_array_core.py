@@ -4820,7 +4820,6 @@ def test_stack_errs():
     assert len(str(e.value)) < 105
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="numpy arrays don't have expr attribute")
 def test_blockwise_with_numpy_arrays():
     x = np.ones(10)
     y = da.ones(10, chunks=(5,))
