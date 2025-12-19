@@ -60,7 +60,14 @@ from dask.array._array_expr._creation import (
     zeros_like,
 )
 from dask.array._array_expr._gufunc import *
-from dask.array._array_expr._io import from_delayed, from_npy_stack, store, to_npy_stack
+from dask.array._array_expr._io import (
+    from_delayed,
+    from_npy_stack,
+    from_zarr,
+    store,
+    to_npy_stack,
+    to_zarr,
+)
 from dask.array._array_expr._einsum import einsum
 from dask.array._array_expr._linalg import dot, matmul, tensordot, vdot
 from dask.array._array_expr._map_blocks import map_blocks

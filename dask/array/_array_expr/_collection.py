@@ -911,6 +911,36 @@ class Array(DaskMethodsMixin):
 
         return store([self], [target], **kwargs)
 
+    def to_zarr(self, *args, **kwargs):
+        """Save array to the zarr storage format
+
+        See https://zarr.readthedocs.io for details about the format.
+
+        Refer to :func:`dask.array.to_zarr` for full documentation.
+
+        See also
+        --------
+        dask.array.to_zarr : equivalent function
+        """
+        from dask.array._array_expr._io import to_zarr
+
+        return to_zarr(self, *args, **kwargs)
+
+    def to_tiledb(self, uri, *args, **kwargs):
+        """Save array to the TileDB storage manager
+
+        See https://docs.tiledb.io for details about the format and engine.
+
+        Refer to :func:`dask.array.to_tiledb` for full documentation.
+
+        See also
+        --------
+        dask.array.to_tiledb : equivalent function
+        """
+        from dask.array.tiledb_io import to_tiledb
+
+        return to_tiledb(self, uri, *args, **kwargs)
+
     def to_svg(self, size=500):
         """Convert chunks from Dask Array into an SVG Image
 
