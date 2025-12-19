@@ -304,7 +304,6 @@ def test_multinomial(generator_class):
         assert x.shape == y.shape == x.compute().shape
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="choice not fully implemented for array-expr")
 def test_choice(generator_class):
     np_generator = {
         da.random.RandomState: np.random.RandomState,
