@@ -156,7 +156,6 @@ def test_consistent_across_sizes(generator_class):
 
 
 @pytest.mark.parametrize("sz", [None, 5, (2, 2)], ids=type)
-@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr", strict=False)
 def test_random_all(sz):
     da.random.beta(1, 2, size=sz, chunks=3).compute()
     da.random.binomial(10, 0.5, size=sz, chunks=3).compute()
@@ -206,7 +205,6 @@ def test_RandomState_only_funcs():
 
 
 @pytest.mark.parametrize("sz", [None, 5, (2, 2)], ids=type)
-@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr", strict=False)
 def test_Generator_only_funcs(sz):
     da.random.default_rng().integers(5, high=15, size=sz, chunks=3).compute()
     da.random.default_rng().multivariate_hypergeometric(
@@ -215,7 +213,6 @@ def test_Generator_only_funcs(sz):
 
 
 @pytest.mark.parametrize("sz", [None, 5, (2, 2)], ids=type)
-@pytest.mark.xfail(da._array_expr_enabled(), reason="random not fully implemented for array-expr", strict=False)
 def test_random_all_with_class_methods(generator_class, sz):
     def rnd_test(func, *args, **kwargs):
         a = func(*args, **kwargs)
@@ -299,7 +296,6 @@ def test_array_broadcasting(generator_class):
     assert 0.8 < z.mean().compute() / x.mean() < 1.2
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="multinomial not fully implemented for array-expr")
 def test_multinomial(generator_class):
     for size, chunks in [(5, 3), ((5, 4), (2, 3))]:
         x = generator_class().multinomial(20, [1 / 6.0] * 6, size=size, chunks=chunks)
@@ -394,8 +390,11 @@ def test_names():
     assert len(key_split(name)) < 10
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="permutation not fully implemented for array-expr", strict=False)
-def test_permutation(generator_class):
+def test_permutation(generator_class, request):
+    if generator_class is da.random.default_rng and da._array_expr_enabled():
+        request.applymarker(
+            pytest.mark.xfail(reason="permutation not fully implemented for array-expr with default_rng")
+        )
     x = da.arange(12, chunks=3)
     y = generator_class().permutation(x)
 
