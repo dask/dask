@@ -110,6 +110,14 @@ class Rechunk(ArrayExpr):
         if isinstance(self.array, Elemwise) and isinstance(self._chunks, tuple):
             return self._pushdown_through_elemwise()
 
+        # Rechunk(IO) -> IO with new chunks (if IO supports it)
+        if (
+            getattr(self.array, "_can_rechunk_pushdown", False)
+            and isinstance(self._chunks, tuple)
+        ):
+            # Keep the same name prefix - the token will change with the new chunks
+            return self.array.substitute_parameters({"chunks": self.chunks})
+
     def _pushdown_through_transpose(self):
         """Push rechunk through transpose by reordering chunk spec."""
         from dask.array._array_expr.manipulation._transpose import Transpose

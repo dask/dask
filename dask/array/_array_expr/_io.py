@@ -34,7 +34,10 @@ if TYPE_CHECKING:
 
 
 class IO(ArrayExpr):
-    pass
+    # Whether rechunk can be pushed into this IO expression by modifying its chunks.
+    # False by default since many IO expressions have chunks that affect computation
+    # (e.g., Random generates different values with different chunks).
+    _can_rechunk_pushdown = False
 
 
 class FromDelayed(IO):
@@ -123,7 +126,7 @@ class FromNpyStack(IO):
         return dict(zip(keys, values))
 
 
-class FromGraph(IO):
+class FromGraph(ArrayExpr):
     _parameters = ["layer", "_meta", "chunks", "keys", "name_prefix"]
 
     @functools.cached_property
@@ -183,24 +186,14 @@ class FromArray(IO):
         "lock": False,
         "_name_override": None,
     }
+    # FromArray reads static data, so rechunk can be pushed in safely
+    _can_rechunk_pushdown = True
 
     @functools.cached_property
     def _name(self):
-        name_override = self.operand("_name_override")
-        if name_override is not None:
-            return name_override
-        return f"fromarray-{self.deterministic_token}"
-
-    def __dask_tokenize__(self):
-        # When _name_override is provided, use it as the token to avoid
-        # tokenizing potentially non-serializable objects like custom locks.
-        # The name_override already contains a unique token computed from
-        # all the parameters in from_array().
-        name_override = self.operand("_name_override")
-        if name_override is not None:
-            return (type(self).__name__, name_override)
-        # Fall back to default behavior
-        return super().__dask_tokenize__()
+        # _name_override is just a prefix (e.g., "array"), not the full name
+        prefix = self.operand("_name_override") or "fromarray"
+        return f"{prefix}-{self.deterministic_token}"
 
     @property
     def chunks(self):

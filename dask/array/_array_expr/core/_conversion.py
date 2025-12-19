@@ -186,16 +186,17 @@ def from_array(
         chunks, x.shape, dtype=x.dtype
     )
 
-    # Generate name/token for the expression
-    # We tokenize all the user-provided parameters to get a consistent hash
-    # Note: we tokenize the original lock (before normalization) for consistency
+    # Determine name prefix for the expression
+    # _name_override is just a prefix - the full name is computed as prefix-{deterministic_token}
     if name in (None, True):
-        token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
-        final_name = f"array-{token}"
+        # Deterministic: use "array" prefix, token computed from operands
+        name_prefix = "array"
     elif name is False:
-        final_name = f"array-{uuid.uuid1()}"
+        # Non-deterministic: include UUID in prefix to ensure uniqueness
+        name_prefix = f"array-{uuid.uuid1()}"
     else:
-        final_name = name
+        # Custom: use user-provided name as prefix
+        name_prefix = name
 
     # Normalize lock=True to SerializableLock() for actual use
     if lock is True:
@@ -211,7 +212,7 @@ def from_array(
             getitem=getitem,
             meta=meta,
             inline_array=inline_array,
-            _name_override=final_name,
+            _name_override=name_prefix,
         )
     )
 
