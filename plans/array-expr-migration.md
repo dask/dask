@@ -204,6 +204,23 @@ Lower priority operations.
 | ravel_multi_index | index conversion | **Done** |
 | unravel_index | index conversion | **Done** |
 
+### Tier 12: UFunc Advanced Features
+Advanced ufunc parameters that require special handling.
+
+| Feature | Issue | Tests | Status |
+|---------|-------|-------|--------|
+| `where` parameter | Array masks not applied correctly | 28 xfails | Not started |
+| `out` parameter | Shape mismatch with broadcasting | 8 xfails | Not started |
+| `frompyfunc` | Can't tokenize vectorized ufuncs | 1 xfail | Not started |
+
+Notes:
+- `where=True` (trivial case) works; actual array masks fail in compute path
+- `out=` is an imperative concept that doesn't fit expression model well
+  - Currently handled at collection level via `_handle_out` which replaces target's expr
+  - Fails when combined with `where` because masked elements need original `out` values
+- `frompyfunc` creates ufuncs that can't be deterministically tokenized
+- These require deeper architectural changes and are low priority
+
 ### Zarr/TileDB IO (Separate Track)
 External format support.
 
