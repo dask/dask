@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numbers
 from collections.abc import Iterable
+from itertools import product
 
 import numpy as np
 import tlz as toolz
@@ -9,6 +10,7 @@ import tlz as toolz
 from dask import is_dask_collection
 from dask.array._array_expr._expr import ArrayExpr, unify_chunks_expr
 from dask.array._array_expr._utils import compute_meta
+from dask._task_spec import Task, TaskRef
 from dask.array.core import (
     _elemwise_handle_where,
     _enforce_dtype,
@@ -392,4 +394,258 @@ class Elemwise(Blockwise):
                     *new_elemwise_args,
                 )
 
+    def _task(self, key, block_id: tuple[int, ...]) -> Task:
+        """Generate task for a specific output block.
+
+        Parameters
+        ----------
+        key : tuple
+            The output key for this task (e.g., ('add-abc123', 0, 1))
+        block_id : tuple[int, ...]
+            The block coordinates (e.g., (0, 1) for block at row 0, col 1)
+
+        Returns
+        -------
+        Task
+            A Task object that computes this block
+        """
+        args = []
+
+        # Process elemwise_args
+        for arg in self.elemwise_args:
+            if is_scalar_for_elemwise(arg):
+                args.append(arg)
+            else:
+                # Array argument - compute block_id adjusted for broadcasting
+                # For broadcasting: use 0 for dimensions where array has 1 block
+                arg_block_id = self._broadcast_block_id(arg, block_id)
+                args.append(TaskRef((arg.name, *arg_block_id)))
+
+        # Handle where/out arrays if present
+        if self.where is not True:
+            if is_scalar_for_elemwise(self.where):
+                args.append(self.where)
+            else:
+                where_block_id = self._broadcast_block_id(self.where, block_id)
+                args.append(TaskRef((self.where.name, *where_block_id)))
+
+            if self.out is None or is_scalar_for_elemwise(self.out):
+                args.append(self.out)
+            else:
+                out_block_id = self._broadcast_block_id(self.out, block_id)
+                args.append(TaskRef((self.out.name, *out_block_id)))
+
+        if self.kwargs:
+            return Task(key, self.func, *args, **self.kwargs)
+        else:
+            return Task(key, self.func, *args)
+
+    def _broadcast_block_id(self, arr, block_id: tuple[int, ...]) -> tuple[int, ...]:
+        """Adjust block_id for broadcasting."""
+        return _broadcast_block_id(arr.numblocks, block_id)
+
+
+def _broadcast_block_id(numblocks: tuple[int, ...], block_id: tuple[int, ...]) -> tuple[int, ...]:
+    """Adjust block_id for broadcasting.
+
+    When an array has fewer dimensions or single-block dimensions,
+    we need to adjust the block indices accordingly.
+    """
+    out_ndim = len(block_id)
+    arr_ndim = len(numblocks)
+
+    # Handle dimension mismatch (broadcasting adds leading dims)
+    offset = out_ndim - arr_ndim
+
+    result = []
+    for i, nb in enumerate(numblocks):
+        out_idx = offset + i
+        if nb == 1:
+            # Single block in this dimension - always use 0
+            result.append(0)
+        else:
+            result.append(block_id[out_idx])
+    return tuple(result)
+
+
+def is_fusable_elemwise(expr):
+    """Check if an expression is a fusable Elemwise operation."""
+    # Import here to avoid circular imports
+    from dask.array._array_expr._io import FromArray, FromDelayed
+
+    return isinstance(expr, Elemwise) and not isinstance(expr, (FromArray, FromDelayed))
+
+
+def optimize_blockwise_fusion_array(expr):
+    """Traverse the expression graph and apply fusion.
+
+    Finds groups of consecutive Elemwise operations and fuses them
+    into single FusedBlockwise expressions.
+    """
+    from collections import defaultdict
+
+    def _fusion_pass(expr):
+        # Build dependency graph of fusable operations
+        seen = set()
+        stack = [expr]
+        dependents = defaultdict(set)  # name -> set of dependent names
+        dependencies = {}  # name -> set of dependency names
+        expr_mapping = {}  # name -> expr
+
+        while stack:
+            node = stack.pop()
+
+            if node._name in seen:
+                continue
+            seen.add(node._name)
+
+            if is_fusable_elemwise(node):
+                dependencies[node._name] = set()
+                if node._name not in dependents:
+                    dependents[node._name] = set()
+                expr_mapping[node._name] = node
+
+            for operand in node.dependencies():
+                stack.append(operand)
+                if is_fusable_elemwise(operand):
+                    if node._name in dependencies:
+                        dependencies[node._name].add(operand._name)
+                    dependents[operand._name].add(node._name)
+                    expr_mapping[operand._name] = operand
+                    expr_mapping[node._name] = node
+
+        # Find roots - Elemwise nodes with no Elemwise dependents
+        roots = [
+            expr_mapping[k]
+            for k, v in dependents.items()
+            if v == set()
+            or all(not is_fusable_elemwise(expr_mapping.get(_name)) for _name in v)
+        ]
+
+        while roots:
+            root = roots.pop()
+            seen_in_group = set()
+            stack = [root]
+            group = []
+
+            while stack:
+                node = stack.pop()
+
+                if node._name in seen_in_group:
+                    continue
+                seen_in_group.add(node._name)
+
+                group.append(node)
+                for dep_name in dependencies.get(node._name, set()):
+                    dep = expr_mapping[dep_name]
+
+                    stack_names = {s._name for s in stack}
+                    group_names = {g._name for g in group}
+
+                    # Check if all dependents of dep are in our group or stack
+                    dep_dependents = dependents.get(dep_name, set())
+                    if dep_dependents <= (stack_names | group_names | {node._name}):
+                        # dep can be fused into this group
+                        stack.append(dep)
+                    elif dependencies.get(dep._name) and dep._name not in [
+                        r._name for r in roots
+                    ]:
+                        # Can't fuse dep, but may be able to use as new root
+                        roots.append(dep)
+
+            # Replace fusable sub-group
+            if len(group) > 1:
+                fused = FusedBlockwise(tuple(group))
+                new_expr = expr.substitute(group[0], fused)
+                return new_expr, not roots
+
+        # No fusable groups found
+        return expr, True
+
+    # Iterate until no more fusion is possible
+    while True:
+        original_name = expr._name
+        expr, done = _fusion_pass(expr)
+        if done or expr._name == original_name:
+            break
+
+    return expr
+
+
+class FusedBlockwise(ArrayExpr):
+    """Fused blockwise operations for arrays.
+
+    A FusedBlockwise corresponds to the fusion of multiple Blockwise/Elemwise
+    expressions into a single Expr object. At graph-materialization time,
+    the behavior produces fused tasks that execute all operations together.
+
+    Parameters
+    ----------
+    exprs : tuple[Expr, ...]
+        Group of original Expr objects being fused together. The first
+        expression is the "root" (final output).
+    *dependencies :
+        External Expr dependencies - any Expr operand not included in exprs.
+        These are passed as additional operands after exprs.
+    """
+
+    _parameters = ["exprs"]
+
+    @property
+    def _meta(self):
+        return self.exprs[0]._meta
+
+    @property
+    def chunks(self):
+        return self.exprs[0].chunks
+
+    @property
+    def dtype(self):
+        return self.exprs[0].dtype
+
+    def dependencies(self):
+        """Return external dependencies not included in the fused group."""
+        fused_names = {e._name for e in self.exprs}
+        external_deps = []
+        seen = set()
+        for expr in self.exprs:
+            for dep in expr.dependencies():
+                if dep._name not in fused_names and dep._name not in seen:
+                    external_deps.append(dep)
+                    seen.add(dep._name)
+        return external_deps
+
+    def _layer(self):
+        result = {}
+        for block_id in product(*[range(n) for n in self.numblocks]):
+            key = (self._name, *block_id)
+            result[key] = self._task(key, block_id)
+        return result
+
+    def _task(self, key, block_id: tuple[int, ...]) -> Task:
+        """Generate a fused task for a specific output block."""
+        internal_tasks = []
+        for expr in self.exprs:
+            # Adjust block_id for expressions with different shapes (broadcasting)
+            expr_block_id = self._adjust_block_id(expr, block_id)
+            subname = (expr._name, *expr_block_id)
+            t = expr._task(subname, expr_block_id)
+            internal_tasks.append(t)
+        return Task.fuse(*internal_tasks, key=key)
+
+    def _adjust_block_id(self, expr, block_id: tuple[int, ...]) -> tuple[int, ...]:
+        """Adjust block_id for an expression that may have different shape."""
+        if expr.numblocks == self.numblocks:
+            return block_id
+        return _broadcast_block_id(expr.numblocks, block_id)
+
+    def __str__(self):
+        names = [expr._name.split("-")[0] for expr in self.exprs]
+        if len(names) > 4:
+            return f"{names[0]}-fused-{names[-1]}"
+        return "-".join(names)
+
+    @cached_property
+    def _name(self):
+        return f"{self}-{self.deterministic_token}"
 
