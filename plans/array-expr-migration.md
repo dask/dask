@@ -402,15 +402,18 @@ Various map_blocks improvements.
 - Fixed custom name by passing `name=` when user provides explicit name
 - Fixed enforce_ndim uniqueness by passing `token=out.name` in second blockwise call
 
-### Stream K: Single Chunk Compute Behavior (10 tests) 🟡
+### Stream K: Single Chunk Compute Behavior (13 tests) 🟢 **DONE**
 Single chunk arrays returning references vs copies.
 
-| Tests | Notes |
-|-------|-------|
-| test_array_picklable | 2 tests |
-| Various core tests | 8 tests |
+| Tests | Status |
+|-------|--------|
+| test_numpy_asarray_copy_true | ✅ 6 tests pass |
+| test_numpy_asarray_copy_false | ✅ 6 tests pass |
+| test_numpy_asarray_copy_none | ✅ 6 tests pass |
+| test_numpy_asarray_copy_default | ✅ 6 tests pass |
+| test_compute_copy | ✅ 2 tests pass |
 
-**Notes:** When array has single chunk, compute may return reference to underlying data.
+**Implementation:** Added `CopyArray` expression class in `_expr.py` that wraps single-chunk arrays and applies `.copy()` to prevent mutation of graph-stored data. Modified `FinalizeComputeArray._simplify_down()` to use `CopyArray` for single-chunk arrays instead of returning the raw expression.
 
 ### Stream L: Miscellaneous (20+ tests) 🟢
 Smaller independent fixes.
