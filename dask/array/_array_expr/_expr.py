@@ -190,7 +190,8 @@ def unify_chunks_expr(*args, warn=True):
     blockdim_dict = dict()
     max_parts = 0
     for a, ind in arginds:
-        if ind is not None and not isinstance(a, ArrayBlockwiseDep):
+        # Skip scalars (empty tuple index), literals (None), and ArrayBlockwiseDep
+        if ind is not None and ind != () and not isinstance(a, ArrayBlockwiseDep):
             nameinds.append((a.name, ind))
             blockdim_dict[a.name] = a.chunks
             max_parts = max(max_parts, math.prod(a.numblocks))
@@ -210,8 +211,8 @@ def unify_chunks_expr(*args, warn=True):
     arrays = []
     changed = False
     for a, i in arginds:
-        if i is None or isinstance(a, ArrayBlockwiseDep):
-            pass
+        if i is None or i == () or isinstance(a, ArrayBlockwiseDep):
+            pass  # Skip scalars, literals, ArrayBlockwiseDep
         else:
             chunks = tuple(
                 (
