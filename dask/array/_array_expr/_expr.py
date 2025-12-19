@@ -223,10 +223,12 @@ def unify_chunks_expr(*args, warn=True):
                 for n, j in enumerate(i)
             )
             if chunks != a.chunks and all(a.chunks):
-                a = a.rechunk(chunks)
-                changed = True
-            else:
-                pass
+                # Skip rechunking known chunks to unknown - can't rechunk to nan sizes
+                target_has_nan = any(c is not None and np.isnan(sum(c)) for c in chunks)
+                source_is_known = not any(np.isnan(sum(c)) for c in a.chunks)
+                if not (target_has_nan and source_is_known):
+                    a = a.rechunk(chunks)
+                    changed = True
         arrays.append(a)
     return chunkss, arrays, changed
 

@@ -1133,7 +1133,13 @@ def test_broadcast_shapes():
 
     pytest.raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
-    pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (1, np.nan)))
+    # With unknown dimensions (nan), we allow broadcasting as long as
+    # known dimensions don't conflict with each other
+    assert np.allclose(
+        (2, np.nan), broadcast_shapes((2, 3), (1, np.nan)), equal_nan=True
+    )
+    # Conflicting known dimensions should still raise
+    pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (1, np.nan), (1, 5)))
 
 
 @pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
@@ -3973,7 +3979,6 @@ def test_from_array_names():
 @pytest.mark.parametrize(
     "array", [da.arange(100, chunks=25), da.ones((10, 10), chunks=25)]
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_array_picklable(array):
     from pickle import dumps, loads
 
@@ -4850,7 +4855,6 @@ def test_no_warnings_on_metadata():
     assert not record
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_delayed_array_key_hygeine():
     a = da.zeros((1,), chunks=(1,))
     d = delayed(identity)(a)

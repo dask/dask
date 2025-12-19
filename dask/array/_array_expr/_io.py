@@ -69,17 +69,17 @@ class FromDelayed(IO):
 
     def _layer(self):
         from dask._task_spec import Alias
+        from dask.base import is_dask_collection
 
         value = self.operand("value")
         shape = self.operand("shape")
         key = (self._name,) + (0,) * len(shape)
         task = Alias(key=key, target=value.key)
-        return {key: task}
-
-    @property
-    def _dependencies(self):
-        """Return the delayed value as a dependency."""
-        return [self.operand("value")]
+        result = {key: task}
+        # Include the delayed value's graph
+        if is_dask_collection(value):
+            result.update(value.__dask_graph__())
+        return result
 
 
 class FromNpyStack(IO):

@@ -4280,18 +4280,18 @@ def common_blockdim(blockdims):
     """
     if not any(blockdims):
         return ()
+
+    # If any dims have unknown chunks, return the unknown chunks
+    # (we can't verify alignment at graph-build time)
+    unknown_dims = [d for d in blockdims if np.isnan(sum(d))]
+    if unknown_dims:
+        return first(unknown_dims)
+
     non_trivial_dims = {d for d in blockdims if len(d) > 1}
     if len(non_trivial_dims) == 1:
         return first(non_trivial_dims)
     if len(non_trivial_dims) == 0:
         return max(blockdims, key=first)
-
-    if np.isnan(sum(map(sum, blockdims))):
-        raise ValueError(
-            f"Arrays' chunk sizes ({blockdims}) are unknown.\n\n"
-            "A possible solution:\n"
-            "  x.compute_chunk_sizes()"
-        )
 
     if len(set(map(sum, non_trivial_dims))) > 1:
         raise ValueError("Chunks do not add up to same value", blockdims)
@@ -5063,15 +5063,26 @@ def broadcast_shapes(*shapes):
         return shapes[0]
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
-        if np.isnan(sizes).any():
+        has_nan = np.isnan(sizes).any()
+        # Filter out -1 (missing dims), 0 and 1 (broadcastable), and nan
+        non_trivial = [s for s in sizes if s not in (-1, 0, 1) and not np.isnan(s)]
+
+        if has_nan:
+            # If any nan, output is nan but we still validate non-nan values
             dim = np.nan
+            # All non-trivial sizes must match each other
+            if len(set(non_trivial)) > 1:
+                raise ValueError(
+                    "operands could not be broadcast together with "
+                    "shapes {}".format(" ".join(map(str, shapes)))
+                )
         else:
             dim = 0 if 0 in sizes else np.max(sizes).item()
-        if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
-            raise ValueError(
-                "operands could not be broadcast together with "
-                "shapes {}".format(" ".join(map(str, shapes)))
-            )
+            if any(i not in [-1, 0, 1, dim] for i in sizes):
+                raise ValueError(
+                    "operands could not be broadcast together with "
+                    "shapes {}".format(" ".join(map(str, shapes)))
+                )
         out.append(dim)
     return tuple(reversed(out))
 

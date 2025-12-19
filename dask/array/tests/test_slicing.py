@@ -1125,25 +1125,23 @@ def test_positional_indexer_newaxis():
 @pytest.mark.parametrize(
     "shapes",
     [
+        (10, 10),
+        (np.nan, np.nan),
         pytest.param(
-            (10, 10),
+            (10, np.nan),
             marks=pytest.mark.xfail(
-                da._array_expr_enabled(),
-                reason="from_delayed not implemented for array-expr",
+                not da._array_expr_enabled(),
+                reason="Not implemented in traditional mode",
+                strict=True,
             ),
         ),
         pytest.param(
-            (np.nan, np.nan),
+            (np.nan, 10),
             marks=pytest.mark.xfail(
-                da._array_expr_enabled(),
-                reason="from_delayed not implemented for array-expr",
+                not da._array_expr_enabled(),
+                reason="Not implemented in traditional mode",
+                strict=True,
             ),
-        ),
-        pytest.param(
-            (10, np.nan), marks=pytest.mark.xfail(reason="Not implemented", strict=True)
-        ),
-        pytest.param(
-            (np.nan, 10), marks=pytest.mark.xfail(reason="Not implemented", strict=True)
         ),
     ],
 )

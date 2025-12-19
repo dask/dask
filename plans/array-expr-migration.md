@@ -306,14 +306,14 @@ These work streams can be executed in parallel by agents. Each is independent.
 | Q: from_array features | 6 | 🟡 Medium | API completeness |
 | O: Unknown chunks | 6 | 🟡 Medium | Edge case handling |
 | S: Setitem edge | 3 | 🟡 Medium | Nearly complete (67/68 pass) |
-| R: Boolean mask unknown | 4 | 🟡 Medium | Depends on unknown chunks |
+| ~~R: Boolean mask unknown~~ | ~~4~~ | ~~🟡 Medium~~ | **DONE** (+3 bonus tests fixed) |
 | X: Rechunk auto | 2 | 🟢 Low | May be test adjustment |
-| U: Array pickling | 2 | 🟢 Low | May be test pattern |
+| ~~U: Array pickling~~ | ~~2~~ | ~~🟢 Low~~ | **DONE** (fixed by Stream R) |
 | Y: Random broadcast | 2 | 🟡 Low | Niche use case |
 | W: Blockwise concat | 1 | 🟡 Low | Niche use case |
 | T: Graph construction | 5 | 🔴 Low | Different paradigm |
 | V: Fusion | 4 | 🔴 Deferred | Architectural change |
-| Z: Misc | ~37 | 🟢 Varies | Mixed bag |
+| Z: Misc | ~36 | 🟢 Varies | Mixed bag (-1 fixed by Stream R) |
 
 **Recommended next targets:** Stream M (store completeness), Stream Q (from_array features), Stream S (setitem edge cases)
 
@@ -528,17 +528,25 @@ Various from_array parameters and edge cases.
 
 **Notes:** Basic from_array works. These test specific parameters.
 
-### Stream R: Boolean Mask with Unknown Shapes (4 tests) 🟡
+### Stream R: Boolean Mask with Unknown Shapes (4 tests) 🟢 **DONE**
 Boolean masking when mask has unknown shape.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_boolean_mask_with_unknown_shape[shapes0] | from_delayed case | ⏳ |
-| test_boolean_mask_with_unknown_shape[shapes1] | from_delayed case | ⏳ |
-| test_boolean_mask_with_unknown_shape[shapes2] | Other case | ⏳ |
-| test_boolean_mask_with_unknown_shape[shapes3] | Other case | ⏳ |
+| test_boolean_mask_with_unknown_shape[shapes0] | from_delayed case | ✅ |
+| test_boolean_mask_with_unknown_shape[shapes1] | from_delayed case | ✅ |
+| test_boolean_mask_with_unknown_shape[shapes2] | Other case | ✅ |
+| test_boolean_mask_with_unknown_shape[shapes3] | Other case | ✅ |
 
-**Notes:** Boolean masking with known shapes works. These involve unknown shape arrays created via from_delayed or boolean indexing.
+**Implementation:**
+- Fixed `broadcast_shapes` to allow nan (unknown) dimensions to be compatible with known dimensions
+- Fixed `common_blockdim` to prefer unknown chunks when mixing known and unknown chunk arrays
+- Fixed `unify_chunks_expr` to skip rechunking when trying to go from known to unknown chunks
+- Fixed `FromDelayed._layer()` to include the delayed value's graph in the layer
+
+**Bonus fixes:**
+- `test_array_picklable` (2 tests) now pass due to from_delayed fix
+- `test_delayed_array_key_hygeine` now passes due to from_delayed fix
 
 ### Stream S: Setitem Edge Cases (3 tests) 🟡
 Remaining setitem issues.
@@ -564,15 +572,15 @@ Direct graph/dict construction with Array class.
 
 **Notes:** These tests construct Array directly from dicts, which array-expr doesn't support in the same way. May need to create FromGraph expression or similar.
 
-### Stream U: Array Pickling (2 tests) 🟢
+### Stream U: Array Pickling (2 tests) 🟢 **DONE**
 Pickle serialization of arrays.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_array_picklable[array0] | Basic pickling | ⏳ |
-| test_array_picklable[array1] | Basic pickling | ⏳ |
+| test_array_picklable[array0] | Basic pickling | ✅ |
+| test_array_picklable[array1] | Basic pickling | ✅ |
 
-**Notes:** The test creates arrays via dict constructor. May pass if using standard creation functions.
+**Notes:** Fixed as part of Stream R (from_delayed graph dependency fix).
 
 ### Stream V: Fusion (4 tests) 🔴
 Blockwise fusion optimization.
@@ -635,7 +643,7 @@ Various individual tests.
 | test_pandas_from_dask_array | Pandas conversion | ⏳ |
 | test_partitions_indexer | .partitions property | ⏳ |
 | test_chunk_assignment_invalidates_cached_properties | Property caching | ⏳ |
-| test_delayed_array_key_hygeine | Key hygiene | ⏳ |
+| test_delayed_array_key_hygeine | Key hygiene | ✅ (fixed in Stream R) |
 | test_to_backend | Backend switching | ⏳ |
 | test_linspace | 2 variants - dask scalar inputs | ⏳ |
 | test_arange_cast_float_int_step | Float-to-int casting | ⏳ (by design) |
