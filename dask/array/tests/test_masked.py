@@ -376,11 +376,6 @@ def test_set_fill_value():
 
 
 @pytest.mark.parametrize("keepdims", [False, True])
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="_average function uses traditional routines.py which warns on dask array input",
-    strict=False,
-)
 def test_average_weights_with_masked_array(keepdims):
     mask = np.array([[True, False], [True, True], [False, True]])
     data = np.arange(6).reshape((3, 2))

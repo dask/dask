@@ -166,7 +166,7 @@ Full submodule implementations.
 |-----------|-------|--------|
 | fft | FFT operations | **Done** |
 | linalg | Full linalg submodule | **Done** (330/391 tests pass, 61 skipped) |
-| ma | Masked arrays | **Done** (127/139 tests pass, 6 xfails for tensordot/average edge cases) |
+| ma | Masked arrays | **Done** (139/139 tests pass) |
 
 #### Linalg Status Detail
 Native expression classes for TSQR algorithm (tall-skinny QR) and derived operations.
@@ -274,7 +274,7 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 
 **XFails by category (52 total):**
 - Store advanced features: 3 xfails (regions, locks)
-- Masked array average: 2 xfails (test_average_weights_with_masked_array)
+- ~~Masked array average: 2 xfails~~ **DONE**
 - Fusion (architectural): 4 xfails (blockwise_fusion, block_id_fusion, trim_internal, map_blocks_optimize)
 - Overlap: 3 xfails (trim_internal, push, xarray)
 - Graph construction: 4 xfails (constructor_plugin, dask_layers, to_backend, cull)
@@ -301,7 +301,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | ~~M: Store advanced~~ | 6 | 🟡 High | **PARTIAL** (3/6 pass) |
 | ~~AC: Masked tensordot~~ | 4 | 🟡 Medium | **DONE** - explicit meta in tensordot |
 | ~~S: Setitem edge~~ | 1 | 🟡 Medium | **DONE** - all 18 sub-tests pass |
-| AD: Masked average | 2 | 🟡 Medium | _average uses traditional routines.py |
+| ~~AD: Masked average~~ | 2 | 🟡 Medium | **DONE** - late import of broadcast_to |
 | X: Rechunk auto | 2 | 🟢 Low | May be test adjustment |
 | Y: Random broadcast | 2 | 🟡 Low | Niche use case |
 | W: Blockwise concat | 1 | 🟡 Low | Niche use case |
@@ -311,12 +311,12 @@ These work streams can be executed in parallel by agents. Each is independent.
 | AF: Overlap | 3 | 🔴 Deferred | Needs fusion/push |
 | Z: Misc | ~27 | 🟢 Varies | Mixed bag |
 
-**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S (mostly)
+**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD
 
 **Recommended next targets:**
-1. Stream AD (masked average) - 2 tests
-2. Stream X (rechunk auto) - 2 tests
-3. Stream Y (random broadcast) - 2 tests
+1. Stream X (rechunk auto) - 2 tests
+2. Stream Y (random broadcast) - 2 tests
+3. Stream W (blockwise concat) - 1 test
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -681,15 +681,17 @@ Tensordot operations that lose masked array meta.
 
 **Fix:** Added explicit meta computation in `tensordot` (`dask/array/_array_expr/_linalg.py`). When either input is a masked array, we create an explicit masked array meta with the correct ndim. This bypasses the `compute_meta` failure caused by numpy's tensordot failing to reshape 0-element masked arrays.
 
-### Stream AD: Masked Array Average (2 tests) 🟡
+### Stream AD: Masked Array Average (2 tests) 🟢 **DONE**
 Average function with masked array weights.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_average_weights_with_masked_array[False] | Without keepdims | ⏳ |
-| test_average_weights_with_masked_array[True] | With keepdims | ⏳ |
+| test_average_weights_with_masked_array[False] | Without keepdims | ✅ |
+| test_average_weights_with_masked_array[True] | With keepdims | ✅ |
 
-**Notes:** The `_average` function in ma module uses traditional `routines.py` which warns when passed dask arrays. Need to update ma average to use array-expr compatible path.
+**Root Cause:** The `_average` function in `routines.py` imported `broadcast_to` from `dask.array.core` (legacy). When array-expr Arrays were passed through this legacy `broadcast_to`, they got converted to legacy Arrays, triggering the "Passing an object to dask.array.from_array which is already a Dask collection" warning.
+
+**Fix:** Added late import of `broadcast_to` from `dask.array` instead of using the module-level import from `dask.array.core`. When array-expr is enabled, `dask.array.broadcast_to` resolves to the array-expr version, which properly handles array-expr Arrays and keeps them in the expression system.
 
 ### Stream AE: Linspace Dask Scalars (2 tests) 🟡
 Linspace with dask scalar start/stop values.
