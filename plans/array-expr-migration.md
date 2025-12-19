@@ -221,6 +221,16 @@ Notes:
 - `frompyfunc` creates ufuncs that can't be deterministically tokenized
 - These require deeper architectural changes and are low priority
 
+### Tier 13: Reduction Features (Pending)
+Additional reduction functionality needed for full compatibility.
+
+| Feature | Tests Blocked | Notes | Status |
+|---------|---------------|-------|--------|
+| out= parameter | 4 | Output array pre-allocation for reductions/ufuncs | Not started |
+| weights parameter | 1 | Weighted reductions in `da.reduction()` | Not started |
+| compute_chunk_sizes() | 4 | Method to compute unknown chunk sizes after boolean indexing | Not started |
+| cumulative axis=None | 16 | Cumulative reductions with axis=None (HLG dependency issues) | Not started |
+
 ### Zarr/TileDB IO (Separate Track)
 External format support.
 
@@ -258,6 +268,7 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
 
 ### Current Test Failure Summary
+- `test_reductions.py`: 25 xfails (out=: 4, weights: 1, compute_chunk_sizes: 4, cumulative axis=None: 16)
 - `test_array_core.py`: ~157 xfails (block: 27, store: 12, vindex: 7, other: 111)
 - `test_routines.py`: ~115 xfails
 - `test_array_function.py`: ~30 xfails

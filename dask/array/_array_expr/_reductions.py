@@ -3,6 +3,7 @@ from __future__ import annotations
 import builtins
 import math
 import operator
+import warnings
 from functools import partial
 from itertools import product, repeat
 from numbers import Integral
@@ -140,6 +141,12 @@ def reduction(
         remove them.
 
     """
+    # Convert non-dask arrays to dask arrays
+    if not hasattr(x, "expr"):
+        from dask.array._array_expr.core._conversion import asanyarray
+
+        x = asanyarray(x)
+
     if axis is None:
         axis = tuple(range(x.ndim))
     if isinstance(axis, Integral):
@@ -309,6 +316,13 @@ class PartialReduce(ArrayExpr):
         )
 
     @cached_property
+    def dtype(self):
+        # Use the explicitly passed dtype parameter instead of inferring from meta
+        if self.operand("dtype") is not None:
+            return np.dtype(self.operand("dtype"))
+        return super().dtype
+
+    @cached_property
     def chunks(self):
         chunks = [
             (
@@ -352,35 +366,50 @@ class PartialReduce(ArrayExpr):
     @property
     def _meta(self):
         meta = self.array._meta
+        original_dtype = getattr(self.reduced_meta, "dtype", None) or getattr(meta, "dtype", None)
+
         if self.reduced_meta is not None:
             try:
                 meta = self.func(self.reduced_meta, computing_meta=True)
-            # no meta keyword argument exists for func, and it isn't required
             except TypeError:
+                # No computing_meta kwarg, try without it
                 try:
                     meta = self.func(self.reduced_meta)
                 except ValueError as e:
-                    # min/max functions have no identity, don't apply function to meta
                     if "zero-size array to reduction operation" in str(e):
                         meta = self.reduced_meta
                 except IndexError:
-                    # argtopk and similar can't handle empty arrays
                     meta = self.reduced_meta
-            # when no work can be computed on the empty array (e.g., func is a ufunc)
-            except ValueError:
-                pass
-            except IndexError:
-                # argtopk and similar can't handle empty arrays
+            except (ValueError, IndexError):
+                # Can't compute on empty array (ufunc, argtopk, etc.)
                 meta = self.reduced_meta
 
-        # some functions can't compute empty arrays (those for which reduced_meta
-        # fall into the ValueError exception) and we have to rely on reshaping
-        # the array according to len(out_chunks)
+        # Ensure meta is array-like (func can return Python scalars for object dtype)
+        if not is_arraylike(meta) and meta is not None:
+            meta = np.array(meta, dtype=original_dtype or object)
+
+        # Reshape meta to match output dimensions
         if is_arraylike(meta) and meta.ndim != len(self.chunks):
             if len(self.chunks) == 0:
-                meta = meta.sum()
+                # 0D output - reduce to scalar
+                try:
+                    meta = meta.sum()
+                    if not hasattr(meta, "dtype"):
+                        meta = np.array(meta, dtype=original_dtype)
+                except TypeError:
+                    # dtype doesn't support sum (e.g., datetime64)
+                    meta = np.empty((), dtype=meta.dtype)
             else:
                 meta = meta.reshape((0,) * len(self.chunks))
+
+        # Ensure meta has the correct dtype if dtype is explicitly specified
+        if self.operand("dtype") is not None and hasattr(meta, "dtype"):
+            target_dtype = np.dtype(self.operand("dtype"))
+            if meta.dtype != target_dtype:
+                with warnings.catch_warnings():
+                    # Suppress ComplexWarning when casting complex to real (e.g., var)
+                    warnings.filterwarnings("ignore", category=np.exceptions.ComplexWarning)
+                    meta = meta.astype(target_dtype)
 
         return meta
 
