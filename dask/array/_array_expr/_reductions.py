@@ -219,6 +219,12 @@ def reduction(
             for i, c in enumerate(result.chunks)
         )
         result = new_collection(ChunksOverride(result.expr, final_chunks))
+
+    # Handle out= parameter
+    if out is not None:
+        from dask.array._array_expr.core._blockwise_funcs import _handle_out
+
+        return _handle_out(out, result)
     return result
 
 
@@ -494,7 +500,7 @@ def arg_reduction(
     axis : int, optional
     split_every : int or dict, optional
     """
-    from dask.array.core import handle_out
+    from dask.array._array_expr.core._blockwise_funcs import _handle_out
     from dask.array.utils import asarray_safe, meta_from_array
 
     if axis is None:
@@ -537,7 +543,7 @@ def arg_reduction(
         split_every=split_every,
         combine=combine,
     )
-    return handle_out(out, result)
+    return _handle_out(out, result)
 
 
 def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
@@ -898,8 +904,8 @@ def _cumreduction_expr(
     func, binop, ident, x, axis, dtype, out, method, preop
 ):
     """Create cumulative reduction expression."""
-    from dask.array.core import handle_out
     from dask.array._array_expr._collection import Array
+    from dask.array._array_expr.core._blockwise_funcs import _handle_out
 
     if not isinstance(x, Array):
         from dask.array._array_expr.core._conversion import asarray
@@ -923,7 +929,7 @@ def _cumreduction_expr(
         )
 
     result = new_collection(expr)
-    return handle_out(out, result)
+    return _handle_out(out, result)
 
 
 def cumsum(x, axis=None, dtype=None, out=None, method="sequential"):

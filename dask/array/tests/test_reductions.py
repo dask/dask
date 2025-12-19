@@ -642,7 +642,6 @@ def test_general_reduction_names():
 
 
 @pytest.mark.parametrize("func", [np.sum, np.argmax])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="out= parameter not implemented for array-expr", strict=False)
 def test_array_reduction_out(func):
     x = da.arange(10, chunks=(5,))
     y = da.ones((10, 10), chunks=(4, 4))
@@ -709,7 +708,6 @@ def test_array_cumreduction_ufunc(ufunc, target_dtype):
 
 
 @pytest.mark.parametrize("func", [np.cumsum, np.cumprod])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="out= parameter not implemented for array-expr", strict=False)
 def test_array_cumreduction_out(func):
     x = da.ones((10, 10), chunks=(4, 4))
     func(x, axis=0, out=x)
