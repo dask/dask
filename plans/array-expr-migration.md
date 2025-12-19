@@ -269,15 +269,17 @@ Create expression class with `_layer()` method in appropriate `_*.py` file.
 ### Testing Strategy
 
 ```bash
-# Test array-expr specifically
-DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/
+# Test array-expr specifically (uses pytest_configure hook)
+pytest --array-expr dask/array/tests/
 
 # Quick check - stop on first failure
-DASK_ARRAY__QUERY_PLANNING=True pytest -k {operation} -x
+pytest --array-expr -k {operation} -x
 
 # Find xfail markers
 grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
+
+Note: The `--array-expr` flag sets `array.query-planning` config via `pytest_configure` hook, which runs before test collection imports `dask.array`.
 
 ### Current Test Status (December 2025)
 - **4471 passed**, 52 xfailed, 0 failed, 610 skipped

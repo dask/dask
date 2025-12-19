@@ -56,17 +56,22 @@ except ImportError:
 
 def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true", help="run slow tests")
-    parser.addoption("--runarrayexpr", action="store_true", help="run array-expr tests")
+    parser.addoption(
+        "--array-expr", action="store_true", help="enable array query-planning mode"
+    )
+
+
+def pytest_configure(config):
+    """Set array.query-planning config before any test imports dask.array."""
+    if config.getoption("--array-expr", default=False):
+        import dask
+
+        dask.config.set({"array.query-planning": True})
 
 
 def pytest_runtest_setup(item):
     if "slow" in item.keywords and not item.config.getoption("--runslow"):
         pytest.skip("need --runslow option to run")
-    if "array_expr" in item.keywords and not item.config.getoption("--runarrayexpr"):
-        pytest.skip("need --runarrayexpr option to run")
-    elif "array_expr" not in item.keywords and item.config.getoption("--runarrayexpr"):
-        if "normal_and_array_expr" not in item.keywords:
-            pytest.skip("only array-expr tests are being run")
 
 
 def pytest_assertrepr_compare(op, left, right):
