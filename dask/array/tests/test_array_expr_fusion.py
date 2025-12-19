@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array._array_expr._blockwise import FusedBlockwise
 from dask.array.utils import assert_eq
 
 pytestmark = pytest.mark.skipif(
@@ -14,8 +15,6 @@ pytestmark = pytest.mark.skipif(
 
 def test_simple_chain_fusion():
     """Simple chain fuses: (x + 1) * 2"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((10,), chunks=5)
     y = (x + 1) * 2
     expr = y.expr.optimize(fuse=True)
@@ -26,8 +25,6 @@ def test_simple_chain_fusion():
 
 def test_diamond_fusion():
     """Diamond pattern fuses: (x+1) + (x*2)"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((10,), chunks=5)
     a = x + 1
     b = x * 2
@@ -40,8 +37,6 @@ def test_diamond_fusion():
 
 def test_no_fusion_single_op():
     """Single operation does not create FusedBlockwise"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     # Use from_array (not fusable) to isolate a single elemwise op
     x = da.from_array(np.ones(10), chunks=5)
     y = x + 1
@@ -65,8 +60,6 @@ def test_task_count_reduced():
 
 def test_broadcast_fusion():
     """Fusion works with broadcasting"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((10, 10), chunks=5)  # 2D
     y = da.ones((10,), chunks=5)  # 1D, broadcasts
     z = (x + y) * 2
@@ -77,8 +70,6 @@ def test_broadcast_fusion():
 
 def test_longer_chain():
     """Longer chains fuse completely"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((10,), chunks=5)
     y = ((((x + 1) * 2) - 3) / 4) + 5
     expr = y.expr.optimize(fuse=True)
@@ -89,8 +80,6 @@ def test_longer_chain():
 
 def test_fusion_with_different_chunks():
     """Fusion works when arrays have different but compatible chunks"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((12,), chunks=4)  # 3 chunks
     y = da.ones((12,), chunks=6)  # 2 chunks
     # After unify_chunks, both will have same chunking
@@ -102,8 +91,6 @@ def test_fusion_with_different_chunks():
 
 def test_optimize_with_fuse_false():
     """optimize(fuse=False) does not fuse"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((10,), chunks=5)
     y = (x + 1) * 2
     expr = y.expr.optimize(fuse=False)
@@ -123,8 +110,6 @@ def test_fusion_correctness_random():
 
 def test_transpose_elemwise_fusion():
     """Transpose followed by elemwise fuses"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((6, 8), chunks=(3, 4))
     y = x.T + 1
     expr = y.expr.optimize(fuse=True)
@@ -136,8 +121,6 @@ def test_transpose_elemwise_fusion():
 
 def test_elemwise_transpose_elemwise_fusion():
     """Elemwise + transpose + elemwise chain fuses"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((6, 8), chunks=(3, 4))
     y = ((x + 1).T * 2)
     expr = y.expr.optimize(fuse=True)
@@ -148,8 +131,6 @@ def test_elemwise_transpose_elemwise_fusion():
 
 def test_swapaxes_fusion():
     """Swapaxes (uses Transpose) fuses with elemwise"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((6, 8, 4), chunks=(3, 4, 2))
     y = da.swapaxes(x, 0, 2) + 1
     expr = y.expr.optimize(fuse=True)
@@ -159,8 +140,6 @@ def test_swapaxes_fusion():
 
 def test_transpose_broadcast_fusion():
     """Transpose with broadcast fuses correctly"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     x = da.ones((6, 8), chunks=(3, 4))
     b = da.ones((6,), chunks=3)  # broadcasts against (8, 6) last dim
     z = ((x + 1).T + b) * 2
@@ -171,8 +150,6 @@ def test_transpose_broadcast_fusion():
 
 def test_creation_fusion():
     """Creation operations (ones, zeros, etc.) fuse with elemwise"""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     # ones fuses with elemwise
     x = da.ones((10,), chunks=5)
     y = x + 1
@@ -198,8 +175,6 @@ def test_creation_fusion():
 
 def test_same_array_different_patterns():
     """Same array accessed with different index patterns (a + a.T)."""
-    from dask.array._array_expr._blockwise import FusedBlockwise
-
     # a + a.T - same array, different access patterns
     a = da.ones((8, 8), chunks=4)
     b = a + a.T

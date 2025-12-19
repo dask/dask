@@ -597,7 +597,7 @@ def _remove_conflicting_exprs(group):
 def optimize_blockwise_fusion_array(expr):
     """Traverse the expression graph and apply fusion.
 
-    Finds groups of consecutive Elemwise operations and fuses them
+    Finds groups of consecutive fusable Blockwise operations and fuses them
     into single FusedBlockwise expressions.
     """
     from collections import defaultdict
