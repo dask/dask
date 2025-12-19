@@ -129,6 +129,11 @@ class Blockwise(ArrayExpr):
     def dtype(self):
         return super().dtype
 
+    @property
+    def _is_blockwise_fusable(self):
+        # Blockwise with concatenate requires special handling not yet implemented
+        return not self.concatenate
+
     def _idx_to_block(self, block_id: tuple[int, ...]) -> dict:
         """Map symbolic indices to output block coordinates."""
         idx_to_block = {idx: block_id[dim] for dim, idx in enumerate(self.out_ind)}
@@ -519,22 +524,10 @@ def _broadcast_block_id(numblocks: tuple[int, ...], block_id: tuple[int, ...]) -
 def is_fusable_blockwise(expr):
     """Check if an expression is a fusable Blockwise operation.
 
-    Returns True for Blockwise operations that don't use concatenate.
-    Also includes creation operations (Ones, Zeros, etc.).
-    Excludes IO operations like FromArray and FromDelayed.
+    Returns True if the expression has _is_blockwise_fusable = True.
+    This includes Blockwise (without concatenate), BroadcastTrick, and Random.
     """
-    # Import here to avoid circular imports
-    from dask.array._array_expr._creation import BroadcastTrick
-    from dask.array._array_expr._io import FromArray, FromDelayed
-
-    if isinstance(expr, (FromArray, FromDelayed)):
-        return False
-    if isinstance(expr, BroadcastTrick):
-        return True
-    if isinstance(expr, Blockwise):
-        # Blockwise with concatenate requires special handling
-        return not expr.concatenate
-    return False
+    return getattr(expr, "_is_blockwise_fusable", False)
 
 
 # Alias for internal use

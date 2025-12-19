@@ -44,9 +44,11 @@ Each expression also implements `_input_block_id(dep, block_id)` which maps an o
 
 **Follow the DataFrame pattern**: Arrays use the same `_task()` + `Fused` class approach as dataframes, extended for N-dimensional block indices.
 
-**Specialized `_task()` implementations**: Rather than one generic implementation, each expression type (Elemwise, Transpose, BroadcastTrick) has its own `_task()` that understands its semantics. Base `Blockwise` provides a fallback using symbolic index mapping.
+**Specialized `_task()` implementations**: Rather than one generic implementation, each expression type (Elemwise, Transpose, BroadcastTrick, Random) has its own `_task()` that understands its semantics. Base `Blockwise` provides a fallback using symbolic index mapping.
 
-**Exclude IO operations**: `FromArray` and `FromDelayed` are not fusable - they represent data boundaries.
+**`_is_blockwise_fusable` attribute**: Expressions declare their fusability via `_is_blockwise_fusable = True`. This is more extensible than checking types - new expression types just set the attribute. The base `ArrayExpr` defaults to `False`; `Blockwise` uses a property that returns `not self.concatenate`.
+
+**Exclude IO operations**: `FromArray` and `FromDelayed` are not fusable - they represent data boundaries (inherit `_is_blockwise_fusable = False` from `ArrayExpr`).
 
 **Exclude `concatenate=True` blockwise**: Operations that concatenate blocks along a dimension (like some reductions) require special handling not yet implemented.
 
@@ -86,7 +88,11 @@ After removing conflicting expressions, some expressions may become unreachable 
 - `dask/array/_array_expr/_creation.py`
   - `BroadcastTrick._task()` - creation operations (ones, zeros, etc.)
 
+- `dask/array/_array_expr/random.py`
+  - `Random._task()` - random array generation with per-block seeds
+
 - `dask/array/_array_expr/_expr.py`
+  - `ArrayExpr._is_blockwise_fusable` - fusability attribute (default False)
   - `ArrayExpr.optimize(fuse=True)` - integration point
   - `ArrayExpr.fuse()` - explicit fusion method
 

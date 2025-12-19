@@ -44,6 +44,10 @@ def _clean_header(header):
 
 class ArrayExpr(SingletonExpr):
 
+    # Whether this expression can be fused with other blockwise operations.
+    # Override to True in subclasses that support fusion (Blockwise, Random, etc.)
+    _is_blockwise_fusable = False
+
     def _operands_for_repr(self):
         return []
 

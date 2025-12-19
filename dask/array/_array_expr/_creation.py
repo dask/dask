@@ -17,8 +17,6 @@ from dask.array.core import normalize_chunks
 from dask.array.creation import _get_like_function_shapes_chunks
 from dask.array.utils import meta_from_array
 from dask.array.wrap import _parse_wrap_args, broadcast_trick
-from dask.blockwise import blockwise as core_blockwise
-from dask.layers import ArrayChunkShapeDep
 from dask.base import tokenize
 from dask.utils import cached_cumsum, derived_from
 
@@ -123,6 +121,7 @@ class Linspace(Arange):
 class BroadcastTrick(ArrayExpr):
     _parameters = ["shape", "dtype", "chunks", "meta", "kwargs", "name"]
     _defaults = {"meta": None, "name": None}
+    _is_blockwise_fusable = True
 
     @functools.cached_property
     def _name(self):
@@ -146,15 +145,13 @@ class BroadcastTrick(ArrayExpr):
         return partial(func, meta=self._meta, dtype=self.dtype, **k)
 
     def _layer(self) -> dict:
-        out_ind = dep_ind = tuple(range(len(self.shape)))
-        return core_blockwise(
-            self._wrapped_func,
-            self._name,
-            out_ind,
-            ArrayChunkShapeDep(self.chunks),
-            dep_ind,
-            numblocks={},
-        )
+        from itertools import product
+
+        result = {}
+        for block_id in product(*[range(len(c)) for c in self.chunks]):
+            key = (self._name, *block_id)
+            result[key] = self._task(key, block_id)
+        return result
 
     def _task(self, key, block_id: tuple[int, ...]) -> Task:
         """Generate task for a specific output block."""
