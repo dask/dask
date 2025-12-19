@@ -119,7 +119,7 @@ Array construction.
 | fromfunction | meshgrid + blockwise | **Done** |
 | indices | arange + meshgrid + stack | **Done** |
 | meshgrid | asarray + slicing + broadcast_arrays | **Done** |
-| pad | concatenate + broadcast_to (constant/edge/linear_ramp/empty modes) | **Done** (stat modes pending) |
+| pad | concatenate + broadcast_to + block (all modes) | **Done** |
 | tile | block | **Done** |
 
 ### Tier 7: Statistics & Histograms

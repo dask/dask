@@ -824,7 +824,6 @@ def test_tile_np_kroncompare_examples(shape, reps):
         ((10, 11), (4, 5), 0, "empty", {}),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="some pad modes not implemented in array-expr", strict=False)
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
@@ -870,7 +869,6 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ((10,), (3,), 1, "empty", {}),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="some pad modes not implemented in array-expr", strict=False)
 def test_pad(shape, chunks, pad_width, mode, kwargs):
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
@@ -971,7 +969,6 @@ def test_pad_constant_values(np_a, pad_value):
         ),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="some pad modes not implemented in array-expr", strict=False)
 def test_pad_3d_data(dtype, pad_widths, mode):
     np_a = np.arange(2 * 3 * 4).reshape(2, 3, 4).astype(dtype)
     da_a = da.from_array(np_a, chunks="auto")
@@ -983,7 +980,6 @@ def test_pad_3d_data(dtype, pad_widths, mode):
 
 
 @pytest.mark.parametrize("kwargs", [{}, {"scaler": 2}])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="pad UDF mode not implemented in array-expr")
 def test_pad_udf(kwargs):
     def udf_pad(vector, pad_width, iaxis, inner_kwargs):
         assert kwargs == inner_kwargs
