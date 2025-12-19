@@ -479,16 +479,17 @@ def _broadcast_block_id(numblocks: tuple[int, ...], block_id: tuple[int, ...]) -
 def is_fusable_blockwise(expr):
     """Check if an expression is a fusable Blockwise operation.
 
-    Returns True for Elemwise and Transpose operations.
+    Returns True for Elemwise, Transpose, and creation operations (Ones, Zeros, etc.).
     Excludes IO operations like FromArray and FromDelayed.
     """
     # Import here to avoid circular imports
+    from dask.array._array_expr._creation import BroadcastTrick
     from dask.array._array_expr._io import FromArray, FromDelayed
     from dask.array._array_expr.manipulation._transpose import Transpose
 
     if isinstance(expr, (FromArray, FromDelayed)):
         return False
-    return isinstance(expr, (Elemwise, Transpose))
+    return isinstance(expr, (Elemwise, Transpose, BroadcastTrick))
 
 
 # Alias for internal use

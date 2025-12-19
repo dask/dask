@@ -19,7 +19,7 @@ def test_simple_chain_fusion():
     y = (x + 1) * 2
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    assert len(expr.exprs) == 2  # two elemwise ops
+    assert len(expr.exprs) == 3  # ones + two elemwise ops
     result = y.compute()
     expected = (np.ones(10) + 1) * 2
     assert np.allclose(result, expected)
@@ -35,7 +35,7 @@ def test_diamond_fusion():
     c = a + b
     expr = c.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    assert len(expr.exprs) == 3  # three elemwise ops
+    assert len(expr.exprs) == 4  # ones + three elemwise ops
     result = c.compute()
     expected = (np.ones(10) + 1) + (np.ones(10) * 2)
     assert np.allclose(result, expected)
@@ -45,7 +45,8 @@ def test_no_fusion_single_op():
     """Single operation does not create FusedBlockwise"""
     from dask.array._array_expr._blockwise import FusedBlockwise
 
-    x = da.ones((10,), chunks=5)
+    # Use from_array (not fusable) to isolate a single elemwise op
+    x = da.from_array(np.ones(10), chunks=5)
     y = x + 1
     expr = y.expr.optimize(fuse=True)
     assert not isinstance(expr, FusedBlockwise)
@@ -87,7 +88,7 @@ def test_longer_chain():
     y = ((((x + 1) * 2) - 3) / 4) + 5
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    assert len(expr.exprs) == 5  # five elemwise ops
+    assert len(expr.exprs) == 6  # ones + five elemwise ops
     result = y.compute()
     expected = ((((np.ones(10) + 1) * 2) - 3) / 4) + 5
     assert np.allclose(result, expected)
@@ -139,7 +140,7 @@ def test_transpose_elemwise_fusion():
     y = x.T + 1
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    assert len(expr.exprs) == 2
+    assert len(expr.exprs) == 3  # ones + transpose + elemwise
     result = y.compute()
     expected = np.ones((6, 8)).T + 1
     assert np.allclose(result, expected)
@@ -154,7 +155,7 @@ def test_elemwise_transpose_elemwise_fusion():
     y = ((x + 1).T * 2)
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
-    assert len(expr.exprs) == 3
+    assert len(expr.exprs) == 4  # ones + add + transpose + mul
     result = y.compute()
     expected = ((np.ones((6, 8)) + 1).T * 2)
     assert np.allclose(result, expected)
@@ -185,3 +186,30 @@ def test_transpose_broadcast_fusion():
     result = z.compute()
     expected = ((np.ones((6, 8)) + 1).T + np.ones(6)) * 2
     assert np.allclose(result, expected)
+
+
+def test_creation_fusion():
+    """Creation operations (ones, zeros, etc.) fuse with elemwise"""
+    from dask.array._array_expr._blockwise import FusedBlockwise
+
+    # ones fuses with elemwise
+    x = da.ones((10,), chunks=5)
+    y = x + 1
+    expr = y.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    assert len(expr.exprs) == 2  # ones + add
+    assert np.allclose(y.compute(), np.ones(10) + 1)
+
+    # zeros fuses too
+    x = da.zeros((10,), chunks=5)
+    y = x + 1
+    expr = y.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    assert np.allclose(y.compute(), np.zeros(10) + 1)
+
+    # full fuses too
+    x = da.full((10,), 5, chunks=5)
+    y = x * 2
+    expr = y.expr.optimize(fuse=True)
+    assert isinstance(expr, FusedBlockwise)
+    assert np.allclose(y.compute(), np.full(10, 5) * 2)
