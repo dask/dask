@@ -395,3 +395,68 @@ def test_pushdown_broadcast_both_arrays():
     assert opt.elemwise_args[0].chunks == ((2, 2, 2, 2, 2), (1,))
     assert opt.elemwise_args[1].chunks == ((1,), (5, 5, 5, 5))
     assert_eq(result, a_np + b_np)
+
+
+def test_rechunk_pushdown_to_io():
+    """Rechunk should push down into FromArray by changing chunks parameter."""
+    from dask.array._array_expr._io import FromArray
+
+    a = np.random.random((10, 10))
+    b = da.from_array(a, chunks=(4, 4))
+
+    result = b.rechunk((5, 2)).expr.optimize()
+    expected = da.from_array(a, chunks=((5, 5), (2, 2, 2, 2, 2))).expr
+
+    # Both should be FromArray with matching structure
+    assert type(result) is FromArray
+    assert result._name == expected._name
+
+
+def test_rechunk_chain_optimize():
+    """Chained rechunks should collapse to single rechunk pushed to IO."""
+    from dask.array._array_expr._io import FromArray
+
+    a = np.random.random((10, 10))
+    b = da.from_array(a, chunks=(4, 4))
+
+    result = b.rechunk((2, 5)).rechunk((5, 2)).expr.optimize()
+    expected = da.from_array(a, chunks=((5, 5), (2, 2, 2, 2, 2))).expr
+
+    # Both rechunks eliminated, just FromArray
+    assert type(result) is FromArray
+    assert result._name == expected._name
+
+
+def test_rechunk_transpose_pushdown_to_io():
+    """Rechunk after transpose should push through to IO."""
+    from dask.array._array_expr._io import FromArray
+    from dask.array._array_expr.manipulation._transpose import Transpose
+
+    a = np.random.random((10, 10))
+    b = da.from_array(a, chunks=(4, 4))
+
+    result = b.T.rechunk((5, 2)).expr.optimize()
+    # Rechunk pushed through transpose: input rechunked to (2, 5) then transposed
+    expected = da.from_array(a, chunks=((2, 2, 2, 2, 2), (5, 5))).T.expr
+
+    assert type(result) is Transpose
+    assert type(result.array) is FromArray
+    assert result._name == expected._name
+
+
+def test_rechunk_elemwise_pushdown_to_io():
+    """Rechunk after elemwise should push through to IO inputs."""
+    from dask.array._array_expr._io import FromArray
+    from dask.array._array_expr._blockwise import Elemwise
+
+    a = np.random.random((10, 10))
+    b = da.from_array(a, chunks=(4, 4))
+
+    result = (b + 1).rechunk((5, 5)).expr.optimize()
+
+    # Rechunk pushed through elemwise into FromArray
+    assert type(result) is Elemwise
+    assert type(result.elemwise_args[0]) is FromArray
+    assert result.elemwise_args[0].chunks == ((5, 5), (5, 5))
+    # Verify the prefix is preserved
+    assert result.elemwise_args[0].name.startswith("array-")
