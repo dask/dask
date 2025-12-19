@@ -572,6 +572,15 @@ class Array(DaskMethodsMixin):
 
     flatten = ravel
 
+    def repeat(self, repeats, axis=None):
+        """Repeat elements of an array.
+
+        Refer to :func:`dask.array.repeat` for full documentation.
+        """
+        from dask.array._array_expr._creation import repeat
+
+        return repeat(self, repeats, axis)
+
     def choose(self, choices):
         """Use an index array to construct a new array from a set of choices.
 

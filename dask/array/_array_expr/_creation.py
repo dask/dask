@@ -121,8 +121,15 @@ class Linspace(Arange):
 
 
 class BroadcastTrick(ArrayExpr):
-    _parameters = ["shape", "dtype", "chunks", "meta", "kwargs"]
-    _defaults = {"meta": None}
+    _parameters = ["shape", "dtype", "chunks", "meta", "kwargs", "name"]
+    _defaults = {"meta": None, "name": None}
+
+    @functools.cached_property
+    def _name(self):
+        custom_name = self.operand("name")
+        if custom_name is not None:
+            return custom_name
+        return f"{self._funcname}-{self.deterministic_token}"
 
     @functools.cached_property
     def _meta(self):
@@ -615,6 +622,7 @@ def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
             "Please use tuple, list, or a 1D numpy array instead."
         )
 
+    name = kwargs.pop("name", None)
     parsed = _parse_wrap_args(klass.func, args, kwargs, shape)
     return new_collection(
         klass(
@@ -623,6 +631,7 @@ def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
             parsed["chunks"],
             kwargs.get("meta"),
             kwargs,
+            name,
         )
     )
 

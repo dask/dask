@@ -37,7 +37,6 @@ from dask.array.utils import assert_eq, same_keys
         "full",
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="custom name not preserved in array-expr", strict=False)
 @pytest.mark.parametrize("cast_shape", [tuple, list, np.asarray])
 @pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
 @pytest.mark.parametrize("shape, chunks", [((10, 10), (4, 4))])
@@ -718,7 +717,6 @@ def test_fromfunction(func, dtype, kwargs):
     assert same_keys(d, d2)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="repeat not implemented for array-expr")
 def test_repeat():
     x = np.random.random((10, 11, 13))
     d = da.from_array(x, chunks=(4, 5, 3))
