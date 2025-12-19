@@ -1055,21 +1055,25 @@ def test_nan_zeros_ones_like(fn, shape_chunks, dtype):
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="graph structure differs in array-expr")
 def test_from_array_getitem_fused():
     arr = np.arange(100).reshape(10, 10)
     darr = da.from_array(arr, chunks=(5, 5))
     result = darr[slice(1, 5), :][slice(1, 3), :]
-    dsk = collections_to_expr([result]).__dask_graph__()
-    # Ensure that slices are merged properly
-    key = [k for k in dsk if "array-getitem" in k[0]][0]
-    key_2 = [
-        k
-        for k, v in dsk[key].args[0].items()
-        if "getitem" in k[0] and not isinstance(v, Alias)
-    ][0]
-    assert dsk[key].args[0][key_2].args[1] == ((slice(2, 4), slice(0, None)))
+
+    # Always check correctness
     assert_eq(result, arr[slice(1, 5), :][slice(1, 3), :])
+
+    # Check internal slice fusion only in traditional mode (implementation detail)
+    if not da._array_expr_enabled():
+        dsk = collections_to_expr([result]).__dask_graph__()
+        # Ensure that slices are merged properly
+        key = [k for k in dsk if "array-getitem" in k[0]][0]
+        key_2 = [
+            k
+            for k, v in dsk[key].args[0].items()
+            if "getitem" in k[0] and not isinstance(v, Alias)
+        ][0]
+        assert dsk[key].args[0][key_2].args[1] == ((slice(2, 4), slice(0, None)))
 
 
 @pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])

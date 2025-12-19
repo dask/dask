@@ -55,7 +55,6 @@ def test_array_function_dask(func):
         lambda x: np.vstack(x),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="stack sequence check differs for array-expr")
 def test_stack_functions_require_sequence_of_arrays(func):
     x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
@@ -86,7 +85,6 @@ def test_array_function_fft(func):
         lambda x: np.linalg.eigvals(x),
     ],
 )
-@pytest.mark.xfail(da._array_expr_enabled(), reason="warning behavior differs for array-expr")
 def test_array_notimpl_function_dask(func):
     x = np.random.default_rng().random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
@@ -183,7 +181,6 @@ def test_unregistered_func(func):
     assert_eq(xx, yy, check_meta=False, check_type=False)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="warning behavior differs for array-expr")
 def test_non_existent_func():
     # Regression test for __array_function__ becoming default in numpy 1.17
     # dask has no sort function, so ensure that this still calls np.sort
@@ -230,11 +227,7 @@ def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
 
 
 @pytest.mark.parametrize("like_ns", (np, da))
-@pytest.mark.parametrize("func", [
-    da.array,
-    pytest.param(da.asarray, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="asarray like kwarg")),
-    pytest.param(da.asanyarray, marks=pytest.mark.xfail(da._array_expr_enabled(), reason="asanyarray like kwarg")),
-])
+@pytest.mark.parametrize("func", [da.array, da.asarray, da.asanyarray])
 def test_like(func, like_ns):
     like = like_ns.array(0, dtype=np.int16)
 

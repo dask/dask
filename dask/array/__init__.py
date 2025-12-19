@@ -931,3 +931,6 @@ if _array_expr_enabled():
         import dask.array as da  # type: ignore[no-redef]
 
         da = importlib.reload(da)
+
+    # Clean up helper function from namespace
+    del raise_not_implemented_error
