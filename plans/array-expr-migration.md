@@ -290,14 +290,14 @@ These work streams can be executed in parallel by agents. Each is independent.
 - 🟡 Medium - Moderate complexity
 - 🔴 Complex - Architectural changes needed
 
-### Stream A: Cleanup XPASSed Tests (24 tests) 🟢
-Tests that now pass but still have xfail markers. Just remove the markers.
+### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
+Converted blanket xfail markers to targeted ones for passing variants.
 
-| Test File | Tests | Issue |
-|-----------|-------|-------|
-| test_creation.py | 3 | test_like_forgets_graph now passes |
-| test_slicing.py | 17 | test_index_with_int_dask_array (most variants pass) |
-| test_ufunc.py | 4 | test_ufunc_where with dtype=None passes |
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| test_creation.py | 3 | ✅ test_like_forgets_graph[array/asarray/asanyarray] now pass |
+| test_slicing.py | 17 | ✅ test_index_with_int_dask_array (17 of 20 variants pass) |
+| test_ufunc.py | 4 | ✅ test_ufunc_where with where=True and dtype=None pass |
 
 ### Stream B: compute_chunk_sizes() (9 tests) 🟡
 Method to compute unknown chunk sizes after boolean indexing.
