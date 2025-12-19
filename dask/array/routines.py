@@ -2540,7 +2540,10 @@ def _average(
                 )
 
             # setup wgt to broadcast along axis
-            wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
+            # Import broadcast_to from dask.array to get the array-expr version
+            # when array-expr is enabled (avoids mixing legacy and array-expr arrays)
+            import dask.array as _da
+            wgt = _da.broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
             wgt = wgt.swapaxes(-1, axis)
         if is_masked:
             from dask.array.ma import getmaskarray
