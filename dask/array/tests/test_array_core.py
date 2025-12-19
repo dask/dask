@@ -4427,10 +4427,6 @@ def test_setitem_extended_API_2d(index, value):
     assert_eq(x, dx.compute())
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="setitem with dask array indices needs array-expr reimplementation",
-)
 def test_setitem_extended_API_2d_rhs_func_of_lhs():
     # Cases:
     # * RHS and/or indices are a function of the LHS
