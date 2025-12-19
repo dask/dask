@@ -655,8 +655,6 @@ def test_array_reduction_out(func):
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
 @pytest.mark.parametrize("method", ["sequential", "blelloch"])
 def test_array_cumreduction_axis(func, use_nan, axis, method):
-    if axis is None and da._array_expr_enabled():
-        pytest.xfail("cumulative reduction axis=None not implemented for array-expr")
     np_func = getattr(np, func)
     da_func = getattr(da, func)
 

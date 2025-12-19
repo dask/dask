@@ -311,14 +311,14 @@ Method to compute unknown chunk sizes after boolean indexing.
 
 **Implementation:** Added `compute_chunk_sizes()` method to Array class in `_collection.py`. Uses `map_blocks` to get chunk shapes, computes them, then wraps the expression with `ChunksOverride` to set the new chunks.
 
-### Stream C: Cumulative Reduction axis=None (16 tests) 🔴
+### Stream C: Cumulative Reduction axis=None (16 tests) 🟢 **DONE**
 cumsum/cumprod/nancumsum/nancumprod with axis=None.
 
-| Functions | Issue |
-|-----------|-------|
-| cumsum, cumprod, nancumsum, nancumprod | axis=None requires flatten + cumulative, then reshape |
+| Functions | Status |
+|-----------|--------|
+| cumsum, cumprod, nancumsum, nancumprod | **Done** - Native expression classes in `_reductions.py` |
 
-**Notes:** Currently fails due to HLG dependency issues when combining flatten with cumulative operations.
+**Implementation:** Created `CumReduction` and `CumReductionBlelloch` expression classes that handle axis=None by flattening and rechunking first. Functions exported from `_array_expr/__init__.py`.
 
 ### Stream D: UFunc where Parameter 🟢 **DONE**
 Array masks for ufunc `where=` parameter.
