@@ -2227,7 +2227,7 @@ def get_default_shuffle_method() -> str:
 
         default_client()
     except (ImportError, ValueError):
-        return "disk"
+        return "tasks"
 
     try:
         from distributed.shuffle import check_minimal_arrow_version
