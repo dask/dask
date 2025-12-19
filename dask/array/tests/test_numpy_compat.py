@@ -32,7 +32,6 @@ def test_basic():
     assert_eq(result, expected)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="min/max/round scalar conversion differs for array-expr")
 def test_min_max_round_funcs():
     # Regression test for gh-5031
     image = da.from_array(np.array([[0, 1], [1, 2]]), chunks=(1, 2))
