@@ -896,32 +896,25 @@ class Random(IO):
     def kwargs(self):
         return self.operand("kwargs")
 
-    @property
-    def chunks(self):
+    @cached_property
+    def _base_chunks(self):
+        """Chunks for the size dimensions, excluding extra_chunks."""
         size = self.operand("size")
         chunks = self.operand("chunks")
-
-        # shapes = list(
-        #     {
-        #         ar.shape
-        #         for ar in chain(args, kwargs.values())
-        #         if isinstance(ar, (Array, np.ndarray))
-        #     }
-        # )
-        # if size is not None:
-        #     shapes.append(size)
-        shapes = [size]
-        # broadcast to the final size(shape)
-        size = broadcast_shapes(*shapes)
+        shape = broadcast_shapes(size) if size is not None else ()
         return normalize_chunks(
             chunks,
-            size,  # ideally would use dtype here
+            shape,
             dtype=self.kwargs.get("dtype", np.float64),
         )
 
+    @property
+    def chunks(self):
+        return self._base_chunks + self.extra_chunks
+
     @cached_property
     def _info(self):
-        sizes = list(product(*self.chunks))
+        sizes = list(product(*self._base_chunks))
         if isinstance(self.rng, Generator):
             bitgens = _spawn_bitgens(self.rng._bit_generator, len(sizes))
             bitgen_token = tokenize(bitgens)
@@ -955,7 +948,7 @@ class Random(IO):
 
         keys = product(
             [name],
-            *([range(len(bd)) for bd in self.chunks] + [[0]] * len(self.extra_chunks)),
+            *([range(len(bd)) for bd in self._base_chunks] + [[0]] * len(self.extra_chunks)),
         )
 
         vals = []
@@ -978,15 +971,15 @@ class Random(IO):
     @cached_property
     def _meta(self):
         bitgens, name, sizes, gen, func_applier = self._info
+        size = self.operand("size")
+        meta_size = (0,) * len(size) if size is not None else ()
         return func_applier(
             gen,
             self.distribution,
-            bitgens[0],  # TODO: not sure about this
-            (0,) * len(self.operand("size")),
+            bitgens[0],
+            meta_size,
             self.args,
             self.kwargs,
-            # small_args,
-            # small_kwargs,
         )
 
 
