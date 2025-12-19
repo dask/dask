@@ -88,11 +88,18 @@ def assert_has_persisted_data(arr):
     has_persisted_data = False
     if futures_of(arr):
         has_persisted_data = True
-    else:
+    elif hasattr(arr.dask, 'layers'):
+        # Legacy HLG path
         for layer in arr.dask.layers.values():
             if isinstance(layer, MaterializedLayer) and any(
                 map(lambda obj: isinstance(obj, np.ndarray), layer.mapping.values())
             ):
+                has_persisted_data = True
+                break
+    else:
+        # Array-expr dict graph path - check for numpy arrays in values
+        for value in arr.dask.values():
+            if isinstance(value, np.ndarray):
                 has_persisted_data = True
                 break
     assert has_persisted_data
@@ -2092,7 +2099,6 @@ def test_store_kwargs():
     assert called[0]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
 def test_store_delayed_target():
     from dask.delayed import delayed
 
@@ -2164,7 +2170,7 @@ def test_store():
     pytest.raises(ValueError, lambda: da.store([at, bt], [at, bt]))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="store regions has graph dependency issues in array-expr", strict=False)
 def test_store_regions():
     d = da.ones((4, 4, 4), dtype=int, chunks=(2, 2, 2))
     a, b = d + 1, d + 2
@@ -2176,7 +2182,7 @@ def test_store_regions():
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = da.store([a, b], [at, bt], regions=region, compute=False)
-    assert all([isinstance(a, Array) for a in v])
+    assert all([isinstance(a, da.Array) for a in v])
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
     assert all([ev.size == 0 for ev in results])
@@ -2260,7 +2266,6 @@ def test_store_regions():
         assert (ar == 2).all()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
 def test_store_compute_false():
     d = da.ones((4, 4), chunks=(2, 2))
     a, b = d + 1, d + 2
@@ -2278,7 +2283,7 @@ def test_store_compute_false():
     at = np.zeros(shape=(4, 4))
     bt = np.zeros(shape=(4, 4))
     dat, dbt = da.store([a, b], [at, bt], compute=False, return_stored=True)
-    assert isinstance(dat, Array) and isinstance(dbt, Array)
+    assert isinstance(dat, da.Array) and isinstance(dbt, da.Array)
     assert (at == 0).all() and (bt == 0).all()
     assert (dat.compute() == at).all() and (dbt.compute() == bt).all()
     assert (at == 2).all() and (bt == 3).all()
@@ -2288,7 +2293,7 @@ def test_store_compute_false():
     dat, dbt = da.store(
         [a, b], [at, bt], compute=False, return_stored=True, load_stored=False
     )
-    assert isinstance(dat, Array) and isinstance(dbt, Array)
+    assert isinstance(dat, da.Array) and isinstance(dbt, da.Array)
     assert (at == 0).all() and (bt == 0).all()
     dask.compute(dat, dbt)
     assert (at == 2).all() and (bt == 3).all()
@@ -2352,7 +2357,7 @@ class CounterLock:
         return self.lock.release(*args, **kwargs)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="store lock handling not working in array-expr", strict=False)
 def test_store_locks_failure_lock_released():
     d = da.ones((10, 10), chunks=(2, 2))
 
@@ -2363,7 +2368,7 @@ def test_store_locks_failure_lock_released():
     assert lock.acquire_count == lock.release_count > 0
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
+@pytest.mark.xfail(da._array_expr_enabled(), reason="CounterLock tokenization fails in array-expr", strict=False)
 def test_store_locks():
     d = da.ones((10, 10), chunks=(2, 2))
     a, b = d + 1, d + 2
@@ -2401,7 +2406,7 @@ def test_store_locks():
         lock = CounterLock()
 
         v = da.store([a, b], [at, bt], lock=lock, compute=c, return_stored=True)
-        assert all(isinstance(e, Array) for e in v)
+        assert all(isinstance(e, da.Array) for e in v)
 
         da.compute(v)
 
@@ -2415,7 +2420,6 @@ def test_store_locks():
             assert lock.acquire_count == nchunks
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store not implemented", strict=False)
 def test_store_method_return():
     d = da.ones((10, 10), chunks=(2, 2))
     a = d + 1
@@ -2430,7 +2434,7 @@ def test_store_method_return():
             if compute and not return_stored:
                 assert r is None
             else:
-                assert isinstance(r, Array)
+                assert isinstance(r, da.Array)
 
 
 def test_store_multiprocessing_lock():

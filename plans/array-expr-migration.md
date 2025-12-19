@@ -269,15 +269,15 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 ```
 
 ### Current Test Status (December 2025)
-- **4457 passed**, 60 xfailed, 0 failed, 610 skipped, 6 xpassed
-- Significant progress from earlier (was 211 xfails, now 60)
+- **4460 passed**, 57 xfailed, 0 failed, 610 skipped, 6 xpassed
+- Significant progress from earlier (was 211 xfails, now 57)
 
 **XPassed Tests (6 - expected with strict=False):**
 - `test_mixed_concatenate[<lambda>13/14/15]` - tensordot with masked arrays works in some contexts
 - `test_mixed_random[<lambda>13/14/15]` - tensordot with masked arrays works in some contexts
 
-**XFails by category (60 total):**
-- Store advanced features: 6 xfails
+**XFails by category (57 total):**
+- Store advanced features: 3 xfails (regions, locks)
 - Masked array tensordot: 4 xfails (test_basic lambdas, test_tensordot)
 - Masked array average: 2 xfails (test_average_weights_with_masked_array)
 - Fusion (architectural): 4 xfails (blockwise_fusion, block_id_fusion, trim_internal, map_blocks_optimize)
@@ -303,7 +303,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 |--------|-------|----------|-------|
 | ~~AA: XPASS cleanup~~ | 6 | 🟢 Quick | Expected with strict=False |
 | ~~AB: Failed test fixes~~ | 2 | 🟡 Medium | **DONE** |
-| M: Store advanced | 6 | 🟡 High | Practical importance |
+| ~~M: Store advanced~~ | 6 | 🟡 High | **PARTIAL** (3/6 pass) |
 | S: Setitem edge | 1 | 🟡 Medium | test_setitem_extended_API_2d_rhs_func_of_lhs |
 | AC: Masked tensordot | 4 | 🟡 Medium | test_basic lambdas + test_tensordot |
 | AD: Masked average | 2 | 🟡 Medium | _average uses traditional routines.py |
@@ -316,12 +316,12 @@ These work streams can be executed in parallel by agents. Each is independent.
 | AF: Overlap | 3 | 🔴 Deferred | Needs fusion/push |
 | Z: Misc | ~27 | 🟢 Varies | Mixed bag |
 
-**Completed streams:** N, P, Q, O, R, U, AB (all DONE)
+**Completed streams:** N, P, Q, O, R, U, AB, M (partial)
 
 **Recommended next targets:**
-1. Stream M (store completeness) - 6 tests, practical importance
-2. Stream AC (masked tensordot) - 4 tests
-3. Stream S (setitem edge) - 1 test remaining
+1. Stream AC (masked tensordot) - 4 tests
+2. Stream S (setitem edge) - 1 test remaining
+3. Stream AD (masked average) - 2 tests
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -472,19 +472,25 @@ Smaller independent fixes.
 - Fixed asarray/asanyarray `like` kwarg by using `asarray_safe`/`asanyarray_safe` with `partial`
 - Updated tests to be mode-agnostic where appropriate
 
-### Stream M: Store Advanced Features (6 tests) 🟡
+### Stream M: Store Advanced Features (6 tests) 🟡 **PARTIAL**
 Store with complex options like delayed targets, regions, compute=False.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_store_delayed_target | Delayed objects as targets | ⏳ |
-| test_store_regions | Region slicing for partial writes | ⏳ |
-| test_store_compute_false | compute=False return delayed | ⏳ |
-| test_store_locks | Lock handling during store | ⏳ |
-| test_store_locks_failure_lock_released | Lock release on failure | ⏳ |
-| test_store_method_return | return_stored=True | ⏳ |
+| test_store_delayed_target | Delayed objects as targets | ✅ |
+| test_store_regions | Region slicing for partial writes | ⏳ graph deps |
+| test_store_compute_false | compute=False return delayed | ✅ |
+| test_store_locks | Lock handling during store | ⏳ tokenization |
+| test_store_locks_failure_lock_released | Lock release on failure | ⏳ lock not used |
+| test_store_method_return | return_stored=True | ✅ |
 
-**Notes:** Basic store works. These tests require handling delayed targets, region slicing, and return_stored cases.
+**Implementation (3/6 tests passing):**
+- Fixed `isinstance(x, Array)` checks to use `da.Array` instead of `dask.array.core.Array`
+- Fixed `assert_has_persisted_data` helper to handle dict graphs from array-expr
+- Remaining issues:
+  - `test_store_regions`: Graph dependency error in load-stored layer
+  - `test_store_locks`: CounterLock cannot be tokenized deterministically
+  - `test_store_locks_failure_lock_released`: Lock acquire/release not happening
 
 ### Stream N: UFunc dtype Parameter (16 tests) 🟢 **DONE**
 The `dtype=` parameter in ufunc calls when combined with `where=`.
