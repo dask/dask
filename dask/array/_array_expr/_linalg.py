@@ -105,6 +105,15 @@ def tensordot(lhs, rhs, axes=2):
         else:
             adjust_chunks[left_index[l]] = lambda c: 1
 
+    # Compute explicit meta to preserve masked array type
+    # (compute_meta fails for masked arrays due to reshape issues with 0-dim arrays)
+    meta = None
+    for arr in (lhs, rhs):
+        if hasattr(arr._meta, "mask"):  # MaskedArray check
+            out_ndim = len(out_index)
+            meta = np.ma.empty((0,) * out_ndim, dtype=dt)
+            break
+
     intermediate = blockwise(
         _tensordot,
         out_index,
@@ -117,6 +126,7 @@ def tensordot(lhs, rhs, axes=2):
         adjust_chunks=adjust_chunks,
         axes=(left_axes, right_axes),
         is_sparse=is_sparse,
+        meta=meta,
     )
 
     if concatenate:
