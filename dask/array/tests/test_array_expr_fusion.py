@@ -221,3 +221,52 @@ def test_same_array_different_patterns():
     b = a * a.T
     expected = np.arange(16).reshape((4, 4)) * np.arange(16).reshape((4, 4)).T
     assert_eq(b, expected)
+
+    # mid + mid.T - intermediate expression with different patterns
+    x = da.ones((8, 8), chunks=4)
+    mid = x + 1
+    y = mid + mid.T
+    expected = (np.ones((8, 8)) + 1) + (np.ones((8, 8)) + 1).T
+    assert_eq(y, expected)
+
+
+def test_deep_nesting():
+    """Deep chain of 20 operations fuses into minimal tasks."""
+    x = da.ones((10,), chunks=5)
+    for _ in range(20):
+        x = x + 1
+    assert_eq(x, np.ones(10) + 20)
+    # 20 ops should fuse to just 2 tasks (one per chunk)
+    assert len(dict(x.optimize().__dask_graph__())) == 2
+
+
+def test_wide_diamond():
+    """Wide diamond with 10 branches fuses into minimal tasks."""
+    x = da.ones((10,), chunks=5)
+    branches = [x + i for i in range(10)]
+    y = sum(branches)
+    assert_eq(y, np.ones(10) * 10 + 45)
+    # All branches should fuse to just 2 tasks (one per chunk)
+    assert len(dict(y.optimize().__dask_graph__())) == 2
+
+
+def test_complex_broadcasting():
+    """Complex broadcasting with 3D, 2D, and 1D arrays fuses."""
+    a = da.ones((4, 3, 2), chunks=2)
+    b = da.ones((3, 1), chunks=2)
+    c = da.ones((2,), chunks=2)
+    d = (a + b) * c
+    expected = (np.ones((4, 3, 2)) + np.ones((3, 1))) * np.ones(2)
+    assert_eq(d, expected)
+    # Should fuse - verify reasonable task count
+    assert len(dict(d.optimize().__dask_graph__())) <= 8
+
+
+def test_broadcasting_outer_product():
+    """Broadcasting (N,1) + (1,N) creates outer-product-like pattern."""
+    a = da.ones((10, 1), chunks=5)
+    b = da.ones((1, 10), chunks=5)
+    c = a + b
+    assert_eq(c, np.ones((10, 1)) + np.ones((1, 10)))
+    # 2x2 output blocks, should fuse
+    assert len(dict(c.optimize().__dask_graph__())) == 4
