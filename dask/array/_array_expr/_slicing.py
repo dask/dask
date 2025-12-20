@@ -574,8 +574,8 @@ class SliceSlicesIntegers(Slice):
             return None
         if any(not isinstance(idx, (slice, Integral)) for idx in index):
             return None
-        # Don't push negative step slices - FromArray._layer doesn't handle them
-        if any(isinstance(idx, slice) and idx.step is not None and idx.step < 0 for idx in index):
+        # Don't push non-unit step slices - FromArray._layer doesn't handle them correctly
+        if any(isinstance(idx, slice) and idx.step is not None and idx.step != 1 for idx in index):
             return None
 
         io_expr = self.array
