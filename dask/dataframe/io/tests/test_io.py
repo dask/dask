@@ -467,6 +467,7 @@ def test_from_dask_array_struct_dtype():
     )
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="Legacy Array constructor not supported in array-expr")
 def test_from_dask_array_unknown_chunks():
     # Series
     dx = da.Array(
@@ -503,6 +504,7 @@ def test_from_dask_array_empty_chunks(chunksizes, expected_divisions):
     assert df.divisions == expected_divisions
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="Legacy Array constructor not supported in array-expr")
 def test_from_dask_array_unknown_width_error():
     dsk = {("x", 0, 0): np.random.random((2, 3)), ("x", 1, 0): np.random.random((5, 3))}
     dx = da.Array(dsk, "x", ((np.nan, np.nan), (np.nan,)), np.float64)

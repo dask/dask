@@ -1,7 +1,9 @@
-"""Array expressions for DataFrame operations that produce arrays.
+"""Bridge expressions between DataFrame and Array.
 
-These ArrayExpr classes are used when array-expr is enabled and a DataFrame
-operation produces an array (e.g., ddf.values, ddf.to_dask_array()).
+These expressions are used when array-expr is enabled to preserve expression
+structure when converting between DataFrame and Array:
+- Values (ArrayExpr): DataFrame → Array (e.g., ddf.values, ddf.to_dask_array())
+- FromDaskArray (Expr): Array → DataFrame (e.g., dd.from_dask_array, arr.to_dask_dataframe())
 """
 
 from __future__ import annotations
@@ -13,6 +15,15 @@ import numpy as np
 from dask._task_spec import Task, TaskRef
 from dask.array._array_expr._expr import ArrayExpr
 from dask.dataframe import methods
+from dask.dataframe.dask_expr._expr import Expr
+from dask.dataframe.io.io import _meta_from_array, _partition_from_array
+from dask.utils import is_series_like
+
+
+def _concat_and_partition(*arrays, index=None, **kwargs):
+    """Concatenate array chunks along axis 1 and create a partition."""
+    data = np.concatenate(arrays, axis=1)
+    return _partition_from_array(data, index=index, **kwargs)
 
 
 class Values(ArrayExpr):
@@ -99,3 +110,188 @@ def create_values_array(frame, chunks=None, meta=None):
     from dask.array._array_expr._collection import Array
 
     return Array(Values(frame, chunks, meta))
+
+
+class FromDaskArray(Expr):
+    """DataFrame expression from a Dask Array.
+
+    Converts a dask array into a DataFrame (2D) or Series (1D).
+    This is a DataFrame Expr that directly creates tasks to convert
+    each array chunk into a DataFrame/Series partition.
+
+    Parameters
+    ----------
+    array : ArrayExpr
+        The array expression to convert
+    columns : list or string, optional
+        Column names for DataFrame, or name for Series
+    _index : Expr, optional
+        Optional dask Index expression
+    user_meta : DataFrame or Series, optional
+        User-provided metadata for the output
+    """
+
+    _parameters = ["array", "columns", "_index", "user_meta"]
+    _defaults = {"columns": None, "_index": None, "user_meta": None}
+
+    @functools.cached_property
+    def _name(self):
+        return f"from-dask-array-{self.deterministic_token}"
+
+    @functools.cached_property
+    def _meta(self):
+        if self.user_meta is not None:
+            return self.user_meta
+        # Use the helper from io.py to compute meta
+        return _meta_from_array(self.array, self.columns, index=None, meta=None)
+
+    def _divisions(self):
+        # If an index is provided, use its divisions
+        if self._index is not None:
+            return self._index.divisions
+
+        chunks = self.array.chunks
+        if any(np.isnan(c) for c in chunks[0]):
+            # Unknown chunks: divisions are all None
+            return (None,) * (len(chunks[0]) + 1)
+        else:
+            # Known chunks: compute cumulative divisions
+            # Match the logic from io.py to handle empty chunks correctly
+            n_elements = sum(chunks[0])
+            divisions = [0]
+            stop = 0
+            for c in chunks[0]:
+                stop += c
+                # Correct division when we reach the total count
+                # This handles empty chunks at the end
+                if stop == n_elements:
+                    stop -= 1
+                divisions.append(stop)
+            return tuple(divisions)
+
+    def _layer(self):
+        dsk = {}
+        array_name = self.array._name
+        chunks = self.array.chunks
+        ndim = self.array.ndim
+        npartitions = len(chunks[0])
+
+        # Determine index arguments for each partition
+        if self._index is not None:
+            # Use provided index - pass TaskRef to index partition
+            index_args = [TaskRef((self._index._name, i)) for i in range(npartitions)]
+        elif not any(np.isnan(c) for c in chunks[0]):
+            # Compute index ranges from known chunk sizes
+            cumsum = 0
+            index_args = []
+            for c in chunks[0]:
+                index_args.append((cumsum, cumsum + c))
+                cumsum += c
+        else:
+            # Unknown chunk sizes - no index info
+            index_args = [None] * npartitions
+
+        # Build kwargs for _partition_from_array
+        meta = self._meta
+        if is_series_like(meta):
+            kwargs = {"dtype": self.array.dtype, "name": meta.name, "initializer": type(meta)}
+        else:
+            kwargs = {"columns": meta.columns, "initializer": type(meta)}
+
+        for i in range(npartitions):
+            key = (self._name, i)
+            index_arg = index_args[i]
+
+            if ndim == 2:
+                n_col_chunks = len(chunks[1])
+                if n_col_chunks == 1:
+                    # Single column chunk - direct reference
+                    dsk[key] = Task(
+                        key,
+                        _partition_from_array,
+                        TaskRef((array_name, i, 0)),
+                        index=index_arg,
+                        **kwargs,
+                    )
+                else:
+                    # Multiple column chunks - need to concatenate along axis 1
+                    array_refs = [TaskRef((array_name, i, j)) for j in range(n_col_chunks)]
+                    dsk[key] = Task(
+                        key,
+                        _concat_and_partition,
+                        *array_refs,
+                        index=index_arg,
+                        **kwargs,
+                    )
+            else:
+                # 1D array
+                dsk[key] = Task(
+                    key,
+                    _partition_from_array,
+                    TaskRef((array_name, i)),
+                    index=index_arg,
+                    **kwargs,
+                )
+        return dsk
+
+    def dependencies(self):
+        deps = [self.array]
+        if self._index is not None:
+            deps.append(self._index)
+        return deps
+
+
+def from_dask_array_expr(array, columns=None, index=None, meta=None):
+    """Create a DataFrame from an array expression.
+
+    Parameters
+    ----------
+    array : Array
+        The dask Array (with expression backend)
+    columns : list or string, optional
+        Column names for DataFrame, or name for Series
+    index : Index, optional
+        Optional dask Index
+    meta : DataFrame or Series, optional
+        Metadata override
+
+    Returns
+    -------
+    DataFrame or Series
+        A dask DataFrame/Series backed by the FromDaskArray expression
+    """
+    from dask.dataframe.utils import pyarrow_strings_enabled
+    from dask.dataframe.dask_expr._collection import new_collection
+    from dask.dataframe.dask_expr._expr import ArrowStringConversion
+
+    # Get the expression from the array
+    array_expr = array._expr
+
+    # Validate and get index expression
+    index_expr = None
+    if index is not None:
+        from dask.dataframe import Index as DaskIndex
+
+        if not isinstance(index, DaskIndex):
+            raise ValueError("'index' must be an instance of dask.dataframe.Index")
+
+        n_array_chunks = len(array_expr.chunks[0])
+        if index.npartitions != n_array_chunks:
+            raise ValueError(
+                "The index and array have different numbers of blocks. "
+                f"({index.npartitions} != {n_array_chunks})"
+            )
+
+        index_expr = index.expr
+
+    # Compute meta using the array collection (which has proper _meta for dispatch)
+    if meta is None:
+        # _meta_from_array expects a dask Index object, not pandas Index
+        meta = _meta_from_array(array, columns, index=index, meta=None)
+
+    result = new_collection(FromDaskArray(array_expr, columns, index_expr, meta))
+
+    # Apply pyarrow string conversion if enabled
+    if pyarrow_strings_enabled():
+        return new_collection(ArrowStringConversion(result.expr))
+    return result
