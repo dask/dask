@@ -32,12 +32,11 @@ from dask.array._array_expr._stack import stack
 from dask.array._array_expr.core._blockwise_funcs import blockwise, elemwise
 
 # Import core conversion functions from their module
-# Import stacking functions from their module
-
-# Import blockwise functions from their module
-from dask.array._array_expr.core._blockwise_funcs import elemwise
 from dask.array._array_expr.core._conversion import (
+    array,
     asanyarray,
+    asarray,
+    from_array,
 )
 from dask.array._array_expr.core._from_graph import from_graph
 
@@ -1655,7 +1654,7 @@ class Array(DaskMethodsMixin):
 
 # Import rechunk, reshape, ravel from their modules
 from dask.array._array_expr._rechunk import rechunk
-from dask.array._array_expr._reshape import reshape
+from dask.array._array_expr._reshape import ravel, reshape
 
 # Import swapaxes
 from dask.array._array_expr.manipulation._transpose import swapaxes
