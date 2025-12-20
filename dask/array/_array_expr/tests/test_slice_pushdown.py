@@ -10,6 +10,10 @@ from dask.array._array_expr._io import FromArray
 from dask.array._array_expr._slicing import SliceSlicesIntegers
 from dask.array.utils import assert_eq
 
+pytestmark = pytest.mark.skipif(
+    not da._array_expr_enabled(), reason="array_expr not enabled"
+)
+
 # Parametrized correctness tests: (array_shape, chunks, slice_tuple)
 SLICE_CASES = [
     # Basic slices

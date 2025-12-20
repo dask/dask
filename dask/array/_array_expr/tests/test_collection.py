@@ -10,6 +10,10 @@ from dask import is_dask_collection
 from dask.array import Array, assert_eq
 from dask.array._array_expr._rechunk import Rechunk
 
+pytestmark = pytest.mark.skipif(
+    not da._array_expr_enabled(), reason="array_expr not enabled"
+)
+
 
 @pytest.fixture()
 def arr():
