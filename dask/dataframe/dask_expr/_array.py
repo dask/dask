@@ -285,9 +285,9 @@ def from_dask_array_expr(array, columns=None, index=None, meta=None):
         index_expr = index.expr
 
     # Compute meta using the array collection (which has proper _meta for dispatch)
-    if meta is None:
-        # _meta_from_array expects a dask Index object, not pandas Index
-        meta = _meta_from_array(array, columns, index=index, meta=None)
+    # Always call _meta_from_array because it correctly handles 1D arrays
+    # even when meta is a DataFrame (uses _constructor_sliced for Series)
+    meta = _meta_from_array(array, columns, index=index, meta=meta)
 
     result = new_collection(FromDaskArray(array_expr, columns, index_expr, meta))
 
