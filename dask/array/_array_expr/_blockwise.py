@@ -24,7 +24,7 @@ from dask.blockwise import blockwise as core_blockwise
 from dask.delayed import unpack_collections
 from dask.layers import ArrayBlockwiseDep
 from dask.tokenize import _tokenize_deterministic
-from dask.utils import cached_property, funcname
+from dask.utils import SerializableLock, cached_property, funcname
 
 
 class Blockwise(ArrayExpr):
@@ -210,7 +210,14 @@ class Blockwise(ArrayExpr):
 
     def __dask_tokenize__(self):
         if not self._determ_token:
-            # TODO: Is there an actual need to overwrite this?
+            # Handle non-serializable locks in kwargs by using their id()
+            kwargs_token = {}
+            for k, v in self.kwargs.items():
+                if k == "lock" and v and not isinstance(v, (bool, SerializableLock)):
+                    kwargs_token[k] = ("lock-id", id(v))
+                else:
+                    kwargs_token[k] = v
+
             self._determ_token = _tokenize_deterministic(
                 self.func,
                 self.out_ind,
@@ -220,7 +227,7 @@ class Blockwise(ArrayExpr):
                 self.align_arrays,
                 self.concatenate,
                 *self.args,
-                **self.kwargs,
+                **kwargs_token,
             )
         return self._determ_token
 
