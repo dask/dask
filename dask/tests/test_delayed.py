@@ -626,6 +626,7 @@ def test_array_delayed_complex_optimization_kwargs():
     assert_eq(val.compute(), (np_arr + 1) + (np_arr + 2) + 1)
 
 
+@pytest.mark.filterwarnings("ignore:Computing mixed collections")
 def test_array_bag_delayed():
     np = pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
