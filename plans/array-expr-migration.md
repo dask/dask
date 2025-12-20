@@ -282,10 +282,10 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 Note: The `--array-expr` flag sets `array.query-planning` config via `pytest_configure` hook, which runs before test collection imports `dask.array`.
 
 ### Current Test Status (December 2025)
-- **4096 passed**, 45 xfailed, 0 failed, 578 skipped
-- Significant progress from earlier (was 211 xfails, now 45)
+- **4500 passed**, 43 xfailed, 0 failed, 610 skipped
+- Significant progress from earlier (was 211 xfails, now 43)
 
-**Complete XFails Inventory (45 total):**
+**Complete XFails Inventory (43 total):**
 
 | Category | Tests | Priority |
 |----------|-------|----------|
@@ -293,14 +293,12 @@ Note: The `--array-expr` flag sets `array.query-planning` config via `pytest_con
 | Legacy Graph API | 7 | 🔴 |
 | Scalar/Element Ops | 1 | 🟡 |
 | Map Blocks | 5 | 🟡 |
-| Blockwise Features | 2 | 🟡 |
+| Blockwise Features | 1 | 🟡 |
 | Linspace Scalars | 2 | 🟡 |
 | Indexing Edge Cases | 4 | 🟡 |
 | Store Regions | 1 | 🟡 |
 | Overlap/Fusion | 4 | 🔴 |
 | Creation Edge Cases | 4 | 🟢 |
-| Reduction Features | 1 | 🟡 |
-| UFunc Features | 1 | 🟡 |
 | Miscellaneous | 9 | 🟢-🟡 |
 
 ## Remaining Work Streams (Parallelizable)
@@ -327,11 +325,11 @@ These work streams can be executed in parallel by agents. Each is independent.
 | AO: Store Regions | 1 | 🟡 Medium | Graph deps in regions |
 | AF: Overlap | 3 | 🔴 Deferred | Needs fusion/push |
 | AM: Creation Edge Cases | 4 | 🟢 Quick | Graph pickling, numpy edge cases |
-| AN: Reduction Features | 1 | 🟡 Medium | Weighted reductions |
-| AP: UFunc Features | 1 | 🟡 Medium | frompyfunc |
+| AN: Reduction Features | 1 | 🟢 **DONE** | Weighted reductions |
+| AP: UFunc Features | 1 | 🟢 **DONE** | frompyfunc |
 | AQ: Miscellaneous | 9 | 🟢 Varies | Mixed independent issues |
 
-**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V, X, W, AI
+**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V, X, W, AI, AN, AP
 
 **Recommended next targets (parallelizable):**
 1. Stream AM (creation edge cases) - 4 tests, quick wins
@@ -894,25 +892,27 @@ Edge cases in creation functions.
 - `test_nan_full_like`: NumPy 2.1+ raises on inserting -1 into u4. This is a numpy behavior change, may need to skip for numpy >= 2.1.
 - `test_like_forgets_graph`: The test checks that `like=x` doesn't store x's graph. In array-expr, graph structure differs so pickle test may fail differently.
 
-### Stream AN: Reduction Features (1 test) 🟡
+### Stream AN: Reduction Features (1 test) 🟢 **DONE**
 Weighted reductions.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_weighted_reduction | weights= parameter in reduction() | ⏳ |
+| test_weighted_reduction | weights= parameter in reduction() | ✅ |
 
-**Root Issue:** The `reduction()` function needs to support the `weights=` parameter for weighted reductions. This requires broadcasting weights to chunks and passing to chunk function.
+**Implementation:**
+- Added weights support to `reduction()` in `_reductions.py` by broadcasting weights to x's shape and adding them to the blockwise args.
+- Fixed MaskedConstant tokenization issue by converting `np.ma.masked` singleton to proper MaskedArray in `PartialReduce._meta` and `compute_meta()`.
 
-### Stream AP: UFunc Features (1 test) 🟡
+### Stream AP: UFunc Features (1 test) 🟢 **DONE**
 Custom ufuncs via frompyfunc.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_frompyfunc | np.frompyfunc ufuncs | ⏳ |
+| test_frompyfunc | np.frompyfunc ufuncs | ✅ |
 
-**Root Issue:** `np.frompyfunc` creates ufuncs from Python functions that can't be deterministically tokenized. Need to either:
-1. Use function identity in tokenization
-2. Add special handling for frompyfunc-created ufuncs
+**Implementation:**
+- Created `_frompyfunc_outer` wrapper class that provides tokenizable outer method for frompyfunc-created ufuncs.
+- Added `self.outer = _frompyfunc_outer(self)` to `da_frompyfunc.__init__` to intercept outer method calls before they hit `__getattr__`.
 
 ### Stream AQ: Miscellaneous (9 tests) 🟢-🟡 **PARTIAL**
 Independent issues not fitting other streams.
