@@ -22,15 +22,40 @@ try:
 except ImportError:
     ARRAY_TEMPLATE = None
 
-# Import core conversion functions from their module
-# Import stacking functions from their module
-
 # Import blockwise functions from their module
-from dask.array._array_expr.core._blockwise_funcs import elemwise
+# Import broadcast
+from dask.array._array_expr._broadcast import broadcast_to
+
+# Import concatenate and stacking
+from dask.array._array_expr._concatenate import concatenate
+from dask.array._array_expr._stack import stack
+from dask.array._array_expr.core._blockwise_funcs import blockwise, elemwise
+
+# Import core conversion functions from their module
 from dask.array._array_expr.core._conversion import (
+    array,
     asanyarray,
+    asarray,
+    from_array,
 )
 from dask.array._array_expr.core._from_graph import from_graph
+
+# Import manipulation functions
+from dask.array._array_expr.manipulation._expand import (
+    atleast_1d,
+    atleast_2d,
+    atleast_3d,
+    expand_dims,
+)
+from dask.array._array_expr.manipulation._flip import flip, fliplr, flipud, rot90
+from dask.array._array_expr.manipulation._roll import roll
+from dask.array._array_expr.manipulation._transpose import (
+    moveaxis,
+    rollaxis,
+    transpose,
+)
+from dask.array._array_expr.stacking._block import block
+from dask.array._array_expr.stacking._simple import dstack, hstack, vstack
 
 # Type imports
 from dask.array.core import (
@@ -40,6 +65,41 @@ from dask.array.core import (
     check_if_handled_given_other,
     finalize,
 )
+
+__all__ = [
+    "Array",
+    "array",
+    "asanyarray",
+    "asarray",
+    "atleast_1d",
+    "atleast_2d",
+    "atleast_3d",
+    "block",
+    "blockwise",
+    "broadcast_to",
+    "concatenate",
+    "dstack",
+    "elemwise",
+    "expand_dims",
+    "flip",
+    "fliplr",
+    "flipud",
+    "from_array",
+    "from_graph",
+    "hstack",
+    "moveaxis",
+    "ravel",
+    "rechunk",
+    "reshape",
+    "roll",
+    "rollaxis",
+    "rot90",
+    "squeeze",
+    "stack",
+    "swapaxes",
+    "transpose",
+    "vstack",
+]
 
 
 class Array(DaskMethodsMixin):
@@ -987,7 +1047,7 @@ class Array(DaskMethodsMixin):
         """
         from dask.array.creation import to_backend
 
-        return to_backend(self, backend=backend, **kwargs)
+        return to_backend(self, backend=backend, **kwargs)  # type: ignore[arg-type]
 
     def to_svg(self, size=500):
         """Convert chunks from Dask Array into an SVG Image
@@ -1566,19 +1626,12 @@ class Array(DaskMethodsMixin):
         )
 
 
-# Import rechunk and ravel from their modules (they return Arrays directly)
-# Import broadcast_to directly (it returns an Array)
+# Import rechunk, reshape, ravel from their modules
 from dask.array._array_expr._rechunk import rechunk
-from dask.array._array_expr._reshape import reshape
+from dask.array._array_expr._reshape import ravel, reshape
 
-# Import squeeze from its module (it returns an Array directly)
+# Import squeeze from its module
 from dask.array._array_expr._slicing import squeeze
 
-# Import expand functions from their module
-# Import expand_dims from manipulation module
-# Import manipulation functions from their module
-from dask.array._array_expr.manipulation._transpose import (
-    swapaxes,
-)
-
-# Import stacking functions from their module
+# Import swapaxes
+from dask.array._array_expr.manipulation._transpose import swapaxes

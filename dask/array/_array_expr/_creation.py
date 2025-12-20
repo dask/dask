@@ -449,7 +449,7 @@ class Diagonal(ArrayExpr):
                     out_chunks[axis][free_idx[axis]] for axis in range(ndims_free)
                 )
                 key = (self._name,) + free_idx + (0,)
-                dsk[key] = Task(key, partial(xp.empty, dtype=x.dtype), shape + (0,))
+                dsk[key] = Task(key, partial(xp.empty, dtype=x.dtype), shape + (0,))  # type: ignore[misc]
             return dsk
 
         # Follow k-diagonal through chunks

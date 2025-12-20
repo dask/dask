@@ -973,7 +973,7 @@ def test_map_overlap_new_axis():
     assert_eq(expected, actual, check_shape=False, check_chunks=False)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="xarray doesn't work yet")  # type: ignore[call-overload]
+@pytest.mark.xfail(da._array_expr_enabled(), reason="xarray doesn't work yet")
 def test_overlap_not_blowing_up_graph():
     xr = pytest.importorskip("xarray")
 

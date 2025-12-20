@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins as _builtins
 import importlib
 import sys
 import warnings
@@ -8,7 +9,7 @@ import warnings
 ARRAY_EXPR_ENABLED: bool | None = None
 
 
-def _array_expr_enabled() -> bool:
+def _array_expr_enabled() -> _builtins.bool:
     import dask
 
     global ARRAY_EXPR_ENABLED
@@ -30,11 +31,11 @@ def _array_expr_enabled() -> bool:
                 "The query-planning config can only be changed before "
                 "`dask.array` is first imported!"
             )
-        return ARRAY_EXPR_ENABLED
+        return _builtins.bool(ARRAY_EXPR_ENABLED)
 
     # Cache the result on first call
     ARRAY_EXPR_ENABLED = True if use_array_expr else False
-    return ARRAY_EXPR_ENABLED
+    return _builtins.bool(ARRAY_EXPR_ENABLED)
 
 
 def array_expr_enabled():
@@ -885,12 +886,12 @@ if _array_expr_enabled():
         )
 
         backends = raise_not_implemented_error("backends")
-        from dask.array._array_expr import fft
+        from dask.array._array_expr import fft  # type: ignore[no-redef]
 
         # Make dask.array.fft resolve to the array-expr fft module
         sys.modules["dask.array.fft"] = fft
         lib = raise_not_implemented_error("lib")
-        from dask.array._array_expr import linalg
+        from dask.array._array_expr import linalg  # type: ignore[no-redef]
 
         sys.modules["dask.array.linalg"] = linalg
         from dask.array import ma
@@ -906,7 +907,7 @@ if _array_expr_enabled():
         from dask.array.chunk_types import register_chunk_type
 
         to_hdf5 = raise_not_implemented_error("to_hdf5")
-        from dask.array._array_expr import (
+        from dask.array._array_expr import (  # type: ignore[assignment]
             aligned_coarsen_chunks,
             apply_along_axis,
             apply_over_axes,
