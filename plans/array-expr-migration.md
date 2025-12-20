@@ -5,12 +5,15 @@ Skill: `.claude/skills/array-expr-migration/SKILL.md`
 
 ## Current Status
 
-**Test Results (December 2025):** 4509 passed, 32 xfailed, 2 failed, 610 skipped
+**Test Results (December 2025):**
+- Array tests: 4509 passed, 32 xfailed, 2 failed, 610 skipped
+- Dataframe tests: 3568 passed, 16 failed, 578 skipped
+- Core/bag/diagnostics tests: 1187 passed, 41 failed, 76 skipped
 
-The array-expr system is nearly complete. Most operations have been migrated. The remaining work falls into a few categories:
-1. **Active Regressions** - 2 tests that were passing but now fail
-2. **Fixable Issues** - Tests that could be fixed with targeted work
-3. **Deferred** - Tests that require architectural changes or test internal details
+The array-expr system is nearly complete for array-only operations. The remaining work falls into:
+1. **Active Regressions** - Bugs in array-expr code
+2. **Cross-Module Integration** - Dataframe↔array, delayed↔array interactions
+3. **Deferred** - Tests that check internal implementation details (HLG, graph structure)
 
 ## Active Regressions (Priority 1)
 
@@ -19,8 +22,81 @@ These tests were working and have regressed. Fix immediately.
 | Test | Issue | Fix |
 |------|-------|-----|
 | `test_average_weights_with_masked_array` (2 tests) | `asanyarray()` in `_average()` uses legacy import | Use late import like `broadcast_to` fix |
+| `test_array_bag_delayed`, `test_finalize_name` | `FinalizeComputeArray.chunks` missing decorator | Add `@cached_property` to `_expr.py:373` |
 
-**Root Cause:** Line 2514 in `routines.py` calls `asanyarray(a)` which imports from `dask.array.core` (legacy). When an array-expr Array is passed, it triggers the "already a Dask collection" warning. The `broadcast_to` import was fixed with a late import pattern but `asanyarray` still uses the module-level import.
+**Root Cause 1:** Line 2514 in `routines.py` calls `asanyarray(a)` which imports from `dask.array.core` (legacy). When an array-expr Array is passed, it triggers the "already a Dask collection" warning. The `broadcast_to` import was fixed with a late import pattern but `asanyarray` still uses the module-level import.
+
+**Root Cause 2:** `FinalizeComputeArray.chunks` at `dask/array/_array_expr/_expr.py:373` is defined as `def chunks(self):` but missing the `@cached_property` decorator. This causes `'method' object is not iterable` when delayed tries to unpack array collections.
+
+## Cross-Module Integration (Priority 2)
+
+These failures occur when array-expr arrays interact with other dask modules.
+
+### Dataframe↔Array Bridge (16 tests) - Implement
+
+When dataframe operations return arrays (e.g., `ddf.values`, `ddf.to_dask_array()`), the result is an array-expr `Array` collection wrapping a **dataframe-expr** `MapPartitions` expression. The dataframe expression lacks array properties (`chunks`, `dtype`, `shape`).
+
+| Test | Issue |
+|------|-------|
+| `test_values`, `test_values_extension_dtypes` | `MapPartitions` has no `chunks` |
+| `test_to_dask_array_unknown` (2 tests) | `MapPartitions` has no `chunks` |
+| `test_to_dask_array[True-False-meta2]` | `_meta` has no setter |
+| `test_map_partition_array` (2 tests) | Broadcasting/dtype issues |
+| `test_mixed_dask_array_operations` | `MapPartitions` has no `dtype` |
+| `test_mixed_dask_array_multi_dimensional` | Type dispatch for None |
+| `test_scalar_with_array` | Deprecation warning |
+| `test_array_to_df_conversion` | NoneType has no itemsize |
+| `test_loc_with_array` (3 tests) | `MapPartitions` has no `dtype` |
+| `test_to_numeric_on_dask_array` (2 tests) | `MapPartitions` has no `chunks` |
+
+**Fix:** Create a bridge ArrayExpr that wraps dataframe expressions, providing array-like interface (`chunks`, `dtype`, `shape`, `_meta`) while delegating to the dataframe expression for graph generation. This is cleaner than having expr↔HLG interactions.
+
+### from_graph rename parameter (5 tests) - Implement
+
+| Test | Issue |
+|------|-------|
+| `test_blockwise_clone_with_literals` (5 params) | `from_graph()` got unexpected keyword argument 'rename' |
+
+**Root Cause:** `clone()` in `graph_manipulation.py:407` calls rebuild function with `rename` kwarg, but array-expr's `from_graph` doesn't accept it.
+
+**Fix:** Add `rename` parameter to `dask/array/_array_expr/core/_from_graph.py`.
+
+### dask.optimize() (9 tests) - Implement
+
+| Test | Issue |
+|------|-------|
+| `test_blockwise_array_creation` (9 params) | `NotImplementedError: Function optimize is not implemented for dask-expr` |
+
+**Fix:** Implement `optimize` function for array-expr, likely as a no-op or calling `simplify()`.
+
+### HLG API Tests (6 tests) - XFail
+
+Array-expr returns plain dicts from `__dask_graph__()`, not `HighLevelGraph`. Tests expecting HLG methods fail by design.
+
+| Test | Issue |
+|------|-------|
+| `test_keys_values_items_to_dict_methods` | `dict` has no `to_dict()` |
+| `test_single_annotation` (2 params) | `dict` has no `layers` |
+| `test_multiple_annotations` | `dict` has no `layers` |
+| `test_blockwise_cull` (2 params) | `dict` has no `cull` |
+
+**Fix:** Add `xfail(using_array_expr(), reason="array-expr returns dict graphs")` markers.
+
+### Graph Order/Typing (5 tests) - XFail
+
+| Test | Issue |
+|------|-------|
+| `test_reduce_with_many_common_dependents` (4 params) | Ordering heuristic assertions fail |
+| `test_isinstance_core[HLGDaskCollection]` | Type check for HLG fails |
+
+**Fix:** Add xfail markers - graph structure differs by design.
+
+### Other Integration (2 tests) - Investigate
+
+| Test | Issue |
+|------|-------|
+| `test_annotations_blockwise_unpack` | ZeroDivisionError |
+| `test_combo_of_layer_types` | `MapPartitions` has no `chunks` |
 
 ## Remaining XFails by Category
 
@@ -109,16 +185,25 @@ These have xfails that aren't array-expr specific:
 ## Recommended Work Order
 
 ### Immediate (Fix Regressions)
-1. Fix `_average()` to use late imports for `asanyarray` - matches existing `broadcast_to` fix
+1. Fix `FinalizeComputeArray.chunks` - add `@cached_property` decorator at `_expr.py:373`
+2. Fix `_average()` to use late imports for `asanyarray` - matches existing `broadcast_to` fix
 
-### Short Term (High Value)
-2. Store regions graph dependencies
-3. ~~Block_id fusion support~~ ✅ Done
+### Short Term (Cross-Module Integration)
+3. Add `rename` parameter to `from_graph()` - enables `clone()` support
+4. Implement `dask.optimize()` for array-expr - likely calls `simplify()`
+5. Add xfail markers to HLG API tests (6 tests) and graph order tests (5 tests)
 
-### Medium Term
-4. Linspace with dask scalars
-5. Partitions indexer
-6. 3D/2D indexing chunk alignment
+### Medium Term (Dataframe↔Array Bridge)
+6. Create bridge ArrayExpr for dataframe expressions - biggest architectural piece
+   - Wrap dataframe `MapPartitions` with array-like interface
+   - Provide `chunks`, `dtype`, `shape`, `_meta` properties
+   - Delegate graph generation to underlying dataframe expression
+
+### Existing Array Work
+7. Store regions graph dependencies
+8. ~~Block_id fusion support~~ ✅ Done
+9. Linspace with dask scalars
+10. Partitions indexer
 
 ### Deferred
 - Legacy graph API tests (by design)
@@ -127,6 +212,30 @@ These have xfails that aren't array-expr specific:
 - `test_cull` (tests internal optimization, not user behavior)
 
 ## Implementation Patterns
+
+### Dataframe↔Array Bridge Pattern
+
+When a dataframe operation produces an array (like `ddf.values`), we need to bridge between expression systems. Create an ArrayExpr that wraps dataframe expressions:
+
+```python
+class DataFrameToArray(ArrayExpr):
+    """Bridge from dataframe-expr to array-expr."""
+    _parameters = ["df_expr", "_meta", "_chunks"]
+
+    @cached_property
+    def chunks(self):
+        return self._chunks
+
+    @cached_property
+    def dtype(self):
+        return self._meta.dtype
+
+    def _layer(self):
+        # Delegate to the dataframe expression's graph
+        return self.df_expr.__dask_graph__()
+```
+
+This keeps expr↔expr interactions clean without HLG in the middle.
 
 ### Late Import Pattern (for avoiding legacy/array-expr mixing)
 ```python
