@@ -3354,7 +3354,6 @@ def test_chunks_is_immutable():
         assert "rechunk(2)" in str(e)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_raise_on_bad_kwargs():
     x = da.ones(5, chunks=3)
     try:
@@ -4965,7 +4964,6 @@ def test_normalize_chunks_nan():
     assert "auto" in str(info.value)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_pandas_from_dask_array():
     pd = pytest.importorskip("pandas")
     a = da.ones((12,), chunks=4)
@@ -6060,7 +6058,6 @@ def test_chunk_non_array_like():
         raise AssertionError("Expected a ValueError: Dimension mismatch")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_to_backend():
     # Test that `Array.to_backend` works as expected
     with dask.config.set({"array.backend": "numpy"}):

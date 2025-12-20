@@ -110,6 +110,15 @@ class ufunc:
         return repr(self._ufunc)
 
     def __call__(self, *args, **kwargs):
+        # Validate kwargs - only allow known ufunc kwargs
+        valid_kwargs = {"out", "where", "dtype"}
+        extra_kwargs = set(kwargs) - valid_kwargs
+        if extra_kwargs:
+            raise TypeError(
+                f"{self.__name__} does not take the following keyword arguments "
+                f"{sorted(extra_kwargs)}"
+            )
+
         dsks = [arg for arg in args if hasattr(arg, "_elemwise")]
         if len(dsks) > 0:
             for dsk in dsks:
