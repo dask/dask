@@ -200,7 +200,7 @@ class Blockwise(ArrayExpr):
         different index mappings (e.g., da.dot(x, x)).
         """
         idx_to_block = self._idx_to_block(block_id)
-        result = {}
+        result: dict = {}
         for arr, ind in toolz.partition(2, self.args):
             if ind is not None and hasattr(arr, "_name"):
                 dep_block_id = self._dep_block_id(arr, ind, idx_to_block)
@@ -871,7 +871,7 @@ class FusedBlockwise(ArrayExpr):
             subname = (expr._name, *expr_block_id)
             t = expr._task(subname, expr_block_id)
             internal_tasks.append(t)
-        return Task.fuse(*internal_tasks, key=key)
+        return Task.fuse(*internal_tasks, key=key)  # type: ignore[return-value]
 
     def _compute_block_ids(self, output_block_id: tuple[int, ...]) -> dict:
         """Compute block_id for each expression given the output block_id.

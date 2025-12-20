@@ -1560,7 +1560,7 @@ class VIndexArray(ArrayExpr):
             else:
                 inblock_idxs.append(a)
 
-        inblock_idxs = np.broadcast_arrays(*inblock_idxs)
+        inblock_idxs = np.broadcast_arrays(*inblock_idxs)  # type: ignore[assignment]
 
         n_chunks, remainder = divmod(npoints, max_chunk_point_dimensions)
 

@@ -227,7 +227,7 @@ class Expr:
         # Dependencies are `Expr` operands only
         return [operand for operand in self.operands if isinstance(operand, Expr)]
 
-    def _task(self, key: Key, index: int) -> Task:
+    def _task(self, key: Key, index: Any) -> Task:
         """The task for the i'th partition
 
         Parameters
