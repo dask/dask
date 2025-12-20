@@ -2513,6 +2513,7 @@ def _average(
     # Wrapper used by da.average or da.ma.average.
     # Use late import to get array-expr version when enabled
     import dask.array as _da
+
     a = _da.asanyarray(a)
 
     if weights is None:
@@ -2542,9 +2543,6 @@ def _average(
                 )
 
             # setup wgt to broadcast along axis
-            # Import broadcast_to from dask.array to get the array-expr version
-            # when array-expr is enabled (avoids mixing legacy and array-expr arrays)
-            import dask.array as _da
             wgt = _da.broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
             wgt = wgt.swapaxes(-1, axis)
         if is_masked:
@@ -2556,7 +2554,7 @@ def _average(
 
     if returned:
         if scl.shape != avg.shape:
-            scl = broadcast_to(scl, avg.shape).copy()
+            scl = _da.broadcast_to(scl, avg.shape).copy()
         return avg, scl
     else:
         return avg
