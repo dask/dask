@@ -911,7 +911,7 @@ if _array_expr_enabled():
         to_hdf5 = raise_not_implemented_error("to_hdf5")
         from dask.array._array_expr import to_npy_stack
         from dask.array._array_expr import to_zarr
-        optimize = raise_not_implemented_error("optimize")
+        from dask.array._array_expr import optimize
         from dask.array._array_expr import argtopk
         from dask.array._array_expr import topk
         from dask.array._array_expr import trace

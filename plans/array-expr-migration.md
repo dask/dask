@@ -60,13 +60,24 @@ When dataframe operations return arrays (e.g., `ddf.values`, `ddf.to_dask_array(
 
 **Fix:** Add `rename` parameter to `dask/array/_array_expr/core/_from_graph.py`.
 
-### dask.optimize() (9 tests) - Implement
+### dask.optimize() (9 tests) - ✅ Done
 
-| Test | Issue |
-|------|-------|
-| `test_blockwise_array_creation` (9 params) | `NotImplementedError: Function optimize is not implemented for dask-expr` |
+| Test | Issue | Status |
+|------|-------|--------|
+| `test_blockwise_array_creation` (9 params) | `NotImplementedError: Function optimize is not implemented for dask-expr` | ✅ Fixed |
 
-**Fix:** Implement `optimize` function for array-expr, likely as a no-op or calling `simplify()`.
+**Implementation:** Added `dask/array/_array_expr/_optimize.py` with a no-op `optimize(dsk, keys)` function for API compatibility. The legacy graph-level API simply returns the input unchanged.
+
+For actual optimization, use expression-level methods:
+- `arr.optimize()` or `dask.optimize(arr)` - simplifies expressions
+- **Slice pushdown** - slices push into IO layers (FromArray), eliminating unused tasks without culling
+
+**Slice Pushdown into IO (new):**
+- IO expressions (FromArray) set `_slice_pushdown = True`
+- `SliceSlicesIntegers._simplify_down()` detects sliceable IO and calls `_pushdown_into_io()`
+- Creates new FromArray with sliced source array and computed chunks for sliced region
+- Tests: `dask/array/_array_expr/tests/test_slice_pushdown.py` (36 tests)
+- Result: Task count equals chunks touched, no culling needed
 
 ### HLG API Tests (6 tests) - XFail
 
@@ -189,7 +200,7 @@ These have xfails that aren't array-expr specific:
 
 ### Short Term (Cross-Module Integration)
 3. Add `rename` parameter to `from_graph()` - enables `clone()` support
-4. Implement `dask.optimize()` for array-expr - likely calls `simplify()`
+4. ~~Implement `dask.optimize()` for array-expr~~ ✅ Done
 5. Add xfail markers to HLG API tests (6 tests) and graph order tests (5 tests)
 
 ### Medium Term (Dataframe↔Array Bridge)

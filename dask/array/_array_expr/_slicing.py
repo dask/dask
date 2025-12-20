@@ -38,6 +38,44 @@ from dask.tokenize import tokenize
 from dask.utils import cached_cumsum, cached_max, is_arraylike
 
 
+def _compute_sliced_chunks(chunks, slc, dim_size):
+    """Compute chunk sizes for the sliced region of a dimension."""
+    if slc == slice(None):
+        return chunks
+
+    start, stop, step = slc.indices(dim_size)
+    if step != 1:
+        # For non-unit step, fall back to single chunk
+        new_size = len(range(start, stop, step))
+        return (new_size,)
+
+    # Handle empty slice - return single chunk of size 0
+    if start >= stop:
+        return (0,)
+
+    # Find chunks that overlap with [start, stop)
+    result = []
+    pos = 0
+    for chunk_size in chunks:
+        chunk_start = pos
+        chunk_end = pos + chunk_size
+        pos = chunk_end
+
+        # Skip chunks entirely before the slice
+        if chunk_end <= start:
+            continue
+        # Stop at chunks entirely after the slice
+        if chunk_start >= stop:
+            break
+
+        # Compute the portion of this chunk included in the slice
+        included_start = max(chunk_start, start)
+        included_end = min(chunk_end, stop)
+        result.append(included_end - included_start)
+
+    return tuple(result) if result else (0,)
+
+
 def slice_with_int_dask_array(x, index):
     """Slice x with at most one 1D dask arrays of ints.
 
@@ -437,6 +475,10 @@ class SliceSlicesIntegers(Slice):
         if isinstance(self.array, Transpose):
             return self._pushdown_through_transpose()
 
+        # Slice(FromArray) -> FromArray(sliced source) - push slice into IO
+        if getattr(self.array, "_slice_pushdown", False):
+            return self._pushdown_into_io()
+
     def _pushdown_through_elemwise(self):
         """Push slice through elemwise by slicing each input appropriately."""
         from dask.array._array_expr._blockwise import Elemwise, is_scalar_for_elemwise
@@ -509,6 +551,54 @@ class SliceSlicesIntegers(Slice):
 
         sliced_input = new_collection(transpose.array)[tuple(input_index)]
         return Transpose(sliced_input.expr, axes)
+
+    def _pushdown_into_io(self):
+        """Push slice into IO expression by slicing the source array directly."""
+        from dask.array._array_expr._io import FromArray
+        from dask.array.core import normalize_chunks
+
+        # Only handle simple slices (no integers, no fancy indexing)
+        index = self.index
+        if any(isinstance(idx, Integral) or idx is None for idx in index):
+            return None
+        if any(not isinstance(idx, slice) for idx in index):
+            return None
+
+        io_expr = self.array
+
+        # For FromArray, slice the source array directly
+        if isinstance(io_expr, FromArray):
+            source = io_expr.array
+            old_chunks = io_expr.operand("chunks")
+
+            # Pad index to full dimensions
+            full_index = index + (slice(None),) * (source.ndim - len(index))
+
+            # Slice the source array
+            sliced_source = source[full_index]
+
+            # Compute new chunks - use same chunk sizes but clipped to new shape
+            new_chunks = tuple(
+                _compute_sliced_chunks(dim_chunks, slc, dim_size)
+                for dim_chunks, slc, dim_size in zip(
+                    old_chunks, full_index, source.shape
+                )
+            )
+
+            # Create new FromArray with sliced source
+            return FromArray(
+                sliced_source,
+                new_chunks,
+                lock=io_expr.operand("lock"),
+                getitem=io_expr.operand("getitem"),
+                inline_array=io_expr.inline_array,
+                meta=io_expr.operand("meta"),
+                asarray=io_expr.operand("asarray"),
+                fancy=io_expr.operand("fancy"),
+                _name_override=io_expr.operand("_name_override"),
+            )
+
+        return None
 
     @functools.cached_property
     def chunks(self):
