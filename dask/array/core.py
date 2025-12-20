@@ -3789,7 +3789,9 @@ def from_zarr(
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
-    return from_array(z, chunks, name=name, inline_array=inline_array)
+    import dask.array as da
+
+    return da.from_array(z, chunks, name=name, inline_array=inline_array)
 
 
 def _write_dask_to_existing_zarr(
