@@ -5704,6 +5704,11 @@ def concatenate3(arrays):
                 arr = arr[None, ...]
         result[idx] = arr
 
+    # Preserve recarray type if inputs are recarrays
+    first = deepfirst(arrays)
+    if isinstance(first, np.recarray):
+        result = result.view(np.recarray)
+
     return result
 
 

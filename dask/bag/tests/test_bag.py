@@ -1668,6 +1668,8 @@ def test_dask_layers_to_delayed(optimize):
     # Ensure the layer name is propagated between `Delayed` and `Item`.
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
+    if da._array_expr_enabled():
+        pytest.xfail("array-expr returns dict graphs, not HLG")
     i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
     name = i.key[0]
     assert i.key[1:] == (0,)
