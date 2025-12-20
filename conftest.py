@@ -61,9 +61,9 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_configure(config):
-    """Set array.query-planning config before any test imports dask.array."""
-    if config.getoption("--array-expr", default=False):
+def pytest_load_initial_conftests(early_config, parser, args):
+    """Set array.query-planning config before conftest files import dask.array."""
+    if "--array-expr" in args:
         import dask
 
         dask.config.set({"array.query-planning": True})

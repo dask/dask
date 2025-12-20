@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 
-import dask.array as da
-
 
 def wrap(func_name):
     """
@@ -132,5 +130,8 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
         self.arr[key] = value
 
 
-# Register EncapsulateNDArray as a valid chunk type
-da.register_chunk_type(EncapsulateNDArray)
+def pytest_configure(config):
+    """Register EncapsulateNDArray as a valid chunk type."""
+    import dask.array as da
+
+    da.register_chunk_type(EncapsulateNDArray)

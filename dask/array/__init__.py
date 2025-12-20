@@ -15,6 +15,10 @@ def _array_expr_enabled() -> bool:
 
     use_array_expr = dask.config.get("array.query-planning")
 
+    # Check for pytest --array-expr flag (handles early import during test collection)
+    if use_array_expr is None and "--array-expr" in sys.argv:
+        use_array_expr = True
+
     if ARRAY_EXPR_ENABLED is not None:
         if (use_array_expr is True and ARRAY_EXPR_ENABLED is False) or (
             use_array_expr is False and ARRAY_EXPR_ENABLED is True
@@ -28,7 +32,9 @@ def _array_expr_enabled() -> bool:
             )
         return ARRAY_EXPR_ENABLED  # type: ignore[return-value]
 
-    return bool(use_array_expr if use_array_expr is not None else False)
+    # Cache the result on first call
+    ARRAY_EXPR_ENABLED = bool(use_array_expr if use_array_expr is not None else False)
+    return ARRAY_EXPR_ENABLED
 
 
 def array_expr_enabled():
