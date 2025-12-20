@@ -4065,6 +4065,42 @@ def test_values():
     assert_eq(df.index.values, ddf.index.values)
 
 
+def test_values_expr_structure():
+    """Test that ddf.values creates a proper expression structure in array-expr mode."""
+    import dask.array as da
+    from dask.array.utils import assert_eq
+
+    if not da._array_expr_enabled():
+        pytest.skip("Only relevant for array-expr mode")
+
+    from dask.dataframe.dask_expr._array import Values
+
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, 2)
+
+    arr = ddf.values
+
+    # Verify the expression structure - Values directly wraps the DataFrame expr
+    assert isinstance(arr.expr, Values)
+    assert arr.expr.frame is ddf.expr
+
+    # Values should add exactly 1 to the frame's depth (expression preserved, not lowered)
+    assert arr.expr._depth() == ddf.expr._depth() + 1
+
+    # Verify array properties work
+    assert arr.chunks == ((np.nan, np.nan), (2,))
+    assert arr.ndim == 2
+    assert arr.dtype == np.dtype("int64")
+
+    # Verify to_dask_array with overrides preserves structure
+    arr2 = ddf.to_dask_array(lengths=[2, 2])
+    assert isinstance(arr2.expr, Values)
+    assert arr2.chunks == ((2, 2), (2,))
+
+    # Verify correctness
+    assert_eq(arr, df.values)
+
+
 def test_values_extension_dtypes():
     from dask.array.utils import assert_eq
 

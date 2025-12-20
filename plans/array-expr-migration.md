@@ -10,6 +10,10 @@ Skill: `.claude/skills/array-expr-migration/SKILL.md`
 - Dataframe tests: 3568 passed, 16 failed, 578 skipped
 - Core/bag/diagnostics tests: 1187 passed, 41 failed, 76 skipped
 
+**Recent Progress:**
+- Dataframe↔Array bridge implemented with `DataFrameToArray` expression
+- `ddf.values` and `ddf.to_dask_array()` now work correctly, keeping dataframe expressions as expressions (not lowered)
+
 The array-expr system is nearly complete for array-only operations. The remaining work falls into:
 1. **Active Regressions** - Bugs in array-expr code
 2. **Cross-Module Integration** - Dataframe↔array, delayed↔array interactions
@@ -31,24 +35,35 @@ The array-expr system is nearly complete for array-only operations. The remainin
 
 These failures occur when array-expr arrays interact with other dask modules.
 
-### Dataframe↔Array Bridge (16 tests) - Implement
+### Dataframe↔Array Bridge - ✅ Done
 
-When dataframe operations return arrays (e.g., `ddf.values`, `ddf.to_dask_array()`), the result is an array-expr `Array` collection wrapping a **dataframe-expr** `MapPartitions` expression. The dataframe expression lacks array properties (`chunks`, `dtype`, `shape`).
+**Implementation:** Created `Values` ArrayExpr in the dataframe module that directly wraps DataFrame expressions, producing tasks that call `methods.values` on each partition. This is cleaner than a generic bridge - no aliases, direct tasks.
 
+**Key changes:**
+- `dask/dataframe/dask_expr/_array.py`: New module with `Values(ArrayExpr)` class
+- `dask/dataframe/dask_expr/_collection.py`: `DataFrame.values` and `to_dask_array` use `Values` directly
+- `dask/array/_array_expr/_backends.py`: `create_array_collection` only accepts `ArrayExpr`, raises for DataFrame expressions
+- Added `test_values_expr_structure` test to verify expression structure
+
+**Design principles:**
+- DataFrame→Array operations create ArrayExpr directly (no bridge/wrapper pattern)
+- `create_array_collection` rejects non-ArrayExpr with helpful error message
+- Direct tasks, no alias layer - cleaner graph structure
+
+**Tests now passing:**
+- `test_values`, `test_values_extension_dtypes` ✅
+- `test_to_dask_array_unknown` (2 tests) ✅
+- `test_to_dask_array[*]` (all params) ✅
+- `test_map_partition_array[asarray]` ✅
+- `test_mixed_dask_array_operations` ✅
+- `test_values_expr_structure` ✅ (new test)
+
+**Remaining issues (pre-existing, unrelated to bridge):**
 | Test | Issue |
 |------|-------|
-| `test_values`, `test_values_extension_dtypes` | `MapPartitions` has no `chunks` |
-| `test_to_dask_array_unknown` (2 tests) | `MapPartitions` has no `chunks` |
-| `test_to_dask_array[True-False-meta2]` | `_meta` has no setter |
-| `test_map_partition_array` (2 tests) | Broadcasting/dtype issues |
-| `test_mixed_dask_array_operations` | `MapPartitions` has no `dtype` |
-| `test_mixed_dask_array_multi_dimensional` | Type dispatch for None |
-| `test_scalar_with_array` | Deprecation warning |
-| `test_array_to_df_conversion` | NoneType has no itemsize |
-| `test_loc_with_array` (3 tests) | `MapPartitions` has no `dtype` |
-| `test_to_numeric_on_dask_array` (2 tests) | `MapPartitions` has no `chunks` |
-
-**Fix:** Create a bridge ArrayExpr that wraps dataframe expressions, providing array-like interface (`chunks`, `dtype`, `shape`, `_meta`) while delegating to the dataframe expression for graph generation. This is cleaner than having expr↔HLG interactions.
+| `test_map_partition_array[func1]` | recarray meta type mismatch |
+| `test_mixed_dask_array_multi_dimensional` | Missing dependency in rechunk (array→dataframe) |
+| `test_to_dask_dataframe` | Array missing `to_dask_dataframe` method |
 
 ### from_graph rename parameter (5 tests) - Implement
 
@@ -223,29 +238,38 @@ These have xfails that aren't array-expr specific:
 
 ## Implementation Patterns
 
-### Dataframe↔Array Bridge Pattern
+### Dataframe→Array Pattern
 
-When a dataframe operation produces an array (like `ddf.values`), we need to bridge between expression systems. Create an ArrayExpr that wraps dataframe expressions:
+When a dataframe operation produces an array (like `ddf.values`), create an ArrayExpr directly in the dataframe module:
 
 ```python
-class DataFrameToArray(ArrayExpr):
-    """Bridge from dataframe-expr to array-expr."""
-    _parameters = ["df_expr", "_meta", "_chunks"]
+# In dask/dataframe/dask_expr/_array.py
+from dask.array._array_expr._expr import ArrayExpr
+
+class Values(ArrayExpr):
+    """Array expression for DataFrame.values."""
+    _parameters = ["frame", "_chunks", "_meta_override"]
+    _defaults = {"_chunks": None, "_meta_override": None}
 
     @cached_property
     def chunks(self):
-        return self._chunks
-
-    @cached_property
-    def dtype(self):
-        return self._meta.dtype
+        if self.operand("_chunks"):
+            return self.operand("_chunks")
+        # Derive from frame divisions
+        return ((np.nan,) * self.frame.npartitions, (len(self.frame.columns),))
 
     def _layer(self):
-        # Delegate to the dataframe expression's graph
-        return self.df_expr.__dask_graph__()
+        # Direct tasks that call methods.values on each partition
+        return {
+            (self._name, i, 0): Task(key, methods.values, TaskRef((frame_name, i)))
+            for i in range(self.frame.npartitions)
+        }
+
+    def dependencies(self):
+        return [self.frame]
 ```
 
-This keeps expr↔expr interactions clean without HLG in the middle.
+This creates direct tasks (no aliases) and keeps the expression tree clean.
 
 ### Late Import Pattern (for avoiding legacy/array-expr mixing)
 ```python

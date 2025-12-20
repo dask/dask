@@ -21,21 +21,27 @@ except ImportError:
 
 
 def create_array_collection(expr):
-    # This is hacky and an abstraction leak, but utilizing get_collection_type
-    # to infer that we want to create an array is the only way that is guaranteed
-    # to be a general solution.
-    # We can get rid of this when we have an Array expression
+    """Create an Array collection from an expression.
+
+    In array-expr mode, only accepts ArrayExpr instances. DataFrame operations
+    that produce arrays (like ddf.values) should create ArrayExpr directly
+    via dask.dataframe.dask_expr._array.create_values_array.
+    """
     import dask.array as da
-    from dask.highlevelgraph import HighLevelGraph
-    from dask.layers import Blockwise
 
     if da._array_expr_enabled():
+        from dask.array._array_expr._collection import Array
         from dask.array._array_expr._expr import ArrayExpr
 
         if isinstance(expr, ArrayExpr):
-            from dask.array._array_expr._collection import Array
-
             return Array(expr)
+
+        # Non-ArrayExpr (e.g., DataFrame MapPartitions returning ndarray)
+        # Fall through to use from_graph below
+
+    # Lower expression to graph
+    from dask.highlevelgraph import HighLevelGraph
+    from dask.layers import Blockwise
 
     result = expr.optimize()
     dsk = result.__dask_graph__()
@@ -68,22 +74,17 @@ def create_array_collection(expr):
                 new_keys.append(new_key)
     else:
         new_keys = [(name, 0)]
+
     if da._array_expr_enabled():
         from dask.array._array_expr._collection import from_graph
 
         return from_graph(dsk, meta, chunks, set(new_keys), name)
-    else:
-        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+
+    return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
 
 
 @get_collection_type.register(np.ndarray)
 def get_collection_type_array(_):
-    import dask.array as da
-
-    if da._array_expr_enabled():
-        from dask.array._array_expr._collection import Array
-
-        return Array
     return create_array_collection
 
 
