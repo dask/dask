@@ -553,9 +553,8 @@ class SliceSlicesIntegers(Slice):
         return Transpose(sliced_input.expr, axes)
 
     def _pushdown_into_io(self):
-        """Push slice into IO expression by slicing the source array directly."""
+        """Push slice into IO expression by setting a region (deferred slice)."""
         from dask.array._array_expr._io import FromArray
-        from dask.array.core import normalize_chunks
 
         # Only handle simple slices (no integers, no fancy indexing)
         index = self.index
@@ -566,28 +565,42 @@ class SliceSlicesIntegers(Slice):
 
         io_expr = self.array
 
-        # For FromArray, slice the source array directly
+        # For FromArray, set region instead of slicing eagerly
         if isinstance(io_expr, FromArray):
             source = io_expr.array
-            old_chunks = io_expr.operand("chunks")
+            old_chunks = io_expr.chunks  # Use normalized chunks property
+            old_region = io_expr.operand("_region")
 
             # Pad index to full dimensions
             full_index = index + (slice(None),) * (source.ndim - len(index))
 
-            # Slice the source array
-            sliced_source = source[full_index]
+            # Compute new region by combining with existing region
+            if old_region is not None:
+                # Compose slices: new slice is relative to old region
+                new_region = tuple(
+                    _compose_slices(old_slc, new_slc, dim_size)
+                    for old_slc, new_slc, dim_size in zip(
+                        old_region, full_index, source.shape
+                    )
+                )
+            else:
+                new_region = full_index
 
             # Compute new chunks - use same chunk sizes but clipped to new shape
+            new_shape = tuple(
+                len(range(*slc.indices(dim_size)))
+                for slc, dim_size in zip(new_region, source.shape)
+            )
             new_chunks = tuple(
                 _compute_sliced_chunks(dim_chunks, slc, dim_size)
                 for dim_chunks, slc, dim_size in zip(
-                    old_chunks, full_index, source.shape
+                    old_chunks, full_index, io_expr._effective_shape
                 )
             )
 
-            # Create new FromArray with sliced source
+            # Create new FromArray with region (deferred slice)
             return FromArray(
-                sliced_source,
+                source,  # Keep original source, don't slice
                 new_chunks,
                 lock=io_expr.operand("lock"),
                 getitem=io_expr.operand("getitem"),
@@ -596,6 +609,7 @@ class SliceSlicesIntegers(Slice):
                 asarray=io_expr.operand("asarray"),
                 fancy=io_expr.operand("fancy"),
                 _name_override=io_expr.operand("_name_override"),
+                _region=new_region,
             )
 
         return None
@@ -645,6 +659,28 @@ class SliceSlicesIntegers(Slice):
             for out_name, in_name, slices in zip(out_names, in_names, all_slices)
         }
         return dsk_out
+
+
+def _compose_slices(outer_slice, inner_slice, dim_size):
+    """Compose two slices: inner_slice is relative to outer_slice's result."""
+    # Get the range of the outer slice
+    outer_start, outer_stop, outer_step = outer_slice.indices(dim_size)
+    outer_len = len(range(outer_start, outer_stop, outer_step))
+
+    # Get the range of the inner slice relative to outer's result
+    inner_start, inner_stop, inner_step = inner_slice.indices(outer_len)
+
+    # Compose: offset inner by outer_start
+    if outer_step != 1 or inner_step != 1:
+        new_start = outer_start + inner_start * outer_step
+        new_stop = outer_start + inner_stop * outer_step
+        new_step = outer_step * inner_step
+    else:
+        new_start = outer_start + inner_start
+        new_stop = outer_start + inner_stop
+        new_step = 1
+
+    return slice(new_start, new_stop, new_step if new_step != 1 else None)
 
 
 class SlicesWrapNone(SliceSlicesIntegers):
