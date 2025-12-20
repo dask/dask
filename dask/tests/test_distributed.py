@@ -452,6 +452,9 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
     np = pytest.importorskip("numpy")
     from dask.array.utils import assert_eq
 
+    if da._array_expr_enabled():
+        pytest.xfail("array-expr doesn't fully support annotations yet")
+
     # A flaky doubling function -- need extra args because it is called before
     # application to establish dtype/meta.
     scale = varying([ZeroDivisionError("one"), ZeroDivisionError("two"), 2, 2])

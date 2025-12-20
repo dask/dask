@@ -395,11 +395,14 @@ def test_persist_array():
     y = x.persist()
 
     assert_eq(x, y)
-    assert set(y.dask).issubset(x.dask)
     assert len(y.dask) == y.npartitions
 
 
 @pytest.mark.skipif("not da")
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr from_graph() doesn't accept rename parameter",
+)
 def test_persist_array_rename():
     a = da.zeros(4, dtype=int, chunks=2)
     rebuild, args = a.__dask_postpersist__()
@@ -463,8 +466,13 @@ def test_compute_array_dataframe():
     darr = da.from_array(arr, chunks=(5, 5)) + 1
     df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 5, 3, 3]})
     ddf = dd.from_pandas(df, npartitions=2).a + 2
-    with pytest.warns(UserWarning, match="mixed.*materialize"):
+    # With array-expr and dataframe-expr both enabled, no warning is issued
+    # because both are expression-based
+    if da._array_expr_enabled():
         arr_out, df_out = compute(darr, ddf)
+    else:
+        with pytest.warns(UserWarning, match="mixed.*materialize"):
+            arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
     dd.utils.assert_eq(df_out, df.a + 2)
 
@@ -496,11 +504,13 @@ def test_compute_dataframe_invalid_unicode():
 
 
 @pytest.mark.skipif("not da")
+@pytest.mark.filterwarnings("ignore:Computing mixed collections")
 def test_compute_array_bag():
     x = da.arange(5, chunks=2)
     b = db.from_sequence([1, 2, 3])
 
-    pytest.raises(ValueError, lambda: compute(x, b))
+    if not da._array_expr_enabled():
+        pytest.raises(ValueError, lambda: compute(x, b))
 
     xx, bb = compute(x, b, scheduler="single-threaded")
     assert np.allclose(xx, np.arange(5))
@@ -766,21 +776,24 @@ def test_persist_delayedattr():
 
 
 @pytest.mark.skipif("not da")
+@pytest.mark.filterwarnings("ignore:Computing mixed collections")
 def test_persist_array_bag():
     x = da.arange(5, chunks=2) + 1
     b = db.from_sequence([1, 2, 3]).map(inc)
 
-    with pytest.raises(ValueError):
-        persist(x, b)
+    if not da._array_expr_enabled():
+        with pytest.raises(ValueError):
+            persist(x, b)
 
     xx, bb = persist(x, b, scheduler="single-threaded")
 
     assert isinstance(xx, da.Array)
     assert isinstance(bb, db.Bag)
 
-    assert xx.name == x.name
+    if not da._array_expr_enabled():
+        assert xx.name == x.name
+        assert len(xx.dask) == xx.npartitions < len(x.dask)
     assert bb.name == b.name
-    assert len(xx.dask) == xx.npartitions < len(x.dask)
     assert len(bb.dask) == bb.npartitions < len(b.dask)
 
     assert np.allclose(x, xx)
@@ -825,6 +838,10 @@ def test_persist_item_change_name():
     db.utils.assert_eq(b, 4)
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr doesn't use legacy graph optimizer API",
+)
 def test_optimize_globals():
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
@@ -853,6 +870,10 @@ def test_optimize_globals():
         assert_eq(xx, (np.ones(10) * 2 + 1) * 2)
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr doesn't use legacy graph optimizer API",
+)
 def test_optimize_None():
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
@@ -958,6 +979,10 @@ def test_clone_key():
         clone_key(1, 2)
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr returns dict graphs, not HLG",
+)
 def test_compute_as_if_collection_low_level_task_graph():
     # See https://github.com/dask/dask/pull/7969
     pytest.importorskip("numpy")

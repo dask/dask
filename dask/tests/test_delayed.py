@@ -547,6 +547,10 @@ def test_custom_delayed():
 
 
 @pytest.mark.filterwarnings("ignore:The dask.delayed:UserWarning")
+@pytest.mark.xfail(
+    "dask.array._array_expr_enabled()",
+    reason="array-expr finalization produces different graph structure",
+)
 def test_array_delayed():
     np = pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
