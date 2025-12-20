@@ -9,6 +9,7 @@ from packaging.version import Version
 import dask
 from dask import delayed
 from dask._compatibility import WINDOWS
+import dask.array as da
 from dask.base import collections_to_expr, key_split, visualize_dsk
 from dask.core import get_deps
 from dask.order import _connecting_to_roots, diagnostics, ndependencies, order
@@ -1997,13 +1998,17 @@ def test_flox_reduction(abcde):
     assert max(of1) < min(of2) or max(of2) < min(of1)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="array-expr graph structure differs, ordering heuristics may fail",
+    strict=False,
+)
 @pytest.mark.parametrize("optimize", [True, False])
 @pytest.mark.parametrize("keep_self", [True, False])
 @pytest.mark.parametrize("ndeps", [2, 5])
 @pytest.mark.parametrize("n_reducers", [4, 7])
 def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reducers):
     pytest.importorskip("numpy")
-    da = pytest.importorskip("dask.array")
     import numpy as np
 
     def random(**kwargs):

@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 import dask
+import dask.array as da
 from dask.base import collections_to_expr, tokenize
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
@@ -40,9 +41,9 @@ def test_basic():
     assert all(isinstance(layer, Layer) for layer in hg.layers.values())
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG")
 def test_keys_values_items_to_dict_methods():
     pytest.importorskip("numpy")
-    da = pytest.importorskip("dask.array")
     a = da.ones(10, chunks=(5,))
     b = a + 1
     c = a + 2
@@ -151,6 +152,7 @@ def annot_map_fn(key):
     return key[1:]
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG")
 @pytest.mark.parametrize(
     "annotation",
     [
@@ -160,7 +162,6 @@ def annot_map_fn(key):
 )
 def test_single_annotation(annotation):
     pytest.importorskip("numpy")
-    da = pytest.importorskip("dask.array")
     with dask.annotate(**annotation):
         A = da.ones((10, 10), chunks=(5, 5))
 
@@ -169,9 +170,9 @@ def test_single_annotation(annotation):
     assert not dask.get_annotations()
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG")
 def test_multiple_annotations():
     pytest.importorskip("numpy")
-    da = pytest.importorskip("dask.array")
     with dask.annotate(block_id=annot_map_fn):
         with dask.annotate(resources={"GPU": 1}):
             A = da.ones((10, 10), chunks=(5, 5))
@@ -231,10 +232,10 @@ def test_annotations_leak():
     assert result == [{"foo": 1}, {"foo": 2}]
 
 
+@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG")
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
     np = pytest.importorskip("numpy")
-    da = pytest.importorskip("dask.array")
     if flat:
         # Simple "flat" mapping between input and
         # output indices

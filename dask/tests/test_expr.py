@@ -149,6 +149,110 @@ class FooExpr(Expr):
         return {"foo": DataNode("foo", 42)}
 
 
+def test_expr_sequence_fuse_array():
+    """Test that _ExprSequence.fuse() properly fuses array expressions."""
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+    if not da._array_expr_enabled():
+        pytest.skip("array-expr not enabled")
+    from dask.base import collections_to_expr
+    import dask
+
+    # Independent chains - should fuse completely
+    a = da.ones((10, 10), chunks=5)
+    b = da.zeros((10, 10), chunks=5)
+    y = a + 1
+    z = b + 2
+
+    # Separate computation would have 4 fused tasks each
+    y_alone = y._expr.optimize(fuse=True).__dask_graph__()
+    z_alone = z._expr.optimize(fuse=True).__dask_graph__()
+    assert len(y_alone) == 4
+    assert len(z_alone) == 4
+
+    # Combined should also fuse to 8 tasks total
+    combined = collections_to_expr([y, z], optimize_graph=True).optimize(fuse=True)
+    assert len(combined.__dask_graph__()) == 8
+
+    # Verify results are correct
+    y_result, z_result = dask.compute(y, z)
+    np.testing.assert_array_equal(y_result, np.full((10, 10), 2.0))
+    np.testing.assert_array_equal(z_result, np.full((10, 10), 2.0))
+
+
+def test_expr_sequence_fuse_shared_subexpression():
+    """Test that shared subexpressions are not duplicated during fusion."""
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+    if not da._array_expr_enabled():
+        pytest.skip("array-expr not enabled")
+    from dask.base import collections_to_expr
+    import dask
+
+    # Shared subexpression case - x itself is a fused chain (ones * 2)
+    x = da.ones((10, 10), chunks=5) * 2
+    y = x + 1
+    z = x + 2
+
+    # x alone would fuse to 4 tasks (ones-mul fused)
+    x_alone = x._expr.optimize(fuse=True).__dask_graph__()
+    assert len(x_alone) == 4
+
+    # With shared input, we should have:
+    # - 4 fused 'mul-ones' tasks (shared, not duplicated)
+    # - 4 'add' tasks for y
+    # - 4 'add' tasks for z
+    # Total: 12 tasks (x is NOT fused into y/z because it has 2 dependents)
+    combined = collections_to_expr([y, z], optimize_graph=True).optimize(fuse=True)
+    dsk = combined.__dask_graph__()
+    assert len(dsk) == 12
+
+    # Verify the shared fused chain exists only once (4 tasks, not 8)
+    # The fused x tasks contain both 'ones' and 'mul'
+    fused_x_keys = [k for k in dsk if "mul" in str(k) and "ones" in str(k)]
+    assert len(fused_x_keys) == 4
+
+    # Verify results are correct
+    y_result, z_result = dask.compute(y, z)
+    np.testing.assert_array_equal(y_result, np.full((10, 10), 3.0))  # 1*2 + 1 = 3
+    np.testing.assert_array_equal(z_result, np.full((10, 10), 4.0))  # 1*2 + 2 = 4
+
+
+def test_expr_sequence_fuse_dataframe():
+    """Test that _ExprSequence.fuse() properly fuses dataframe expressions."""
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+    from dask.base import collections_to_expr
+    import dask
+
+    # Independent chains
+    df1 = dd.from_pandas(pd.DataFrame({"a": range(100)}), npartitions=4)
+    df2 = dd.from_pandas(pd.DataFrame({"b": range(100)}), npartitions=4)
+    y = df1["a"] + 1
+    z = df2["b"] + 2
+
+    # Separate should be 8 tasks each (4 frompandas + 4 fused getitem-add)
+    y_alone = y._expr.optimize(fuse=True).__dask_graph__()
+    z_alone = z._expr.optimize(fuse=True).__dask_graph__()
+    assert len(y_alone) == 8
+    assert len(z_alone) == 8
+
+    # Combined should be 16 tasks total (both fully fused)
+    combined = collections_to_expr([y, z], optimize_graph=True).optimize(fuse=True)
+    assert len(combined.__dask_graph__()) == 16
+
+    # Verify results are correct
+    y_result, z_result = dask.compute(y, z)
+    pd.testing.assert_series_equal(
+        y_result.reset_index(drop=True),
+        pd.Series(range(1, 101), name="a"),
+    )
+    pd.testing.assert_series_equal(
+        z_result.reset_index(drop=True),
+        pd.Series(range(2, 102), name="b"),
+    )
+
+
 def test_prohibit_reuse():
     once = FooExpr()
     ProhibitReuse._ALLOWED_TYPES.append(FooExpr)
