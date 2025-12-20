@@ -791,22 +791,24 @@ Tests that use `Array(dict, name, chunks, ...)` constructor directly.
 - Fixed `reshape` to return `self` when shape is unchanged (identity case)
 - Updated `test_from_zarr_name` to check for name prefix instead of exact match (names always include deterministic token)
 
-### Stream AJ: Map Blocks Edge Cases (5 tests) 🟡
-Various map_blocks features and edge cases.
+### Stream AJ: Map Blocks Edge Cases (5 tests) 🔴
+Various map_blocks features and edge cases. These tests exercise legacy APIs or internal structures that differ fundamentally in array-expr.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_map_blocks_optimize_blockwise[<lambda>0] | Optimization check | ⏳ |
-| test_map_blocks_optimize_blockwise[<lambda>1] | Optimization check | ⏳ |
-| test_map_blocks_delayed | HLG.validate() check | ⏳ (by design) |
-| test_map_blocks3 | da.core.map_blocks (legacy path) | ⏳ |
-| test_map_blocks_dataframe | DataFrame output from map_blocks | ⏳ |
+| test_map_blocks_optimize_blockwise[<lambda>0] | Uses `optimize_blockwise(dsk)` on HLG | ⏳ deferred - requires HLG |
+| test_map_blocks_optimize_blockwise[<lambda>1] | Uses `optimize_blockwise(dsk)` on HLG | ⏳ deferred - requires HLG |
+| test_map_blocks_delayed | Calls `.dask.validate()` which requires HLG | ⏳ deferred - by design |
+| test_map_blocks3 | Uses `da.core.map_blocks` (legacy API explicitly) | ⏳ deferred - legacy API |
+| test_map_blocks_dataframe | DataFrame output from map_blocks | ⏳ deferred - architectural |
 
-**Root Issue:**
-- Optimize tests check task count which may differ in array-expr
-- `test_map_blocks_delayed` calls `.dask.validate()` which returns dict not HLG
-- `test_map_blocks3` uses `da.core.map_blocks` instead of `da.map_blocks`
-- DataFrame output needs special handling for singleton dimensions
+**Root Issues (all deferred):**
+- `test_map_blocks_optimize_blockwise`: Uses `optimize_blockwise()` which expects HLG layers. Array-expr returns dict graphs and uses different optimization paths.
+- `test_map_blocks_delayed`: Calls `.dask.validate()` which requires HLG. Array-expr returns dict, not HLG.
+- `test_map_blocks3`: Uses `da.core.map_blocks` explicitly - the legacy-specific API. Array-expr Arrays aren't recognized by legacy `isinstance(a, Array)` checks.
+- `test_map_blocks_dataframe`: When map_blocks produces a DataFrame, the result gets wrapped in a dask DataFrame but the underlying expression is an array `Blockwise` which lacks `npartitions`. This is a deeper architectural issue where the DataFrame wrapper expects a DataFrame expression tree.
+
+**Related Fix:** Fixed `Blockwise._meta` to use `getattr(meta, "dtype", None)` instead of `meta.dtype` to handle metas without `.dtype` (like DataFrames). This prevents crashes but doesn't fix the fundamental issue.
 
 ### Stream AK: Block ID Fusion (1 test) 🟡
 Fusion with block_id parameter.
