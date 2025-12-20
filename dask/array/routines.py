@@ -2511,13 +2511,15 @@ def _average(
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
     # Wrapper used by da.average or da.ma.average.
-    a = asanyarray(a)
+    # Use late import to get array-expr version when enabled
+    import dask.array as _da
+    a = _da.asanyarray(a)
 
     if weights is None:
         avg = a.mean(axis, keepdims=keepdims)
         scl = avg.dtype.type(a.size / avg.size)
     else:
-        wgt = asanyarray(weights)
+        wgt = _da.asanyarray(weights)
 
         if issubclass(a.dtype.type, (np.integer, np.bool_)):
             result_dtype = result_type(a.dtype, wgt.dtype, "f8")
