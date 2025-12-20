@@ -228,9 +228,10 @@ class FromArray(IO):
             keys = product([self._name], *(range(len(bds)) for bds in self.chunks))
             values = [self.array[slc] for slc in slices]
             dsk = dict(zip(keys, values))
-        elif is_ndarray and is_single_block:
-            # No slicing needed
-            dsk = {(self._name,) + (0,) * self.array.ndim: self.array}
+        elif is_ndarray and is_single_block and not lock:
+            # No slicing needed, but copy to avoid memory aliasing issues
+            # when rechunk pushdown creates single-chunk from multi-chunk
+            dsk = {(self._name,) + (0,) * self.array.ndim: self.array.copy()}
         else:
             getitem = self.operand("getitem")
             if getitem is None:
