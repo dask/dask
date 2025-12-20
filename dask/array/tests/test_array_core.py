@@ -2355,7 +2355,6 @@ class CounterLock:
         return self.lock.release(*args, **kwargs)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store lock handling not working in array-expr", strict=False)
 def test_store_locks_failure_lock_released():
     d = da.ones((10, 10), chunks=(2, 2))
 
@@ -2366,7 +2365,6 @@ def test_store_locks_failure_lock_released():
     assert lock.acquire_count == lock.release_count > 0
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="CounterLock tokenization fails in array-expr", strict=False)
 def test_store_locks():
     d = da.ones((10, 10), chunks=(2, 2))
     a, b = d + 1, d + 2
@@ -2835,11 +2833,6 @@ def test_Array_normalizes_dtype():
     assert isinstance(x.dtype, np.dtype)
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="Custom lock tokenization fails in array-expr",
-    strict=False,
-)
 @pytest.mark.parametrize("inline_array", [True, False])
 def test_from_array_with_lock(inline_array):
     x = np.arange(10)

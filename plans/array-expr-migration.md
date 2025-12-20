@@ -282,14 +282,14 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 Note: The `--array-expr` flag sets `array.query-planning` config via `pytest_configure` hook, which runs before test collection imports `dask.array`.
 
 ### Current Test Status (December 2025)
-- **4500 passed**, 43 xfailed, 0 failed, 610 skipped
-- Significant progress from earlier (was 211 xfails, now 43)
+- **4504 passed**, 39 xfailed, 0 failed, 610 skipped
+- Significant progress from earlier (was 211 xfails, now 39)
 
-**Complete XFails Inventory (43 total):**
+**Complete XFails Inventory (39 total):**
 
 | Category | Tests | Priority |
 |----------|-------|----------|
-| Lock Tokenization | 4 | 🟡 |
+| Lock Tokenization | 0 | ✅ Done |
 | Legacy Graph API | 7 | 🔴 |
 | Scalar/Element Ops | 1 | 🟡 |
 | Map Blocks | 5 | 🟡 |
@@ -314,7 +314,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 
 | Stream | Tests | Priority | Notes |
 |--------|-------|----------|-------|
-| AG: Lock Tokenization | 4 | 🟡 Medium | Custom lock serialization |
+| AG: Lock Tokenization | 4 | 🟢 **Done** | Custom lock serialization |
 | AH: Legacy Graph API | 7 | 🔴 Deferred | Different paradigm, low priority |
 | AI: Scalar/Element Ops | 3 | 🟢 **Done** | 0-d arrays, dtypes, matmul |
 | AJ: Map Blocks Edge Cases | 5 | 🟡 Medium | Various map_blocks features |
@@ -329,12 +329,11 @@ These work streams can be executed in parallel by agents. Each is independent.
 | AP: UFunc Features | 1 | 🟢 **DONE** | frompyfunc |
 | AQ: Miscellaneous | 9 | 🟢 Varies | Mixed independent issues |
 
-**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V, X, W, AI, AN, AP
+**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V, X, W, AI, AN, AP, AG
 
 **Recommended next targets (parallelizable):**
 1. Stream AM (creation edge cases) - 4 tests, quick wins
-2. Stream AG (lock tokenization) - 4 tests, medium complexity
-3. Stream AE (linspace scalars) - 2 tests
+2. Stream AE (linspace scalars) - 2 tests
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -747,20 +746,19 @@ Overlap operations requiring fusion.
 
 **Notes:** Overlap operations depend on fusion for efficiency. Deferred until fusion is implemented.
 
-### Stream AG: Lock Tokenization (4 tests) 🟡
+### Stream AG: Lock Tokenization (4 tests) 🟢 **DONE**
 Custom lock objects need deterministic tokenization for singleton pattern.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_store_locks | CounterLock can't be tokenized | ⏳ |
-| test_store_locks_failure_lock_released | Lock acquire/release not happening | ⏳ |
-| test_from_array_with_lock[True] | Custom lock tokenization | ⏳ |
-| test_from_array_with_lock[False] | Custom lock tokenization | ⏳ |
+| test_store_locks | CounterLock can't be tokenized | ✅ |
+| test_store_locks_failure_lock_released | Lock acquire/release not happening | ✅ |
+| test_from_array_with_lock[True] | Custom lock tokenization | ✅ |
+| test_from_array_with_lock[False] | Custom lock tokenization | ✅ |
 
-**Root Issue:** The singleton pattern requires deterministic tokenization of all expression arguments. Non-serializable lock objects (like `CounterLock` in tests) fail tokenization. Need to either:
-1. Add `__dask_tokenize__` to lock classes
-2. Normalize locks before expression creation
-3. Handle locks specially in `FromArray.__dask_tokenize__`
+**Implementation:** Added custom `__dask_tokenize__` methods to `FromArray` and `Blockwise` that handle non-serializable locks by using `id()` for tokenization. Different locks produce different expressions (preserving expected semantics). `SerializableLock` objects are tokenized normally via pickle. Modified:
+- `dask/array/_array_expr/_io.py`: Added `__dask_tokenize__` to `FromArray`
+- `dask/array/_array_expr/_blockwise.py`: Updated `__dask_tokenize__` in `Blockwise` to handle locks in kwargs
 
 ### Stream AH: Legacy Graph API (7 tests) 🔴
 Tests that use `Array(dict, name, chunks, ...)` constructor directly.

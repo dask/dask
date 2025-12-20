@@ -256,6 +256,23 @@ class FromArray(IO):
     def __str__(self):
         return "FromArray(...)"
 
+    def __dask_tokenize__(self):
+        from dask.tokenize import _tokenize_deterministic
+
+        # Handle non-serializable locks by using their id()
+        # Locks are identity-based objects, so using id() is semantically correct
+        lock = self.operand("lock")
+        if lock and not isinstance(lock, (bool, SerializableLock)):
+            lock_token = ("lock-id", id(lock))
+        else:
+            lock_token = lock
+
+        operands = [
+            lock_token if p == "lock" else self.operand(p)
+            for p in self._parameters
+        ]
+        return _tokenize_deterministic(type(self), *operands)
+
 
 def get_scheduler_lock(collection, scheduler):
     """Get an appropriate lock for the given collection and scheduler."""
