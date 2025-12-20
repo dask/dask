@@ -30,10 +30,10 @@ def _array_expr_enabled() -> bool:
                 "The query-planning config can only be changed before "
                 "`dask.array` is first imported!"
             )
-        return ARRAY_EXPR_ENABLED  # type: ignore[return-value]
+        return ARRAY_EXPR_ENABLED
 
     # Cache the result on first call
-    ARRAY_EXPR_ENABLED = bool(use_array_expr if use_array_expr is not None else False)
+    ARRAY_EXPR_ENABLED = True if use_array_expr else False
     return ARRAY_EXPR_ENABLED
 
 
@@ -655,7 +655,9 @@ if _array_expr_enabled():
             abs,
             absolute,
             add,
+            allclose,
             angle,
+            append,
             apply_gufunc,
             arange,
             arccos,
@@ -666,6 +668,7 @@ if _array_expr_enabled():
             arctan2,
             arctanh,
             argwhere,
+            around,
             array,
             as_gufunc,
             asanyarray,
@@ -681,9 +684,11 @@ if _array_expr_enabled():
             bitwise_xor,
             block,
             blockwise,
+            broadcast_arrays,
             broadcast_to,
             cbrt,
             ceil,
+            choose,
             clip,
             compress,
             concatenate,
@@ -692,7 +697,10 @@ if _array_expr_enabled():
             corrcoef,
             cos,
             cosh,
+            count_nonzero,
             cov,
+            cumprod,
+            cumsum,
             deg2rad,
             degrees,
             diag,
@@ -700,18 +708,19 @@ if _array_expr_enabled():
             diff,
             digitize,
             divide,
-            dstack,
             divmod,
             dot,
+            dstack,
             elemwise,
             empty,
             empty_like,
             equal,
-            eye,
             exp,
             exp2,
-            expm1,
             expand_dims,
+            expm1,
+            extract,
+            eye,
             fabs,
             fix,
             flatnonzero,
@@ -730,9 +739,9 @@ if _array_expr_enabled():
             frompyfunc,
             full,
             full_like,
+            gradient,
             greater,
             greater_equal,
-            gradient,
             gufunc,
             histogram,
             histogram2d,
@@ -743,11 +752,14 @@ if _array_expr_enabled():
             imag,
             indices,
             invert,
+            isclose,
             iscomplex,
             isfinite,
+            isin,
             isinf,
             isnan,
             isneginf,
+            isnull,
             isposinf,
             isreal,
             ldexp,
@@ -772,18 +784,23 @@ if _array_expr_enabled():
             meshgrid,
             minimum,
             mod,
-            moveaxis,
             modf,
+            moveaxis,
             multiply,
             nan_to_num,
+            nancumprod,
+            nancumsum,
+            ndim,
             negative,
             nextafter,
             nonzero,
             not_equal,
+            notnull,
             ones,
             ones_like,
             outer,
             pad,
+            piecewise,
             positive,
             power,
             rad2deg,
@@ -792,17 +809,21 @@ if _array_expr_enabled():
             ravel,
             real,
             rechunk,
-            reshape,
             reciprocal,
             reduction,
             remainder,
             repeat,
+            reshape,
+            result_type,
             right_shift,
             rint,
             roll,
             rollaxis,
             rot90,
+            round,
             searchsorted,
+            select,
+            shape,
             sign,
             signbit,
             sin,
@@ -828,10 +849,11 @@ if _array_expr_enabled():
             triu,
             triu_indices,
             triu_indices_from,
-            vdot,
-            vstack,
             true_divide,
             trunc,
+            unify_chunks,
+            vdot,
+            vstack,
             where,
             zeros,
             zeros_like,
@@ -861,33 +883,6 @@ if _array_expr_enabled():
             sum,
             var,
         )
-        from dask.array._array_expr import (
-            cumprod,
-            cumsum,
-            nancumprod,
-            nancumsum,
-        )
-
-        from dask.array._array_expr import (
-            allclose,
-            append,
-            around,
-            broadcast_arrays,
-            choose,
-            count_nonzero,
-            extract,
-            isclose,
-            isin,
-            isnull,
-            ndim,
-            notnull,
-            piecewise,
-            result_type,
-            round,
-            select,
-            shape,
-            unify_chunks,
-        )
 
         backends = raise_not_implemented_error("backends")
         from dask.array._array_expr import fft
@@ -902,31 +897,31 @@ if _array_expr_enabled():
 
         sys.modules["dask.array.ma"] = ma
         atop = raise_not_implemented_error("atop")
+        from dask.array._array_expr import from_delayed, from_npy_stack, from_zarr, store
         from dask.array.chunk_types import register_chunk_type
-        from dask.array._array_expr import from_delayed
-        from dask.array._array_expr import from_npy_stack
-        from dask.array._array_expr import from_zarr
-        from dask.array._array_expr import store
-        to_hdf5 = raise_not_implemented_error("to_hdf5")
-        from dask.array._array_expr import to_npy_stack
-        from dask.array._array_expr import to_zarr
-        from dask.array._array_expr import optimize
-        from dask.array._array_expr import argtopk
-        from dask.array._array_expr import topk
-        from dask.array._array_expr import trace
-        from dask.array._array_expr import apply_along_axis
-        from dask.array._array_expr import apply_over_axes
-        from dask.array._array_expr import coarsen, aligned_coarsen_chunks
-        from dask.array._array_expr import delete
-        from dask.array._array_expr import ediff1d
-        from dask.array._array_expr import einsum
-        from dask.array._array_expr import insert
-        from dask.array._array_expr import ravel_multi_index
-        from dask.array._array_expr import union1d
-        from dask.array._array_expr import unique
-        from dask.array._array_expr import unravel_index
-        from dask.array.tiledb_io import from_tiledb, to_tiledb
 
+        to_hdf5 = raise_not_implemented_error("to_hdf5")
+        from dask.array._array_expr import (
+            aligned_coarsen_chunks,
+            apply_along_axis,
+            apply_over_axes,
+            argtopk,
+            coarsen,
+            delete,
+            ediff1d,
+            einsum,
+            insert,
+            optimize,
+            ravel_multi_index,
+            to_npy_stack,
+            to_zarr,
+            topk,
+            trace,
+            union1d,
+            unique,
+            unravel_index,
+        )
+        from dask.array.tiledb_io import from_tiledb, to_tiledb
         from dask.array.utils import assert_eq
         from dask.base import compute
 
