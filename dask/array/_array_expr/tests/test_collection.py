@@ -456,3 +456,141 @@ def test_rechunk_elemwise_pushdown_to_io():
     assert result.elemwise_args[0].chunks == ((5, 5), (5, 5))
     # Verify the prefix is preserved
     assert result.elemwise_args[0].name.startswith("array-")
+
+
+# --- Fusion regression tests ---
+
+
+def test_fusion_broadcast_modulo():
+    """Test that fusion handles broadcasting correctly with modulo.
+
+    When fusing operations where one array broadcasts (has fewer blocks),
+    the block indices must use modulo to wrap around correctly.
+    This is a regression test for matmul-like operations.
+    """
+    # 1D array broadcasting to 2D - simulates matmul broadcast pattern
+    a = da.from_array(np.arange(6).reshape(2, 3), chunks=(1, 3))
+    b = da.from_array(np.arange(3), chunks=3)
+
+    # b broadcasts: it has 1 block but a has 2 blocks in first dimension
+    result = a * b  # Elemwise with broadcast
+    assert_eq(result, np.arange(6).reshape(2, 3) * np.arange(3))
+
+    # Test that the fused graph computes correctly
+    opt = result.expr.optimize(fuse=True)
+    assert_eq(da.Array(opt), np.arange(6).reshape(2, 3) * np.arange(3))
+
+
+def test_fusion_same_array_different_indices():
+    """Test conflict detection when same array used with different indices.
+
+    When the same array appears multiple times in a computation with
+    different index mappings (e.g., da.dot(x, x)), fusion must detect
+    this conflict and exclude the conflicting expression.
+    """
+    # da.dot(x, x) uses x with indices 'ij' and 'jk', different mappings
+    x = da.from_array(np.arange(9).reshape(3, 3), chunks=(2, 2))
+    x_np = x.compute()
+
+    result = da.dot(x, x)
+    expected = np.dot(x_np, x_np)
+    assert_eq(result, expected)
+
+    # Test with persist (triggers the conflict path during fusion)
+    result_persisted = result.persist()
+    assert_eq(result_persisted, expected)
+
+
+def test_fusion_elemwise_with_out_and_where_true():
+    """Test that out arrays don't break fusion when where=True.
+
+    When an Elemwise has out=array but where=True (the default),
+    the out array should not be a dependency since it's not used
+    in the computation - it's just a placeholder for the result.
+    """
+    a = da.from_array(np.arange(4), chunks=2)
+    b = da.from_array(np.arange(4, 8), chunks=2)
+    out = da.zeros(4, chunks=2)
+
+    # When where=True (default), out is just a placeholder
+    result = da.add(a, b, out=out)
+    assert result is out
+
+    # Should compute correctly despite fusion
+    assert_eq(result, np.arange(4) + np.arange(4, 8))
+
+
+def test_fusion_elemwise_with_out_and_where_array():
+    """Test that out arrays are properly used when where is an array.
+
+    When where is a mask array (not True), the out array IS used
+    as a dependency and should participate in the computation.
+    """
+    a = da.from_array(np.arange(4), chunks=2)
+    b = da.from_array(np.arange(4, 8), chunks=2)
+    where = da.from_array(np.array([True, False, True, False]), chunks=2)
+    out = da.zeros(4, dtype=int, chunks=2)
+
+    result = da.add(a, b, where=where, out=out)
+    assert result is out
+
+    # Should compute correctly: only positions where=True get the sum
+    expected = np.zeros(4, dtype=int)
+    np.add(np.arange(4), np.arange(4, 8), where=np.array([True, False, True, False]), out=expected)
+    assert_eq(result, expected)
+
+
+def test_fusion_out_same_as_input():
+    """Test that out=x works when x is also an input argument.
+
+    When out is the same array as an input (e.g., np.sin(x, out=x)),
+    we must NOT exclude it from dependencies since it's actually used.
+    """
+    x = da.from_array(np.array([0.0, 0.5, 1.0, 1.5]), chunks=2)
+    x_np = x.compute().copy()
+
+    # In-place operation: out is same as input
+    result = np.sin(x, out=x)
+    assert result is x
+
+    expected = np.sin(x_np, out=x_np)
+    assert_eq(result, expected)
+
+
+def test_fusion_transpose_conflict():
+    """Test conflict detection for a + a.T pattern.
+
+    When the same array is accessed both directly and transposed,
+    fusion must detect this conflict since different output blocks
+    would need different source blocks from the same expression.
+    """
+    a = da.from_array(np.arange(9).reshape(3, 3), chunks=(2, 2))
+    a_np = a.compute()
+
+    # a + a.T accesses 'a' with different index mappings
+    result = a + a.T
+    expected = a_np + a_np.T
+    assert_eq(result, expected)
+
+    # Verify fusion handles this correctly
+    opt = result.expr.optimize(fuse=True)
+    assert_eq(da.Array(opt), expected)
+
+
+def test_fusion_chained_transpose():
+    """Test fusion with chained transpose operations.
+
+    Operations like (a + b).T should fuse correctly since there's
+    no conflict - just a consistent dimension permutation.
+    """
+    a = da.from_array(np.arange(6).reshape(2, 3), chunks=(1, 2))
+    b = da.from_array(np.arange(6, 12).reshape(2, 3), chunks=(1, 2))
+    a_np, b_np = a.compute(), b.compute()
+
+    result = (a + b).T
+    expected = (a_np + b_np).T
+    assert_eq(result, expected)
+
+    # Should fuse the add and transpose
+    opt = result.expr.optimize(fuse=True)
+    assert_eq(da.Array(opt), expected)

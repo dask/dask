@@ -141,6 +141,13 @@ class Blockwise(ArrayExpr):
             idx_to_block[idx] = 0
         return idx_to_block
 
+    def _dep_block_id(self, arr, ind, idx_to_block: dict) -> tuple[int, ...]:
+        """Compute block_id for a dependency, applying modulo for broadcasting."""
+        return tuple(
+            idx_to_block[i] % arr.numblocks[dim]
+            for dim, i in enumerate(ind)
+        )
+
     def _task(self, key, block_id: tuple[int, ...]):
         """Generate task for a specific output block."""
         from dask._task_spec import Task, TaskRef
@@ -159,7 +166,7 @@ class Blockwise(ArrayExpr):
                 input_block_id = tuple(idx_to_block[i] for i in ind)
                 args.append(arr[input_block_id])
             else:
-                input_block_id = tuple(idx_to_block[i] for i in ind)
+                input_block_id = self._dep_block_id(arr, ind, idx_to_block)
                 args.append(TaskRef((arr._name, *input_block_id)))
 
         return Task(key, self.func, *args, **self.kwargs)
@@ -167,12 +174,26 @@ class Blockwise(ArrayExpr):
     def _input_block_id(self, dep, block_id: tuple[int, ...]) -> tuple[int, ...]:
         """Map output block_id to input block_id for a dependency."""
         idx_to_block = self._idx_to_block(block_id)
-
         for arr, ind in toolz.partition(2, self.args):
             if ind is not None and hasattr(arr, '_name') and arr._name == dep._name:
-                return tuple(idx_to_block[i] for i in ind)
-
+                return self._dep_block_id(arr, ind, idx_to_block)
         return block_id
+
+    def _all_input_block_ids(self, block_id: tuple[int, ...]) -> dict:
+        """Return all input block_ids for dependencies.
+
+        Handles case where same dependency appears multiple times with
+        different index mappings (e.g., da.dot(x, x)).
+        """
+        idx_to_block = self._idx_to_block(block_id)
+        result = {}
+        for arr, ind in toolz.partition(2, self.args):
+            if ind is not None and hasattr(arr, '_name'):
+                dep_block_id = self._dep_block_id(arr, ind, idx_to_block)
+                if arr._name not in result:
+                    result[arr._name] = []
+                result[arr._name].append(dep_block_id)
+        return result
 
     def __dask_tokenize__(self):
         if not self._determ_token:
@@ -302,6 +323,26 @@ class Elemwise(Blockwise):
     @property
     def elemwise_args(self):
         return self.operands[len(self._parameters) :]
+
+    def dependencies(self):
+        """Return expression dependencies.
+
+        When where is True (the default), 'out' is not actually used in
+        the computation - it's just a placeholder for _handle_out to
+        replace the expression. Exclude it from dependencies to avoid
+        fusion issues, UNLESS out is also an input (e.g., np.sin(x, out=x)).
+        """
+        deps = super().dependencies()
+        if self.where is True and self.out is not None:
+            out_name = getattr(self.out, '_name', None)
+            # Only exclude if out is not also an input argument
+            input_names = {
+                getattr(a, '_name', None) for a in self.elemwise_args
+                if hasattr(a, '_name')
+            }
+            if out_name and out_name not in input_names:
+                deps = [d for d in deps if d._name != out_name]
+        return deps
 
     @property
     def out_ind(self):
@@ -534,12 +575,62 @@ def is_fusable_blockwise(expr):
 is_fusable_elemwise = is_fusable_blockwise
 
 
+def _symbolic_mapping(expr, parent_mapping):
+    """Compute symbolic block mapping from root dimensions to dependency dimensions.
+
+    A symbolic mapping is a tuple where each element indicates which root output
+    dimension maps to that position. For example:
+    - (0, 1) means block = (root_dim_0, root_dim_1)
+    - (2, 1) means block = (root_dim_2, root_dim_1)
+
+    This allows detecting conflicts symbolically without sampling.
+    """
+    from dask.array._array_expr.manipulation._transpose import Transpose
+
+    result = {}
+
+    if isinstance(expr, Transpose):
+        # Transpose permutes dimensions: output[i] comes from input[axes[i]]
+        # So if parent has mapping M, our input has mapping M permuted by inverse_axes
+        inv = expr._inverse_axes
+        dep_mapping = tuple(parent_mapping[inv[i]] for i in range(len(inv)))
+        dep = expr.array
+        if hasattr(dep, '_name'):
+            result[dep._name] = [dep_mapping]
+    elif hasattr(expr, 'out_ind') and hasattr(expr, 'args'):
+        # Blockwise: each arg has indices that select from out_ind
+        idx_to_parent = {}
+        for dim, idx in enumerate(expr.out_ind):
+            idx_to_parent[idx] = parent_mapping[dim] if dim < len(parent_mapping) else dim
+
+        for arr, ind in toolz.partition(2, expr.args):
+            if ind is not None and hasattr(arr, '_name'):
+                # Map each position in ind to root dimension
+                dep_mapping = tuple(idx_to_parent.get(i, i) for i in ind)
+                if arr._name not in result:
+                    result[arr._name] = []
+                result[arr._name].append(dep_mapping)
+    else:
+        # For other expression types (e.g., Random), use identity mapping
+        # through dependencies - each dep gets the same mapping as parent
+        for dep in expr.dependencies():
+            if hasattr(dep, '_name') and dep.ndim == len(parent_mapping):
+                result[dep._name] = [parent_mapping]
+
+    return result
+
+
 def _remove_conflicting_exprs(group):
     """Remove expressions accessed with conflicting block patterns.
 
     When the same expression is accessed via multiple paths with different
     index transformations (e.g., a + a.T), we can't fuse it - each output
     block would need different source blocks from the same expression.
+
+    Uses symbolic analysis: traces how root output dimensions map to each
+    expression's block dimensions through the expression tree. If the same
+    expression is reached via paths with different symbolic mappings, it's
+    a conflict.
 
     Also removes expressions that become unreachable after conflict removal.
     """
@@ -549,25 +640,30 @@ def _remove_conflicting_exprs(group):
     expr_names = {e._name for e in group}
     expr_map = {e._name: e for e in group}
     root = group[0]
-    # Use non-diagonal sample to detect transpose conflicts
-    sample_block_id = tuple(range(root.ndim))
 
-    block_ids = {root._name: sample_block_id}
+    # Symbolic mapping: tuple of root dimension indices for each expression
+    # (0, 1) means "root dim 0 for position 0, root dim 1 for position 1"
+    symbolic_mappings = {root._name: tuple(range(root.ndim))}
     conflicts = set()
 
     for expr in group:
-        if expr._name not in block_ids:
+        if expr._name not in symbolic_mappings:
             continue
-        my_block_id = block_ids[expr._name]
+        my_mapping = symbolic_mappings[expr._name]
 
-        for dep in expr.dependencies():
-            if dep._name in expr_names:
-                dep_block_id = expr._input_block_id(dep, my_block_id)
-                if dep._name in block_ids:
-                    if block_ids[dep._name] != dep_block_id:
-                        conflicts.add(dep._name)
+        # Get symbolic mappings for all dependencies
+        dep_mappings = _symbolic_mapping(expr, my_mapping)
+
+        for dep_name, mappings_list in dep_mappings.items():
+            if dep_name not in expr_names:
+                continue
+
+            for dep_mapping in mappings_list:
+                if dep_name in symbolic_mappings:
+                    if symbolic_mappings[dep_name] != dep_mapping:
+                        conflicts.add(dep_name)
                 else:
-                    block_ids[dep._name] = dep_block_id
+                    symbolic_mappings[dep_name] = dep_mapping
 
     if not conflicts:
         return group

@@ -58,6 +58,31 @@ class ArrayExpr(SingletonExpr):
     # Override to True in subclasses that support fusion (Blockwise, Random, etc.)
     _is_blockwise_fusable = False
 
+    def _all_input_block_ids(self, block_id):
+        """Return all input block_ids for dependencies.
+
+        Returns a dict mapping dep._name to a list of block_ids.
+        This handles the case where the same dependency is used multiple
+        times with different index mappings (e.g., da.dot(x, x)).
+
+        Subclasses like Blockwise override this to iterate over all args.
+        """
+        result = {}
+        for dep in self.dependencies():
+            dep_block_id = self._input_block_id(dep, block_id)
+            if dep._name not in result:
+                result[dep._name] = []
+            result[dep._name].append(dep_block_id)
+        return result
+
+    def _input_block_id(self, dep, block_id):
+        """Map output block_id to input block_id for a dependency.
+
+        Default implementation returns the same block_id.
+        Subclasses override for transformations like transpose.
+        """
+        return block_id
+
     # Pre-computed set of cached_property names for efficient serialization
     _cached_property_names: frozenset[str] = frozenset()
 
