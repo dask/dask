@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 import toolz
 
+from dask import config
 from dask._collections import new_collection
 from dask.array import chunk
 from dask.array.chunk_types import is_valid_chunk_type
@@ -14,7 +15,13 @@ from dask.array._array_expr.manipulation._transpose import Transpose
 from dask.array._array_expr._expr import ArrayExpr
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
-from dask.utils import derived_from, has_keyword, key_split
+from dask.utils import derived_from, format_bytes, has_keyword, key_split, typename
+from dask.widgets import get_template
+
+try:
+    ARRAY_TEMPLATE = get_template("array.html.j2")
+except ImportError:
+    ARRAY_TEMPLATE = None
 
 # Import core conversion functions from their module
 from dask.array._array_expr.core._conversion import (
@@ -273,6 +280,33 @@ class Array(DaskMethodsMixin):
                 type(self._meta).__module__.split(".")[0],
                 type(self._meta).__name__,
             )
+        )
+
+    def _repr_html_(self):
+        if ARRAY_TEMPLATE is None:
+            return repr(self)
+
+        try:
+            grid = self.to_svg(size=config.get("array.svg.size", 120))
+        except NotImplementedError:
+            grid = ""
+
+        if "sparse" in typename(type(self._meta)):
+            nbytes = None
+            cbytes = None
+        elif not math.isnan(self.nbytes):
+            nbytes = format_bytes(self.nbytes)
+            cbytes = format_bytes(math.prod(self.chunksize) * self.dtype.itemsize)
+        else:
+            nbytes = "unknown"
+            cbytes = "unknown"
+
+        return ARRAY_TEMPLATE.render(
+            array=self,
+            grid=grid,
+            nbytes=nbytes,
+            cbytes=cbytes,
+            layers="1 expression",
         )
 
     def __bool__(self):
