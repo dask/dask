@@ -75,11 +75,13 @@ def _get_partial(key, dct, default):
 
 
 def _finalize_args_collections(args, collections):
-    old_keys = [c.__dask_keys__()[0] for c in collections]
+    # Arrays return nested keys [[key]], flatten to get single key
+    old_keys = [list(flatten(c.__dask_keys__()))[0] for c in collections]
     from dask._task_spec import cull
 
     collections = _ExprSequence(*collections).optimize()
-    new_keys = collections.__dask_keys__()
+    # Flatten nested keys from arrays and wrap in list for uniform structure
+    new_keys = [list(flatten(k)) for k in collections.__dask_keys__()]
     dsk = convert_legacy_graph(collections.__dask_graph__())
     annots = collections.__dask_annotations__()
     outcollections = []
@@ -191,7 +193,8 @@ def unpack_collections(expr, _return_collections=True):
             return unpack_collections(Delayed(keys[0], dsk))
         else:
             expr = collections_to_expr(expr).finalize_compute()
-            (name,) = expr.__dask_keys__()
+            # Arrays return nested keys [[key]], flatten to get single key
+            (name,) = list(flatten(expr.__dask_keys__()))
             return TaskRef(name), (expr,)
 
     if type(expr) is type(iter(list())):
@@ -345,7 +348,8 @@ def to_task_dask(expr):
         expr = collections_to_expr(expr)
         expr = FinalizeCompute(expr)
         expr = expr.optimize()
-        (name,) = expr.__dask_keys__()
+        # Arrays return nested keys [[key]], flatten to get single key
+        (name,) = list(flatten(expr.__dask_keys__()))
         return name, expr.__dask_graph__()
 
     if type(expr) is type(iter(list())):
