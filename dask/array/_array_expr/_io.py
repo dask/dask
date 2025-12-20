@@ -184,6 +184,7 @@ class FromArray(IO):
         "asarray",
         "fancy",
         "_name_override",
+        "_region",  # Slice region for pushdown (tuple of slices or None)
     ]
     _defaults = {
         "_chunks": "auto",
@@ -194,6 +195,7 @@ class FromArray(IO):
         "fancy": True,
         "lock": False,
         "_name_override": None,
+        "_region": None,
     }
     # FromArray reads static data, so rechunk can be pushed in safely
     _can_rechunk_pushdown = True
@@ -207,10 +209,22 @@ class FromArray(IO):
         return f"{prefix}-{self.deterministic_token}"
 
     @functools.cached_property
+    def _effective_shape(self):
+        """Shape after applying region slice."""
+        region = self.operand("_region")
+        if region is None:
+            return self.array.shape
+        # Compute shape from region slices
+        return tuple(
+            len(range(*slc.indices(dim_size)))
+            for slc, dim_size in zip(region, self.array.shape)
+        )
+
+    @functools.cached_property
     def chunks(self):
         # Normalize chunks lazily - keeps repr compact with user-provided chunks
         return normalize_chunks(
-            self.operand("_chunks"), self.array.shape, dtype=self.array.dtype
+            self.operand("_chunks"), self._effective_shape, dtype=self.array.dtype
         )
 
     @functools.cached_property
@@ -228,23 +242,43 @@ class FromArray(IO):
 
     def _layer(self):
         lock = self.operand("lock")
+        region = self.operand("_region")
         # Note: lock=True is already normalized to SerializableLock() in from_array()
 
         is_ndarray = type(self.array) in (np.ndarray, np.ma.core.MaskedArray)
         is_single_block = all(len(c) == 1 for c in self.chunks)
+
+        # Get slices for chunks (based on effective shape after region)
+        slices = slices_from_chunks(self.chunks)
+
+        # If region is set, offset all slices by the region start
+        if region is not None:
+            region_starts = tuple(
+                slc.indices(dim_size)[0]
+                for slc, dim_size in zip(region, self.array.shape)
+            )
+            slices = [
+                tuple(
+                    slice(s.start + offset, s.stop + offset, s.step)
+                    for s, offset in zip(slc, region_starts)
+                )
+                for slc in slices
+            ]
+
         # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
         # because np.matrix is a subclass of np.ndarray.
         if is_ndarray and not is_single_block and not lock:
             # eagerly slice numpy arrays to prevent memory blowup
             # GH5367, GH5601
-            slices = slices_from_chunks(self.chunks)
             keys = product([self._name], *(range(len(bds)) for bds in self.chunks))
             values = [self.array[slc] for slc in slices]
             dsk = dict(zip(keys, values))
         elif is_ndarray and is_single_block and not lock:
-            # No slicing needed, but copy to avoid memory aliasing issues
-            # when rechunk pushdown creates single-chunk from multi-chunk
-            dsk = {(self._name,) + (0,) * self.array.ndim: self.array.copy()}
+            # Single block - slice with region (or full array) and copy
+            if region is not None:
+                dsk = {(self._name,) + (0,) * self.array.ndim: self.array[region].copy()}
+            else:
+                dsk = {(self._name,) + (0,) * self.array.ndim: self.array.copy()}
         else:
             getitem = self.operand("getitem")
             if getitem is None:
@@ -253,17 +287,29 @@ class FromArray(IO):
                 else:
                     getitem = getter_nofancy
 
-            dsk = graph_from_arraylike(
-                self.array,
-                chunks=self.chunks,
-                shape=self.array.shape,
-                name=self._name,
-                lock=lock,
-                getitem=getitem,
-                asarray=self.asarray_arg,
-                inline_array=self.inline_array,
-                dtype=self.array.dtype,
-            )
+            # For non-numpy arrays with region, we need custom graph generation
+            # to apply the offset slices
+            if region is not None:
+                keys = list(product([self._name], *(range(len(bds)) for bds in self.chunks)))
+                if self.inline_array:
+                    dsk = {k: (getitem, self.array, slc, self.asarray_arg, lock) for k, slc in zip(keys, slices)}
+                else:
+                    # Put array in graph once, reference by key
+                    arr_key = ("array-" + self._name,)
+                    dsk = {arr_key: self.array}
+                    dsk.update({k: (getitem, arr_key, slc, self.asarray_arg, lock) for k, slc in zip(keys, slices)})
+            else:
+                dsk = graph_from_arraylike(
+                    self.array,
+                    chunks=self.chunks,
+                    shape=self.array.shape,
+                    name=self._name,
+                    lock=lock,
+                    getitem=getitem,
+                    asarray=self.asarray_arg,
+                    inline_array=self.inline_array,
+                    dtype=self.array.dtype,
+                )
         return dict(dsk)  # this comes as a legacy HLG for now
 
     def __str__(self):

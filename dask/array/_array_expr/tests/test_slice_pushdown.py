@@ -149,3 +149,92 @@ def test_slice_then_reduction():
     arr = np.arange(100).reshape(10, 10)
     x = da.from_array(arr, chunks=(2, 2))
     assert_eq(x[0:4, 0:4].sum(), arr[0:4, 0:4].sum())
+
+
+def test_region_deferred_slice():
+    """Slice pushdown uses _region for deferred slicing (not eager read)."""
+    arr = np.arange(10000).reshape(100, 100)
+    x = da.from_array(arr, chunks=(10, 10))
+    # Use a slice that fits within a single chunk
+    y = x[12:18, 34:39]
+
+    opt = y.expr.optimize()
+
+    # Should use _region parameter, not slice the source eagerly
+    assert opt.operand("_region") == (slice(12, 18, None), slice(34, 39, None))
+    # Source array should still be the full array
+    assert opt.array.shape == (100, 100)
+    # Chunks should be for the sliced region (6x5)
+    assert opt.chunks == ((6,), (5,))
+
+    # Verify correctness
+    assert_eq(y, arr[12:18, 34:39])
+
+
+def test_region_single_chunk():
+    """Slice within a single chunk produces one task with direct slice."""
+    arr = np.arange(10000 * 10000).reshape(10000, 10000)
+    x = da.from_array(arr, chunks=(1000, 1000))
+    # Small slice within a single chunk
+    y = x[1500:1550, 2300:2350]
+
+    opt = y.expr.optimize()
+    graph = dict(opt.__dask_graph__())
+
+    # Should be single task (slice fits within one chunk)
+    task_keys = [k for k in graph if isinstance(k, tuple) and len(k) == 3]
+    assert len(task_keys) == 1
+
+    # The slice should be direct (1500:1550, 2300:2350), not via 1000x1000 chunk
+    graph_str = str(graph)
+    assert "1000" not in graph_str, "Should slice directly, not via full chunk"
+
+    # Verify correctness
+    assert_eq(y, arr[1500:1550, 2300:2350])
+
+
+def test_region_multiple_chunks():
+    """Slice spanning multiple chunks still produces multiple tasks."""
+    arr = np.arange(10000).reshape(100, 100)
+    x = da.from_array(arr, chunks=(10, 10))
+    # Slice spanning 2x2 chunks: 15-25 spans chunks 1,2 in first dim
+    # 35-45 spans chunks 3,4 in second dim
+    y = x[15:25, 35:45]
+
+    opt = y.expr.optimize()
+    graph = dict(opt.__dask_graph__())
+
+    # Should be 2x2=4 tasks (slice spans multiple chunks)
+    task_keys = [k for k in graph if isinstance(k, tuple) and len(k) == 3]
+    assert len(task_keys) == 4
+
+    # Verify correctness
+    assert_eq(y, arr[15:25, 35:45])
+
+
+def test_region_zarr_deferred(tmp_path):
+    """Zarr slicing is deferred - graph contains zarr array, not numpy data."""
+    zarr = pytest.importorskip("zarr")
+    # Create zarr array
+    zarr_path = tmp_path / "test.zarr"
+    z = zarr.open(str(zarr_path), mode="w", shape=(10000, 10000), dtype="float64", chunks=(1000, 1000))
+    z[1500:1550, 2300:2350] = np.arange(2500).reshape(50, 50)
+
+    x = da.from_zarr(str(zarr_path))
+    y = x[1500:1550, 2300:2350]
+
+    opt = y.expr.optimize()
+    graph = dict(opt.__dask_graph__())
+
+    # Should have zarr array in graph, not numpy data
+    zarr_arrays = [v for v in graph.values() if isinstance(v, zarr.Array)]
+    numpy_arrays = [v for v in graph.values() if isinstance(v, np.ndarray)]
+
+    assert len(zarr_arrays) == 1, "Graph should contain the zarr array"
+    assert len(numpy_arrays) == 0, "Graph should not contain numpy arrays (data not loaded)"
+
+    # The zarr array in graph should be the full array, not sliced
+    assert zarr_arrays[0].shape == (10000, 10000)
+
+    # Verify correctness
+    assert_eq(y, z[1500:1550, 2300:2350])
