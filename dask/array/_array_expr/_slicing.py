@@ -556,11 +556,11 @@ class SliceSlicesIntegers(Slice):
         """Push slice into IO expression by setting a region (deferred slice)."""
         from dask.array._array_expr._io import FromArray
 
-        # Only handle simple slices (no integers, no fancy indexing)
+        # Only handle slices and integers (no None/newaxis, no fancy indexing)
         index = self.index
-        if any(isinstance(idx, Integral) or idx is None for idx in index):
+        if any(idx is None for idx in index):
             return None
-        if any(not isinstance(idx, slice) for idx in index):
+        if any(not isinstance(idx, (slice, Integral)) for idx in index):
             return None
 
         io_expr = self.array
@@ -574,32 +574,37 @@ class SliceSlicesIntegers(Slice):
             # Pad index to full dimensions
             full_index = index + (slice(None),) * (source.ndim - len(index))
 
+            # Check if any integers are present - they need special handling
+            has_integers = any(isinstance(idx, Integral) for idx in full_index)
+
+            # Convert integers to 1-element slices for region calculation
+            region_index = tuple(
+                slice(idx, idx + 1) if isinstance(idx, Integral) else idx
+                for idx in full_index
+            )
+
             # Compute new region by combining with existing region
             if old_region is not None:
                 # Compose slices: new slice is relative to old region
                 new_region = tuple(
                     _compose_slices(old_slc, new_slc, dim_size)
                     for old_slc, new_slc, dim_size in zip(
-                        old_region, full_index, source.shape
+                        old_region, region_index, source.shape
                     )
                 )
             else:
-                new_region = full_index
+                new_region = region_index
 
             # Compute new chunks - use same chunk sizes but clipped to new shape
-            new_shape = tuple(
-                len(range(*slc.indices(dim_size)))
-                for slc, dim_size in zip(new_region, source.shape)
-            )
             new_chunks = tuple(
                 _compute_sliced_chunks(dim_chunks, slc, dim_size)
                 for dim_chunks, slc, dim_size in zip(
-                    old_chunks, full_index, io_expr._effective_shape
+                    old_chunks, region_index, io_expr._effective_shape
                 )
             )
 
             # Create new FromArray with region (deferred slice)
-            return FromArray(
+            new_io = FromArray(
                 source,  # Keep original source, don't slice
                 new_chunks,
                 lock=io_expr.operand("lock"),
@@ -611,6 +616,17 @@ class SliceSlicesIntegers(Slice):
                 _name_override=io_expr.operand("_name_override"),
                 _region=new_region,
             )
+
+            # If integers were present, apply them to extract elements
+            if has_integers:
+                # Build index with 0s for integer dims (they're now size-1)
+                extract_index = tuple(
+                    0 if isinstance(idx, Integral) else slice(None)
+                    for idx in full_index
+                )
+                return SliceSlicesIntegers(new_io, extract_index, False)
+
+            return new_io
 
         return None
 

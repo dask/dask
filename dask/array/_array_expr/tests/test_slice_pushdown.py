@@ -238,3 +238,28 @@ def test_region_zarr_deferred(tmp_path):
 
     # Verify correctness
     assert_eq(y, z[1500:1550, 2300:2350])
+
+
+def test_integer_indexing_pushdown():
+    """Integer indexing uses region pushdown to minimize data loading."""
+    arr = np.arange(100).reshape(10, 10)
+    x = da.from_array(arr, chunks=(5, 5))
+
+    # Pure integer indexing - should be 2 tasks (FromArray + extract)
+    y = x[3, 7]
+    opt = y.optimize()
+    assert len(opt.__dask_graph__()) == 2
+
+    # The inner FromArray should have region centered on (3, 7)
+    from_array_expr = opt.expr.array
+    assert from_array_expr.operand("_region") == (slice(3, 4), slice(7, 8))
+    assert from_array_expr.array.shape == (10, 10)  # Original array unchanged
+
+    assert_eq(y, arr[3, 7])
+
+    # Mixed slice + integer
+    y = x[:3, 5]
+    assert_eq(y, arr[:3, 5])
+
+    y = x[5, 2:8]
+    assert_eq(y, arr[5, 2:8])
