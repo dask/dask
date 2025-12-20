@@ -8,8 +8,6 @@ pytest.importorskip("numpy")
 
 DA_EXPORTED_SUBMODULES = {"backends", "fft", "lib", "linalg", "ma", "overlap", "random"}
 
-import dask.array as da
-
 
 def test_api():
     """Tests that `dask.array.__all__` is correct"""

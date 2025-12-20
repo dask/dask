@@ -39,9 +39,13 @@ def hstack(tup, allow_unknown_chunksizes=False):
         )
 
     if all(x.ndim == 1 for x in tup):
-        return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
+        return concatenate(
+            tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes
+        )
     else:
-        return concatenate(tup, axis=1, allow_unknown_chunksizes=allow_unknown_chunksizes)
+        return concatenate(
+            tup, axis=1, allow_unknown_chunksizes=allow_unknown_chunksizes
+        )
 
 
 def dstack(tup, allow_unknown_chunksizes=False):

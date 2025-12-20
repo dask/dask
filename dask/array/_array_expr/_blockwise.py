@@ -8,9 +8,9 @@ import numpy as np
 import tlz as toolz
 
 from dask import is_dask_collection
+from dask._task_spec import Task, TaskRef
 from dask.array._array_expr._expr import ArrayExpr, unify_chunks_expr
 from dask.array._array_expr._utils import compute_meta
-from dask._task_spec import Task, TaskRef
 from dask.array.core import (
     _elemwise_handle_where,
     _enforce_dtype,
@@ -90,7 +90,9 @@ class Blockwise(ArrayExpr):
                 # compute_meta failed (e.g., function has assertions on shapes)
                 # Fall back to a default meta based on the explicitly provided dtype
                 # (use operand to avoid recursion since dtype property may depend on _meta)
-                meta = meta_from_array(None, ndim=self.ndim, dtype=self.operand("dtype"))
+                meta = meta_from_array(
+                    None, ndim=self.ndim, dtype=self.operand("dtype")
+                )
             return meta
 
     @cached_property
@@ -156,10 +158,7 @@ class Blockwise(ArrayExpr):
 
     def _dep_block_id(self, arr, ind, idx_to_block: dict) -> tuple[int, ...]:
         """Compute block_id for a dependency, applying modulo for broadcasting."""
-        return tuple(
-            idx_to_block[i] % arr.numblocks[dim]
-            for dim, i in enumerate(ind)
-        )
+        return tuple(idx_to_block[i] % arr.numblocks[dim] for dim, i in enumerate(ind))
 
     def _task(self, key, block_id: tuple[int, ...]):
         """Generate task for a specific output block."""
@@ -167,7 +166,9 @@ class Blockwise(ArrayExpr):
         from dask.layers import ArrayBlockwiseDep
 
         if self.concatenate:
-            raise NotImplementedError("Blockwise with concatenate not supported for fusion")
+            raise NotImplementedError(
+                "Blockwise with concatenate not supported for fusion"
+            )
 
         idx_to_block = self._idx_to_block(block_id)
 
@@ -188,7 +189,7 @@ class Blockwise(ArrayExpr):
         """Map output block_id to input block_id for a dependency."""
         idx_to_block = self._idx_to_block(block_id)
         for arr, ind in toolz.partition(2, self.args):
-            if ind is not None and hasattr(arr, '_name') and arr._name == dep._name:
+            if ind is not None and hasattr(arr, "_name") and arr._name == dep._name:
                 return self._dep_block_id(arr, ind, idx_to_block)
         return block_id
 
@@ -201,7 +202,7 @@ class Blockwise(ArrayExpr):
         idx_to_block = self._idx_to_block(block_id)
         result = {}
         for arr, ind in toolz.partition(2, self.args):
-            if ind is not None and hasattr(arr, '_name'):
+            if ind is not None and hasattr(arr, "_name"):
                 dep_block_id = self._dep_block_id(arr, ind, idx_to_block)
                 if arr._name not in result:
                     result[arr._name] = []
@@ -354,11 +355,12 @@ class Elemwise(Blockwise):
         """
         deps = super().dependencies()
         if self.where is True and self.out is not None:
-            out_name = getattr(self.out, '_name', None)
+            out_name = getattr(self.out, "_name", None)
             # Only exclude if out is not also an input argument
             input_names = {
-                getattr(a, '_name', None) for a in self.elemwise_args
-                if hasattr(a, '_name')
+                getattr(a, "_name", None)
+                for a in self.elemwise_args
+                if hasattr(a, "_name")
             }
             if out_name and out_name not in input_names:
                 deps = [d for d in deps if d._name != out_name]
@@ -559,7 +561,9 @@ class Elemwise(Blockwise):
         return self._broadcast_block_id(dep, block_id)
 
 
-def _broadcast_block_id(numblocks: tuple[int, ...], block_id: tuple[int, ...]) -> tuple[int, ...]:
+def _broadcast_block_id(
+    numblocks: tuple[int, ...], block_id: tuple[int, ...]
+) -> tuple[int, ...]:
     """Adjust block_id for broadcasting.
 
     When an array has fewer dimensions or single-block dimensions,
@@ -615,16 +619,18 @@ def _symbolic_mapping(expr, parent_mapping):
         inv = expr._inverse_axes
         dep_mapping = tuple(parent_mapping[inv[i]] for i in range(len(inv)))
         dep = expr.array
-        if hasattr(dep, '_name'):
+        if hasattr(dep, "_name"):
             result[dep._name] = [dep_mapping]
-    elif hasattr(expr, 'out_ind') and hasattr(expr, 'args'):
+    elif hasattr(expr, "out_ind") and hasattr(expr, "args"):
         # Blockwise: each arg has indices that select from out_ind
         idx_to_parent = {}
         for dim, idx in enumerate(expr.out_ind):
-            idx_to_parent[idx] = parent_mapping[dim] if dim < len(parent_mapping) else dim
+            idx_to_parent[idx] = (
+                parent_mapping[dim] if dim < len(parent_mapping) else dim
+            )
 
         for arr, ind in toolz.partition(2, expr.args):
-            if ind is not None and hasattr(arr, '_name'):
+            if ind is not None and hasattr(arr, "_name"):
                 # Map each position in ind to root dimension
                 dep_mapping = tuple(idx_to_parent.get(i, i) for i in ind)
                 if arr._name not in result:
@@ -634,7 +640,7 @@ def _symbolic_mapping(expr, parent_mapping):
         # For other expression types (e.g., Random), use identity mapping
         # through dependencies - each dep gets the same mapping as parent
         for dep in expr.dependencies():
-            if hasattr(dep, '_name') and dep.ndim == len(parent_mapping):
+            if hasattr(dep, "_name") and dep.ndim == len(parent_mapping):
                 result[dep._name] = [parent_mapping]
 
     return result
@@ -894,4 +900,3 @@ class FusedBlockwise(ArrayExpr):
     @cached_property
     def _name(self):
         return f"{self}-{self.deterministic_token}"
-

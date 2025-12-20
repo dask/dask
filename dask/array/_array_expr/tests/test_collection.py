@@ -9,8 +9,6 @@ import dask.array as da
 from dask import is_dask_collection
 from dask.array import Array, assert_eq
 from dask.array._array_expr._rechunk import Rechunk
-from dask.array._array_expr._slicing import Slice
-from dask.array._array_expr.manipulation._transpose import Transpose
 
 
 @pytest.fixture()
@@ -165,7 +163,9 @@ def test_transpose_optimize():
 
     # Explicit axes composition
     c = da.from_array(np.random.random((3, 4, 5)), chunks=(1, 2, 3))
-    d = c.transpose((2, 0, 1)).transpose((1, 2, 0))  # Should compose to (0, 1, 2) = identity
+    d = c.transpose((2, 0, 1)).transpose(
+        (1, 2, 0)
+    )  # Should compose to (0, 1, 2) = identity
     assert_eq(d, c)
 
 
@@ -442,8 +442,8 @@ def test_rechunk_transpose_pushdown_to_io():
 
 def test_rechunk_elemwise_pushdown_to_io():
     """Rechunk after elemwise should push through to IO inputs."""
-    from dask.array._array_expr._io import FromArray
     from dask.array._array_expr._blockwise import Elemwise
+    from dask.array._array_expr._io import FromArray
 
     a = np.random.random((10, 10))
     b = da.from_array(a, chunks=(4, 4))
@@ -536,7 +536,12 @@ def test_fusion_elemwise_with_out_and_where_array():
 
     # Should compute correctly: only positions where=True get the sum
     expected = np.zeros(4, dtype=int)
-    np.add(np.arange(4), np.arange(4, 8), where=np.array([True, False, True, False]), out=expected)
+    np.add(
+        np.arange(4),
+        np.arange(4, 8),
+        where=np.array([True, False, True, False]),
+        out=expected,
+    )
     assert_eq(result, expected)
 
 

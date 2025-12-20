@@ -56,7 +56,12 @@ from dask.array.core import (
 from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_210
 from dask.array.reshape import _not_implemented_message
 from dask.array.utils import assert_eq, same_keys
-from dask.base import collections_to_expr, compute_as_if_collection, is_dask_collection, tokenize
+from dask.base import (
+    collections_to_expr,
+    compute_as_if_collection,
+    is_dask_collection,
+    tokenize,
+)
 from dask.blockwise import (
     _make_blockwise_graph,
     broadcast_dimensions,
@@ -73,6 +78,7 @@ try:
 except ModuleNotFoundError:
     futures_of = lambda *args, **kwargs: []
 
+
 def skip_if_no_sparray():
     try:
         import scipy
@@ -88,7 +94,7 @@ def assert_has_persisted_data(arr):
     has_persisted_data = False
     if futures_of(arr):
         has_persisted_data = True
-    elif hasattr(arr.dask, 'layers'):
+    elif hasattr(arr.dask, "layers"):
         # Legacy HLG path
         for layer in arr.dask.layers.values():
             if isinstance(layer, MaterializedLayer) and any(
@@ -1955,7 +1961,9 @@ def test_map_blocks_unique_name_new_axis():
 
 
 @pytest.mark.parametrize("func", [lambda x, y: x + y, lambda x, y, block_info: x + y])
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_map_blocks_optimize_blockwise(func):
     # Check that map_blocks layers can merge with elementwise layers
     base = [da.full((1,), i, chunks=1) for i in range(4)]
@@ -1989,7 +1997,9 @@ def test_repr_meta():
     assert "chunktype=sparse.COO" in repr(s)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_repr_html_array_highlevelgraph():
     pytest.importorskip("jinja2")
     x = da.ones((9, 9), chunks=(3, 3)).T[0:4, 0:4]
@@ -3037,14 +3047,18 @@ def test_from_array_inline():
     a = np.array([1, 2, 3]).view(MyArray)
     dsk = dict(da.from_array(a, name="my-array", inline_array=False).dask)
     # Find the original-* key (may include token suffix in array-expr mode)
-    original_keys = [k for k in dsk if isinstance(k, str) and k.startswith("original-my-array")]
+    original_keys = [
+        k for k in dsk if isinstance(k, str) and k.startswith("original-my-array")
+    ]
     assert len(original_keys) == 1
     original_key = original_keys[0]
     assert dsk[original_key] is not a
     assert_eq(dsk[original_key], a)
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
-    assert not any(isinstance(k, str) and k.startswith("original-my-array") for k in dsk)
+    assert not any(
+        isinstance(k, str) and k.startswith("original-my-array") for k in dsk
+    )
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
@@ -3221,7 +3235,9 @@ def test_concatenate3_2():
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_map_blocks3():
     x = np.arange(10)
     y = np.arange(10) * 2
@@ -3783,7 +3799,9 @@ def test_array_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_dont_fuse_outputs():
     dsk = {("x", 0): np.array([1, 2]), ("x", 1): (inc, ("x", 0))}
 
@@ -3791,7 +3809,9 @@ def test_dont_fuse_outputs():
     assert_eq(a, np.array([1, 2, 2, 3], dtype=a.dtype))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_dont_dealias_outputs():
     dsk = {
         ("x", 0, 0): np.ones((2, 2)),
@@ -3824,7 +3844,9 @@ def test_to_delayed():
     assert a.compute() == s
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_to_delayed_optimize_graph():
     x = da.ones((4, 4), chunks=(2, 2))
     y = x[1:][1:][1:][:, 1:][:, 1:][:, 1:]
@@ -4105,7 +4127,9 @@ def test_uneven_chunks_blockwise():
     assert_eq(z, x.compute().dot(y))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_warn_bad_rechunking():
     x = da.ones((20, 20), chunks=(20, 1))
     y = da.ones((20, 20), chunks=(1, 20))
@@ -4124,7 +4148,11 @@ def test_concatenate_stack_dont_warn():
     assert not record
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict, not HLG with validate()", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="array-expr returns dict, not HLG with validate()",
+    strict=False,
+)
 def test_map_blocks_delayed():
     x = da.ones((10, 10), chunks=(5, 5))
     y = np.ones((5, 5))
@@ -4820,7 +4848,9 @@ def test_elemwise_with_lists(chunks, other):
     assert_eq(x3, d3)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_constructor_plugin():
     L = []
     L2 = []
@@ -5970,7 +6000,9 @@ def test_map_blocks_dataframe():
     dd_assert_eq(s, s)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_dask_layers():
     a = da.ones(1)
     assert a.dask.layers.keys() == {a.name}
@@ -6175,6 +6207,7 @@ def test_blockwise_fusion():
         graph = dict(optimized.__dask_graph__())
         assert len(graph) == 3, f"Expected 3 tasks, got {len(graph)}"
     else:
+
         def custom_scheduler_get(dsk, keys, **kwargs):
             dsk = dsk.__dask_graph__()
             # HLG: 2 sum + 1 agg + 1 finalize = 4 tasks
@@ -6188,9 +6221,7 @@ def test_blockwise_fusion():
         dask.compute(a, scheduler=custom_scheduler_get)
 
 
-@pytest.mark.skipif(
-    not da._array_expr_enabled(), reason="array_expr not enabled"
-)
+@pytest.mark.skipif(not da._array_expr_enabled(), reason="array_expr not enabled")
 def test_tree_repr():
     """Test that tree_repr shows hierarchical expression structure."""
     x = da.ones((10, 10), chunks=5)

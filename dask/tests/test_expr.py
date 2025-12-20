@@ -155,8 +155,8 @@ def test_expr_sequence_fuse_array():
     da = pytest.importorskip("dask.array")
     if not da._array_expr_enabled():
         pytest.skip("array-expr not enabled")
-    from dask.base import collections_to_expr
     import dask
+    from dask.base import collections_to_expr
 
     # Independent chains - should fuse completely
     a = da.ones((10, 10), chunks=5)
@@ -186,8 +186,8 @@ def test_expr_sequence_fuse_shared_subexpression():
     da = pytest.importorskip("dask.array")
     if not da._array_expr_enabled():
         pytest.skip("array-expr not enabled")
-    from dask.base import collections_to_expr
     import dask
+    from dask.base import collections_to_expr
 
     # Shared subexpression case - x itself is a fused chain (ones * 2)
     x = da.ones((10, 10), chunks=5) * 2
@@ -222,8 +222,8 @@ def test_expr_sequence_fuse_dataframe():
     """Test that _ExprSequence.fuse() properly fuses dataframe expressions."""
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    from dask.base import collections_to_expr
     import dask
+    from dask.base import collections_to_expr
 
     # Independent chains
     df1 = dd.from_pandas(pd.DataFrame({"a": range(100)}), npartitions=4)

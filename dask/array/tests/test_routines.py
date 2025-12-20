@@ -19,7 +19,6 @@ from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_220, AxisError
 from dask.array.utils import allclose, assert_eq, same_keys
 
 
-
 def test_array():
     x = np.ones(5, dtype="i4")
     d = da.ones(5, chunks=3, dtype="i4")

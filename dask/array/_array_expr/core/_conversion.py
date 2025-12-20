@@ -10,7 +10,7 @@ import numpy as np
 
 from dask.array.core import getter_inline
 from dask.array.utils import meta_from_array
-from dask.base import is_dask_collection, tokenize
+from dask.base import is_dask_collection
 from dask.utils import SerializableLock
 
 
@@ -157,12 +157,11 @@ def from_array(
     """
     # Lazy imports to avoid circular dependencies
     from dask._collections import new_collection
-    from dask.array._array_expr._io import FromArray
-    from dask.array.chunk_types import is_valid_chunk_type
-    from dask.utils import is_arraylike
 
     # Import Array for isinstance check
     from dask.array._array_expr._collection import Array
+    from dask.array._array_expr._io import FromArray
+    from dask.utils import is_arraylike
 
     # Check for both array-expr and legacy dask arrays
     is_legacy = type(x).__module__ == "dask.array.core" and type(x).__name__ == "Array"

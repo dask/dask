@@ -41,7 +41,9 @@ def test_basic():
     assert all(isinstance(layer, Layer) for layer in hg.layers.values())
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG")
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
+)
 def test_keys_values_items_to_dict_methods():
     pytest.importorskip("numpy")
     a = da.ones(10, chunks=(5,))
@@ -152,7 +154,9 @@ def annot_map_fn(key):
     return key[1:]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG")
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
+)
 @pytest.mark.parametrize(
     "annotation",
     [
@@ -170,7 +174,9 @@ def test_single_annotation(annotation):
     assert not dask.get_annotations()
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG")
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
+)
 def test_multiple_annotations():
     pytest.importorskip("numpy")
     with dask.annotate(block_id=annot_map_fn):
@@ -232,7 +238,9 @@ def test_annotations_leak():
     assert result == [{"foo": 1}, {"foo": 2}]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG")
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
+)
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
     np = pytest.importorskip("numpy")

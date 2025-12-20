@@ -4293,8 +4293,8 @@ def common_blockdim(blockdims):
         all_lengths = {len(d) for d in blockdims}
         if len(all_lengths) > 1:
             raise ValueError(
-                f"Chunks are unknown or misaligned along dimensions with missing values.\n\n"
-                f"A possible solution:\n  x.compute_chunk_sizes()"
+                "Chunks are unknown or misaligned along dimensions with missing values.\n\n"
+                "A possible solution:\n  x.compute_chunk_sizes()"
             )
         return first(unknown_dims)
 
@@ -6269,7 +6269,14 @@ class BlockView:
                 hlg,
                 self._array._meta,
                 chunks,
-                list(flatten([(name,) + key for key in product(*(range(len(c)) for c in chunks))])),
+                list(
+                    flatten(
+                        [
+                            (name,) + key
+                            for key in product(*(range(len(c)) for c in chunks))
+                        ]
+                    )
+                ),
                 "blocks",
             )
         return Array(hlg, name, chunks, meta=self._array)

@@ -322,7 +322,7 @@ def slice_with_newaxes(x, index):
 
     if where_none:
         # Check if result has the expected attributes for SlicesWrapNone
-        if hasattr(x, 'index') and hasattr(x, 'allow_getitem_optimization'):
+        if hasattr(x, "index") and hasattr(x, "allow_getitem_optimization"):
             return SlicesWrapNone(
                 x.array, x.index, x.allow_getitem_optimization, where_none
             )
@@ -331,6 +331,7 @@ def slice_with_newaxes(x, index):
             # use expand_dims to add the new axes. Need to wrap in Array first.
             from dask.array._array_expr._collection import Array
             from dask.array._array_expr.manipulation._expand import expand_dims
+
             return expand_dims(Array(x), axis=tuple(where_none)).expr
 
     else:
@@ -573,7 +574,8 @@ class SliceSlicesIntegers(Slice):
         # Integer indices remove dimensions - compute new axes for remaining dims
         # Track which input dimensions remain (those not indexed by integers)
         remaining_input_dims = [
-            in_axis for out_axis, in_axis in enumerate(axes)
+            in_axis
+            for out_axis, in_axis in enumerate(axes)
             if not isinstance(full_index[out_axis], Integral)
         ]
 
@@ -606,7 +608,10 @@ class SliceSlicesIntegers(Slice):
         if any(not isinstance(idx, (slice, Integral)) for idx in index):
             return None
         # Don't push non-unit step slices - FromArray._layer doesn't handle them correctly
-        if any(isinstance(idx, slice) and idx.step is not None and idx.step != 1 for idx in index):
+        if any(
+            isinstance(idx, slice) and idx.step is not None and idx.step != 1
+            for idx in index
+        ):
             return None
 
         io_expr = self.array
@@ -869,9 +874,7 @@ class Squeeze(ArrayExpr):
             # Build squeeze axis for this chunk (relative to input chunk dimensions)
             chunk_axis = tuple(sorted(axis_set))
 
-            dsk[out_key] = Task(
-                out_key, np.squeeze, TaskRef(in_key), axis=chunk_axis
-            )
+            dsk[out_key] = Task(out_key, np.squeeze, TaskRef(in_key), axis=chunk_axis)
 
         return dsk
 
@@ -1228,7 +1231,7 @@ def concatenate_array_chunks_expr(x):
 
     Array-expr version of dask.array.slicing.concatenate_array_chunks.
     """
-    from dask.array._array_expr._collection import Array, new_collection
+    from dask.array._array_expr._collection import new_collection
 
     if x.npartitions == 1:
         return x
@@ -1270,7 +1273,6 @@ def slice_with_bool_dask_array(x, index):
         new_collection,
     )
     from dask.array._array_expr._expr import ChunksOverride
-    from dask.base import flatten
 
     out_index = [
         slice(None) if isinstance(ind, Array) and ind.dtype == bool else ind
@@ -1376,12 +1378,10 @@ class BooleanIndexFlattened(ArrayExpr):
 
     def _layer(self) -> dict:
         from dask.base import flatten
+
         # Flatten the keys from the elemwise result
         keys = list(flatten(self.array.__dask_keys__()))
-        return {
-            (self._name, i): Alias((self._name, i), k)
-            for i, k in enumerate(keys)
-        }
+        return {(self._name, i): Alias((self._name, i), k) for i, k in enumerate(keys)}
 
 
 def _numpy_vindex(indexer, arr):
@@ -1408,7 +1408,6 @@ def _vindex(x, *indexes):
     >>> result.compute()
     array([ 0,  9, 48,  7])
     """
-    from dask.array._array_expr._collection import Array, new_collection
 
     indexes = replace_ellipsis(x.ndim, indexes)
 
@@ -1478,9 +1477,7 @@ def _vindex_array(x, dict_indexes):
     chunks.insert(0, (0,))
     chunks = tuple(chunks)
 
-    result_1d = empty(
-        tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype
-    )
+    result_1d = empty(tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype)
     return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
 
@@ -1533,7 +1530,6 @@ class VIndexArray(ArrayExpr):
         )
         return tuple(chunks)
 
-
     def _layer(self) -> dict:
         dict_indexes = self.dict_indexes
         broadcast_shape = self.broadcast_shape
@@ -1545,7 +1541,9 @@ class VIndexArray(ArrayExpr):
             np.array(cached_cumsum(c, initial_zero=True))
             for c in self._subset_to_indexed_axes(self.array.chunks)
         )
-        axis = _get_axis(tuple(i if i in axes else None for i in range(self.array.ndim)))
+        axis = _get_axis(
+            tuple(i if i in axes else None for i in range(self.array.ndim))
+        )
 
         # Now compute indices of each output element within each input block
         block_idxs = tuple(
@@ -1581,7 +1579,10 @@ class VIndexArray(ArrayExpr):
         outinds = np.arange(npoints).reshape(broadcast_shape)
         outblocks, outblock_idx = np.divmod(outinds, max_chunk_point_dimensions)
 
-        ravel_shape = (n_chunks + 1, *self._subset_to_indexed_axes(self.array.numblocks))
+        ravel_shape = (
+            n_chunks + 1,
+            *self._subset_to_indexed_axes(self.array.numblocks),
+        )
         keys = np.ravel_multi_index([outblocks, *block_idxs], ravel_shape)
         sortidx = np.argsort(keys, axis=None)
         sorted_keys = keys.flat[sortidx]
@@ -1629,6 +1630,7 @@ class VIndexArray(ArrayExpr):
 
     def __dask_keys__(self):
         # Override to return 1D keys since we reshape after
-        return [(self._name,) + idx for idx in np.ndindex(tuple(len(c) for c in self.chunks))]
-
-
+        return [
+            (self._name,) + idx
+            for idx in np.ndindex(tuple(len(c) for c in self.chunks))
+        ]

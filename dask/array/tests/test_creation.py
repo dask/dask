@@ -129,7 +129,11 @@ def test_arr_like_shape(funcname, kwargs, shape, dtype, chunks, out_shape):
         assert_eq(np_r, da_r)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="dask scalar inputs not supported in array-expr", strict=False)
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="dask scalar inputs not supported in array-expr",
+    strict=False,
+)
 @pytest.mark.parametrize("endpoint", [True, False])
 def test_linspace(endpoint):
     darr = da.linspace(6, 49, endpoint=endpoint, chunks=5)
@@ -565,7 +569,9 @@ def test_diag_extraction(k):
     assert_eq(da.diag(d, k), np.diag(y, k))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="data_producer not implemented in array-expr")
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="data_producer not implemented in array-expr"
+)
 def test_creation_data_producers():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))

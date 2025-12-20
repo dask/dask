@@ -13,8 +13,8 @@ from dask._collections import new_collection
 from dask._task_spec import Task, TaskRef
 from dask.array._array_expr._collection import Array
 from dask.array._array_expr._io import IO
-from dask.array.backends import array_creation_dispatch
 from dask.array._array_expr.core._conversion import asarray
+from dask.array.backends import array_creation_dispatch
 from dask.array.core import broadcast_shapes, normalize_chunks
 from dask.array.creation import arange
 from dask.array.utils import asarray_safe
@@ -141,7 +141,15 @@ class Generator:
 
         return new_collection(
             RandomChoiceGenerator(
-                a_val, a_expr, chunks, meta, self._bit_generator, replace, p_expr, axis, shuffle
+                a_val,
+                a_expr,
+                chunks,
+                meta,
+                self._bit_generator,
+                replace,
+                p_expr,
+                axis,
+                shuffle,
             )
         )
 
@@ -548,7 +556,9 @@ class RandomState:
             ) = _choice_validate_params(self, a, size, replace, p, 0, chunks)
 
             return new_collection(
-                RandomChoice(a_val, a_expr, chunks, meta, self._numpy_state, replace, p_expr)
+                RandomChoice(
+                    a_val, a_expr, chunks, meta, self._numpy_state, replace, p_expr
+                )
             )
 
     @derived_from(np.random.RandomState, skipblocks=1)
@@ -921,20 +931,18 @@ def _wrap_func(
             chunks, size, dtype=kwargs.get("dtype", np.float64)
         )
         args = tuple(_broadcast_array_arg(arg, size, target_chunks) for arg in args)
-        kwargs = {k: _broadcast_array_arg(v, size, target_chunks) for k, v in kwargs.items()}
+        kwargs = {
+            k: _broadcast_array_arg(v, size, target_chunks) for k, v in kwargs.items()
+        }
 
     # Dispatch to specific subclass if available
     if funcname == "normal":
         loc = kwargs.pop("loc", args[0] if len(args) > 0 else 0.0)
         scale = kwargs.pop("scale", args[1] if len(args) > 1 else 1.0)
-        return new_collection(
-            RandomNormal(rng, size, chunks, extra_chunks, loc, scale)
-        )
+        return new_collection(RandomNormal(rng, size, chunks, extra_chunks, loc, scale))
     elif funcname == "poisson":
         lam = args[0] if len(args) > 0 else kwargs.pop("lam", 1.0)
-        return new_collection(
-            RandomPoisson(rng, size, chunks, extra_chunks, lam)
-        )
+        return new_collection(RandomPoisson(rng, size, chunks, extra_chunks, lam))
 
     # Fallback: use generic Random with args/kwargs tuples
     return new_collection(
@@ -1016,7 +1024,7 @@ class Random(IO):
     def _block_id_to_flat_index(self, block_id: tuple[int, ...]) -> int:
         """Convert N-D block_id to flat index for bitgens/sizes lookup."""
         # Only use base_chunks dimensions (exclude extra_chunks which are always 0)
-        base_block_id = block_id[:len(self._base_chunks)]
+        base_block_id = block_id[: len(self._base_chunks)]
         flat_idx = 0
         stride = 1
         for i in reversed(range(len(base_block_id))):
@@ -1026,7 +1034,8 @@ class Random(IO):
 
     def _task(self, key, block_id: tuple[int, ...]) -> Task:
         """Generate task for a specific output block."""
-        from dask._task_spec import Dict as TaskDict, Tuple as TaskTuple
+        from dask._task_spec import Dict as TaskDict
+        from dask._task_spec import Tuple as TaskTuple
         from dask.array._array_expr._expr import ArrayExpr
 
         bitgens, name, sizes, gen, func_applier = self._info
@@ -1118,8 +1127,10 @@ class Random(IO):
 # Distribution-specific subclasses with explicit parameters
 # These avoid storing array dependencies inside tuple operands
 
+
 class RandomNormal(Random):
     """Normal distribution with explicit loc and scale parameters."""
+
     _parameters = ["rng", "size", "chunks", "extra_chunks", "loc", "scale"]
     _defaults = {"extra_chunks": (), "loc": 0.0, "scale": 1.0}
     distribution = "normal"
@@ -1135,6 +1146,7 @@ class RandomNormal(Random):
 
 class RandomPoisson(Random):
     """Poisson distribution with explicit lam parameter."""
+
     _parameters = ["rng", "size", "chunks", "extra_chunks", "lam"]
     _defaults = {"extra_chunks": (), "lam": 1.0}
     distribution = "poisson"
@@ -1150,13 +1162,13 @@ class RandomPoisson(Random):
 
 class RandomChoice(IO):
     _parameters = [
-        "a_val",        # int value of a (or None if a is an array)
-        "a_expr",       # expression for a (or None if a is an int)
+        "a_val",  # int value of a (or None if a is an array)
+        "a_expr",  # expression for a (or None if a is an int)
         "chunks",
         "_meta",
         "_state",
         "replace",
-        "p_expr",       # expression for p (or None)
+        "p_expr",  # expression for p (or None)
         "axis",
         "shuffle",
     ]

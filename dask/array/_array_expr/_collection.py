@@ -5,17 +5,16 @@ import operator
 import warnings
 
 import numpy as np
-import toolz
 
 from dask import config
 from dask._collections import new_collection
 from dask.array import chunk
-from dask.array.chunk_types import is_valid_chunk_type
-from dask.array._array_expr.manipulation._transpose import Transpose
 from dask.array._array_expr._expr import ArrayExpr
+from dask.array._array_expr.manipulation._transpose import Transpose
+from dask.array.chunk_types import is_valid_chunk_type
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
-from dask.utils import derived_from, format_bytes, has_keyword, key_split, typename
+from dask.utils import format_bytes, has_keyword, key_split, typename
 from dask.widgets import get_template
 
 try:
@@ -24,31 +23,23 @@ except ImportError:
     ARRAY_TEMPLATE = None
 
 # Import core conversion functions from their module
+# Import stacking functions from their module
+
+# Import blockwise functions from their module
+from dask.array._array_expr.core._blockwise_funcs import elemwise
 from dask.array._array_expr.core._conversion import (
-    array,
     asanyarray,
-    asarray,
-    from_array,
 )
 from dask.array._array_expr.core._from_graph import from_graph
 
-# Import stacking functions from their module
-from dask.array._array_expr._concatenate import concatenate
-from dask.array._array_expr._stack import stack
-
-# Import blockwise functions from their module
-from dask.array._array_expr.core._blockwise_funcs import blockwise, elemwise
-
-
 # Type imports
 from dask.array.core import (
-    T_IntOrNaN,
     _HANDLED_FUNCTIONS,
+    T_IntOrNaN,
     _should_delegate,
     check_if_handled_given_other,
     finalize,
 )
-from dask.array.chunk_types import is_valid_chunk_type
 
 
 class Array(DaskMethodsMixin):
@@ -161,6 +152,7 @@ class Array(DaskMethodsMixin):
     @property
     def chunksize(self) -> tuple:
         from dask.array.core import cached_max
+
         return tuple(cached_max(c) for c in self.chunks)
 
     @property
@@ -441,7 +433,6 @@ class Array(DaskMethodsMixin):
         # Use "where" method for any dask Array key (matches legacy behavior)
         if isinstance(key, Array):
             from dask.array._array_expr._broadcast import broadcast_to
-            from dask.array._array_expr.routines import where
 
             left_shape = np.array(key.shape)
             right_shape = np.array(self.shape)
@@ -507,7 +498,7 @@ class Array(DaskMethodsMixin):
                 )
 
         # Check shape compatibility for each dimension
-        for i, (a, b, j) in enumerate(
+        for _, (a, b, j) in enumerate(
             zip(array_common_shape, value_common_shape, implied_positions)
         ):
             index = indices[j]
@@ -699,7 +690,6 @@ class Array(DaskMethodsMixin):
 
     def __array_function__(self, func, types, args, kwargs):
         import dask.array as module
-
         from dask.base import compute
 
         def handle_nonmatching_names(func, args, kwargs):
@@ -824,8 +814,6 @@ class Array(DaskMethodsMixin):
             A 1-D array with the same data as self.
         """
         return reshape(self, (-1,))
-
-    flatten = ravel
 
     def repeat(self, repeats, axis=None):
         """Repeat elements of an array.
@@ -1579,38 +1567,18 @@ class Array(DaskMethodsMixin):
 
 
 # Import rechunk and ravel from their modules (they return Arrays directly)
+# Import broadcast_to directly (it returns an Array)
 from dask.array._array_expr._rechunk import rechunk
-from dask.array._array_expr._reshape import ravel, reshape
+from dask.array._array_expr._reshape import reshape
 
 # Import squeeze from its module (it returns an Array directly)
 from dask.array._array_expr._slicing import squeeze
 
-
 # Import expand functions from their module
-from dask.array._array_expr.manipulation._expand import (
-    atleast_1d,
-    atleast_2d,
-    atleast_3d,
-)
-
-
-# Import stacking functions from their module
-from dask.array._array_expr.stacking._simple import vstack, hstack, dstack
-from dask.array._array_expr.stacking._block import block
-
-
+# Import expand_dims from manipulation module
 # Import manipulation functions from their module
-from dask.array._array_expr.manipulation._flip import flip, flipud, fliplr, rot90
 from dask.array._array_expr.manipulation._transpose import (
     swapaxes,
-    moveaxis,
-    rollaxis,
-    transpose,
 )
-from dask.array._array_expr.manipulation._roll import roll
 
-# Import broadcast_to directly (it returns an Array)
-from dask.array._array_expr._broadcast import broadcast_to
-
-# Import expand_dims from manipulation module
-from dask.array._array_expr.manipulation._expand import expand_dims
+# Import stacking functions from their module

@@ -13,7 +13,12 @@ import toolz
 
 from dask._expr import FinalizeCompute, SingletonExpr
 from dask._task_spec import List, Task, TaskRef
-from dask.array.core import PerformanceWarning, T_IntOrNaN, common_blockdim, unknown_chunk_message
+from dask.array.core import (
+    PerformanceWarning,
+    T_IntOrNaN,
+    common_blockdim,
+    unknown_chunk_message,
+)
 from dask.blockwise import broadcast_dimensions
 from dask.layers import ArrayBlockwiseDep
 from dask.utils import cached_cumsum, funcname
@@ -319,8 +324,7 @@ def unify_chunks_expr(*args, warn=True):
 
 
 # Import Stack, Concatenate, and ConcatenateFinalize from their modules
-from dask.array._array_expr._stack import Stack
-from dask.array._array_expr._concatenate import Concatenate, ConcatenateFinalize
+from dask.array._array_expr._concatenate import ConcatenateFinalize
 
 
 def _copy_array(x):
@@ -417,8 +421,9 @@ class ChunksOverride(ArrayExpr):
         return self._chunks
 
     def _layer(self) -> dict:
-        from dask._task_spec import Alias
         from itertools import product
+
+        from dask._task_spec import Alias
 
         dsk = {}
         chunk_ranges = [range(len(c)) for c in self._chunks]

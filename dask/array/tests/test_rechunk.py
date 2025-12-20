@@ -27,6 +27,7 @@ from dask.array.rechunk import (
 from dask.array.utils import assert_eq
 from dask.utils import funcname
 
+
 def test_rechunk_internals_1():
     """Test the cumdims_label and _breakpoints and
     _intersect_1d internal funcs to rechunk."""

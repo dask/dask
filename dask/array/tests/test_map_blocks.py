@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 import dask.array as da
 from dask.base import collections_to_expr
 

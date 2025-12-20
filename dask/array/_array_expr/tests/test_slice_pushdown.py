@@ -10,7 +10,6 @@ from dask.array._array_expr._io import FromArray
 from dask.array._array_expr._slicing import SliceSlicesIntegers
 from dask.array.utils import assert_eq
 
-
 # Parametrized correctness tests: (array_shape, chunks, slice_tuple)
 SLICE_CASES = [
     # Basic slices
@@ -217,7 +216,13 @@ def test_region_zarr_deferred(tmp_path):
     zarr = pytest.importorskip("zarr")
     # Create zarr array
     zarr_path = tmp_path / "test.zarr"
-    z = zarr.open(str(zarr_path), mode="w", shape=(10000, 10000), dtype="float64", chunks=(1000, 1000))
+    z = zarr.open(
+        str(zarr_path),
+        mode="w",
+        shape=(10000, 10000),
+        dtype="float64",
+        chunks=(1000, 1000),
+    )
     z[1500:1550, 2300:2350] = np.arange(2500).reshape(50, 50)
 
     x = da.from_zarr(str(zarr_path))
@@ -231,7 +236,9 @@ def test_region_zarr_deferred(tmp_path):
     numpy_arrays = [v for v in graph.values() if isinstance(v, np.ndarray)]
 
     assert len(zarr_arrays) == 1, "Graph should contain the zarr array"
-    assert len(numpy_arrays) == 0, "Graph should not contain numpy arrays (data not loaded)"
+    assert (
+        len(numpy_arrays) == 0
+    ), "Graph should not contain numpy arrays (data not loaded)"
 
     # The zarr array in graph should be the full array, not sliced
     assert zarr_arrays[0].shape == (10000, 10000)

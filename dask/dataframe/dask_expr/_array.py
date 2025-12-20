@@ -296,7 +296,11 @@ class FromDaskArray(Expr):
         # Build kwargs for _partition_from_array
         meta = self._meta
         if is_series_like(meta):
-            kwargs = {"dtype": self.array.dtype, "name": meta.name, "initializer": type(meta)}
+            kwargs = {
+                "dtype": self.array.dtype,
+                "name": meta.name,
+                "initializer": type(meta),
+            }
         else:
             kwargs = {"columns": meta.columns, "initializer": type(meta)}
 
@@ -317,7 +321,9 @@ class FromDaskArray(Expr):
                     )
                 else:
                     # Multiple column chunks - need to concatenate along axis 1
-                    array_refs = [TaskRef((array_name, i, j)) for j in range(n_col_chunks)]
+                    array_refs = [
+                        TaskRef((array_name, i, j)) for j in range(n_col_chunks)
+                    ]
                     dsk[key] = Task(
                         key,
                         _concat_and_partition,
@@ -362,9 +368,9 @@ def from_dask_array_expr(array, columns=None, index=None, meta=None):
     DataFrame or Series
         A dask DataFrame/Series backed by the FromDaskArray expression
     """
-    from dask.dataframe.utils import pyarrow_strings_enabled
     from dask.dataframe.dask_expr._collection import new_collection
     from dask.dataframe.dask_expr._expr import ArrowStringConversion
+    from dask.dataframe.utils import pyarrow_strings_enabled
 
     # Get the expression from the array
     array_expr = array._expr

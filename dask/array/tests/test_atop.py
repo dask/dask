@@ -10,7 +10,9 @@ import dask
 import dask.array as da
 
 if da._array_expr_enabled():
-    pytest.skip("blockwise internals not compatible with array-expr", allow_module_level=True)
+    pytest.skip(
+        "blockwise internals not compatible with array-expr", allow_module_level=True
+    )
 
 from dask._task_spec import Task, TaskRef
 from dask.array.utils import assert_eq

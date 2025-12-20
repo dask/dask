@@ -46,8 +46,14 @@ class HistogramBinned(ArrayExpr):
 
     Handles both concrete and delayed bins/range.
     """
+
     _parameters = ["array", "bins", "range_start", "range_stop", "weights", "nbins"]
-    _defaults = {"range_start": None, "range_stop": None, "weights": None, "nbins": None}
+    _defaults = {
+        "range_start": None,
+        "range_stop": None,
+        "weights": None,
+        "nbins": None,
+    }
 
     @cached_property
     def _meta(self):
@@ -93,13 +99,20 @@ class HistogramBinned(ArrayExpr):
         if self.weights is None:
             for i, k in enumerate(array_keys):
                 dsk[(self._name, i, 0)] = Task(
-                    (self._name, i, 0), _block_hist, TaskRef(k), bins_range,
+                    (self._name, i, 0),
+                    _block_hist,
+                    TaskRef(k),
+                    bins_range,
                 )
         else:
             weight_keys = list(_flatten_keys(self.weights))
             for i, (k, w) in enumerate(zip(array_keys, weight_keys)):
                 dsk[(self._name, i, 0)] = Task(
-                    (self._name, i, 0), _block_hist, TaskRef(k), bins_range, TaskRef(w),
+                    (self._name, i, 0),
+                    _block_hist,
+                    TaskRef(k),
+                    bins_range,
+                    TaskRef(w),
                 )
         return dsk
 
@@ -114,6 +127,7 @@ class HistogramBinned(ArrayExpr):
 
 class LinspaceDelayed(ArrayExpr):
     """Expression for linspace with delayed start/stop values."""
+
     _parameters = ["num_bins", "range_start", "range_stop"]
 
     @cached_property
@@ -135,7 +149,7 @@ class LinspaceDelayed(ArrayExpr):
 
         bins_range = TaskList(
             _to_ref(self.num_bins),
-            TaskList(_to_ref(self.range_start), _to_ref(self.range_stop))
+            TaskList(_to_ref(self.range_start), _to_ref(self.range_stop)),
         )
         return {
             (self._name, 0): Task((self._name, 0), _linspace_from_range, bins_range)
@@ -143,8 +157,11 @@ class LinspaceDelayed(ArrayExpr):
 
     @property
     def _dependencies(self):
-        return [v for v in (self.range_start, self.range_stop, self.num_bins)
-                if isinstance(v, ArrayExpr)]
+        return [
+            v
+            for v in (self.range_start, self.range_stop, self.num_bins)
+            if isinstance(v, ArrayExpr)
+        ]
 
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
@@ -174,7 +191,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     bin_edges : dask Array
         The bin edges.
     """
-    from dask.array._array_expr._collection import Array
     from dask.base import is_dask_collection
 
     if isinstance(bins, Array):
@@ -257,7 +273,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                 nbins_expr = int(bins)
 
             # Create linspace expression for bin edges
-            linspace_expr = LinspaceDelayed(nbins_expr, range_start_expr, range_stop_expr)
+            linspace_expr = LinspaceDelayed(
+                nbins_expr, range_start_expr, range_stop_expr
+            )
             bins_edges = new_collection(linspace_expr)
 
             hist_expr = HistogramBinned(
@@ -319,7 +337,10 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
     # Create the histogram expression (concrete bins)
     hist_expr = HistogramBinned(
-        a.expr, bins, range_start_expr, range_stop_expr,
+        a.expr,
+        bins,
+        range_start_expr,
+        range_stop_expr,
         weights.expr if weights is not None else None,
     )
     mapped = new_collection(hist_expr)
@@ -352,7 +373,9 @@ def _block_histogramdd_multiarg(*args):
     """
     bins, range_, weights = args[-3:]
     sample = args[:-3]
-    return np.histogramdd(sample, bins=bins, range=range_, weights=weights)[0][np.newaxis]
+    return np.histogramdd(sample, bins=bins, range=range_, weights=weights)[0][
+        np.newaxis
+    ]
 
 
 class HistogramDDBinned(ArrayExpr):
@@ -361,7 +384,16 @@ class HistogramDDBinned(ArrayExpr):
     This creates an (nchunks, *nbins) array where the first axis
     represents each input chunk. Use .sum(axis=0) to get the final histogram.
     """
-    _parameters = ["sample", "bins", "range", "weights", "rectangular_sample", "n_chunks", "D"]
+
+    _parameters = [
+        "sample",
+        "bins",
+        "range",
+        "weights",
+        "rectangular_sample",
+        "n_chunks",
+        "D",
+    ]
     _defaults = {"range": None, "weights": None}
 
     @cached_property
@@ -539,7 +571,11 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         bins = (bins,) * D
 
     # Compute edges
-    if all(isinstance(b, int) for b in bins) and range is not None and all(len(r) == 2 for r in range):
+    if (
+        all(isinstance(b, int) for b in bins)
+        and range is not None
+        and all(len(r) == 2 for r in range)
+    ):
         edges = [np.linspace(r[0], r[1], b + 1) for b, r in zip(bins, range)]
     else:
         edges = [np.asarray(b) for b in bins]

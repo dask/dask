@@ -17,7 +17,6 @@ from dask.array.core import normalize_chunks
 from dask.array.creation import _get_like_function_shapes_chunks
 from dask.array.utils import meta_from_array
 from dask.array.wrap import _parse_wrap_args, broadcast_trick
-from dask.base import tokenize
 from dask.utils import cached_cumsum, derived_from
 
 
@@ -385,7 +384,7 @@ class Diagonal(ArrayExpr):
             return pop_axes(x.chunks, axis1, axis2) + ((0,),)
 
         # Compute diagonal chunks by following the diagonal through blocks
-        k = info["k"]
+        info["k"]
         kdiag_row_start = info["kdiag_row_start"]
         kdiag_col_start = info["kdiag_col_start"]
 
@@ -433,7 +432,7 @@ class Diagonal(ArrayExpr):
         dsk = {}
         info = self._diag_info
         x = self.x
-        axis1, axis2, k = info["axis1"], info["axis2"], info["k"]
+        axis1, axis2, _k = info["axis1"], info["axis2"], info["k"]
         free_indices = info["free_indices"]
         ndims_free = info["ndims_free"]
 
@@ -441,6 +440,7 @@ class Diagonal(ArrayExpr):
             xp = np
             if is_cupy_type(x._meta):
                 import cupy
+
                 xp = cupy
 
             out_chunks = self.chunks
@@ -523,7 +523,7 @@ def diag(v, k=0):
         hasattr(v, "__array_function__") and not isinstance(v, Array)
     ):
         if v.ndim == 1:
-            m = abs(k)
+            abs(k)
             result = np.diag(v, k)
             return asarray(result)
         elif v.ndim == 2:
@@ -660,7 +660,9 @@ _full = wrap(wrap_func_shape_as_first_arg, klass=Full, dtype="f8")
 _arange_sentinel = object()
 
 
-def arange(start=_arange_sentinel, stop=None, step=1, *, chunks="auto", like=None, dtype=None):
+def arange(
+    start=_arange_sentinel, stop=None, step=1, *, chunks="auto", like=None, dtype=None
+):
     """
     Return evenly spaced values from `start` to `stop` with step size `step`.
 

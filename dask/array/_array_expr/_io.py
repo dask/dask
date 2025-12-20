@@ -151,7 +151,11 @@ class FromGraph(ArrayExpr):
         # After persist with optimization, the exact token may differ but the
         # prefix (e.g., 'store-map') should match.
         recorded_prefixes = {
-            k[0].rsplit("-", 1)[0] if isinstance(k, tuple) and isinstance(k[0], str) and "-" in k[0] else k[0]
+            (
+                k[0].rsplit("-", 1)[0]
+                if isinstance(k, tuple) and isinstance(k[0], str) and "-" in k[0]
+                else k[0]
+            )
             for k in self.operand("keys")
             if isinstance(k, tuple)
         }
@@ -161,7 +165,11 @@ class FromGraph(ArrayExpr):
                 raise TypeError(f"Expected tuple, got {type(k)}")
             # Only process keys from our layer, skip dependency keys
             # Match by prefix to handle token changes after optimization
-            key_prefix = k[0].rsplit("-", 1)[0] if isinstance(k[0], str) and "-" in k[0] else k[0]
+            key_prefix = (
+                k[0].rsplit("-", 1)[0]
+                if isinstance(k[0], str) and "-" in k[0]
+                else k[0]
+            )
             if key_prefix not in recorded_prefixes:
                 continue
             orig = dsk[k]
@@ -276,7 +284,9 @@ class FromArray(IO):
         elif is_ndarray and is_single_block and not lock:
             # Single block - slice with region (or full array) and copy
             if region is not None:
-                dsk = {(self._name,) + (0,) * self.array.ndim: self.array[region].copy()}
+                dsk = {
+                    (self._name,) + (0,) * self.array.ndim: self.array[region].copy()
+                }
             else:
                 dsk = {(self._name,) + (0,) * self.array.ndim: self.array.copy()}
         else:
@@ -290,14 +300,24 @@ class FromArray(IO):
             # For non-numpy arrays with region, we need custom graph generation
             # to apply the offset slices
             if region is not None:
-                keys = list(product([self._name], *(range(len(bds)) for bds in self.chunks)))
+                keys = list(
+                    product([self._name], *(range(len(bds)) for bds in self.chunks))
+                )
                 if self.inline_array:
-                    dsk = {k: (getitem, self.array, slc, self.asarray_arg, lock) for k, slc in zip(keys, slices)}
+                    dsk = {
+                        k: (getitem, self.array, slc, self.asarray_arg, lock)
+                        for k, slc in zip(keys, slices)
+                    }
                 else:
                     # Put array in graph once, reference by key
                     arr_key = ("array-" + self._name,)
                     dsk = {arr_key: self.array}
-                    dsk.update({k: (getitem, arr_key, slc, self.asarray_arg, lock) for k, slc in zip(keys, slices)})
+                    dsk.update(
+                        {
+                            k: (getitem, arr_key, slc, self.asarray_arg, lock)
+                            for k, slc in zip(keys, slices)
+                        }
+                    )
             else:
                 dsk = graph_from_arraylike(
                     self.array,
@@ -327,8 +347,7 @@ class FromArray(IO):
             lock_token = lock
 
         operands = [
-            lock_token if p == "lock" else self.operand(p)
-            for p in self._parameters
+            lock_token if p == "lock" else self.operand(p) for p in self._parameters
         ]
         return _tokenize_deterministic(type(self), *operands)
 
@@ -611,4 +630,3 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
 
 
 # Zarr functions use da.from_array late import to respect array-expr mode
-from dask.array.core import from_zarr, to_zarr
