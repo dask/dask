@@ -314,6 +314,10 @@ class Array(DaskMethodsMixin):
         x = self.compute()
         return np.asarray(x, dtype=dtype)
 
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if isinstance(index, str) or (
@@ -940,6 +944,23 @@ class Array(DaskMethodsMixin):
         from dask.array.tiledb_io import to_tiledb
 
         return to_tiledb(self, uri, *args, **kwargs)
+
+    def to_backend(self, backend: str | None = None, **kwargs):
+        """Move to a new Array backend
+
+        Parameters
+        ----------
+        backend : str, Optional
+            The name of the new backend to move to. The default
+            is the current "array.backend" configuration.
+
+        Returns
+        -------
+        Array
+        """
+        from dask.array.creation import to_backend
+
+        return to_backend(self, backend=backend, **kwargs)
 
     def to_svg(self, size=500):
         """Convert chunks from Dask Array into an SVG Image

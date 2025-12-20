@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.core import Array
 from dask.array.utils import assert_eq, meta_from_array
 from dask.local import get_sync
 
@@ -120,14 +119,7 @@ def test_assert_eq_checks_dtype(a, b):
     [
         (1.0, 1.0),
         ([1, 2], [1, 2]),
-        pytest.param(
-            da.array([1, 2]),
-            da.array([1, 2]),
-            marks=pytest.mark.xfail(
-                da._array_expr_enabled(),
-                reason="isinstance check uses wrong Array class",
-            ),
-        ),
+        (da.array([1, 2]), da.array([1, 2])),
     ],
 )
 def test_assert_eq_scheduler(a, b):
@@ -144,5 +136,5 @@ def test_assert_eq_scheduler(a, b):
     assert_eq(a, b, scheduler=custom_scheduler)
     # `custom_scheduler` should be executed 2x the number of arrays.
     # Once in `persist` and once in `compute`
-    n_da_arrays = len([x for x in [a, b] if isinstance(x, Array)]) * 2
+    n_da_arrays = len([x for x in [a, b] if isinstance(x, da.Array)]) * 2
     assert counter == n_da_arrays

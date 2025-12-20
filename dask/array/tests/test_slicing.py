@@ -757,7 +757,7 @@ def test_index_with_bool_dask_array_2():
         assert_eq(x[tuple(index3)], d[tuple(index2)])
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(reason="tests internal graph optimization, not user behavior")
 def test_cull():
     x = da.ones(1000, chunks=(10,))
 

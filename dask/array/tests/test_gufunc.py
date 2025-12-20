@@ -702,7 +702,7 @@ def test_as_gufunc_with_meta():
     assert_eq(np.array([expected[1].compute()]), result[1].compute())
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="Array.copy not implemented for array-expr")
+@pytest.mark.xfail(da._array_expr_enabled(), reason="apply_gufunc rechunking not working for array-expr")
 def test_gufunc_chunksizes_adjustment():
     def foo(x, *args):
         # simulating xarray interpolate (kind off)
