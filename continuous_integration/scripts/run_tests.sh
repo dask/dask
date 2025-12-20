@@ -3,7 +3,7 @@
 set -e
 
 if [[ $ARRAYEXPR == 'true' ]]; then
-    export MARKERS="--runarrayexpr"
+    export MARKERS="--array-expr"
 else
     export MARKERS=""
 fi
