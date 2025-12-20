@@ -196,6 +196,8 @@ class FromArray(IO):
     }
     # FromArray reads static data, so rechunk can be pushed in safely
     _can_rechunk_pushdown = True
+    # Slicing can be pushed into FromArray by slicing the source array
+    _slice_pushdown = True
 
     @functools.cached_property
     def _name(self):
