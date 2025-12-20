@@ -276,12 +276,6 @@ def map_blocks(
         )
         raise TypeError(msg % type(func).__name__)
     if token:
-        warnings.warn(
-            "The `token=` keyword to `map_blocks` has been moved to `name=`. "
-            "Please use `name=` instead as the `token=` keyword will be removed "
-            "in a future release.",
-            category=FutureWarning,
-        )
         name = token
 
     # Track if user provided explicit name (should be used exactly)

@@ -4985,7 +4985,7 @@ def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
         or is a list or tuple of `Array`'s.
     """
     if like is None:
-        if isinstance(a, Array) or (is_arraylike(a) and is_dask_collection(a)):
+        if isinstance(a, Array):
             return _as_dtype(a, dtype)
         elif hasattr(a, "to_dask_array"):
             return _as_dtype(a.to_dask_array(), dtype)

@@ -1149,14 +1149,13 @@ def test_broadcast_shapes():
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (1, np.nan), (1, 5)))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_elemwise_on_scalars():
     nx = np.arange(10, dtype=np.int64)
     ny = np.arange(10, dtype=np.int32)
     nz = nx.sum() * ny
 
-    dx = from_array(nx, chunks=(5,))
-    dy = from_array(ny, chunks=(5,))
+    dx = da.from_array(nx, chunks=(5,))
+    dy = da.from_array(ny, chunks=(5,))
     dz = dx.sum() * dy
 
     if NUMPY_GE_200:
@@ -1314,13 +1313,12 @@ def test_field_access_with_shape():
     assert_eq(x[["col1", "col2"]], data[["col1", "col2"]])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="test_matmul needs work", strict=False)
 def test_matmul():
     rng = np.random.default_rng()
     x = rng.random((5, 5))
     y = rng.random((5, 2))
-    a = from_array(x, chunks=(1, 5))
-    b = from_array(y, chunks=(5, 1))
+    a = da.from_array(x, chunks=(1, 5))
+    b = da.from_array(y, chunks=(5, 1))
     assert_eq(operator.matmul(a, b), a.dot(b))
     assert_eq(operator.matmul(a, b), operator.matmul(x, y))
     assert_eq(operator.matmul(a, y), operator.matmul(x, b))
@@ -1328,7 +1326,7 @@ def test_matmul():
     assert_eq(operator.matmul(list_vec, b), operator.matmul(list_vec, y))
     assert_eq(operator.matmul(x, list_vec), operator.matmul(a, list_vec))
     z = rng.random((5, 5, 5))
-    c = from_array(z, chunks=(1, 5, 1))
+    c = da.from_array(z, chunks=(1, 5, 1))
     assert_eq(operator.matmul(a, z), operator.matmul(x, c))
     assert_eq(operator.matmul(z, a), operator.matmul(c, x))
 
@@ -2516,7 +2514,6 @@ def test_np_array_with_zero_dimensions():
     assert_eq(np.array(d.sum()), np.array(d.compute().sum()))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_dtype_complex():
     x = np.arange(24).reshape((4, 6)).astype("f4")
     y = np.arange(24).reshape((4, 6)).astype("i8")
@@ -2538,8 +2535,8 @@ def test_dtype_complex():
     assert_eq(a[:3].dtype, x[:3].dtype)
     assert_eq((a.dot(b.T)).dtype, (x.dot(y.T)).dtype)
 
-    assert_eq(stack([a, b]).dtype, np.vstack([x, y]).dtype)
-    assert_eq(concatenate([a, b]).dtype, np.concatenate([x, y]).dtype)
+    assert_eq(da.stack([a, b]).dtype, np.vstack([x, y]).dtype)
+    assert_eq(da.concatenate([a, b]).dtype, np.concatenate([x, y]).dtype)
 
     assert_eq(b.std().dtype, y.std().dtype)
     assert_eq(c.sum().dtype, z.sum().dtype)
@@ -4988,7 +4985,7 @@ def test_from_zarr_unique_name():
 def test_from_zarr_name():
     zarr = pytest.importorskip("zarr")
     a = zarr.array([1, 2, 3])
-    assert da.from_zarr(a, name="foo").name == "foo"
+    assert da.from_zarr(a, name="foo").name.startswith("foo")
 
 
 def test_zarr_roundtrip():

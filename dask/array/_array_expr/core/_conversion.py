@@ -164,7 +164,9 @@ def from_array(
     # Import Array for isinstance check
     from dask.array._array_expr._collection import Array
 
-    if isinstance(x, Array):
+    # Check for both array-expr and legacy dask arrays
+    is_legacy = type(x).__module__ == "dask.array.core" and type(x).__name__ == "Array"
+    if isinstance(x, Array) or is_legacy:
         raise ValueError(
             "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
         )
@@ -187,7 +189,7 @@ def from_array(
     )
 
     # Determine name prefix for the expression
-    # _name_override is just a prefix - the full name is computed as prefix-{deterministic_token}
+    # User-provided name is used as prefix, deterministic token always appended
     if name in (None, True):
         # Deterministic: use "array" prefix, token computed from operands
         name_prefix = "array"

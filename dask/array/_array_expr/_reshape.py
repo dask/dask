@@ -147,9 +147,9 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     if reduce(mul, shape, 1) != x.size:
         raise ValueError("total size of new array must be unchanged")
 
-    # Identity reshape
+    # Identity reshape - return input unchanged
     if x.shape == shape:
-        return new_collection(x.expr)
+        return x
 
     # Single partition case: use simple blockwise reshape
     expr = x.expr
