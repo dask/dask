@@ -237,6 +237,11 @@ class Array(DaskMethodsMixin):
         return BlockView(self)
 
     @property
+    def partitions(self):
+        """Slice an array by partitions. Alias of dask array .blocks attribute."""
+        return self.blocks
+
+    @property
     def size(self) -> T_IntOrNaN:
         return self.expr.size
 

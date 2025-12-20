@@ -147,14 +147,22 @@ class FromGraph(ArrayExpr):
         # using an alias. Use the actual keys from the layer dict since they may
         # differ from self.operand("keys") (e.g., after persist() with optimization).
         #
-        # Only process keys from our layer, skip dependency keys from HLG.
-        our_layer_names = {k[0] for k in self.operand("keys") if isinstance(k, tuple)}
+        # Get expected layer name prefixes from recorded keys.
+        # After persist with optimization, the exact token may differ but the
+        # prefix (e.g., 'store-map') should match.
+        recorded_prefixes = {
+            k[0].rsplit("-", 1)[0] if isinstance(k, tuple) and isinstance(k[0], str) and "-" in k[0] else k[0]
+            for k in self.operand("keys")
+            if isinstance(k, tuple)
+        }
 
         for k in list(dsk.keys()):
             if not isinstance(k, tuple):
                 raise TypeError(f"Expected tuple, got {type(k)}")
             # Only process keys from our layer, skip dependency keys
-            if k[0] not in our_layer_names:
+            # Match by prefix to handle token changes after optimization
+            key_prefix = k[0].rsplit("-", 1)[0] if isinstance(k[0], str) and "-" in k[0] else k[0]
+            if key_prefix not in recorded_prefixes:
                 continue
             orig = dsk[k]
             if not istask(orig):
