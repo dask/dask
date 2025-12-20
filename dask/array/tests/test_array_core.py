@@ -2774,7 +2774,6 @@ def test_optimize():
     assert all(key in result for key in expr.__dask_keys__())
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="non-ndarray slicing not implemented for array-expr")
 def test_slicing_with_non_ndarrays():
     class ARangeSlice:
         dtype = np.dtype("i8")
@@ -4029,7 +4028,6 @@ def test_concatenate_axes():
         concatenate_axes([x, x], axes=[0, 1, 2, 3])  # too many axes
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="blockwise concatenate not implemented")
 def test_blockwise_concatenate():
     x = da.ones((4, 4, 4), chunks=(2, 2, 2))
     y = da.ones((4, 4), chunks=(2, 2))
