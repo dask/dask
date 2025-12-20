@@ -370,8 +370,10 @@ class CopyArray(ArrayExpr):
 class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
     _parameters = ["arr"]
 
+    @cached_property
     def chunks(self):
-        return (self.arr.shape,)
+        # Each dimension has a single chunk with the full size
+        return tuple((s,) for s in self.arr.shape)
 
     def _simplify_down(self):
         if all(n == 1 for n in self.arr.numblocks):

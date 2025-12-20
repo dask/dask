@@ -15,18 +15,17 @@ The array-expr system is nearly complete for array-only operations. The remainin
 2. **Cross-Module Integration** - Dataframe↔array, delayed↔array interactions
 3. **Deferred** - Tests that check internal implementation details (HLG, graph structure)
 
-## Active Regressions (Priority 1)
+## Active Regressions (Priority 1) - ✅ All Fixed
 
-These tests were working and have regressed. Fix immediately.
+| Test | Issue | Status |
+|------|-------|--------|
+| `test_average_weights_with_masked_array` (2 tests) | `asanyarray()` in `_average()` uses legacy import | ✅ Fixed (late import already added) |
+| `test_array_bag_delayed`, `test_finalize_name` | `FinalizeComputeArray.chunks` wrong + missing decorator | ✅ Fixed |
 
-| Test | Issue | Fix |
-|------|-------|-----|
-| `test_average_weights_with_masked_array` (2 tests) | `asanyarray()` in `_average()` uses legacy import | Use late import like `broadcast_to` fix |
-| `test_array_bag_delayed`, `test_finalize_name` | `FinalizeComputeArray.chunks` missing decorator | Add `@cached_property` to `_expr.py:373` |
-
-**Root Cause 1:** Line 2514 in `routines.py` calls `asanyarray(a)` which imports from `dask.array.core` (legacy). When an array-expr Array is passed, it triggers the "already a Dask collection" warning. The `broadcast_to` import was fixed with a late import pattern but `asanyarray` still uses the module-level import.
-
-**Root Cause 2:** `FinalizeComputeArray.chunks` at `dask/array/_array_expr/_expr.py:373` is defined as `def chunks(self):` but missing the `@cached_property` decorator. This causes `'method' object is not iterable` when delayed tries to unpack array collections.
+**Fixes Applied:**
+1. Added `@cached_property` decorator to `FinalizeComputeArray.chunks`
+2. Fixed `chunks` to return `tuple((s,) for s in self.arr.shape)` instead of `(self.arr.shape,)` - the old code was wrong for 0-d arrays and produced incorrect dimensionality for all arrays
+3. Added `@pytest.mark.filterwarnings("ignore:Computing mixed collections")` to `test_array_bag_delayed` since mixing bags (HLG) with arrays (expr) is expected to warn
 
 ## Cross-Module Integration (Priority 2)
 
@@ -184,9 +183,9 @@ These have xfails that aren't array-expr specific:
 
 ## Recommended Work Order
 
-### Immediate (Fix Regressions)
-1. Fix `FinalizeComputeArray.chunks` - add `@cached_property` decorator at `_expr.py:373`
-2. Fix `_average()` to use late imports for `asanyarray` - matches existing `broadcast_to` fix
+### Immediate (Fix Regressions) - ✅ Done
+1. ~~Fix `FinalizeComputeArray.chunks`~~ ✅ Fixed (decorator + correct chunking logic)
+2. ~~Fix `_average()` late imports~~ ✅ Already fixed
 
 ### Short Term (Cross-Module Integration)
 3. Add `rename` parameter to `from_graph()` - enables `clone()` support
