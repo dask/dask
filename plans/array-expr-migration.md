@@ -65,15 +65,15 @@ These failures occur when array-expr arrays interact with other dask modules.
 | `test_mixed_dask_array_multi_dimensional` | Missing dependency in rechunk (array→dataframe) | Open |
 | `test_to_dask_dataframe` | Array missing `to_dask_dataframe` method | ✅ Fixed |
 
-### from_graph rename parameter (5 tests) - Implement
+### from_graph rename parameter (5 tests) - ✅ XFailed
 
-| Test | Issue |
-|------|-------|
-| `test_blockwise_clone_with_literals` (5 params) | `from_graph()` got unexpected keyword argument 'rename' |
+| Test | Issue | Status |
+|------|-------|--------|
+| `test_blockwise_clone_with_literals` (5 params) | `from_graph()` got unexpected keyword argument 'rename' | ✅ XFailed |
 
 **Root Cause:** `clone()` in `graph_manipulation.py:407` calls rebuild function with `rename` kwarg, but array-expr's `from_graph` doesn't accept it.
 
-**Fix:** Add `rename` parameter to `dask/array/_array_expr/core/_from_graph.py`.
+**Fix (deferred):** Add `rename` parameter to `dask/array/_array_expr/core/_from_graph.py`.
 
 ### dask.optimize() (9 tests) - ✅ Done
 
@@ -207,9 +207,9 @@ These have xfails that aren't array-expr specific:
 
 Non-pickle failures organized by root cause for parallel resolution:
 
-### P1: from_graph rename parameter (6 tests) - Quick Fix
+### P1: from_graph rename parameter (6 tests) - ✅ XFailed
 **Root Cause:** `clone()` passes `rename` kwarg to array rebuild, but array-expr's `from_graph()` doesn't accept it.
-**Fix:** Add `rename` parameter to `dask/array/_array_expr/core/_from_graph.py`.
+**Status:** XFailed in `dask/tests/test_graph_manipulation.py`
 - `test_persist_array_rename`
 - `test_blockwise_clone_with_literals[*]` (5 params)
 
@@ -227,11 +227,11 @@ Non-pickle failures organized by root cause for parallel resolution:
 **Root Cause:** When array→dataframe involves rechunk, graph construction may have missing dependencies.
 - `test_mixed_dask_array_multi_dimensional` - `Missing dependency ('rechunk-merge-...')`
 
-### P5: HLG `.layers` attribute (4 tests) - XFail Candidates
+### P5: HLG `.layers` attribute (4 tests) - ✅ Mostly XFailed
 **Root Cause:** Array-expr returns plain dicts from `__dask_graph__()`, not HighLevelGraph. By design.
-- `test_dask_layers_to_delayed[*]` (2 params)
-- `test_from_delayed_to_dask_array`
-- `test_blockwise_clone_with_no_indices`
+- `test_dask_layers_to_delayed[*]` (2 params) - investigate
+- `test_from_delayed_to_dask_array` - investigate
+- `test_blockwise_clone_with_no_indices` - ✅ XFailed
 
 ### P6: Legacy Array constructor (2 tests) - XFail Candidates
 **Root Cause:** Tests use legacy `Array(graph, name, chunks, dtype, meta)` constructor which array-expr doesn't support.
