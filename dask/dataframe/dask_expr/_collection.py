@@ -5128,10 +5128,19 @@ def from_dask_array(x, columns=None, index=None, meta=None) -> DataFrame:
     dask.dataframe.DataFrame.values: Reverse conversion
     dask.dataframe.DataFrame.to_records: Reverse conversion
     """
-    from dask.dataframe.io import from_dask_array
+    import dask.array as da
 
     if columns is not None and isinstance(columns, list) and not len(columns):
         columns = None
+
+    if da._array_expr_enabled():
+        # Use expression-based approach for array-expr
+        from dask.dataframe.dask_expr._array import from_dask_array_expr
+
+        return from_dask_array_expr(x, columns=columns, index=index, meta=meta)
+
+    from dask.dataframe.io import from_dask_array
+
     return from_dask_array(x, columns=columns, index=index, meta=meta)
 
 

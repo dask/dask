@@ -1050,6 +1050,37 @@ class Array(DaskMethodsMixin):
         L = ndeepmap(self.ndim, lambda k: Delayed(k, graph), keys)
         return np.array(L, dtype=object)
 
+    def to_dask_dataframe(self, columns=None, index=None, meta=None):
+        """Convert dask Array to dask Dataframe
+
+        Parameters
+        ----------
+        columns: list or string
+            list of column names if DataFrame, single string if Series
+        index : dask.dataframe.Index, optional
+            An optional *dask* Index to use for the output Series or DataFrame.
+
+            The default output index depends on whether the array has any unknown
+            chunks. If there are any unknown chunks, the output has ``None``
+            for all the divisions (one per chunk). If all the chunks are known,
+            a default index with known divisions is created.
+
+            Specifying ``index`` can be useful if you're conforming a Dask Array
+            to an existing dask Series or DataFrame, and you would like the
+            indices to match.
+        meta : object, optional
+            An optional `meta` parameter can be passed for dask
+            to specify the concrete dataframe type to use for partitions of
+            the Dask dataframe. By default, pandas DataFrame is used.
+
+        See Also
+        --------
+        dask.dataframe.from_dask_array
+        """
+        from dask.dataframe.dask_expr._array import from_dask_array_expr
+
+        return from_dask_array_expr(self, columns=columns, index=index, meta=meta)
+
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         """
         Return the sum of the array elements over the given axis.
