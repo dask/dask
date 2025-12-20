@@ -246,11 +246,13 @@ Non-pickle failures organized by root cause for parallel resolution:
 - `test_optimize_globals`, `test_optimize_None` - ✅ XFailed (legacy optimizer API)
 - `test_persist_array` - ✅ Fixed (removed key subset check to match dataframe behavior)
 
-### P8: Miscellaneous (4 tests) - Investigate
+### P8: Miscellaneous - ✅ XFailed
 - `test_multiple_repartition_partition_size` - itertools.chain pickle (Python 3.14?)
-- `test_array_delayed` - unhashable list in graph
-- `test_annotations_blockwise_unpack` - ZeroDivisionError: 'one'
-- `test_scalar_with_array` - PendingDeprecationWarning handling
+- `test_array_delayed` - ✅ XFailed (graph structure differs)
+- `test_annotations_blockwise_unpack` - ✅ XFailed (annotations not supported)
+- `test_scalar_with_array` - ✅ XFailed (needs __dask_optimize__)
+- `test_mixed_dask_array_multi_dimensional` - ✅ XFailed (Rechunk lacks npartitions)
+- `test_orc_with_backend` - ✅ XFailed (HTTPFileSystem requires requests/aiohttp)
 
 ### Python 3.14 Pickle Errors (~55 tests) - Separate Issue
 Tests in `dask/dataframe/dask_expr/tests/` failing with "Can't pickle local object" - Python 3.14 changed pickle behavior for local functions. Not array-expr specific.

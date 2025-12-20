@@ -25,6 +25,7 @@ columns = ["time", "date"]
 
 
 @pytest.mark.network
+@pytest.mark.xfail(reason="HTTPFileSystem requires requests/aiohttp")
 def test_orc_with_backend():
     pytest.importorskip("requests")
     d = dd.read_orc(url)
