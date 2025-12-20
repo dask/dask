@@ -99,11 +99,11 @@ Let's review our work and see if there is anything we should simplify or clean
 up
 
 ### Phase 6: Full Test Suite & Cleanup
-Ensure all related tests pass and clean up.
+Ensure all array tests pass and clean up.
 
 ```bash
 # Run full test suite for the module
-DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/test_routines.py -v
+.venv/bin/pytest dask/array --array-expr
 
 # Check for any remaining xfail markers to remove
 grep -n "xfail.*{operation}" dask/array/tests/*.py
@@ -143,14 +143,22 @@ For operations that restructure arrays, implement custom `_layer()` logic.
 Run tests iteratively - they're your guide:
 ```bash
 # Quick check - stop on first failure
-DASK_ARRAY__QUERY_PLANNING=True pytest -k {operation} -x
+.venv/bin/pytest -k {operation} -x --array-expr
 
 # Verbose output for debugging
-DASK_ARRAY__QUERY_PLANNING=True pytest -k {operation} -v --tb=short
+.venv/bin/pytest -k {operation} -v --tb=short --array-expr
 
 # Run single specific test
-DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/tests/test_routines.py::test_{operation} -v
+.venv/bin/pytest dask/array/tests/test_routines.py::test_{operation} -v --array-expr
 ```
+
+### Anti-patterns
+
+Don't depend on legacy/traditional arrays.  It's ok to bring in isolated
+functions, but we definitely don't want to be creating and converting from the
+traditional array class.
+
+Avoid using from_graph when possible.  It's difficult to optimize through it.
 
 ## Reference Locations
 
