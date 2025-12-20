@@ -44,8 +44,20 @@ def _compute_sliced_chunks(chunks, slc, dim_size):
         return chunks
 
     start, stop, step = slc.indices(dim_size)
+
+    # Handle step == -1 (flip) specially - preserve chunks in reverse order
+    if step == -1:
+        # Check if this is a full flip (equivalent to slice(None, None, -1))
+        if start == dim_size - 1 and stop == -1:
+            # Full flip: reverse the chunks
+            return chunks[::-1]
+        else:
+            # Partial negative step: fall back to single chunk
+            new_size = len(range(start, stop, step))
+            return (new_size,)
+
     if step != 1:
-        # For non-unit step, fall back to single chunk
+        # For non-unit step (other than -1), fall back to single chunk
         new_size = len(range(start, stop, step))
         return (new_size,)
 
@@ -561,6 +573,9 @@ class SliceSlicesIntegers(Slice):
         if any(idx is None for idx in index):
             return None
         if any(not isinstance(idx, (slice, Integral)) for idx in index):
+            return None
+        # Don't push negative step slices - FromArray._layer doesn't handle them
+        if any(isinstance(idx, slice) and idx.step is not None and idx.step < 0 for idx in index):
             return None
 
         io_expr = self.array
