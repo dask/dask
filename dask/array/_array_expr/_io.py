@@ -176,7 +176,7 @@ class FromGraph(ArrayExpr):
 class FromArray(IO):
     _parameters = [
         "array",
-        "chunks",
+        "_chunks",
         "lock",
         "getitem",
         "inline_array",
@@ -186,6 +186,7 @@ class FromArray(IO):
         "_name_override",
     ]
     _defaults = {
+        "_chunks": "auto",
         "getitem": None,
         "inline_array": False,
         "meta": None,
@@ -205,10 +206,12 @@ class FromArray(IO):
         prefix = self.operand("_name_override") or "fromarray"
         return f"{prefix}-{self.deterministic_token}"
 
-    @property
+    @functools.cached_property
     def chunks(self):
-        # chunks are already normalized when passed from from_array()
-        return self.operand("chunks")
+        # Normalize chunks lazily - keeps repr compact with user-provided chunks
+        return normalize_chunks(
+            self.operand("_chunks"), self.array.shape, dtype=self.array.dtype
+        )
 
     @functools.cached_property
     def _meta(self):

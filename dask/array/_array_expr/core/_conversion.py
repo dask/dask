@@ -8,7 +8,7 @@ from collections.abc import Iterable
 
 import numpy as np
 
-from dask.array.core import getter_inline, normalize_chunks
+from dask.array.core import getter_inline
 from dask.array.utils import meta_from_array
 from dask.base import is_dask_collection, tokenize
 from dask.utils import SerializableLock
@@ -183,10 +183,10 @@ def from_array(
     if is_arraylike(x) and hasattr(x, "copy"):
         x = x.copy()
 
-    # Normalize chunks early to validate and catch errors
-    normalized_chunks = normalize_chunks(
-        chunks, x.shape, dtype=x.dtype
-    )
+    # Validate chunks early to catch errors, but store original for compact repr
+    from dask.array.core import normalize_chunks
+
+    normalize_chunks(chunks, x.shape, dtype=x.dtype)  # validates
 
     # Determine name prefix for the expression
     # User-provided name is used as prefix, deterministic token always appended
@@ -204,10 +204,11 @@ def from_array(
     if lock is True:
         lock = SerializableLock()
 
+    # Pass original chunks - normalization happens lazily in FromArray.chunks
     return new_collection(
         FromArray(
             x,
-            normalized_chunks,
+            chunks,
             lock=lock,
             asarray=asarray,
             fancy=fancy,
