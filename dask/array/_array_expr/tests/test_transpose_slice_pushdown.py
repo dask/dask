@@ -6,6 +6,10 @@ da = pytest.importorskip("dask.array")
 
 from dask.array.utils import assert_eq
 
+pytestmark = pytest.mark.skipif(
+    not da._array_expr_enabled(), reason="array_expr not enabled"
+)
+
 
 def test_transpose_integer_slice_2d():
     """x.T[0] should optimize to x[:, 0] (transpose eliminated)."""
