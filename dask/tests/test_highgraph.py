@@ -9,12 +9,13 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 import dask
-import dask.array as da
 from dask.base import collections_to_expr, tokenize
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
-from dask.utils_test import dec, inc
+from dask.utils_test import dec, import_or_none, inc
+
+da = import_or_none("dask.array")
 
 
 def test_visualize(tmpdir):
@@ -42,7 +43,7 @@ def test_basic():
 
 
 @pytest.mark.xfail(
-    da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
+    da and da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
 )
 def test_keys_values_items_to_dict_methods():
     pytest.importorskip("numpy")
@@ -155,7 +156,7 @@ def annot_map_fn(key):
 
 
 @pytest.mark.xfail(
-    da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
+    da and da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
 )
 @pytest.mark.parametrize(
     "annotation",
@@ -175,7 +176,7 @@ def test_single_annotation(annotation):
 
 
 @pytest.mark.xfail(
-    da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
+    da and da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
 )
 def test_multiple_annotations():
     pytest.importorskip("numpy")
@@ -239,7 +240,7 @@ def test_annotations_leak():
 
 
 @pytest.mark.xfail(
-    da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
+    da and da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
 )
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):

@@ -7,13 +7,14 @@ import pytest
 from packaging.version import Version
 
 import dask
-import dask.array as da
 from dask import delayed
 from dask._compatibility import WINDOWS
 from dask.base import collections_to_expr, key_split, visualize_dsk
 from dask.core import get_deps
 from dask.order import _connecting_to_roots, diagnostics, ndependencies, order
-from dask.utils_test import add, inc
+from dask.utils_test import add, import_or_none, inc
+
+da = import_or_none("dask.array")
 
 
 @pytest.fixture(
@@ -1999,7 +2000,7 @@ def test_flox_reduction(abcde):
 
 
 @pytest.mark.xfail(
-    da._array_expr_enabled(),
+    da and da._array_expr_enabled(),
     reason="array-expr graph structure differs, ordering heuristics may fail",
     strict=False,
 )
