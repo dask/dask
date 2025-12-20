@@ -5,10 +5,10 @@ Skill: `.claude/skills/array-expr-migration/SKILL.md`
 
 ## Current Status
 
-**Test Results (December 2025):**
-- Array tests: 4454 passed, 29 xfailed, 566 skipped (+ pre-existing rechunk issues)
-- Dataframe tests: 3568 passed, 16 failed, 578 skipped
-- Core/bag/diagnostics tests: 1187 passed, 41 failed, 76 skipped
+**Test Results (December 20, 2025):**
+- Full test suite: 14536 passed, ~32 failed (non-pickle), ~55 pickle errors (Python 3.14), 252 xfailed, 293 xpassed
+- The 293 xpassed tests indicate many previously-failing tests now pass
+- Pickle errors are Python 3.14 compatibility issues, not array-expr specific
 
 **Recent Progress:**
 - Dataframe↔Array bridge implemented with `DataFrameToArray` expression
@@ -59,11 +59,11 @@ These failures occur when array-expr arrays interact with other dask modules.
 - `test_values_expr_structure` ✅ (new test)
 
 **Remaining issues (pre-existing, unrelated to bridge):**
-| Test | Issue |
-|------|-------|
-| `test_map_partition_array[func1]` | recarray meta type mismatch |
-| `test_mixed_dask_array_multi_dimensional` | Missing dependency in rechunk (array→dataframe) |
-| `test_to_dask_dataframe` | Array missing `to_dask_dataframe` method |
+| Test | Issue | Status |
+|------|-------|--------|
+| `test_map_partition_array[func1]` | recarray meta type mismatch | Open |
+| `test_mixed_dask_array_multi_dimensional` | Missing dependency in rechunk (array→dataframe) | Open |
+| `test_to_dask_dataframe` | Array missing `to_dask_dataframe` method | ✅ Fixed |
 
 ### from_graph rename parameter (5 tests) - Implement
 
@@ -202,6 +202,58 @@ These have xfails that aren't array-expr specific:
 |------|-------|
 | `test_select_broadcasting` | General dask issue |
 | `test_two[ttest_1samp-kwargs2]` | scipy 1.10+ compatibility |
+
+## Parallel Work Categories (December 20, 2025)
+
+Non-pickle failures organized by root cause for parallel resolution:
+
+### P1: from_graph rename parameter (6 tests) - Quick Fix
+**Root Cause:** `clone()` passes `rename` kwarg to array rebuild, but array-expr's `from_graph()` doesn't accept it.
+**Fix:** Add `rename` parameter to `dask/array/_array_expr/core/_from_graph.py`.
+- `test_persist_array_rename`
+- `test_blockwise_clone_with_literals[*]` (5 params)
+
+### P2: recarray type preservation (5 tests) - Medium
+**Root Cause:** `np.concatenate` on recarrays returns regular ndarray. Array-expr's `FinalizeComputeArray` uses rechunk→concatenate which loses recarray type.
+**Fix:** Either use `np.rec.concatenate()` for recarrays, or convert result back to recarray based on meta type in finalize.
+- `test_to_records`, `test_to_records_with_lengths[*]` (in both io/tests and dask_expr/io/tests)
+
+### P3: map_blocks with non-array output (2 tests) - Medium
+**Root Cause:** When map_blocks produces non-array results (DataFrame, recarray), the meta type or dtype handling is wrong.
+- `test_array_to_df_conversion` - `dtype=None` in rechunk causes `'NoneType' has no attribute 'itemsize'`
+- `test_map_partition_array[func1]` - recarray meta type mismatch
+
+### P4: rechunk missing dependencies (1 test) - Medium
+**Root Cause:** When array→dataframe involves rechunk, graph construction may have missing dependencies.
+- `test_mixed_dask_array_multi_dimensional` - `Missing dependency ('rechunk-merge-...')`
+
+### P5: HLG `.layers` attribute (4 tests) - XFail Candidates
+**Root Cause:** Array-expr returns plain dicts from `__dask_graph__()`, not HighLevelGraph. By design.
+- `test_dask_layers_to_delayed[*]` (2 params)
+- `test_from_delayed_to_dask_array`
+- `test_blockwise_clone_with_no_indices`
+
+### P6: Legacy Array constructor (2 tests) - XFail Candidates
+**Root Cause:** Tests use legacy `Array(graph, name, chunks, dtype, meta)` constructor which array-expr doesn't support.
+- `test_from_dask_array_unknown_chunks`
+- `test_from_dask_array_unknown_width_error`
+
+### P7: Mixed collections & optimize behavior (7 tests) - Investigate
+**Root Cause:** Array-expr arrays mixed with HLG-based collections behave differently.
+- `test_compute_array_bag`, `test_persist_array_bag` - warning expected but changes behavior
+- `test_compute_array_dataframe` - expected warning not raised
+- `test_compute_as_if_collection_low_level_task_graph` - expects HLG
+- `test_optimize_globals`, `test_optimize_None` - optimizer differences
+- `test_persist_array` - persist behavior
+
+### P8: Miscellaneous (4 tests) - Investigate
+- `test_multiple_repartition_partition_size` - itertools.chain pickle (Python 3.14?)
+- `test_array_delayed` - unhashable list in graph
+- `test_annotations_blockwise_unpack` - ZeroDivisionError: 'one'
+- `test_scalar_with_array` - PendingDeprecationWarning handling
+
+### Python 3.14 Pickle Errors (~55 tests) - Separate Issue
+Tests in `dask/dataframe/dask_expr/tests/` failing with "Can't pickle local object" - Python 3.14 changed pickle behavior for local functions. Not array-expr specific.
 
 ## Recommended Work Order
 
