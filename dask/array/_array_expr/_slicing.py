@@ -547,8 +547,8 @@ class SliceSlicesIntegers(Slice):
         axes = transpose.axes
         index = self.index
 
-        # Don't handle dimension-changing slices (integers, None/newaxis)
-        if any(isinstance(idx, Integral) or idx is None for idx in index):
+        # Don't handle None/newaxis (adds dimensions)
+        if any(idx is None for idx in index):
             return None
 
         # Pad index to full length
@@ -562,7 +562,38 @@ class SliceSlicesIntegers(Slice):
             input_index[in_axis] = full_index[out_axis]
 
         sliced_input = new_collection(transpose.array)[tuple(input_index)]
-        return Transpose(sliced_input.expr, axes)
+
+        # Check if any dimensions were removed by integer indexing
+        has_integers = any(isinstance(idx, Integral) for idx in full_index)
+
+        if not has_integers:
+            # No dimension changes - just apply original transpose
+            return Transpose(sliced_input.expr, axes)
+
+        # Integer indices remove dimensions - compute new axes for remaining dims
+        # Track which input dimensions remain (those not indexed by integers)
+        remaining_input_dims = [
+            in_axis for out_axis, in_axis in enumerate(axes)
+            if not isinstance(full_index[out_axis], Integral)
+        ]
+
+        if len(remaining_input_dims) <= 1:
+            # 0 or 1 dimension left - no transpose needed
+            return sliced_input.expr
+
+        # Map old input dim indices to new (post-slice) indices
+        # After slicing, input dims are renumbered 0, 1, 2, ...
+        sorted_remaining = sorted(remaining_input_dims)
+        dim_map = {old: new for new, old in enumerate(sorted_remaining)}
+
+        # Build new axes: for each remaining output dim, what's the new input dim?
+        new_axes = tuple(dim_map[in_dim] for in_dim in remaining_input_dims)
+
+        # Check if it's an identity transpose
+        if new_axes == tuple(range(len(new_axes))):
+            return sliced_input.expr
+
+        return Transpose(sliced_input.expr, new_axes)
 
     def _pushdown_into_io(self):
         """Push slice into IO expression by setting a region (deferred slice)."""
