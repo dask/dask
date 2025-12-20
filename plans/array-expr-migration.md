@@ -6,7 +6,7 @@ Skill: `.claude/skills/array-expr-migration/SKILL.md`
 ## Current Status
 
 **Test Results (December 2025):**
-- Array tests: 4509 passed, 32 xfailed, 2 failed, 610 skipped
+- Array tests: 4454 passed, 29 xfailed, 566 skipped (+ pre-existing rechunk issues)
 - Dataframe tests: 3568 passed, 16 failed, 578 skipped
 - Core/bag/diagnostics tests: 1187 passed, 41 failed, 76 skipped
 
@@ -142,14 +142,14 @@ These tests construct Arrays directly from dicts/graphs. Array-expr fundamentall
 
 ### Category D: Specific Features (6 tests) - Mixed Priority
 
-| Test | Location | Issue | Priority |
-|------|----------|-------|----------|
-| `test_store_regions` | test_array_core.py:2171 | Graph dependency in regions | Medium |
-| `test_linspace[True/False]` | test_creation.py:132 | Dask scalar inputs | Low |
-| `test_partitions_indexer` | test_array_core.py:5474 | `.partitions` property | Low |
-| `test_index_array_with_array_3d_2d` | test_array_core.py:3828 | Chunk alignment | Low |
-| `test_positional_indexer_newaxis` | test_slicing.py (not found in grep) | np.newaxis handling | Low |
-| `test_map_blocks_dataframe` | test_array_core.py:4824 | DataFrame from map_blocks | Low (architectural) |
+| Test | Location | Issue | Status |
+|------|----------|-------|--------|
+| `test_store_regions` | test_array_core.py:2171 | Graph dependency in regions | ✅ Fixed (FromGraph key prefix matching) |
+| `test_linspace[True/False]` | test_creation.py:132 | Dask scalar inputs | ⏭️ Deferred (requires architectural changes) |
+| `test_partitions_indexer` | test_array_core.py:5474 | `.partitions` property | ✅ Fixed (added partitions alias) |
+| `test_index_array_with_array_3d_2d` | test_array_core.py:3828 | Chunk alignment | ❌ Not array-expr specific |
+| `test_positional_indexer_newaxis` | test_slicing.py:1119 | np.newaxis handling | ✅ Fixed (added ExpandDims expr) |
+| `test_map_blocks_dataframe` | test_array_core.py:4824 | DataFrame from map_blocks | ❌ Not array-expr specific |
 
 ### Category E: Design Decisions (4 tests) - Won't Fix
 
@@ -199,11 +199,11 @@ These have xfails that aren't array-expr specific:
    - Provide `chunks`, `dtype`, `shape`, `_meta` properties
    - Delegate graph generation to underlying dataframe expression
 
-### Existing Array Work
-7. Store regions graph dependencies
+### Existing Array Work (Category D - ✅ Done)
+7. ~~Store regions graph dependencies~~ ✅ Done
 8. ~~Block_id fusion support~~ ✅ Done
-9. Linspace with dask scalars
-10. Partitions indexer
+9. ~~Linspace with dask scalars~~ Deferred (requires 0-d array computation)
+10. ~~Partitions indexer~~ ✅ Done
 
 ### Deferred
 - Legacy graph API tests (by design)

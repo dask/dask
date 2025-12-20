@@ -1116,7 +1116,6 @@ def test_vindex_with_dask_array():
         darr.vindex[(dindexer, None)]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr")
 def test_positional_indexer_newaxis():
     arr = da.array([0, 1, 2])
     new = arr[[True, True, False], np.newaxis]

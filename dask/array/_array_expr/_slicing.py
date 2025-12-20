@@ -271,9 +271,17 @@ def slice_with_newaxes(x, index):
     x = slice_wrap_lists(x, index2, not where_none)
 
     if where_none:
-        return SlicesWrapNone(
-            x.array, x.index, x.allow_getitem_optimization, where_none
-        )
+        # Check if result has the expected attributes for SlicesWrapNone
+        if hasattr(x, 'index') and hasattr(x, 'allow_getitem_optimization'):
+            return SlicesWrapNone(
+                x.array, x.index, x.allow_getitem_optimization, where_none
+            )
+        else:
+            # For other expression types (e.g., Shuffle from fancy indexing),
+            # use expand_dims to add the new axes. Need to wrap in Array first.
+            from dask.array._array_expr._collection import Array
+            from dask.array._array_expr.manipulation._expand import expand_dims
+            return expand_dims(Array(x), axis=tuple(where_none)).expr
 
     else:
         return x

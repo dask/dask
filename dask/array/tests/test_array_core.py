@@ -2168,7 +2168,6 @@ def test_store():
     pytest.raises(ValueError, lambda: da.store([at, bt], [at, bt]))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="store regions has graph dependency issues in array-expr", strict=False)
 def test_store_regions():
     d = da.ones((4, 4, 4), dtype=int, chunks=(2, 2, 2))
     a, b = d + 1, d + 2
@@ -5471,7 +5470,6 @@ def test_blocks_indexer():
         x.blocks[100, 100]
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="not implemented for array-expr", strict=False)
 def test_partitions_indexer():
     # .partitions is an alias of .blocks for dask arrays
     x = da.arange(10, chunks=2)
