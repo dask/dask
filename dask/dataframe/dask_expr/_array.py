@@ -112,6 +112,108 @@ def create_values_array(frame, chunks=None, meta=None):
     return Array(Values(frame, chunks, meta))
 
 
+class MapBlocksToDataFrame(Expr):
+    """DataFrame expression from array map_blocks with DataFrame output.
+
+    This is used when array map_blocks produces DataFrame/Series output.
+    Instead of creating an ArrayExpr and aliasing, this generates
+    DataFrame-keyed tasks directly.
+
+    Parameters
+    ----------
+    func : callable
+        Function to apply to each block
+    meta : DataFrame or Series
+        Metadata for the output
+    name_prefix : str
+        Prefix for the output name
+    out_ind : tuple
+        Output indices for blockwise
+    args : tuple
+        Alternating (array, indices) pairs and scalar arguments
+    kwargs : dict
+        Keyword arguments for func
+    """
+
+    _parameters = ["func", "meta", "name_prefix", "out_ind", "args", "kwargs"]
+    _defaults = {"kwargs": None}
+
+    @functools.cached_property
+    def _name(self):
+        return f"{self.name_prefix}-{self.deterministic_token}"
+
+    @functools.cached_property
+    def _meta(self):
+        return self.operand("meta")
+
+    @functools.cached_property
+    def _npartitions(self):
+        # Number of partitions = number of blocks in first dimension
+        for arr, ind in self._array_args:
+            if ind is not None:
+                return arr.numblocks[0]
+        return 1
+
+    @functools.cached_property
+    def _array_args(self):
+        """Parse args into (array, indices) pairs."""
+        import toolz
+
+        return list(toolz.partition(2, self.args))
+
+    def _divisions(self):
+        # Each partition has its own index (0, 1, 2, ...)
+        # So we use unknown divisions
+        return (None,) * (self._npartitions + 1)
+
+    def _layer(self):
+        from dask.layers import ArrayBlockwiseDep
+
+        dsk = {}
+        npartitions = self._npartitions
+        out_ind = self.out_ind
+        kwargs = self.kwargs or {}
+
+        for i in range(npartitions):
+            key = (self._name, i)
+
+            # Build block_id for this partition
+            # For output, we only care about the first dimension (partitions)
+            block_id = (i,) + (0,) * (len(out_ind) - 1)
+
+            # Map output indices to block coordinates
+            idx_to_block = {idx: block_id[dim] for dim, idx in enumerate(out_ind)}
+
+            # Build arguments for this task
+            task_args = []
+            for arr, ind in self._array_args:
+                if ind is None:
+                    # Scalar argument
+                    task_args.append(arr)
+                elif isinstance(arr, ArrayBlockwiseDep):
+                    # Special dependency type
+                    input_block_id = tuple(idx_to_block.get(j, 0) for j in ind)
+                    task_args.append(arr[input_block_id])
+                else:
+                    # Array expression - compute input block id
+                    input_block_id = tuple(
+                        idx_to_block.get(j, 0) % arr.numblocks[dim]
+                        for dim, j in enumerate(ind)
+                    )
+                    task_args.append(TaskRef((arr._name, *input_block_id)))
+
+            dsk[key] = Task(key, self.func, *task_args, **kwargs)
+
+        return dsk
+
+    def dependencies(self):
+        deps = []
+        for arr, ind in self._array_args:
+            if ind is not None and hasattr(arr, "_name"):
+                deps.append(arr)
+        return deps
+
+
 class FromDaskArray(Expr):
     """DataFrame expression from a Dask Array.
 

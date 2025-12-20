@@ -505,4 +505,47 @@ def map_blocks(
             **kwargs,
         )
 
+    # If output is DataFrame-like, create a DataFrame expression directly
+    # instead of returning an Array with DataFrame blocks
+    from dask.utils import is_dataframe_like, is_index_like, is_series_like
+
+    if meta is not None and (
+        is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta)
+    ):
+        try:
+            from dask.dataframe.dask_expr._array import MapBlocksToDataFrame
+            from dask.dataframe.dask_expr._collection import new_collection
+
+            # Helper to convert Array to expr
+            def to_expr(arr):
+                return arr.expr if isinstance(arr, Array) else arr
+
+            # Build args list with expressions
+            if extra_argpairs:
+                # Function wrapped with block_info/block_id injection
+                actual_func = _pass_extra_kwargs
+                expr_args = [func, None, tuple(extra_names), None]
+                for arr, ind in extra_argpairs:
+                    expr_args.extend([arr, ind])
+                for arr, ind in argpairs:
+                    expr_args.extend([to_expr(arr), ind])
+            else:
+                actual_func = func
+                expr_args = []
+                for arr, ind in argpairs:
+                    expr_args.extend([to_expr(arr), ind])
+
+            return new_collection(
+                MapBlocksToDataFrame(
+                    actual_func,
+                    meta,
+                    token_prefix,
+                    out_ind,
+                    tuple(expr_args),
+                    kwargs or None,
+                )
+            )
+        except ImportError:
+            pass  # dask.dataframe not available
+
     return out
