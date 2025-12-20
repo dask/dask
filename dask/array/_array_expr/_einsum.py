@@ -7,12 +7,13 @@ import math
 import numpy as np
 
 from dask import config
-from dask.array.core import einsum_lookup
 from dask.array.einsumfuncs import chunk_einsum, einsum_symbols, einsum_symbols_set
 from dask.utils import cached_max, derived_from
 
 
-def _calculate_new_chunksizes(old_chunks, new_chunks, changeable_dimensions, target_size):
+def _calculate_new_chunksizes(
+    old_chunks, new_chunks, changeable_dimensions, target_size
+):
     """Calculate new chunk sizes for einsum rechunking."""
     from dask.array._shuffle import _calculate_new_chunksizes as _calc
 

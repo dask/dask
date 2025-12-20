@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from itertools import product
 from numbers import Number
 

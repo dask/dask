@@ -7,8 +7,6 @@ import numpy as np
 import pytest
 
 import dask.array as da
-
-
 import dask.array.fft
 from dask.array.core import normalize_chunks
 from dask.array.fft import fft_wrap

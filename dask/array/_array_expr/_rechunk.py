@@ -111,9 +111,8 @@ class Rechunk(ArrayExpr):
             return self._pushdown_through_elemwise()
 
         # Rechunk(IO) -> IO with new chunks (if IO supports it)
-        if (
-            getattr(self.array, "_can_rechunk_pushdown", False)
-            and isinstance(self._chunks, tuple)
+        if getattr(self.array, "_can_rechunk_pushdown", False) and isinstance(
+            self._chunks, tuple
         ):
             # Keep the same name prefix - the token will change with the new chunks
             return self.array.substitute_parameters({"_chunks": self.chunks})
@@ -318,7 +317,9 @@ def _compute_rechunk(old_name, old_chunks, chunks, level, name):
             x2[key] = Alias(key, source_key)
         else:
             # Multiple source blocks - concatenate
-            x2[key] = Task(key, concatenate3, _convert_to_task_refs(rec_cat_arg.tolist()))
+            x2[key] = Task(
+                key, concatenate3, _convert_to_task_refs(rec_cat_arg.tolist())
+            )
 
     del old_blocks, new_index
 

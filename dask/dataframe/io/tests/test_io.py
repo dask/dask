@@ -467,7 +467,10 @@ def test_from_dask_array_struct_dtype():
     )
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="Legacy Array constructor not supported in array-expr")
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="Legacy Array constructor not supported in array-expr",
+)
 def test_from_dask_array_unknown_chunks():
     # Series
     dx = da.Array(
@@ -504,7 +507,10 @@ def test_from_dask_array_empty_chunks(chunksizes, expected_divisions):
     assert df.divisions == expected_divisions
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="Legacy Array constructor not supported in array-expr")
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="Legacy Array constructor not supported in array-expr",
+)
 def test_from_dask_array_unknown_width_error():
     dsk = {("x", 0, 0): np.random.random((2, 3)), ("x", 1, 0): np.random.random((5, 3))}
     dx = da.Array(dsk, "x", ((np.nan, np.nan), (np.nan,)), np.float64)
@@ -620,7 +626,9 @@ def test_to_records_with_lengths(lengths):
     ddf = dd.from_pandas(df, 2)
 
     result = ddf.to_records(lengths=lengths)
-    assert_eq(df.to_records(), result, check_type=False, check_meta=False)  # TODO: make check_type pass
+    assert_eq(
+        df.to_records(), result, check_type=False, check_meta=False
+    )  # TODO: make check_type pass
 
     assert isinstance(result, da.Array)
 
@@ -677,7 +685,9 @@ def test_from_delayed():
     assert str(e.value).startswith("Metadata mismatch found in `from_delayed`")
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG")
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="array-expr returns dict graphs, not HLG"
+)
 def test_from_delayed_to_dask_array():
     # Check that `from_delayed`` can be followed
     # by `to_dask_array` without breaking

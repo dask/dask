@@ -1,4 +1,5 @@
 """Tests for array-expr blockwise fusion."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -84,7 +85,7 @@ def test_fusion_with_different_chunks():
     y = da.ones((12,), chunks=6)  # 2 chunks
     # After unify_chunks, both will have same chunking
     z = (x + y) * 2
-    expr = z.expr.optimize(fuse=True)
+    z.expr.optimize(fuse=True)  # Just verify it doesn't error
     # May or may not fuse depending on chunk unification, but should compute correctly
     assert_eq(z, (np.ones(12) + np.ones(12)) * 2)
 
@@ -122,7 +123,7 @@ def test_transpose_elemwise_fusion():
 def test_elemwise_transpose_elemwise_fusion():
     """Elemwise + transpose + elemwise chain fuses"""
     x = da.ones((6, 8), chunks=(3, 4))
-    y = ((x + 1).T * 2)
+    y = (x + 1).T * 2
     expr = y.expr.optimize(fuse=True)
     assert isinstance(expr, FusedBlockwise)
     assert len(expr.exprs) == 4  # ones + add + transpose + mul

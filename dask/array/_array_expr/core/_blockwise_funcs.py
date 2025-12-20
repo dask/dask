@@ -251,7 +251,6 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     blockwise
     """
     # Lazy import to avoid circular dependency
-    from dask.array._array_expr._collection import Array
     from dask.array._array_expr.core import asanyarray
 
     # Normalize where parameter

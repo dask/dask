@@ -107,9 +107,7 @@ class ConcatenateFinalize(ArrayExpr):
         keys_list = convert_keys(arr_keys)
 
         out_key = (self._name,) + (0,) * self.arr.ndim
-        return {
-            out_key: Task(out_key, concatenate3, keys_list)
-        }
+        return {out_key: Task(out_key, concatenate3, keys_list)}
 
 
 def concatenate(seq, axis=0, allow_unknown_chunksizes=False):

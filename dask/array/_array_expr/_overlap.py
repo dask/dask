@@ -932,8 +932,8 @@ def push(array, n, axis):
 
         Requires bottleneck to be installed.
     """
-    from dask._compatibility import import_optional_dependency
     import dask.array as da
+    from dask._compatibility import import_optional_dependency
 
     import_optional_dependency("bottleneck", min_version="1.3.7")
 

@@ -21,6 +21,7 @@ def normalize_masked_array(x):
 @derived_from(np.ma)
 def filled(a, fill_value=None):
     import dask.array as da
+
     a = da.asanyarray(a)
     return a.map_blocks(np.ma.filled, fill_value=fill_value)
 
@@ -29,6 +30,7 @@ def _wrap_masked(f):
     @wraps(f)
     def _(a, value):
         import dask.array as da
+
         a = da.asanyarray(a)
         value = da.asanyarray(value)
         ainds = tuple(range(a.ndim))[::-1]
@@ -49,6 +51,7 @@ masked_not_equal = _wrap_masked(np.ma.masked_not_equal)
 @derived_from(np.ma)
 def masked_equal(a, value):
     import dask.array as da
+
     a = da.asanyarray(a)
     if getattr(value, "shape", ()):
         raise ValueError("da.ma.masked_equal doesn't support array `value`s")
@@ -59,12 +62,14 @@ def masked_equal(a, value):
 @derived_from(np.ma)
 def masked_invalid(a):
     import dask.array as da
+
     return da.asanyarray(a).map_blocks(np.ma.masked_invalid)
 
 
 @derived_from(np.ma)
 def masked_inside(x, v1, v2):
     import dask.array as da
+
     x = da.asanyarray(x)
     return x.map_blocks(np.ma.masked_inside, v1, v2)
 
@@ -72,6 +77,7 @@ def masked_inside(x, v1, v2):
 @derived_from(np.ma)
 def masked_outside(x, v1, v2):
     import dask.array as da
+
     x = da.asanyarray(x)
     return x.map_blocks(np.ma.masked_outside, v1, v2)
 
@@ -79,6 +85,7 @@ def masked_outside(x, v1, v2):
 @derived_from(np.ma)
 def masked_where(condition, a):
     import dask.array as da
+
     cshape = getattr(condition, "shape", ())
     if cshape and cshape != a.shape:
         raise IndexError(
@@ -97,6 +104,7 @@ def masked_where(condition, a):
 @derived_from(np.ma)
 def masked_values(x, value, rtol=1e-05, atol=1e-08, shrink=True):
     import dask.array as da
+
     x = da.asanyarray(x)
     if getattr(value, "shape", ()):
         raise ValueError("da.ma.masked_values doesn't support array `value`s")
@@ -108,6 +116,7 @@ def masked_values(x, value, rtol=1e-05, atol=1e-08, shrink=True):
 @derived_from(np.ma)
 def fix_invalid(a, fill_value=None):
     import dask.array as da
+
     a = da.asanyarray(a)
     return a.map_blocks(np.ma.fix_invalid, fill_value=fill_value)
 
@@ -115,6 +124,7 @@ def fix_invalid(a, fill_value=None):
 @derived_from(np.ma)
 def getdata(a):
     import dask.array as da
+
     a = da.asanyarray(a)
     return a.map_blocks(np.ma.getdata)
 
@@ -122,6 +132,7 @@ def getdata(a):
 @derived_from(np.ma)
 def getmaskarray(a):
     import dask.array as da
+
     a = da.asanyarray(a)
     return a.map_blocks(np.ma.getmaskarray)
 
@@ -135,6 +146,7 @@ def _masked_array(data, mask=np.ma.nomask, masked_dtype=None, **kwargs):
 @derived_from(np.ma)
 def masked_array(data, mask=np.ma.nomask, fill_value=None, **kwargs):
     import dask.array as da
+
     data = da.asanyarray(data)
     inds = tuple(range(data.ndim))
     arginds = [inds, data, inds]
@@ -173,6 +185,7 @@ def _set_fill_value(x, fill_value):
 @derived_from(np.ma)
 def set_fill_value(a, fill_value):
     import dask.array as da
+
     a = da.asanyarray(a)
     if getattr(fill_value, "shape", ()):
         raise ValueError("da.ma.set_fill_value doesn't support array `value`s")
@@ -198,6 +211,7 @@ def _chunk_count(x, axis=None, keepdims=None):
 @derived_from(np.ma)
 def count(a, axis=None, keepdims=False, split_every=None):
     import dask.array as da
+
     return da.reduction(
         a,
         _chunk_count,
@@ -213,6 +227,7 @@ def count(a, axis=None, keepdims=False, split_every=None):
 @derived_from(np.ma.core)
 def ones_like(a, **kwargs):
     import dask.array as da
+
     a = da.asanyarray(a)
     return a.map_blocks(np.ma.core.ones_like, **kwargs)
 
@@ -220,6 +235,7 @@ def ones_like(a, **kwargs):
 @derived_from(np.ma.core)
 def zeros_like(a, **kwargs):
     import dask.array as da
+
     a = da.asanyarray(a)
     return a.map_blocks(np.ma.core.zeros_like, **kwargs)
 
@@ -227,6 +243,7 @@ def zeros_like(a, **kwargs):
 @derived_from(np.ma.core)
 def empty_like(a, **kwargs):
     import dask.array as da
+
     a = da.asanyarray(a)
     return a.map_blocks(np.ma.core.empty_like, **kwargs)
 
@@ -234,6 +251,7 @@ def empty_like(a, **kwargs):
 @derived_from(np.ma.core)
 def nonzero(a):
     import dask.array as da
+
     return da.nonzero(getdata(a) * ~getmaskarray(a))
 
 
@@ -245,7 +263,8 @@ def where(condition, x=None, y=None):
         return nonzero(condition)
     # elemwise is exported in array-expr mode, but not in traditional mode
     import dask.array as da
-    elemwise = getattr(da, 'elemwise', None)
+
+    elemwise = getattr(da, "elemwise", None)
     if elemwise is None:
         from dask.array.core import elemwise
     return elemwise(np.ma.where, condition, x, y)

@@ -12,7 +12,9 @@ import dask
 import dask.array as da
 
 if da._array_expr_enabled():
-    pytest.skip("optimization internals not compatible with array-expr", allow_module_level=True)
+    pytest.skip(
+        "optimization internals not compatible with array-expr", allow_module_level=True
+    )
 
 from dask.array.chunk import getitem
 from dask.array.core import getter

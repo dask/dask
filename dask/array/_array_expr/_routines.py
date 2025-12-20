@@ -12,8 +12,8 @@ from dask._task_spec import List, Task, TaskRef
 from dask.array._array_expr._collection import (
     Array,
     array,
-    asarray,
     asanyarray,
+    asarray,
     broadcast_to,
     concatenate,
     elemwise,
@@ -498,9 +498,10 @@ def unify_chunks(*args, **kwargs):
     arrays : list
         List of rechunked arrays.
     """
+    from toolz import partition
+
     from dask._collections import new_collection
     from dask.array._array_expr._expr import unify_chunks_expr
-    from toolz import partition
 
     if not args:
         return {}, []
@@ -541,10 +542,11 @@ def unify_chunks(*args, **kwargs):
 @derived_from(np)
 def broadcast_arrays(*args, subok=False):
     """Broadcast any number of arrays against each other."""
-    from dask.array._array_expr._collection import broadcast_to
-    from dask.array.core import broadcast_shapes, broadcast_chunks
-    from dask.array.numpy_compat import NUMPY_GE_200
     from toolz import concat
+
+    from dask.array._array_expr._collection import broadcast_to
+    from dask.array.core import broadcast_chunks, broadcast_shapes
+    from dask.array.numpy_compat import NUMPY_GE_200
 
     subok = bool(subok)
 
@@ -865,7 +867,7 @@ def _bincount_sum(bincounts, axis, keepdims, dtype=None):
     n = max(b.shape[1] for b in bincounts)
     out = np.zeros((1, n), dtype=bincounts[0].dtype)
     for b in bincounts:
-        out[0, :b.shape[1]] += b[0]
+        out[0, : b.shape[1]] += b[0]
 
     if not keepdims:
         return out[0]
@@ -902,7 +904,9 @@ class BincountChunked(ArrayExpr):
         for i in range(len(self.x.chunks[0])):
             key = (self._name, i, 0)
             x_ref = TaskRef((self.x._name, i))
-            w_ref = TaskRef((self.weights._name, i)) if self.weights is not None else None
+            w_ref = (
+                TaskRef((self.weights._name, i)) if self.weights is not None else None
+            )
             dsk[key] = Task(key, _bincount_chunk, x_ref, w_ref, minlen)
         return dsk
 
@@ -937,7 +941,9 @@ def bincount(x, weights=None, minlength=0, split_every=None):
     else:
         output_size = minlength
 
-    chunked_counts = new_collection(BincountChunked(x, weights, minlength, output_size, meta_provided=meta))
+    chunked_counts = new_collection(
+        BincountChunked(x, weights, minlength, output_size, meta_provided=meta)
+    )
 
     # Use sum along axis 0 to combine chunk results
     # For minlength>0 this works directly; for minlength=0 we need tree reduce
@@ -1510,8 +1516,12 @@ class UniqueChunked(ArrayExpr):
         for i in range(len(self.x.chunks[0])):
             key = (self._name, i)
             x_ref = TaskRef((self.x._name, i))
-            idx_ref = TaskRef((self.indices._name, i)) if self.indices is not None else None
-            cnt_ref = TaskRef((self.counts._name, i)) if self.counts is not None else None
+            idx_ref = (
+                TaskRef((self.indices._name, i)) if self.indices is not None else None
+            )
+            cnt_ref = (
+                TaskRef((self.counts._name, i)) if self.counts is not None else None
+            )
             dsk[key] = Task(key, _unique_internal, x_ref, idx_ref, cnt_ref, False)
         return dsk
 
@@ -1548,7 +1558,9 @@ class UniqueAggregate(ArrayExpr):
 
     def _layer(self):
         # Gather all chunk keys and concatenate + aggregate in one task
-        chunk_keys = [(self.chunked._name, i) for i in range(len(self.chunked.chunks[0]))]
+        chunk_keys = [
+            (self.chunked._name, i) for i in range(len(self.chunked.chunks[0]))
+        ]
         key = (self._name, 0)
         # Use List from task_spec to wrap TaskRefs so they get resolved
         chunks_list = List(*[TaskRef(k) for k in chunk_keys])
@@ -1615,7 +1627,10 @@ def unique_no_structured_arr(
     chunked = new_collection(out)
     # Override chunks to unknown
     from dask.array._array_expr._expr import ChunksOverride
-    chunked = new_collection(ChunksOverride(chunked.expr, ((np.nan,) * len(ar.chunks[0]),)))
+
+    chunked = new_collection(
+        ChunksOverride(chunked.expr, ((np.nan,) * len(ar.chunks[0]),))
+    )
 
     def _unique_agg(arrays, axis, keepdims):
         if not isinstance(arrays, list):
@@ -1677,7 +1692,11 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     )
 
     # Build final dtype (with inverse field if requested)
-    final_dtype = out_dtype if not return_inverse else np.dtype(list(out_dtype.descr) + [("inverse", np.intp)])
+    final_dtype = (
+        out_dtype
+        if not return_inverse
+        else np.dtype(list(out_dtype.descr) + [("inverse", np.intp)])
+    )
 
     # Aggregate all chunks into final result
     aggregated = new_collection(UniqueAggregate(chunked, return_inverse, final_dtype))
@@ -1692,6 +1711,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         inverse = (matches * aggregated["inverse"]).sum(axis=1)
         if NUMPY_GE_200:
             from dask.array._array_expr._reshape import reshape
+
             inverse = reshape(inverse, orig_shape)
         result.append(inverse)
     if return_counts:

@@ -35,8 +35,6 @@ from dask.array._array_expr._collection import (
     transpose,
     vstack,
 )
-from dask.array._array_expr.routines._diff import diff
-from dask.array._array_expr.routines._where import where
 from dask.array._array_expr._creation import (
     arange,
     diag,
@@ -59,7 +57,9 @@ from dask.array._array_expr._creation import (
     zeros,
     zeros_like,
 )
+from dask.array._array_expr._einsum import einsum
 from dask.array._array_expr._gufunc import *
+from dask.array._array_expr._histogram import histogram, histogram2d, histogramdd
 from dask.array._array_expr._io import (
     from_delayed,
     from_npy_stack,
@@ -68,9 +68,9 @@ from dask.array._array_expr._io import (
     to_npy_stack,
     to_zarr,
 )
-from dask.array._array_expr._einsum import einsum
 from dask.array._array_expr._linalg import dot, matmul, tensordot, vdot
 from dask.array._array_expr._map_blocks import map_blocks
+from dask.array._array_expr._optimize import optimize
 from dask.array._array_expr._overlap import map_overlap, overlap, trim_overlap
 from dask.array._array_expr._reductions import (
     _tree_reduce,
@@ -83,7 +83,6 @@ from dask.array._array_expr._reductions import (
     reduction,
     trace,
 )
-from dask.array._array_expr._histogram import histogram, histogram2d, histogramdd
 from dask.array._array_expr._routines import (
     aligned_coarsen_chunks,
     allclose,
@@ -108,9 +107,9 @@ from dask.array._array_expr._routines import (
     extract,
     flatnonzero,
     gradient,
+    insert,
     isclose,
     isin,
-    insert,
     isnull,
     ndim,
     nonzero,
@@ -124,17 +123,18 @@ from dask.array._array_expr._routines import (
     select,
     shape,
     take,
+    topk,
     tril,
     tril_indices,
     tril_indices_from,
     triu,
     triu_indices,
     triu_indices_from,
-    topk,
     unify_chunks,
-    unique,
     union1d,
+    unique,
     unravel_index,
 )
 from dask.array._array_expr._ufunc import *
-from dask.array._array_expr._optimize import optimize
+from dask.array._array_expr.routines._diff import diff
+from dask.array._array_expr.routines._where import where

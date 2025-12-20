@@ -9,7 +9,6 @@ from itertools import product, repeat
 from numbers import Integral
 
 import numpy as np
-
 from tlz import accumulate, compose, get, partition_all, pluck
 
 from dask import config
@@ -227,8 +226,7 @@ def reduction(
         from dask.array._array_expr._expr import ChunksOverride
 
         final_chunks = tuple(
-            (output_size,) if i in axis else c
-            for i, c in enumerate(result.chunks)
+            (output_size,) if i in axis else c for i, c in enumerate(result.chunks)
         )
         result = new_collection(ChunksOverride(result.expr, final_chunks))
 
@@ -384,7 +382,9 @@ class PartialReduce(ArrayExpr):
     @property
     def _meta(self):
         meta = self.array._meta
-        original_dtype = getattr(self.reduced_meta, "dtype", None) or getattr(meta, "dtype", None)
+        original_dtype = getattr(self.reduced_meta, "dtype", None) or getattr(
+            meta, "dtype", None
+        )
 
         if self.reduced_meta is not None:
             try:
@@ -426,7 +426,9 @@ class PartialReduce(ArrayExpr):
             if meta.dtype != target_dtype:
                 with warnings.catch_warnings():
                     # Suppress ComplexWarning when casting complex to real (e.g., var)
-                    warnings.filterwarnings("ignore", category=np.exceptions.ComplexWarning)
+                    warnings.filterwarnings(
+                        "ignore", category=np.exceptions.ComplexWarning
+                    )
                     meta = meta.astype(target_dtype)
 
         # Convert MaskedConstant (np.ma.masked) to a proper MaskedArray
@@ -660,7 +662,9 @@ class CumReduction(ArrayExpr):
         if self._dtype is not None:
             return np.dtype(self._dtype)
         # Infer dtype from the function
-        return getattr(self.func(np.ones((0,), dtype=self.array.dtype)), "dtype", object)
+        return getattr(
+            self.func(np.ones((0,), dtype=self.array.dtype)), "dtype", object
+        )
 
     @cached_property
     def _meta(self):
@@ -707,7 +711,10 @@ class CumReduction(ArrayExpr):
         except ValueError:
             try:
                 # Workaround for numpy ufunc.accumulate
-                if isinstance(func.__self__, np.ufunc) and func.__name__ == "accumulate":
+                if (
+                    isinstance(func.__self__, np.ufunc)
+                    and func.__name__ == "accumulate"
+                ):
                     use_dtype = True
             except AttributeError:
                 pass
@@ -733,7 +740,9 @@ class CumReduction(ArrayExpr):
         # For each position along the axis, we need to track the cumulative
         # last values from all previous blocks
         indices = list(
-            product(*[range(nb) if i != axis else [0] for i, nb in enumerate(x.numblocks)])
+            product(
+                *[range(nb) if i != axis else [0] for i, nb in enumerate(x.numblocks)]
+            )
         )
 
         # Initialize "extra" values (cumulative sums of previous blocks) to identity
@@ -796,7 +805,9 @@ class CumReductionBlelloch(ArrayExpr):
     def dtype(self):
         if self._dtype is not None:
             return np.dtype(self._dtype)
-        return getattr(self.func(np.ones((0,), dtype=self.array.dtype)), "dtype", object)
+        return getattr(
+            self.func(np.ones((0,), dtype=self.array.dtype)), "dtype", object
+        )
 
     @cached_property
     def _meta(self):
@@ -889,7 +900,7 @@ class CumReductionBlelloch(ArrayExpr):
                 level += 1
 
         # Phase 2: Apply cumulative function and combine with prefix sums
-        from dask.array.reductions import _prefixscan_first, _prefixscan_combine
+        from dask.array.reductions import _prefixscan_combine, _prefixscan_first
 
         # First blocks: just apply the cumulative function
         for index in full_indices[0]:
@@ -917,9 +928,7 @@ class CumReductionBlelloch(ArrayExpr):
         return dsk
 
 
-def _cumreduction_expr(
-    func, binop, ident, x, axis, dtype, out, method, preop
-):
+def _cumreduction_expr(func, binop, ident, x, axis, dtype, out, method, preop):
     """Create cumulative reduction expression."""
     from dask.array._array_expr._collection import Array
     from dask.array._array_expr.core._blockwise_funcs import _handle_out

@@ -9,7 +9,6 @@ from dask._task_spec import Task, TaskRef
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array.core import normalize_chunks
 from dask.array.utils import meta_from_array
-from dask.blockwise import lol_tuples
 
 
 class BroadcastTo(ArrayExpr):
@@ -26,7 +25,11 @@ class BroadcastTo(ArrayExpr):
     def _meta(self):
         meta_override = self.operand("_meta_override")
         # Only use meta_override if it has the correct ndim
-        if meta_override is not None and hasattr(meta_override, 'ndim') and meta_override.ndim == len(self._shape):
+        if (
+            meta_override is not None
+            and hasattr(meta_override, "ndim")
+            and meta_override.ndim == len(self._shape)
+        ):
             return meta_override
         return meta_from_array(self.array._meta, ndim=len(self._shape))
 

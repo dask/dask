@@ -59,7 +59,9 @@ class Transpose(Blockwise):
         # Map output block_id to input block_id using inverse permutation
         # For axes=(1,0), output block (i,j) needs input block (j,i)
         input_block_id = self._input_block_id(self.array, block_id)
-        return Task(key, self.func, TaskRef((self.array._name, *input_block_id)), **self.kwargs)
+        return Task(
+            key, self.func, TaskRef((self.array._name, *input_block_id)), **self.kwargs
+        )
 
     def _input_block_id(self, dep, block_id: tuple[int, ...]) -> tuple[int, ...]:
         """Map output block_id to input block_id using inverse permutation."""

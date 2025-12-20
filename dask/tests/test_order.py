@@ -7,9 +7,9 @@ import pytest
 from packaging.version import Version
 
 import dask
+import dask.array as da
 from dask import delayed
 from dask._compatibility import WINDOWS
-import dask.array as da
 from dask.base import collections_to_expr, key_split, visualize_dsk
 from dask.core import get_deps
 from dask.order import _connecting_to_roots, diagnostics, ndependencies, order

@@ -362,9 +362,7 @@ class UnstackQInner(ArrayExpr):
             # Get the R block size for each data block (min of dimensions)
             for i in range(numblocks):
                 bs_key = (self._name + "-bs", i)
-                dsk[bs_key] = Task(
-                    bs_key, _get_block_size, TaskRef((data_name, i, 0))
-                )
+                dsk[bs_key] = Task(bs_key, _get_block_size, TaskRef((data_name, i, 0)))
 
             # Compute cumulative sums: (start, end) for each block
             cs_key_0 = (self._name + "-cs", 0)
@@ -455,14 +453,13 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     u, s, vh : Array, Array, Array
         SVD factors if compute_svd=True
     """
-    from dask.array._array_expr._collection import Array
     from dask.array._array_expr.core import asanyarray
 
     data = asanyarray(data)
     expr = data.expr
 
-    nr, nc = len(expr.chunks[0]), len(expr.chunks[1])
-    cr_max, cc = max(expr.chunks[0]), expr.chunks[1][0]
+    _nr, nc = len(expr.chunks[0]), len(expr.chunks[1])
+    _cr_max, _cc = max(expr.chunks[0]), expr.chunks[1][0]
 
     if not (expr.ndim == 2 and nc == 1):
         raise ValueError(
@@ -504,7 +501,6 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
 def _tsqr_svd(q_expr, r_expr, data_expr):
     """Compute SVD from TSQR factorization."""
-    from dask.array._array_expr._collection import Array
 
     # SVD of R: R = U_r @ S @ Vh
     svd_r = InCoreSVD(r_expr)
@@ -674,7 +670,6 @@ def qr(a, mode="reduced"):
     q, r : Array, Array
         Q and R factors
     """
-    from dask.array._array_expr._collection import Array
     from dask.array._array_expr.core import asanyarray
 
     a = asanyarray(a)
@@ -715,7 +710,6 @@ def sfqr(data):
 
     Q [R_1 R_2 ...] = [A_1 A_2 ...]
     """
-    from dask.array._array_expr._collection import Array
     from dask.array._array_expr.core import asanyarray
 
     data = asanyarray(data)
@@ -864,7 +858,6 @@ def svd(a, full_matrices=True, compute_uv=True):
     u, s, vh : Array, Array, Array
         SVD factors
     """
-    from dask.array._array_expr._collection import Array
     from dask.array._array_expr.core import asanyarray
 
     a = asanyarray(a)
@@ -909,7 +902,6 @@ def norm(x, ord=None, axis=None, keepdims=False):
     This function uses array operations (abs, sum, max, min) which are
     already implemented in array-expr.
     """
-    from dask.array._array_expr._collection import Array
     from dask.array._array_expr.core import asanyarray
 
     x = asanyarray(x)
@@ -1241,9 +1233,7 @@ class LU(ArrayExpr):
                         TaskRef((name_u, p, i)),
                     )
                     prevs.append(TaskRef(prev))
-                target = Task(
-                    None, operator.sub, target, Task(None, sum, List(*prevs))
-                )
+                target = Task(None, operator.sub, target, Task(None, sum, List(*prevs)))
             # Diagonal block LU
             dsk[(name_lu, i, i)] = Task((name_lu, i, i), _scipy_lu, target)
 
@@ -1350,18 +1340,14 @@ class LU(ArrayExpr):
                         self.array.chunks[0][i],
                         self.array.chunks[1][j],
                     )
-                    dsk[(name_p, i, j)] = Task(
-                        (name_p, i, j), np.zeros, chunk_shape
-                    )
+                    dsk[(name_p, i, j)] = Task((name_p, i, j), np.zeros, chunk_shape)
                     dsk[(name_l, i, j)] = Task(
                         (name_l, i, j),
                         np.dot,
                         TaskRef((name_transpose, i, i)),
                         TaskRef((name_lu, i, j)),
                     )
-                    dsk[(name_u, i, j)] = Task(
-                        (name_u, i, j), np.zeros, chunk_shape
-                    )
+                    dsk[(name_u, i, j)] = Task((name_u, i, j), np.zeros, chunk_shape)
                     dsk[(name_l_permuted, i, j)] = TaskRef((name_lu, i, j))
                 else:
                     # Above diagonal: U has values, P and L are zeros
@@ -1369,12 +1355,8 @@ class LU(ArrayExpr):
                         self.array.chunks[0][i],
                         self.array.chunks[1][j],
                     )
-                    dsk[(name_p, i, j)] = Task(
-                        (name_p, i, j), np.zeros, chunk_shape
-                    )
-                    dsk[(name_l, i, j)] = Task(
-                        (name_l, i, j), np.zeros, chunk_shape
-                    )
+                    dsk[(name_p, i, j)] = Task((name_p, i, j), np.zeros, chunk_shape)
+                    dsk[(name_l, i, j)] = Task((name_l, i, j), np.zeros, chunk_shape)
                     dsk[(name_u, i, j)] = TaskRef((name_lu, i, j))
 
         return dsk
@@ -1505,7 +1487,9 @@ class Cholesky(ArrayExpr):
         from dask.array.utils import array_safe
 
         arr_meta = meta_from_array(self.array._meta)
-        cho = np.linalg.cholesky(array_safe([[1, 2], [2, 5]], dtype=self.array.dtype, like=arr_meta))
+        cho = np.linalg.cholesky(
+            array_safe([[1, 2], [2, 5]], dtype=self.array.dtype, like=arr_meta)
+        )
         return meta_from_array(self.array._meta, dtype=cho.dtype)
 
     @functools.cached_property
