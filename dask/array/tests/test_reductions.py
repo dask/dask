@@ -953,7 +953,6 @@ def test_chunk_structure_independence(axes, split_every, chunks):
     assert_eq(reduced_x, np_array, check_chunks=False, check_shape=False)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="weighted reduction not implemented for array-expr", strict=False)
 def test_weighted_reduction():
     # Weighted reduction
     def w_sum(x, weights=None, dtype=None, computing_meta=False, **kwargs):

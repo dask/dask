@@ -168,8 +168,20 @@ def reduction(
     args = (x.expr, inds)
 
     if weights is not None:
-        # TODO(expr-soon): Needs more IO Stuff
-        raise NotImplementedError("Weights are not yet supported")
+        # Broadcast weights to x and add to args
+        from dask.array._array_expr._broadcast import broadcast_to
+        from dask.array._array_expr.core._conversion import asanyarray
+
+        wgt = asanyarray(weights)
+        try:
+            wgt = broadcast_to(wgt, x.shape)
+        except ValueError:
+            raise ValueError(
+                f"Weights with shape {wgt.shape} are not broadcastable "
+                f"to x with shape {x.shape}"
+            )
+
+        args += (wgt.expr, inds)
 
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
     tmp = blockwise(
@@ -416,6 +428,11 @@ class PartialReduce(ArrayExpr):
                     # Suppress ComplexWarning when casting complex to real (e.g., var)
                     warnings.filterwarnings("ignore", category=np.exceptions.ComplexWarning)
                     meta = meta.astype(target_dtype)
+
+        # Convert MaskedConstant (np.ma.masked) to a proper MaskedArray
+        # since the singleton cannot be tokenized
+        if isinstance(meta, np.ma.core.MaskedConstant):
+            meta = np.ma.array(meta, ndmin=0)
 
         return meta
 

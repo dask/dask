@@ -42,6 +42,10 @@ class da_frompyfunc:
         self._name = funcname(func)
         self.__name__ = f"frompyfunc-{self._name}"
 
+    def outer(self, *args, **kwargs):
+        """Outer product - tokenizable because da_frompyfunc has __dask_tokenize__."""
+        return self._ufunc.outer(*args, **kwargs)
+
     def __repr__(self):
         return f"da.frompyfunc<{self._name}, {self.nin}, {self.nout}>"
 

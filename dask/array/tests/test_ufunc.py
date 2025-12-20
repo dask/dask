@@ -371,7 +371,6 @@ def test_non_ufunc_others(func):
     assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="frompyfunc not implemented for array-expr")
 def test_frompyfunc():
     myadd = da.frompyfunc(add, 2, 1)
     np_myadd = np.frompyfunc(add, 2, 1)
