@@ -1,6 +1,15 @@
 from __future__ import annotations
 
+import sys
+
 import pytest
+
+# Set array-expr env var early (at import time) so xdist workers inherit it
+# and test modules see it when they're imported
+if "--array-expr" in sys.argv:
+    import os
+
+    os.environ["DASK_ARRAY__QUERY_PLANNING"] = "True"
 
 pytest.register_assert_rewrite(
     "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
@@ -59,14 +68,6 @@ def pytest_addoption(parser):
     parser.addoption(
         "--array-expr", action="store_true", help="enable array query-planning mode"
     )
-
-
-def pytest_load_initial_conftests(early_config, parser, args):
-    """Set array.query-planning config before conftest files import dask.array."""
-    if "--array-expr" in args:
-        import dask
-
-        dask.config.set({"array.query-planning": True})
 
 
 def pytest_runtest_setup(item):
