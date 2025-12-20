@@ -282,19 +282,26 @@ grep -n "xfail.*_array_expr" dask/array/tests/*.py
 Note: The `--array-expr` flag sets `array.query-planning` config via `pytest_configure` hook, which runs before test collection imports `dask.array`.
 
 ### Current Test Status (December 2025)
-- **4471 passed**, 52 xfailed, 0 failed, 610 skipped
-- Significant progress from earlier (was 211 xfails, now 52)
+- **4094 passed**, 47 xfailed, 0 failed, 578 skipped
+- Significant progress from earlier (was 211 xfails, now 47)
 
-**XFails by category (52 total):**
-- Store advanced features: 3 xfails (regions, locks)
-- ~~Masked array average: 2 xfails~~ **DONE**
-- Fusion (architectural): 4 xfails (blockwise_fusion, block_id_fusion, trim_internal, map_blocks_optimize)
-- Overlap: 3 xfails (trim_internal, push, xarray)
-- Graph construction: 4 xfails (constructor_plugin, dask_layers, to_backend, cull)
-- Linspace: 2 xfails (dask scalar inputs)
-- Rechunk auto: 2 xfails
-- Random broadcasting: 2 xfails
-- Creation/misc: ~31 xfails
+**Complete XFails Inventory (47 total):**
+
+| Category | Tests | Priority |
+|----------|-------|----------|
+| Lock Tokenization | 4 | 🟡 |
+| Legacy Graph API | 7 | 🔴 |
+| Scalar/Element Ops | 3 | 🟡 |
+| Map Blocks | 5 | 🟡 |
+| Blockwise Features | 2 | 🟡 |
+| Linspace Scalars | 2 | 🟡 |
+| Indexing Edge Cases | 4 | 🟡 |
+| Store Regions | 1 | 🟡 |
+| Overlap/Fusion | 4 | 🔴 |
+| Creation Edge Cases | 4 | 🟢 |
+| Reduction Features | 1 | 🟡 |
+| UFunc Features | 1 | 🟡 |
+| Miscellaneous | 9 | 🟢-🟡 |
 
 ## Remaining Work Streams (Parallelizable)
 
@@ -305,31 +312,32 @@ These work streams can be executed in parallel by agents. Each is independent.
 - 🟡 Medium - Moderate complexity
 - 🔴 Complex - Architectural changes needed
 
-### Priority Summary for Streams
+### Priority Summary for NEW Streams
 
 | Stream | Tests | Priority | Notes |
 |--------|-------|----------|-------|
-| ~~AA: XPASS cleanup~~ | 6 | 🟢 Quick | Expected with strict=False |
-| ~~AB: Failed test fixes~~ | 2 | 🟡 Medium | **DONE** |
-| ~~M: Store advanced~~ | 6 | 🟡 High | **PARTIAL** (3/6 pass) |
-| ~~AC: Masked tensordot~~ | 4 | 🟡 Medium | **DONE** - explicit meta in tensordot |
-| ~~S: Setitem edge~~ | 1 | 🟡 Medium | **DONE** - all 18 sub-tests pass |
-| ~~AD: Masked average~~ | 2 | 🟡 Medium | **DONE** - late import of broadcast_to |
-| ~~X: Rechunk auto~~ | 2 | 🟢 Low | **DONE** - pre-resolve auto chunks |
-| Y: Random broadcast | 2 | 🟡 Low | Niche use case |
-| W: Blockwise concat | 1 | 🟡 Low | Niche use case |
-| AE: Linspace scalars | 2 | 🟡 Low | Dask scalar inputs |
-| T: Graph construction | 4 | 🔴 Low | Different paradigm |
-| V: Fusion | 4 | 🟢 Done | Elemwise, Transpose, Creation, Random |
+| AG: Lock Tokenization | 4 | 🟡 Medium | Custom lock serialization |
+| AH: Legacy Graph API | 7 | 🔴 Deferred | Different paradigm, low priority |
+| AI: Scalar/Element Ops | 3 | 🟡 Medium | 0-d arrays, dtypes, matmul |
+| AJ: Map Blocks Edge Cases | 5 | 🟡 Medium | Various map_blocks features |
+| AK: Block ID Fusion | 1 | 🟡 Medium | Fusion with block_id |
+| W: Blockwise Concat | 2 | 🟡 Medium | concatenate=True param |
+| AE: Linspace Scalars | 2 | 🟡 Medium | Dask scalar inputs |
+| AL: Indexing Edge Cases | 4 | 🟡 Medium | Various indexing features |
+| AO: Store Regions | 1 | 🟡 Medium | Graph deps in regions |
 | AF: Overlap | 3 | 🔴 Deferred | Needs fusion/push |
-| Z: Misc | ~27 | 🟢 Varies | Mixed bag |
+| AM: Creation Edge Cases | 4 | 🟢 Quick | Graph pickling, numpy edge cases |
+| AN: Reduction Features | 1 | 🟡 Medium | Weighted reductions |
+| AP: UFunc Features | 1 | 🟡 Medium | frompyfunc |
+| AQ: Miscellaneous | 9 | 🟢 Varies | Mixed independent issues |
 
 **Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V, X
 
-**Recommended next targets:**
-1. Stream Y (random broadcast) - 2 tests
-2. Stream W (blockwise concat) - 1 test
-3. Stream AE (linspace scalars) - 2 tests
+**Recommended next targets (parallelizable):**
+1. Stream AI (scalar/element ops) - 3 tests, likely quick wins
+2. Stream AM (creation edge cases) - 4 tests, quick wins
+3. Stream AG (lock tokenization) - 4 tests, medium complexity
+4. Stream W (blockwise concat) - 2 tests
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -739,34 +747,195 @@ Overlap operations requiring fusion.
 
 **Notes:** Overlap operations depend on fusion for efficiency. Deferred until fusion is implemented.
 
-### Stream Z: Misc Single Tests (~25 tests) 🟢
-Various individual tests not covered by other streams.
+### Stream AG: Lock Tokenization (4 tests) 🟡
+Custom lock objects need deterministic tokenization for singleton pattern.
 
-| Test | Notes | Status |
-|------|-------|--------|
-| test_slicing_with_non_ndarrays | Custom types in slicing | ⏳ |
-| test_map_blocks_delayed | Returns dict not HLG | ⏳ (by design) |
-| test_to_delayed_optimize_graph | Optimization | ⏳ |
-| test_index_array_with_array_3d_2d | Chunking alignment | ⏳ |
-| test_pandas_from_dask_array | Pandas conversion | ⏳ |
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_store_locks | CounterLock can't be tokenized | ⏳ |
+| test_store_locks_failure_lock_released | Lock acquire/release not happening | ⏳ |
+| test_from_array_with_lock[True] | Custom lock tokenization | ⏳ |
+| test_from_array_with_lock[False] | Custom lock tokenization | ⏳ |
+
+**Root Issue:** The singleton pattern requires deterministic tokenization of all expression arguments. Non-serializable lock objects (like `CounterLock` in tests) fail tokenization. Need to either:
+1. Add `__dask_tokenize__` to lock classes
+2. Normalize locks before expression creation
+3. Handle locks specially in `FromArray.__dask_tokenize__`
+
+### Stream AH: Legacy Graph API (7 tests) 🔴
+Tests that use `Array(dict, name, chunks, ...)` constructor directly.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_dont_fuse_outputs | Direct dict graph construction | ⏳ deferred |
+| test_dont_dealias_outputs | Direct dict graph construction | ⏳ deferred |
+| test_constructor_plugin | array_plugins config | ⏳ deferred |
+| test_dask_layers | __dask_layers__() method | ⏳ deferred |
+| test_meta_from_array_type_inputs | Array(graph, ...) constructor | ⏳ deferred |
+| test_index_with_int_dask_array_nocompute | Legacy Array constructor | ⏳ deferred |
+| test_to_delayed_optimize_graph | HLG layer inspection | ⏳ deferred |
+
+**Root Issue:** Array-expr doesn't support direct dict-based Array construction. These tests are testing internal graph structure that differs fundamentally in array-expr. Low priority as they test internal implementation details rather than user-facing behavior.
+
+### Stream AI: Scalar/Element Operations (3 tests) 🟡
+0-d array operations and dtype handling.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_elemwise_on_scalars | dx.sum() * dy - 0-d * 1-d | ⏳ |
+| test_dtype_complex | Complex dtype assertions | ⏳ |
+| test_matmul | operator.matmul with various inputs | ⏳ |
+
+**Root Issue:**
+- `test_elemwise_on_scalars`: Need to verify 0-d array operations work with type promotion
+- `test_dtype_complex`: Need to verify dtype attribute access on expressions
+- `test_matmul`: `operator.matmul` may not be calling `__matmul__` correctly
+
+**Investigation:** Run tests individually to identify specific failures.
+
+### Stream AJ: Map Blocks Edge Cases (5 tests) 🟡
+Various map_blocks features and edge cases.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_map_blocks_optimize_blockwise[<lambda>0] | Optimization check | ⏳ |
+| test_map_blocks_optimize_blockwise[<lambda>1] | Optimization check | ⏳ |
+| test_map_blocks_delayed | HLG.validate() check | ⏳ (by design) |
+| test_map_blocks3 | da.core.map_blocks (legacy path) | ⏳ |
+| test_map_blocks_dataframe | DataFrame output from map_blocks | ⏳ |
+
+**Root Issue:**
+- Optimize tests check task count which may differ in array-expr
+- `test_map_blocks_delayed` calls `.dask.validate()` which returns dict not HLG
+- `test_map_blocks3` uses `da.core.map_blocks` instead of `da.map_blocks`
+- DataFrame output needs special handling for singleton dimensions
+
+### Stream AK: Block ID Fusion (1 test) 🟡
+Fusion with block_id parameter.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_map_blocks_block_id_fusion | block_id in fused operations | ⏳ |
+
+**Root Issue:** The `block_id=True` parameter in map_blocks needs special handling in fusion. When fusing blockwise operations, block_id information must be preserved/computed correctly.
+
+### Stream W: Blockwise Concat (2 tests) 🟡
+blockwise with concatenate=True parameter.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_blockwise_concatenate | concatenate=True in blockwise | ⏳ |
+| test_warn_bad_rechunking | Rechunking warning | ⏳ |
+
+**Root Issue:** When `concatenate=True`, blockwise should concatenate chunks along specified axes before applying the function. This requires pre-concatenation logic in `Blockwise._layer()`.
+
+### Stream AE: Linspace Dask Scalars (2 tests) 🟡
+Linspace with dask array scalars as start/stop.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_linspace[True] | endpoint=True with dask scalars | ⏳ |
+| test_linspace[False] | endpoint=False with dask scalars | ⏳ |
+
+**Root Issue:** The test uses `da.argmin(x)` and `da.argmax(x)` (0-d dask arrays) as start/stop parameters. Need to either:
+1. Create `LinspaceDelayed` expression that handles dask scalar inputs
+2. Compute scalars eagerly (not ideal)
+
+### Stream AL: Indexing Edge Cases (4 tests) 🟡
+Various indexing features not yet implemented.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_slicing_with_non_ndarrays | Custom array-like slicing | ⏳ |
+| test_index_array_with_array_3d_2d | 3D indexing with 2D index | ⏳ |
+| test_positional_indexer_newaxis | newaxis in positional index | ⏳ |
 | test_partitions_indexer | .partitions property | ⏳ |
-| test_delayed_array_key_hygeine | Key hygiene | ✅ (fixed in Stream R) |
+
+**Root Issue:**
+- Non-ndarray slicing: Need to support array-like objects with `__array__` method
+- 3D/2D indexing: Chunk alignment issues
+- Newaxis: Need to handle np.newaxis in positional indexers
+- Partitions: `.partitions` property needs implementation
+
+### Stream AO: Store Regions (1 test) 🟡
+Store with region parameter.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_store_regions | Region slicing for partial writes | ⏳ |
+
+**Root Issue:** Graph dependency error in load-stored layer when using regions. The region slicing creates complex dependencies that aren't being tracked correctly.
+
+### Stream AF: Overlap (3 tests) 🔴
+Overlap operations needing fusion/push.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_trim_internal | Requires blockwise fusion for task count | ⏳ deferred |
+| test_push | Requires bottleneck push implementation | ⏳ deferred |
+| test_xarray_reduction | XArray integration | ⏳ deferred |
+
+**Root Issue:** These tests depend on fusion optimizations or external library integration. Deferred until fusion is more complete.
+
+### Stream AM: Creation Edge Cases (4 tests) 🟢
+Edge cases in creation functions.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_nan_full_like[u4-shape_chunks0--1] | Negative value in unsigned int | ⏳ (numpy issue) |
+| test_nan_full_like[u4-shape_chunks1--1] | Negative value in unsigned int | ⏳ (numpy issue) |
+| test_like_forgets_graph[arange] | Graph serialization differs | ⏳ |
+| test_like_forgets_graph[tri] | Graph serialization differs | ⏳ |
+
+**Root Issue:**
+- `test_nan_full_like`: NumPy 2.1+ raises on inserting -1 into u4. This is a numpy behavior change, may need to skip for numpy >= 2.1.
+- `test_like_forgets_graph`: The test checks that `like=x` doesn't store x's graph. In array-expr, graph structure differs so pickle test may fail differently.
+
+### Stream AN: Reduction Features (1 test) 🟡
+Weighted reductions.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_weighted_reduction | weights= parameter in reduction() | ⏳ |
+
+**Root Issue:** The `reduction()` function needs to support the `weights=` parameter for weighted reductions. This requires broadcasting weights to chunks and passing to chunk function.
+
+### Stream AP: UFunc Features (1 test) 🟡
+Custom ufuncs via frompyfunc.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_frompyfunc | np.frompyfunc ufuncs | ⏳ |
+
+**Root Issue:** `np.frompyfunc` creates ufuncs from Python functions that can't be deterministically tokenized. Need to either:
+1. Use function identity in tokenization
+2. Add special handling for frompyfunc-created ufuncs
+
+### Stream AQ: Miscellaneous (9 tests) 🟢-🟡
+Independent issues not fitting other streams.
+
+| Tests | Notes | Status |
+|-------|-------|--------|
+| test_raise_on_bad_kwargs | Bad kwargs error checking in ufuncs | ⏳ |
+| test_pandas_from_dask_array | pd.Series(da.array) conversion | ⏳ |
+| test_from_array_respects_zarr_shards | Zarr v3 shard-based chunking | ⏳ |
+| test_gufunc_chunksizes_adjustment | Uses Array.copy() | ⏳ |
+| test_assert_eq_scheduler[a2-b2] | isinstance check uses wrong Array class | ⏳ |
+| test_creation_data_producers | data_producer attribute on tasks | ⏳ |
+| test_arange_cast_float_int_step | Float-to-int step casting | ⏳ (by design) |
 | test_to_backend | Backend switching | ⏳ |
-| test_arange_cast_float_int_step | Float-to-int casting | ⏳ (by design) |
-| test_nan_full_like | 2 variants - unsigned int edge case | ⏳ |
-| test_like_forgets_graph | 2 remaining variants | ⏳ |
-| test_gufunc_chunksizes_adjustment | Array.copy | ⏳ |
 | test_cull | Graph culling | ⏳ |
-| test_positional_indexer_newaxis | Newaxis in indexer | ⏳ |
-| test_frompyfunc | Custom ufunc tokenization | ⏳ |
-| test_weighted_reduction | Weighted reductions | ⏳ |
-| test_select_broadcasting | Broadcasting in select() | ⏳ |
-| test_meta_from_array_type_inputs | meta_from_array | ⏳ |
-| test_assert_eq_scheduler | Test utility issue | ⏳ |
-| test_map_blocks_dataframe | DataFrame output | ⏳ |
-| test_two[ttest_1samp-kwargs2] | scipy stats edge case | ⏳ |
-| test_index_with_int_dask_array_nocompute | Legacy Array constructor | ⏳ |
-| test_creation_data_producers | data_producer not implemented | ⏳ |
+
+**Analysis:**
+- `test_raise_on_bad_kwargs`: Need to validate kwargs in ufunc calls
+- `test_pandas_from_dask_array`: Pandas Series from dask array conversion
+- `test_from_array_respects_zarr_shards`: Need shard-aware chunking for Zarr v3
+- `test_gufunc_chunksizes_adjustment`: Need `Array.copy()` method
+- `test_assert_eq_scheduler`: Test utility uses wrong Array class in isinstance
+- `test_creation_data_producers`: Tasks need `data_producer` attribute
+- `test_arange_cast_float_int_step`: Design decision - don't support float-to-int step
+- `test_to_backend`: Backend switching needs implementation
+- `test_cull`: Graph culling in array-expr
 
 ## Migration Workflow
 
