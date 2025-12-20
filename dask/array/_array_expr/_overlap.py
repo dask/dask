@@ -907,3 +907,58 @@ def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
         window_shape=window_shape,
         axis=axis,
     )
+
+
+def _fill_with_last_one(a, b):
+    """Fill NaN values in b with values from a."""
+    return np.where(~np.isnan(b), b, a)
+
+
+def _push(array, n=None, axis=-1):
+    """Apply bottleneck.push to a single chunk."""
+    import bottleneck as bn
+
+    limit = n if n is not None else array.shape[axis]
+    return bn.push(array, limit, axis)
+
+
+def push(array, n, axis):
+    """
+    Dask-version of bottleneck.push
+
+    Forward fill NaN values along an axis.
+
+    .. note::
+
+        Requires bottleneck to be installed.
+    """
+    from dask._compatibility import import_optional_dependency
+    import dask.array as da
+
+    import_optional_dependency("bottleneck", min_version="1.3.7")
+
+    if n is not None and 0 < n < array.shape[axis] - 1:
+        arr = da.broadcast_to(
+            da.arange(
+                array.shape[axis], chunks=array.chunks[axis], dtype=array.dtype
+            ).reshape(
+                tuple(size if i == axis else 1 for i, size in enumerate(array.shape))
+            ),
+            array.shape,
+            array.chunks,
+        )
+        valid_arange = da.where(da.notnull(array), arr, np.nan)
+        valid_limits = (arr - push(valid_arange, None, axis)) <= n
+        # omit the forward fill that violate the limit
+        return da.where(valid_limits, push(array, None, axis), np.nan)
+
+    from dask.array._array_expr._reductions import cumreduction
+
+    return cumreduction(
+        func=_push,
+        binop=_fill_with_last_one,
+        ident=np.nan,
+        x=array,
+        axis=axis,
+        dtype=array.dtype,
+    )

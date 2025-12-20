@@ -21,6 +21,7 @@ if da._array_expr_enabled():
         overlap,
         overlap_internal,
         periodic,
+        push,
         reflect,
         sliding_window_view,
         trim_internal,
@@ -138,11 +139,14 @@ def test_overlap_internal_asymmetric_small():
     assert same_keys(overlap_internal(d, {0: (0, 0), 1: (1, 1)}), result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="blockwise fusion needed")
 def test_trim_internal():
     d = da.ones((40, 60), chunks=(10, 10))
     e = trim_internal(d, axes={0: 1, 1: 2}, boundary="reflect")
-    assert len(collections_to_expr([e]).__dask_graph__()) == 24
+    if da._array_expr_enabled():
+        # For array-expr, fusion happens during expr.optimize()
+        assert len(e._expr.optimize().__dask_graph__()) == 24
+    else:
+        assert len(collections_to_expr([e]).__dask_graph__()) == 24
     assert e.chunks == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
 
 
@@ -755,7 +759,6 @@ def test_overlap_few_dimensions():
     assert len(c.dask) < 10 * len(a.dask)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="push needed")
 def test_push():
     bottleneck = pytest.importorskip("bottleneck")
 

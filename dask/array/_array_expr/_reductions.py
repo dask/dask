@@ -1097,3 +1097,20 @@ def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
         method=method,
         preop=np.nanprod,
     )
+
+
+def cumreduction(
+    func,
+    binop,
+    ident,
+    x,
+    axis=None,
+    dtype=None,
+    out=None,
+    method="sequential",
+    preop=None,
+):
+    """Generic cumulative reduction. See dask.array.reductions.cumreduction."""
+    return _cumreduction_expr(
+        func, binop, ident, x, axis, dtype, out=out, method=method, preop=preop
+    )
