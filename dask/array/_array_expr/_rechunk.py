@@ -116,7 +116,7 @@ class Rechunk(ArrayExpr):
             and isinstance(self._chunks, tuple)
         ):
             # Keep the same name prefix - the token will change with the new chunks
-            return self.array.substitute_parameters({"chunks": self.chunks})
+            return self.array.substitute_parameters({"_chunks": self.chunks})
 
     def _pushdown_through_transpose(self):
         """Push rechunk through transpose by reordering chunk spec."""
