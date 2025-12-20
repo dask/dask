@@ -1234,6 +1234,55 @@ class _ExprSequence(Expr):
     def __iter__(self):
         return iter(self.operands)
 
+    def fuse(self):
+        """Fuse operations within operands, preserving shared subexpressions.
+
+        Groups operands by type and calls fusion on the sequence, so that
+        shared subexpressions are detected via the combined dependents graph.
+        """
+        if not self.operands:
+            return self
+
+        # Group operands by their fusion function type
+        # Each expression type (array, dataframe) has its own fusion implementation
+        groups = {}  # module -> list of (original_index, operand)
+        for i, op in enumerate(self.operands):
+            fuse_method = getattr(op, "fuse", None)
+            if fuse_method is None or fuse_method.__func__ is Expr.fuse:
+                key = None  # No custom fusion
+            else:
+                key = type(op).__module__
+            groups.setdefault(key, []).append((i, op))
+
+        # Apply fusion to each group, passing the sequence to preserve sharing
+        fused_operands = [None] * len(self.operands)
+
+        for key, indexed_ops in groups.items():
+            if key is None:
+                # No fusion for these operands
+                for i, op in indexed_ops:
+                    fused_operands[i] = op
+            elif len(indexed_ops) == 1:
+                # Single operand, just call its fuse method
+                i, op = indexed_ops[0]
+                fused_operands[i] = op.fuse()
+            else:
+                # Multiple operands of same type - create sequence and fuse together
+                # This preserves shared subexpressions via combined dependents graph
+                ops = [op for _, op in indexed_ops]
+                temp_seq = _ExprSequence(*ops)
+                # Call the fusion function with the sequence
+                fused_seq = ops[0].fuse.__func__(temp_seq)
+                if isinstance(fused_seq, _ExprSequence):
+                    for (orig_i, _), fused_op in zip(indexed_ops, fused_seq.operands):
+                        fused_operands[orig_i] = fused_op
+                else:
+                    # Fusion returned something unexpected, fall back to individual
+                    for i, op in indexed_ops:
+                        fused_operands[i] = op.fuse()
+
+        return _ExprSequence(*fused_operands)
+
     def _simplify_down(self):
         from dask.highlevelgraph import HighLevelGraph
 

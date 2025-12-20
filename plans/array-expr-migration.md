@@ -94,27 +94,23 @@ For actual optimization, use expression-level methods:
 - Tests: `dask/array/_array_expr/tests/test_slice_pushdown.py` (36 tests)
 - Result: Task count equals chunks touched, no culling needed
 
-### HLG API Tests (6 tests) - XFail
+### HLG API Tests (6 tests) - ✅ XFailed
 
 Array-expr returns plain dicts from `__dask_graph__()`, not `HighLevelGraph`. Tests expecting HLG methods fail by design.
 
-| Test | Issue |
-|------|-------|
-| `test_keys_values_items_to_dict_methods` | `dict` has no `to_dict()` |
-| `test_single_annotation` (2 params) | `dict` has no `layers` |
-| `test_multiple_annotations` | `dict` has no `layers` |
-| `test_blockwise_cull` (2 params) | `dict` has no `cull` |
+| Test | Issue | Status |
+|------|-------|--------|
+| `test_keys_values_items_to_dict_methods` | `dict` has no `to_dict()` | ✅ XFailed |
+| `test_single_annotation` (2 params) | `dict` has no `layers` | ✅ XFailed |
+| `test_multiple_annotations` | `dict` has no `layers` | ✅ XFailed |
+| `test_blockwise_cull` (2 params) | `dict` has no `cull` | ✅ XFailed |
 
-**Fix:** Add `xfail(using_array_expr(), reason="array-expr returns dict graphs")` markers.
+### Graph Order/Typing (5 tests) - ✅ XFailed
 
-### Graph Order/Typing (5 tests) - XFail
-
-| Test | Issue |
-|------|-------|
-| `test_reduce_with_many_common_dependents` (4 params) | Ordering heuristic assertions fail |
-| `test_isinstance_core[HLGDaskCollection]` | Type check for HLG fails |
-
-**Fix:** Add xfail markers - graph structure differs by design.
+| Test | Issue | Status |
+|------|-------|--------|
+| `test_reduce_with_many_common_dependents` (4 params) | Ordering heuristic assertions fail | ✅ XFailed (strict=False) |
+| `test_isinstance_core[HLGDaskCollection]` | Type check for HLG fails | ✅ XFailed |
 
 ### Other Integration (2 tests) - Investigate
 
@@ -216,7 +212,10 @@ These have xfails that aren't array-expr specific:
 ### Short Term (Cross-Module Integration)
 3. Add `rename` parameter to `from_graph()` - enables `clone()` support
 4. ~~Implement `dask.optimize()` for array-expr~~ ✅ Done
-5. Add xfail markers to HLG API tests (6 tests) and graph order tests (5 tests)
+5. ~~Add xfail markers to HLG API tests (6 tests) and graph order tests (5 tests)~~ ✅ Done
+6. ~~Fix `_ExprSequence.fuse()` to delegate to type-specific fusion~~ ✅ Done
+   - Was causing fusion to not happen when computing multiple collections together
+   - Fix in `dask/_expr.py` - groups operands by type and calls appropriate fusion
 
 ### Medium Term (Dataframe↔Array Bridge)
 6. Create bridge ArrayExpr for dataframe expressions - biggest architectural piece
