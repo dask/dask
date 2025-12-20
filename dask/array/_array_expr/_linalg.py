@@ -63,12 +63,12 @@ def tensordot(lhs, rhs, axes=2):
     --------
     numpy.tensordot
     """
-    from dask.array._array_expr._collection import Array, blockwise, from_array
+    from dask.array._array_expr._collection import Array, asarray, blockwise
 
     if not isinstance(lhs, Array):
-        lhs = from_array(lhs)
+        lhs = asarray(lhs)
     if not isinstance(rhs, Array):
-        rhs = from_array(rhs)
+        rhs = asarray(rhs)
 
     if isinstance(axes, Iterable):
         left_axes, right_axes = axes

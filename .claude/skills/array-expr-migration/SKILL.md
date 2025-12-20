@@ -42,6 +42,9 @@ Read the implementation and identify:
 - How is the task graph built?
 - What edge cases are handled?
 
+If you have to run Python code use `.venv/bin/python` and set array query
+planning with `dask.config.set({"array.query-planning": True})`
+
 **Output**: Notes on metadata logic, chunking logic, and graph construction.
 
 ### Phase 3: Expression Class Implementation

@@ -191,7 +191,7 @@ class FromArray(IO):
 
     @functools.cached_property
     def _name(self):
-        # _name_override is just a prefix (e.g., "array"), not the full name
+        # _name_override is a prefix, deterministic token is always appended
         prefix = self.operand("_name_override") or "fromarray"
         return f"{prefix}-{self.deterministic_token}"
 
