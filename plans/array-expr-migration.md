@@ -321,7 +321,7 @@ These work streams can be executed in parallel by agents. Each is independent.
 | AI: Scalar/Element Ops | 3 | 🟢 **Done** | 0-d arrays, dtypes, matmul |
 | AJ: Map Blocks Edge Cases | 5 | 🟡 Medium | Various map_blocks features |
 | AK: Block ID Fusion | 1 | 🟡 Medium | Fusion with block_id |
-| W: Blockwise Concat | 2 | 🟡 Medium | concatenate=True param |
+| W: Blockwise Concat | 2 | 🟢 **DONE** | concatenate=True param |
 | AE: Linspace Scalars | 2 | 🟡 Medium | Dask scalar inputs |
 | AL: Indexing Edge Cases | 4 | 🟡 Medium | Various indexing features |
 | AO: Store Regions | 1 | 🟡 Medium | Graph deps in regions |
@@ -331,12 +331,12 @@ These work streams can be executed in parallel by agents. Each is independent.
 | AP: UFunc Features | 1 | 🟡 Medium | frompyfunc |
 | AQ: Miscellaneous | 9 | 🟢 Varies | Mixed independent issues |
 
-**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V, X, AI
+**Completed streams:** N, P, Q, O, R, U, AB, M (partial), AC, S, AD, V, X, W, AI
 
 **Recommended next targets (parallelizable):**
 1. Stream AM (creation edge cases) - 4 tests, quick wins
 2. Stream AG (lock tokenization) - 4 tests, medium complexity
-3. Stream W (blockwise concat) - 2 tests
+3. Stream AE (linspace scalars) - 2 tests
 
 ### Stream A: Cleanup XPASSed Tests (24 tests) 🟢 **DONE**
 Converted blanket xfail markers to targeted ones for passing variants.
@@ -647,14 +647,17 @@ Blockwise fusion optimization.
 - Support `block_id` parameter in fusion (test_map_blocks_block_id_fusion)
 - Investigate trim_internal and map_blocks_optimize_blockwise tests
 
-### Stream W: Blockwise concatenate (1 test) 🟡
+### Stream W: Blockwise concatenate (1 test) 🟢 **DONE**
 The `concatenate=True` parameter in blockwise.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_blockwise_concatenate | concatenate=True | ⏳ |
+| test_blockwise_concatenate | concatenate=True | ✅ |
+| test_slicing_with_non_ndarrays | Non-ndarray slicing | ✅ (bonus fix) |
 
-**Notes:** When `concatenate=True`, blockwise should concatenate chunks along specified axes before applying the function.
+**Root Cause:** The `Blockwise._meta` property was returning `None` when `compute_meta` failed (e.g., due to assertion failures in user functions that expect specific shapes). In legacy mode, this falls back to creating a default meta based on dtype.
+
+**Fix:** Added fallback in `Blockwise._meta` to call `meta_from_array(None, ndim=self.ndim, dtype=self.operand("dtype"))` when `compute_meta` returns `None`. This matches the legacy behavior where `new_da_object` handles `None` meta by creating a default array based on dtype.
 
 ### Stream X: Rechunk Auto (2 tests) 🟢 **DONE**
 Automatic chunk size calculation differences.
@@ -846,13 +849,13 @@ Various indexing features not yet implemented.
 
 | Tests | Notes | Status |
 |-------|-------|--------|
-| test_slicing_with_non_ndarrays | Custom array-like slicing | ⏳ |
+| test_slicing_with_non_ndarrays | Custom array-like slicing | ✅ (fixed in Stream W) |
 | test_index_array_with_array_3d_2d | 3D indexing with 2D index | ⏳ |
 | test_positional_indexer_newaxis | newaxis in positional index | ⏳ |
 | test_partitions_indexer | .partitions property | ⏳ |
 
 **Root Issue:**
-- Non-ndarray slicing: Need to support array-like objects with `__array__` method
+- ~~Non-ndarray slicing: Need to support array-like objects with `__array__` method~~ Fixed by meta fallback
 - 3D/2D indexing: Chunk alignment issues
 - Newaxis: Need to handle np.newaxis in positional indexers
 - Partitions: `.partitions` property needs implementation

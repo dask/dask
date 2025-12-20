@@ -83,9 +83,15 @@ class Blockwise(ArrayExpr):
                 dtype=getattr(self._meta_provided, "dtype", None),
             )
         else:
-            return compute_meta(
+            meta = compute_meta(
                 self.func, self.operand("dtype"), *self.args[::2], **self.kwargs
             )
+            if meta is None:
+                # compute_meta failed (e.g., function has assertions on shapes)
+                # Fall back to a default meta based on the explicitly provided dtype
+                # (use operand to avoid recursion since dtype property may depend on _meta)
+                meta = meta_from_array(None, ndim=self.ndim, dtype=self.operand("dtype"))
+            return meta
 
     @cached_property
     def chunks(self):
