@@ -76,6 +76,7 @@ from dask.array._array_expr._reductions import (
     _tree_reduce,
     arg_reduction,
     cumprod,
+    cumreduction,
     cumsum,
     nancumprod,
     nancumsum,

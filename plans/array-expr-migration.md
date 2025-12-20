@@ -49,16 +49,20 @@ These tests construct Arrays directly from dicts/graphs. Array-expr fundamentall
 
 **Decision:** Array-expr returns dict graphs, not HLG. This is by design.
 
-### Category C: Fusion/Optimization (4 tests) - Medium Priority
+### Category C: Fusion/Optimization (1 test remaining) - ✅ Mostly Done
 
-| Test | Location | Issue |
-|------|----------|-------|
-| `test_map_blocks_block_id_fusion` | test_map_blocks.py:9 | block_id in fused operations |
-| `test_trim_internal` | test_overlap.py:141 | Task count requires fusion |
-| `test_push` | test_overlap.py:758 | Bottleneck push implementation |
-| `test_cull` | test_slicing.py:1119 | Internal graph optimization |
+| Test | Location | Issue | Status |
+|------|----------|-------|--------|
+| `test_map_blocks_block_id_fusion` | test_map_blocks.py:9 | block_id in fused operations | ✅ Fixed |
+| `test_trim_internal` | test_overlap.py:141 | Task count requires fusion | ✅ Fixed |
+| `test_push` | test_overlap.py:758 | Bottleneck push implementation | ✅ Fixed |
+| `test_cull` | test_slicing.py:1119 | Internal graph optimization | Deferred (tests internals) |
 
-**Notes:** Fusion is implemented but needs block_id support. Overlap tests need fusion + push.
+**Completed Work:**
+- Made `map_blocks` fusable when `drop_axis` is not used (set `concatenate=False` when no indices are contracted)
+- Added `push` function to array-expr using `cumreduction`
+- Added `cumreduction` function to array-expr reductions module
+- Updated tests to use `expr.optimize()` for fusion checks (array-expr optimizes at expression level)
 
 ### Category D: Specific Features (6 tests) - Mixed Priority
 
@@ -109,7 +113,7 @@ These have xfails that aren't array-expr specific:
 
 ### Short Term (High Value)
 2. Store regions graph dependencies
-3. Block_id fusion support
+3. ~~Block_id fusion support~~ ✅ Done
 
 ### Medium Term
 4. Linspace with dask scalars
@@ -120,6 +124,7 @@ These have xfails that aren't array-expr specific:
 - Legacy graph API tests (by design)
 - HLG-dependent tests (by design)
 - XArray integration (external dependency)
+- `test_cull` (tests internal optimization, not user behavior)
 
 ## Implementation Patterns
 

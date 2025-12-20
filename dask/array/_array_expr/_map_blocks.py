@@ -354,6 +354,14 @@ def map_blocks(
     else:
         adjust_chunks = None
 
+    # Determine if we actually need concatenation. Concatenation is only needed
+    # when some input indices are not in the output (contracted dimensions).
+    # When there's no actual contraction, we can set concatenate=False to enable fusion.
+    out_ind_set = set(out_ind)
+    needs_concatenate = any(
+        i not in out_ind_set for _, ind in argpairs if ind is not None for i in ind
+    )
+
     if enforce_ndim:
         out = blockwise(
             apply_and_enforce,
@@ -365,7 +373,7 @@ def map_blocks(
             token=token_prefix,
             new_axes=new_axes,
             dtype=dtype,
-            concatenate=True,
+            concatenate=needs_concatenate,
             align_arrays=False,
             adjust_chunks=adjust_chunks,
             meta=meta,
@@ -380,7 +388,7 @@ def map_blocks(
             token=token_prefix,
             new_axes=new_axes,
             dtype=dtype,
-            concatenate=True,
+            concatenate=needs_concatenate,
             align_arrays=False,
             adjust_chunks=adjust_chunks,
             meta=meta,
@@ -490,7 +498,7 @@ def map_blocks(
             *concat(argpairs),
             token=out.name,
             dtype=out.dtype,
-            concatenate=True,
+            concatenate=needs_concatenate,
             align_arrays=False,
             adjust_chunks=dict(zip(out_ind, out.chunks)),
             meta=meta,
