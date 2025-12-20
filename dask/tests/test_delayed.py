@@ -20,7 +20,9 @@ from dask._task_spec import Task
 from dask.base import collections_to_expr
 from dask.delayed import Delayed, delayed, to_task_dask
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils_test import inc
+from dask.utils_test import import_or_none, inc
+
+da = import_or_none("dask.array")
 
 
 class Tuple:
@@ -548,7 +550,7 @@ def test_custom_delayed():
 
 @pytest.mark.filterwarnings("ignore:The dask.delayed:UserWarning")
 @pytest.mark.xfail(
-    "dask.array._array_expr_enabled()",
+    da and da._array_expr_enabled(),
     reason="array-expr finalization produces different graph structure",
 )
 def test_array_delayed():
