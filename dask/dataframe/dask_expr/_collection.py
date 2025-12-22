@@ -328,6 +328,12 @@ class FrameBase(DaskMethodsMixin):
     def _meta_nonempty(self):
         return meta_nonempty(self._meta)
 
+    def _repr_mimebundle_(self, **kwargs):
+        """Block __getattr__ fallthrough to expr for Jupyter display."""
+        # Return None so Jupyter falls back to _repr_html_
+        # This prevents __getattr__ from delegating to expr._repr_mimebundle_
+        return None
+
     @property
     def divisions(self):
         """

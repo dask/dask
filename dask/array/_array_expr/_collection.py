@@ -174,6 +174,21 @@ class Array(DaskMethodsMixin):
         """
         self.expr.pprint()
 
+    def visualize(self, tasks: bool = False, **kwargs):  # type: ignore[override]
+        """Visualize the expression or task graph.
+
+        Parameters
+        ----------
+        tasks : bool
+            Whether to visualize the task graph. By default
+            the expression graph will be visualized instead.
+        **kwargs
+            Additional arguments passed to the visualizer.
+        """
+        if tasks:
+            return super().visualize(**kwargs)
+        return self.expr.visualize(**kwargs)
+
     @property
     def _meta(self):
         return self.expr._meta

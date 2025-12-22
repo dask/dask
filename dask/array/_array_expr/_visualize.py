@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-import io
 import math
 from typing import TYPE_CHECKING
 
-from dask.utils import funcname
+from dask._rich_table import (
+    REDUCER_COLOR,
+    SOURCE_COLOR,
+    ExprTable,
+    format_bytes,
+    get_op_display_name,
+    get_op_style,
+    is_expr,
+    walk_expr_with_prefix,
+)
 
 if TYPE_CHECKING:
     from dask.array._array_expr._expr import ArrayExpr
-
-# Color coding using Tango palette for readability on light backgrounds
-# Orange (warm) = sources, new data entering the computation
-# Blue (cool) = reducers, data being reduced/consumed
-_SOURCE_COLOR = "#ce5c00"  # Tango orange dark
-_REDUCER_COLOR = "#3465a4"  # Tango sky blue
 
 
 def _get_op_color(node) -> str | None:
@@ -27,62 +29,19 @@ def _get_op_color(node) -> str | None:
     # Sources: no ArrayExpr dependencies (data enters here)
     deps = [op for op in node.operands if isinstance(op, ArrayExpr)]
     if not deps:
-        return _SOURCE_COLOR
+        return SOURCE_COLOR
 
     # Reducers: PartialReduce or Slice subclasses (data shrinks here)
     if isinstance(node, (PartialReduce, Slice)):
-        return _REDUCER_COLOR
+        return REDUCER_COLOR
 
     return None
-
-
-def _get_op_style(node) -> str:
-    """Get the rich style for an operation."""
-    color = _get_op_color(node)
-    if color:
-        return f"bold {color}"
-    return "bold"
 
 
 # Operations where we prefer showing the _name prefix as the primary name
 _USE_LABEL_AS_NAME = frozenset(
     {"Blockwise", "PartialReduce", "Elemwise", "Random", "SliceSlicesIntegers"}
 )
-
-
-def _get_op_display_name(node) -> str:
-    """Get the display name for an operation.
-
-    For generic operations like Blockwise, extracts a meaningful name from _name.
-    Returns title-cased name (e.g., "Sum", "Tensordot", "Random Sample").
-    """
-    class_name = funcname(type(node))
-
-    if class_name not in _USE_LABEL_AS_NAME:
-        return class_name
-
-    # Extract prefix from _name (everything before the hash)
-    # e.g., "sum-aggregate-abc123" -> "Sum"
-    #       "random_sample-abc123" -> "Random Sample"
-    expr_name = node._name
-    if "-" in expr_name:
-        # Find where the hash starts (last segment that looks like a hash)
-        parts = expr_name.rsplit("-", 1)
-        if len(parts) == 2 and len(parts[1]) >= 8:
-            # Likely a hash suffix, use the prefix
-            label = parts[0]
-            # Clean up underscores to spaces
-            label = label.replace("_", " ")
-            # Remove common suffixes that don't add info
-            for suffix in ["-aggregate", "-partial"]:
-                if suffix in label:
-                    label = label.replace(suffix, "")
-            # Clean up any remaining hyphens
-            label = label.replace("-", " ").strip()
-            # Title case
-            return label.title()
-
-    return class_name
 
 
 def _summarize_chunks(chunks: tuple) -> str:
@@ -102,33 +61,6 @@ def _format_shape(shape: tuple) -> str:
     return f"({', '.join(str(s) for s in shape)})"
 
 
-def _walk_expr_with_prefix(expr: ArrayExpr, prefix: str = "", is_last: bool = True):
-    """
-    Walk expression tree depth-first, yielding (expr, display_prefix) pairs.
-
-    Handles proper tree drawing characters for siblings.
-    """
-    yield expr, prefix
-
-    # Get array expression children
-    children = [op for op in expr.operands if hasattr(op, "chunks")]
-
-    for i, child in enumerate(children):
-        is_last_child = i == len(children) - 1
-
-        # Build the prefix for this child
-        if prefix == "":
-            child_prefix = ""
-        else:
-            # Continue vertical lines for non-last ancestors
-            child_prefix = prefix[:-2] + ("  " if is_last else "│ ")
-
-        # Add the branch character
-        branch = "└ " if is_last_child else "├ "
-
-        yield from _walk_expr_with_prefix(child, child_prefix + branch, is_last_child)
-
-
 def _get_nbytes(node) -> float:
     """Get the number of bytes for an expression, or NaN if unknown."""
     try:
@@ -140,76 +72,9 @@ def _get_nbytes(node) -> float:
         return math.nan
 
 
-def _format_nbytes(nbytes: float) -> str:
-    """Format bytes with 2 significant figures."""
-    if math.isnan(nbytes):
-        return "?"
-
-    for unit, threshold in [
-        ("PiB", 2**50),
-        ("TiB", 2**40),
-        ("GiB", 2**30),
-        ("MiB", 2**20),
-        ("kiB", 2**10),
-    ]:
-        if nbytes >= threshold:
-            value = nbytes / threshold
-            if value >= 10:
-                return f"{value:.0f} {unit}"
-            else:
-                return f"{value:.1f} {unit}"
-    return f"{int(nbytes)} B"
-
-
-class ExprTable:
-    """Wrapper for rich Table with Jupyter and terminal display support."""
-
-    def __init__(self, table):
-        self._table = table
-        self._html_cache = None
-        self._text_cache = None
-
-    def _repr_html_(self):
-        """Jupyter notebook display."""
-        if self._html_cache is None:
-            from rich.console import Console
-
-            console = Console(
-                file=io.StringIO(),
-                force_terminal=False,
-                force_jupyter=False,
-                record=True,
-            )
-            console.print(self._table)
-            self._html_cache = console.export_html(
-                inline_styles=True, code_format="<pre>{code}</pre>"
-            )
-        return self._html_cache
-
-    def __repr__(self):
-        """Terminal display."""
-        if self._text_cache is None:
-            from rich.console import Console
-
-            console = Console(
-                file=io.StringIO(), force_terminal=True, force_jupyter=False
-            )
-            console.print(self._table)
-            self._text_cache = console.file.getvalue().rstrip()
-        return self._text_cache
-
-    def __str__(self):
-        return self.__repr__()
-
-    def _repr_mimebundle_(self, **kwargs):
-        """Provide explicit MIME bundle for Jupyter."""
-        return {"text/html": self._repr_html_()}
-
-    def print(self):
-        """Print to the current console."""
-        from rich.console import Console
-
-        Console().print(self._table)
+def _is_array_expr(op):
+    """Check if operand is an ArrayExpr for tree walking."""
+    return hasattr(op, "chunks") and is_expr(op)
 
 
 def expr_table(expr: ArrayExpr, color: bool = True) -> ExprTable:
@@ -246,13 +111,13 @@ def expr_table(expr: ArrayExpr, color: bool = True) -> ExprTable:
     table.add_column("Chunks", justify="right", style="dim", no_wrap=True)
 
     # First pass: collect nodes and compute bytes for highlighting
-    nodes_and_prefixes = list(_walk_expr_with_prefix(expr))
+    nodes_and_prefixes = list(walk_expr_with_prefix(expr, is_expr_child=_is_array_expr))
     node_bytes = [_get_nbytes(node) for node, _ in nodes_and_prefixes]
     max_bytes = max((b for b in node_bytes if not math.isnan(b)), default=0)
 
     # Walk tree and add rows
     for (node, prefix), nbytes in zip(nodes_and_prefixes, node_bytes):
-        display_name = _get_op_display_name(node)
+        display_name = get_op_display_name(node, _USE_LABEL_AS_NAME)
 
         # Calculate size ratio for background highlighting
         size_ratio = (
@@ -271,14 +136,14 @@ def expr_table(expr: ArrayExpr, color: bool = True) -> ExprTable:
         if color:
             op_text = Text()
             op_text.append(prefix, style="dim")
-            op_text.append(display_name, style=_get_op_style(node))
+            op_text.append(display_name, style=get_op_style(_get_op_color(node)))
         else:
             op_text = f"{prefix}{display_name}"
 
         row = [
             op_text,
             _format_shape(node.shape),
-            _format_nbytes(nbytes),
+            format_bytes(nbytes),
             _summarize_chunks(node.chunks),
         ]
         table.add_row(*row, style=row_style)

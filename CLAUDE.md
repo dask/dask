@@ -189,3 +189,8 @@ pip install -r requirements-docs.txt
 make html
 # Output in build/html/
 ```
+
+## Skills
+
+Be sure to look at skills to see if any of them are relevant for what we're
+working on.
