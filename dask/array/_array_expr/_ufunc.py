@@ -357,3 +357,47 @@ def divmod(x, y):
     res1 = x // y
     res2 = x % y
     return res1, res2
+
+
+def round(a, decimals=0):
+    """Round an array to the given number of decimals."""
+    a = asarray(a)
+    return elemwise(np.round, a, dtype=a.dtype, decimals=decimals)
+
+
+@derived_from(np)
+def around(x, decimals=0):
+    """Evenly round to the given number of decimals."""
+    return round(x, decimals=decimals)
+
+
+def _asarray_isnull(values):
+    import pandas as pd
+
+    return np.asarray(pd.isnull(values))
+
+
+def isnull(values):
+    """pandas.isnull for dask arrays"""
+    # eagerly raise ImportError, if pandas isn't available
+    import pandas as pd  # noqa: F401
+
+    return elemwise(_asarray_isnull, values, dtype="bool")
+
+
+def notnull(values):
+    """pandas.notnull for dask arrays"""
+    return ~isnull(values)
+
+
+@derived_from(np)
+def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
+    """Returns a boolean array where two arrays are element-wise equal within a tolerance."""
+    func = partial(np.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    return elemwise(func, arr1, arr2, dtype="bool")
+
+
+@derived_from(np)
+def allclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
+    """Returns True if two arrays are element-wise equal within a tolerance."""
+    return isclose(arr1, arr2, rtol=rtol, atol=atol, equal_nan=equal_nan).all()
