@@ -638,3 +638,29 @@ def test_fusion_chained_transpose():
     # Should fuse the add and transpose
     opt = result.expr.optimize(fuse=True)
     assert_eq(da.Array(opt), expected)
+
+
+def test_reduction_scalar_aggregate_meta():
+    """Regression test: reduction handles aggregate returning Python scalar.
+
+    When a custom aggregate function returns a Python scalar instead of
+    preserving array dimensions, the meta computation must not fail.
+    Previously failed with:
+    ValueError: cannot reshape array of size 1 into shape (0,0)
+    """
+    arr = da.ones((10, 5, 5), chunks=(5, 5, 5))
+
+    # Custom aggregate that returns Python int (not numpy array)
+    def scalar_agg(x, axis=None, keepdims=False):
+        return 42
+
+    # Should not raise ValueError when accessing _meta
+    result = da.reduction(
+        arr,
+        chunk=np.sum,
+        aggregate=scalar_agg,
+        axis=0,
+        dtype=float,
+    )
+    assert result._meta.shape == (0, 0)
+    assert result._meta.dtype == np.float64

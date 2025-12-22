@@ -417,7 +417,12 @@ class PartialReduce(ArrayExpr):
                     # dtype doesn't support sum (e.g., datetime64)
                     meta = np.empty((), dtype=meta.dtype)
             else:
-                meta = meta.reshape((0,) * len(self.chunks))
+                target_shape = (0,) * len(self.chunks)
+                if meta.size != 0:
+                    # Can't reshape non-empty array to empty shape (e.g., scalar)
+                    meta = np.empty(target_shape, dtype=meta.dtype)
+                else:
+                    meta = meta.reshape(target_shape)
 
         # Ensure meta has the correct dtype if dtype is explicitly specified
         if self.operand("dtype") is not None and hasattr(meta, "dtype"):
