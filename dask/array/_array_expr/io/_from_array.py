@@ -67,8 +67,20 @@ class FromArray(IO):
     @functools.cached_property
     def chunks(self):
         # Normalize chunks lazily - keeps repr compact with user-provided chunks
+        # Pass previous_chunks from underlying array (h5py, zarr) for alignment
+        previous_chunks = getattr(self.array, "chunks", None)
+        # Handle zarr 3.x shards attribute for write alignment
+        if (
+            hasattr(self.array, "shards")
+            and self.array.shards is not None
+            and self.operand("_chunks") == "auto"
+        ):
+            previous_chunks = self.array.shards
         return normalize_chunks(
-            self.operand("_chunks"), self._effective_shape, dtype=self.array.dtype
+            self.operand("_chunks"),
+            self._effective_shape,
+            dtype=self.array.dtype,
+            previous_chunks=previous_chunks,
         )
 
     @functools.cached_property

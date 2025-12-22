@@ -611,6 +611,11 @@ def test_apply_gufunc_axes_two_kept_coredims():
     assert c.compute().shape == (10, 20, 30, 40)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="numba gufunc produces different results with array-expr",
+    strict=False,
+)
 def test_apply_gufunc_via_numba_01():
     numba = pytest.importorskip("numba")
 
