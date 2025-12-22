@@ -79,32 +79,31 @@ Implemented in `slicing/_basic.py:_pushdown_through_broadcast_to()`
 
 ---
 
-## Phase 2: Rechunk Pushdown Extensions
+## Phase 2: Rechunk Pushdown Extensions ✓
 
-### 2.1 Rechunk through Concatenate
+**Status**: Complete
 
-**Goal**: `rechunk(concat([a, b]))` -> `concat([rechunk(a), rechunk(b)])`
+### 2.1 Rechunk through Concatenate ✓
 
-May enable better chunk alignment before concatenation.
+Implemented in `_rechunk.py:_pushdown_through_concatenate()`
+
+- Dict chunks with non-concat axis -> pushes to all inputs
+- Tuple chunks when concat axis unchanged -> pushes to all inputs (preserving original chunks on concat axis)
 
 ---
 
-## Phase 3: Cross-Operation Optimizations
+## Phase 3: Cross-Operation Optimizations ✓
 
-### 3.1 Transpose through Elemwise
+**Status**: Complete
 
-**Goal**: `(x + y).T` -> `x.T + y.T`
+### 3.1 Transpose through Elemwise ✓
 
-Enables further fusion opportunities when transposed arrays are used together.
+Implemented in `manipulation/_transpose.py:_pushdown_through_elemwise()`
 
-```python
-def test_transpose_pushes_through_elemwise():
-    x = da.ones((10, 5), chunks=5)
-    y = da.ones((10, 5), chunks=5)
-    result = (x + y).T.expr.simplify()
-    expected = (x.T + y.T).expr.simplify()
-    assert result._name == expected._name
-```
+- Same-ndim inputs: transposes each input with same axes
+- Broadcasting (different ndim): doesn't push through (too complex)
+- Scalars: left as-is
+- Custom axes: applies same axes to all inputs
 
 ---
 

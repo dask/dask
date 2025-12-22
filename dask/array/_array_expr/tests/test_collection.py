@@ -462,6 +462,41 @@ def test_rechunk_elemwise_pushdown_to_io():
     assert result.elemwise_args[0].name.startswith("array-")
 
 
+def test_rechunk_pushdown_concatenate_other_axis():
+    """Rechunk pushes through concatenate when rechunking non-concat axis."""
+    a = da.ones((10, 20), chunks=(5, 10))
+    b = da.ones((10, 20), chunks=(5, 10))
+    concat = da.concatenate([a, b], axis=0)  # shape (20, 20)
+
+    # Rechunk axis 1 (not concat axis)
+    result = concat.rechunk({1: 5})
+
+    # Expected: rechunk pushed to inputs
+    expected = da.concatenate([a.rechunk({1: 5}), b.rechunk({1: 5})], axis=0)
+
+    # Structure should match
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_rechunk_pushdown_concatenate_correctness():
+    """Verify rechunk through concatenate produces correct values with real data."""
+    a = np.arange(20).reshape(4, 5)
+    b = np.arange(20, 40).reshape(4, 5)
+    da_a = da.from_array(a, chunks=(2, 3))
+    da_b = da.from_array(b, chunks=(2, 3))
+
+    concat = da.concatenate([da_a, da_b], axis=0)  # shape (8, 5)
+
+    # Rechunk non-concat axis
+    result = concat.rechunk({1: 2})
+    expected = da.concatenate([da_a.rechunk({1: 2}), da_b.rechunk({1: 2})], axis=0)
+
+    # Structure should match
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, np.concatenate([a, b], axis=0))
+
+
 # --- Fusion regression tests ---
 
 

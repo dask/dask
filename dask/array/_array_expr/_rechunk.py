@@ -110,6 +110,13 @@ class Rechunk(ArrayExpr):
         if isinstance(self.array, Elemwise) and isinstance(self._chunks, tuple):
             return self._pushdown_through_elemwise()
 
+        # Rechunk(Concatenate) -> Concatenate(rechunked inputs)
+        # Only for non-concat axes
+        from dask.array._array_expr._concatenate import Concatenate
+
+        if isinstance(self.array, Concatenate):
+            return self._pushdown_through_concatenate()
+
         # Rechunk(IO) -> IO with new chunks (if IO supports it)
         if getattr(self.array, "_can_rechunk_pushdown", False) and isinstance(
             self._chunks, tuple
@@ -192,6 +199,49 @@ class Rechunk(ArrayExpr):
             new_out,
             elemwise.operand("_user_kwargs"),
             *new_args,
+        )
+
+    def _pushdown_through_concatenate(self):
+        """Push rechunk through concatenate for non-concat axes."""
+        from dask._collections import new_collection
+
+        concat = self.array
+        axis = concat.axis
+        arrays = concat.args
+        chunks = self._chunks
+
+        # Only handle tuple chunks for now
+        if not isinstance(chunks, tuple):
+            # For dict chunks, check if we're only rechunking non-concat axes
+            if isinstance(chunks, dict) and axis not in chunks:
+                # Build chunks for each input (same rechunk spec)
+                rechunked_arrays = [new_collection(a).rechunk(chunks) for a in arrays]
+                return type(concat)(
+                    rechunked_arrays[0].expr,
+                    axis,
+                    concat._meta,
+                    *[a.expr for a in rechunked_arrays[1:]],
+                )
+            return None
+
+        # Only push through if we're not changing the concat axis chunking
+        # (redistributing across concat boundaries is too complex)
+        if chunks[axis] != concat.chunks[axis]:
+            return None
+
+        # Build rechunk spec for each input (excluding concat axis)
+        # For the concat axis, each input keeps its original chunks
+        rechunked_arrays = []
+        for arr in arrays:
+            arr_chunks = list(chunks)
+            arr_chunks[axis] = arr.chunks[axis]
+            rechunked_arrays.append(new_collection(arr).rechunk(tuple(arr_chunks)))
+
+        return type(concat)(
+            rechunked_arrays[0].expr,
+            axis,
+            concat._meta,
+            *[a.expr for a in rechunked_arrays[1:]],
         )
 
     def _lower(self):
