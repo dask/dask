@@ -166,6 +166,14 @@ class Array(DaskMethodsMixin):
     def simplify(self):
         return new_collection(self.expr.simplify())
 
+    def pprint(self):
+        """Pretty print the expression tree.
+
+        Uses rich table format if rich is installed, otherwise falls back
+        to the basic tree representation.
+        """
+        self.expr.pprint()
+
     @property
     def _meta(self):
         return self.expr._meta
