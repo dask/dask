@@ -1,4 +1,4 @@
-"""Linear algebra operations for array-expr."""
+"""Tensor operations for array-expr (tensordot, dot, vdot, matmul)."""
 
 from __future__ import annotations
 

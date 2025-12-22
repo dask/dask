@@ -726,13 +726,13 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __matmul__(self, other):
-        from dask.array._array_expr._linalg import matmul
+        from dask.array._array_expr.linalg import matmul
 
         return matmul(self, other)
 
     @check_if_handled_given_other
     def __rmatmul__(self, other):
-        from dask.array._array_expr._linalg import matmul
+        from dask.array._array_expr.linalg import matmul
 
         return matmul(other, self)
 
@@ -880,7 +880,7 @@ class Array(DaskMethodsMixin):
 
         Refer to :func:`dask.array.repeat` for full documentation.
         """
-        from dask.array._array_expr._creation import repeat
+        from dask.array._array_expr.creation import repeat
 
         return repeat(self, repeats, axis)
 
@@ -998,7 +998,7 @@ class Array(DaskMethodsMixin):
 
         Refer to :func:`dask.array.store` for full documentation.
         """
-        from dask.array._array_expr._io import store
+        from dask.array._array_expr.io import store
 
         return store([self], [target], **kwargs)
 
@@ -1013,7 +1013,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.to_zarr : equivalent function
         """
-        from dask.array._array_expr._io import to_zarr
+        from dask.array._array_expr.io import to_zarr
 
         return to_zarr(self, *args, **kwargs)
 
@@ -1423,7 +1423,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.dot : equivalent function
         """
-        from dask.array._array_expr._linalg import tensordot
+        from dask.array._array_expr.linalg import tensordot
 
         return tensordot(self, other, axes=((self.ndim - 1,), (other.ndim - 2,)))
 
@@ -1579,7 +1579,7 @@ class Array(DaskMethodsMixin):
 
         if method == "__call__":
             if numpy_ufunc is np.matmul:
-                from dask.array._array_expr._linalg import matmul
+                from dask.array._array_expr.linalg import matmul
 
                 # special case until apply_gufunc handles optional dimensions
                 return matmul(*inputs, **kwargs)

@@ -41,8 +41,8 @@ def count_nonzero(a, axis=None):
 @derived_from(np)
 def argwhere(a):
     """Find the indices of array elements that are non-zero."""
-    from dask.array._array_expr._creation import indices
     from dask.array._array_expr._routines import compress
+    from dask.array._array_expr.creation import indices
 
     a = asarray(a)
 

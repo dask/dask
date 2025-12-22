@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dask._collections import new_collection
-from dask.array._array_expr._io import FromGraph
+from dask.array._array_expr.io import FromGraph
 
 
 def from_graph(layer, _meta, chunks, keys, name_prefix):

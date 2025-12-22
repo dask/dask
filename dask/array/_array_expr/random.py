@@ -12,8 +12,8 @@ import numpy as np
 from dask._collections import new_collection
 from dask._task_spec import Task, TaskRef
 from dask.array._array_expr._collection import Array
-from dask.array._array_expr._io import IO
 from dask.array._array_expr.core._conversion import asarray
+from dask.array._array_expr.io import IO
 from dask.array.backends import array_creation_dispatch
 from dask.array.core import broadcast_shapes, normalize_chunks
 from dask.array.creation import arange

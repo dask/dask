@@ -239,8 +239,8 @@ def inv(a):
     ainv : Array
         Inverse of the matrix `a`.
     """
-    from dask.array._array_expr._creation import eye
     from dask.array._array_expr.core import asanyarray
+    from dask.array._array_expr.creation import eye
 
     a = asanyarray(a)
     return solve(a, eye(a.shape[0], chunks=a.chunks[0][0]))

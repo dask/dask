@@ -15,14 +15,17 @@ from dask.array._array_expr.linalg._svd import (
     svd,
     svd_compressed,
 )
+from dask.array._array_expr.linalg._tensordot import dot, matmul, tensordot, vdot
 
 __all__ = [
     "cholesky",
     "compression_level",
     "compression_matrix",
+    "dot",
     "inv",
     "lstsq",
     "lu",
+    "matmul",
     "norm",
     "qr",
     "sfqr",
@@ -30,5 +33,7 @@ __all__ = [
     "solve_triangular",
     "svd",
     "svd_compressed",
+    "tensordot",
     "tsqr",
+    "vdot",
 ]

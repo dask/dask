@@ -15,7 +15,7 @@ def _unravel_index_kernel(indices, func_kwargs):
 
 @derived_from(np)
 def unravel_index(indices, shape, order="C"):
-    from dask.array._array_expr._creation import empty
+    from dask.array._array_expr.creation import empty
 
     indices = asarray(indices)
     if shape and indices.size:

@@ -82,8 +82,8 @@ def cov(
     dtype=None,
 ):
     """Estimate a covariance matrix."""
-    from dask.array._array_expr._linalg import dot
     from dask.array._array_expr._ufunc import true_divide
+    from dask.array._array_expr.linalg import dot
 
     if ddof is not None and ddof != int(ddof):
         raise ValueError("ddof must be integer")
@@ -164,8 +164,8 @@ def cov(
 @derived_from(np)
 def corrcoef(x, y=None, rowvar=1):
     """Return Pearson product-moment correlation coefficients."""
-    from dask.array._array_expr._creation import diag
     from dask.array._array_expr._ufunc import sqrt
+    from dask.array._array_expr.creation import diag
 
     c = cov(x, y, rowvar)
 

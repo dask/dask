@@ -615,7 +615,7 @@ def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
     >>> da.trace(da.eye(3)).compute()  # doctest: +SKIP
     3.0
     """
-    from dask.array._array_expr._creation import diagonal
+    from dask.array._array_expr.creation import diagonal
 
     return diagonal(a, offset=offset, axis1=axis1, axis2=axis2).sum(-1, dtype=dtype)
 

@@ -13,9 +13,9 @@ from tlz.curried import map
 from dask._collections import new_collection
 from dask.array import chunk
 from dask.array._array_expr._collection import Array, concatenate
-from dask.array._array_expr._creation import empty_like, full_like, repeat
 from dask.array._array_expr._expr import ArrayExpr, unify_chunks_expr
 from dask.array._array_expr._map_blocks import map_blocks
+from dask.array._array_expr.creation import empty_like, full_like, repeat
 from dask.array._shuffle import _calculate_new_chunksizes
 from dask.array.numpy_compat import normalize_axis_tuple
 from dask.array.utils import meta_from_array
