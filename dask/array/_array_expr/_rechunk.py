@@ -107,7 +107,7 @@ class Rechunk(ArrayExpr):
             return self._pushdown_through_transpose()
 
         # Rechunk(Elemwise) -> Elemwise(rechunked inputs)
-        if isinstance(self.array, Elemwise) and isinstance(self._chunks, tuple):
+        if isinstance(self.array, Elemwise):
             return self._pushdown_through_elemwise()
 
         # Rechunk(Concatenate) -> Concatenate(rechunked inputs)
@@ -118,9 +118,7 @@ class Rechunk(ArrayExpr):
             return self._pushdown_through_concatenate()
 
         # Rechunk(IO) -> IO with new chunks (if IO supports it)
-        if getattr(self.array, "_can_rechunk_pushdown", False) and isinstance(
-            self._chunks, tuple
-        ):
+        if getattr(self.array, "_can_rechunk_pushdown", False):
             # Keep the same name prefix - the token will change with the new chunks
             return self.array.substitute_parameters({"_chunks": self.chunks})
 
@@ -157,6 +155,10 @@ class Rechunk(ArrayExpr):
         elemwise = self.array
         out_ind = elemwise.out_ind
         chunks = self._chunks
+
+        # Convert dict chunks to tuple for positional indexing
+        if isinstance(chunks, dict):
+            chunks = tuple(chunks.get(i, -1) for i in range(elemwise.ndim))
 
         def rechunk_array_arg(arg):
             """Rechunk an array argument to match target output chunks."""
