@@ -336,15 +336,36 @@ def test_optimization_applied_to_reduction():
     assert "sum-aggregate" in simplified._name
 
 
-def test_optimization_not_applied_new_axes():
-    """Verify optimization is NOT applied: new_axes present."""
+def test_optimization_pushes_through_new_axes_when_safe():
+    """Verify slice pushes through new_axes when not slicing the new axis."""
     from dask.array._array_expr.slicing import SliceSlicesIntegers
 
     x = da.ones((20, 20), chunks=(5, 5))
     y = da.map_blocks(lambda b: b[..., np.newaxis], x, new_axis=2, dtype=float)
-    z = y[:5, :5, :]
+    z = y[:5, :5, :]  # Not slicing the new axis (axis 2)
 
-    # The slice should remain (not pushed through)
+    # The slice CAN push through because we're not slicing axis 2
+    simplified = z.expr.simplify()
+    assert not isinstance(simplified, SliceSlicesIntegers)
+    assert_eq(z, np.ones((20, 20))[:5, :5, np.newaxis])
+
+
+def test_optimization_not_applied_slicing_new_axes():
+    """Verify optimization is NOT applied when slicing new_axes dimension."""
+    from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+    x = da.ones((20, 20), chunks=(5, 5))
+    # Add new axis of size 3
+    y = da.map_blocks(
+        lambda b: np.repeat(b[..., np.newaxis], 3, axis=2),
+        x,
+        new_axis=2,
+        chunks=(5, 5, 3),
+        dtype=float,
+    )
+    z = y[:5, :5, :2]  # Slicing the new axis (axis 2)
+
+    # The slice should NOT push through because we're slicing axis 2
     simplified = z.expr.simplify()
     assert isinstance(simplified, SliceSlicesIntegers)
 
@@ -362,3 +383,72 @@ def test_optimization_reduces_tasks():
 
     # Sliced should have fewer tasks (only processes 1 column of chunks)
     assert sliced_tasks < full_tasks
+
+
+# =============================================================================
+# Case 8: Tensordot / Matmul
+# - adjust_chunks only affects contracted dimension
+# - Slices on non-contracted dimensions can push through
+# =============================================================================
+
+
+@pytest.mark.filterwarnings("ignore::dask.array.core.PerformanceWarning")
+def test_slice_through_tensordot_correctness():
+    """Verify slice through tensordot produces correct values."""
+    arr = np.random.random((100, 100))
+    x = da.from_array(arr, chunks=(10, 10))
+
+    result = x.dot(x.T)[:5, :5]
+    expected = arr.dot(arr.T)[:5, :5]
+
+    assert_eq(result, expected)
+
+
+@pytest.mark.filterwarnings("ignore::dask.array.core.PerformanceWarning")
+def test_slice_through_matmul_correctness():
+    """Verify slice through matmul produces correct values."""
+    arr1 = np.random.random((100, 50))
+    arr2 = np.random.random((50, 100))
+    x = da.from_array(arr1, chunks=(10, 10))
+    y = da.from_array(arr2, chunks=(10, 10))
+
+    result = (x @ y)[:5, :5]
+    expected = (arr1 @ arr2)[:5, :5]
+
+    assert_eq(result, expected)
+
+
+@pytest.mark.filterwarnings("ignore::dask.array.core.PerformanceWarning")
+def test_slice_through_matmul_expression_structure():
+    """Verify x.dot(y)[a:b, c:d] simplifies to x[a:b, :].dot(y[:, c:d])."""
+    x = da.ones((100, 50), chunks=(10, 10))
+    y = da.ones((50, 100), chunks=(10, 10))
+
+    # Use different slices to verify correct operand mapping
+    result = (x @ y)[:15, :25]
+    expected = x[:15, :] @ y[:, :25]
+
+    # Both should simplify to equivalent expressions
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+@pytest.mark.filterwarnings("ignore::dask.array.core.PerformanceWarning")
+def test_slice_through_tensordot_reduces_tasks():
+    """Verify slice through tensordot reduces task count.
+
+    x.dot(x.T)[0:5, 0:5] should optimize to compute only the
+    submatrix, not the full matrix then slice.
+    """
+    x = da.ones((100, 100), chunks=(10, 10))
+
+    full = x.dot(x.T)
+    sliced = x.dot(x.T)[:5, :5]
+
+    full_tasks = len(full.optimize().__dask_graph__())
+    sliced_tasks = len(sliced.optimize().__dask_graph__())
+
+    # Sliced should have significantly fewer tasks
+    # Full: 10x10 output chunks = 100 output chunks
+    # Sliced: 1x1 output chunks = 1 output chunk
+    # Task reduction should be ~10x or more
+    assert sliced_tasks < full_tasks / 5

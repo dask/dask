@@ -555,23 +555,35 @@ class SliceSlicesIntegers(Slice):
         out_ind = bw.out_ind
         index = self.index
 
-        # Don't handle if blockwise adjusts chunks - slice indices may not map correctly
-        # Use getattr since subclasses may define as class attribute or property
-        adjust_chunks = getattr(bw, "adjust_chunks", None)
-        if adjust_chunks is not None:
-            return None
-
-        # Don't handle if blockwise adds new axes - output shape differs from inputs
-        new_axes = getattr(bw, "new_axes", None)
-        if new_axes:
-            return None
-
         # Don't handle None/newaxis
         if any(idx is None for idx in index):
             return None
 
         # Pad index to full output length
         full_index = index + (slice(None),) * (len(out_ind) - len(index))
+
+        # Find which output axes have non-trivial slices
+        sliced_axes = {
+            i
+            for i, idx in enumerate(full_index)
+            if isinstance(idx, Integral) or idx != slice(None)
+        }
+
+        # Use getattr since subclasses may define as class attribute or property
+        adjust_chunks = getattr(bw, "adjust_chunks", None)
+        if adjust_chunks:
+            # Only reject if we're slicing an adjusted dimension
+            # adjust_chunks keys are output axis indices
+            adjusted_axes = set(adjust_chunks.keys())
+            if sliced_axes & adjusted_axes:
+                return None
+
+        # Don't handle if blockwise adds new axes and we're slicing those axes
+        new_axes = getattr(bw, "new_axes", None)
+        if new_axes:
+            new_axis_positions = set(new_axes.keys())
+            if sliced_axes & new_axis_positions:
+                return None
 
         # Convert integers to size-1 slices for pushdown
         slice_index = tuple(
