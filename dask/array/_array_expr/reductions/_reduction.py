@@ -182,18 +182,18 @@ def reduction(
         args += (wgt.expr, inds)
 
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
+    # Use adjust_chunks to set reduced axes to output_size (default 1)
+    adjust_chunks = {i: output_size for i in axis}
     tmp = blockwise(
-        chunk, inds, *args, axis=axis, keepdims=True, token=name, dtype=dtype or float
+        chunk,
+        inds,
+        *args,
+        axis=axis,
+        keepdims=True,
+        token=name,
+        dtype=dtype or float,
+        adjust_chunks=adjust_chunks,
     )
-    # Override chunks along reduced axes to output_size
-    if output_size != 1:
-        from dask.array._array_expr._expr import ChunksOverride
-
-        new_chunks = tuple(
-            (output_size,) * len(c) if i in axis else c
-            for i, c in enumerate(tmp.chunks)
-        )
-        tmp = ChunksOverride(tmp, new_chunks)
     if meta is None and hasattr(x, "_meta"):
         try:
             reduced_meta = compute_meta(
