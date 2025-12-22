@@ -490,6 +490,73 @@ class SliceSlicesIntegers(Slice):
         if getattr(self.array, "_slice_pushdown", False):
             return self._pushdown_into_io()
 
+        # Slice(BroadcastTrick) -> BroadcastTrick(sliced shape)
+        # For ones/zeros/full/empty, just create new with sliced shape
+        from dask.array._array_expr.creation import BroadcastTrick
+
+        if isinstance(self.array, BroadcastTrick):
+            return self._simplify_creation()
+
+    def _simplify_creation(self):
+        """Simplify Slice(BroadcastTrick) to BroadcastTrick with new shape.
+
+        For ones, zeros, full, empty - just create a new instance with
+        the sliced shape and chunks.
+        """
+        creation = self.array
+        index = self.index
+        old_shape = creation.shape
+        old_chunks = creation.chunks
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (len(old_shape) - len(index))
+
+        # Handle integers and newaxis - for now, only handle simple slices
+        if any(idx is None for idx in full_index):
+            return None
+        if any(isinstance(idx, Integral) for idx in full_index):
+            return None
+
+        # Compute new shape and chunks from slices
+        new_shape = []
+        new_chunks = []
+        for i, idx in enumerate(full_index):
+            if isinstance(idx, slice):
+                # Normalize slice
+                start, stop, step = idx.indices(old_shape[i])
+                if step != 1:
+                    return None  # Don't handle non-unit steps
+                new_dim = max(0, stop - start)
+                new_shape.append(new_dim)
+
+                # Compute new chunks for this dimension
+                old_axis_chunks = old_chunks[i]
+                axis_chunks = []
+                cumsum = 0
+                for chunk_size in old_axis_chunks:
+                    chunk_start = cumsum
+                    chunk_end = cumsum + chunk_size
+                    cumsum = chunk_end
+
+                    # Intersection of [chunk_start, chunk_end) with [start, stop)
+                    overlap_start = max(chunk_start, start)
+                    overlap_end = min(chunk_end, stop)
+                    if overlap_end > overlap_start:
+                        axis_chunks.append(overlap_end - overlap_start)
+
+                new_chunks.append(tuple(axis_chunks) if axis_chunks else (0,))
+            else:
+                return None  # Unexpected index type
+
+        # Substitute shape and chunks, clear name for new expression
+        return creation.substitute_parameters(
+            {
+                "shape": tuple(new_shape),
+                "chunks": tuple(new_chunks),
+                "name": None,
+            }
+        )
+
     def _pushdown_through_elemwise(self):
         """Push slice through elemwise by slicing each input appropriately."""
         from dask.array._array_expr._blockwise import Elemwise, is_scalar_for_elemwise
@@ -646,10 +713,11 @@ class SliceSlicesIntegers(Slice):
         # If we converted integers to slices, extract with [0] to restore dimensions
         if has_integers:
             extract_index = tuple(
-                0 if isinstance(idx, Integral) else slice(None)
-                for idx in full_index
+                0 if isinstance(idx, Integral) else slice(None) for idx in full_index
             )
-            return SliceSlicesIntegers(result, extract_index, self.allow_getitem_optimization)
+            return SliceSlicesIntegers(
+                result, extract_index, self.allow_getitem_optimization
+            )
 
         return result
 
@@ -783,8 +851,7 @@ class SliceSlicesIntegers(Slice):
         # If we converted integers to slices, extract with [0] to restore dimensions
         if has_integers:
             extract_index = tuple(
-                0 if isinstance(idx, Integral) else slice(None)
-                for idx in full_index
+                0 if isinstance(idx, Integral) else slice(None) for idx in full_index
             )
             return SliceSlicesIntegers(
                 result, extract_index, self.allow_getitem_optimization
