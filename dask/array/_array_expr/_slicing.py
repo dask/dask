@@ -599,7 +599,7 @@ class SliceSlicesIntegers(Slice):
 
     def _pushdown_into_io(self):
         """Push slice into IO expression by setting a region (deferred slice)."""
-        from dask.array._array_expr._io import FromArray
+        from dask.array._array_expr.io import FromArray
 
         # Only handle slices and integers (no None/newaxis, no fancy indexing)
         index = self.index

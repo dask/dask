@@ -160,7 +160,7 @@ def from_array(
 
     # Import Array for isinstance check
     from dask.array._array_expr._collection import Array
-    from dask.array._array_expr._io import FromArray
+    from dask.array._array_expr.io import FromArray
     from dask.utils import is_arraylike
 
     # Check for both array-expr and legacy dask arrays

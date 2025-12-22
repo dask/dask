@@ -399,7 +399,7 @@ def test_pushdown_broadcast_both_arrays():
 
 def test_rechunk_pushdown_to_io():
     """Rechunk should push down into FromArray by changing chunks parameter."""
-    from dask.array._array_expr._io import FromArray
+    from dask.array._array_expr.io import FromArray
 
     a = np.random.random((10, 10))
     b = da.from_array(a, chunks=(4, 4))
@@ -414,7 +414,7 @@ def test_rechunk_pushdown_to_io():
 
 def test_rechunk_chain_optimize():
     """Chained rechunks should collapse to single rechunk pushed to IO."""
-    from dask.array._array_expr._io import FromArray
+    from dask.array._array_expr.io import FromArray
 
     a = np.random.random((10, 10))
     b = da.from_array(a, chunks=(4, 4))
@@ -429,7 +429,7 @@ def test_rechunk_chain_optimize():
 
 def test_rechunk_transpose_pushdown_to_io():
     """Rechunk after transpose should push through to IO."""
-    from dask.array._array_expr._io import FromArray
+    from dask.array._array_expr.io import FromArray
     from dask.array._array_expr.manipulation._transpose import Transpose
 
     a = np.random.random((10, 10))
@@ -447,7 +447,7 @@ def test_rechunk_transpose_pushdown_to_io():
 def test_rechunk_elemwise_pushdown_to_io():
     """Rechunk after elemwise should push through to IO inputs."""
     from dask.array._array_expr._blockwise import Elemwise
-    from dask.array._array_expr._io import FromArray
+    from dask.array._array_expr.io import FromArray
 
     a = np.random.random((10, 10))
     b = da.from_array(a, chunks=(4, 4))

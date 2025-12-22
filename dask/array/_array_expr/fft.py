@@ -15,8 +15,8 @@ except ImportError:
     scipy = None
 
 from dask.array._array_expr._collection import asarray, concatenate
-from dask.array._array_expr._creation import arange
 from dask.array._array_expr._map_blocks import map_blocks
+from dask.array._array_expr.creation import arange
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.utils import derived_from, skip_doctest
 

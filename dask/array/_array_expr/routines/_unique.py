@@ -176,7 +176,7 @@ def unique_no_structured_arr(
 @derived_from(np)
 def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     """Find the unique elements of an array."""
-    from dask.array._array_expr._creation import arange, ones
+    from dask.array._array_expr.creation import arange, ones
     from dask.array.numpy_compat import NUMPY_GE_200
 
     try:

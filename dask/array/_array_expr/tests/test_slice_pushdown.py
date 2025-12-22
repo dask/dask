@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array._array_expr._io import FromArray
 from dask.array._array_expr._slicing import SliceSlicesIntegers
+from dask.array._array_expr.io import FromArray
 from dask.array.utils import assert_eq
 
 pytestmark = pytest.mark.skipif(

@@ -10,7 +10,7 @@ from dask.utils import derived_from
 
 @derived_from(np)
 def tril(m, k=0):
-    from dask.array._array_expr._creation import tri
+    from dask.array._array_expr.creation import tri
     from dask.array._array_expr.routines._where import where
     from dask.array.utils import meta_from_array
 
@@ -28,7 +28,7 @@ def tril(m, k=0):
 
 @derived_from(np)
 def triu(m, k=0):
-    from dask.array._array_expr._creation import tri
+    from dask.array._array_expr.creation import tri
     from dask.array._array_expr.routines._where import where
     from dask.array.utils import meta_from_array
 
@@ -46,7 +46,7 @@ def triu(m, k=0):
 
 @derived_from(np)
 def tril_indices(n, k=0, m=None, chunks="auto"):
-    from dask.array._array_expr._creation import tri
+    from dask.array._array_expr.creation import tri
     from dask.array._array_expr.routines._nonzero import nonzero
 
     return nonzero(tri(n, m, k=k, dtype=bool, chunks=chunks))
@@ -61,7 +61,7 @@ def tril_indices_from(arr, k=0):
 
 @derived_from(np)
 def triu_indices(n, k=0, m=None, chunks="auto"):
-    from dask.array._array_expr._creation import tri
+    from dask.array._array_expr.creation import tri
     from dask.array._array_expr.routines._nonzero import nonzero
 
     return nonzero(~tri(n, m, k=k - 1, dtype=bool, chunks=chunks))
