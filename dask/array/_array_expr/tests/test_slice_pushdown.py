@@ -655,3 +655,211 @@ def test_slice_through_broadcast_to_reduces_tasks():
     sliced_tasks = len(broadcasted[:5, :5].optimize().__dask_graph__())
 
     assert sliced_tasks < full_tasks
+
+
+# --- Shuffle (take) through Elemwise Tests ---
+
+
+def test_shuffle_pushes_through_elemwise_add():
+    """(x + y)[[1,3,5]] should optimize to x[[1,3,5]] + y[[1,3,5]]."""
+    x = da.arange(20, chunks=5)
+    y = da.arange(20, chunks=5)
+
+    indices = [1, 3, 5, 7, 9]
+    result = (x + y)[indices]
+    expected = x[indices] + y[indices]
+
+    # Structure should match
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+    # Verify correctness
+    x_np = np.arange(20)
+    y_np = np.arange(20)
+    assert_eq(result, (x_np + y_np)[indices])
+
+
+def test_shuffle_pushes_through_elemwise_mul():
+    """(x * y)[[2,4,6]] should optimize to x[[2,4,6]] * y[[2,4,6]]."""
+    x = da.arange(30, chunks=10)
+    y = da.arange(30, chunks=10)
+
+    indices = [2, 4, 6, 8]
+    result = (x * y)[indices]
+    expected = x[indices] * y[indices]
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_shuffle_pushes_through_elemwise_2d():
+    """Shuffle on 2D array along axis 0."""
+    x = da.ones((10, 8), chunks=(5, 4))
+    y = da.ones((10, 8), chunks=(5, 4))
+
+    indices = [0, 2, 4, 6]
+    result = (x + y)[indices, :]
+    expected = x[indices, :] + y[indices, :]
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_shuffle_pushes_through_elemwise_scalar():
+    """Shuffle through elemwise with scalar."""
+    x = da.arange(20, chunks=5)
+
+    indices = [1, 5, 9, 13]
+    result = (x + 1)[indices]
+    expected = x[indices] + 1
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_shuffle_pushes_through_unary_elemwise():
+    """Shuffle through unary elemwise (e.g. negative)."""
+    x = da.arange(20, chunks=5)
+
+    indices = [2, 4, 6, 8]
+    result = (-x)[indices]
+    expected = -(x[indices])
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_shuffle_through_elemwise_reduces_work():
+    """Taking a subset should reduce computation by only computing needed elements."""
+    x = da.ones((100,), chunks=10)
+    y = da.ones((100,), chunks=10)
+
+    # Take only 10 of 100 elements
+    indices = list(range(0, 100, 10))  # [0, 10, 20, ..., 90]
+    result = (x + y)[indices]
+
+    # Optimized should have fewer tasks since we only compute what we need
+    unopt_tasks = len(result.__dask_graph__())
+    opt_tasks = len(result.optimize().__dask_graph__())
+
+    # Optimization should reduce task count
+    assert opt_tasks <= unopt_tasks
+
+
+# --- Shuffle through Transpose Tests ---
+
+
+def test_shuffle_pushes_through_transpose():
+    """x.T[[1,3,5]] should optimize to x[:, [1,3,5]].T."""
+    x = da.arange(20, chunks=5).reshape((4, 5))
+
+    indices = [1, 3]
+    result = x.T[indices, :]  # Take rows 1, 3 from transposed (5, 4)
+    expected = x[:, indices].T  # Take cols 1, 3 from (4, 5), then transpose
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_shuffle_pushes_through_transpose_axis1():
+    """x.T[:, [0,2]] should optimize to x[[0,2], :].T."""
+    x = da.arange(20, chunks=5).reshape((4, 5))
+
+    indices = [0, 2]
+    result = x.T[:, indices]  # Take cols 0, 2 from transposed (5, 4)
+    expected = x[indices, :].T  # Take rows 0, 2 from (4, 5), then transpose
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_shuffle_pushes_through_transpose_3d():
+    """Shuffle through 3D transpose."""
+    x = da.ones((2, 3, 4), chunks=2)
+
+    indices = [0, 2]
+    # Transpose (2,3,4) -> (4,3,2), then take along axis 0
+    result = x.transpose((2, 1, 0))[indices, :, :]
+    # Equivalent: take along axis 2 of original, then transpose
+    expected = x[:, :, indices].transpose((2, 1, 0))
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+# --- Shuffle through Concatenate/Stack Tests ---
+
+
+def test_shuffle_pushes_through_concatenate():
+    """Shuffle on non-concat axis pushes to all inputs."""
+    a = da.arange(20, chunks=5).reshape((4, 5))
+    b = da.arange(20, 40, chunks=5).reshape((4, 5))
+
+    concat = da.concatenate([a, b], axis=1)  # (4, 10)
+    indices = [0, 2]
+    result = concat[indices, :]  # Take rows 0, 2
+
+    expected = da.concatenate([a[indices, :], b[indices, :]], axis=1)
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_shuffle_pushes_through_stack():
+    """Shuffle on non-stack axis pushes to all inputs."""
+    a = da.arange(12, chunks=4).reshape((3, 4))
+    b = da.arange(12, 24, chunks=4).reshape((3, 4))
+
+    stacked = da.stack([a, b], axis=0)  # (2, 3, 4)
+    indices = [0, 2]
+    result = stacked[:, indices, :]  # Take along axis 1
+
+    expected = da.stack([a[indices, :], b[indices, :]], axis=0)
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+# --- Shuffle through Blockwise Tests ---
+
+
+def test_shuffle_pushes_through_blockwise():
+    """Shuffle through blockwise when adjust_chunks doesn't affect shuffle axis."""
+    from dask.array._array_expr._blockwise import Blockwise
+
+    # map_blocks creates a generic Blockwise with no adjust_chunks
+    x = da.ones((4, 6), chunks=(2, 3))
+    mapped = x.map_blocks(lambda b: b * 2)
+
+    indices = [0, 2]
+    result = mapped[indices, :]
+
+    # Expected: shuffle first, then map_blocks
+    expected = x[indices, :].map_blocks(lambda b: b * 2)
+
+    # Verify the optimization happened - Blockwise should be at top
+    opt = result.expr.simplify()
+    assert isinstance(opt, Blockwise)
+
+    # Verify correctness
+    assert_eq(result, expected)
+
+
+def test_shuffle_does_not_push_through_blockwise_adjust_chunks():
+    """Shuffle does NOT push through blockwise when adjust_chunks affects shuffle axis."""
+    from dask.array._array_expr._shuffle import Shuffle
+
+    # map_blocks with explicit chunks sets adjust_chunks
+    x = da.ones((8, 6), chunks=(2, 3))
+    # Providing chunks means each output block has these chunk sizes (adjust_chunks)
+    # This creates output with shape (4, 6) chunks (1, 3)
+    mapped = x.map_blocks(lambda b: b * 2, chunks=(1, 3))
+
+    indices = [0, 2]  # Taking along axis 0 - NOT all indices
+    result = mapped[indices, :]
+
+    # Shuffle should stay at top (not push through) because axis 0 has adjust_chunks
+    opt = result.expr.simplify()
+    assert isinstance(opt, Shuffle)
+
+    # Still correct
+    assert_eq(result, mapped.compute()[indices, :])

@@ -39,14 +39,24 @@
 | Transpose | Done | Reorders chunk spec |
 | Elemwise | Done | Pushes to each input |
 | IO | Done | Modifies IO chunks directly |
-| Concatenate | **Missing** | Medium value |
+| Concatenate | Done | Pushes to all inputs when not changing concat axis |
+
+### Shuffle (take) Pushdown
+
+| Target Expression | Status | Notes |
+|-------------------|--------|-------|
+| Elemwise | Done | Pushes to each input |
+| Transpose | Done | Remaps shuffle axis through transpose |
+| Concatenate | Done | Pushes to each input (non-concat axis) |
+| Stack | Done | Pushes to each input (non-stack axis) |
+| Blockwise | Done | Pushes when shuffle axis not in new_axes/adjust_chunks |
 
 ### Other Pushdowns
 
 | Pattern | Status | Notes |
 |---------|--------|-------|
 | Transpose(Transpose) | Done | Composes axes |
-| Transpose(Elemwise) | **Missing** | Low complexity, enables fusion |
+| Transpose(Elemwise) | Done | Pushes to each input (same ndim only) |
 
 ---
 
@@ -145,14 +155,14 @@ These are particularly important for xarray integration where fancy indexing is 
 
 **Limited potential**: Only safe when same mask applies to all inputs
 
-### 4.4 Integer Array Indexing (take)
+### 4.4 Integer Array Indexing (take/Shuffle) ✓
 
-**Goal**: `x[[1,3,5]]` along one axis
+Implemented in `_shuffle.py:Shuffle._simplify_down()`
 
-**Challenges**:
-- Reorders data (not just selection)
-- May duplicate elements
-- Different semantics than slicing
+- `(x + y)[[1,3,5]]` → `x[[1,3,5]] + y[[1,3,5]]`
+- Only pushes when all inputs have enough dimensions for the shuffle axis
+- Scalars left as-is
+- Reduces computation by only computing elements that will be selected
 
 ### 4.5 Abstract Projection Interface (Investigation)
 
