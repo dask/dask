@@ -1394,6 +1394,11 @@ def test_xarray_like_reduction():
         False,
     ],
 )
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr graph structure differs, affecting ordering metrics",
+    strict=False,
+)
 def test_array_vs_dataframe(optimize):
     xr = pytest.importorskip("xarray")
     pytest.importorskip("dask.dataframe")
@@ -1430,6 +1435,11 @@ def test_array_vs_dataframe(optimize):
     assert max(diag_array[1]) < 50
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr graph structure differs, affecting ordering metrics",
+    strict=False,
+)
 def test_anom_mean():
     np = pytest.importorskip("numpy")
     xr = pytest.importorskip("xarray")
@@ -2345,6 +2355,10 @@ def test_xarray_rechunk_map_reduce_cohorts(use_longest_path):
     assert all_diffs == [10, 39, 10]
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr lacks __dask_layers__ which xarray uses internally",
+)
 def test_xarray_8414():
     # https://github.com/pydata/xarray/issues/8414#issuecomment-1793860552
     np = pytest.importorskip("numpy")

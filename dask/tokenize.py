@@ -484,6 +484,27 @@ def register_numpy():
         return dtype.str
 
 
+@normalize_token.register_lazy("h5py")
+def register_h5py():
+    import h5py
+
+    @normalize_token.register(h5py.Dataset)
+    def normalize_h5py_dataset(ds):
+        # Use file path, dataset name, shape, and dtype for deterministic token
+        # The file.filename gives us the path to the HDF5 file
+        return (
+            "h5py.Dataset",
+            ds.file.filename,
+            ds.name,
+            ds.shape,
+            str(ds.dtype),
+        )
+
+    @normalize_token.register(h5py.File)
+    def normalize_h5py_file(f):
+        return ("h5py.File", f.filename, f.mode)
+
+
 def _tokenize_deterministic(*args, **kwargs) -> str:
     # Utility to be strict about deterministic tokens
     return tokenize(*args, ensure_deterministic=True, **kwargs)

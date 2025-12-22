@@ -898,15 +898,6 @@ if _array_expr_enabled():
 
         sys.modules["dask.array.ma"] = ma
         atop = raise_not_implemented_error("atop")
-        from dask.array._array_expr import (
-            from_delayed,
-            from_npy_stack,
-            from_zarr,
-            store,
-        )
-        from dask.array.chunk_types import register_chunk_type
-
-        to_hdf5 = raise_not_implemented_error("to_hdf5")
         from dask.array._array_expr import (  # type: ignore[assignment]
             aligned_coarsen_chunks,
             apply_along_axis,
@@ -916,9 +907,13 @@ if _array_expr_enabled():
             delete,
             ediff1d,
             einsum,
+            from_delayed,
+            from_npy_stack,
+            from_zarr,
             insert,
             optimize,
             ravel_multi_index,
+            store,
             to_npy_stack,
             to_zarr,
             topk,
@@ -927,6 +922,8 @@ if _array_expr_enabled():
             unique,
             unravel_index,
         )
+        from dask.array.chunk_types import register_chunk_type
+        from dask.array.core import to_hdf5
         from dask.array.tiledb_io import from_tiledb, to_tiledb
         from dask.array.utils import assert_eq
         from dask.base import compute

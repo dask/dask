@@ -170,7 +170,20 @@ def from_array(
             "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
         )
 
-    elif is_dask_collection(x):
+    # Handle xarray DataArray wrapping a dask array
+    try:
+        import xarray as xr
+
+        if isinstance(x, xr.DataArray) and x.chunks is not None:
+            if isinstance(x.data, Array) or (
+                type(x.data).__module__ == "dask.array.core"
+                and type(x.data).__name__ == "Array"
+            ):
+                return x.data
+    except ImportError:
+        pass
+
+    if is_dask_collection(x):
         warnings.warn(
             "Passing an object to dask.array.from_array which is already a "
             "Dask collection. This can lead to unexpected behavior."

@@ -1168,7 +1168,10 @@ def store(
         targets = [targets]  # type: ignore[list-item]
     targets = cast("Collection[ArrayLike | Delayed]", targets)
 
-    if any(not isinstance(s, Array) for s in sources):
+    if any(
+        not isinstance(s, Array) and not is_dask_collection(s)  # type: ignore[unreachable]
+        for s in sources
+    ):
         raise ValueError("All sources must be dask array objects")
 
     if len(sources) != len(targets):
@@ -5759,7 +5762,11 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
     """
     if len(args) == 1 and isinstance(args[0], dict):
         data = args[0]
-    elif len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], Array):
+    elif (
+        len(args) == 2
+        and isinstance(args[0], str)
+        and (isinstance(args[1], Array) or is_dask_collection(args[1]))
+    ):
         data = {args[0]: args[1]}
     else:
         raise ValueError("Please provide {'/data/path': array} dictionary")

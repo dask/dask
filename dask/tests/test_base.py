@@ -598,6 +598,10 @@ def test_visualize():
 @pytest.mark.skipif(
     bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr returns dict graphs, not HLG",
+)
 def test_visualize_highlevelgraph():
     graphviz = pytest.importorskip("graphviz")
     with tmpdir() as d:

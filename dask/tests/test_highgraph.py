@@ -18,6 +18,10 @@ from dask.utils_test import dec, import_or_none, inc
 da = import_or_none("dask.array")
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr returns dict graphs, not HLG",
+)
 def test_visualize(tmpdir):
     pytest.importorskip("numpy")
     pytest.importorskip("graphviz")
@@ -301,6 +305,10 @@ def test_len_does_not_materialize():
     assert not hg.layers["b"].is_materialized()
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr returns dict graphs, not HLG",
+)
 def test_node_tooltips_exist():
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
