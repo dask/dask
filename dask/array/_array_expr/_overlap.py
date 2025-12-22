@@ -952,7 +952,7 @@ def push(array, n, axis):
         # omit the forward fill that violate the limit
         return da.where(valid_limits, push(array, None, axis), np.nan)
 
-    from dask.array._array_expr._reductions import cumreduction
+    from dask.array._array_expr.reductions import cumreduction
 
     return cumreduction(
         func=_push,

@@ -219,7 +219,7 @@ def _sum_wo_cat(a, axis=None, dtype=None):
     """Sum without concatenation - used for matmul reduction."""
     from functools import partial, reduce
 
-    from dask.array._array_expr._reductions import reduction
+    from dask.array._array_expr.reductions import reduction
 
     def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
         # Caution: this is not your conventional array-sum: due

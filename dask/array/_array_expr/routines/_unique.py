@@ -143,7 +143,7 @@ def unique_no_structured_arr(
     """Simplified version of unique for arrays that don't support structured arrays."""
     from dask.array._array_expr._blockwise import Blockwise
     from dask.array._array_expr._expr import ChunksOverride
-    from dask.array._array_expr._reductions import _tree_reduce
+    from dask.array._array_expr.reductions import _tree_reduce
 
     if return_index or return_inverse or return_counts:
         raise ValueError(
