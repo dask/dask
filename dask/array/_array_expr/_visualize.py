@@ -21,7 +21,7 @@ _REDUCER_COLOR = "#3465a4"  # Tango sky blue
 def _get_op_color(node) -> str | None:
     """Determine operation color based on class hierarchy and data flow."""
     from dask.array._array_expr._expr import ArrayExpr
-    from dask.array._array_expr._reductions import PartialReduce
+    from dask.array._array_expr.reductions._reduction import PartialReduce
     from dask.array._array_expr.slicing._basic import Slice
 
     # Sources: no ArrayExpr dependencies (data enters here)
@@ -33,7 +33,7 @@ def _get_op_color(node) -> str | None:
     if isinstance(node, (PartialReduce, Slice)):
         return _REDUCER_COLOR
 
-    return None  # type: ignore[unreachable]
+    return None
 
 
 def _get_op_style(node) -> str:
