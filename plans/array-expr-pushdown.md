@@ -10,7 +10,7 @@
 | Expression | Example | Pushdown Status | Notes |
 |------------|---------|-----------------|-------|
 | SliceSlicesIntegers | `x[5:10, :, 3]` | **Active** | Basic slices + integers, most optimizations here |
-| SlicesWrapNone | `x[None, :, None]` | Disabled | Adds dimensions via None, blocks pushdown |
+| SlicesWrapNone | `x[None, :, None]` | **Active** | Separates slicing from expand_dims, pushes slicing through |
 | VIndexArray | `x.vindex[[1,3], [2,4]]` | None | Fancy point-wise indexing |
 | BooleanIndexFlattened | `x[bool_mask]` | None | Unknown output shape (nan chunks) |
 | TakeUnknownOneChunk | `x[idx]` (unknown) | None | Integer array with unknown values |
@@ -121,13 +121,16 @@ Implemented in `manipulation/_transpose.py:_pushdown_through_elemwise()`
 
 These are particularly important for xarray integration where fancy indexing is common.
 
-### 4.1 SlicesWrapNone Pushdown
+### 4.1 SlicesWrapNone Pushdown ✓
 
 **Goal**: Enable pushdown for `x[None, :5, None]` -> `x[:5][None, :, None]`
 
-**Current state**: `_simplify_down` explicitly disabled (returns None)
+**Implementation**: `slicing/_basic.py:SlicesWrapNone._simplify_down()`
 
-**Approach**: Separate the None-insertion from the slicing, push slicing through
+- Creates temporary `SliceSlicesIntegers` with just the slicing part
+- Calls parent's `_simplify_down()` to push through
+- Wraps result with `expand_dims` to add the new dimensions
+- Only pushes if there's non-trivial slicing (not just `slice(None)`s)
 
 ### 4.2 VIndexArray Pushdown
 
