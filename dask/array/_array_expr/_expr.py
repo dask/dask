@@ -141,29 +141,6 @@ class ArrayExpr(SingletonExpr):
 
         return expr_table(self, color=color)
 
-    def pprint(self):
-        """Pretty print the expression tree.
-
-        Uses rich table format if rich is installed, otherwise falls back
-        to the basic tree representation.
-        """
-        try:
-            self._table().print()
-        except ImportError:
-            for line in self._tree_repr_lines():
-                print(line)
-
-    def _repr_html_(self):
-        """Jupyter notebook display using rich table."""
-        try:
-            return self._table()._repr_html_()
-        except ImportError:
-            return f"<pre>{self.tree_repr()}</pre>"
-
-    def _repr_mimebundle_(self, **kwargs):
-        """Provide explicit MIME bundle for Jupyter."""
-        return {"text/html": self._repr_html_()}
-
     @cached_property
     def shape(self) -> tuple[T_IntOrNaN, ...]:
         return tuple(cached_cumsum(c, initial_zero=True)[-1] for c in self.chunks)

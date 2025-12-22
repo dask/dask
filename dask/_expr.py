@@ -131,9 +131,38 @@ class Expr:
 
         return explain(self, stage, format)
 
+    def _table(self, color: bool = True):
+        """Return a rich Table visualization of the expression tree.
+
+        Subclasses should override this to provide collection-specific tables.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement _table(). "
+            "Use pprint() for basic tree display."
+        )
+
     def pprint(self):
-        for line in self._tree_repr_lines():
-            print(line)
+        """Pretty print the expression tree.
+
+        Uses rich table format if available, otherwise falls back
+        to the basic tree representation.
+        """
+        try:
+            self._table().print()
+        except (ImportError, NotImplementedError):
+            for line in self._tree_repr_lines():
+                print(line)
+
+    def _repr_html_(self):
+        """Jupyter notebook display using rich table."""
+        try:
+            return self._table()._repr_html_()
+        except (ImportError, NotImplementedError):
+            return f"<pre>{self.tree_repr()}</pre>"
+
+    def _repr_mimebundle_(self, **kwargs):
+        """Provide explicit MIME bundle for Jupyter."""
+        return {"text/html": self._repr_html_()}
 
     def __hash__(self):
         return hash(self._name)

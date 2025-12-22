@@ -94,11 +94,17 @@ class Expr(core.SingletonExpr):
     def __dask_keys__(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
-    def optimize(self, **kwargs):
-        return optimize(self, **kwargs)
+    def optimize(self, fuse: bool = True):
+        return optimize(self, fuse=fuse)
 
     def __hash__(self):
         return hash(self._name)
+
+    def _table(self, color: bool = True):
+        """Return a rich Table visualization of the expression tree."""
+        from dask.dataframe.dask_expr._visualize import expr_table
+
+        return expr_table(self, color=color)
 
     @property
     def index(self):
