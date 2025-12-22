@@ -295,7 +295,8 @@ def test_slice_through_reduction_optimization():
     expected = x[:, :5].sum(axis=0)
 
     # After simplification, the names should be equivalent
-    assert y.expr.simplify()._name == expected.expr._name
+    # (both sides need simplify since slices also simplify through ones)
+    assert y.expr.simplify()._name == expected.expr.simplify()._name
 
 
 def test_slice_through_reduction_reduces_tasks():
@@ -330,7 +331,7 @@ def test_slice_through_reduction_axis1():
     y = x.sum(axis=1)[:5]
     expected = x[:5, :].sum(axis=1)
 
-    assert y.expr.simplify()._name == expected.expr._name
+    assert y.expr.simplify()._name == expected.expr.simplify()._name
 
 
 def test_slice_through_reduction_3d():
@@ -342,7 +343,7 @@ def test_slice_through_reduction_3d():
     y = x.sum(axis=1)[:3, :4]
     expected = x[:3, :, :4].sum(axis=1)
 
-    assert y.expr.simplify()._name == expected.expr._name
+    assert y.expr.simplify()._name == expected.expr.simplify()._name
 
 
 def test_slice_through_reduction_multiple_axes():
@@ -354,7 +355,7 @@ def test_slice_through_reduction_multiple_axes():
     y = x.sum(axis=(0, 2))[:5]
     expected = x[:, :5, :].sum(axis=(0, 2))
 
-    assert y.expr.simplify()._name == expected.expr._name
+    assert y.expr.simplify()._name == expected.expr.simplify()._name
 
 
 def test_slice_through_reduction_correctness():
@@ -386,3 +387,61 @@ def test_slice_through_reduction_integer_index():
 
     assert indexed_tasks < full_tasks
     assert_eq(result, arr.sum(axis=0)[5])
+
+
+# =============================================================================
+# Slice through creation expressions (ones, zeros, full, empty)
+# =============================================================================
+
+
+def test_slice_ones_returns_smaller_ones():
+    """Slicing ones() returns a new ones() with the sliced shape."""
+    from dask.array._array_expr.creation import Ones
+
+    x = da.ones((100, 100), chunks=(10, 10))
+    y = x[:15, :25]
+
+    # After simplification, should be Ones with new shape, not Slice(Ones)
+    simplified = y.expr.simplify()
+    assert isinstance(simplified, Ones)
+    assert simplified.shape == (15, 25)
+
+
+def test_slice_zeros_returns_smaller_zeros():
+    """Slicing zeros() returns a new zeros() with the sliced shape."""
+    from dask.array._array_expr.creation import Zeros
+
+    x = da.zeros((100, 100), chunks=(10, 10))
+    y = x[:15, :25]
+
+    simplified = y.expr.simplify()
+    assert isinstance(simplified, Zeros)
+    assert simplified.shape == (15, 25)
+
+
+def test_slice_full_returns_smaller_full():
+    """Slicing full() returns a new full() with the sliced shape."""
+    from dask.array._array_expr.creation import Full
+
+    x = da.full((100, 100), 42, chunks=(10, 10))
+    y = x[:15, :25]
+
+    simplified = y.expr.simplify()
+    assert isinstance(simplified, Full)
+    assert simplified.shape == (15, 25)
+    # Verify fill_value is preserved
+    assert_eq(y, np.full((15, 25), 42))
+
+
+def test_slice_creation_correctness():
+    """Verify sliced creation expressions produce correct values."""
+    assert_eq(da.ones((100, 100), chunks=10)[:15, :25], np.ones((15, 25)))
+    assert_eq(da.zeros((100, 100), chunks=10)[:15, :25], np.zeros((15, 25)))
+    assert_eq(da.full((100, 100), 7.5, chunks=10)[:15, :25], np.full((15, 25), 7.5))
+
+
+def test_slice_creation_preserves_dtype():
+    """Verify sliced creation preserves dtype."""
+    x = da.ones((100, 100), chunks=10, dtype="int32")[:15, :25]
+    assert x.dtype == np.dtype("int32")
+    assert_eq(x, np.ones((15, 25), dtype="int32"))

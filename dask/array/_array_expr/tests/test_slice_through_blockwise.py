@@ -33,7 +33,7 @@ def test_slice_through_reduction_blockwise():
     result = x.sum(axis=0)[:5]
     expected = x[:, :5].sum(axis=0)
 
-    assert result.expr.simplify()._name == expected.expr._name
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
 
 
 def test_slice_through_reduction_blockwise_axis1():
@@ -43,7 +43,7 @@ def test_slice_through_reduction_blockwise_axis1():
     result = x.sum(axis=1)[:5]
     expected = x[:5, :].sum(axis=1)
 
-    assert result.expr.simplify()._name == expected.expr._name
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
 
 
 # =============================================================================
@@ -61,7 +61,7 @@ def test_slice_through_elemwise_add():
     result = (x + y)[:5, :10]
     expected = x[:5, :10] + y[:5, :10]
 
-    assert result.expr.simplify()._name == expected.expr._name
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
 
 
 def test_slice_through_elemwise_unary():
@@ -71,7 +71,7 @@ def test_slice_through_elemwise_unary():
     result = da.sin(x)[:5, :10]
     expected = da.sin(x[:5, :10])
 
-    assert result.expr.simplify()._name == expected.expr._name
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
 
 
 # =============================================================================
@@ -302,11 +302,6 @@ def test_slice_through_reduction_correctness(shape, chunks, axis, slice_):
     # Build the slice tuple for the output
     out_ndim = len(shape) - 1  # reduction removes one axis
     slices = [slice(None)] * out_ndim
-    # Figure out which output axis corresponds to the slice
-    out_axis = axis if axis < out_ndim else out_ndim - 1
-    # Actually, with keepdims=False, axes after the reduced one shift down
-    if axis < len(shape) - 1:
-        out_axis = 0  # Just slice the first output axis for simplicity
     slices[0] = slice_
 
     result = x.sum(axis=axis)[tuple(slices)]
