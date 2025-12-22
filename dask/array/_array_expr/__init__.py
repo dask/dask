@@ -41,17 +41,6 @@ from dask.array._array_expr._histogram import histogram, histogram2d, histogramd
 from dask.array._array_expr._map_blocks import map_blocks
 from dask.array._array_expr._optimize import optimize
 from dask.array._array_expr._overlap import map_overlap, overlap, trim_overlap
-from dask.array._array_expr._reductions import (
-    _tree_reduce,
-    arg_reduction,
-    cumprod,
-    cumreduction,
-    cumsum,
-    nancumprod,
-    nancumsum,
-    reduction,
-    trace,
-)
 from dask.array._array_expr._routines import (
     aligned_coarsen_chunks,
     allclose,
@@ -136,5 +125,16 @@ from dask.array._array_expr.io import (
     to_zarr,
 )
 from dask.array._array_expr.linalg import dot, matmul, tensordot, vdot
+from dask.array._array_expr.reductions import (
+    _tree_reduce,
+    arg_reduction,
+    cumprod,
+    cumreduction,
+    cumsum,
+    nancumprod,
+    nancumsum,
+    reduction,
+    trace,
+)
 from dask.array._array_expr.routines._diff import diff
 from dask.array._array_expr.routines._where import where

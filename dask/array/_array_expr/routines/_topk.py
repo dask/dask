@@ -19,7 +19,7 @@ def topk(a, k, axis=-1, split_every=None):
     from smallest to largest.
     """
     from dask.array import chunk
-    from dask.array._array_expr._reductions import reduction
+    from dask.array._array_expr.reductions import reduction
 
     a = asarray(a)
     axis = validate_axis(axis, a.ndim)
@@ -47,8 +47,8 @@ def argtopk(a, k, axis=-1, split_every=None):
     extract the indices of the -k smallest elements instead.
     """
     from dask.array import chunk
-    from dask.array._array_expr._reductions import reduction
     from dask.array._array_expr.creation import arange
+    from dask.array._array_expr.reductions import reduction
 
     a = asarray(a)
     axis = validate_axis(axis, a.ndim)

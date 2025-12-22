@@ -440,11 +440,11 @@ class Array(DaskMethodsMixin):
         if not isinstance(index, tuple):
             index = (index,)
 
-        from dask.array._array_expr._slicing import (
+        from dask.array._array_expr.slicing import (
+            normalize_index,
             slice_array,
             slice_with_int_dask_array,
         )
-        from dask.array.slicing import normalize_index
 
         index2 = normalize_index(index, self.shape)
 
@@ -456,7 +456,7 @@ class Array(DaskMethodsMixin):
         if any(isinstance(i, Array) and i.dtype.kind in "iu" for i in index2):
             self, index2 = slice_with_int_dask_array(self, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
-            from dask.array._array_expr._slicing import slice_with_bool_dask_array
+            from dask.array._array_expr.slicing import slice_with_bool_dask_array
 
             self, index2 = slice_with_bool_dask_array(self, index2)
 
@@ -578,7 +578,7 @@ class Array(DaskMethodsMixin):
                 )
 
         # Use SetItem expression for other index types
-        from dask.array._array_expr._slicing import SetItem
+        from dask.array._array_expr.slicing import SetItem
 
         value_expr = value.expr if isinstance(value, Array) else value
         y = new_collection(SetItem(self.expr, key, value_expr))
@@ -934,7 +934,7 @@ class Array(DaskMethodsMixin):
         return rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
     def _vindex(self, key):
-        from dask.array._array_expr._slicing import _numpy_vindex, _vindex
+        from dask.array._array_expr.slicing import _numpy_vindex, _vindex
         from dask.base import is_dask_collection
 
         if not isinstance(key, tuple):
@@ -1384,7 +1384,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.cumsum : equivalent function
         """
-        from dask.array._array_expr._reductions import cumsum
+        from dask.array._array_expr.reductions import cumsum
 
         return cumsum(self, axis=axis, dtype=dtype, out=out, method=method)
 
@@ -1397,7 +1397,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.cumprod : equivalent function
         """
-        from dask.array._array_expr._reductions import cumprod
+        from dask.array._array_expr.reductions import cumprod
 
         return cumprod(self, axis=axis, dtype=dtype, out=out, method=method)
 
@@ -1410,7 +1410,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.trace : equivalent function
         """
-        from dask.array._array_expr._reductions import trace
+        from dask.array._array_expr.reductions import trace
 
         return trace(self, offset=offset, axis1=axis1, axis2=axis2, dtype=dtype)
 
@@ -1630,8 +1630,8 @@ class Array(DaskMethodsMixin):
 from dask.array._array_expr._rechunk import rechunk
 from dask.array._array_expr._reshape import ravel, reshape
 
-# Import squeeze from its module
-from dask.array._array_expr._slicing import squeeze
-
 # Import swapaxes
 from dask.array._array_expr.manipulation._transpose import swapaxes
+
+# Import squeeze from its module
+from dask.array._array_expr.slicing import squeeze
