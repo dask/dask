@@ -75,6 +75,59 @@ class Transpose(Blockwise):
         # Identity transpose -> return the array
         if self.axes == tuple(range(self.array.ndim)):
             return self.array
+        # Transpose(Elemwise(x, y)) -> Elemwise(Transpose(x), Transpose(y))
+        from dask.array._array_expr._blockwise import Elemwise
+
+        if isinstance(self.array, Elemwise):
+            return self._pushdown_through_elemwise()
+
+    def _pushdown_through_elemwise(self):
+        """Push transpose through elemwise by transposing each input."""
+        from dask.array._array_expr._blockwise import Elemwise
+        from dask.array.core import is_scalar_for_elemwise
+
+        elemwise = self.array
+        axes = self.axes
+        out_ndim = len(axes)
+
+        # Only push through if all array inputs have the same ndim as output
+        # Broadcasting cases require index transformations we don't handle
+        for arg in elemwise.elemwise_args:
+            if is_scalar_for_elemwise(arg):
+                continue
+            if arg.ndim != out_ndim:
+                return None
+
+        # Check where/out as well
+        if hasattr(elemwise.where, "ndim") and elemwise.where.ndim != out_ndim:
+            return None
+        if hasattr(elemwise.out, "ndim") and elemwise.out.ndim != out_ndim:
+            return None
+
+        # Transpose each array input
+        new_args = [
+            arg if is_scalar_for_elemwise(arg) else Transpose(arg, axes)
+            for arg in elemwise.elemwise_args
+        ]
+
+        # Transpose where/out if they are arrays
+        new_where = elemwise.where
+        if hasattr(new_where, "ndim"):
+            new_where = Transpose(new_where, axes)
+
+        new_out = elemwise.out
+        if hasattr(new_out, "ndim"):
+            new_out = Transpose(new_out, axes)
+
+        return Elemwise(
+            elemwise.op,
+            elemwise.operand("dtype"),
+            elemwise.operand("name"),
+            new_where,
+            new_out,
+            elemwise.operand("_user_kwargs"),
+            *new_args,
+        )
 
 
 def transpose(a, axes=None):

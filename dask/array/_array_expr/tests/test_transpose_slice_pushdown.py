@@ -130,3 +130,88 @@ def test_transpose_slice_task_count():
     assert (
         len(unopt_graph) == 14
     ), f"Expected 14 unoptimized tasks, got {len(unopt_graph)}"
+
+
+# --- Transpose through Elemwise Tests ---
+
+
+def test_transpose_pushes_through_elemwise_add():
+    """(x + y).T should optimize to x.T + y.T."""
+    x = da.ones((10, 5), chunks=5)
+    y = da.ones((10, 5), chunks=5)
+
+    result = (x + y).T
+    expected = x.T + y.T
+
+    # Simplified should match expected structure
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+    # Verify correctness
+    assert_eq(result, expected)
+
+
+def test_transpose_pushes_through_elemwise_mul():
+    """(x * y).T should optimize to x.T * y.T."""
+    x = da.ones((6, 4), chunks=2)
+    y = da.ones((6, 4), chunks=2)
+
+    result = (x * y).T
+    expected = x.T * y.T
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_transpose_through_elemwise_broadcasting_no_pushdown():
+    """Transpose doesn't push through elemwise when broadcasting (different ndim)."""
+    from dask.array._array_expr.manipulation._transpose import Transpose
+
+    x = da.ones((6, 4), chunks=2)
+    y = da.ones((4,), chunks=2)  # broadcasts along axis 1
+
+    result = (x + y).T  # (6, 4) + (4,) -> (6, 4), then .T -> (4, 6)
+
+    # We don't push through broadcasting cases, so outer op is still Transpose
+    opt = result.expr.simplify()
+    assert isinstance(opt, Transpose)
+
+    # But result is still correct
+    import numpy as np
+
+    x_np = np.ones((6, 4))
+    y_np = np.ones((4,))
+    assert_eq(result, (x_np + y_np).T)
+
+
+def test_transpose_pushes_through_elemwise_scalar():
+    """Transpose through elemwise with scalar."""
+    x = da.ones((5, 3), chunks=2)
+
+    result = (x + 1).T
+    expected = x.T + 1
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_transpose_pushes_through_unary_elemwise():
+    """Transpose through unary elemwise (e.g. negative)."""
+    x = da.ones((4, 6), chunks=2)
+
+    result = (-x).T
+    expected = -(x.T)
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_transpose_custom_axes_through_elemwise():
+    """Custom transpose axes through elemwise."""
+    x = da.ones((2, 3, 4), chunks=2)
+    y = da.ones((2, 3, 4), chunks=2)
+
+    result = (x + y).transpose((2, 0, 1))
+    expected = x.transpose((2, 0, 1)) + y.transpose((2, 0, 1))
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
