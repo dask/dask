@@ -55,6 +55,10 @@ def test_fft():
     assert_eq(result, expected)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="xarray's polyfit calls from_array on an existing dask array",
+)
 def test_polyfit_reshaping():
     # Regression test for https://github.com/pydata/xarray/issues/4554
     arr = xr.DataArray(da.ones((10, 20, 30), chunks=(1, 5, 30)), dims=["z", "y", "x"])
@@ -90,6 +94,10 @@ def test_positional_indexer_multiple_variables():
 
 
 @pytest.mark.parametrize("compute", [True, False])
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="xarray operations don't trigger array-expr fusion",
+)
 def test_xarray_blockwise_fusion_store(compute):
     def custom_scheduler_get(dsk, keys, expected, **kwargs):
         dsk = dsk.__dask_graph__()
