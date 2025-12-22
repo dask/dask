@@ -497,6 +497,24 @@ class SliceSlicesIntegers(Slice):
         if isinstance(self.array, BroadcastTrick):
             return self._simplify_creation()
 
+        # Slice(Concatenate) -> push slice through concatenate
+        from dask.array._array_expr._concatenate import Concatenate
+
+        if isinstance(self.array, Concatenate):
+            return self._pushdown_through_concatenate()
+
+        # Slice(Stack) -> push slice through stack
+        from dask.array._array_expr._stack import Stack
+
+        if isinstance(self.array, Stack):
+            return self._pushdown_through_stack()
+
+        # Slice(BroadcastTo) -> push slice through broadcast
+        from dask.array._array_expr._broadcast import BroadcastTo
+
+        if isinstance(self.array, BroadcastTo):
+            return self._pushdown_through_broadcast_to()
+
     def _simplify_creation(self):
         """Simplify Slice(BroadcastTrick) to BroadcastTrick with new shape.
 
@@ -556,6 +574,271 @@ class SliceSlicesIntegers(Slice):
                 "name": None,
             }
         )
+
+    def _pushdown_through_concatenate(self):
+        """Push slice through concatenate.
+
+        Cases:
+        1. Slice on concat axis: select/trim relevant arrays
+        2. Slice on other axis: push to all inputs
+        """
+        from dask.array._array_expr._collection import new_collection
+
+        concat = self.array
+        axis = concat.axis
+        arrays = concat.args
+        index = self.index
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (concat.ndim - len(index))
+
+        # For now, only handle simple slices (no integers that reduce dims)
+        if any(isinstance(idx, Integral) for idx in full_index):
+            return None
+        if any(idx is None for idx in full_index):
+            return None
+
+        axis_slice = full_index[axis]
+
+        # Normalize the axis slice
+        concat_dim_size = sum(a.shape[axis] for a in arrays)
+        if isinstance(axis_slice, slice):
+            start, stop, step = axis_slice.indices(concat_dim_size)
+            if step != 1:
+                return None  # Don't handle non-unit steps
+        else:
+            return None
+
+        # Build sliced arrays
+        sliced_arrays = []
+        cumsum = 0
+        for arr in arrays:
+            arr_size = arr.shape[axis]
+            arr_start = cumsum
+            arr_end = cumsum + arr_size
+
+            # Check if this array overlaps with the slice
+            overlap_start = max(start, arr_start)
+            overlap_end = min(stop, arr_end)
+
+            if overlap_end > overlap_start:
+                # Build slice for this array
+                local_start = overlap_start - arr_start
+                local_stop = overlap_end - arr_start
+
+                # Build full slice tuple for this array
+                arr_slices = list(full_index)
+                arr_slices[axis] = slice(local_start, local_stop)
+
+                sliced_arr = new_collection(arr)[tuple(arr_slices)]
+                sliced_arrays.append(sliced_arr.expr)
+
+            cumsum = arr_end
+
+        if not sliced_arrays:
+            # Empty result - shouldn't happen with valid slice
+            return None
+
+        if len(sliced_arrays) == 1:
+            # Only one array needed - just return it (already sliced)
+            return sliced_arrays[0]
+
+        # Multiple arrays - create new Concatenate
+        return type(concat)(
+            sliced_arrays[0],
+            axis,
+            concat._meta,
+            *sliced_arrays[1:],
+        )
+
+    def _pushdown_through_stack(self):
+        """Push slice through stack.
+
+        Stack adds a new dimension at axis. Cases:
+        1. Slice on stacked axis: select subset of inputs
+        2. Slice on other axes: push to all inputs (adjusting for added dim)
+        """
+        import numpy as np
+
+        from dask.array._array_expr._collection import new_collection
+        from dask.array.utils import meta_from_array
+
+        stack = self.array
+        axis = stack.axis
+        arrays = stack.args
+        index = self.index
+
+        # Pad index to full length (output has one more dim than inputs)
+        full_index = index + (slice(None),) * (stack.ndim - len(index))
+
+        # For now, only handle simple slices (no integers that reduce dims)
+        if any(isinstance(idx, Integral) for idx in full_index):
+            return None
+        if any(idx is None for idx in full_index):
+            return None
+
+        # Handle the stacked axis slice
+        stacked_axis_slice = full_index[axis]
+        n_arrays = len(arrays)
+
+        if isinstance(stacked_axis_slice, slice):
+            start, stop, step = stacked_axis_slice.indices(n_arrays)
+            if step != 1:
+                return None
+            selected_arrays = arrays[start:stop]
+        else:
+            return None
+
+        if not selected_arrays:
+            return None
+
+        # Build slice for the other axes (remove the stacked axis from index)
+        other_slices = full_index[:axis] + full_index[axis + 1 :]
+
+        # Check if we need to slice the other axes
+        needs_other_slice = any(s != slice(None) for s in other_slices)
+
+        # Slice each selected array on the other axes
+        sliced_arrays = []
+        for arr in selected_arrays:
+            if needs_other_slice:
+                sliced_arr = new_collection(arr)[other_slices]
+                sliced_arrays.append(sliced_arr.expr)
+            else:
+                sliced_arrays.append(arr)
+
+        # Compute new meta for the resulting stack
+        new_meta = np.stack(
+            [meta_from_array(new_collection(a)) for a in sliced_arrays], axis=axis
+        )
+
+        # Create new Stack with selected/sliced arrays
+        return type(stack)(
+            sliced_arrays[0],
+            axis,
+            new_meta,
+            *sliced_arrays[1:],
+        )
+
+    def _pushdown_through_broadcast_to(self):
+        """Push slice through broadcast_to.
+
+        For broadcast_to(x, shape)[slices]:
+        - Dimensions added by broadcast (new dims): affect output shape only
+        - Dimensions from input with size > 1: push slice to input
+        - Dimensions from input with size == 1: affect output shape only
+        """
+        from dask.array._array_expr._broadcast import BroadcastTo
+        from dask.array._array_expr._collection import new_collection
+
+        broadcast = self.array
+        input_arr = broadcast.array
+        output_shape = broadcast._shape
+        index = self.index
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (len(output_shape) - len(index))
+
+        # For now, only handle simple slices
+        if any(isinstance(idx, Integral) for idx in full_index):
+            return None
+        if any(idx is None for idx in full_index):
+            return None
+
+        ndim_new = len(output_shape) - input_arr.ndim
+
+        # Compute new output shape and input slices
+        new_output_shape = []
+        input_slices = []
+
+        for out_dim, idx in enumerate(full_index):
+            if not isinstance(idx, slice):
+                return None
+
+            out_size = output_shape[out_dim]
+            start, stop, step = idx.indices(out_size)
+            if step != 1:
+                return None
+            new_dim_size = max(0, stop - start)
+            new_output_shape.append(new_dim_size)
+
+            # Check if this dimension maps to input
+            if out_dim >= ndim_new:
+                in_dim = out_dim - ndim_new
+                in_size = input_arr.shape[in_dim]
+
+                if in_size == 1:
+                    # Broadcasted from size 1 - can't push, just take full slice
+                    input_slices.append(slice(None))
+                else:
+                    # Real dimension - push the slice
+                    input_slices.append(idx)
+
+        # Slice the input array
+        if input_slices:
+            sliced_input = new_collection(input_arr)[tuple(input_slices)]
+        else:
+            sliced_input = new_collection(input_arr)
+
+        # Compute new chunks for the output
+        # For dimensions from input: use input's (sliced) chunks
+        # For new dimensions: use the new output shape (single chunk)
+        old_chunks = broadcast._chunks
+        new_chunks = []
+        for out_dim, old_chunk in enumerate(old_chunks):
+            if out_dim >= ndim_new:
+                in_dim = out_dim - ndim_new
+                in_size = input_arr.shape[in_dim]
+                if in_size == 1:
+                    # Broadcasted - compute new chunks from old
+                    idx = full_index[out_dim]
+                    start, stop, _ = idx.indices(output_shape[out_dim])
+                    new_chunks.append(
+                        self._slice_chunks(old_chunk, start, stop - start)
+                    )
+                else:
+                    # Use sliced input's chunks
+                    new_chunks.append(sliced_input.expr.chunks[in_dim])
+            else:
+                # New dimension - compute from slice
+                idx = full_index[out_dim]
+                start, stop, _ = idx.indices(output_shape[out_dim])
+                new_chunks.append(self._slice_chunks(old_chunk, start, stop - start))
+
+        # Compute meta for the new broadcast
+        from dask.array.utils import meta_from_array
+
+        new_meta = meta_from_array(sliced_input.expr._meta)
+
+        # Create new BroadcastTo
+        return BroadcastTo(
+            sliced_input.expr,
+            tuple(new_output_shape),
+            tuple(new_chunks),
+            new_meta,
+        )
+
+    def _slice_chunks(self, chunks, start, length):
+        """Compute new chunks after slicing."""
+        result = []
+        cumsum = 0
+        for chunk_size in chunks:
+            chunk_start = cumsum
+            chunk_end = cumsum + chunk_size
+            cumsum = chunk_end
+
+            if chunk_end <= start:
+                continue
+            if chunk_start >= start + length:
+                break
+
+            overlap_start = max(start, chunk_start)
+            overlap_end = min(start + length, chunk_end)
+            overlap_size = overlap_end - overlap_start
+            if overlap_size > 0:
+                result.append(overlap_size)
+
+        return tuple(result) if result else (0,)
 
     def _pushdown_through_elemwise(self):
         """Push slice through elemwise by slicing each input appropriately."""

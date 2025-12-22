@@ -26,9 +26,9 @@
 | PartialReduce | Done | Maps output slice to input |
 | IO (FromArray) | Done | Pushes into source array |
 | BroadcastTrick | Done | Creates new with sliced shape |
-| Concatenate | **Missing** | High value |
-| Stack | **Missing** | High value |
-| BroadcastTo | **Missing** | Medium value |
+| Concatenate | Done | Selects/trims relevant arrays |
+| Stack | Done | Selects subset, pushes to inputs |
+| BroadcastTo | Done | Pushes to input where possible |
 | Reshape | **Missing** | Complex, low value |
 
 ### Rechunk Pushdown (Rechunk._simplify_down)
@@ -50,49 +50,32 @@
 
 ---
 
-## Phase 1: Complete Slice Pushdown for Common Operations
+## Phase 1: Complete Slice Pushdown for Common Operations ✓
 
-### 1.1 Slice through Concatenate
+**Status**: Complete
 
-**Goal**: `concat([a, b, c], axis=0)[:n]` -> `concat([a[:n]], axis=0)` when n < len(a)
+### 1.1 Slice through Concatenate ✓
 
-**Cases**:
-- Slice entirely within first input -> just return sliced first input
-- Slice spans multiple inputs -> slice relevant inputs
-- Slice on non-concat axis -> push to all inputs
+Implemented in `slicing/_basic.py:_pushdown_through_concatenate()`
 
-**Test file**: `tests/test_slice_pushdown.py`
+- Slice entirely within first input -> returns sliced first input
+- Slice spans multiple inputs -> slices relevant inputs
+- Slice on non-concat axis -> pushes to all inputs
 
-```python
-def test_slice_through_concat_same_axis():
-    a = da.ones((10, 5), chunks=5)
-    b = da.ones((10, 5), chunks=5)
-    result = da.concatenate([a, b], axis=0)[:5]  # Only needs 'a'
-    # Should simplify to a[:5]
+### 1.2 Slice through Stack ✓
 
-def test_slice_through_concat_different_axis():
-    a = da.ones((10, 5), chunks=5)
-    b = da.ones((10, 5), chunks=5)
-    result = da.concatenate([a, b], axis=0)[:, :3]  # Needs both
-    # Should simplify to concat([a[:, :3], b[:, :3]])
+Implemented in `slicing/_basic.py:_pushdown_through_stack()`
 
-def test_slice_through_concat_reduces_tasks():
-    # Verify task count reduction
-```
+- Slice on stacked axis -> selects subset of inputs
+- Slice on other axes -> pushes to all inputs
 
-### 1.2 Slice through Stack
+### 1.3 Slice through BroadcastTo ✓
 
-**Goal**: `stack([a, b, c])[:1]` -> effectively just `a[None, ...]`
+Implemented in `slicing/_basic.py:_pushdown_through_broadcast_to()`
 
-**Cases**:
-- Slice on stacked axis -> select subset of inputs
-- Slice on other axes -> push to all inputs
-
-### 1.3 Slice through BroadcastTo
-
-**Goal**: `broadcast_to(x, (100, 100))[:5, :5]` -> `broadcast_to(slice(x), (5, 5))`
-
-**Complexity**: Need to map slice to broadcasted input dimensions
+- Dimensions added by broadcast -> affects output shape only
+- Dimensions from input with size > 1 -> pushes slice to input
+- Dimensions from input with size == 1 -> affects output shape only
 
 ---
 

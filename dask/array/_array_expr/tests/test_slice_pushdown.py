@@ -445,3 +445,213 @@ def test_slice_creation_preserves_dtype():
     x = da.ones((100, 100), chunks=10, dtype="int32")[:15, :25]
     assert x.dtype == np.dtype("int32")
     assert_eq(x, np.ones((15, 25), dtype="int32"))
+
+
+# =============================================================================
+# Slice through Concatenate
+# =============================================================================
+
+
+def test_slice_through_concat_same_axis_first_array():
+    """Slice entirely within first array of concat -> just first array sliced."""
+    a = da.ones((10, 5), chunks=5)
+    b = da.ones((10, 5), chunks=5)
+    result = da.concatenate([a, b], axis=0)[:5]  # Only needs 'a'
+    expected = a[:5]
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_concat_same_axis_spans_arrays():
+    """Slice spans multiple arrays in concat."""
+    a = da.ones((10, 5), chunks=5)
+    b = da.ones((10, 5), chunks=5)
+    c = da.ones((10, 5), chunks=5)
+    # slice 5:15 spans a[5:10] and b[0:5]
+    result = da.concatenate([a, b, c], axis=0)[5:15]
+    expected = da.concatenate([a[5:], b[:5]], axis=0)
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_concat_different_axis():
+    """Slice on different axis than concat -> push to all inputs."""
+    a = da.ones((10, 20), chunks=5)
+    b = da.ones((10, 20), chunks=5)
+    result = da.concatenate([a, b], axis=0)[:, :5]  # Slice axis 1
+    expected = da.concatenate([a[:, :5], b[:, :5]], axis=0)
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_concat_correctness():
+    """Verify slice through concat produces correct values."""
+    a = np.arange(20).reshape(4, 5)
+    b = np.arange(20, 40).reshape(4, 5)
+    da_a = da.from_array(a, chunks=2)
+    da_b = da.from_array(b, chunks=2)
+
+    # Same axis slice
+    result = da.concatenate([da_a, da_b], axis=0)[:3]
+    assert_eq(result, np.concatenate([a, b], axis=0)[:3])
+
+    # Different axis slice
+    result = da.concatenate([da_a, da_b], axis=0)[:, :3]
+    assert_eq(result, np.concatenate([a, b], axis=0)[:, :3])
+
+    # Slice spanning both arrays
+    result = da.concatenate([da_a, da_b], axis=0)[2:6]
+    assert_eq(result, np.concatenate([a, b], axis=0)[2:6])
+
+
+def test_slice_through_concat_reduces_tasks():
+    """Verify slice through concat reduces task count."""
+    a = da.ones((100, 100), chunks=10)
+    b = da.ones((100, 100), chunks=10)
+    concat = da.concatenate([a, b], axis=0)
+
+    full_tasks = len(concat.optimize().__dask_graph__())
+    # Slice only first 5 rows - should only need first array
+    sliced_tasks = len(concat[:5].optimize().__dask_graph__())
+
+    assert sliced_tasks < full_tasks
+
+
+# =============================================================================
+# Slice through Stack
+# =============================================================================
+
+
+def test_slice_through_stack_selects_subset():
+    """Slice on stacked axis selects subset of inputs."""
+    a = da.ones((10, 5), chunks=5)
+    b = da.ones((10, 5), chunks=5)
+    c = da.ones((10, 5), chunks=5)
+    # stack gives shape (3, 10, 5), slice [:1] should be stack([a])
+    result = da.stack([a, b, c], axis=0)[:1]
+    expected = da.stack([a], axis=0)
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_stack_other_axis():
+    """Slice on non-stacked axis pushes to all inputs."""
+    a = da.ones((10, 20), chunks=5)
+    b = da.ones((10, 20), chunks=5)
+    # stack gives shape (2, 10, 20), slice [:, :5, :10] pushes to each array
+    result = da.stack([a, b], axis=0)[:, :5, :10]
+    expected = da.stack([a[:5, :10], b[:5, :10]], axis=0)
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_stack_mixed():
+    """Slice on both stacked and other axes."""
+    a = da.ones((10, 20), chunks=5)
+    b = da.ones((10, 20), chunks=5)
+    c = da.ones((10, 20), chunks=5)
+    # stack gives shape (3, 10, 20), slice [:2, :5] keeps a and b, sliced
+    result = da.stack([a, b, c], axis=0)[:2, :5]
+    expected = da.stack([a[:5], b[:5]], axis=0)
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_stack_correctness():
+    """Verify slice through stack produces correct values."""
+    a = np.arange(20).reshape(4, 5)
+    b = np.arange(20, 40).reshape(4, 5)
+    c = np.arange(40, 60).reshape(4, 5)
+    da_a = da.from_array(a, chunks=2)
+    da_b = da.from_array(b, chunks=2)
+    da_c = da.from_array(c, chunks=2)
+
+    # Slice on stacked axis
+    result = da.stack([da_a, da_b, da_c], axis=0)[:2]
+    assert_eq(result, np.stack([a, b, c], axis=0)[:2])
+
+    # Slice on other axis
+    result = da.stack([da_a, da_b, da_c], axis=0)[:, :2, :3]
+    assert_eq(result, np.stack([a, b, c], axis=0)[:, :2, :3])
+
+
+def test_slice_through_stack_reduces_tasks():
+    """Verify slice through stack reduces task count."""
+    a = da.ones((100, 100), chunks=10)
+    b = da.ones((100, 100), chunks=10)
+    c = da.ones((100, 100), chunks=10)
+    stacked = da.stack([a, b, c], axis=0)
+
+    full_tasks = len(stacked.optimize().__dask_graph__())
+    # Slice only first array
+    sliced_tasks = len(stacked[:1].optimize().__dask_graph__())
+
+    assert sliced_tasks < full_tasks
+
+
+# =============================================================================
+# Slice through BroadcastTo
+# =============================================================================
+
+
+def test_slice_through_broadcast_to_new_dim():
+    """Slice on dimension added by broadcast."""
+    x = da.ones((10,), chunks=5)
+    # broadcast_to adds a new dimension at front: (10,) -> (20, 10)
+    result = da.broadcast_to(x, (20, 10))[:5, :]
+    expected = da.broadcast_to(x, (5, 10))
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_broadcast_to_existing_dim():
+    """Slice on dimension that exists in input."""
+    x = da.ones((10,), chunks=5)
+    # broadcast_to adds new dim: (10,) -> (20, 10)
+    result = da.broadcast_to(x, (20, 10))[:, :5]
+    expected = da.broadcast_to(x[:5], (20, 5))
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_broadcast_to_both_dims():
+    """Slice on both new and existing dimensions."""
+    x = da.ones((10,), chunks=5)
+    result = da.broadcast_to(x, (20, 10))[:5, :3]
+    expected = da.broadcast_to(x[:3], (5, 3))
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_broadcast_to_broadcasted_dim():
+    """Slice on dimension that was size-1 in input."""
+    x = da.ones((1, 10), chunks=(1, 5))
+    # broadcast_to expands first dim: (1, 10) -> (20, 10)
+    result = da.broadcast_to(x, (20, 10))[:5, :3]
+    # First dim can't push (was 1), second dim pushes
+    expected = da.broadcast_to(x[:, :3], (5, 3))
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+def test_slice_through_broadcast_to_correctness():
+    """Verify slice through broadcast_to produces correct values."""
+    x = np.arange(10)
+    da_x = da.from_array(x, chunks=5)
+
+    # Broadcast to 2D then slice
+    result = da.broadcast_to(da_x, (20, 10))[:5, :3]
+    expected = np.broadcast_to(x, (20, 10))[:5, :3]
+    assert_eq(result, expected)
+
+
+def test_slice_through_broadcast_to_reduces_tasks():
+    """Verify slice through broadcast_to reduces task count."""
+    x = da.ones((100,), chunks=10)
+    broadcasted = da.broadcast_to(x, (100, 100))
+
+    full_tasks = len(broadcasted.optimize().__dask_graph__())
+    # Slice to smaller output
+    sliced_tasks = len(broadcasted[:5, :5].optimize().__dask_graph__())
+
+    assert sliced_tasks < full_tasks
