@@ -74,6 +74,7 @@ def makeTimedeltaIndex(k=30, freq="D"):
 
 
 def makeMissingDataframe():
+    np.random.seed(42)
     df = makeDataFrame()
     data = df.values
     data = np.where(data > 1, np.nan, data)
