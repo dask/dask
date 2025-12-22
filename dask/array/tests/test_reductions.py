@@ -641,6 +641,31 @@ def test_general_reduction_names():
     assert all(tokens)
 
 
+@pytest.mark.skipif(not da._array_expr_enabled(), reason="array-expr only")
+def test_reduction_intermediate_chunks():
+    """Test that intermediate reduction results have correct chunk sizes."""
+    x = da.ones((10, 12), chunks=(5, 4))
+    result = x.sum(axis=0, keepdims=True)
+
+    # Walk the expression tree to find the Blockwise (chunk step)
+    from dask.array._array_expr._blockwise import Blockwise
+
+    def find_blockwise(expr):
+        if isinstance(expr, Blockwise):
+            return expr
+        for dep in expr.dependencies():
+            found = find_blockwise(dep)
+            if found is not None:
+                return found
+        return None
+
+    blockwise_expr = find_blockwise(result.expr)
+    assert blockwise_expr is not None
+
+    # The intermediate should have chunks of size 1 along reduced axis
+    assert blockwise_expr.chunks == ((1, 1), (4, 4, 4))
+
+
 @pytest.mark.parametrize("func", [np.sum, np.argmax])
 def test_array_reduction_out(func):
     x = da.arange(10, chunks=(5,))
