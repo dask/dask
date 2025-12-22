@@ -611,9 +611,6 @@ def test_apply_gufunc_axes_two_kept_coredims():
     assert c.compute().shape == (10, 20, 30, 40)
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(), reason="numba doesn't tokenize deterministically"
-)
 def test_apply_gufunc_via_numba_01():
     numba = pytest.importorskip("numba")
 
@@ -634,9 +631,6 @@ def test_apply_gufunc_via_numba_01():
     assert_eq(x, y)
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(), reason="numba doesn't tokenize deterministically"
-)
 def test_apply_gufunc_via_numba_02():
     numba = pytest.importorskip("numba")
 
