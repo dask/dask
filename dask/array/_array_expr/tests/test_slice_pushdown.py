@@ -863,3 +863,72 @@ def test_shuffle_does_not_push_through_blockwise_adjust_chunks():
 
     # Still correct
     assert_eq(result, mapped.compute()[indices, :])
+
+
+# --- SlicesWrapNone (None indexing) Pushdown Tests ---
+
+
+def test_none_slice_pushes_through_elemwise():
+    """Slice with None pushes slicing through elemwise, keeps expand_dims on top."""
+    x = da.ones((10, 10), chunks=5)
+    y = da.ones((10, 10), chunks=5)
+
+    # (x + y)[None, :5, :] should optimize to expand_dims(x[:5] + y[:5], axis=0)
+    result = (x + y)[None, :5, :]
+    expected = da.expand_dims(x[:5, :] + y[:5, :], axis=0)
+
+    # Structure should match after optimization
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+    # Verify correctness
+    assert_eq(result, expected)
+
+
+def test_none_slice_multiple_nones():
+    """Slice with multiple Nones pushes through correctly."""
+    x = da.arange(20, chunks=5).reshape((4, 5))
+    y = da.ones((4, 5), chunks=(4, 5))
+
+    # (x + y)[None, :2, None, :3] -> expand_dims(x[:2, :3] + y[:2, :3], axis=(0, 2))
+    result = (x + y)[None, :2, None, :3]
+    expected = da.expand_dims(x[:2, :3] + y[:2, :3], axis=(0, 2))
+
+    # Structure should match after optimization
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+    # Verify correctness
+    assert_eq(result, expected)
+
+
+def test_none_slice_no_slicing():
+    """Slice with only None (no actual slicing) doesn't push through."""
+    from dask.array._array_expr.slicing._basic import SlicesWrapNone
+
+    x = da.ones((10, 10), chunks=5)
+    y = da.ones((10, 10), chunks=5)
+
+    # (x + y)[None, :, :] - only dimension expansion, no slicing
+    result = (x + y)[None, :, :]
+
+    opt = result.expr.simplify()
+    # Should still be SlicesWrapNone since no slicing to push
+    assert isinstance(opt, SlicesWrapNone)
+
+    # Verify correctness
+    expected = (x + y)[None, :, :]
+    assert_eq(result, expected)
+
+
+def test_none_slice_through_transpose():
+    """Slice with None pushes through transpose."""
+    x = da.arange(20, chunks=5).reshape((4, 5))
+
+    # x.T[None, :3, :2] -> expand_dims(x[:2, :3].T, axis=0)
+    result = x.T[None, :3, :2]
+    expected = da.expand_dims(x[:2, :3].T, axis=0)
+
+    # Structure should match after optimization
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+    # Verify correctness
+    assert_eq(result, expected)

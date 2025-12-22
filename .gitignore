@@ -28,3 +28,4 @@ hdfs-initialized-indicator
 env.yaml
 uv.lock
 dask/_version.py
+*.ipynb

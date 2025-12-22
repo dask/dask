@@ -1299,9 +1299,32 @@ class SlicesWrapNone(SliceSlicesIntegers):
     _parameters = ["array", "index", "allow_getitem_optimization", "where_none"]
 
     def _simplify_down(self):
-        # Disable inherited simplification - SlicesWrapNone adds dimensions via
-        # None indexing and the parent class's simplifications don't preserve this
-        return None
+        # Strategy: separate the slicing from the dimension expansion
+        # 1. Create a SliceSlicesIntegers to push through
+        # 2. Apply expand_dims to add the new dimensions
+
+        # Check if there's any non-trivial slicing
+        has_slicing = any(idx != slice(None) for idx in self.index)
+
+        if not has_slicing:
+            # Only dimension expansion, no slicing to push
+            return None
+
+        # Create a temporary SliceSlicesIntegers and try to push it through
+        temp_slice = SliceSlicesIntegers(
+            self.array, self.index, self.allow_getitem_optimization
+        )
+        pushed = temp_slice._simplify_down()
+
+        if pushed is None:
+            # Pushdown didn't happen
+            return None
+
+        # Pushdown succeeded - wrap the result with expand_dims
+        from dask._collections import new_collection
+        from dask.array._array_expr.manipulation._expand import expand_dims
+
+        return expand_dims(new_collection(pushed), axis=tuple(self.where_none)).expr
 
     @functools.cached_property
     def chunks(self):
