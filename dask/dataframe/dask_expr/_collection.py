@@ -334,6 +334,12 @@ class FrameBase(DaskMethodsMixin):
         # This prevents __getattr__ from delegating to expr._repr_mimebundle_
         return None
 
+    def _repr_html_(self):
+        """Block __getattr__ fallthrough to expr for Jupyter display."""
+        # Return None so Jupyter falls back to __repr__
+        # Subclasses (DataFrame) can override with actual HTML repr
+        return None
+
     @property
     def divisions(self):
         """
@@ -441,8 +447,7 @@ class FrameBase(DaskMethodsMixin):
         data = self._repr_data().to_string(max_rows=5)
         _str_fmt = """Dask {klass} Structure:
 {data}
-Dask Name: {name}, {n_expr}
-Expr={expr}"""
+Dask Name: {name}, {n_expr}"""
         if not isinstance(self, Series) and not len(self.columns):
             data = data.partition("\n")[-1].replace("Index", "Divisions")
             _str_fmt = f"Empty {_str_fmt}"
@@ -453,7 +458,6 @@ Expr={expr}"""
             data=data,
             name=key_split(self._name),
             n_expr=maybe_pluralize(n_expr, "expression"),
-            expr=self.expr,
         )
 
     def __bool__(self):
