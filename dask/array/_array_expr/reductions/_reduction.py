@@ -418,7 +418,11 @@ class PartialReduce(ArrayExpr):
                     meta = np.empty((), dtype=meta.dtype)
             else:
                 target_shape = (0,) * len(self.chunks)
-                if meta.size != 0:
+                # Use np.prod(shape) for array-likes that don't expose .size
+                meta_size = getattr(meta, "size", None)
+                if meta_size is None:
+                    meta_size = np.prod(meta.shape)
+                if meta_size != 0:
                     # Can't reshape non-empty array to empty shape (e.g., scalar)
                     meta = np.empty(target_shape, dtype=meta.dtype)
                 else:
