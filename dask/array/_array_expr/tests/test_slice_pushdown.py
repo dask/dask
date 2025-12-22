@@ -274,3 +274,115 @@ def test_integer_indexing_pushdown():
 
     y = x[5, 2:8]
     assert_eq(y, arr[5, 2:8])
+
+
+# ============================================================
+# Slice through reduction tests
+# ============================================================
+
+
+def test_slice_through_reduction_optimization():
+    """Verify slice pushdown through reduction produces equivalent result.
+
+    x.sum(axis=0)[:5] should simplify to x[:, :5].sum(axis=0)
+    """
+    x = da.ones((100, 100), chunks=(10, 10))
+
+    # The naive way: full sum then slice
+    y = x.sum(axis=0)[:5]
+
+    # The optimized way: slice first, then sum
+    expected = x[:, :5].sum(axis=0)
+
+    # After simplification, the names should be equivalent
+    assert y.expr.simplify()._name == expected.expr._name
+
+
+def test_slice_through_reduction_reduces_tasks():
+    """Slice pushdown through reduction should reduce graph size.
+
+    For a from_array with (10, 10) chunks, slicing after reduction
+    should result in fewer tasks than computing the full reduction.
+    """
+    arr = np.arange(10000).reshape(100, 100)
+    x = da.from_array(arr, chunks=(10, 10))
+
+    # Full reduction has 10*10 input chunks
+    full_sum = x.sum(axis=0)
+    full_tasks = len(full_sum.optimize().__dask_graph__())
+
+    # Sliced reduction should have fewer tasks
+    sliced_sum = x.sum(axis=0)[:5]
+    sliced_tasks = len(sliced_sum.optimize().__dask_graph__())
+
+    # Slicing to first 5 elements (1 chunk column) should have ~10x fewer tasks
+    assert sliced_tasks < full_tasks
+
+    # Verify the reduction is correct
+    assert_eq(sliced_sum, arr.sum(axis=0)[:5])
+
+
+def test_slice_through_reduction_axis1():
+    """Slice pushdown through sum(axis=1)."""
+    x = da.ones((100, 100), chunks=(10, 10))
+
+    # x.sum(axis=1)[:5] should simplify to x[:5, :].sum(axis=1)
+    y = x.sum(axis=1)[:5]
+    expected = x[:5, :].sum(axis=1)
+
+    assert y.expr.simplify()._name == expected.expr._name
+
+
+def test_slice_through_reduction_3d():
+    """Slice pushdown through reduction on 3D array."""
+    x = da.ones((20, 20, 20), chunks=(5, 5, 5))
+
+    # Reduce axis 1, slice result
+    # Output axes: [0, 2] become [0, 1] -> slice [:3, :4] maps to input [:3, :, :4]
+    y = x.sum(axis=1)[:3, :4]
+    expected = x[:3, :, :4].sum(axis=1)
+
+    assert y.expr.simplify()._name == expected.expr._name
+
+
+def test_slice_through_reduction_multiple_axes():
+    """Slice pushdown through reduction on multiple axes."""
+    x = da.ones((20, 20, 20), chunks=(5, 5, 5))
+
+    # Reduce axes 0 and 2, only axis 1 remains
+    # Output axis 0 -> input axis 1
+    y = x.sum(axis=(0, 2))[:5]
+    expected = x[:, :5, :].sum(axis=(0, 2))
+
+    assert y.expr.simplify()._name == expected.expr._name
+
+
+def test_slice_through_reduction_correctness():
+    """Verify correctness of optimized slice-through-reduction."""
+    arr = np.arange(10000).reshape(100, 100)
+    x = da.from_array(arr, chunks=(10, 10))
+
+    # Various cases
+    assert_eq(x.sum(axis=0)[:5], arr.sum(axis=0)[:5])
+    assert_eq(x.sum(axis=1)[:5], arr.sum(axis=1)[:5])
+    assert_eq(x.sum(axis=0)[10:20], arr.sum(axis=0)[10:20])
+
+
+def test_slice_through_reduction_integer_index():
+    """Integer indexing through reduction reduces tasks.
+
+    Integer indices are converted to size-1 slices, pushed through,
+    then extracted with [0] at the end.
+    """
+    arr = np.arange(10000).reshape(100, 100)
+    x = da.from_array(arr, chunks=(10, 10))
+
+    # Full reduction
+    full_tasks = len(x.sum(axis=0).optimize().__dask_graph__())
+
+    # Integer index should have fewer tasks
+    result = x.sum(axis=0)[5]
+    indexed_tasks = len(result.optimize().__dask_graph__())
+
+    assert indexed_tasks < full_tasks
+    assert_eq(result, arr.sum(axis=0)[5])

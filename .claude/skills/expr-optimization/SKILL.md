@@ -83,6 +83,23 @@ assert_eq(result, expected)
 But this is a bit weaker because it doesn't check expression structure, which
 is what we really care about here for performance.
 
+## Modifying Expressions with substitute_parameters
+
+When pushing operations through expression subclasses, use `substitute_parameters`
+to preserve the subclass type while changing specific operands:
+
+```python
+# Instead of constructing a new Blockwise manually:
+# result = Blockwise(bw.func, bw.out_ind, ...)  # Fails for subclasses!
+
+# Use substitute_parameters to preserve the subclass:
+sliced_input = new_collection(bw.array)[input_slices]
+result = bw.substitute_parameters({"array": sliced_input.expr})
+```
+
+This pattern works with any expression subclass and only changes the specified
+parameters while keeping everything else (including the type) intact.
+
 ## TDD
 
 As always, we prefer to make tests before we start development, and use those

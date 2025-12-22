@@ -451,8 +451,9 @@ class SliceSlicesIntegers(Slice):
     _parameters = ["array", "index", "allow_getitem_optimization"]
 
     def _simplify_down(self):
-        from dask.array._array_expr._blockwise import Elemwise
+        from dask.array._array_expr._blockwise import Blockwise, Elemwise
         from dask.array._array_expr.manipulation._transpose import Transpose
+        from dask.array._array_expr.reductions._reduction import PartialReduce
 
         # Slice(Slice(x)) -> single Slice with fused indices
         if isinstance(self.array, SliceSlicesIntegers):
@@ -473,9 +474,17 @@ class SliceSlicesIntegers(Slice):
         if isinstance(self.array, Elemwise):
             return self._pushdown_through_elemwise()
 
-        # Slice(Transpose) -> Transpose(sliced input)
+        # Slice(Transpose) -> Transpose(sliced input) - check before Blockwise
         if isinstance(self.array, Transpose):
             return self._pushdown_through_transpose()
+
+        # Slice(Blockwise) -> Blockwise(sliced inputs) - for non-Elemwise blockwise
+        if isinstance(self.array, Blockwise):
+            return self._pushdown_through_blockwise()
+
+        # Slice(PartialReduce) -> PartialReduce(sliced input)
+        if isinstance(self.array, PartialReduce):
+            return self._pushdown_through_reduction()
 
         # Slice(FromArray) -> FromArray(sliced source) - push slice into IO
         if getattr(self.array, "_slice_pushdown", False):
@@ -527,6 +536,110 @@ class SliceSlicesIntegers(Slice):
             elemwise.operand("_user_kwargs"),
             *new_args,
         )
+
+    def _pushdown_through_blockwise(self):
+        """Push slice through general Blockwise by slicing each input appropriately.
+
+        This optimization is safe when:
+        - The blockwise doesn't adjust chunk sizes
+        - The blockwise doesn't add new axes
+        - The slice uses only slices or integers (no newaxis)
+
+        For integer indices, we convert them to size-1 slices, push through,
+        then extract with [0] at the end.
+        """
+        from dask.array._array_expr._blockwise import Blockwise
+        from dask.array._array_expr._collection import new_collection
+
+        bw = self.array
+        out_ind = bw.out_ind
+        index = self.index
+
+        # Don't handle if blockwise adjusts chunks - slice indices may not map correctly
+        # Use getattr since subclasses may define as class attribute or property
+        adjust_chunks = getattr(bw, "adjust_chunks", None)
+        if adjust_chunks is not None:
+            return None
+
+        # Don't handle if blockwise adds new axes - output shape differs from inputs
+        new_axes = getattr(bw, "new_axes", None)
+        if new_axes:
+            return None
+
+        # Don't handle None/newaxis
+        if any(idx is None for idx in index):
+            return None
+
+        # Pad index to full output length
+        full_index = index + (slice(None),) * (len(out_ind) - len(index))
+
+        # Convert integers to size-1 slices for pushdown
+        slice_index = tuple(
+            slice(idx, idx + 1) if isinstance(idx, Integral) else idx
+            for idx in full_index
+        )
+        has_integers = any(isinstance(idx, Integral) for idx in full_index)
+
+        # For subclasses with a single "array" parameter, use substitute_parameters
+        if "array" in type(bw)._parameters:
+            # Map output slice indices to input dimensions
+            arg_ind = tuple(range(bw.array.ndim))  # Input indices
+            arg_slices = []
+            for dim_idx in arg_ind:
+                try:
+                    out_pos = out_ind.index(dim_idx)
+                    arg_slices.append(slice_index[out_pos])
+                except ValueError:
+                    arg_slices.append(slice(None))
+
+            sliced_input = new_collection(bw.array)[tuple(arg_slices)]
+            result = bw.substitute_parameters({"array": sliced_input.expr})
+        else:
+            # For base Blockwise with multiple inputs in args
+            args = bw.args
+            new_args = []
+            for i in range(0, len(args), 2):
+                arg = args[i]
+                arg_ind = args[i + 1]
+
+                if arg_ind is None:
+                    new_args.extend([arg, arg_ind])
+                else:
+                    arg_slices = []
+                    for dim_idx in arg_ind:
+                        try:
+                            out_pos = out_ind.index(dim_idx)
+                            arg_slices.append(slice_index[out_pos])
+                        except ValueError:
+                            arg_slices.append(slice(None))
+
+                    sliced_arg = new_collection(arg)[tuple(arg_slices)]
+                    new_args.extend([sliced_arg.expr, arg_ind])
+
+            result = Blockwise(
+                bw.func,
+                bw.out_ind,
+                bw.operand("name"),
+                bw.operand("token"),
+                bw.operand("dtype"),
+                bw.operand("adjust_chunks"),
+                bw.operand("new_axes"),
+                bw.operand("align_arrays"),
+                bw.operand("concatenate"),
+                bw.operand("_meta_provided"),
+                bw.operand("kwargs"),
+                *new_args,
+            )
+
+        # If we converted integers to slices, extract with [0] to restore dimensions
+        if has_integers:
+            extract_index = tuple(
+                0 if isinstance(idx, Integral) else slice(None)
+                for idx in full_index
+            )
+            return SliceSlicesIntegers(result, extract_index, self.allow_getitem_optimization)
+
+        return result
 
     def _pushdown_through_transpose(self):
         """Push slice through transpose by reordering slice indices."""
@@ -585,6 +698,87 @@ class SliceSlicesIntegers(Slice):
             return sliced_input.expr
 
         return Transpose(sliced_input.expr, new_axes)
+
+    def _pushdown_through_reduction(self):
+        """Push slice through PartialReduce by slicing the input.
+
+        For x.sum(axis=0)[:5], we transform to x[:, :5].sum(axis=0).
+        The key is mapping output slice indices back to input indices,
+        inserting slice(None) for the reduced axes.
+
+        For integer indices, we convert to size-1 slices, push through,
+        then extract with [0] at the end.
+        """
+        from dask.array._array_expr._collection import new_collection
+        from dask.array._array_expr.reductions._reduction import PartialReduce
+
+        reduction = self.array
+        index = self.index
+        input_array = reduction.array
+
+        # Don't handle None/newaxis
+        if any(idx is None for idx in index):
+            return None
+
+        # Get reduced axes from split_every
+        reduced_axes = set(reduction.split_every.keys())
+        keepdims = reduction.keepdims
+        input_ndim = input_array.ndim
+
+        if keepdims:
+            # With keepdims, output has same ndim as input
+            full_index = index + (slice(None),) * (input_ndim - len(index))
+        else:
+            # Without keepdims, reduced axes are removed from output
+            out_axis = [i for i in range(input_ndim) if i not in reduced_axes]
+            output_ndim = len(out_axis)
+            full_index = index + (slice(None),) * (output_ndim - len(index))
+
+        # Convert integers to size-1 slices to preserve dimensions
+        slice_index = tuple(
+            slice(idx, idx + 1) if isinstance(idx, Integral) else idx
+            for idx in full_index
+        )
+        has_integers = any(isinstance(idx, Integral) for idx in full_index)
+
+        # Build input index mapping output axes to input axes
+        if keepdims:
+            input_index = slice_index
+        else:
+            input_index = []
+            out_pos = 0
+            for in_ax in range(input_ndim):
+                if in_ax in reduced_axes:
+                    input_index.append(slice(None))
+                else:
+                    input_index.append(slice_index[out_pos])
+                    out_pos += 1
+            input_index = tuple(input_index)
+
+        # Apply the slice to the input and create new PartialReduce
+        sliced_input = new_collection(input_array)[input_index]
+
+        result = PartialReduce(
+            sliced_input.expr,
+            reduction.func,
+            reduction.split_every,
+            reduction.keepdims,
+            reduction.operand("dtype"),
+            reduction.operand("name"),
+            reduction.reduced_meta,
+        )
+
+        # If we converted integers to slices, extract with [0] to restore dimensions
+        if has_integers:
+            extract_index = tuple(
+                0 if isinstance(idx, Integral) else slice(None)
+                for idx in full_index
+            )
+            return SliceSlicesIntegers(
+                result, extract_index, self.allow_getitem_optimization
+            )
+
+        return result
 
     def _pushdown_into_io(self):
         """Push slice into IO expression by setting a region (deferred slice)."""
