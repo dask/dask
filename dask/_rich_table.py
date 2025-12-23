@@ -11,7 +11,7 @@ from dask.utils import funcname
 if TYPE_CHECKING:
     from dask._expr import Expr
 
-# Color coding using Tango palette for readability on light backgrounds
+# Color coding using Tango palette for readability
 # Orange (warm) = sources, new data entering the computation
 # Blue (cool) = reducers, data being reduced/consumed
 SOURCE_COLOR = "#ce5c00"  # Tango orange dark
@@ -150,6 +150,34 @@ def walk_expr_with_prefix(
 def is_expr(op) -> bool:
     """Check if operand is a Dask expression (has operands attribute)."""
     return hasattr(op, "operands")
+
+
+def compute_row_emphasis(values: list[float], threshold: float = 0.5) -> list[bool]:
+    """Compute which rows should be emphasized based on relative values.
+
+    Parameters
+    ----------
+    values : list of float
+        Numeric values for each row (e.g., bytes, partition counts)
+    threshold : float
+        Ratio threshold (0-1). Rows with value > threshold * max are emphasized.
+
+    Returns
+    -------
+    list of bool
+        True for rows that should be emphasized (normal brightness),
+        False for rows that should be de-emphasized (dim).
+    """
+    # Filter out NaN values for computing max
+    valid_values = [v for v in values if not math.isnan(v)]
+    if not valid_values:
+        return [True] * len(values)
+
+    max_value = max(valid_values)
+    if max_value <= 0:
+        return [True] * len(values)
+
+    return [not math.isnan(v) and v > threshold * max_value for v in values]
 
 
 def get_op_display_name(node, use_label_for: frozenset | None = None) -> str:

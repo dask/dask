@@ -8,6 +8,8 @@ pytest.importorskip("rich")
 def test_array_expr_repr_html():
     """Array expr._repr_html_() shows expression tree."""
     da = pytest.importorskip("dask.array")
+    if not hasattr(da.ones((2,), chunks=1), "expr"):
+        pytest.skip("array query-planning not enabled")
     x = da.ones((10, 10), chunks=5) + 1
     html = x.expr._repr_html_()
     assert "Operation" in html
@@ -18,6 +20,8 @@ def test_array_expr_repr_html():
 def test_array_expr_pprint(capsys):
     """Array expr.pprint() outputs expression tree."""
     da = pytest.importorskip("dask.array")
+    if not hasattr(da.ones((2,), chunks=1), "expr"):
+        pytest.skip("array query-planning not enabled")
     x = da.ones((10, 10), chunks=5) + 1
     x.expr.pprint()
     captured = capsys.readouterr()
