@@ -86,12 +86,20 @@ class Expr:
     def _operands_for_repr(self):
         return [f"{param}={op!r}" for param, op in zip(self._parameters, self.operands)]
 
-    def __str__(self):
+    def _simple_repr(self):
+        """Simple one-line representation."""
         s = ", ".join(self._operands_for_repr())
         return f"{type(self).__name__}({s})"
 
+    def __str__(self):
+        return self._simple_repr()
+
     def __repr__(self):
-        return str(self)
+        """Return rich table representation if available, else simple repr."""
+        try:
+            return repr(self._table())
+        except (ImportError, NotImplementedError, Exception):
+            return self._simple_repr()
 
     def _tree_repr_argument_construction(self, i, op, header):
         try:
