@@ -113,7 +113,8 @@ def test_series_repr():
         D      ...
         G      ...
         H      ...
-        Dask Name: frompandas, 1 expression"""
+        Dask Name: frompandas, 1 expression
+        Expr=df"""
     )
     assert repr(ds) == exp
 
@@ -130,7 +131,8 @@ def test_series_repr():
                ...
                ...
                ...
-        Dask Name: frompandas, 1 expression"""
+        Dask Name: frompandas, 1 expression
+        Expr=df"""
     )
     assert repr(ds) == exp
 
@@ -145,14 +147,13 @@ def test_df_repr():
     assert "col1" in repr_str
     assert "col2" in repr_str
     assert "Dask Name: frompandas, 1 expression" in repr_str
-    # Should not contain verbose expression tree
-    assert "Expr=" not in repr_str
+    assert "Expr=df" in repr_str
 
     df = pd.DataFrame()
     ddf = from_pandas(df, 3)
     repr_str = repr(ddf)
     assert "Empty Dask DataFrame Structure:" in repr_str
-    assert "Expr=" not in repr_str
+    assert "Expr=df" in repr_str
 
 
 def test_df_to_html():

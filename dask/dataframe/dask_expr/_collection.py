@@ -447,7 +447,8 @@ class FrameBase(DaskMethodsMixin):
         data = self._repr_data().to_string(max_rows=5)
         _str_fmt = """Dask {klass} Structure:
 {data}
-Dask Name: {name}, {n_expr}"""
+Dask Name: {name}, {n_expr}
+Expr={expr}"""
         if not isinstance(self, Series) and not len(self.columns):
             data = data.partition("\n")[-1].replace("Index", "Divisions")
             _str_fmt = f"Empty {_str_fmt}"
@@ -458,6 +459,7 @@ Dask Name: {name}, {n_expr}"""
             data=data,
             name=key_split(self._name),
             n_expr=maybe_pluralize(n_expr, "expression"),
+            expr=str(self.expr),
         )
 
     def __bool__(self):
