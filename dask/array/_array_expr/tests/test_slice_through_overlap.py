@@ -35,7 +35,7 @@ def identity(x):
 
 def test_slice_through_overlap_non_overlap_axis():
     """Slice on axis without overlap pushes through."""
-    from dask.array._array_expr._overlap import MapOverlap, overlap_internal
+    from dask.array._array_expr._overlap import overlap_internal
 
     arr = np.arange(10000).reshape((100, 100))
     x = da.from_array(arr, chunks=(10, 10))
@@ -45,13 +45,10 @@ def test_slice_through_overlap_non_overlap_axis():
 
     # Slice on axis 1 (no overlap)
     sliced = overlap_result[:, :20]
-
-    # After simplification, MapOverlap should be the outermost operation
-    simplified = sliced.expr.simplify()
-    assert isinstance(simplified, MapOverlap)
-
-    # Verify correctness
     expected = overlap_internal(x[:, :20], {0: 2})
+
+    # Both should simplify to the same expression
+    assert sliced.expr.simplify()._name == expected.expr.simplify()._name
     assert_eq(sliced, expected)
 
 
@@ -73,7 +70,7 @@ def test_slice_through_overlap_expression_structure():
 
 def test_slice_through_overlap_middle_slice():
     """Slice in the middle of non-overlap axis."""
-    from dask.array._array_expr._overlap import MapOverlap, overlap_internal
+    from dask.array._array_expr._overlap import overlap_internal
 
     arr = np.arange(10000).reshape((100, 100))
     x = da.from_array(arr, chunks=(10, 10))
@@ -82,12 +79,10 @@ def test_slice_through_overlap_middle_slice():
 
     # Middle slice on axis 1 (no overlap)
     sliced = overlap_result[:, 30:70]
-
-    simplified = sliced.expr.simplify()
-    assert isinstance(simplified, MapOverlap)
-
-    # Verify correctness
     expected = overlap_internal(x[:, 30:70], {0: 2})
+
+    # Both should simplify to the same expression
+    assert sliced.expr.simplify()._name == expected.expr.simplify()._name
     assert_eq(sliced, expected)
 
 
@@ -104,6 +99,8 @@ def test_slice_through_overlap_correctness():
     result = overlap_result[:, 2:6]
     expected = overlap_internal(x[:, 2:6], {0: 2})
 
+    # Both should simplify to the same expression
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
     assert_eq(result, expected)
 
 
@@ -213,7 +210,7 @@ def test_slice_through_2d_overlap():
 
 def test_slice_through_2d_overlap_middle():
     """Middle slice through 2D overlap on non-overlap dimension."""
-    from dask.array._array_expr._overlap import MapOverlap, overlap_internal
+    from dask.array._array_expr._overlap import overlap_internal
 
     arr = np.arange(10000).reshape((100, 100))
     x = da.from_array(arr, chunks=(10, 10))
@@ -223,18 +220,16 @@ def test_slice_through_2d_overlap_middle():
 
     # Middle slice on axis 1 (no overlap)
     sliced = overlap_result[:, 25:75]
-
-    simplified = sliced.expr.simplify()
-    assert isinstance(simplified, MapOverlap)
-
-    # Verify correctness
     expected = overlap_internal(x[:, 25:75], {0: 2})
+
+    # Both should simplify to the same expression
+    assert sliced.expr.simplify()._name == expected.expr.simplify()._name
     assert_eq(sliced, expected)
 
 
 def test_slice_through_1d_overlap_on_3d_array():
     """Slice on multiple non-overlap axes."""
-    from dask.array._array_expr._overlap import MapOverlap, overlap_internal
+    from dask.array._array_expr._overlap import overlap_internal
 
     arr = np.arange(1000).reshape((10, 10, 10))
     x = da.from_array(arr, chunks=(5, 5, 5))
@@ -244,12 +239,10 @@ def test_slice_through_1d_overlap_on_3d_array():
 
     # Slice on axes 1 and 2 (neither has overlap)
     sliced = overlap_result[:, :3, :3]
-
-    simplified = sliced.expr.simplify()
-    assert isinstance(simplified, MapOverlap)
-
-    # Verify correctness
     expected = overlap_internal(x[:, :3, :3], {0: 1})
+
+    # Both should simplify to the same expression
+    assert sliced.expr.simplify()._name == expected.expr.simplify()._name
     assert_eq(sliced, expected)
 
 

@@ -521,6 +521,12 @@ class SliceSlicesIntegers(Slice):
         if isinstance(self.array, MapOverlap):
             return self._pushdown_through_map_overlap()
 
+        # Slice(Reshape) -> push slice through when leading dims preserved
+        from dask.array._array_expr._reshape import Reshape
+
+        if isinstance(self.array, Reshape):
+            return self._pushdown_through_reshape()
+
     def _simplify_creation(self):
         """Simplify Slice(BroadcastTrick) to BroadcastTrick with new shape.
 
@@ -942,6 +948,109 @@ class SliceSlicesIntegers(Slice):
         return SliceSlicesIntegers(
             new_overlap, tuple(output_trim_index), self.allow_getitem_optimization
         )
+
+    def _pushdown_through_reshape(self):
+        """Push slice through Reshape when leading dimensions are preserved.
+
+        Reshape can be pushed through when the slice only affects dimensions
+        that have the same size in both input and output shapes (preserved dims).
+
+        For example:
+            x.reshape((10, 2, 3))[:5]  # (10, 6) -> (10, 2, 3), first dim preserved
+            becomes: x[:5].reshape((5, 2, 3))
+        """
+        from dask.array._array_expr._collection import new_collection
+        from dask.array._array_expr._reshape import Reshape
+
+        reshape = self.array
+        in_shape = reshape.array.shape
+        out_shape = reshape._shape
+        index = self.index
+
+        # Separate None (newaxis) from real indices
+        # None insertions don't interact with reshape and can be re-applied after
+        none_positions = []  # positions where None appears in original index
+        stripped_index = []  # index without Nones
+        for i, idx in enumerate(index):
+            if idx is None:
+                none_positions.append(i)
+            else:
+                stripped_index.append(idx)
+
+        # Pad stripped index to output ndim
+        out_ndim = len(out_shape)
+        full_index = list(stripped_index) + [slice(None)] * (
+            out_ndim - len(stripped_index)
+        )
+
+        # Find how many leading dimensions are preserved (same size in both shapes)
+        preserved_dims = 0
+        for in_size, out_size in zip(in_shape, out_shape):
+            if in_size == out_size:
+                preserved_dims += 1
+            else:
+                break
+
+        if preserved_dims == 0:
+            return None  # No preserved dimensions, can't push through
+
+        # Check if slice only affects preserved dimensions
+        # (non-preserved dims must all be slice(None))
+        if any(
+            isinstance(idx, Integral) or idx != slice(None)
+            for idx in full_index[preserved_dims:]
+        ):
+            return None
+
+        # Build the input slice (only on preserved dims, same indices)
+        in_ndim = len(in_shape)
+        input_index = list(full_index[:preserved_dims])
+        input_index += [slice(None)] * (in_ndim - preserved_dims)
+
+        # Compute new output shape after slicing
+        new_out_shape = []
+        for idx, size in zip(full_index, out_shape):
+            if isinstance(idx, Integral):
+                # Integer index removes dimension
+                continue
+            elif idx == slice(None):
+                new_out_shape.append(size)
+            else:
+                # Normalize slice
+                start, stop, step = idx.indices(size)
+                if step != 1:
+                    return None  # Don't handle non-unit steps
+                new_out_shape.append(stop - start)
+
+        new_out_shape = tuple(new_out_shape)
+
+        # Apply slice to input, then reshape
+        sliced_input = new_collection(reshape.array)[tuple(input_index)]
+        result = Reshape(sliced_input.expr, new_out_shape)
+
+        # Re-apply None insertions if any using expand_dims
+        if none_positions:
+            from dask.array._array_expr.manipulation._expand import expand_dims
+
+            # Compute where Nones should be inserted in the OUTPUT of reshape
+            # Account for integer indices that remove dimensions
+            axes = []
+            for pos in none_positions:
+                # Count how many real (non-None) indices come before this position
+                real_before = sum(1 for idx in index[:pos] if idx is not None)
+                # Account for integer indices that removed dimensions
+                ints_before = sum(
+                    1
+                    for idx in stripped_index[:real_before]
+                    if isinstance(idx, Integral)
+                )
+                axes.append(
+                    pos - len([p for p in none_positions if p < pos]) - ints_before
+                )
+
+            return expand_dims(new_collection(result), axis=tuple(axes)).expr
+
+        return result
 
     def _slice_chunks(self, chunks, start, length):
         """Compute new chunks after slicing."""
@@ -1612,31 +1721,33 @@ class SlicesWrapNone(SliceSlicesIntegers):
     _parameters = ["array", "index", "allow_getitem_optimization", "where_none"]
 
     def _simplify_down(self):
-        # Strategy: separate the slicing from the dimension expansion
-        # 1. Create a SliceSlicesIntegers to push through
-        # 2. Apply expand_dims to add the new dimensions
+        # Normalize: always convert to expand_dims (which uses Reshape)
+        # This ensures a canonical representation for dimension expansion
+        from dask._collections import new_collection
+        from dask.array._array_expr.manipulation._expand import expand_dims
 
         # Check if there's any non-trivial slicing
         has_slicing = any(idx != slice(None) for idx in self.index)
 
         if not has_slicing:
-            # Only dimension expansion, no slicing to push
-            return None
+            # Pure dimension expansion - convert to expand_dims
+            return expand_dims(
+                new_collection(self.array), axis=tuple(self.where_none)
+            ).expr
 
-        # Create a temporary SliceSlicesIntegers and try to push it through
+        # Has slicing - try to push it through first
         temp_slice = SliceSlicesIntegers(
             self.array, self.index, self.allow_getitem_optimization
         )
         pushed = temp_slice._simplify_down()
 
         if pushed is None:
-            # Pushdown didn't happen
-            return None
+            # Pushdown didn't happen - still normalize the None insertion
+            return expand_dims(
+                new_collection(temp_slice), axis=tuple(self.where_none)
+            ).expr
 
         # Pushdown succeeded - wrap the result with expand_dims
-        from dask._collections import new_collection
-        from dask.array._array_expr.manipulation._expand import expand_dims
-
         return expand_dims(new_collection(pushed), axis=tuple(self.where_none)).expr
 
     @functools.cached_property
