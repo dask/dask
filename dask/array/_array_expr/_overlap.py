@@ -18,7 +18,7 @@ from dask.array._array_expr._map_blocks import map_blocks
 from dask.array._array_expr.creation import empty_like, full_like, repeat
 from dask.array._shuffle import _calculate_new_chunksizes
 from dask.array.numpy_compat import normalize_axis_tuple
-from dask.array.utils import meta_from_array
+from dask.array.utils import compute_meta, meta_from_array
 from dask.layers import ArrayOverlapLayer
 from dask.utils import derived_from, ensure_dict
 
@@ -61,10 +61,16 @@ def overlap_internal(x, axes):
     The axes input informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
-    return new_collection(MapOverlap(x, axes))
+    return new_collection(OverlapInternal(x, axes))
 
 
-class MapOverlap(ArrayExpr):
+class OverlapInternal(ArrayExpr):
+    """Low-level overlap expression that shares boundaries between blocks.
+
+    This is the internal implementation detail. For the user-facing
+    map_overlap operation, see MapOverlap.
+    """
+
     _parameters = ["array", "axes"]
 
     @functools.cached_property
@@ -89,6 +95,219 @@ class MapOverlap(ArrayExpr):
             token="-".join(self._name.split("-")[1:]),
         )
         return ensure_dict(graph)
+
+
+class MapOverlap(ArrayExpr):
+    """Logical expression for the full map_overlap operation.
+
+    This captures the user's intent: apply func with overlap depth/boundary,
+    optionally trimming the result. Slice pushdown is simple because we
+    understand the semantics.
+
+    Note: new_axis/drop_axis cases are handled by _map_overlap_direct instead.
+
+    The expression is lowered to the full pipeline during _lower():
+    rechunk -> boundaries -> overlap_internal -> map_blocks -> trim
+    """
+
+    _parameters = [
+        "arrays",  # tuple of input ArrayExpr
+        "func",  # callable
+        "depth",  # list of dicts (one per array)
+        "boundary",  # list of dicts (one per array)
+        "trim_output",  # bool
+        "allow_rechunk",  # bool
+        "kwargs",  # dict for map_blocks kwargs
+    ]
+    _defaults = {
+        "trim_output": True,
+        "allow_rechunk": True,
+        "kwargs": None,
+    }
+
+    @functools.cached_property
+    def _meta(self):
+        # Check for explicit meta
+        meta = self._kwargs.get("meta")
+        if meta is not None:
+            return meta_from_array(meta)
+
+        # Check for explicit dtype
+        dtype = self._kwargs.get("dtype")
+        if dtype is not None:
+            return np.empty((0,) * self.ndim, dtype=dtype)
+
+        # Try to infer dtype by calling the function on array collections
+        try:
+            arr_collections = [new_collection(a) for a in self.arrays]
+            meta = compute_meta(self.func, None, *arr_collections)
+            if meta is not None:
+                return meta
+        except Exception:
+            pass
+
+        # Default to primary (highest-rank) array's meta
+        return meta_from_array(self._get_primary_array())
+
+    @property
+    def _kwargs(self):
+        return self.kwargs if self.kwargs is not None else {}
+
+    def _get_primary_array(self):
+        """Get the primary array (highest rank, first if tied) for shape/chunk info."""
+        return max(enumerate(self.arrays), key=lambda x: (x[1].ndim, -x[0]))[1]
+
+    def _get_primary_index(self):
+        """Get the index of the primary array (highest rank, first if tied)."""
+        return max(enumerate(self.arrays), key=lambda x: (x[1].ndim, -x[0]))[0]
+
+    @functools.cached_property
+    def shape(self):
+        # Output shape = input shape (no new_axis/drop_axis in this expr)
+        return self._get_primary_array().shape
+
+    @functools.cached_property
+    def chunks(self):
+        # If allow_rechunk, the input is rechunked to ensure minimum chunk size >= depth
+        primary = self._get_primary_array()
+        primary_idx = self._get_primary_index()
+        if self.allow_rechunk:
+            return _get_overlap_rechunked_chunks(
+                new_collection(primary), self.depth[primary_idx]
+            )
+        return primary.chunks
+
+    @functools.cached_property
+    def _name(self) -> str:
+        return f"map-overlap-{super()._name}"
+
+    def _simplify_up(self, parent, dependents):
+        """Push slice through MapOverlap.
+
+        For a slice on MapOverlap:
+        - Non-overlap axes: push slice directly to inputs
+        - Overlap axes: expand slice by depth, push to inputs, leave trim at top
+        """
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if not isinstance(parent, SliceSlicesIntegers):
+            return None
+
+        index = parent.index
+        ndim = self.arrays[0].ndim
+
+        # Don't handle None (newaxis) or integers (dimension reduction)
+        if any(idx is None for idx in index):
+            return None
+        if any(isinstance(idx, Integral) for idx in index):
+            return None
+
+        # Pad index to full length
+        full_index = list(index) + [slice(None)] * (ndim - len(index))
+
+        # Build input slices for each input array
+        output_trim_index = []
+        needs_trim = False
+
+        # Get depth for first array (all arrays should have same depth structure)
+        depth = self.depth[0]
+
+        for axis in range(ndim):
+            idx = full_index[axis]
+            d = depth.get(axis, 0)
+
+            # Get actual depth (handle tuple for asymmetric overlap)
+            if isinstance(d, tuple):
+                left_depth, right_depth = d
+                max_depth = max(left_depth, right_depth)
+            else:
+                left_depth = right_depth = max_depth = d
+
+            if not isinstance(idx, slice):
+                return None  # Unexpected index type
+
+            if idx == slice(None):
+                output_trim_index.append(slice(None))
+                continue
+
+            # Normalize the slice
+            dim_size = self.shape[axis]
+            start, stop, step = idx.indices(dim_size)
+
+            if step != 1:
+                return None  # Don't handle non-unit steps
+
+            if max_depth == 0:
+                # No overlap on this axis - push directly
+                output_trim_index.append(slice(None))
+            else:
+                # Expand slice by overlap depth for input
+                # But respect array boundaries
+                input_size = self.arrays[0].shape[axis]
+                expanded_start = max(0, start - left_depth)
+                expanded_stop = min(input_size, stop + right_depth)
+
+                # Replace this axis in full_index with expanded slice
+                full_index[axis] = slice(expanded_start, expanded_stop)
+
+                # Compute trim slice to get original result
+                trim_start = start - expanded_start
+                trim_stop = trim_start + (stop - start)
+                output_trim_index.append(slice(trim_start, trim_stop))
+                needs_trim = True
+
+        # Slice all input arrays
+        new_arrays = []
+        for arr in self.arrays:
+            sliced = new_collection(arr)[tuple(full_index)]
+            new_arrays.append(sliced.expr)
+
+        # Create new MapOverlap with sliced inputs
+        new_expr = MapOverlap(
+            arrays=tuple(new_arrays),
+            func=self.func,
+            depth=self.depth,
+            boundary=self.boundary,
+            trim_output=self.trim_output,
+            allow_rechunk=self.allow_rechunk,
+            kwargs=self.kwargs,
+        )
+
+        if needs_trim:
+            # Apply trim slice to output
+            return SliceSlicesIntegers(
+                new_expr, tuple(output_trim_index), parent.allow_getitem_optimization
+            )
+        else:
+            return new_expr
+
+    def _lower(self):
+        """Expand to the full overlap pipeline.
+
+        This expands to: rechunk -> boundaries -> overlap_internal -> map_blocks -> trim
+        """
+        # Apply overlap to each input array
+        overlapped = []
+        for arr, d, b in zip(self.arrays, self.depth, self.boundary):
+            arr_coll = new_collection(arr)
+            overlapped_arr = overlap(
+                arr_coll, depth=d, boundary=b, allow_rechunk=self.allow_rechunk
+            )
+            overlapped.append(overlapped_arr.expr)
+
+        # Build map_blocks expression
+        result = map_blocks(
+            self.func, *[new_collection(a) for a in overlapped], **self._kwargs
+        )
+
+        if self.trim_output:
+            # Find highest-rank array for trim settings
+            i = sorted(enumerate(overlapped), key=lambda v: (v[1].ndim, -v[0]))[-1][0]
+            trim_depth = dict(self.depth[i])
+            trim_boundary = dict(self.boundary[i])
+            result = trim_internal(result, trim_depth, trim_boundary)
+
+        return result.expr
 
 
 def trim_overlap(x, depth, boundary=None):
@@ -512,6 +731,59 @@ def add_dummy_padding(x, depth, boundary):
     return x
 
 
+def _map_overlap_direct(func, args, depth, boundary, trim, allow_rechunk, kwargs):
+    """Direct implementation of map_overlap without MapOverlap.
+
+    Used for cases with new_axis/drop_axis where MapOverlap doesn't apply.
+    """
+    # Apply overlap to each input array
+    overlapped = []
+    for x, d, b in zip(args, depth, boundary):
+        overlapped.append(overlap(x, depth=d, boundary=b, allow_rechunk=allow_rechunk))
+
+    # Apply the function via map_blocks
+    result = map_blocks(func, *overlapped, **kwargs)
+
+    if trim:
+        # Find highest-rank array for trim settings
+        i = sorted(enumerate(overlapped), key=lambda v: (v[1].ndim, -v[0]))[-1][0]
+        trim_depth = dict(depth[i])
+        trim_boundary = dict(boundary[i])
+
+        # Handle drop_axis
+        drop_axis = kwargs.get("drop_axis")
+        if drop_axis is not None:
+            if isinstance(drop_axis, Number):
+                drop_axis = [drop_axis]
+            ndim_out = max(a.ndim for a in overlapped)
+            drop_axis = [d % ndim_out for d in drop_axis]
+            kept_axes = tuple(
+                ax for ax in range(overlapped[i].ndim) if ax not in drop_axis
+            )
+            trim_depth = {n: trim_depth[ax] for n, ax in enumerate(kept_axes)}
+            trim_boundary = {n: trim_boundary[ax] for n, ax in enumerate(kept_axes)}
+
+        # Handle new_axis
+        new_axis = kwargs.get("new_axis")
+        if new_axis is not None:
+            if isinstance(new_axis, Number):
+                new_axis = [new_axis]
+            ndim_out = max(a.ndim for a in overlapped)
+            new_axis = [d % ndim_out for d in new_axis]
+
+            for axis in new_axis:
+                for existing_axis in list(trim_depth.keys()):
+                    if existing_axis >= axis:
+                        trim_depth[existing_axis + 1] = trim_depth[existing_axis]
+                        trim_boundary[existing_axis + 1] = trim_boundary[existing_axis]
+                trim_depth[axis] = 0
+                trim_boundary[axis] = "none"
+
+        result = trim_internal(result, trim_depth, trim_boundary)
+
+    return result
+
+
 def map_overlap(
     func,
     *args,
@@ -738,65 +1010,47 @@ def map_overlap(
         assert all(type(c) is int for x in xs for cc in x.chunks for c in cc)
 
     assert_int_chunksize(args)
-    if not trim and "chunks" not in kwargs:
-        if allow_rechunk:
-            # Adjust chunks based on the rechunking result
-            kwargs["chunks"] = _get_overlap_rechunked_chunks(
-                args[0], coerce_depth(args[0].ndim, depth[0])
+
+    # Validate chunk sizes if rechunking is not allowed
+    if not allow_rechunk:
+        for x, d in zip(args, depth):
+            depths = [max(dd) if isinstance(dd, tuple) else dd for dd in d.values()]
+            original_chunks_too_small = any(
+                min(c) < dd for dd, c in zip(depths, x.chunks)
             )
-        else:
-            kwargs["chunks"] = args[0].chunks
-    args = [
-        overlap(x, depth=d, boundary=b, allow_rechunk=allow_rechunk)
-        for x, d, b in zip(args, depth, boundary)
-    ]
-    assert_int_chunksize(args)
-    x = map_blocks(func, *args, **kwargs)
-    assert_int_chunksize([x])
-    if trim:
-        # Find index of array argument with maximum rank and break ties by choosing first provided
-        i = sorted(enumerate(args), key=lambda v: (v[1].ndim, -v[0]))[-1][0]
-        # Trim using depth/boundary setting for array of highest rank
-        depth = depth[i]
-        boundary = boundary[i]
-        # remove any dropped axes from depth and boundary variables
-        drop_axis = kwargs.pop("drop_axis", None)
-        if drop_axis is not None:
-            if isinstance(drop_axis, Number):
-                drop_axis = [drop_axis]
+            if original_chunks_too_small:
+                raise ValueError(
+                    "Overlap depth is larger than smallest chunksize.\n"
+                    "Please set allow_rechunk=True to rechunk automatically.\n"
+                    f"Overlap depths required: {depths}\n"
+                    f"Input chunks: {x.chunks}\n"
+                )
 
-            # convert negative drop_axis to equivalent positive value
-            ndim_out = max(a.ndim for a in args if isinstance(a, Array))
-            drop_axis = [d % ndim_out for d in drop_axis]
+    # Fall back to direct implementation for complex cases:
+    # - new_axis/drop_axis: change dimensionality
+    # - explicit chunks: change output shape/chunks
+    if (
+        kwargs.get("new_axis") is not None
+        or kwargs.get("drop_axis") is not None
+        or kwargs.get("chunks") is not None
+    ):
+        return _map_overlap_direct(
+            func, args, depth, boundary, trim, allow_rechunk, kwargs
+        )
 
-            kept_axes = tuple(ax for ax in range(args[i].ndim) if ax not in drop_axis)
-            # note that keys are relabeled to match values in range(x.ndim)
-            depth = {n: depth[ax] for n, ax in enumerate(kept_axes)}
-            boundary = {n: boundary[ax] for n, ax in enumerate(kept_axes)}
-
-        # add any new axes to depth and boundary variables
-        new_axis = kwargs.pop("new_axis", None)
-        if new_axis is not None:
-            if isinstance(new_axis, Number):
-                new_axis = [new_axis]
-
-            # convert negative new_axis to equivalent positive value
-            ndim_out = max(a.ndim for a in args if isinstance(a, Array))
-            new_axis = [d % ndim_out for d in new_axis]
-
-            for axis in new_axis:
-                for existing_axis in list(depth.keys()):
-                    if existing_axis >= axis:
-                        # Shuffle existing axis forward to give room to insert new_axis
-                        depth[existing_axis + 1] = depth[existing_axis]
-                        boundary[existing_axis + 1] = boundary[existing_axis]
-
-                depth[axis] = 0
-                boundary[axis] = "none"
-
-        return trim_internal(x, depth, boundary)
-    else:
-        return x
+    # Create the logical MapOverlap
+    # It will be lowered to the full pipeline during optimization
+    return new_collection(
+        MapOverlap(
+            arrays=tuple(a.expr for a in args),
+            func=func,
+            depth=depth,
+            boundary=boundary,
+            trim_output=trim,
+            allow_rechunk=allow_rechunk,
+            kwargs=kwargs if kwargs else None,
+        )
+    )
 
 
 def coerce_depth(ndim, depth):
