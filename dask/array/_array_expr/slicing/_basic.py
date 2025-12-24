@@ -956,15 +956,20 @@ class SliceSlicesIntegers(Slice):
         return tuple(result) if result else (0,)
 
     def _pushdown_through_shuffle(self):
-        """Push slice through Shuffle when not slicing on the shuffle axis.
+        """Push slice through Shuffle.
 
-        Shuffle reorganizes data along a single axis. If the slice doesn't
-        affect that axis (uses slice(None)), we can push the slice through
-        to the input array, potentially reducing I/O significantly.
+        Shuffle reorganizes data along a single axis. We can push slices through:
+        1. Non-shuffle axes: directly push through
+        2. Shuffle axis (step=1): if input indices are contiguous, slice input
+           and adjust the indexer
 
-        Example:
-            Slice(Shuffle(x, axis=0), [:, 10:20, 30:40])
-            -> Shuffle(Slice(x, [:, 10:20, 30:40]), axis=0)
+        Example (non-shuffle axis):
+            Slice(Shuffle(x, axis=0), [:, 10:20])
+            -> Shuffle(Slice(x, [:, 10:20]), axis=0)
+
+        Example (shuffle axis, contiguous):
+            Slice(Shuffle(x, axis=0), [100:200, :])
+            -> Shuffle(Slice(x, [input_start:input_stop, :]), adjusted_indexer, axis=0)
         """
         from dask.array._array_expr._collection import new_collection
         from dask.array._array_expr._shuffle import Shuffle
@@ -972,23 +977,68 @@ class SliceSlicesIntegers(Slice):
         shuffle = self.array
         axis = shuffle.axis
         index = self.index
+        indexer = shuffle.indexer
 
         # Pad index to full length
-        full_index = index + (slice(None),) * (len(shuffle.shape) - len(index))
+        full_index = list(index) + [slice(None)] * (len(shuffle.shape) - len(index))
 
         # Check if we're slicing on the shuffle axis
         axis_slice = full_index[axis]
-        if axis_slice != slice(None):
-            # Slicing on the shuffle axis is complex - don't push through
+
+        if axis_slice == slice(None):
+            # Not slicing shuffle axis - push through directly
+            sliced_input = new_collection(shuffle.array)[tuple(full_index)]
+            return Shuffle(
+                sliced_input.expr,
+                indexer,
+                shuffle.axis,
+                shuffle.operand("name"),
+            )
+
+        # Slicing on shuffle axis - check if we can handle it
+        if not isinstance(axis_slice, slice):
+            return None  # Integer indexing removes the dimension
+
+        # Only handle step=1 slices
+        if axis_slice.step is not None and axis_slice.step != 1:
             return None
 
-        # Push the slice through to the input
-        sliced_input = new_collection(shuffle.array)[tuple(full_index)]
+        # Normalize slice bounds
+        axis_size = shuffle.shape[axis]
+        start, stop, _ = axis_slice.indices(axis_size)
+        if start >= stop:
+            return None  # Empty slice
 
-        # Return new Shuffle with the sliced input
+        # Slice the indexer
+        new_indexer = indexer[start:stop]
+
+        # Find all input indices needed
+        input_indices = set()
+        for chunk in new_indexer:
+            input_indices.update(chunk)
+
+        if not input_indices:
+            return None  # No indices
+
+        input_min = min(input_indices)
+        input_max = max(input_indices)
+
+        # Check if input indices are contiguous
+        if len(input_indices) != input_max - input_min + 1:
+            return None  # Non-contiguous, can't use simple slice
+
+        # Adjust indexer: subtract input_min from each index
+        adjusted_indexer = [[idx - input_min for idx in chunk] for chunk in new_indexer]
+
+        # Build slice for input array
+        input_slice = list(full_index)
+        input_slice[axis] = slice(input_min, input_max + 1)
+
+        sliced_input = new_collection(shuffle.array)[tuple(input_slice)]
+
         return Shuffle(
             sliced_input.expr,
-            shuffle.indexer,
+            adjusted_indexer,
             shuffle.axis,
             shuffle.operand("name"),
         )

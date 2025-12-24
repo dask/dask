@@ -187,25 +187,50 @@ def test_slice_through_where_with_broadcast():
     assert_eq(sliced, np.ones((10, 10, 15)))
 
 
-def test_slice_through_shuffle():
-    """Slice pushes through Shuffle when not slicing shuffle axis.
+def test_slice_through_shuffle_non_shuffle_axis():
+    """Slice pushes through Shuffle when slicing non-shuffle axes."""
+    arr = np.arange(100 * 50 * 60).reshape(100, 50, 60)
+    x = da.from_array(arr, chunks=(1, 25, 30))  # chunks=1 on axis 0
 
-    When slicing on axes other than the shuffle axis, the slice can be
-    pushed through to reduce data loaded from the source.
+    # Fancy indexing creates Shuffle; use non-identity to prevent simplification
+    indices = list(range(50)) + list(range(99, 49, -1))  # 0-49, then 99-50 reversed
+    shuffled = x[indices, :, :]
+    result = shuffled[:, 10:20, 30:40]
+
+    # Expected: slice pushed through, so shuffle input is sliced
+    # x[:, 10:20, 30:40] then shuffled, not x shuffled then sliced
+    expected = x[:, 10:20, 30:40][indices, :, :]
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, arr[indices, :, :][:, 10:20, 30:40])
+
+
+def test_slice_through_shuffle_on_shuffle_axis():
+    """Slice on shuffle axis pushes through when input indices are contiguous.
+
+    This optimization applies to xarray's unstack pattern where the shuffle
+    indexer maps contiguous ranges (identity-like with possible padding).
     """
     from dask.array._array_expr._collection import new_collection
     from dask.array._array_expr._shuffle import _shuffle
 
-    arr = np.random.rand(100, 50, 60)
-    x = da.from_array(arr, chunks=(10, 25, 30))
+    arr = np.arange(100 * 50).reshape(100, 50)
+    x = da.from_array(arr, chunks=(1, 25))
 
-    # Shuffle on axis 0, slice on axes 1 and 2
+    # Simulate xarray unstack: identity shuffle with single-element chunks
+    # This is exactly what xarray produces for time dimension restructuring
     indexer = [[i] for i in range(100)]
     shuffled = new_collection(_shuffle(x.expr, indexer, axis=0, name="shuffle"))
-    sliced = shuffled[:, 10:20, 30:40]
+    result = shuffled[20:40, :]
 
-    # Verify correctness
-    assert_eq(sliced, arr[:, 10:20, 30:40])
+    # Expected: input sliced to [20:40], indexer adjusted
+    adjusted_indexer = [[i] for i in range(20)]
+    expected = new_collection(
+        _shuffle(x[20:40, :].expr, adjusted_indexer, axis=0, name="shuffle")
+    )
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, arr[20:40, :])
 
 
 # =============================================================================
