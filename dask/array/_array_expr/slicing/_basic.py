@@ -1509,19 +1509,16 @@ class SlicesWrapNone(SliceSlicesIntegers):
     _parameters = ["array", "index", "allow_getitem_optimization", "where_none"]
 
     def _simplify_down(self):
-        # Normalize: always convert to expand_dims (which uses Reshape)
-        # This ensures a canonical representation for dimension expansion
-        from dask._collections import new_collection
-        from dask.array._array_expr.manipulation._expand import expand_dims
+        # SlicesWrapNone handles dimension expansion combined with slicing.
+        # We push the slicing through but keep the None expansion as SlicesWrapNone
+        # (not expand_dims/Reshape, which causes issues with FusedBlockwise lowering).
 
         # Check if there's any non-trivial slicing
         has_slicing = any(idx != slice(None) for idx in self.index)
 
         if not has_slicing:
-            # Pure dimension expansion - convert to expand_dims
-            return expand_dims(
-                new_collection(self.array), axis=tuple(self.where_none)
-            ).expr
+            # Pure dimension expansion - no pushdown needed
+            return None
 
         # Has slicing - try to push it through first
         temp_slice = SliceSlicesIntegers(
@@ -1530,13 +1527,15 @@ class SlicesWrapNone(SliceSlicesIntegers):
         pushed = temp_slice._simplify_down()
 
         if pushed is None:
-            # Pushdown didn't happen - still normalize the None insertion
-            return expand_dims(
-                new_collection(temp_slice), axis=tuple(self.where_none)
-            ).expr
+            # Pushdown didn't happen
+            return None
 
-        # Pushdown succeeded - wrap the result with expand_dims
-        return expand_dims(new_collection(pushed), axis=tuple(self.where_none)).expr
+        # Pushdown succeeded - wrap the result with SlicesWrapNone for dimension expansion
+        # Build a new index with only slice(None) for the pushed dimensions
+        new_index = tuple(slice(None) for _ in range(pushed.ndim))
+        return SlicesWrapNone(
+            pushed, new_index, self.allow_getitem_optimization, self.where_none
+        )
 
     @functools.cached_property
     def chunks(self):
