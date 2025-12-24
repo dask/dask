@@ -442,10 +442,17 @@ def collections_to_expr(
     for coll in collections:
         from dask.delayed import Delayed
 
-        if isinstance(coll, Delayed) or not hasattr(coll, "expr"):
+        if isinstance(coll, Delayed):
             graphs.append(HLGExpr.from_collection(coll, optimize_graph=optimize_graph))
         else:
-            graphs.append(coll.expr)
+            try:
+                graphs.append(coll.expr)
+            except (AttributeError, ValueError):
+                # AttributeError: object doesn't have .expr
+                # ValueError: xarray DataArrays have .expr but it raises for non-chunked
+                graphs.append(
+                    HLGExpr.from_collection(coll, optimize_graph=optimize_graph)
+                )
 
     if len(graphs) > 1 or is_iterable:
         return _ExprSequence(*graphs)

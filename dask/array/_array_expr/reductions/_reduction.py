@@ -140,7 +140,9 @@ def reduction(
 
     """
     # Convert non-dask arrays to dask arrays
-    if not hasattr(x, "expr"):
+    from dask.array._array_expr._collection import Array
+
+    if not isinstance(x, Array):
         from dask.array._array_expr.core._conversion import asanyarray
 
         x = asanyarray(x)

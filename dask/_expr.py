@@ -41,8 +41,13 @@ def _unpack_collections(o):
     if isinstance(o, Expr):
         return o
 
-    if hasattr(o, "expr") and not isinstance(o, Delayed):
-        return o.expr
+    if not isinstance(o, Delayed):
+        try:
+            return o.expr
+        except (AttributeError, ValueError):
+            # AttributeError: object doesn't have .expr
+            # ValueError: xarray DataArrays have .expr but it raises for non-chunked
+            pass
 
     return o
 
