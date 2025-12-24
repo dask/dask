@@ -148,13 +148,19 @@ class Expr(core.SingletonExpr):
         return lines
 
     def _operands_for_repr(self):
+        from dask.delayed import Delayed
+
         to_include = []
         for param, operand in zip(self._parameters, self.operands):
-            if isinstance(operand, Expr) or (
-                not isinstance(operand, (pd.Series, pd.DataFrame))
-                and operand != self._defaults.get(param)
-            ):
+            if isinstance(operand, Expr):
+                # Use str() for simple one-line format, not repr() which shows table
+                to_include.append(f"{param}={operand}")
+            elif isinstance(operand, Delayed):
+                # Delayed objects can't be compared for equality
                 to_include.append(f"{param}={operand!r}")
+            elif not isinstance(operand, (pd.Series, pd.DataFrame)):
+                if operand != self._defaults.get(param):
+                    to_include.append(f"{param}={operand!r}")
         return to_include
 
     def __getattr__(self, key):
