@@ -171,11 +171,7 @@ class Expr:
         try:
             return self._table()._repr_html_()
         except (ImportError, NotImplementedError):
-            return f"<pre>{self.tree_repr()}</pre>"
-
-    def _repr_mimebundle_(self, **kwargs):
-        """Provide explicit MIME bundle for Jupyter."""
-        return {"text/html": self._repr_html_()}
+            return f"<pre>{self._simple_repr()}</pre>"
 
     def __hash__(self):
         return hash(self._name)
