@@ -59,9 +59,10 @@ class ExprTable:
         if self._html_cache is None:
             from rich.console import Console
 
-            # Grab width from real console, use StringIO to suppress stdout
-            width = Console().width
-            console = Console(file=io.StringIO(), record=True, width=width)
+            # force_jupyter=False prevents rich's Jupyter auto-display
+            console = Console(
+                file=io.StringIO(), record=True, width=120, force_jupyter=False
+            )
             console.print(self._table)
             self._html_cache = console.export_html(
                 inline_styles=True, code_format="<pre>{code}</pre>"
@@ -73,18 +74,16 @@ class ExprTable:
         if self._text_cache is None:
             from rich.console import Console
 
-            console = Console(force_terminal=True)
-            with console.capture() as capture:
-                console.print(self._table)
-            self._text_cache = capture.get().rstrip()
+            # force_jupyter=False prevents rich's Jupyter auto-display
+            console = Console(
+                file=io.StringIO(), force_terminal=True, force_jupyter=False, width=120
+            )
+            console.print(self._table)
+            self._text_cache = console.file.getvalue().rstrip()
         return self._text_cache
 
     def __str__(self):
         return self.__repr__()
-
-    def _repr_mimebundle_(self, **kwargs):
-        """Provide explicit MIME bundle for Jupyter."""
-        return {"text/html": self._repr_html_()}
 
     def print(self):
         """Print to the current console."""
