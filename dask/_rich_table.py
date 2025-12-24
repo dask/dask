@@ -59,12 +59,9 @@ class ExprTable:
         if self._html_cache is None:
             from rich.console import Console
 
-            console = Console(
-                file=io.StringIO(),
-                force_terminal=False,
-                force_jupyter=False,
-                record=True,
-            )
+            # Grab width from real console, use StringIO to suppress stdout
+            width = Console().width
+            console = Console(file=io.StringIO(), record=True, width=width)
             console.print(self._table)
             self._html_cache = console.export_html(
                 inline_styles=True, code_format="<pre>{code}</pre>"
@@ -76,11 +73,10 @@ class ExprTable:
         if self._text_cache is None:
             from rich.console import Console
 
-            console = Console(
-                file=io.StringIO(), force_terminal=True, force_jupyter=False
-            )
-            console.print(self._table)
-            self._text_cache = console.file.getvalue().rstrip()
+            console = Console(force_terminal=True)
+            with console.capture() as capture:
+                console.print(self._table)
+            self._text_cache = capture.get().rstrip()
         return self._text_cache
 
     def __str__(self):
