@@ -187,6 +187,27 @@ def test_slice_through_where_with_broadcast():
     assert_eq(sliced, np.ones((10, 10, 15)))
 
 
+def test_slice_through_shuffle():
+    """Slice pushes through Shuffle when not slicing shuffle axis.
+
+    When slicing on axes other than the shuffle axis, the slice can be
+    pushed through to reduce data loaded from the source.
+    """
+    from dask.array._array_expr._collection import new_collection
+    from dask.array._array_expr._shuffle import _shuffle
+
+    arr = np.random.rand(100, 50, 60)
+    x = da.from_array(arr, chunks=(10, 25, 30))
+
+    # Shuffle on axis 0, slice on axes 1 and 2
+    indexer = [[i] for i in range(100)]
+    shuffled = new_collection(_shuffle(x.expr, indexer, axis=0, name="shuffle"))
+    sliced = shuffled[:, 10:20, 30:40]
+
+    # Verify correctness
+    assert_eq(sliced, arr[:, 10:20, 30:40])
+
+
 # =============================================================================
 # Case 4: new_axes - Blockwise adds dimensions
 # - Slice on a new axis doesn't correspond to input

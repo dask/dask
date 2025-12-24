@@ -521,6 +521,12 @@ class SliceSlicesIntegers(Slice):
         if isinstance(self.array, Reshape):
             return self._pushdown_through_reshape()
 
+        # Slice(Shuffle) -> push slice through when not slicing shuffle axis
+        from dask.array._array_expr._shuffle import Shuffle
+
+        if isinstance(self.array, Shuffle):
+            return self._pushdown_through_shuffle()
+
     def _simplify_creation(self):
         """Simplify Slice(BroadcastTrick) to BroadcastTrick with new shape.
 
@@ -948,6 +954,44 @@ class SliceSlicesIntegers(Slice):
                 result.append(overlap_size)
 
         return tuple(result) if result else (0,)
+
+    def _pushdown_through_shuffle(self):
+        """Push slice through Shuffle when not slicing on the shuffle axis.
+
+        Shuffle reorganizes data along a single axis. If the slice doesn't
+        affect that axis (uses slice(None)), we can push the slice through
+        to the input array, potentially reducing I/O significantly.
+
+        Example:
+            Slice(Shuffle(x, axis=0), [:, 10:20, 30:40])
+            -> Shuffle(Slice(x, [:, 10:20, 30:40]), axis=0)
+        """
+        from dask.array._array_expr._collection import new_collection
+        from dask.array._array_expr._shuffle import Shuffle
+
+        shuffle = self.array
+        axis = shuffle.axis
+        index = self.index
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (len(shuffle.shape) - len(index))
+
+        # Check if we're slicing on the shuffle axis
+        axis_slice = full_index[axis]
+        if axis_slice != slice(None):
+            # Slicing on the shuffle axis is complex - don't push through
+            return None
+
+        # Push the slice through to the input
+        sliced_input = new_collection(shuffle.array)[tuple(full_index)]
+
+        # Return new Shuffle with the sliced input
+        return Shuffle(
+            sliced_input.expr,
+            shuffle.indexer,
+            shuffle.axis,
+            shuffle.operand("name"),
+        )
 
     def _pushdown_through_elemwise(self):
         """Push slice through elemwise by slicing each input appropriately."""
