@@ -22,7 +22,7 @@ from dask.array.slicing import (
     sanitize_index,
 )
 from dask.array.utils import meta_from_array
-from dask.layers import ArrayBlockwiseDep
+from dask.layers import ArrayBlockwiseDep, ArrayValuesDep
 from dask.tokenize import tokenize
 from dask.utils import cached_cumsum, is_arraylike
 
@@ -515,6 +515,12 @@ class SliceSlicesIntegers(Slice):
         if isinstance(self.array, BroadcastTo):
             return self._pushdown_through_broadcast_to()
 
+        # Slice(MapOverlap) -> push slice through overlap for non-overlap axes
+        from dask.array._array_expr._overlap import MapOverlap
+
+        if isinstance(self.array, MapOverlap):
+            return self._pushdown_through_map_overlap()
+
     def _simplify_creation(self):
         """Simplify Slice(BroadcastTrick) to BroadcastTrick with new shape.
 
@@ -818,6 +824,125 @@ class SliceSlicesIntegers(Slice):
             new_meta,
         )
 
+    def _pushdown_through_map_overlap(self):
+        """Push slice through MapOverlap.
+
+        The slice is on MapOverlap OUTPUT. We need to:
+        1. Map the output slice to input chunk boundaries
+        2. Add padding for overlap requirements
+        3. Slice the input accordingly
+
+        For non-overlap axes: push slice directly through.
+        For overlap axes: find which chunks are needed, include overlap padding.
+        """
+        from dask.array._array_expr._collection import new_collection
+        from dask.array._array_expr._overlap import MapOverlap
+
+        overlap = self.array
+        overlap_axes = overlap.axes
+        index = self.index
+
+        # Don't handle None/newaxis or integers (dimension reduction)
+        if any(idx is None for idx in index):
+            return None
+        if any(isinstance(idx, Integral) for idx in index):
+            return None
+
+        ndim = overlap.array.ndim
+        input_chunks = overlap.array.chunks
+        output_chunks = overlap.chunks
+
+        # Pad index to full length
+        full_index = list(index) + [slice(None)] * (ndim - len(index))
+
+        # Build input slice based on which output chunks we need
+        input_index = []
+        output_trim_index = []
+        needs_trim = False
+
+        for axis in range(ndim):
+            idx = full_index[axis]
+            depth = overlap_axes.get(axis, 0)
+
+            # Get actual depth (handle tuple for asymmetric overlap)
+            if isinstance(depth, tuple):
+                left_depth, right_depth = depth
+            else:
+                left_depth = right_depth = depth
+
+            if not isinstance(idx, slice):
+                return None  # Unexpected index type
+
+            if idx == slice(None):
+                input_index.append(slice(None))
+                output_trim_index.append(slice(None))
+                continue
+
+            # Normalize the slice using OUTPUT size
+            output_size = sum(output_chunks[axis])
+            start, stop, step = idx.indices(output_size)
+
+            if step != 1:
+                return None  # Don't handle non-unit steps
+
+            if left_depth == 0 and right_depth == 0:
+                # No overlap on this axis - push directly
+                input_index.append(idx)
+                output_trim_index.append(slice(None))
+            else:
+                # Find which OUTPUT chunks are covered by the slice
+                out_chunks = output_chunks[axis]
+                in_chunks = input_chunks[axis]
+
+                # Find first and last output chunk indices
+                pos = 0
+                first_out_chunk = None
+                last_out_chunk = None
+                for ci, cs in enumerate(out_chunks):
+                    chunk_end = pos + cs
+                    if first_out_chunk is None and start < chunk_end:
+                        first_out_chunk = ci
+                    if stop > pos:
+                        last_out_chunk = ci
+                    pos = chunk_end
+
+                if first_out_chunk is None or last_out_chunk is None:
+                    return None
+
+                # Only push through if slice starts at beginning (chunk 0).
+                # Middle slices create misaligned chunk boundaries.
+                if first_out_chunk != 0:
+                    return None
+
+                # Calculate input slice to cover needed chunks + overlap padding
+                # Since first_out_chunk == 0, input starts at 0
+                input_stop = sum(in_chunks[: last_out_chunk + 1])
+
+                # Add right overlap padding if not the last chunk
+                if last_out_chunk < len(in_chunks) - 1:
+                    input_stop += min(right_depth, in_chunks[last_out_chunk + 1])
+
+                input_index.append(slice(0, input_stop))
+
+                # Trim index on output aligns with original since we start at chunk 0
+                output_trim_index.append(slice(start, stop))
+                needs_trim = True
+
+        # Apply input slice
+        sliced_input = new_collection(overlap.array)[tuple(input_index)]
+
+        # Create new MapOverlap with sliced input
+        new_overlap = MapOverlap(sliced_input.expr, overlap_axes)
+
+        if not needs_trim:
+            # No trimming needed - simple pushdown
+            return new_overlap
+
+        # Return trimmed overlap result
+        return SliceSlicesIntegers(
+            new_overlap, tuple(output_trim_index), self.allow_getitem_optimization
+        )
+
     def _slice_chunks(self, chunks, start, length):
         """Compute new chunks after slicing."""
         result = []
@@ -922,10 +1047,26 @@ class SliceSlicesIntegers(Slice):
         # Use getattr since subclasses may define as class attribute or property
         adjust_chunks = getattr(bw, "adjust_chunks", None)
         if adjust_chunks:
-            # Only reject if we're slicing an adjusted dimension
-            # adjust_chunks keys are output axis indices
-            adjusted_axes = set(adjust_chunks.keys())
-            if sliced_axes & adjusted_axes:
+            # Only reject if we're slicing a dimension where chunk COUNT changes
+            # (i.e., chunks are being merged or split).
+            # If chunk count is the same, we can slice both input and output identically,
+            # even if individual chunk sizes differ (like in trim operations).
+            problematic_axes = set()
+            for sym_idx, output_chunks in adjust_chunks.items():
+                if sym_idx in out_ind:
+                    out_axis = out_ind.index(sym_idx)
+                    # If output_chunks is an int or callable, it's a special case
+                    # Be conservative and block
+                    if isinstance(output_chunks, Integral) or callable(output_chunks):
+                        problematic_axes.add(out_axis)
+                        continue
+                    deps = list(bw.dependencies())
+                    if deps:
+                        input_chunks = deps[0].chunks[out_axis]
+                        # Block only if number of chunks differs
+                        if len(output_chunks) != len(input_chunks):
+                            problematic_axes.add(out_axis)
+            if sliced_axes & problematic_axes:
                 return None
 
         # Don't handle if blockwise adds new axes and we're slicing those axes
@@ -958,25 +1099,197 @@ class SliceSlicesIntegers(Slice):
             result = bw.substitute_parameters({"array": sliced_input.expr})
         else:
             # For base Blockwise with multiple inputs in args
+            from dask.array._array_expr._expr import ArrayExpr
+
             args = bw.args
             new_args = []
+
+            # First, compute the new output chunks after slicing
+            # We need this to regenerate ArrayValuesDep if present
+            new_output_chunks = []
+            for axis, idx in enumerate(slice_index):
+                if axis < len(bw.chunks):
+                    old_chunks = bw.chunks[axis]
+                    new_output_chunks.append(
+                        _compute_sliced_chunks(old_chunks, idx, sum(old_chunks))
+                    )
+
             for i in range(0, len(args), 2):
                 arg = args[i]
                 arg_ind = args[i + 1]
 
                 if arg_ind is None:
                     new_args.extend([arg, arg_ind])
+                elif isinstance(arg, ArrayValuesDep):
+                    # Special handling for ArrayValuesDep - preserve original position info
+                    # This is critical for trim operations that need to know if a chunk
+                    # was originally on an edge or in the interior
+                    needs_update = False
+                    sliced_axis_indices = []  # Track which chunk indices are selected
+
+                    for dim_pos, dim_idx in enumerate(arg_ind):
+                        if dim_idx in out_ind:
+                            out_pos = out_ind.index(dim_idx)
+                            if slice_index[out_pos] != slice(None):
+                                needs_update = True
+                                # Figure out which chunk indices are selected
+                                old_chunks = arg.chunks[dim_pos]
+                                out_slice = slice_index[out_pos]
+                                out_size = sum(old_chunks)
+                                start, stop, step = out_slice.indices(out_size)
+                                if step == 1:
+                                    pos = 0
+                                    selected = []
+                                    for ci, cs in enumerate(old_chunks):
+                                        chunk_end = pos + cs
+                                        if start < chunk_end and stop > pos:
+                                            selected.append(ci)
+                                        pos = chunk_end
+                                    sliced_axis_indices.append(selected)
+                                else:
+                                    sliced_axis_indices.append(None)
+                            else:
+                                sliced_axis_indices.append(None)
+                        else:
+                            sliced_axis_indices.append(None)
+
+                    if needs_update:
+                        # Build new chunks and values preserving original positions
+                        new_avd_chunks = tuple(
+                            new_output_chunks[out_ind.index(dim_idx)]
+                            for dim_idx in arg_ind
+                            if dim_idx in out_ind
+                        )
+
+                        # Preserve original values for the selected chunks
+                        # Values are {block_id: (original_block_id, original_num_chunks)}
+                        old_values = arg.values
+                        new_values = {}
+
+                        # Map new block indices to old block indices
+                        new_numblocks = tuple(len(c) for c in new_avd_chunks)
+                        for new_block_id in product(*(range(n) for n in new_numblocks)):
+                            # Convert new block id to original block id
+                            old_block_id = []
+                            for new_idx, selected in zip(
+                                new_block_id, sliced_axis_indices
+                            ):
+                                if selected is not None:
+                                    old_block_id.append(selected[new_idx])
+                                else:
+                                    old_block_id.append(new_idx)
+                            old_block_id = tuple(old_block_id)
+
+                            # Get original values and preserve them
+                            if old_block_id in old_values:
+                                new_values[new_block_id] = old_values[old_block_id]
+                            else:
+                                # Fallback - shouldn't happen but be safe
+                                new_values[new_block_id] = (
+                                    new_block_id,
+                                    new_numblocks,
+                                )
+
+                        new_arg = ArrayValuesDep(new_avd_chunks, new_values)
+                        new_args.extend([new_arg, arg_ind])
+                    else:
+                        new_args.extend([arg, arg_ind])
+                elif not isinstance(arg, ArrayExpr):
+                    # Other non-array arguments with indices - check if they need slicing
+                    for dim_idx in arg_ind:
+                        if dim_idx in out_ind:
+                            out_pos = out_ind.index(dim_idx)
+                            if slice_index[out_pos] != slice(None):
+                                # Can't slice this non-ArrayExpr with indices
+                                return None
+                    new_args.extend([arg, arg_ind])
                 else:
                     arg_slices = []
                     for dim_idx in arg_ind:
                         try:
                             out_pos = out_ind.index(dim_idx)
-                            arg_slices.append(slice_index[out_pos])
+                            out_slice = slice_index[out_pos]
+
+                            # If adjust_chunks changes sizes for this axis,
+                            # we need to map the slice from output to input coordinates
+                            if (
+                                adjust_chunks
+                                and dim_idx in adjust_chunks
+                                and out_slice != slice(None)
+                            ):
+                                out_chunks = adjust_chunks[dim_idx]
+                                in_chunks = arg.chunks[arg_ind.index(dim_idx)]
+                                if len(out_chunks) == len(in_chunks):
+                                    # Same number of chunks, but different sizes
+                                    # Map element-based slice to chunk-based slice
+                                    out_size = sum(out_chunks)
+                                    start, stop, step = out_slice.indices(out_size)
+                                    if step == 1:
+                                        # Find which output chunks are covered
+                                        pos = 0
+                                        first_chunk = None
+                                        last_chunk = None
+                                        for ci, cs in enumerate(out_chunks):
+                                            chunk_end = pos + cs
+                                            if (
+                                                first_chunk is None
+                                                and start < chunk_end
+                                            ):
+                                                first_chunk = ci
+                                            if stop > pos:
+                                                last_chunk = ci
+                                            pos = chunk_end
+                                        # Now compute input slice for those chunks
+                                        in_start = sum(in_chunks[:first_chunk])
+                                        in_stop = sum(in_chunks[: last_chunk + 1])
+                                        arg_slices.append(slice(in_start, in_stop))
+                                    else:
+                                        arg_slices.append(out_slice)
+                                else:
+                                    arg_slices.append(out_slice)
+                            else:
+                                arg_slices.append(out_slice)
                         except ValueError:
                             arg_slices.append(slice(None))
 
                     sliced_arg = new_collection(arg)[tuple(arg_slices)]
                     new_args.extend([sliced_arg.expr, arg_ind])
+
+            # Update adjust_chunks if present to reflect sliced output
+            new_adjust_chunks = bw.operand("adjust_chunks")
+            if new_adjust_chunks and adjust_chunks:
+                # For each symbolic index in adjust_chunks, update based on slice
+                updated_adjust = {}
+                for sym_idx, old_chunks in adjust_chunks.items():
+                    if sym_idx in out_ind:
+                        out_axis = out_ind.index(sym_idx)
+                        idx = slice_index[out_axis]
+                        if idx == slice(None):
+                            updated_adjust[sym_idx] = old_chunks
+                        else:
+                            # Compute new chunks after slicing
+                            # old_chunks = tuple of chunk sizes for this axis
+                            total_size = sum(old_chunks)
+                            start, stop, step = idx.indices(total_size)
+                            if step != 1:
+                                updated_adjust[sym_idx] = old_chunks
+                            else:
+                                # Figure out which chunks are selected
+                                new_chunks = []
+                                pos = 0
+                                for chunk_size in old_chunks:
+                                    chunk_start = pos
+                                    chunk_end = pos + chunk_size
+                                    # Intersection with slice [start, stop)
+                                    sel_start = max(chunk_start, start)
+                                    sel_end = min(chunk_end, stop)
+                                    if sel_end > sel_start:
+                                        new_chunks.append(sel_end - sel_start)
+                                    pos = chunk_end
+                                updated_adjust[sym_idx] = tuple(new_chunks)
+                    else:
+                        updated_adjust[sym_idx] = old_chunks
+                new_adjust_chunks = updated_adjust if updated_adjust else None
 
             result = Blockwise(
                 bw.func,
@@ -984,7 +1297,7 @@ class SliceSlicesIntegers(Slice):
                 bw.operand("name"),
                 bw.operand("token"),
                 bw.operand("dtype"),
-                bw.operand("adjust_chunks"),
+                new_adjust_chunks,
                 bw.operand("new_axes"),
                 bw.operand("align_arrays"),
                 bw.operand("concatenate"),
