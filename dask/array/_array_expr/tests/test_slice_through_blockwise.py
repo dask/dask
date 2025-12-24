@@ -128,6 +128,65 @@ def test_slice_through_broadcast_scalar():
     assert_eq(result, arr[:3, :4] + 5)
 
 
+def test_slice_through_broadcast_size_one_dims():
+    """Slice through Elemwise where inputs have size-1 dims that broadcast.
+
+    When inputs have different size-1 dimensions that broadcast together,
+    slicing the output should preserve those size-1 dimensions rather than
+    applying the output slice to them.
+
+    This test covers the case where:
+    - Input a has shape (1, M, 1) with size-1 dims at positions 0 and 2
+    - Input b has shape (1, 1, N) with size-1 dims at positions 0 and 1
+    - Output broadcasts to (1, M, N)
+    - Slicing output[:, m1:m2, n1:n2] should produce:
+      - a[:, m1:m2, :] + b[:, :, n1:n2]  (preserving size-1 dims)
+    """
+    # Create inputs with size-1 dims in different positions
+    a_np = np.arange(20).reshape(1, 20, 1)
+    b_np = np.arange(30).reshape(1, 1, 30)
+
+    a = da.from_array(a_np, chunks=(1, 10, 1))
+    b = da.from_array(b_np, chunks=(1, 1, 15))
+
+    # Output broadcasts to (1, 20, 30)
+    result = a + b
+    assert result.shape == (1, 20, 30)
+
+    # Slice the output - this should not fail during simplify
+    sliced = result[:, 5:10, 10:20]
+    assert sliced.shape == (1, 5, 10)
+
+    # Simplify should succeed (was failing before fix)
+    simplified = sliced.expr.simplify()
+    assert simplified is not None
+
+    # Verify computed values are correct
+    expected = (a_np + b_np)[:, 5:10, 10:20]
+    assert_eq(sliced, expected)
+
+
+def test_slice_through_where_with_broadcast():
+    """Slice through where() with broadcast condition.
+
+    Regression test for xarray integration - slicing through Where
+    with broadcast inputs was failing due to incorrect size-1 handling.
+    """
+    # Broadcast condition from size-1 dims
+    cond = (
+        da.ones((10, 1, 1), dtype=bool, chunks=(5, 1, 1))
+        & da.ones((1, 20, 1), dtype=bool, chunks=(1, 10, 1))
+        & da.ones((1, 1, 30), dtype=bool, chunks=(1, 1, 15))
+    )
+
+    result = da.where(cond, da.ones((10, 20, 30), chunks=(5, 10, 15)), np.nan)
+    sliced = result[:, 5:15, 10:25]
+
+    # Simplify should succeed (was failing before fix)
+    sliced.expr.simplify()
+    assert_eq(sliced, np.ones((10, 10, 15)))
+
+
 # =============================================================================
 # Case 4: new_axes - Blockwise adds dimensions
 # - Slice on a new axis doesn't correspond to input

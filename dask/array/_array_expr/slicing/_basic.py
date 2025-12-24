@@ -970,15 +970,22 @@ class SliceSlicesIntegers(Slice):
                 # Map output slice to this input's dimensions
                 # arg has indices tuple(range(arg.ndim)[::-1])
                 arg_ind = tuple(range(arg.ndim)[::-1])
+                arg_shape = arg.shape
 
                 # For each dimension of arg, find where its index appears in out_ind
                 # and get the corresponding slice
                 arg_slices = []
-                for dim_idx in arg_ind:
+                for i, dim_idx in enumerate(arg_ind):
                     # Find position of this index in out_ind
                     try:
                         out_pos = out_ind.index(dim_idx)
-                        arg_slices.append(full_index[out_pos])
+                        out_slice = full_index[out_pos]
+                        # If this dimension is size 1 (broadcasting), use slice(None)
+                        # to preserve broadcast semantics
+                        if arg_shape[i] == 1:
+                            arg_slices.append(slice(None))
+                        else:
+                            arg_slices.append(out_slice)
                     except ValueError:
                         # Index not in output (shouldn't happen for elemwise)
                         arg_slices.append(slice(None))
