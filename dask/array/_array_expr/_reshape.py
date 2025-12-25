@@ -64,6 +64,117 @@ class Reshape(ArrayExpr):
             rechunked = self.array.rechunk(self._inchunks)
         return ReshapeLowered(rechunked, self._shape, self._outchunks)
 
+    def _simplify_up(self, parent, dependents):
+        """Allow slice operations to push through Reshape."""
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        return None
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through Reshape.
+
+        Reshape can be pushed through when the slice only affects dimensions
+        that have the same size in both input and output shapes (preserved dims).
+
+        For example:
+            x.reshape((10, 2, 3))[:5]  # (10, 6) -> (10, 2, 3), first dim preserved
+            becomes: x[:5].reshape((5, 2, 3))
+        """
+        from numbers import Integral
+
+        from dask._collections import new_collection
+
+        in_shape = self.array.shape
+        out_shape = self._shape
+        index = slice_expr.index
+
+        # Separate None (newaxis) from real indices
+        # None insertions don't interact with reshape and can be re-applied after
+        none_positions = []  # positions where None appears in original index
+        stripped_index = []  # index without Nones
+        for i, idx in enumerate(index):
+            if idx is None:
+                none_positions.append(i)
+            else:
+                stripped_index.append(idx)
+
+        # Pad stripped index to output ndim
+        out_ndim = len(out_shape)
+        full_index = list(stripped_index) + [slice(None)] * (
+            out_ndim - len(stripped_index)
+        )
+
+        # Find how many leading dimensions are preserved (same size in both shapes)
+        preserved_dims = 0
+        for in_size, out_size in zip(in_shape, out_shape):
+            if in_size == out_size:
+                preserved_dims += 1
+            else:
+                break
+
+        if preserved_dims == 0:
+            return None  # No preserved dimensions, can't push through
+
+        # Check if slice only affects preserved dimensions
+        # (non-preserved dims must all be slice(None))
+        if any(
+            isinstance(idx, Integral) or idx != slice(None)
+            for idx in full_index[preserved_dims:]
+        ):
+            return None
+
+        # Build the input slice (only on preserved dims, same indices)
+        in_ndim = len(in_shape)
+        input_index = list(full_index[:preserved_dims])
+        input_index += [slice(None)] * (in_ndim - preserved_dims)
+
+        # Compute new output shape after slicing
+        new_out_shape = []
+        for idx, size in zip(full_index, out_shape):
+            if isinstance(idx, Integral):
+                # Integer index removes dimension
+                continue
+            elif idx == slice(None):
+                new_out_shape.append(size)
+            else:
+                # Normalize slice
+                start, stop, step = idx.indices(size)
+                if step != 1:
+                    return None  # Don't handle non-unit steps
+                new_out_shape.append(stop - start)
+
+        new_out_shape = tuple(new_out_shape)
+
+        # Apply slice to input, then reshape
+        sliced_input = new_collection(self.array)[tuple(input_index)]
+        result = Reshape(sliced_input.expr, new_out_shape)
+
+        # Re-apply None insertions if any using expand_dims
+        if none_positions:
+            from dask.array._array_expr.manipulation._expand import expand_dims
+
+            # Compute where Nones should be inserted in the OUTPUT of reshape
+            # Account for integer indices that remove dimensions
+            axes = []
+            for pos in none_positions:
+                # Count how many real (non-None) indices come before this position
+                real_before = sum(1 for idx in index[:pos] if idx is not None)
+                # Account for integer indices that removed dimensions
+                ints_before = sum(
+                    1
+                    for idx in stripped_index[:real_before]
+                    if isinstance(idx, Integral)
+                )
+                axes.append(
+                    pos - len([p for p in none_positions if p < pos]) - ints_before
+                )
+
+            return expand_dims(new_collection(result), axis=tuple(axes)).expr
+
+        return result
+
 
 class ReshapeLowered(ArrayExpr):
     """Lowered reshape expression with rechunked input as operand."""

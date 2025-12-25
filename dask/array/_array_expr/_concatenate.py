@@ -63,6 +63,120 @@ class Concatenate(ArrayExpr):
 
         return dsk
 
+    def _simplify_up(self, parent, dependents):
+        """Allow slice and shuffle operations to push through Concatenate."""
+        from dask.array._array_expr._shuffle import Shuffle
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        if isinstance(parent, Shuffle):
+            return self._accept_shuffle(parent)
+        return None
+
+    def _accept_shuffle(self, shuffle_expr):
+        """Accept a shuffle being pushed through Concatenate.
+
+        Can only push through if not shuffling on the concat axis.
+        """
+        from dask.array._array_expr._shuffle import Shuffle
+
+        concat_axis = self.axis
+        shuffle_axis = shuffle_expr.axis
+
+        # Can't shuffle on concat axis (would split indices across arrays)
+        if shuffle_axis == concat_axis:
+            return None
+
+        # Shuffle each input
+        arrays = self.args
+        shuffled_arrays = [
+            Shuffle(a, shuffle_expr.indexer, shuffle_axis, shuffle_expr.operand("name"))
+            for a in arrays
+        ]
+
+        return type(self)(
+            shuffled_arrays[0],
+            concat_axis,
+            self._meta,
+            *shuffled_arrays[1:],
+        )
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through Concatenate.
+
+        Cases:
+        1. Slice on concat axis: select/trim relevant arrays
+        2. Slice on other axis: push to all inputs
+        """
+        from numbers import Integral
+
+        axis = self.axis
+        arrays = self.args
+        index = slice_expr.index
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (self.ndim - len(index))
+
+        # For now, only handle simple slices (no integers that reduce dims)
+        if any(isinstance(idx, Integral) for idx in full_index):
+            return None
+        if any(idx is None for idx in full_index):
+            return None
+
+        axis_slice = full_index[axis]
+
+        # Normalize the axis slice
+        concat_dim_size = sum(a.shape[axis] for a in arrays)
+        if isinstance(axis_slice, slice):
+            start, stop, step = axis_slice.indices(concat_dim_size)
+            if step != 1:
+                return None  # Don't handle non-unit steps
+        else:
+            return None
+
+        # Build sliced arrays
+        sliced_arrays = []
+        cumsum = 0
+        for arr in arrays:
+            arr_size = arr.shape[axis]
+            arr_start = cumsum
+            arr_end = cumsum + arr_size
+
+            # Check if this array overlaps with the slice
+            overlap_start = max(start, arr_start)
+            overlap_end = min(stop, arr_end)
+
+            if overlap_end > overlap_start:
+                # Build slice for this array
+                local_start = overlap_start - arr_start
+                local_stop = overlap_end - arr_start
+
+                # Build full slice tuple for this array
+                arr_slices = list(full_index)
+                arr_slices[axis] = slice(local_start, local_stop)
+
+                sliced_arr = new_collection(arr)[tuple(arr_slices)]
+                sliced_arrays.append(sliced_arr.expr)
+
+            cumsum = arr_end
+
+        if not sliced_arrays:
+            # Empty result - shouldn't happen with valid slice
+            return None
+
+        if len(sliced_arrays) == 1:
+            # Only one array needed - just return it (already sliced)
+            return sliced_arrays[0]
+
+        # Multiple arrays - create new Concatenate
+        return type(self)(
+            sliced_arrays[0],
+            axis,
+            self._meta,
+            *sliced_arrays[1:],
+        )
+
 
 class ConcatenateFinalize(ArrayExpr):
     """Finalize array computation by concatenating all blocks.

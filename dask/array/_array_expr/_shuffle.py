@@ -100,182 +100,103 @@ class Shuffle(ArrayExpr):
         return new_chunks
 
     def _simplify_down(self):
-        """Push shuffle through various operations."""
-        from dask.array._array_expr._blockwise import Blockwise, Elemwise
-        from dask.array._array_expr.manipulation._transpose import Transpose
+        """Push shuffle through various operations using _accept_shuffle pattern."""
+        # Check if child can accept this shuffle
+        if hasattr(self.array, "_accept_shuffle"):
+            return self.array._accept_shuffle(self)
 
-        # Shuffle(Transpose) -> Transpose(Shuffle) with remapped axis
-        if isinstance(self.array, Transpose):
-            return self._pushdown_through_transpose()
+    def _simplify_up(self, parent, dependents):
+        """Allow slice operations to push through Shuffle."""
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
 
-        # Shuffle(Concatenate) -> Concatenate(Shuffle, Shuffle, ...) on non-concat axis
-        from dask.array._array_expr._concatenate import Concatenate
-        from dask.array._array_expr._stack import Stack
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        return None
 
-        if isinstance(self.array, (Concatenate, Stack)):
-            return self._pushdown_through_concatenate()
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through Shuffle.
 
-        # Shuffle(Elemwise) -> Elemwise(Shuffle, Shuffle, ...)
-        if isinstance(self.array, Elemwise):
-            return self._pushdown_through_elemwise()
+        Shuffle reorganizes data along a single axis. We can push slices through:
+        1. Non-shuffle axes: directly push through
+        2. Shuffle axis (step=1): if input indices are contiguous, slice input
+           and adjust the indexer
 
-        # Shuffle(Blockwise) -> Blockwise(Shuffle, ...) when axis not affected
-        if isinstance(self.array, Blockwise):
-            return self._pushdown_through_blockwise()
+        Example (non-shuffle axis):
+            Slice(Shuffle(x, axis=0), [:, 10:20])
+            -> Shuffle(Slice(x, [:, 10:20]), axis=0)
 
-    def _pushdown_through_transpose(self):
-        """Push shuffle through transpose by remapping axis."""
-        from dask.array._array_expr.manipulation._transpose import Transpose
-
-        transpose = self.array
-        axes = transpose.axes
-
-        # Map shuffle axis through transpose: axes[i] tells us which input axis
-        # becomes output axis i. So to shuffle output axis `self.axis`, we need
-        # to shuffle input axis `axes[self.axis]`.
-        input_axis = axes[self.axis]
-
-        shuffled_input = Shuffle(
-            transpose.array, self.indexer, input_axis, self.operand("name")
-        )
-        return Transpose(shuffled_input, axes)
-
-    def _pushdown_through_concatenate(self):
-        """Push shuffle through concatenate/stack on non-concat axis."""
+        Example (shuffle axis, contiguous):
+            Slice(Shuffle(x, axis=0), [100:200, :])
+            -> Shuffle(Slice(x, [input_start:input_stop, :]), adjusted_indexer, axis=0)
+        """
         from dask._collections import new_collection
-        from dask.array._array_expr._stack import Stack
 
-        concat = self.array
-        concat_axis = concat.axis
-        shuffle_axis = self.axis
-
-        # For Stack, the stacked axis is new - adjust shuffle axis accordingly
-        if isinstance(concat, Stack):
-            if shuffle_axis == concat_axis:
-                # Shuffling on the stacked axis itself - can't push through
-                return None
-            # Adjust axis for inputs (they have one fewer dimension)
-            if shuffle_axis > concat_axis:
-                input_shuffle_axis = shuffle_axis - 1
-            else:
-                input_shuffle_axis = shuffle_axis
-        else:
-            # For Concatenate, can't shuffle on concat axis (would split indices across arrays)
-            if shuffle_axis == concat_axis:
-                return None
-            input_shuffle_axis = shuffle_axis
-
-        # Shuffle each input
-        arrays = concat.args
-        shuffled_arrays = [
-            new_collection(
-                Shuffle(a, self.indexer, input_shuffle_axis, self.operand("name"))
-            )
-            for a in arrays
-        ]
-
-        return type(concat)(
-            shuffled_arrays[0].expr,
-            concat_axis,
-            concat._meta,
-            *[a.expr for a in shuffled_arrays[1:]],
-        )
-
-    def _pushdown_through_elemwise(self):
-        """Push shuffle through elemwise by shuffling each input."""
-        from dask.array._array_expr._blockwise import Elemwise
-        from dask.array.core import is_scalar_for_elemwise
-
-        elemwise = self.array
         axis = self.axis
+        index = slice_expr.index
         indexer = self.indexer
-        name = self.operand("name")
 
-        # Only push through if all array inputs have enough dimensions
-        for arg in elemwise.elemwise_args:
-            if is_scalar_for_elemwise(arg):
-                continue
-            if arg.ndim <= axis:
-                return None
+        # Pad index to full length
+        full_index = list(index) + [slice(None)] * (len(self.shape) - len(index))
 
-        # Check where/out as well
-        if hasattr(elemwise.where, "ndim") and elemwise.where.ndim <= axis:
-            return None
-        if hasattr(elemwise.out, "ndim") and elemwise.out.ndim <= axis:
-            return None
+        # Check if we're slicing on the shuffle axis
+        axis_slice = full_index[axis]
 
-        # Shuffle each array input
-        new_args = [
-            arg if is_scalar_for_elemwise(arg) else Shuffle(arg, indexer, axis, name)
-            for arg in elemwise.elemwise_args
-        ]
+        if axis_slice == slice(None):
+            # Not slicing shuffle axis - push through directly
+            sliced_input = new_collection(self.array)[tuple(full_index)]
+            return Shuffle(
+                sliced_input.expr,
+                indexer,
+                self.axis,
+                self.operand("name"),
+            )
 
-        # Shuffle where/out if they are arrays
-        new_where = elemwise.where
-        if hasattr(new_where, "ndim"):
-            new_where = Shuffle(new_where, indexer, axis, name)
+        # Slicing on shuffle axis - check if we can handle it
+        if not isinstance(axis_slice, slice):
+            return None  # Integer indexing removes the dimension
 
-        new_out = elemwise.out
-        if hasattr(new_out, "ndim"):
-            new_out = Shuffle(new_out, indexer, axis, name)
-
-        return Elemwise(
-            elemwise.op,
-            elemwise.operand("dtype"),
-            elemwise.operand("name"),
-            new_where,
-            new_out,
-            elemwise.operand("_user_kwargs"),
-            *new_args,
-        )
-
-    def _pushdown_through_blockwise(self):
-        """Push shuffle through blockwise when shuffle axis is not modified."""
-        import toolz
-
-        from dask.array._array_expr._blockwise import Blockwise
-
-        blockwise = self.array
-        axis = self.axis
-        out_ind = blockwise.out_ind
-
-        # Get the index label for the shuffle axis
-        shuffle_ind = out_ind[axis]
-
-        # Can't push through if shuffle axis is a new axis or has adjusted chunks
-        if blockwise.new_axes and shuffle_ind in blockwise.new_axes:
-            return None
-        if blockwise.adjust_chunks and shuffle_ind in blockwise.adjust_chunks:
+        # Only handle step=1 slices
+        if axis_slice.step is not None and axis_slice.step != 1:
             return None
 
-        # Shuffle each array input on the corresponding axis
-        new_args = []
-        for arr, ind in toolz.partition(2, blockwise.args):
-            if ind is None:
-                # Literal argument
-                new_args.extend([arr, ind])
-            elif shuffle_ind in ind:
-                # Find the axis in this input that corresponds to shuffle_ind
-                input_axis = ind.index(shuffle_ind)
-                shuffled = Shuffle(arr, self.indexer, input_axis, self.operand("name"))
-                new_args.extend([shuffled, ind])
-            else:
-                # This input doesn't have the shuffle dimension
-                new_args.extend([arr, ind])
+        # Normalize slice bounds
+        axis_size = self.shape[axis]
+        start, stop, _ = axis_slice.indices(axis_size)
+        if start >= stop:
+            return None  # Empty slice
 
-        return Blockwise(
-            blockwise.func,
-            blockwise.out_ind,
-            blockwise.operand("name"),
-            blockwise.token,
-            blockwise.operand("dtype"),
-            blockwise.adjust_chunks,
-            blockwise.new_axes,
-            blockwise.align_arrays,
-            blockwise.concatenate,
-            blockwise._meta_provided,
-            blockwise.kwargs,
-            *new_args,
+        # Slice the indexer
+        new_indexer = indexer[start:stop]
+
+        # Find all input indices needed
+        input_indices = set()
+        for chunk in new_indexer:
+            input_indices.update(chunk)
+
+        if not input_indices:
+            return None  # No indices
+
+        input_min = min(input_indices)
+        input_max = max(input_indices)
+
+        # Check if input indices are contiguous
+        if len(input_indices) != input_max - input_min + 1:
+            return None  # Non-contiguous, can't use simple slice
+
+        # Adjust indexer: subtract input_min from each index
+        adjusted_indexer = [[idx - input_min for idx in chunk] for chunk in new_indexer]
+
+        # Build slice for input array
+        input_slice = list(full_index)
+        input_slice[axis] = slice(input_min, input_max + 1)
+
+        sliced_input = new_collection(self.array)[tuple(input_slice)]
+
+        return Shuffle(
+            sliced_input.expr,
+            adjusted_indexer,
+            self.axis,
+            self.operand("name"),
         )
 
     def _layer(self) -> dict:

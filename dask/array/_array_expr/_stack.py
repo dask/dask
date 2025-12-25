@@ -62,6 +62,125 @@ class Stack(ArrayExpr):
         ]
         return dict(zip(keys, values))
 
+    def _simplify_up(self, parent, dependents):
+        """Allow slice and shuffle operations to push through Stack."""
+        from dask.array._array_expr._shuffle import Shuffle
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        if isinstance(parent, Shuffle):
+            return self._accept_shuffle(parent)
+        return None
+
+    def _accept_shuffle(self, shuffle_expr):
+        """Accept a shuffle being pushed through Stack.
+
+        Stack adds a new dimension at axis. Can't shuffle on the stacked axis.
+        For other axes, adjust axis index for inputs (they have one fewer dim).
+        """
+        from dask.array._array_expr._shuffle import Shuffle
+
+        stack_axis = self.axis
+        shuffle_axis = shuffle_expr.axis
+
+        # Can't shuffle on the stacked axis itself
+        if shuffle_axis == stack_axis:
+            return None
+
+        # Adjust axis for inputs (they have one fewer dimension)
+        if shuffle_axis > stack_axis:
+            input_shuffle_axis = shuffle_axis - 1
+        else:
+            input_shuffle_axis = shuffle_axis
+
+        # Shuffle each input
+        arrays = self.args
+        shuffled_arrays = [
+            Shuffle(
+                a,
+                shuffle_expr.indexer,
+                input_shuffle_axis,
+                shuffle_expr.operand("name"),
+            )
+            for a in arrays
+        ]
+
+        return type(self)(
+            shuffled_arrays[0],
+            stack_axis,
+            self._meta,
+            *shuffled_arrays[1:],
+        )
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through Stack.
+
+        Stack adds a new dimension at axis. Cases:
+        1. Slice on stacked axis: select subset of inputs
+        2. Slice on other axes: push to all inputs (adjusting for added dim)
+        """
+        from numbers import Integral
+
+        from dask._collections import new_collection
+        from dask.array.utils import meta_from_array
+
+        axis = self.axis
+        arrays = self.args
+        index = slice_expr.index
+
+        # Pad index to full length (output has one more dim than inputs)
+        full_index = index + (slice(None),) * (self.ndim - len(index))
+
+        # For now, only handle simple slices (no integers that reduce dims)
+        if any(isinstance(idx, Integral) for idx in full_index):
+            return None
+        if any(idx is None for idx in full_index):
+            return None
+
+        # Handle the stacked axis slice
+        stacked_axis_slice = full_index[axis]
+        n_arrays = len(arrays)
+
+        if isinstance(stacked_axis_slice, slice):
+            start, stop, step = stacked_axis_slice.indices(n_arrays)
+            if step != 1:
+                return None
+            selected_arrays = arrays[start:stop]
+        else:
+            return None
+
+        if not selected_arrays:
+            return None
+
+        # Build slice for the other axes (remove the stacked axis from index)
+        other_slices = full_index[:axis] + full_index[axis + 1 :]
+
+        # Check if we need to slice the other axes
+        needs_other_slice = any(s != slice(None) for s in other_slices)
+
+        # Slice each selected array on the other axes
+        sliced_arrays = []
+        for arr in selected_arrays:
+            if needs_other_slice:
+                sliced_arr = new_collection(arr)[other_slices]
+                sliced_arrays.append(sliced_arr.expr)
+            else:
+                sliced_arrays.append(arr)
+
+        # Compute new meta for the resulting stack
+        new_meta = np.stack(
+            [meta_from_array(new_collection(a)) for a in sliced_arrays], axis=axis
+        )
+
+        # Create new Stack with selected/sliced arrays
+        return type(self)(
+            sliced_arrays[0],
+            axis,
+            new_meta,
+            *sliced_arrays[1:],
+        )
+
 
 def stack(seq, axis=0, allow_unknown_chunksizes=False):
     """

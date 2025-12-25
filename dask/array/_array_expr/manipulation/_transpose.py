@@ -129,6 +129,98 @@ class Transpose(Blockwise):
             *new_args,
         )
 
+    def _simplify_up(self, parent, dependents):
+        """Allow slice and shuffle operations to push through Transpose."""
+        from dask.array._array_expr._shuffle import Shuffle
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        if isinstance(parent, Shuffle):
+            return self._accept_shuffle(parent)
+        return None
+
+    def _accept_shuffle(self, shuffle_expr):
+        """Accept a shuffle being pushed through Transpose.
+
+        Maps shuffle axis through transpose to get input axis.
+        """
+        axes = self.axes
+        shuffle_axis = shuffle_expr.axis
+
+        # Map shuffle axis through transpose: axes[i] tells us which input axis
+        # becomes output axis i. So to shuffle output axis `shuffle_axis`, we need
+        # to shuffle input axis `axes[shuffle_axis]`.
+        input_axis = axes[shuffle_axis]
+
+        from dask.array._array_expr._shuffle import Shuffle
+
+        shuffled_input = Shuffle(
+            self.array, shuffle_expr.indexer, input_axis, shuffle_expr.operand("name")
+        )
+        return Transpose(shuffled_input, axes)
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through Transpose.
+
+        Maps output slice indices through transpose axes to get input slice.
+        """
+        from numbers import Integral
+
+        from dask._collections import new_collection
+
+        axes = self.axes
+        index = slice_expr.index
+
+        # Don't handle None/newaxis (adds dimensions)
+        if any(idx is None for idx in index):
+            return None
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (self.ndim - len(index))
+
+        # Map output slice through transpose axes to get input slice
+        # axes[i] tells us which input axis becomes output axis i
+        # So output axis i gets slice full_index[i], which should go to input axis axes[i]
+        input_index = [slice(None)] * len(axes)
+        for out_axis, in_axis in enumerate(axes):
+            input_index[in_axis] = full_index[out_axis]
+
+        sliced_input = new_collection(self.array)[tuple(input_index)]
+
+        # Check if any dimensions were removed by integer indexing
+        has_integers = any(isinstance(idx, Integral) for idx in full_index)
+
+        if not has_integers:
+            # No dimension changes - just apply original transpose
+            return Transpose(sliced_input.expr, axes)
+
+        # Integer indices remove dimensions - compute new axes for remaining dims
+        # Track which input dimensions remain (those not indexed by integers)
+        remaining_input_dims = [
+            in_axis
+            for out_axis, in_axis in enumerate(axes)
+            if not isinstance(full_index[out_axis], Integral)
+        ]
+
+        if len(remaining_input_dims) <= 1:
+            # 0 or 1 dimension left - no transpose needed
+            return sliced_input.expr
+
+        # Map old input dim indices to new (post-slice) indices
+        # After slicing, input dims are renumbered 0, 1, 2, ...
+        sorted_remaining = sorted(remaining_input_dims)
+        dim_map = {old: new for new, old in enumerate(sorted_remaining)}
+
+        # Build new axes: for each remaining output dim, what's the new input dim?
+        new_axes = tuple(dim_map[in_dim] for in_dim in remaining_input_dims)
+
+        # Check if it's an identity transpose
+        if new_axes == tuple(range(len(new_axes))):
+            return sliced_input.expr
+
+        return Transpose(sliced_input.expr, new_axes)
+
 
 def transpose(a, axes=None):
     """Reverse or permute the axes of an array.

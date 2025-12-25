@@ -865,7 +865,7 @@ def test_shuffle_does_not_push_through_blockwise_adjust_chunks():
     assert_eq(result, mapped.compute()[indices, :])
 
 
-# --- SlicesWrapNone (None indexing) Pushdown Tests ---
+# --- ExpandDims (None indexing) Pushdown Tests ---
 
 
 def test_none_slice_pushes_through_elemwise():
@@ -901,8 +901,8 @@ def test_none_slice_multiple_nones():
 
 
 def test_none_slice_no_slicing():
-    """Slice with only None (dimension expansion) remains SlicesWrapNone."""
-    from dask.array._array_expr.slicing._basic import SlicesWrapNone
+    """Slice with only None (dimension expansion) uses ExpandDims."""
+    from dask.array._array_expr.manipulation._expand import ExpandDims
 
     x = da.ones((10, 10), chunks=5)
     y = da.ones((10, 10), chunks=5)
@@ -911,8 +911,8 @@ def test_none_slice_no_slicing():
     result = (x + y)[None, :, :]
 
     opt = result.expr.simplify()
-    # SlicesWrapNone is not normalized to Reshape to avoid issues with fusion
-    assert isinstance(opt, SlicesWrapNone)
+    # ExpandDims is used for dimension expansion (not Reshape, for fusion compat)
+    assert isinstance(opt, ExpandDims)
 
     # Verify correctness
     x_np = np.ones((10, 10))

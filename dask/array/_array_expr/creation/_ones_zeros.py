@@ -59,6 +59,75 @@ class BroadcastTrick(ArrayExpr):
         """BroadcastTrick has no dependencies, so this is never called."""
         return block_id
 
+    def _simplify_up(self, parent, dependents):
+        """Allow slice operations to simplify BroadcastTrick."""
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        return None
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice by creating a smaller BroadcastTrick.
+
+        For ones, zeros, full, empty - just create a new instance with
+        the sliced shape and chunks.
+        """
+        from numbers import Integral
+
+        index = slice_expr.index
+        old_shape = self.shape
+        old_chunks = self.chunks
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (len(old_shape) - len(index))
+
+        # Handle integers and newaxis - for now, only handle simple slices
+        if any(idx is None for idx in full_index):
+            return None
+        if any(isinstance(idx, Integral) for idx in full_index):
+            return None
+
+        # Compute new shape and chunks from slices
+        new_shape = []
+        new_chunks = []
+        for i, idx in enumerate(full_index):
+            if isinstance(idx, slice):
+                # Normalize slice
+                start, stop, step = idx.indices(old_shape[i])
+                if step != 1:
+                    return None  # Don't handle non-unit steps
+                new_dim = max(0, stop - start)
+                new_shape.append(new_dim)
+
+                # Compute new chunks for this dimension
+                old_axis_chunks = old_chunks[i]
+                axis_chunks = []
+                cumsum = 0
+                for chunk_size in old_axis_chunks:
+                    chunk_start = cumsum
+                    chunk_end = cumsum + chunk_size
+                    cumsum = chunk_end
+
+                    # Intersection of [chunk_start, chunk_end) with [start, stop)
+                    overlap_start = max(chunk_start, start)
+                    overlap_end = min(chunk_end, stop)
+                    if overlap_end > overlap_start:
+                        axis_chunks.append(overlap_end - overlap_start)
+
+                new_chunks.append(tuple(axis_chunks) if axis_chunks else (0,))
+            else:
+                return None  # Unexpected index type
+
+        # Substitute shape and chunks, clear name for new expression
+        return self.substitute_parameters(
+            {
+                "shape": tuple(new_shape),
+                "chunks": tuple(new_chunks),
+                "name": None,
+            }
+        )
+
 
 class Ones(BroadcastTrick):
     func = staticmethod(np.ones_like)
