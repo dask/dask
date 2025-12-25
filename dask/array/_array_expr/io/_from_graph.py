@@ -22,25 +22,32 @@ class FromGraph(ArrayExpr):
         return self.operand("name_prefix") + "-" + self.deterministic_token
 
     def _layer(self):
-        dsk = dict(self.operand("layer"))
-        # Build set of keys that belong to our layer (the recorded output keys)
+        layer = self.operand("layer")
         our_keys = set(self.operand("keys"))
+        is_hlg = hasattr(layer, "layers")
 
+        # Persist case: layer is a dict of computed values with potentially
+        # different keys (optimization can change key names). Just rename.
+        if not is_hlg:
+            layer_keys = {k for k in layer if isinstance(k, tuple)}
+            if layer_keys and not (layer_keys & our_keys):
+                return {
+                    (self._name, *k[1:]) if isinstance(k, tuple) else k: v
+                    for k, v in layer.items()
+                }
+
+        # HLG case (e.g., from BlockView): contains tasks and dependencies.
+        # Rename output keys and preserve dependency structure.
+        dsk = dict(layer)
         result = {}
-        for k in list(dsk.keys()):
-            if not isinstance(k, tuple):
-                raise TypeError(f"Expected tuple, got {type(k)}")
-            orig = dsk[k]
+        for k, v in dsk.items():
             if k in our_keys:
-                # This is one of our output keys - rename to use self._name
-                if not istask(orig):
-                    # Simple alias (e.g., blocks -> arange key)
-                    result[(self._name, *k[1:])] = orig
+                new_key = (self._name, *k[1:])
+                if istask(v):
+                    result[new_key] = k  # Alias to original
+                    result[k] = v  # Keep original task
                 else:
-                    # Task - create alias and keep original task
-                    result[(self._name, *k[1:])] = k
-                    result[k] = orig
+                    result[new_key] = v  # Simple rename
             else:
-                # Dependency key - keep as-is without renaming
-                result[k] = orig
+                result[k] = v  # Dependency - keep as-is
         return result

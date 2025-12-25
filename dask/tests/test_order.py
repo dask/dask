@@ -2358,6 +2358,7 @@ def test_xarray_rechunk_map_reduce_cohorts(use_longest_path):
 @pytest.mark.xfail(
     da and da._array_expr_enabled(),
     reason="array-expr lacks __dask_layers__ which xarray uses internally",
+    strict=False,  # May pass with updated xarray
 )
 def test_xarray_8414():
     # https://github.com/pydata/xarray/issues/8414#issuecomment-1793860552

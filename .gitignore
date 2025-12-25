@@ -17,6 +17,7 @@ log
 coverage.xml
 .DS_Store
 *.sqlite
+*.zarr
 *.swp
 *.swo
 .cache/
