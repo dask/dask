@@ -60,12 +60,42 @@ class BroadcastTrick(ArrayExpr):
         return block_id
 
     def _simplify_up(self, parent, dependents):
-        """Allow slice operations to simplify BroadcastTrick."""
+        """Allow slice and shuffle operations to simplify BroadcastTrick."""
+        from dask.array._array_expr._shuffle import Shuffle
         from dask.array._array_expr.slicing import SliceSlicesIntegers
 
         if isinstance(parent, SliceSlicesIntegers):
             return self._accept_slice(parent)
+        if isinstance(parent, Shuffle):
+            return self._accept_shuffle(parent)
         return None
+
+    def _accept_shuffle(self, shuffle_expr):
+        """Accept a shuffle - create new BroadcastTrick with shuffled shape.
+
+        Since all values are identical, we don't need to actually shuffle,
+        just create a new constant array with the correct output shape.
+        """
+        axis = shuffle_expr.axis
+        indexer = shuffle_expr.indexer
+
+        # Compute new shape - output size is total indices in indexer
+        new_size = sum(len(chunk) for chunk in indexer)
+        new_shape = list(self.shape)
+        new_shape[axis] = new_size
+
+        # Compute new chunks - one chunk per indexer group
+        new_axis_chunks = tuple(len(chunk) for chunk in indexer)
+        new_chunks = list(self.chunks)
+        new_chunks[axis] = new_axis_chunks
+
+        return self.substitute_parameters(
+            {
+                "shape": tuple(new_shape),
+                "chunks": tuple(new_chunks),
+                "name": None,
+            }
+        )
 
     def _accept_slice(self, slice_expr):
         """Accept a slice by creating a smaller BroadcastTrick.

@@ -57,12 +57,48 @@ class BroadcastTo(ArrayExpr):
         return dsk
 
     def _simplify_up(self, parent, dependents):
-        """Allow slice operations to push through BroadcastTo."""
+        """Allow slice and shuffle operations to push through BroadcastTo."""
+        from dask.array._array_expr._shuffle import Shuffle
         from dask.array._array_expr.slicing import SliceSlicesIntegers
 
         if isinstance(parent, SliceSlicesIntegers):
             return self._accept_slice(parent)
+        if isinstance(parent, Shuffle):
+            return self._accept_shuffle(parent)
         return None
+
+    def _accept_shuffle(self, shuffle_expr):
+        """Accept a shuffle being pushed through BroadcastTo.
+
+        - Shuffle on a new dimension (added by broadcast): can't push through
+        - Shuffle on dimension broadcast from size 1: no-op, return self
+        - Shuffle on dimension with real data: push through to input
+        """
+        from dask.array._array_expr._shuffle import Shuffle
+
+        axis = shuffle_expr.axis
+        ndim_new = len(self._shape) - self.array.ndim
+
+        # Shuffle on a new dimension (added by broadcast) - can't push through
+        if axis < ndim_new:
+            return None
+
+        # Map to input axis
+        input_axis = axis - ndim_new
+        input_size = self.array.shape[input_axis]
+
+        # If input dimension is size 1 (broadcasted), shuffle is a no-op
+        if input_size == 1:
+            return self
+
+        # Push shuffle through to input
+        shuffled_input = Shuffle(
+            self.array,
+            shuffle_expr.indexer,
+            input_axis,
+            shuffle_expr.operand("name"),
+        )
+        return BroadcastTo(shuffled_input, self._shape, self._chunks, self._meta)
 
     def _accept_slice(self, slice_expr):
         """Accept a slice being pushed through BroadcastTo.
