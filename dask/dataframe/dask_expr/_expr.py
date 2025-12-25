@@ -3781,6 +3781,9 @@ class Fused(Blockwise):
     """
 
     _parameters = ["exprs"]
+    _optimize_list_operands = (
+        False  # Don't traverse exprs during optimization, only during substitute
+    )
 
     def dependencies(self):
         """Return external dependencies not included in the fused group."""
@@ -3793,6 +3796,50 @@ class Fused(Blockwise):
                     external_deps.append(dep)
                     seen.add(dep._name)
         return external_deps
+
+    def _substitute_operands(self, old, new, _seen, substitute_literal):
+        """Traverse into exprs list for substitution.
+
+        Fused needs to traverse its exprs list during substitution (to update
+        references when an expression is replaced), but NOT during
+        rewrite/simplify/lower (which would modify the fused group).
+        """
+        new_exprs = []
+        update = False
+        for operand in self.operands:
+            if isinstance(operand, (list, tuple)):
+                # Handle the exprs operand
+                new_items = []
+                list_changed = False
+                for item in operand:
+                    if isinstance(item, Expr):
+                        new_item = item._substitute(old, new, _seen)
+                        if new_item._name != item._name:
+                            list_changed = True
+                        new_items.append(new_item)
+                    else:
+                        new_items.append(item)
+                if list_changed:
+                    update = True
+                    new_exprs.append(type(operand)(new_items))
+                else:
+                    new_exprs.append(operand)
+            elif isinstance(operand, Expr):
+                val = operand._substitute(old, new, _seen)
+                if operand._name != val._name:
+                    update = True
+                new_exprs.append(val)
+            elif (
+                substitute_literal
+                and not isinstance(operand, bool)
+                and isinstance(operand, type(old))
+                and operand == old
+            ):
+                new_exprs.append(new)
+                update = True
+            else:
+                new_exprs.append(operand)
+        return new_exprs, update
 
     @functools.cached_property
     def _meta(self):

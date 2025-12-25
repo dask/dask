@@ -58,6 +58,10 @@ class Expr:
 
     _pickle_functools_cache: bool = True
 
+    # Whether to traverse list/tuple operands during optimization (rewrite/simplify/lower).
+    # Set to False for Fused classes that need substitute-only traversal.
+    _optimize_list_operands: bool = True
+
     operands: list
 
     _determ_token: str | None
@@ -384,15 +388,18 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
-            # Only descend into list/tuple operands for classes with custom dependencies()
-            has_custom_deps = type(expr).dependencies is not Expr.dependencies
+            # Traverse list/tuple operands if class opts in via custom dependencies() and _optimize_list_operands
+            traverse_lists = (
+                type(expr).dependencies is not Expr.dependencies
+                and expr._optimize_list_operands
+            )
             for operand in expr.operands:
                 if isinstance(operand, Expr):
                     new = operand.rewrite(kind=kind, rewritten=rewritten)
                     rewritten[operand._name] = new
                     if new._name != operand._name:
                         changed = True
-                elif has_custom_deps and isinstance(operand, (list, tuple)):
+                elif traverse_lists and isinstance(operand, (list, tuple)):
                     new_items = []
                     list_changed = False
                     for item in operand:
@@ -470,8 +477,11 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
-            # Only descend into list/tuple operands for classes with custom dependencies()
-            has_custom_deps = type(expr).dependencies is not Expr.dependencies
+            # Traverse list/tuple operands if class opts in via custom dependencies() and _optimize_list_operands
+            traverse_lists = (
+                type(expr).dependencies is not Expr.dependencies
+                and expr._optimize_list_operands
+            )
             for operand in expr.operands:
                 if isinstance(operand, Expr):
                     # Bandaid for now, waiting for Singleton
@@ -482,7 +492,7 @@ class Expr:
                     simplified[operand._name] = new
                     if new._name != operand._name:
                         changed = True
-                elif has_custom_deps and isinstance(operand, (list, tuple)):
+                elif traverse_lists and isinstance(operand, (list, tuple)):
                     new_items = []
                     list_changed = False
                     for item in operand:
@@ -563,14 +573,17 @@ class Expr:
         # Lower all children
         new_operands = []
         changed = False
-        # Only descend into list/tuple operands for classes with custom dependencies()
-        has_custom_deps = type(out).dependencies is not Expr.dependencies
+        # Traverse list/tuple operands if class opts in via custom dependencies() and _optimize_list_operands
+        traverse_lists = (
+            type(out).dependencies is not Expr.dependencies
+            and out._optimize_list_operands
+        )
         for operand in out.operands:
             if isinstance(operand, Expr):
                 new = operand.lower_once(lowered)
                 if new._name != operand._name:
                     changed = True
-            elif has_custom_deps and isinstance(operand, (list, tuple)):
+            elif traverse_lists and isinstance(operand, (list, tuple)):
                 new_items = []
                 list_changed = False
                 for item in operand:
@@ -719,6 +732,22 @@ class Expr:
             if isinstance(old, bool):
                 raise TypeError("Arguments to `substitute` cannot be bool.")
 
+        new_exprs, update = self._substitute_operands(
+            old, new, _seen, substitute_literal
+        )
+
+        if update:  # Only recreate if something changed
+            return type(self)(*new_exprs)
+        else:
+            _seen.add(self._name)
+        return self
+
+    def _substitute_operands(self, old, new, _seen, substitute_literal):
+        """Substitute operands and return (new_operands, changed).
+
+        Subclasses can override this to handle special operand structures
+        like list/tuple operands containing Exprs.
+        """
         new_exprs = []
         update = False
         # Only descend into list/tuple operands for classes with custom dependencies()
@@ -755,12 +784,7 @@ class Expr:
                 update = True
             else:
                 new_exprs.append(operand)
-
-        if update:  # Only recreate if something changed
-            return type(self)(*new_exprs)
-        else:
-            _seen.add(self._name)
-        return self
+        return new_exprs, update
 
     def substitute_parameters(self, substitutions: dict) -> Expr:
         """Substitute specific `Expr` parameters
