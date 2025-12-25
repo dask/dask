@@ -312,5 +312,5 @@ def concatenate_arrays(arrs, sorter, axis):
 
 def convert_key(key, chunk, axis):
     key = list(key)
-    key.insert(axis, chunk)
+    key.insert(axis, int(chunk))  # Normalize np.int64 to Python int
     return tuple(key)
