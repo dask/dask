@@ -92,7 +92,8 @@ class Rechunk(ArrayExpr):
 
         # Rechunk(Rechunk(x)) -> single Rechunk to final chunks
         # Only match Rechunk, not TasksRechunk (which is already lowered)
-        if type(self.array) is Rechunk:
+        # Don't merge if inner has method='p2p' - preserve explicit p2p semantics
+        if type(self.array) is Rechunk and self.array.method != "p2p":
             return Rechunk(
                 self.array.array,
                 self._chunks,
@@ -118,7 +119,8 @@ class Rechunk(ArrayExpr):
             return self._pushdown_through_concatenate()
 
         # Rechunk(IO) -> IO with new chunks (if IO supports it)
-        if getattr(self.array, "_can_rechunk_pushdown", False):
+        # Skip if method='p2p' is explicitly requested - user wants distributed shuffle
+        if getattr(self.array, "_can_rechunk_pushdown", False) and self.method != "p2p":
             # Keep the same name prefix - the token will change with the new chunks
             return self.array.substitute_parameters({"_chunks": self.chunks})
 
@@ -255,7 +257,13 @@ class Rechunk(ArrayExpr):
             self.array.chunks, self.chunks, threshold=self.threshold
         )
         if method == "p2p":
-            raise NotImplementedError
+            return P2PRechunk(
+                self.array,
+                self.chunks,
+                self.threshold,
+                self.block_size_limit,
+                self.balance,
+            )
         else:
             return TasksRechunk(
                 self.array, self.chunks, self.threshold, self.block_size_limit
@@ -378,6 +386,119 @@ def _compute_rechunk(old_name, old_chunks, chunks, level, name):
     return name, chunks, {**x2, **intermediates}
 
 
+class P2PRechunk(ArrayExpr):
+    """P2P rechunk expression using distributed shuffle."""
+
+    _parameters = ["array", "_chunks", "threshold", "block_size_limit", "balance"]
+    _defaults = {
+        "threshold": None,
+        "block_size_limit": None,
+        "balance": False,
+    }
+
+    @property
+    def _meta(self):
+        return self.array._meta
+
+    @property
+    def _name(self):
+        return "rechunk-p2p-" + tokenize(*self.operands)
+
+    @cached_property
+    def chunks(self):
+        return self.operand("_chunks")
+
+    @cached_property
+    def _prechunked_chunks(self):
+        """Calculate chunks needed before the p2p shuffle."""
+        from distributed.shuffle._rechunk import _calculate_prechunking
+
+        return _calculate_prechunking(
+            self.array.chunks,
+            self.chunks,
+            self.array.dtype,
+            self.block_size_limit,
+        )
+
+    @cached_property
+    def _prechunked_array(self):
+        """Return the input array, potentially prechunked."""
+        prechunked = self._prechunked_chunks
+        if prechunked != self.array.chunks:
+            return TasksRechunk(
+                self.array,
+                prechunked,
+                self.threshold,
+                self.block_size_limit,
+            )
+        return self.array
+
+    def _simplify_down(self):
+        # P2PRechunk is a lowered form - don't apply further simplifications
+        return None
+
+    def _lower(self):
+        return None
+
+    def _layer(self):
+        from distributed.shuffle._rechunk import (
+            _split_partials,
+            partial_concatenate,
+            partial_rechunk,
+        )
+
+        import dask
+        from dask.array.rechunk import old_to_new
+
+        input_name = self._prechunked_array.name
+        input_chunks = self._prechunked_chunks
+        chunks = self.chunks
+        token = tokenize(*self.operands)
+        disk = dask.config.get("distributed.p2p.storage.disk")
+
+        _old_to_new = old_to_new(input_chunks, chunks)
+
+        # Create keepmap (all True - no culling at expression level)
+        shape = tuple(len(axis) for axis in chunks)
+        keepmap = np.ones(shape, dtype=bool)
+
+        dsk = {}
+        for ndpartial in _split_partials(_old_to_new):
+            partial_keepmap = keepmap[ndpartial.new]
+            output_count = np.sum(partial_keepmap)
+            if output_count == 0:
+                continue
+            elif output_count == 1:
+                # Single output chunk - use simple concatenation
+                dsk.update(
+                    partial_concatenate(
+                        input_name=input_name,
+                        input_chunks=input_chunks,
+                        ndpartial=ndpartial,
+                        token=token,
+                        keepmap=keepmap,
+                        old_to_new=_old_to_new,
+                    )
+                )
+            else:
+                # Multiple output chunks - use p2p shuffle
+                dsk.update(
+                    partial_rechunk(
+                        input_name=input_name,
+                        input_chunks=input_chunks,
+                        chunks=chunks,
+                        ndpartial=ndpartial,
+                        token=token,
+                        disk=disk,
+                        keepmap=keepmap,
+                    )
+                )
+        return dsk
+
+    def dependencies(self):
+        return [self._prechunked_array]
+
+
 def rechunk(
     x,
     chunks="auto",
@@ -444,7 +565,12 @@ def rechunk(
     >>> x.rechunk(chunks=(400, -1), balance=True).chunks
     ((500, 500), (1000,))
     """
+    import dask
     from dask._collections import new_collection
+
+    # Capture config value at creation time, not during lowering
+    if method is None:
+        method = dask.config.get("array.rechunk.method", None)
 
     return new_collection(
         x.expr.rechunk(chunks, threshold, block_size_limit, balance, method)
