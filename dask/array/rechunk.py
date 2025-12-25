@@ -333,6 +333,14 @@ def rechunk(
     >>> x.rechunk(chunks=(400, -1), balance=True).chunks
     ((500, 500), (1000,))
     """
+    # Delegate to expression-based rechunk if array-expr is enabled and input is expr-based
+    from dask.array import _array_expr_enabled
+
+    if _array_expr_enabled() and hasattr(x, "expr"):
+        from dask.array._array_expr._rechunk import rechunk as expr_rechunk
+
+        return expr_rechunk(x, chunks, threshold, block_size_limit, balance, method)
+
     # don't rechunk if array is empty
     if x.ndim > 0 and all(s == 0 for s in x.shape):
         return x
