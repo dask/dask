@@ -448,5 +448,92 @@ class PartialReduce(ArrayExpr):
 
         return meta
 
+    def _simplify_up(self, parent, dependents):
+        """Allow slice operations to push through PartialReduce."""
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        return None
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through this PartialReduce.
+
+        For x.sum(axis=0)[:5], we transform to x[:, :5].sum(axis=0).
+        The key is mapping output slice indices back to input indices,
+        inserting slice(None) for the reduced axes.
+        """
+        from numbers import Integral
+
+        from dask._collections import new_collection
+
+        index = slice_expr.index
+        input_array = self.array
+
+        # Don't handle None/newaxis
+        if any(idx is None for idx in index):
+            return None
+
+        # Get reduced axes from split_every
+        reduced_axes = set(self.split_every.keys())
+        keepdims = self.keepdims
+        input_ndim = input_array.ndim
+
+        if keepdims:
+            # With keepdims, output has same ndim as input
+            full_index = index + (slice(None),) * (input_ndim - len(index))
+        else:
+            # Without keepdims, reduced axes are removed from output
+            out_axis = [i for i in range(input_ndim) if i not in reduced_axes]
+            output_ndim = len(out_axis)
+            full_index = index + (slice(None),) * (output_ndim - len(index))
+
+        # Convert integers to size-1 slices to preserve dimensions
+        slice_index = tuple(
+            slice(idx, idx + 1) if isinstance(idx, Integral) else idx
+            for idx in full_index
+        )
+        has_integers = any(isinstance(idx, Integral) for idx in full_index)
+
+        # Build input index mapping output axes to input axes
+        if keepdims:
+            input_index = slice_index
+        else:
+            input_index = []
+            out_pos = 0
+            for in_ax in range(input_ndim):
+                if in_ax in reduced_axes:
+                    input_index.append(slice(None))
+                else:
+                    input_index.append(slice_index[out_pos])
+                    out_pos += 1
+            input_index = tuple(input_index)
+
+        # Apply the slice to the input and create new PartialReduce
+        sliced_input = new_collection(input_array)[input_index]
+
+        result = PartialReduce(
+            sliced_input.expr,
+            self.func,
+            self.split_every,
+            self.keepdims,
+            self.operand("dtype"),
+            self.operand("name"),
+            self.reduced_meta,
+        )
+
+        # If we converted integers to slices, extract with [0] to restore dimensions
+        if has_integers:
+            from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+            extract_index = tuple(
+                0 if isinstance(idx, Integral) else slice(None) for idx in full_index
+            )
+            return SliceSlicesIntegers(
+                result, extract_index, slice_expr.allow_getitem_optimization
+            )
+
+        return result
+
 
 from dask.array._array_expr._collection import blockwise

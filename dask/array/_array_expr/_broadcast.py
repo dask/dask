@@ -56,6 +56,139 @@ class BroadcastTo(ArrayExpr):
 
         return dsk
 
+    def _simplify_up(self, parent, dependents):
+        """Allow slice operations to push through BroadcastTo."""
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        return None
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through BroadcastTo.
+
+        For broadcast_to(x, shape)[slices]:
+        - Dimensions added by broadcast (new dims): affect output shape only
+        - Dimensions from input with size > 1: push slice to input
+        - Dimensions from input with size == 1: affect output shape only
+        """
+        from numbers import Integral
+
+        from dask._collections import new_collection
+
+        input_arr = self.array
+        output_shape = self._shape
+        index = slice_expr.index
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (len(output_shape) - len(index))
+
+        # For now, only handle simple slices
+        if any(isinstance(idx, Integral) for idx in full_index):
+            return None
+        if any(idx is None for idx in full_index):
+            return None
+
+        ndim_new = len(output_shape) - input_arr.ndim
+
+        # Compute new output shape and input slices
+        new_output_shape = []
+        input_slices = []
+
+        for out_dim, idx in enumerate(full_index):
+            if not isinstance(idx, slice):
+                return None
+
+            out_size = output_shape[out_dim]
+            start, stop, step = idx.indices(out_size)
+            if step != 1:
+                return None
+            new_dim_size = max(0, stop - start)
+            new_output_shape.append(new_dim_size)
+
+            # Check if this dimension maps to input
+            if out_dim >= ndim_new:
+                in_dim = out_dim - ndim_new
+                in_size = input_arr.shape[in_dim]
+
+                if in_size == 1:
+                    # Broadcasted from size 1 - can't push, just take full slice
+                    input_slices.append(slice(None))
+                else:
+                    # Real dimension - push the slice
+                    input_slices.append(idx)
+
+        # Slice the input array
+        if input_slices:
+            sliced_input = new_collection(input_arr)[tuple(input_slices)]
+        else:
+            sliced_input = new_collection(input_arr)
+
+        # Compute new chunks for the output
+        # For dimensions from input: use input's (sliced) chunks
+        # For new dimensions: use the new output shape (single chunk)
+        old_chunks = self._chunks
+        new_chunks = []
+        for out_dim, old_chunk in enumerate(old_chunks):
+            if out_dim >= ndim_new:
+                in_dim = out_dim - ndim_new
+                in_size = input_arr.shape[in_dim]
+                if in_size == 1:
+                    # Broadcasted - compute new chunks from old
+                    idx = full_index[out_dim]
+                    start, stop, _ = idx.indices(output_shape[out_dim])
+                    new_chunks.append(
+                        self._slice_chunks(old_chunk, start, stop - start)
+                    )
+                else:
+                    # Use sliced input's chunks
+                    new_chunks.append(sliced_input.expr.chunks[in_dim])
+            else:
+                # New dimension - compute from slice
+                idx = full_index[out_dim]
+                start, stop, _ = idx.indices(output_shape[out_dim])
+                new_chunks.append(self._slice_chunks(old_chunk, start, stop - start))
+
+        # Compute meta for the new broadcast
+        new_meta = meta_from_array(sliced_input.expr._meta)
+
+        # Create new BroadcastTo
+        return BroadcastTo(
+            sliced_input.expr,
+            tuple(new_output_shape),
+            tuple(new_chunks),
+            new_meta,
+        )
+
+    def _slice_chunks(self, chunks, start, length):
+        """Compute new chunks after slicing."""
+        if length == 0:
+            return ()
+
+        result = []
+        pos = 0
+        remaining = length
+        for chunk_size in chunks:
+            chunk_start = pos
+            chunk_end = pos + chunk_size
+            pos = chunk_end
+
+            if chunk_end <= start:
+                continue
+            if chunk_start >= start + length:
+                break
+
+            # Overlap with the slice
+            overlap_start = max(chunk_start, start)
+            overlap_end = min(chunk_end, start + length)
+            overlap_size = overlap_end - overlap_start
+
+            if overlap_size > 0:
+                result.append(overlap_size)
+                remaining -= overlap_size
+
+        return tuple(result)
+
 
 def broadcast_to(x, shape, chunks=None, meta=None):
     """Broadcast an array to a new shape.

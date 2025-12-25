@@ -313,6 +313,187 @@ class Blockwise(ArrayExpr):
                     args.extend([arr, idx])
                 return type(self)(*self.operands[: len(self._parameters)], *args)
 
+    def _simplify_up(self, parent, dependents):
+        """Allow slice and shuffle operations to push through Blockwise."""
+        from dask.array._array_expr._shuffle import Shuffle
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        if isinstance(parent, Shuffle):
+            return self._accept_shuffle(parent)
+        return None
+
+    def _accept_shuffle(self, shuffle_expr):
+        """Accept a shuffle being pushed through Blockwise.
+
+        Push shuffle through when shuffle axis is not modified by blockwise.
+        """
+        import toolz
+
+        from dask.array._array_expr._shuffle import Shuffle
+
+        axis = shuffle_expr.axis
+        out_ind = self.out_ind
+
+        # Get the index label for the shuffle axis
+        shuffle_ind = out_ind[axis]
+
+        # Can't push through if shuffle axis is a new axis or has adjusted chunks
+        new_axes = getattr(self, "new_axes", None)
+        if new_axes and shuffle_ind in new_axes:
+            return None
+        adjust_chunks = getattr(self, "adjust_chunks", None)
+        if adjust_chunks and shuffle_ind in adjust_chunks:
+            return None
+
+        # Shuffle each array input on the corresponding axis
+        new_args = []
+        for arr, ind in toolz.partition(2, self.args):
+            if ind is None:
+                # Literal argument
+                new_args.extend([arr, ind])
+            elif shuffle_ind in ind:
+                # Find the axis in this input that corresponds to shuffle_ind
+                input_axis = ind.index(shuffle_ind)
+                shuffled = Shuffle(
+                    arr, shuffle_expr.indexer, input_axis, shuffle_expr.operand("name")
+                )
+                new_args.extend([shuffled, ind])
+            else:
+                # This input doesn't have the shuffle dimension
+                new_args.extend([arr, ind])
+
+        return Blockwise(
+            self.func,
+            self.out_ind,
+            self.operand("name"),
+            self.operand("token"),
+            self.operand("dtype"),
+            self.operand("adjust_chunks"),
+            self.operand("new_axes"),
+            self.operand("align_arrays"),
+            self.operand("concatenate"),
+            self.operand("_meta_provided"),
+            self.operand("kwargs"),
+            *new_args,
+        )
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through this Blockwise.
+
+        This optimization is safe when:
+        - The blockwise doesn't adjust chunk sizes on sliced dimensions
+        - The blockwise doesn't add new axes on sliced dimensions
+        - The slice uses only slices or integers (no newaxis)
+        """
+        from numbers import Integral
+
+        from dask._collections import new_collection
+
+        out_ind = self.out_ind
+        index = slice_expr.index
+
+        # Don't handle None/newaxis
+        if any(idx is None for idx in index):
+            return None
+
+        # Pad index to full output length
+        full_index = index + (slice(None),) * (len(out_ind) - len(index))
+
+        # Find which output axes have non-trivial slices
+        sliced_axes = {
+            i
+            for i, idx in enumerate(full_index)
+            if isinstance(idx, Integral) or idx != slice(None)
+        }
+
+        # Use getattr since subclasses may define as class attribute or property
+        adjust_chunks = getattr(self, "adjust_chunks", None)
+        if adjust_chunks:
+            # Only reject if we're slicing an adjusted dimension
+            adjusted_axes = set(adjust_chunks.keys())
+            if sliced_axes & adjusted_axes:
+                return None
+
+        # Don't handle if blockwise adds new axes and we're slicing those axes
+        new_axes = getattr(self, "new_axes", None)
+        if new_axes:
+            new_axis_positions = set(new_axes.keys())
+            if sliced_axes & new_axis_positions:
+                return None
+
+        # Convert integers to size-1 slices for pushdown
+        slice_index = tuple(
+            slice(idx, idx + 1) if isinstance(idx, Integral) else idx
+            for idx in full_index
+        )
+        has_integers = any(isinstance(idx, Integral) for idx in full_index)
+
+        # For subclasses with a single "array" parameter, use substitute_parameters
+        if "array" in type(self)._parameters:
+            # Map output slice indices to input dimensions
+            arg_ind = tuple(range(self.array.ndim))  # Input indices
+            arg_slices = []
+            for dim_idx in arg_ind:
+                try:
+                    out_pos = out_ind.index(dim_idx)
+                    arg_slices.append(slice_index[out_pos])
+                except ValueError:
+                    arg_slices.append(slice(None))
+
+            sliced_input = new_collection(self.array)[tuple(arg_slices)]
+            result = self.substitute_parameters({"array": sliced_input.expr})
+        else:
+            # For base Blockwise with multiple inputs in args
+            args = self.args
+            new_args = []
+            for i in range(0, len(args), 2):
+                arg = args[i]
+                arg_ind = args[i + 1]
+
+                if arg_ind is None:
+                    new_args.extend([arg, arg_ind])
+                else:
+                    arg_slices = []
+                    for dim_idx in arg_ind:
+                        try:
+                            out_pos = out_ind.index(dim_idx)
+                            arg_slices.append(slice_index[out_pos])
+                        except ValueError:
+                            arg_slices.append(slice(None))
+
+                    sliced_arg = new_collection(arg)[tuple(arg_slices)]
+                    new_args.extend([sliced_arg.expr, arg_ind])
+
+            result = Blockwise(
+                self.func,
+                self.out_ind,
+                self.operand("name"),
+                self.operand("token"),
+                self.operand("dtype"),
+                self.operand("adjust_chunks"),
+                self.operand("new_axes"),
+                self.operand("align_arrays"),
+                self.operand("concatenate"),
+                self.operand("_meta_provided"),
+                self.operand("kwargs"),
+                *new_args,
+            )
+
+        # If we converted integers to slices, extract with [0] to restore dimensions
+        if has_integers:
+            from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+            extract_index = tuple(
+                0 if isinstance(idx, Integral) else slice(None) for idx in full_index
+            )
+            return SliceSlicesIntegers(
+                result, extract_index, slice_expr.allow_getitem_optimization
+            )
+
+        return result
+
 
 class Elemwise(Blockwise):
     _parameters = ["op", "dtype", "name", "where", "out", "_user_kwargs"]
@@ -559,6 +740,112 @@ class Elemwise(Blockwise):
         for arrays with fewer dimensions or single-block dimensions.
         """
         return self._broadcast_block_id(dep, block_id)
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through this Elemwise.
+
+        Returns a new Elemwise with the slice pushed to each input,
+        handling broadcasting appropriately.
+        """
+        from dask._collections import new_collection
+
+        out_ind = self.out_ind
+        index = slice_expr.index
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (len(out_ind) - len(index))
+
+        # Build sliced inputs
+        new_args = []
+        for arg in self.elemwise_args:
+            if is_scalar_for_elemwise(arg):
+                new_args.append(arg)
+            else:
+                # Map output slice to this input's dimensions
+                # arg has indices tuple(range(arg.ndim)[::-1])
+                arg_ind = tuple(range(arg.ndim)[::-1])
+                arg_shape = arg.shape
+
+                # For each dimension of arg, find where its index appears in out_ind
+                # and get the corresponding slice
+                arg_slices = []
+                for i, dim_idx in enumerate(arg_ind):
+                    # Find position of this index in out_ind
+                    try:
+                        out_pos = out_ind.index(dim_idx)
+                        out_slice = full_index[out_pos]
+                        # If this dimension is size 1 (broadcasting), use slice(None)
+                        # to preserve broadcast semantics
+                        if arg_shape[i] == 1:
+                            arg_slices.append(slice(None))
+                        else:
+                            arg_slices.append(out_slice)
+                    except ValueError:
+                        # Index not in output (shouldn't happen for elemwise)
+                        arg_slices.append(slice(None))
+
+                sliced_arg = new_collection(arg)[tuple(arg_slices)]
+                new_args.append(sliced_arg.expr)
+
+        return Elemwise(
+            self.op,
+            self.operand("dtype"),
+            self.operand("name"),
+            self.where,
+            self.out,
+            self.operand("_user_kwargs"),
+            *new_args,
+        )
+
+    def _accept_shuffle(self, shuffle_expr):
+        """Accept a shuffle being pushed through this Elemwise.
+
+        Push shuffle through by shuffling each input array.
+        Only works when all inputs have enough dimensions.
+        """
+        from dask.array._array_expr._shuffle import Shuffle
+
+        axis = shuffle_expr.axis
+        indexer = shuffle_expr.indexer
+        name = shuffle_expr.operand("name")
+
+        # Only push through if all array inputs have enough dimensions
+        for arg in self.elemwise_args:
+            if is_scalar_for_elemwise(arg):
+                continue
+            if arg.ndim <= axis:
+                return None
+
+        # Check where/out as well
+        if hasattr(self.where, "ndim") and self.where.ndim <= axis:
+            return None
+        if hasattr(self.out, "ndim") and self.out.ndim <= axis:
+            return None
+
+        # Shuffle each array input
+        new_args = [
+            arg if is_scalar_for_elemwise(arg) else Shuffle(arg, indexer, axis, name)
+            for arg in self.elemwise_args
+        ]
+
+        # Shuffle where/out if they are arrays
+        new_where = self.where
+        if hasattr(new_where, "ndim"):
+            new_where = Shuffle(new_where, indexer, axis, name)
+
+        new_out = self.out
+        if hasattr(new_out, "ndim"):
+            new_out = Shuffle(new_out, indexer, axis, name)
+
+        return Elemwise(
+            self.op,
+            self.operand("dtype"),
+            self.operand("name"),
+            new_where,
+            new_out,
+            self.operand("_user_kwargs"),
+            *new_args,
+        )
 
 
 def _broadcast_block_id(
