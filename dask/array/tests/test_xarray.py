@@ -55,10 +55,6 @@ def test_fft():
     assert_eq(result, expected)
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="xarray's polyfit calls from_array on an existing dask array",
-)
 def test_polyfit_reshaping():
     # Regression test for https://github.com/pydata/xarray/issues/4554
     arr = xr.DataArray(da.ones((10, 20, 30), chunks=(1, 5, 30)), dims=["z", "y", "x"])

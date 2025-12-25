@@ -26,6 +26,7 @@ from dask.array._array_expr._collection import (
     ravel,
     rechunk,
     reshape,
+    reshape_blockwise,
     roll,
     rollaxis,
     rot90,

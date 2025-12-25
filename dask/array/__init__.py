@@ -815,6 +815,7 @@ if _array_expr_enabled():
             remainder,
             repeat,
             reshape,
+            reshape_blockwise,
             result_type,
             right_shift,
             rint,
