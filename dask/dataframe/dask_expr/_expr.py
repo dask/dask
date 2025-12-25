@@ -3782,6 +3782,18 @@ class Fused(Blockwise):
 
     _parameters = ["exprs"]
 
+    def dependencies(self):
+        """Return external dependencies not included in the fused group."""
+        fused_names = {e._name for e in self.exprs}
+        external_deps = []
+        seen = set()
+        for expr in self.exprs:
+            for dep in expr.dependencies():
+                if dep._name not in fused_names and dep._name not in seen:
+                    external_deps.append(dep)
+                    seen.add(dep._name)
+        return external_deps
+
     @functools.cached_property
     def _meta(self):
         return self.exprs[0]._meta

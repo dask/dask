@@ -384,12 +384,31 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
+            # Only descend into list/tuple operands for classes with custom dependencies()
+            has_custom_deps = type(expr).dependencies is not Expr.dependencies
             for operand in expr.operands:
                 if isinstance(operand, Expr):
                     new = operand.rewrite(kind=kind, rewritten=rewritten)
                     rewritten[operand._name] = new
                     if new._name != operand._name:
                         changed = True
+                elif has_custom_deps and isinstance(operand, (list, tuple)):
+                    new_items = []
+                    list_changed = False
+                    for item in operand:
+                        if isinstance(item, Expr):
+                            new_item = item.rewrite(kind=kind, rewritten=rewritten)
+                            rewritten[item._name] = new_item
+                            if new_item._name != item._name:
+                                list_changed = True
+                            new_items.append(new_item)
+                        else:
+                            new_items.append(item)
+                    if list_changed:
+                        changed = True
+                        new = type(operand)(new_items)
+                    else:
+                        new = operand
                 else:
                     new = operand
                 new_operands.append(new)
@@ -451,6 +470,8 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
+            # Only descend into list/tuple operands for classes with custom dependencies()
+            has_custom_deps = type(expr).dependencies is not Expr.dependencies
             for operand in expr.operands:
                 if isinstance(operand, Expr):
                     # Bandaid for now, waiting for Singleton
@@ -461,6 +482,26 @@ class Expr:
                     simplified[operand._name] = new
                     if new._name != operand._name:
                         changed = True
+                elif has_custom_deps and isinstance(operand, (list, tuple)):
+                    new_items = []
+                    list_changed = False
+                    for item in operand:
+                        if isinstance(item, Expr):
+                            dependents[item._name].append(weakref.ref(expr))
+                            new_item = item.simplify_once(
+                                dependents=dependents, simplified=simplified
+                            )
+                            simplified[item._name] = new_item
+                            if new_item._name != item._name:
+                                list_changed = True
+                            new_items.append(new_item)
+                        else:
+                            new_items.append(item)
+                    if list_changed:
+                        changed = True
+                        new = type(operand)(new_items)
+                    else:
+                        new = operand
                 else:
                     new = operand
                 new_operands.append(new)
@@ -522,11 +563,29 @@ class Expr:
         # Lower all children
         new_operands = []
         changed = False
+        # Only descend into list/tuple operands for classes with custom dependencies()
+        has_custom_deps = type(out).dependencies is not Expr.dependencies
         for operand in out.operands:
             if isinstance(operand, Expr):
                 new = operand.lower_once(lowered)
                 if new._name != operand._name:
                     changed = True
+            elif has_custom_deps and isinstance(operand, (list, tuple)):
+                new_items = []
+                list_changed = False
+                for item in operand:
+                    if isinstance(item, Expr):
+                        new_item = item.lower_once(lowered)
+                        if new_item._name != item._name:
+                            list_changed = True
+                        new_items.append(new_item)
+                    else:
+                        new_items.append(item)
+                if list_changed:
+                    changed = True
+                    new = type(operand)(new_items)
+                else:
+                    new = operand
             else:
                 new = operand
             new_operands.append(new)
@@ -662,27 +721,30 @@ class Expr:
 
         new_exprs = []
         update = False
+        # Only descend into list/tuple operands for classes with custom dependencies()
+        has_custom_deps = type(self).dependencies is not Expr.dependencies
         for operand in self.operands:
             if isinstance(operand, Expr):
                 val = operand._substitute(old, new, _seen)
                 if operand._name != val._name:
                     update = True
                 new_exprs.append(val)
-            elif (
-                "Fused" in type(self).__name__
-                and isinstance(operand, (list, tuple))
-                and all(isinstance(op, Expr) for op in operand)
-            ):
-                # Special handling for `Fused`.
-                # We make no promise to dive through a
-                # list/tuple operand in general, but NEED to
-                # do so for the `Fused.exprs` operand.
-                val = []
-                for op in operand:
-                    val.append(op._substitute(old, new, _seen))
-                    if val[-1]._name != op._name:
-                        update = True
-                new_exprs.append(type(operand)(val))
+            elif has_custom_deps and isinstance(operand, (list, tuple)):
+                new_items = []
+                list_changed = False
+                for item in operand:
+                    if isinstance(item, Expr):
+                        new_item = item._substitute(old, new, _seen)
+                        if new_item._name != item._name:
+                            list_changed = True
+                        new_items.append(new_item)
+                    else:
+                        new_items.append(item)
+                if list_changed:
+                    update = True
+                    new_exprs.append(type(operand)(new_items))
+                else:
+                    new_exprs.append(operand)
             elif (
                 substitute_literal
                 and not isinstance(operand, bool)
