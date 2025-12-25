@@ -269,3 +269,116 @@ def test_prohibit_reuse():
         assert val() is first
     finally:
         ProhibitReuse._ALLOWED_TYPES.remove(FooExpr)
+
+
+class Leaf(Expr):
+    """A simple leaf expression with an integer value."""
+
+    _parameters = ["value"]
+
+    @property
+    def _name(self):
+        return f"leaf-{self.value}"
+
+    def _layer(self):
+        return {self._name: DataNode(self._name, self.value)}
+
+
+class ListExpr(Expr):
+    """An expression that takes a list of expressions as a parameter.
+
+    This tests that optimization traverses into list operands when
+    the class defines a custom dependencies() method.
+    """
+
+    _parameters = ["exprs"]
+
+    def dependencies(self):
+        # Custom dependencies - signals that list contains Exprs
+        return list(self.exprs)
+
+    @property
+    def _name(self):
+        return f"list-{self.deterministic_token}"
+
+    def _layer(self):
+        # Sum all leaf values
+        return {
+            self._name: DataNode(
+                self._name, sum(dep._layer()[dep._name]() for dep in self.exprs)
+            )
+        }
+
+
+def test_substitute_through_list_operand():
+    """Test that substitute works through list operands when dependencies() is defined."""
+    # Create some leaf expressions
+    a = Leaf(1)
+    b = Leaf(2)
+    c = Leaf(3)
+
+    # Create a ListExpr containing them
+    expr = ListExpr([a, b, c])
+
+    # Substitute one of the leaves
+    new_leaf = Leaf(10)
+    result = expr.substitute(b, new_leaf)
+
+    # The substitution should have worked through the list
+    assert result is not expr  # Should be a new expression
+    assert result.exprs[0] is a  # Unchanged
+    assert result.exprs[1] is new_leaf  # Substituted
+    assert result.exprs[2] is c  # Unchanged
+
+
+def test_simplify_through_list_operand():
+    """Test that simplify traverses into list operands."""
+
+    class SimplifiableLeaf(Leaf):
+        """A leaf that simplifies to a different value."""
+
+        def _simplify_down(self):
+            if self.value == 0:
+                return Leaf(42)  # Simplify 0 -> 42
+            return None
+
+    a = SimplifiableLeaf(0)  # Will simplify
+    b = Leaf(1)
+
+    expr = ListExpr([a, b])
+    result = expr.simplify()
+
+    # The simplification should have propagated through the list
+    assert result.exprs[0].value == 42  # Simplified
+    assert result.exprs[1].value == 1  # Unchanged
+
+
+def test_list_operand_without_custom_deps_not_traversed():
+    """Test that list operands are NOT traversed without custom dependencies()."""
+
+    class ListExprNoCustomDeps(Expr):
+        """Like ListExpr but without custom dependencies()."""
+
+        _parameters = ["exprs"]
+
+        # No custom dependencies() - uses default which won't find exprs in list
+
+        @property
+        def _name(self):
+            return f"list-no-deps-{self.deterministic_token}"
+
+        def _layer(self):
+            return {self._name: DataNode(self._name, None)}
+
+    a = Leaf(1)
+    b = Leaf(2)
+    expr = ListExprNoCustomDeps([a, b])
+
+    # Substitute should NOT work through the list (no custom dependencies)
+    new_leaf = Leaf(10)
+    result = expr.substitute(a, new_leaf)
+
+    # The expression should be unchanged because we didn't traverse into the list
+    assert result is expr
+    assert result.exprs[0] is a  # Not substituted
+    assert result.exprs[1] is b
