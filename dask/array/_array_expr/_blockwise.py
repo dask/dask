@@ -147,7 +147,15 @@ class Blockwise(ArrayExpr):
     @property
     def _is_blockwise_fusable(self):
         # Blockwise with concatenate requires special handling not yet implemented
-        return not self.concatenate
+        if self.concatenate:
+            return False
+        # Blockwise with Delayed operands can't be fused because FusedBlockwise
+        # doesn't properly track them as external dependencies
+        from dask.delayed import Delayed
+
+        if any(isinstance(op, Delayed) for op in self.operands):
+            return False
+        return True
 
     def _idx_to_block(self, block_id: tuple[int, ...]) -> dict:
         """Map symbolic indices to output block coordinates."""
