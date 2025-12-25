@@ -315,7 +315,7 @@ class Array(DaskMethodsMixin):
 
     @property
     def blocks(self):
-        from dask.array.core import BlockView
+        from dask.array._array_expr.slicing._blocks import BlockView
 
         return BlockView(self)
 
