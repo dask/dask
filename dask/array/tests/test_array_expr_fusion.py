@@ -268,3 +268,47 @@ def test_broadcasting_outer_product():
     assert_eq(c, np.ones((10, 1)) + np.ones((1, 10)))
     # 2x2 output blocks, should fuse
     assert len(dict(c.optimize().__dask_graph__())) == 4
+
+
+def test_fusion_does_not_increase_tasks():
+    """Regression test: fusion should never increase task count.
+
+    This tests a bug where fusion with shared dependencies and diamond
+    patterns could increase tasks due to substitute not traversing into
+    FusedBlockwise.exprs (which is a tuple, not list).
+    """
+    shape = (48, 18, 36)
+    chunks = (12, 9, 18)
+
+    # Create arrays with random (fusable) at the leaves
+    a = da.random.random(shape, chunks=chunks) * 50
+    b = da.random.random(shape, chunks=chunks) * 20
+
+    # Means create shared subexpressions
+    mean_a = a.mean(axis=-1, keepdims=True)
+    mean_b = b.mean(axis=-1, keepdims=True)
+
+    # Anomalies use broadcast subtraction
+    anom_a = a - mean_a
+    anom_b = b - mean_b
+
+    # Two products that BOTH consume anom_a AND anom_b (diamond pattern)
+    prod1 = (anom_a * anom_b).mean(axis=-1)
+    prod2 = (anom_b * anom_a).mean(axis=-1)
+
+    # Stack creates multiple roots
+    result = da.stack([mean_a[..., 0], mean_b[..., 0], prod1, prod2])
+
+    # Get task counts
+    expr = result.expr
+    lowered = expr.simplify().lower_completely()
+    fused = lowered.fuse()
+
+    low_tasks = len(lowered.__dask_graph__())
+    fused_tasks = len(fused.__dask_graph__())
+
+    # Fusion should reduce or maintain task count, NEVER increase
+    assert fused_tasks <= low_tasks, (
+        f"Fusion increased tasks from {low_tasks} to {fused_tasks} "
+        f"(+{fused_tasks - low_tasks})"
+    )

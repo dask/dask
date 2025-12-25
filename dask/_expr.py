@@ -670,19 +670,19 @@ class Expr:
                 new_exprs.append(val)
             elif (
                 "Fused" in type(self).__name__
-                and isinstance(operand, list)
+                and isinstance(operand, (list, tuple))
                 and all(isinstance(op, Expr) for op in operand)
             ):
                 # Special handling for `Fused`.
                 # We make no promise to dive through a
-                # list operand in general, but NEED to
+                # list/tuple operand in general, but NEED to
                 # do so for the `Fused.exprs` operand.
                 val = []
                 for op in operand:
                     val.append(op._substitute(old, new, _seen))
                     if val[-1]._name != op._name:
                         update = True
-                new_exprs.append(val)
+                new_exprs.append(type(operand)(val))
             elif (
                 substitute_literal
                 and not isinstance(operand, bool)
