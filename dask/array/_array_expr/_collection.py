@@ -91,6 +91,7 @@ __all__ = [
     "ravel",
     "rechunk",
     "reshape",
+    "reshape_blockwise",
     "roll",
     "rollaxis",
     "rot90",
@@ -1669,7 +1670,7 @@ class Array(DaskMethodsMixin):
 
 # Import rechunk, reshape, ravel from their modules
 from dask.array._array_expr._rechunk import rechunk
-from dask.array._array_expr._reshape import ravel, reshape
+from dask.array._array_expr._reshape import ravel, reshape, reshape_blockwise
 
 # Import swapaxes
 from dask.array._array_expr.manipulation._transpose import swapaxes
