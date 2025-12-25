@@ -472,7 +472,7 @@ class Expr:
 
         return expr
 
-    def optimize(self, fuse: bool = False) -> Expr:
+    def optimize(self, fuse: bool = True) -> Expr:
         stage: OptimizerStage = "fused" if fuse else "simplified-physical"
 
         return optimize_until(self, stage)
