@@ -23,18 +23,24 @@ class FromGraph(ArrayExpr):
 
     def _layer(self):
         dsk = dict(self.operand("layer"))
-        # The name may not actually match the layer's name therefore rewrite this
-        # using an alias. After persist() with optimization/fusion, layer keys
-        # may have completely different names (e.g., 'store-add-ones' instead of
-        # 'store-map'). Rename all keys to use self._name since the layer only
-        # contains this expression's computed data.
+        # Build set of keys that belong to our layer (the recorded output keys)
+        our_keys = set(self.operand("keys"))
+
+        result = {}
         for k in list(dsk.keys()):
             if not isinstance(k, tuple):
                 raise TypeError(f"Expected tuple, got {type(k)}")
             orig = dsk[k]
-            if not istask(orig):
-                del dsk[k]
-                dsk[(self._name, *k[1:])] = orig
+            if k in our_keys:
+                # This is one of our output keys - rename to use self._name
+                if not istask(orig):
+                    # Simple alias (e.g., blocks -> arange key)
+                    result[(self._name, *k[1:])] = orig
+                else:
+                    # Task - create alias and keep original task
+                    result[(self._name, *k[1:])] = k
+                    result[k] = orig
             else:
-                dsk[(self._name, *k[1:])] = k
-        return dsk
+                # Dependency key - keep as-is without renaming
+                result[k] = orig
+        return result
