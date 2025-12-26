@@ -136,7 +136,11 @@ class Rechunk(ArrayExpr):
             # Map output chunks back through transpose axes to get input chunks
             # axes[i] tells us which input axis becomes output axis i
             # So output axis i has chunks[i], which should go to input axis axes[i]
-            new_chunks = tuple(chunks[i] for i in axes)
+            # We need to invert the permutation: place chunks[i] at position axes[i]
+            new_chunks = [None] * len(axes)
+            for i, ax in enumerate(axes):
+                new_chunks[ax] = chunks[i]
+            new_chunks = tuple(new_chunks)
         elif isinstance(chunks, dict):
             # Map dict keys through axes
             new_chunks = {}
