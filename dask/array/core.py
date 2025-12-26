@@ -5467,8 +5467,24 @@ def chunks_from_arrays(arrays):
         except AttributeError:
             return (1,)
 
+    # First, determine nesting depth
+    ndim = 0
+    temp = arrays
+    while isinstance(temp, (list, tuple)):
+        ndim += 1
+        temp = temp[0]
+
+    def get_dim(a, dim):
+        s = shape(deepfirst(a))
+        # When array has fewer dims than nesting, missing dims are at front
+        # (since expansion adds leading dims via arr[None, ...])
+        offset = ndim - len(s)
+        if dim < offset:
+            return 1
+        return s[dim - offset]
+
     while isinstance(arrays, (list, tuple)):
-        result.append(tuple(shape(deepfirst(a))[dim] for a in arrays))
+        result.append(tuple(get_dim(a, dim) for a in arrays))
         arrays = arrays[0]
         dim += 1
     return tuple(result)

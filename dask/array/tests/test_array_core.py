@@ -3235,6 +3235,23 @@ def test_concatenate3_2():
     )
 
 
+def test_chunks_from_arrays_dimension_mismatch():
+    """Test chunks_from_arrays handles arrays with fewer dims than nesting depth."""
+    from dask.array.core import chunks_from_arrays
+
+    # Normal case - 2D arrays in 2-level nesting
+    x = np.array([[1, 2], [3, 4]])
+    assert chunks_from_arrays([[x, x], [x, x]]) == ((2, 2), (2, 2))
+
+    # 1D arrays in 2-level nesting - missing dim is at front
+    y = np.array([1, 2])
+    assert chunks_from_arrays([[y, y], [y, y]]) == ((1, 1), (2, 2))
+
+    # 0D arrays in 2-level nesting
+    z = np.array(5)
+    assert chunks_from_arrays([[z, z], [z, z]]) == ((1, 1), (1, 1))
+
+
 @pytest.mark.xfail(
     da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
 )
