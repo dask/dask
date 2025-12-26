@@ -112,17 +112,13 @@ def walk_expr_with_prefix(
     is_last : bool
         Whether this node is the last child of its parent
     is_expr_child : callable, optional
-        Function to determine if an operand is an Expr child to recurse into.
-        If None, uses hasattr(op, 'dependencies').
+        Function to filter which dependencies to recurse into.
+        If None, recurses into all dependencies.
     """
     yield expr, prefix
 
-    if is_expr_child is None:
-        is_expr_child = lambda op: hasattr(op, "dependencies") and callable(
-            op.dependencies
-        )
-
-    children = [op for op in expr.operands if is_expr_child(op)]
+    deps = expr.dependencies()
+    children = [op for op in deps if is_expr_child(op)] if is_expr_child else deps
 
     for i, child in enumerate(children):
         is_last_child = i == len(children) - 1
