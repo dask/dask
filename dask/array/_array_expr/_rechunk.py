@@ -174,7 +174,15 @@ class Rechunk(ArrayExpr):
 
             # For each dimension of arg, find where its index appears in out_ind
             arg_chunks = []
-            for dim_idx in arg_ind:
+            for i, dim_idx in enumerate(arg_ind):
+                # Get the arg's dimension size for this position
+                arg_dim_size = arg.shape[i]
+
+                # If this dimension is broadcast (size 1), keep its original chunk
+                if arg_dim_size == 1:
+                    arg_chunks.append((1,))
+                    continue
+
                 try:
                     out_pos = out_ind.index(dim_idx)
                     arg_chunks.append(chunks[out_pos])

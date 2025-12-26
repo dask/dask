@@ -76,3 +76,28 @@ def test_rechunk_dict_through_elemwise_correctness():
     expected = np_x + np_y
     assert_eq(result_tuple, expected)
     assert_eq(result_dict, expected)
+
+
+def test_rechunk_pushdown_broadcast_elemwise():
+    """Test rechunk optimization through elemwise with broadcast args."""
+    import dask
+
+    # Array with broadcast dimension
+    a = da.ones((10, 10), chunks=(5, 5))
+    b = da.ones((10,), chunks=(5,))  # broadcasts along axis 0
+
+    # Elemwise with broadcast, then rechunk
+    c = (a + b).rechunk((2, 2))
+
+    # Verify chunks and result
+    assert c.chunks == ((2, 2, 2, 2, 2), (2, 2, 2, 2, 2))
+    result = c.compute()
+    assert result.shape == (10, 10)
+    assert (result == 2).all()
+
+    # Joint compute case
+    d = (a * b).rechunk((2, 2)).sum(axis=0)
+    e = (a - b).rechunk((2, 2)).mean(axis=0)
+    r1, r2 = dask.compute(d, e)
+    assert r1.shape == (10,)
+    assert r2.shape == (10,)
