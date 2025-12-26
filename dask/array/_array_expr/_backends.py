@@ -23,9 +23,11 @@ except ImportError:
 def create_array_collection(expr):
     """Create an Array collection from an expression.
 
-    In array-expr mode, only accepts ArrayExpr instances. DataFrame operations
-    that produce arrays (like ddf.values) should create ArrayExpr directly
-    via dask.dataframe.dask_expr._array.create_values_array.
+    In array-expr mode:
+    - ArrayExpr: wrap directly in Array
+    - DataFrame Expr with array meta: wrap in FrameToArray
+
+    In legacy mode: build graph and create legacy Array.
     """
     import dask.array as da
 
@@ -36,10 +38,12 @@ def create_array_collection(expr):
         if isinstance(expr, ArrayExpr):
             return Array(expr)
 
-        # Non-ArrayExpr (e.g., DataFrame MapPartitions returning ndarray)
-        # Fall through to use from_graph below
+        # DataFrame Expr that produces array output (e.g., map_partitions with to_records)
+        from dask.dataframe.dask_expr._array import FrameToArray
 
-    # Lower expression to graph
+        return Array(FrameToArray(expr))
+
+    # Legacy mode: lower to graph
     from dask.highlevelgraph import HighLevelGraph
     from dask.layers import Blockwise
 
@@ -54,10 +58,8 @@ def create_array_collection(expr):
         if isinstance(dsk, HighLevelGraph):
             layer = dsk.layers[name]
         else:
-            # dask-expr provides a dict only
             layer = dsk
 
-        new_keys = []
         if isinstance(layer, Blockwise):
             layer.new_axes["j"] = chunks[1][0]
             layer.output_indices = layer.output_indices + ("j",)
@@ -71,14 +73,6 @@ def create_array_collection(expr):
                 if isinstance(task, Task):
                     task = Alias(new_key, task.key)
                 layer[new_key] = task
-                new_keys.append(new_key)
-    else:
-        new_keys = [(name, 0)]
-
-    if da._array_expr_enabled():
-        from dask.array._array_expr._collection import from_graph
-
-        return from_graph(dsk, meta, chunks, set(new_keys), name)
 
     return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
 

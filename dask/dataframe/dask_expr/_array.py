@@ -90,6 +90,58 @@ class Values(ArrayExpr):
         return [self.frame]
 
 
+class FrameToArray(ArrayExpr):
+    """Array expression wrapping a DataFrame expression that produces arrays.
+
+    Used when DataFrame operations like map_partitions return array output.
+    Unlike Values, this doesn't apply any transformation - the underlying
+    expression already produces arrays.
+
+    Parameters
+    ----------
+    frame : Expr
+        The DataFrame expression that produces array output
+    """
+
+    _parameters = ["frame"]
+
+    @functools.cached_property
+    def _name(self):
+        return f"frame-to-array-{self.deterministic_token}"
+
+    @functools.cached_property
+    def _meta(self):
+        return self.frame._meta
+
+    @functools.cached_property
+    def chunks(self):
+        divisions = self.frame.divisions
+        npartitions = len(divisions) - 1
+        row_chunks = (np.nan,) * npartitions
+        meta = self._meta
+        if meta.ndim > 1:
+            return (row_chunks,) + tuple((d,) for d in meta.shape[1:])
+        return (row_chunks,)
+
+    def _layer(self):
+        from dask._task_spec import Alias
+
+        dsk = {}
+        frame_name = self.frame._name
+        for i in range(len(self.chunks[0])):
+            if len(self.chunks) > 1:
+                # 2D array
+                key = (self._name, i) + (0,) * (len(self.chunks) - 1)
+            else:
+                # 1D array
+                key = (self._name, i)
+            dsk[key] = Alias(key, (frame_name, i))
+        return dsk
+
+    def dependencies(self):
+        return [self.frame]
+
+
 def create_values_array(frame, chunks=None, meta=None):
     """Create an Array from DataFrame.values.
 
