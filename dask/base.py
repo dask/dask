@@ -1003,6 +1003,16 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 
     schedule = get_scheduler(scheduler=scheduler, collections=collections)
 
+    # Protocol: scheduler can provide its own persist method for async behavior.
+    # For Client-like objects, get_scheduler returns client.get (a bound method),
+    # so we check __self__ for the actual client instance.
+    persist_target = getattr(schedule, "__self__", schedule)
+    if hasattr(persist_target, "persist") and callable(persist_target.persist):
+        results = persist_target.persist(
+            collections, optimize_graph=optimize_graph, **kwargs
+        )
+        return repack(results)
+
     if inspect.ismethod(schedule):
         try:
             from distributed.client import default_client
