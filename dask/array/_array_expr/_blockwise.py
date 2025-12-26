@@ -808,42 +808,54 @@ class Elemwise(Blockwise):
     def _accept_shuffle(self, shuffle_expr):
         """Accept a shuffle being pushed through this Elemwise.
 
-        Push shuffle through by shuffling each input array.
-        Only works when all inputs have enough dimensions.
+        Push shuffle through by shuffling each input array on the corresponding
+        axis, accounting for broadcasting. Inputs that broadcast on the shuffle
+        axis (size-1 or fewer dimensions) are not shuffled.
         """
         from dask.array._array_expr._shuffle import Shuffle
 
         axis = shuffle_expr.axis
         indexer = shuffle_expr.indexer
         name = shuffle_expr.operand("name")
+        output_ndim = len(self.shape)
 
-        # Only push through if all array inputs have enough dimensions
-        for arg in self.elemwise_args:
+        def get_input_axis(arg):
+            """Get the corresponding axis in input for the output shuffle axis.
+
+            Returns the input axis, or None if the input broadcasts on this axis.
+            For broadcasting, input axes are aligned to the right of output axes.
+            """
             if is_scalar_for_elemwise(arg):
-                continue
-            if arg.ndim <= axis:
                 return None
+            # Input axis = output axis - (dimensions added by broadcasting)
+            input_axis = axis - (output_ndim - arg.ndim)
+            if input_axis < 0:
+                # This input doesn't have the shuffle axis (broadcasts on it)
+                return None
+            if arg.shape[input_axis] == 1:
+                # Size-1 dimensions broadcast, don't shuffle
+                return None
+            return input_axis
 
-        # Check where/out as well
-        if hasattr(self.where, "ndim") and self.where.ndim <= axis:
-            return None
-        if hasattr(self.out, "ndim") and self.out.ndim <= axis:
-            return None
-
-        # Shuffle each array input
-        new_args = [
-            arg if is_scalar_for_elemwise(arg) else Shuffle(arg, indexer, axis, name)
-            for arg in self.elemwise_args
-        ]
+        # Shuffle each array input on its corresponding axis
+        new_args = []
+        for arg in self.elemwise_args:
+            input_axis = get_input_axis(arg)
+            if input_axis is not None:
+                new_args.append(Shuffle(arg, indexer, input_axis, name))
+            else:
+                new_args.append(arg)
 
         # Shuffle where/out if they are arrays
         new_where = self.where
-        if hasattr(new_where, "ndim"):
-            new_where = Shuffle(new_where, indexer, axis, name)
+        input_axis = get_input_axis(new_where) if hasattr(new_where, "ndim") else None
+        if input_axis is not None:
+            new_where = Shuffle(new_where, indexer, input_axis, name)
 
         new_out = self.out
-        if hasattr(new_out, "ndim"):
-            new_out = Shuffle(new_out, indexer, axis, name)
+        input_axis = get_input_axis(new_out) if hasattr(new_out, "ndim") else None
+        if input_axis is not None:
+            new_out = Shuffle(new_out, indexer, input_axis, name)
 
         return Elemwise(
             self.op,

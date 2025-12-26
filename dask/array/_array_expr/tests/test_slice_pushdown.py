@@ -745,6 +745,36 @@ def test_shuffle_through_elemwise_reduces_work():
     assert opt_tasks <= unopt_tasks
 
 
+def test_shuffle_through_elemwise_with_broadcast_2d():
+    """Shuffle through elemwise with 2D broadcast operand (size-1 dimension).
+
+    (a * y2d)[[5]] should optimize to a[[5]] * y2d (shuffle only non-broadcast input).
+    """
+    a = da.from_array(np.arange(200).reshape(10, 20), chunks=(4, 5))
+    y2d = da.from_array(np.arange(20).reshape(1, 20), chunks=(1, 20))
+
+    result = (a * y2d)[[5]]
+    expected = a[[5]] * y2d
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
+def test_shuffle_through_elemwise_with_broadcast_1d():
+    """Shuffle through elemwise with 1D broadcast operand.
+
+    (a * y1d)[[5]] should optimize to a[[5]] * y1d (shuffle only the 2D input).
+    """
+    a = da.from_array(np.arange(200).reshape(10, 20), chunks=(4, 5))
+    y1d = da.from_array(np.arange(20), chunks=20)
+
+    result = (a * y1d)[[5]]
+    expected = a[[5]] * y1d
+
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+    assert_eq(result, expected)
+
+
 # --- Shuffle through Transpose Tests ---
 
 
