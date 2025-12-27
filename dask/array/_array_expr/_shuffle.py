@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import functools
 from itertools import count, product
+from typing import Literal
 
 import numpy as np
 
@@ -29,9 +30,81 @@ def _validate_indexer(chunks, indexer, axis):
         )
 
 
-def _shuffle(x, indexer, axis, name):
+def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"] = "auto"):
+    """
+    Reorders one dimensions of a Dask Array based on an indexer.
+
+    The indexer defines a list of positional groups that will end up in the same chunk
+    together. A single group is in at most one chunk on this dimension, but a chunk
+    might contain multiple groups to avoid fragmentation of the array.
+
+    The algorithm tries to balance the chunksizes as much as possible to ideally keep the
+    number of chunks consistent or at least manageable.
+
+    Parameters
+    ----------
+    x: dask array
+        Array to be shuffled.
+    indexer:  list[list[int]]
+        The indexer that determines which elements along the dimension will end up in the
+        same chunk. Multiple groups can be in the same chunk to avoid fragmentation, but
+        each group will end up in exactly one chunk.
+    axis: int
+        The axis to shuffle along.
+    chunks: "auto"
+        Hint on how to rechunk if single groups are becoming too large. The default is
+        to split chunks along the other dimensions evenly to keep the chunksize
+        consistent. The rechunking is done in a way that ensures that non all-to-all
+        network communication is necessary, chunks are only split and not combined with
+        other chunks.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> import numpy as np
+    >>> arr = np.array([[1, 2, 3, 4, 5, 6, 7, 8], [9, 10, 11, 12, 13, 14, 15, 16]])
+    >>> x = da.from_array(arr, chunks=(2, 4))
+
+    Separate the elements in different groups.
+
+    >>> y = x.shuffle([[6, 5, 2], [4, 1], [3, 0, 7]], axis=1)
+
+    The shuffle algorihthm will combine the first 2 groups into a single chunk to keep
+    the number of chunks small.
+
+    The tolerance of increasing the chunk size is controlled by the configuration
+    "array.chunk-size-tolerance". The default value is 1.25.
+
+    >>> y.chunks
+    ((2,), (5, 3))
+
+    The array was reordered along axis 1 according to the positional indexer that was given.
+
+    >>> y.compute()
+    array([[ 7,  6,  3,  5,  2,  4,  1,  8],
+           [15, 14, 11, 13, 10, 12,  9, 16]])
+    """
+    from dask._collections import new_collection
+    from dask.array._shuffle import _rechunk_other_dimensions
+
+    if np.isnan(x.shape).any():
+        from dask.array.core import unknown_chunk_message
+
+        raise ValueError(
+            f"Shuffling only allowed with known chunk sizes. {unknown_chunk_message}"
+        )
+    assert isinstance(axis, int), "axis must be an integer"
     _validate_indexer(x.chunks, indexer, axis)
 
+    x = _rechunk_other_dimensions(x, max(map(len, indexer)), axis, chunks)
+
+    name = "shuffle"
+
+    result = _shuffle(x.expr, indexer, axis, name)
+    return new_collection(result)
+
+
+def _shuffle(x, indexer, axis, name):
     if len(indexer) == len(x.chunks[axis]):
         # check if the array is already shuffled the way we want
         ctr = 0

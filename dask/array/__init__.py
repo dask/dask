@@ -829,6 +829,7 @@ if _array_expr_enabled():
             searchsorted,
             select,
             shape,
+            shuffle,
             sign,
             signbit,
             sin,
