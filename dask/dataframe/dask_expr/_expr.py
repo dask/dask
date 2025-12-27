@@ -97,6 +97,12 @@ class Expr(core.SingletonExpr):
     def optimize(self, fuse: bool = True):
         return optimize(self, fuse=fuse)
 
+    def _layer(self) -> dict:
+        return {
+            (self._name, i): self._task((self._name, i), i)
+            for i in range(self.npartitions)
+        }
+
     def __hash__(self):
         return hash(self._name)
 

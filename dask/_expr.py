@@ -332,11 +332,12 @@ class Expr:
         Expr._task
         Expr.__dask_graph__
         """
-
-        return {
-            (self._name, i): self._task((self._name, i), i)
-            for i in range(self.npartitions)
-        }
+        raise NotImplementedError(
+            f"Expression {type(self).__name__} has no _layer() implementation. "
+            "This is typically an abstract expression that should be lowered "
+            "to a concrete form before graph generation. Check that _lower() "
+            "is correctly transforming this expression type."
+        )
 
     def rewrite(self, kind: str, rewritten):
         """Rewrite an expression
