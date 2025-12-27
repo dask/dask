@@ -552,3 +552,41 @@ def test_slice_through_tensordot_reduces_tasks():
     # Sliced: 1x1 output chunks = 1 output chunk
     # Task reduction should be ~10x or more
     assert sliced_tasks < full_tasks / 5
+
+
+# =============================================================================
+# Regression tests
+# =============================================================================
+
+
+def test_integer_index_on_size_one_dim_through_elemwise():
+    """Integer indexing on size-1 dims must remove the dimension.
+
+    Regression test: when Elemwise._accept_slice pushed integer indices
+    through size-1 dimensions, it was incorrectly converting them to
+    slice(None), keeping the dimension instead of removing it.
+    """
+    arr = da.from_array(np.random.randn(8, 9, 10), chunks=(8, 9, 10))
+    shuffled = da.shuffle(arr, [[0]], axis=2)  # -> (8, 9, 1)
+
+    # Elemwise on top of shuffle
+    cond = da.from_array(np.array([True]), chunks=(1,))
+    elemwise = da.where(cond, shuffled, np.nan)
+
+    # Integer index should remove the dimension
+    indexed = elemwise[:, :, 0]
+    assert indexed.shape == (8, 9)
+    assert indexed.compute().shape == (8, 9)
+
+
+def test_integer_index_through_elemwise_broadcast():
+    """Integer index through Elemwise with broadcasting preserves semantics."""
+    # Array with size-1 dimension
+    x = da.ones((10, 1, 20), chunks=(5, 1, 10))
+    y = da.ones((10, 15, 20), chunks=(5, 5, 10))
+
+    result = (x + y)[:, :, 0]
+
+    # Integer index on axis 2 should remove it
+    assert result.shape == (10, 15)
+    assert_eq(result, np.ones((10, 15)) * 2)

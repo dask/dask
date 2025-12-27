@@ -158,3 +158,61 @@ def test_rechunk_pushdown_through_transpose_dict():
     expected = x.rechunk({2: 2}).transpose((2, 0, 1))
 
     assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+
+# =============================================================================
+# Regression tests
+# =============================================================================
+
+
+def test_rechunk_noop_preserves_identity():
+    """Rechunk with matching chunks should return identical expression.
+
+    Regression test: rechunk was creating new expressions even when
+    target chunks matched input chunks exactly.
+    """
+    x = da.ones((10, 10), chunks=(5, 5))
+
+    # All of these should return the same expression
+    y_tuple = x.rechunk((5, 5))
+    y_dict = x.rechunk({0: 5, 1: 5})
+    y_none = x.rechunk((None, None))
+
+    assert x.expr is y_tuple.expr
+    assert x.expr is y_dict.expr
+    assert x.expr is y_none.expr
+    assert x.name == y_tuple.name == y_dict.name == y_none.name
+
+
+def test_rechunk_noop_negative_index():
+    """Rechunk no-op with negative axis index."""
+    x = da.ones((10, 10), chunks=(5, 5))
+
+    y = x.rechunk({-1: 5, -2: 5})
+
+    assert x.expr is y.expr
+
+
+def test_rechunk_multistep_no_cycle():
+    """Multi-step rechunk should not create cyclic dependencies.
+
+    Regression test: when rechunk required multiple steps (split one dim,
+    merge another), incorrect task name propagation between steps caused
+    cyclic task graph.
+    """
+    x = da.ones((16, 50), chunks=(16, 1))
+    y = x.rechunk((3, 10))
+
+    # This was raising RuntimeError: Cycle detected
+    result = y.compute()
+    assert result.shape == (16, 50)
+    assert np.all(result == 1)
+
+
+def test_rechunk_split_and_merge_correctness():
+    """Verify multi-step rechunk produces correct values."""
+    np_arr = np.arange(16 * 50).reshape(16, 50)
+    x = da.from_array(np_arr, chunks=(16, 1))
+    y = x.rechunk((3, 10))
+
+    assert_eq(y, np_arr)

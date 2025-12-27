@@ -796,9 +796,10 @@ class Elemwise(Blockwise):
                     try:
                         out_pos = out_ind.index(dim_idx)
                         out_slice = full_index[out_pos]
-                        # If this dimension is size 1 (broadcasting), use slice(None)
-                        # to preserve broadcast semantics
-                        if arg_shape[i] == 1:
+                        # If this dimension is size 1 (broadcasting) and slice is a slice
+                        # (not integer), use slice(None) to preserve broadcast semantics.
+                        # Integer indices must still be applied to remove the dimension.
+                        if arg_shape[i] == 1 and isinstance(out_slice, slice):
                             arg_slices.append(slice(None))
                         else:
                             arg_slices.append(out_slice)
