@@ -94,6 +94,7 @@ from dask.array._array_expr._routines import (
     unique,
     unravel_index,
 )
+from dask.array._array_expr._shuffle import shuffle
 from dask.array._array_expr._ufunc import *
 from dask.array._array_expr.creation import (
     arange,

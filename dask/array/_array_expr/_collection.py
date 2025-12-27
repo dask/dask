@@ -957,6 +957,11 @@ class Array(DaskMethodsMixin):
     ):
         return rechunk(self, chunks, threshold, block_size_limit, balance, method)
 
+    def shuffle(self, indexer, axis, chunks="auto"):
+        from dask.array._array_expr._shuffle import shuffle
+
+        return shuffle(self, indexer, axis, chunks)
+
     def _vindex(self, key):
         from dask.array._array_expr.slicing import _numpy_vindex, _vindex
         from dask.base import is_dask_collection
