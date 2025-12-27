@@ -248,20 +248,42 @@ class ArrayExpr(SingletonExpr):
 
         from dask.array._array_expr._rechunk import Rechunk
         from dask.array.core import normalize_chunks
+        from dask.array.rechunk import validate_axis
 
-        # Pre-resolve chunks="auto" to avoid singleton caching issues
-        # (config-dependent values would otherwise produce same expression)
-        # Only handle the simple case where chunks is exactly "auto" string
-        if chunks == "auto":
-            chunks = normalize_chunks(
-                chunks,
-                self.shape,
-                limit=block_size_limit,
-                dtype=self.dtype,
-                previous_chunks=self.chunks,
+        # Pre-resolve chunks to check for no-op and avoid singleton caching issues
+        resolved_chunks = chunks
+        if isinstance(chunks, dict):
+            normalized_dict = {
+                validate_axis(k, self.ndim): v for k, v in chunks.items()
+            }
+            resolved_chunks = tuple(
+                (
+                    normalized_dict[i]
+                    if i in normalized_dict and normalized_dict[i] is not None
+                    else self.chunks[i]
+                )
+                for i in range(self.ndim)
             )
+        if isinstance(resolved_chunks, (tuple, list)):
+            resolved_chunks = tuple(
+                lc if lc is not None else rc
+                for lc, rc in zip(resolved_chunks, self.chunks)
+            )
+        resolved_chunks = normalize_chunks(
+            resolved_chunks,
+            self.shape,
+            limit=block_size_limit,
+            dtype=self.dtype,
+            previous_chunks=self.chunks,
+        )
 
-        result = Rechunk(self, chunks, threshold, block_size_limit, balance, method)
+        # No-op rechunk: if chunks already match, return self
+        if not balance and resolved_chunks == self.chunks:
+            return self
+
+        result = Rechunk(
+            self, resolved_chunks, threshold, block_size_limit, balance, method
+        )
         # Ensure that chunks are compatible
         result.chunks
         return result
