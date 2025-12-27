@@ -186,7 +186,8 @@ class Array(DaskMethodsMixin):
         **kwargs
             Additional arguments passed to the visualizer.
         """
-        if tasks:
+        # color= options require task graph visualization
+        if tasks or kwargs.get("color"):
             return super().visualize(**kwargs)
         return self.expr.visualize(**kwargs)
 

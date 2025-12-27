@@ -4603,10 +4603,6 @@ def test_mixed_dask_array_operations_errors():
     assert "add" in str(info.value) or "different numbers" in str(info.value)
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="array-expr Rechunk doesn't have npartitions attribute",
-)
 def test_mixed_dask_array_multi_dimensional():
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5], "y": [5.0, 6.0, 7.0, 8.0, 9.0]}, columns=["x", "y"]
