@@ -43,7 +43,8 @@ def test_full():
     assert (a.compute() == 100).all()
     assert a.dtype == a.compute(scheduler="sync").dtype == "i8"
 
-    assert a.name.startswith("full_like-")
+    # Traditional implementation uses full_like internally, array-expr uses full
+    assert a.name.startswith("full_like-") or a.name.startswith("full-")
 
 
 def test_full_error_nonscalar_fill_value():

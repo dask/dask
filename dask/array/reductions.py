@@ -45,9 +45,11 @@ except ImportError:
     numbagg = None
 
 if da._array_expr_enabled():
-    from dask.array._array_expr import _tree_reduce, reduction
+    from dask.array._array_expr import _tree_reduce, arg_reduction, reduction
 else:
     from dask.array._reductions_generic import _tree_reduce, reduction
+
+    # Traditional arg_reduction is defined below in this file
 
 
 def divide(a, b, dtype=None):
@@ -839,81 +841,89 @@ def nanarg_agg(argfunc, data, axis=None, keepdims=False, **kwargs):
     return arg
 
 
-def arg_reduction(
-    x, chunk, combine, agg, axis=None, keepdims=False, split_every=None, out=None
-):
-    """Generic function for argreduction.
+# Traditional arg_reduction is only defined when array-expr is disabled
+# (when array-expr is enabled, arg_reduction is imported from _array_expr)
+if not da._array_expr_enabled():
 
-    Parameters
-    ----------
-    x : Array
-    chunk : callable
-        Partialed ``arg_chunk``.
-    combine : callable
-        Partialed ``arg_combine``.
-    agg : callable
-        Partialed ``arg_agg``.
-    axis : int, optional
-    split_every : int or dict, optional
-    """
-    if axis is None:
-        axis = tuple(range(x.ndim))
-        ravel = True
-    elif isinstance(axis, Integral):
-        axis = validate_axis(axis, x.ndim)
-        axis = (axis,)
-        ravel = x.ndim == 1
-    else:
-        raise TypeError(f"axis must be either `None` or int, got '{axis}'")
+    def arg_reduction(
+        x, chunk, combine, agg, axis=None, keepdims=False, split_every=None, out=None
+    ):
+        """Generic function for argreduction.
 
-    for ax in axis:
-        chunks = x.chunks[ax]
-        if len(chunks) > 1 and np.isnan(chunks).any():
-            raise ValueError(
-                "Arg-reductions do not work with arrays that have "
-                "unknown chunksizes. At some point in your computation "
-                "this array lost chunking information.\n\n"
-                "A possible solution is with \n"
-                "  x.compute_chunk_sizes()"
-            )
+        Parameters
+        ----------
+        x : Array
+        chunk : callable
+            Partialed ``arg_chunk``.
+        combine : callable
+            Partialed ``arg_combine``.
+        agg : callable
+            Partialed ``arg_agg``.
+        axis : int, optional
+        split_every : int or dict, optional
+        """
+        if axis is None:
+            axis = tuple(range(x.ndim))
+            ravel = True
+        elif isinstance(axis, Integral):
+            axis = validate_axis(axis, x.ndim)
+            axis = (axis,)
+            ravel = x.ndim == 1
+        else:
+            raise TypeError(f"axis must be either `None` or int, got '{axis}'")
 
-    # Map chunk across all blocks
-    name = f"arg-reduce-{tokenize(axis, x, chunk, combine, split_every)}"
-    old = x.name
-    keys = list(product(*map(range, x.numblocks)))
-    offsets = list(product(*(accumulate(operator.add, bd[:-1], 0) for bd in x.chunks)))
-    if ravel:
-        offset_info = zip(offsets, repeat(x.shape))
-    else:
-        offset_info = pluck(axis[0], offsets)
+        for ax in axis:
+            chunks = x.chunks[ax]
+            if len(chunks) > 1 and np.isnan(chunks).any():
+                raise ValueError(
+                    "Arg-reductions do not work with arrays that have "
+                    "unknown chunksizes. At some point in your computation "
+                    "this array lost chunking information.\n\n"
+                    "A possible solution is with \n"
+                    "  x.compute_chunk_sizes()"
+                )
 
-    chunks = tuple((1,) * len(c) if i in axis else c for (i, c) in enumerate(x.chunks))
-    dsk = {
-        (name,) + k: (chunk, (old,) + k, axis, off)
-        for (k, off) in zip(keys, offset_info)
-    }
+        # Map chunk across all blocks
+        name = f"arg-reduce-{tokenize(axis, x, chunk, combine, split_every)}"
+        old = x.name
+        keys = list(product(*map(range, x.numblocks)))
+        offsets = list(
+            product(*(accumulate(operator.add, bd[:-1], 0) for bd in x.chunks))
+        )
+        if ravel:
+            offset_info = zip(offsets, repeat(x.shape))
+        else:
+            offset_info = pluck(axis[0], offsets)
 
-    dtype = np.argmin(asarray_safe([1], like=meta_from_array(x)))
-    meta = None
-    if is_arraylike(dtype):
-        # This case occurs on non-NumPy types (e.g., CuPy), where the returned
-        # value is an ndarray rather than a scalar.
-        meta = dtype
-        dtype = meta.dtype
+        chunks = tuple(
+            (1,) * len(c) if i in axis else c for (i, c) in enumerate(x.chunks)
+        )
+        dsk = {
+            (name,) + k: (chunk, (old,) + k, axis, off)
+            for (k, off) in zip(keys, offset_info)
+        }
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    tmp = Array(graph, name, chunks, dtype=dtype, meta=meta)
+        dtype = np.argmin(asarray_safe([1], like=meta_from_array(x)))
+        meta = None
+        if is_arraylike(dtype):
+            # This case occurs on non-NumPy types (e.g., CuPy), where the returned
+            # value is an ndarray rather than a scalar.
+            meta = dtype
+            dtype = meta.dtype
 
-    result = _tree_reduce(
-        tmp,
-        agg,
-        axis,
-        keepdims=keepdims,
-        dtype=dtype,
-        split_every=split_every,
-        combine=combine,
-    )
-    return handle_out(out, result)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+        tmp = Array(graph, name, chunks, dtype=dtype, meta=meta)
+
+        result = _tree_reduce(
+            tmp,
+            agg,
+            axis,
+            keepdims=keepdims,
+            dtype=dtype,
+            split_every=split_every,
+            combine=combine,
+        )
+        return handle_out(out, result)
 
 
 def _nanargmin(x, axis, **kwargs):

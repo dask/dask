@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import warnings
 from itertools import product
 from numbers import Number
 
+import numpy as np
 from toolz import concat
 
 from dask.array._array_expr._collection import Array, blockwise
 from dask.array.core import _pass_extra_kwargs, apply_and_enforce, apply_infer_dtype
 from dask.array.utils import compute_meta
-from dask.layers import ArrayBlockIdDep, ArrayValuesDep
+from dask.layers import ArrayBlockIdDep, ArrayBlockwiseDep, ArrayValuesDep
 from dask.utils import cached_cumsum, funcname, has_keyword
 
 
@@ -275,15 +275,12 @@ def map_blocks(
         )
         raise TypeError(msg % type(func).__name__)
     if token:
-        warnings.warn(
-            "The `token=` keyword to `map_blocks` has been moved to `name=`. "
-            "Please use `name=` instead as the `token=` keyword will be removed "
-            "in a future release.",
-            category=FutureWarning,
-        )
         name = token
 
-    name = f"{name or funcname(func)}"
+    # Track if user provided explicit name (should be used exactly)
+    # vs auto-generated token prefix
+    user_provided_name = name is not None
+    token_prefix = f"{name or funcname(func)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -293,10 +290,16 @@ def map_blocks(
 
     arrs = [a for a in args if isinstance(a, Array)]
 
-    argpairs = [
-        (a, tuple(range(a.ndim))[::-1]) if isinstance(a, Array) else (a, None)
-        for a in args
-    ]
+    def get_argpair(a):
+        if isinstance(a, Array):
+            return (a, tuple(range(a.ndim))[::-1])
+        elif isinstance(a, ArrayBlockwiseDep):
+            # ArrayBlockwiseDep needs to be indexed like an array
+            return (a, tuple(range(len(a.numblocks)))[::-1])
+        else:
+            return (a, None)
+
+    argpairs = [get_argpair(a) for a in args]
     if arrs:
         out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
     else:
@@ -311,6 +314,10 @@ def map_blocks(
             pass
 
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
+
+    # Create synthetic meta if compute_meta failed but we have dtype
+    if meta is None and dtype is not None:
+        meta = np.empty((0,) * len(out_ind), dtype=dtype)
 
     if drop_axis:
         ndim_out = len(out_ind)
@@ -346,6 +353,14 @@ def map_blocks(
     else:
         adjust_chunks = None
 
+    # Determine if we actually need concatenation. Concatenation is only needed
+    # when some input indices are not in the output (contracted dimensions).
+    # When there's no actual contraction, we can set concatenate=False to enable fusion.
+    out_ind_set = set(out_ind)
+    needs_concatenate = any(
+        i not in out_ind_set for _, ind in argpairs if ind is not None for i in ind
+    )
+
     if enforce_ndim:
         out = blockwise(
             apply_and_enforce,
@@ -353,10 +368,11 @@ def map_blocks(
             *concat(argpairs),
             expected_ndim=len(out_ind),
             _func=func,
-            token=name,
+            name=name if user_provided_name else None,
+            token=token_prefix,
             new_axes=new_axes,
             dtype=dtype,
-            concatenate=True,
+            concatenate=needs_concatenate,
             align_arrays=False,
             adjust_chunks=adjust_chunks,
             meta=meta,
@@ -367,10 +383,11 @@ def map_blocks(
             func,
             out_ind,
             *concat(argpairs),
-            token=name,
+            name=name if user_provided_name else None,
+            token=token_prefix,
             new_axes=new_axes,
             dtype=dtype,
-            concatenate=True,
+            concatenate=needs_concatenate,
             align_arrays=False,
             adjust_chunks=adjust_chunks,
             meta=meta,
@@ -467,10 +484,8 @@ def map_blocks(
         extra_names.append("block_info")
 
     if extra_argpairs:
-        # Rewrite the Blockwise layer. It would be nice to find a way to
-        # avoid doing it twice, but it's currently needed to determine
-        # out.chunks from the first pass. Since it constructs a Blockwise
-        # rather than an expanded graph, it shouldn't be too expensive.
+        # Rewrite the Blockwise layer to inject block_info/block_id.
+        # Use token=out.name to preserve name prefix from first blockwise.
         out = blockwise(
             _pass_extra_kwargs,
             out_ind,
@@ -480,12 +495,56 @@ def map_blocks(
             None,
             *concat(extra_argpairs),
             *concat(argpairs),
+            token=out.name,
             dtype=out.dtype,
-            concatenate=True,
+            concatenate=needs_concatenate,
             align_arrays=False,
             adjust_chunks=dict(zip(out_ind, out.chunks)),
             meta=meta,
             **kwargs,
         )
+
+    # If output is DataFrame-like, create a DataFrame expression directly
+    # instead of returning an Array with DataFrame blocks
+    from dask.utils import is_dataframe_like, is_index_like, is_series_like
+
+    if meta is not None and (
+        is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta)
+    ):
+        try:
+            from dask.dataframe.dask_expr._array import MapBlocksToDataFrame
+            from dask.dataframe.dask_expr._collection import new_collection
+
+            # Helper to convert Array to expr
+            def to_expr(arr):
+                return arr.expr if isinstance(arr, Array) else arr
+
+            # Build args list with expressions
+            if extra_argpairs:
+                # Function wrapped with block_info/block_id injection
+                actual_func = _pass_extra_kwargs
+                expr_args = [func, None, tuple(extra_names), None]
+                for arr, ind in extra_argpairs:
+                    expr_args.extend([arr, ind])
+                for arr, ind in argpairs:
+                    expr_args.extend([to_expr(arr), ind])
+            else:
+                actual_func = func
+                expr_args = []
+                for arr, ind in argpairs:
+                    expr_args.extend([to_expr(arr), ind])
+
+            return new_collection(
+                MapBlocksToDataFrame(
+                    actual_func,
+                    meta,
+                    token_prefix,
+                    out_ind,
+                    tuple(expr_args),
+                    kwargs or None,
+                )
+            )
+        except ImportError:
+            pass  # dask.dataframe not available
 
     return out

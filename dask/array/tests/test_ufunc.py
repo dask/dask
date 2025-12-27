@@ -519,7 +519,7 @@ def test_dtype_kwarg(dt):
 @pytest.mark.parametrize("left_is_da", [False, True])
 @pytest.mark.parametrize("right_is_da", [False, True])
 @pytest.mark.parametrize("where_kind", [True, False, "numpy", "dask"])
-def test_ufunc_where(dtype, left_is_da, right_is_da, where_kind):
+def test_ufunc_where(dtype, left_is_da, right_is_da, where_kind, request):
     left = np.arange(12).reshape((3, 4))
     right = np.arange(4)
     out = np.zeros_like(left, dtype=dtype)

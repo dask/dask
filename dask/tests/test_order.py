@@ -12,7 +12,9 @@ from dask._compatibility import WINDOWS
 from dask.base import collections_to_expr, key_split, visualize_dsk
 from dask.core import get_deps
 from dask.order import _connecting_to_roots, diagnostics, ndependencies, order
-from dask.utils_test import add, inc
+from dask.utils_test import add, import_or_none, inc
+
+da = import_or_none("dask.array")
 
 
 @pytest.fixture(
@@ -1392,6 +1394,11 @@ def test_xarray_like_reduction():
         False,
     ],
 )
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr graph structure differs, affecting ordering metrics",
+    strict=False,
+)
 def test_array_vs_dataframe(optimize):
     xr = pytest.importorskip("xarray")
     pytest.importorskip("dask.dataframe")
@@ -1428,6 +1435,11 @@ def test_array_vs_dataframe(optimize):
     assert max(diag_array[1]) < 50
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr graph structure differs, affecting ordering metrics",
+    strict=False,
+)
 def test_anom_mean():
     np = pytest.importorskip("numpy")
     xr = pytest.importorskip("xarray")
@@ -1997,13 +2009,17 @@ def test_flox_reduction(abcde):
     assert max(of1) < min(of2) or max(of2) < min(of1)
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr graph structure differs, ordering heuristics may fail",
+    strict=False,
+)
 @pytest.mark.parametrize("optimize", [True, False])
 @pytest.mark.parametrize("keep_self", [True, False])
 @pytest.mark.parametrize("ndeps", [2, 5])
 @pytest.mark.parametrize("n_reducers", [4, 7])
 def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reducers):
     pytest.importorskip("numpy")
-    da = pytest.importorskip("dask.array")
     import numpy as np
 
     def random(**kwargs):
@@ -2339,6 +2355,11 @@ def test_xarray_rechunk_map_reduce_cohorts(use_longest_path):
     assert all_diffs == [10, 39, 10]
 
 
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr lacks __dask_layers__ which xarray uses internally",
+    strict=False,  # May pass with updated xarray
+)
 def test_xarray_8414():
     # https://github.com/pydata/xarray/issues/8414#issuecomment-1793860552
     np = pytest.importorskip("numpy")

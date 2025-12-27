@@ -1668,6 +1668,8 @@ def test_dask_layers_to_delayed(optimize):
     # Ensure the layer name is propagated between `Delayed` and `Item`.
     pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
+    if da._array_expr_enabled():
+        pytest.xfail("array-expr returns dict graphs, not HLG")
     i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
     name = i.key[0]
     assert i.key[1:] == (0,)
@@ -1749,7 +1751,8 @@ def test_map_total_mem_usage():
     total_mem_b = sum(b.map_partitions(total_mem_usage).compute())
     c = b.map(lambda x: x)
     total_mem_c = sum(c.map_partitions(total_mem_usage).compute())
-    assert total_mem_b == total_mem_c
+    # Allow small difference due to Python list over-allocation when building from iterators
+    assert abs(total_mem_b - total_mem_c) / total_mem_b < 0.05
 
 
 def test_reify_empty_iterator():

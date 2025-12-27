@@ -442,10 +442,17 @@ def collections_to_expr(
     for coll in collections:
         from dask.delayed import Delayed
 
-        if isinstance(coll, Delayed) or not hasattr(coll, "expr"):
+        if isinstance(coll, Delayed):
             graphs.append(HLGExpr.from_collection(coll, optimize_graph=optimize_graph))
         else:
-            graphs.append(coll.expr)
+            try:
+                graphs.append(coll.expr)
+            except (AttributeError, ValueError):
+                # AttributeError: object doesn't have .expr
+                # ValueError: xarray DataArrays have .expr but it raises for non-chunked
+                graphs.append(
+                    HLGExpr.from_collection(coll, optimize_graph=optimize_graph)
+                )
 
     if len(graphs) > 1 or is_iterable:
         return _ExprSequence(*graphs)
@@ -995,6 +1002,16 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
         return args
 
     schedule = get_scheduler(scheduler=scheduler, collections=collections)
+
+    # Protocol: scheduler can provide its own persist method for async behavior.
+    # For Client-like objects, get_scheduler returns client.get (a bound method),
+    # so we check __self__ for the actual client instance.
+    persist_target = getattr(schedule, "__self__", schedule)
+    if hasattr(persist_target, "persist") and callable(persist_target.persist):
+        results = persist_target.persist(
+            collections, optimize_graph=optimize_graph, **kwargs
+        )
+        return repack(results)
 
     if inspect.ismethod(schedule):
         try:

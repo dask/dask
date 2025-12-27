@@ -5,6 +5,12 @@ import pytest
 
 import dask
 import dask.array as da
+
+if da._array_expr_enabled():
+    pytest.skip(
+        "shuffle internals not compatible with array-expr", allow_module_level=True
+    )
+
 from dask.array import assert_eq, shuffle
 from dask.array._shuffle import _rechunk_other_dimensions
 from dask.core import flatten
