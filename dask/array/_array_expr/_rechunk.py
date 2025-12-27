@@ -399,7 +399,7 @@ def _compute_rechunk(old_name, old_chunks, chunks, level, name):
 
     del old_blocks, new_index
 
-    return name, chunks, {**x2, **intermediates}
+    return merge_name, chunks, {**x2, **intermediates}
 
 
 class P2PRechunk(ArrayExpr):
