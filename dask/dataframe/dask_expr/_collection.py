@@ -639,7 +639,8 @@ Expr={expr}"""
             Whether to visualize the task graph. By default
             the expression graph will be visualized instead.
         """
-        if tasks:
+        # color= options require task graph visualization
+        if tasks or kwargs.get("color"):
             return super().visualize(**kwargs)
         return self.expr.visualize(**kwargs)
 
