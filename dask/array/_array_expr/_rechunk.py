@@ -87,6 +87,10 @@ class Rechunk(ArrayExpr):
         return chunks
 
     def _simplify_down(self):
+        # No-op rechunk: if chunks already match, return the original array
+        if not self.balance and self.chunks == self.array.chunks:
+            return self.array
+
         from dask.array._array_expr._blockwise import Elemwise
         from dask.array._array_expr.manipulation._transpose import Transpose
 
