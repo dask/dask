@@ -29,34 +29,63 @@ just to remain the same.
 
 ## Testing
 
-When we test we often write the optimized version of the expression, and test
-expression equality against that.
-
-For example
+**Prefer structural equality over value equality.** When testing optimizations,
+we construct both a naive expression and the expected optimized form, then
+compare their `._name` attributes after simplification:
 
 ```python
-def test_transposing_twice_is_identity(self):
-    x = da.ones((5, 5))
-    y = x.T.T
-    result = y.expr.simplify()
-    expected = x.expr
+def test_slice_through_reduction():
+    """x.sum(axis=0)[:5] should optimize to x[:, :5].sum(axis=0)"""
+    x = da.ones((100, 100), chunks=(10, 10))
 
-    assert result._name == expected._name
+    # Naive: slice after reduction
+    result = x.sum(axis=0)[:5]
+
+    # Expected: slice pushed through reduction
+    expected = x[:, :5].sum(axis=0)
+
+    # Structural equality - this is the key assertion
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
 ```
 
-Here testing against _name suffices because `_name` is deterministic based on
-the structure of the graph (it's pretty impossible for different expression
-trees to produce the same name).
+Why `._name`? Names are deterministic based on expression structure - it's
+essentially impossible for different expression trees to produce the same name.
 
-**Subtlety**: When the expected expression also contains optimizable patterns
-(e.g., slices into `from_array`), you may need `.simplify()` on both sides:
+### When to use `.simplify()` on both sides
+
+**Always call `.simplify()` on both sides** unless you're testing that the
+naive expression simplifies to an already-simple base expression:
 
 ```python
-# When expected also has slices that push into IO
+# When expected also has optimizable patterns (common case)
 assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+# Only skip simplify on expected when it's a base expression like FromArray
+x = da.from_array(arr, chunks=(5, 5))
+assert x.T.T.expr.simplify()._name == x.expr._name  # x.expr is already simple
 ```
 
-### Task Count Verification
+### Complete test pattern
+
+A thorough optimization test includes both structural and value verification:
+
+```python
+def test_slice_through_elemwise():
+    """(x + y)[:5] should optimize to x[:5] + y[:5]"""
+    x = da.ones((100, 100), chunks=(10, 10))
+    y = da.ones((100, 100), chunks=(10, 10))
+
+    result = (x + y)[:5]
+    expected = x[:5] + y[:5]
+
+    # 1. Structural equality - verifies the optimization happened
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+    # 2. Value correctness - ensures we didn't break anything
+    assert_eq(result, expected)
+```
+
+### Task count verification
 
 For optimizations that reduce work, verify task count decreases:
 
@@ -71,17 +100,19 @@ def test_optimization_reduces_tasks():
     assert sliced_tasks < full_tasks  # Optimization reduces work
 ```
 
-We might also check expression structure using tools like `._depth`, or
-verifying that the name of some expression doesn't occur in `expr.pprint()`
+### Other structural checks
 
-If we need to we can also test value equality
+Beyond `._name`, you can also verify structure with:
+- `isinstance(expr.simplify(), ExpectedType)` - check expression type
+- `expr._depth` - verify expression tree depth
+- Checking that an operation name doesn't appear in `expr.pprint()`
 
-```python
-assert_eq(result, expected)
-```
+### When value-only tests are acceptable
 
-But this is a bit weaker because it doesn't check expression structure, which
-is what we really care about here for performance.
+Use `assert_eq` alone only for:
+- Correctness tests where optimization is NOT the focus
+- Edge cases where structural verification is complex
+- Parametrized tests covering many inputs where one structural test exists
 
 ## Modifying Expressions with substitute_parameters
 

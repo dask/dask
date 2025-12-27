@@ -138,26 +138,40 @@ Subdirectories for groups:
 
 ## Testing
 
-```bash
-# Run with array-expr enabled
-.venv/bin/pytest dask/array/tests/test_foo.py
+For optimization tests, **prefer structural equality over value-only tests**.
+See the `expr-optimization` skill for comprehensive testing guidance.
 
-# Test expression structure for optimizations
-def test_optimization():
-    x = da.ones((10, 10), chunks=5)
-    result = x.T.T.expr.simplify()
-    assert result._name == x.expr._name  # Transpose cancelled
+### Structural equality pattern
 
-# Test accuracy against numpy for new operations
+```python
+def test_slice_pushes_through_elemwise():
+    """(x + y)[:5] should optimize to x[:5] + y[:5]"""
+    x = da.ones((100, 100), chunks=(10, 10))
+    y = da.ones((100, 100), chunks=(10, 10))
+
+    result = (x + y)[:5]
+    expected = x[:5] + y[:5]
+
+    # Key assertion: structural equality via ._name
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
+
+    # Also verify value correctness
+    assert_eq(result, expected)
+```
+
+**Why `.simplify()` on both sides?** The expected expression often contains
+optimizable patterns too (e.g., slices into `from_array`).
+
+### Value correctness tests
+
+```python
 def test_foo():
     x = np.random.random((10, 10))
     y = da.from_array(x, chunks=(5, 5))
-
     assert_eq(np.foo(x), da.foo(y))
 ```
 
-The `assert_eq` function tests for value equality, but also runs lots of checks
-on the expressions and dask graphs.
+`assert_eq` tests value equality plus structural checks on graphs.
 
 ## Common Tasks
 
