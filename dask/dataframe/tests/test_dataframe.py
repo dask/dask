@@ -5377,10 +5377,6 @@ def test_preserve_ts_unit_in_meta_creation():
     assert_eq(df, pdf)
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(),
-    reason="xarray reindex with array-expr produces more tasks than expected",
-)
 def test_from_xarray():
     xr = pytest.importorskip("xarray")
 

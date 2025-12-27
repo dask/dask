@@ -664,3 +664,77 @@ def test_reduction_scalar_aggregate_meta():
     )
     assert result._meta.shape == (0, 0)
     assert result._meta.dtype == np.float64
+
+
+def test_fusion_blockwise_contracted_dimensions():
+    """Test fusion with Blockwise that has contracted dimensions.
+
+    When a Blockwise expression has indices in input that are not in output
+    (contracted dimensions), the fusion must correctly handle block lookups.
+
+    This is a regression test for xarray integration where groupby operations
+    create Blockwise with out_ind=(2,) for 1D output from 3D input with
+    ind=(0, 1, 2). When fused with Elemwise (out_ind=(0,)), the idx_to_block
+    mapping must correctly handle the contracted dimensions 0 and 1.
+
+    Previously failed with KeyError: 0 in FusedBlockwise._task().
+    """
+    from dask.array._array_expr._blockwise import FusedBlockwise
+
+    # Create 3D array with single blocks in contracted dimensions
+    arr_3d = da.from_array(np.ones((1, 1, 3)), chunks=(1, 1, 1))
+
+    # Blockwise that reduces dims 0 and 1, keeps dim 2 as output
+    # out_ind=(2,) means output indexed by input's dimension 2
+    result = da.blockwise(
+        lambda x: x.mean(axis=(0, 1)),
+        (2,),  # out_ind - output dimension comes from input dim 2
+        arr_3d.expr,
+        (0, 1, 2),  # ind - input has all 3 dimensions
+        dtype=arr_3d.dtype,
+    )
+
+    # Verify Blockwise is fusable when contracted dims have single blocks
+    assert result.expr._is_blockwise_fusable
+
+    # Elemwise comparison - has out_ind=(0,)
+    expected = np.array([1.0, 1.0, 1.0])
+    close = da.isclose(result, expected)
+
+    # Should fuse Elemwise (out_ind=(0,)) with Blockwise (out_ind=(2,))
+    optimized = close.expr.optimize(fuse=True)
+    assert isinstance(optimized, FusedBlockwise)
+
+    # Verify correct computation
+    assert_eq(close, np.array([True, True, True]))
+
+
+def test_fusion_blockwise_multiblock_contracted_prevents_fusion():
+    """Test that Blockwise with multi-block contracted dims isn't fusable.
+
+    When a Blockwise has contracted dimensions (in input but not output) with
+    multiple blocks, fusion is not possible since each output block would need
+    to reference multiple input blocks from the contracted dimension.
+    """
+    from dask.array._array_expr._blockwise import FusedBlockwise
+
+    # Create 3D array with multiple blocks in contracted dimension 0
+    arr_3d = da.from_array(np.ones((2, 1, 3)), chunks=(1, 1, 1))
+
+    result = da.blockwise(
+        lambda x: x.sum(),
+        (2,),  # output indexed by dim 2
+        arr_3d.expr,
+        (0, 1, 2),
+        dtype=arr_3d.dtype,
+    )
+
+    # Should NOT be fusable due to multi-block contracted dimension
+    assert not result.expr._is_blockwise_fusable
+
+    # Elemwise wrapping the Blockwise
+    close = da.isclose(result, np.array([1.0, 1.0, 1.0]))
+
+    # Should NOT fuse since Blockwise isn't fusable
+    optimized = close.expr.optimize(fuse=True)
+    assert not isinstance(optimized, FusedBlockwise)
