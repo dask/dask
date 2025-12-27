@@ -155,6 +155,19 @@ class Blockwise(ArrayExpr):
 
         if any(isinstance(op, Delayed) for op in self.operands):
             return False
+
+        # Check for contracted dimensions with multiple blocks
+        # These are dimensions in input but not in output - we can only fuse
+        # if they have a single block
+        out_idx_set = set(self.out_ind)
+        if self.new_axes:
+            out_idx_set |= set(self.new_axes.keys())
+        for arr, ind in toolz.partition(2, self.args):
+            if ind is not None and hasattr(arr, "numblocks"):
+                for dim, i in enumerate(ind):
+                    if i not in out_idx_set and arr.numblocks[dim] > 1:
+                        # Contracted dimension with multiple blocks can't be fused
+                        return False
         return True
 
     def _idx_to_block(self, block_id: tuple[int, ...]) -> dict:
@@ -166,7 +179,7 @@ class Blockwise(ArrayExpr):
 
     def _dep_block_id(self, arr, ind, idx_to_block: dict) -> tuple[int, ...]:
         """Compute block_id for a dependency, applying modulo for broadcasting."""
-        return tuple(idx_to_block[i] % arr.numblocks[dim] for dim, i in enumerate(ind))
+        return _compute_block_id(ind, idx_to_block, arr.numblocks)
 
     def _task(self, key, block_id: tuple[int, ...]):
         """Generate task for a specific output block."""
@@ -185,7 +198,8 @@ class Blockwise(ArrayExpr):
             if ind is None:
                 args.append(arr)
             elif isinstance(arr, ArrayBlockwiseDep):
-                input_block_id = tuple(idx_to_block[i] for i in ind)
+                numblocks = tuple(len(c) for c in arr.chunks)
+                input_block_id = _compute_block_id(ind, idx_to_block, numblocks)
                 args.append(arr[input_block_id])
             else:
                 input_block_id = self._dep_block_id(arr, ind, idx_to_block)
@@ -890,6 +904,30 @@ def _broadcast_block_id(
             result.append(0)
         else:
             result.append(block_id[out_idx])
+    return tuple(result)
+
+
+def _compute_block_id(
+    ind: tuple, idx_to_block: dict, numblocks: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Compute block_id for a dependency given symbolic indices.
+
+    Maps symbolic indices to block coordinates using idx_to_block mapping.
+    Handles contracted dimensions (indices in input but not output) by using
+    block 0 when the dimension has only 1 block.
+    """
+    result = []
+    for dim, i in enumerate(ind):
+        if i in idx_to_block:
+            result.append(idx_to_block[i] % numblocks[dim])
+        elif numblocks[dim] == 1:
+            # Contracted dimension with single block - use block 0
+            result.append(0)
+        else:
+            raise ValueError(
+                f"Cannot determine block for index {i}: not in output indices "
+                f"and input has {numblocks[dim]} blocks in dimension {dim}"
+            )
     return tuple(result)
 
 
