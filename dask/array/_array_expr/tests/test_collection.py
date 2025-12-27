@@ -236,10 +236,14 @@ def test_slicing_pushdown_elemwise_broadcast():
     # (aa + cc)[:5] should become (aa[:5] + cc)
     # cc doesn't get sliced because axis 0 is broadcast
     result = (aa + cc)[:5]
+    expected = aa[:5] + cc
+    assert result.expr.simplify()._name == expected.expr.simplify()._name
     assert_eq(result, (a + c)[:5])
 
     # (aa + cc)[:, ::2] should become (aa[:, ::2] + cc[::2])
     result2 = (aa + cc)[:, ::2]
+    expected2 = aa[:, ::2] + cc[::2]
+    assert result2.expr.simplify()._name == expected2.expr.simplify()._name
     assert_eq(result2, (a + c)[:, ::2])
 
 
@@ -292,6 +296,10 @@ def test_rechunk_pushdown_elemwise_broadcast():
 
     # (aa + bb).rechunk((5, 2)) should become Elemwise at top level
     c = (aa + bb).rechunk((5, 2))
+    # Expected: rechunk pushed to inputs
+    expected = aa.rechunk((2,)) + bb.rechunk((5, 2))
+    assert c.expr.simplify()._name == expected.expr.simplify()._name
+
     opt = c.expr.optimize()
     # Should be Elemwise at top level (rechunk pushed inside)
     assert type(opt).__name__ == "Elemwise"
