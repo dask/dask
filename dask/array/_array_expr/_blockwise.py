@@ -769,6 +769,8 @@ class Elemwise(Blockwise):
         Returns a new Elemwise with the slice pushed to each input,
         handling broadcasting appropriately.
         """
+        from numbers import Integral
+
         from dask._collections import new_collection
 
         out_ind = self.out_ind
@@ -796,11 +798,25 @@ class Elemwise(Blockwise):
                     try:
                         out_pos = out_ind.index(dim_idx)
                         out_slice = full_index[out_pos]
-                        # If this dimension is size 1 (broadcasting) and slice is a slice
-                        # (not integer), use slice(None) to preserve broadcast semantics.
-                        # Integer indices must still be applied to remove the dimension.
-                        if arg_shape[i] == 1 and isinstance(out_slice, slice):
-                            arg_slices.append(slice(None))
+                        # Handle size-1 (broadcast) dimensions specially:
+                        # - For slices: use slice(None) to preserve broadcast semantics,
+                        #   EXCEPT for empty output slices (like [:0]) which must be preserved
+                        # - For integers: use 0 instead of the original index (which may be
+                        #   out of bounds for the size-1 input)
+                        if arg_shape[i] == 1:
+                            if isinstance(out_slice, slice):
+                                out_dim_size = self.shape[out_pos]
+                                start, stop, step = out_slice.indices(out_dim_size)
+                                if len(range(start, stop, step)) == 0:
+                                    # Empty output slice - preserve it
+                                    arg_slices.append(out_slice)
+                                else:
+                                    arg_slices.append(slice(None))
+                            elif isinstance(out_slice, Integral):
+                                # Integer index on broadcast dim - use 0
+                                arg_slices.append(0)
+                            else:
+                                arg_slices.append(out_slice)
                         else:
                             arg_slices.append(out_slice)
                     except ValueError:

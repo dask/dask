@@ -512,6 +512,12 @@ class PartialReduce(ArrayExpr):
         # Apply the slice to the input and create new PartialReduce
         sliced_input = new_collection(input_array)[input_index]
 
+        # Don't push slice through if it would create empty arrays on non-reduced axes.
+        # Reductions on empty non-reduced dimensions cause issues with task aggregation.
+        for ax in range(input_ndim):
+            if ax not in reduced_axes and sliced_input.shape[ax] == 0:
+                return None
+
         result = PartialReduce(
             sliced_input.expr,
             self.func,

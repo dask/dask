@@ -590,3 +590,65 @@ def test_integer_index_through_elemwise_broadcast():
     # Integer index on axis 2 should remove it
     assert result.shape == (10, 15)
     assert_eq(result, np.ones((10, 15)) * 2)
+
+
+# =============================================================================
+# Regression tests for empty slice handling
+# =============================================================================
+
+
+def test_empty_slice_through_elemwise_broadcast():
+    """Empty slice through Elemwise with broadcast preserves empty output.
+
+    Regression test: empty slices like [:0] on broadcast dimensions were
+    incorrectly replaced with [:], producing non-empty output.
+    """
+    scalar_da = da.from_array(np.float32(0.0), chunks=-1)
+    arr_da = da.from_array(np.array([[0.0]], dtype="float32"), chunks=-1)
+
+    # scalar () + (1, 1) broadcasts to (1, 1)
+    added = scalar_da + arr_da
+    assert added.shape == (1, 1)
+
+    # [0, :0] should give shape (0,) - empty array
+    result = added[0, :0]
+    assert result.shape == (0,)
+    assert result.compute().shape == (0,)
+
+
+def test_integer_index_out_of_bounds_on_broadcast_dim():
+    """Integer index larger than input size works on broadcast dimension.
+
+    Regression test: integer indices like [1] on size-1 broadcast dimensions
+    were applied directly, causing IndexError.
+    """
+    scalar = da.from_array(np.float32(0.0), chunks=-1)
+    arr1 = da.from_array(np.array([[0.0, 1.0]], dtype="float32"), chunks=-1)  # (1, 2)
+    arr2 = da.from_array(np.zeros((1, 1, 1, 1), dtype="float32"), chunks=-1)
+
+    # scalar + (1, 2) + (1, 1, 1, 1) = (1, 1, 1, 2)
+    result = scalar + arr1 + arr2
+    assert result.shape == (1, 1, 1, 2)
+
+    # [0, 0, 0, 1] - the index 1 on axis 3 is valid for output but the
+    # (1, 1, 1, 1) input only has size 1 on that axis (broadcast)
+    indexed = result[0, 0, 0, 1]
+    assert indexed.shape == ()
+    assert indexed.compute() == 1.0  # arr1[0, 1] = 1.0
+
+
+def test_empty_slice_not_pushed_through_reduction():
+    """Empty slice after reduction is not pushed through.
+
+    Regression test: pushing empty slices through reductions created invalid
+    task graphs because the reduction machinery doesn't handle empty
+    non-reduced dimensions.
+    """
+    arr = da.from_array(np.zeros((1, 2, 1, 1), dtype="float32"), chunks=-1)
+    reduced = da.nanmin(arr, axis=(1, 2, 3))  # (1,)
+
+    # [:-1] on (1,) gives (0,) - empty array
+    sliced = reduced[:-1]
+    assert sliced.shape == (0,)
+    result = sliced.compute()
+    assert result.shape == (0,)
