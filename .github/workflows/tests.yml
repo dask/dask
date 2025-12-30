@@ -25,6 +25,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Note: after adding/removing builds here, update
+        # codecov.yml to match.
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
         environment: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         extra: [null]
