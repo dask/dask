@@ -2651,12 +2651,10 @@ def repartition_npartitions(bag, npartitions):
 
 
 def total_mem_usage(partition):
-    from copy import deepcopy
-
-    # if repartition is called multiple times prior to calling compute(), the partitions
-    # will be an Iterable. Copy the object to avoid consuming the iterable.
+    # Reify iterables to measure actual memory size.
+    # Each compute creates a fresh iterator from the graph.
     if isinstance(partition, Iterable):
-        partition = reify(deepcopy(partition))
+        partition = reify(partition)
     return sizeof(partition)
 
 
