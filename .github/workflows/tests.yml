@@ -43,10 +43,10 @@ jobs:
             environment: "mindeps-optional"
           # Experimental setups
           - os: "ubuntu-latest"
-            environment: "3.12"
+            environment: "3.14"
             extra: "pandas-nightly"
           - os: "ubuntu-latest"
-            environment: "3.12"
+            environment: "3.14"
             array-expr: "true"
 
     env:
