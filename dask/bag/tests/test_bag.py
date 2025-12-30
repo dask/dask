@@ -1749,8 +1749,9 @@ def test_map_total_mem_usage():
     total_mem_b = sum(b.map_partitions(total_mem_usage).compute())
     c = b.map(lambda x: x)
     total_mem_c = sum(c.map_partitions(total_mem_usage).compute())
-    # Allow small difference due to Python list over-allocation when building from iterators
-    assert abs(total_mem_b - total_mem_c) / total_mem_b < 0.05
+    # Allow small difference due to Python list over-allocation when building
+    # from iterators
+    assert math.isclose(total_mem_b, total_mem_c, rel_tol=0.05)
 
 
 def test_reify_empty_iterator():
