@@ -31,7 +31,6 @@ import dask.array as da
 from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
-    BlockView,
     PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
@@ -5433,8 +5432,7 @@ def test_tiledb_multiattr():
 
 def test_blockview():
     x = da.arange(10, chunks=2)
-    blockview = BlockView(x)
-    assert x.blocks == blockview
+    blockview = x.blocks
     assert isinstance(blockview[0], da.Array)
 
     assert_eq(blockview[0], x[:2])
@@ -5449,7 +5447,7 @@ def test_blockview():
     )
 
     x = da.random.default_rng().random((20, 20), chunks=(4, 5))
-    blockview = BlockView(x)
+    blockview = x.blocks
     assert_eq(blockview[0], x[:4])
     assert_eq(blockview[0, :3], x[:4, :15])
     assert_eq(blockview[:, :3], x[:, :15])
@@ -5460,7 +5458,7 @@ def test_blockview():
     )
 
     x = da.ones((40, 40, 40), chunks=(10, 10, 10))
-    blockview = BlockView(x)
+    blockview = x.blocks
     assert_eq(blockview[0, :, 0], np.ones((10, 40, 10)))
     assert_eq(blockview.shape, tuple(map(len, x.chunks)))
     assert_eq(blockview.size, math.prod(blockview.shape))
@@ -5469,6 +5467,7 @@ def test_blockview():
     )
 
     x = da.ones((2, 2), chunks=1)
+    blockview = x.blocks
     with pytest.raises(ValueError):
         blockview[[0, 1], [0, 1]]
     with pytest.raises(ValueError):
