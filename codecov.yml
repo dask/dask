@@ -6,8 +6,10 @@ codecov:
   # https://docs.codecov.com/docs/merging-reports this shouldn't be happening,
   # but it is. Here we set a minimum number of builds before notifying in the
   # hopes that it will stop this behavior.
+  # This number is informed by the number of builds defined by the matrix in
+  # .github/workflows/tests.yml.
   notify:
-    after_n_builds: 10
+    after_n_builds: 22
 
 coverage:
   precision: 2
