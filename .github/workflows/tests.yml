@@ -120,6 +120,8 @@ jobs:
 
       - name: Coverage
         uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       # The environment file is created in continuous_integration/scripts/install.sh
       # and can be useful when debugging locally
