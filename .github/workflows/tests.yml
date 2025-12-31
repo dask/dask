@@ -25,6 +25,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Note: after adding/removing builds here, update
+        # codecov.yml to match.
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
         environment: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         extra: [null]
@@ -118,6 +120,8 @@ jobs:
 
       - name: Coverage
         uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       # The environment file is created in continuous_integration/scripts/install.sh
       # and can be useful when debugging locally
