@@ -24,7 +24,7 @@ def test_api():
         if isinstance(mod, ModuleType) and mod.__package__ == "dask.array"
     }
     # imported utility modules
-    members -= {"annotations", "importlib", "warnings"}
+    members -= {"annotations", "builtins", "importlib", "warnings"}
     # private utilities and `__dunder__` members
     members -= {"ARRAY_EXPR_ENABLED"}
     members -= {m for m in members if m.startswith("_")}
