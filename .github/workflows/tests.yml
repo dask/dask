@@ -60,6 +60,9 @@ jobs:
           - os: "ubuntu-latest"
             environment: "3.14"
             array-expr: "true"
+          - os: "ubuntu-latest"
+            environment: "mindeps-array"
+            array-expr: "true"
 
     env:
       PARALLEL: "true"
