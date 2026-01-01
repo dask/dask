@@ -9,7 +9,7 @@ codecov:
   # This number is informed by the number of builds defined by the matrix in
   # .github/workflows/tests.yml.
   notify:
-    after_n_builds: 18
+    after_n_builds: 19
 
 coverage:
   precision: 2
