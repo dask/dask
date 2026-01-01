@@ -140,7 +140,7 @@ def test_overlap_internal_asymmetric_small():
     assert same_keys(overlap_internal(d, {0: (0, 0), 1: (1, 1)}), result)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="blockwise fusion needed")  # type: ignore[call-overload]
+@pytest.mark.xfail(da._array_expr_enabled(), reason="blockwise fusion needed")
 def test_trim_internal():
     d = da.ones((40, 60), chunks=(10, 10))
     e = trim_internal(d, axes={0: 1, 1: 2}, boundary="reflect")
@@ -374,7 +374,7 @@ def test_map_overlap_no_depth(boundary):
     assert_eq(y, x)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="reshape needed")  # type: ignore[call-overload]
+@pytest.mark.xfail(da._array_expr_enabled(), reason="reshape needed")
 def test_map_overlap_multiarray():
     # Same ndim, same numblocks, same chunks
     x = da.arange(10, chunks=5)
@@ -480,7 +480,7 @@ def test_map_overlap_multiarray_block_broadcast():
     assert_eq(z.sum(), 4.0 * (10 * 8 + 8))
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="__array_function__ needed")  # type: ignore[call-overload]
+@pytest.mark.xfail(da._array_expr_enabled(), reason="__array_function__ needed")
 def test_map_overlap_multiarray_variadic():
     # Test overlapping row slices from 3D arrays
     xs = [
@@ -759,7 +759,7 @@ def test_overlap_few_dimensions():
     assert len(c.dask) < 10 * len(a.dask)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="push needed")  # type: ignore[call-overload]
+@pytest.mark.xfail(da._array_expr_enabled(), reason="push needed")
 def test_push():
     bottleneck = pytest.importorskip("bottleneck")
 
@@ -974,7 +974,7 @@ def test_map_overlap_new_axis():
     assert_eq(expected, actual, check_shape=False, check_chunks=False)
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="xarray doesn't work yet")  # type: ignore[call-overload]
+@pytest.mark.xfail(da._array_expr_enabled(), reason="xarray doesn't work yet")
 def test_overlap_not_blowing_up_graph():
     xr = pytest.importorskip("xarray")
 

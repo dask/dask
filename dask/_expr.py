@@ -7,7 +7,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 import toolz
 
@@ -18,9 +18,6 @@ from dask.typing import Key
 from dask.utils import ensure_dict, funcname, import_required
 
 if TYPE_CHECKING:
-    # TODO import from typing (requires Python >=3.10)
-    from typing import Any, TypeAlias
-
     from dask.highlevelgraph import HighLevelGraph
 
 OptimizerStage: TypeAlias = Literal[
