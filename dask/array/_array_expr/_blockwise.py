@@ -408,6 +408,11 @@ class Blockwise(ArrayExpr):
         - The blockwise doesn't adjust chunk sizes on sliced dimensions
         - The blockwise doesn't add new axes on sliced dimensions
         - The slice uses only slices or integers (no newaxis)
+
+        When adjust_chunks is present, we do "coarse" optimization:
+        - Calculate which output blocks the slice needs
+        - Select only the corresponding input blocks
+        - Wrap with adjusted output slice if needed
         """
         from numbers import Integral
 
@@ -432,11 +437,20 @@ class Blockwise(ArrayExpr):
 
         # Use getattr since subclasses may define as class attribute or property
         adjust_chunks = getattr(self, "adjust_chunks", None)
+        needs_coarse = False
         if adjust_chunks:
-            # Only reject if we're slicing an adjusted dimension
-            adjusted_axes = set(adjust_chunks.keys())
-            if sliced_axes & adjusted_axes:
-                return None
+            # Map sliced axis positions to symbolic indices
+            # out_ind can be a tuple like (1, 0) or a string like 'ij'
+            sliced_indices = set()
+            for axis in sliced_axes:
+                if axis < len(out_ind):
+                    sliced_indices.add(out_ind[axis])
+
+            # Check if we're slicing an adjusted dimension
+            adjusted_indices = set(adjust_chunks.keys())
+            if sliced_indices & adjusted_indices:
+                # Use coarse slice optimization
+                needs_coarse = True
 
         # Don't handle if blockwise adds new axes and we're slicing those axes
         new_axes = getattr(self, "new_axes", None)
@@ -444,6 +458,10 @@ class Blockwise(ArrayExpr):
             new_axis_positions = set(new_axes.keys())
             if sliced_axes & new_axis_positions:
                 return None
+
+        # For coarse optimization, calculate block-aligned slices
+        if needs_coarse:
+            return self._accept_slice_coarse(slice_expr, full_index, adjust_chunks)
 
         # Convert integers to size-1 slices for pushdown
         slice_index = tuple(
@@ -512,6 +530,170 @@ class Blockwise(ArrayExpr):
             )
             return SliceSlicesIntegers(
                 result, extract_index, slice_expr.allow_getitem_optimization
+            )
+
+        return result
+
+    def _accept_slice_coarse(self, slice_expr, full_index, adjust_chunks):
+        """Coarse slice optimization for blockwise with adjust_chunks.
+
+        When chunk sizes change between input and output, we can't push the
+        exact slice through. But we CAN select only the input blocks that
+        contribute to the needed output blocks.
+
+        Algorithm:
+        1. For each adjusted axis, find which OUTPUT blocks the slice needs
+        2. Map to corresponding INPUT blocks (same block indices for blockwise)
+        3. Create block-aligned input slices
+        4. Wrap output with adjusted slice if original doesn't align to blocks
+        """
+        from numbers import Integral
+
+        from dask._collections import new_collection
+        from dask.utils import cached_cumsum
+
+        def find_block_range(cumsum, start, stop):
+            """Find (first_block, last_block) indices for range [start, stop)."""
+            # First block containing element at 'start'
+            first_block = np.searchsorted(cumsum[1:], start, side="right")
+            # Last block containing element before 'stop'
+            last_block = (
+                np.searchsorted(cumsum[1:], stop - 1, side="right")
+                if stop > start
+                else first_block - 1
+            )
+            if first_block >= len(cumsum) - 1:
+                return None, None  # Out of bounds
+            return int(first_block), int(last_block)
+
+        out_ind = self.out_ind
+        out_chunks = self.chunks
+
+        # For each output axis, compute block range and output adjustment
+        block_ranges = []  # (first_block, last_block) for each axis
+        output_adjustments = []  # Adjusted slices to apply to output
+
+        for axis, idx in enumerate(full_index):
+            chunks = out_chunks[axis]
+            dim_size = sum(chunks)
+            cumsum = np.array(list(cached_cumsum(chunks, initial_zero=True)))
+
+            if idx == slice(None):
+                block_ranges.append(None)  # All blocks
+                output_adjustments.append(slice(None))
+            elif isinstance(idx, Integral):
+                pos_idx = idx if idx >= 0 else idx + dim_size
+                first, last = find_block_range(cumsum, pos_idx, pos_idx + 1)
+                if first is None:
+                    return None  # Out of bounds
+                block_ranges.append((first, last))
+                output_adjustments.append(pos_idx - cumsum[first])
+            elif isinstance(idx, slice):
+                start, stop, step = idx.indices(dim_size)
+                if step != 1:
+                    return None  # Non-unit step not supported
+
+                first, last = find_block_range(cumsum, start, stop)
+                if first is None:
+                    block_ranges.append((0, -1))  # Empty
+                    output_adjustments.append(slice(0, 0))
+                else:
+                    block_ranges.append((first, last))
+                    coarse_start = cumsum[first]
+                    coarse_end = cumsum[last + 1]
+                    adj_start = start - coarse_start
+                    adj_stop = stop - coarse_start
+                    if adj_start == 0 and adj_stop == coarse_end - coarse_start:
+                        output_adjustments.append(slice(None))
+                    else:
+                        output_adjustments.append(slice(adj_start, adj_stop))
+            else:
+                return None
+
+        # Map output block ranges to input slices
+        args = self.args
+        new_args = []
+
+        for i in range(0, len(args), 2):
+            arg = args[i]
+            arg_ind = args[i + 1]
+
+            if arg_ind is None:
+                new_args.extend([arg, arg_ind])
+            elif not hasattr(arg, "_meta"):
+                # Non-array args (e.g., ArrayValuesDep for block_info) can't be sliced
+                return None
+            else:
+                arg_slices = []
+                for dim_idx, in_ind in enumerate(arg_ind):
+                    try:
+                        out_pos = out_ind.index(in_ind)
+                        br = block_ranges[out_pos]
+
+                        if br is None:
+                            arg_slices.append(slice(None))
+                        else:
+                            first, last = br
+                            if last < first:  # Empty
+                                arg_slices.append(slice(0, 0))
+                            else:
+                                in_cumsum = list(
+                                    cached_cumsum(
+                                        arg.chunks[dim_idx], initial_zero=True
+                                    )
+                                )
+                                arg_slices.append(
+                                    slice(in_cumsum[first], in_cumsum[last + 1])
+                                )
+                    except ValueError:
+                        arg_slices.append(slice(None))  # Contracted dimension
+
+                sliced_arg = new_collection(arg)[tuple(arg_slices)]
+                new_args.extend([sliced_arg.expr, arg_ind])
+
+        # Slice adjust_chunks tuples/lists to match the new block ranges
+        new_adjust_chunks = self.operand("adjust_chunks")
+        if new_adjust_chunks:
+            new_adjust_chunks = dict(new_adjust_chunks)  # Copy
+            for axis, br in enumerate(block_ranges):
+                if br is None:
+                    continue
+                first, last = br
+                if last < first:
+                    continue
+                ind = out_ind[axis]
+                if ind in new_adjust_chunks:
+                    val = new_adjust_chunks[ind]
+                    if isinstance(val, (tuple, list)):
+                        # Slice the tuple to match the selected blocks
+                        new_adjust_chunks[ind] = val[first : last + 1]
+
+        # Build the new Blockwise with coarse-sliced inputs
+        result = Blockwise(
+            self.func,
+            self.out_ind,
+            self.operand("name"),
+            self.operand("token"),
+            self.operand("dtype"),
+            new_adjust_chunks,
+            self.operand("new_axes"),
+            self.operand("align_arrays"),
+            self.operand("concatenate"),
+            self.operand("_meta_provided"),
+            self.operand("kwargs"),
+            *new_args,
+        )
+
+        # Check if we need output adjustment
+        needs_output_slice = any(adj != slice(None) for adj in output_adjustments)
+
+        if needs_output_slice:
+            from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+            # Build the output adjustment index
+            adj_index = tuple(output_adjustments)
+            return SliceSlicesIntegers(
+                result, adj_index, slice_expr.allow_getitem_optimization
             )
 
         return result
