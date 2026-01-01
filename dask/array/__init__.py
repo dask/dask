@@ -623,7 +623,7 @@ try:
 
         da = importlib.reload(da)
 
-except ImportError as e:
+except ImportError as e:  # pragma: no cover
     msg = (
         "Dask array requirements are not installed.\n\n"
         "Please either conda or pip install as follows:\n\n"
@@ -917,7 +917,8 @@ if _array_expr_enabled():
         from dask.array.utils import assert_eq
         from dask.base import compute
 
-    except ImportError:
+    # FIXME this should not ever happen
+    except ImportError:  # pragma: no cover
         import dask.array as da  # type: ignore[no-redef]
 
         da = importlib.reload(da)
