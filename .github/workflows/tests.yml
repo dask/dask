@@ -31,6 +31,16 @@ jobs:
         environment: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         extra: [null]
         array-expr: ["false"]
+        exclude:
+          # MacOS CI does not have many hosts available; run it on 3.14 only
+          - os: "macos-latest"
+            environment: "3.10"
+          - os: "macos-latest"
+            environment: "3.11"
+          - os: "macos-latest"
+            environment: "3.12"
+          - os: "macos-latest"
+            environment: "3.13"
         include:
           # Minimum dependencies
           - os: "ubuntu-latest"
