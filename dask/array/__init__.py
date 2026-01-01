@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import builtins
 import importlib
 import warnings
 
 # The "array.query-planning" config can only be processed once
-ARRAY_EXPR_ENABLED: bool | None = None
+ARRAY_EXPR_ENABLED: builtins.bool | None = None
 
 
-def _array_expr_enabled() -> bool:
+def _array_expr_enabled() -> builtins.bool:
     import dask
 
     global ARRAY_EXPR_ENABLED
@@ -25,12 +26,12 @@ def _array_expr_enabled() -> bool:
                 "The query-planning config can only be changed before "
                 "`dask.array` is first imported!"
             )
-        return ARRAY_EXPR_ENABLED  # type: ignore[return-value]
+        return ARRAY_EXPR_ENABLED
 
-    return bool(use_array_expr if use_array_expr is not None else False)
+    return builtins.bool(use_array_expr if use_array_expr is not None else False)
 
 
-def array_expr_enabled():
+def array_expr_enabled() -> builtins.bool:
     # Need a public variant for downstream libraries to check
     return _array_expr_enabled()
 
