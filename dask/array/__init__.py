@@ -34,7 +34,9 @@ def _array_expr_enabled() -> _builtins.bool:
         return _builtins.bool(ARRAY_EXPR_ENABLED)
 
     # Cache the result on first call
-    ARRAY_EXPR_ENABLED = _builtins.bool(use_array_expr if use_array_expr is not None else False)
+    ARRAY_EXPR_ENABLED = _builtins.bool(
+        use_array_expr if use_array_expr is not None else False
+    )
     return ARRAY_EXPR_ENABLED
 
 
