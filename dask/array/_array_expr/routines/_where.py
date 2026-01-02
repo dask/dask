@@ -45,21 +45,18 @@ def where(condition, x=None, y=None):
 
         return nonzero(condition)
 
-    # Optimization: for scalar conditions with matching shapes, return the chosen array directly
+    # Optimization: for scalar conditions, avoid elemwise overhead
     if np.isscalar(condition):
+        from dask.array._array_expr._broadcast import broadcast_to
         from dask.array.core import broadcast_shapes
+        from dask.array.routines import result_type
 
+        dtype = result_type(x, y)
         x = asarray(x)
         y = asarray(y)
-        out = x if condition else y
-
-        # If shapes match, we can return the original array (possibly cast)
         shape = broadcast_shapes(x.shape, y.shape)
-        if out.shape == shape:
-            dtype = np.result_type(x.dtype, y.dtype)
-            if out.dtype == dtype:
-                return out
-            return out.astype(dtype)
+        out = x if condition else y
+        return broadcast_to(out, shape).astype(dtype)
 
     # Use elemwise with np.where to handle all cases
     return elemwise(np.where, condition, x, y)
