@@ -2,21 +2,22 @@
 
 set -e
 
+CMD="python -m pytest dask --runslow"
+
+if [[ $COVERAGE == 'true' ]]; then
+    CMD="$CMD --cov --cov-report=xml"
+fi
+
 if [[ $ARRAYEXPR == 'true' ]]; then
-    export MARKERS="--runarrayexpr"
-else
-    export MARKERS=""
+    CMD="$CMD --runarrayexpr"
 fi
 
 if [[ $PARALLEL == 'true' ]]; then
-    export XTRATESTARGS="-n4 $XTRATESTARGS"
+    CMD="$CMD -n4"
 fi
 
-if [[ $COVERAGE == 'true' ]]; then
-    export XTRATESTARGS="--cov=dask --cov-report=xml --junit-xml pytest.xml $XTRATESTARGS"
-fi
+CMD="$CMD $@"
 
-echo "pytest dask --runslow $MARKERS $XTRATESTARGS"
-pytest dask --runslow $MARKERS $XTRATESTARGS
-
-set +e
+env | grep DASK || true
+echo "$CMD"
+$CMD
