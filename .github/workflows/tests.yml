@@ -64,11 +64,6 @@ jobs:
             environment: "mindeps-array"
             array-expr: "true"
 
-    env:
-      PARALLEL: "true"
-      COVERAGE: "true"
-      HDF5_USE_FILE_LOCKING: "FALSE"
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v6
@@ -120,15 +115,15 @@ jobs:
           echo "DASK_ARRAY__QUERY_PLANNING=$DASK_ARRAY__QUERY_PLANNING" >> $GITHUB_ENV
 
       - name: Run import tests
-        id: import_tests
-        env:
-          ARRAYEXPR: ${{ matrix.array-expr }}
         run: pytest dask/tests/test_imports.py
 
       - name: Run tests
         id: run_tests
         env:
+          PARALLEL: "true"
+          COVERAGE: "true"
           ARRAYEXPR: ${{ matrix.array-expr }}
+          HDF5_USE_FILE_LOCKING: "FALSE"
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage

@@ -7,7 +7,7 @@ try:
     # Backwards compatibility with versioneer
     from dask._version import __commit_id__ as __git_revision__
     from dask._version import __version__
-except ImportError:
+except ImportError:  # pragma: no cover
     __git_revision__ = "unknown"
     __version__ = "unknown"
 from dask.base import (

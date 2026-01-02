@@ -234,6 +234,7 @@ source = ["dask"]
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
 exclude_lines = [
+    "if TYPE_CHECKING:",
     "pragma: no cover",
     "raise AssertionError",
     "raise NotImplementedError",
