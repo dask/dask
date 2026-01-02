@@ -15,6 +15,7 @@ from dask._collections import new_collection
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array._array_expr._utils import compute_meta
 from dask.array.core import _concatenate2
+from dask.array.numpy_compat import ComplexWarning
 from dask.array.utils import is_arraylike, validate_axis
 from dask.blockwise import lol_tuples
 from dask.tokenize import _tokenize_deterministic
@@ -436,9 +437,7 @@ class PartialReduce(ArrayExpr):
             if meta.dtype != target_dtype:
                 with warnings.catch_warnings():
                     # Suppress ComplexWarning when casting complex to real (e.g., var)
-                    warnings.filterwarnings(
-                        "ignore", category=np.exceptions.ComplexWarning
-                    )
+                    warnings.filterwarnings("ignore", category=ComplexWarning)
                     meta = meta.astype(target_dtype)
 
         # Convert MaskedConstant (np.ma.masked) to a proper MaskedArray
