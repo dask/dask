@@ -257,7 +257,7 @@ def broadcast_to(x, shape, chunks=None, meta=None):
 
     # Identity case
     if x.shape == shape and (chunks is None or chunks == x.chunks):
-        return new_collection(x.expr)
+        return x
 
     ndim_new = len(shape) - x.ndim
     if ndim_new < 0 or any(
