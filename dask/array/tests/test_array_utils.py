@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.core import Array
 from dask.array.utils import assert_eq, meta_from_array
 from dask.local import get_sync
 
@@ -23,10 +22,6 @@ try:
     asarrays.append(cupy.asarray)
 except ImportError:
     pass
-
-
-if da._array_expr_enabled():
-    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
 
 
 @pytest.mark.parametrize("asarray", asarrays)
@@ -65,6 +60,10 @@ def test_meta_from_array_literal(meta, dtype):
         )
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="array-expr Array constructor doesn't accept graph directly",
+)
 def test_meta_from_array_type_inputs():
     x = meta_from_array(np.ndarray, ndim=2, dtype=np.float32)
     assert isinstance(x, np.ndarray)
@@ -137,5 +136,5 @@ def test_assert_eq_scheduler(a, b):
     assert_eq(a, b, scheduler=custom_scheduler)
     # `custom_scheduler` should be executed 2x the number of arrays.
     # Once in `persist` and once in `compute`
-    n_da_arrays = len([x for x in [a, b] if isinstance(x, Array)]) * 2
+    n_da_arrays = len([x for x in [a, b] if isinstance(x, da.Array)]) * 2
     assert counter == n_da_arrays

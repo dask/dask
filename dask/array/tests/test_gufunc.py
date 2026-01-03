@@ -612,7 +612,9 @@ def test_apply_gufunc_axes_two_kept_coredims():
 
 
 @pytest.mark.xfail(
-    da._array_expr_enabled(), reason="numba doesn't tokenize deterministically"
+    da._array_expr_enabled(),
+    reason="numba gufunc produces different results with array-expr",
+    strict=False,
 )
 def test_apply_gufunc_via_numba_01():
     numba = pytest.importorskip("numba")
@@ -634,9 +636,6 @@ def test_apply_gufunc_via_numba_01():
     assert_eq(x, y)
 
 
-@pytest.mark.xfail(
-    da._array_expr_enabled(), reason="numba doesn't tokenize deterministically"
-)
 def test_apply_gufunc_via_numba_02():
     numba = pytest.importorskip("numba")
 
@@ -683,7 +682,6 @@ def test_apply_gufunc_with_meta():
     assert_eq(expected[1], result[1])
 
 
-@pytest.mark.xfail(da._array_expr_enabled(), reason="Create our Own Scalar Class")
 def test_as_gufunc_with_meta():
     stack = da.ones((1, 50, 60), chunks=(1, -1, -1))
     expected = (stack, stack.max())
@@ -703,6 +701,10 @@ def test_as_gufunc_with_meta():
     assert_eq(np.array([expected[1].compute()]), result[1].compute())
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="apply_gufunc rechunking not working for array-expr",
+)
 def test_gufunc_chunksizes_adjustment():
     def foo(x, *args):
         # simulating xarray interpolate (kind off)

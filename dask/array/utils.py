@@ -243,8 +243,9 @@ def assert_eq_shape(a, b, check_ndim=True, check_nan=True):
 
 def _check_chunks(x, check_ndim=True, scheduler=None):
     x = x.persist(scheduler=scheduler)
+    dsk = x.dask  # Cache to avoid repeated graph materialization
     for idx in itertools.product(*(range(len(c)) for c in x.chunks)):
-        chunk = x.dask[(x.name,) + idx]
+        chunk = dsk[(x.name,) + idx]
         if hasattr(chunk, "result"):  # it's a future
             chunk = chunk.result()
         if not hasattr(chunk, "dtype"):

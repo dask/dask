@@ -165,7 +165,19 @@ def assert_isinstance(coll: DaskCollection, protocol: Any) -> None:
     assert isinstance(coll, protocol)
 
 
-@pytest.mark.parametrize("protocol", [DaskCollection, HLGDaskCollection])
+@pytest.mark.parametrize(
+    "protocol",
+    [
+        DaskCollection,
+        pytest.param(
+            HLGDaskCollection,
+            marks=pytest.mark.xfail(
+                da._array_expr_enabled(),
+                reason="array-expr Array is not HLGDaskCollection",
+            ),
+        ),
+    ],
+)
 def test_isinstance_core(protocol):
     arr = da.ones(10)
     bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)

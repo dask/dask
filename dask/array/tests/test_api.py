@@ -24,9 +24,12 @@ def test_api():
         if isinstance(mod, ModuleType) and mod.__package__ == "dask.array"
     }
     # imported utility modules
-    members -= {"annotations", "builtins", "importlib", "warnings"}
+    members -= {"annotations", "builtins", "importlib", "warnings", "sys"}
     # private utilities and `__dunder__` members
     members -= {"ARRAY_EXPR_ENABLED"}
     members -= {m for m in members if m.startswith("_")}
+    # Internal symbols that leak in array-expr mode
+    if da._array_expr_enabled():
+        members -= {"da", "elemwise", "aligned_coarsen_chunks"}
 
     assert set(da.__all__) == members

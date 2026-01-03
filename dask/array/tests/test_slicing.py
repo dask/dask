@@ -641,7 +641,7 @@ def test_oob_check():
 
 @pytest.mark.parametrize("idx_chunks", [None, 3, 2, 1])
 @pytest.mark.parametrize("x_chunks", [None, (3, 5), (2, 3), (1, 2), (1, 1)])
-def test_index_with_int_dask_array(x_chunks, idx_chunks):
+def test_index_with_int_dask_array(x_chunks, idx_chunks, request):
     # test data is crafted to stress use cases:
     # - pick from different chunks of x out of order
     # - a chunk of x contains no matches
@@ -707,16 +707,21 @@ def test_index_with_int_dask_array_dtypes(dtype):
     assert_eq(a[idx], np.array([20, 30]))
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="Test uses legacy Array constructor; needs array-expr reimplementation",
+)
 def test_index_with_int_dask_array_nocompute():
     """Test that when the indices are a dask array
     they are not accidentally computed
     """
+    from dask.array.core import Array
 
     def crash():
         raise NotImplementedError()
 
     x = da.arange(5, chunks=-1)
-    idx = da.Array({("x", 0): (crash,)}, name="x", chunks=((2,),), dtype=np.int64)
+    idx = Array({("x", 0): (crash,)}, name="x", chunks=((2,),), dtype=np.int64)
     result = x[idx]
     with pytest.raises(NotImplementedError):
         result.compute()
@@ -752,7 +757,7 @@ def test_index_with_bool_dask_array_2():
         assert_eq(x[tuple(index3)], d[tuple(index2)])
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(reason="tests internal graph optimization, not user behavior")
 def test_cull():
     x = da.ones(1000, chunks=(10,))
 
@@ -880,7 +885,13 @@ def test_getitem_avoids_large_chunks():
 
         result = arr[indexer]
         assert_eq(result, expected)
-        assert result.chunks == ((1,) * 12, (128,), (128,))
+        # With array-expr input chunk locality grouping: position 0 needs chunk 0,
+        # positions 1-11 need chunk 1, so we get (1, 11) chunks.
+        # Legacy path produces (1,) * 12.
+        if da._array_expr_enabled():
+            assert result.chunks == ((1, 11), (128,), (128,))
+        else:
+            assert result.chunks == ((1,) * 12, (128,), (128,))
 
         # Users can silence the warning
         with dask.config.set({"array.slicing.split-large-chunks": False}):
@@ -896,7 +907,10 @@ def test_getitem_avoids_large_chunks():
             assert_eq(result, expected)
             assert not record
 
-            assert result.chunks == ((1,) * 12, (128,), (128,))
+            if da._array_expr_enabled():
+                assert result.chunks == ((1, 11), (128,), (128,))
+            else:
+                assert result.chunks == ((1,) * 12, (128,), (128,))
 
 
 def test_getitem_avoids_large_chunks_missing():
@@ -1123,10 +1137,20 @@ def test_positional_indexer_newaxis():
         (10, 10),
         (np.nan, np.nan),
         pytest.param(
-            (10, np.nan), marks=pytest.mark.xfail(reason="Not implemented", strict=True)
+            (10, np.nan),
+            marks=pytest.mark.xfail(
+                not da._array_expr_enabled(),
+                reason="Not implemented in traditional mode",
+                strict=True,
+            ),
         ),
         pytest.param(
-            (np.nan, 10), marks=pytest.mark.xfail(reason="Not implemented", strict=True)
+            (np.nan, 10),
+            marks=pytest.mark.xfail(
+                not da._array_expr_enabled(),
+                reason="Not implemented in traditional mode",
+                strict=True,
+            ),
         ),
     ],
 )

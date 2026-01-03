@@ -1,35 +1,106 @@
 from __future__ import annotations
 
+import math
 import operator
 import warnings
-from collections.abc import Iterable
 
 import numpy as np
-import toolz
-from toolz import concat, first
 
+from dask import config
 from dask._collections import new_collection
 from dask.array import chunk
-from dask.array._array_expr._blockwise import Blockwise, Elemwise, Transpose
-from dask.array._array_expr._expr import (
-    ArrayExpr,
-    Concatenate,
-    Stack,
-    unify_chunks_expr,
+from dask.array._array_expr._expr import ArrayExpr
+from dask.array._array_expr.manipulation._transpose import Transpose
+from dask.array.chunk_types import is_valid_chunk_type
+from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
+from dask.core import flatten
+from dask.utils import format_bytes, has_keyword, key_split, typename
+from dask.widgets import get_template
+
+try:
+    ARRAY_TEMPLATE = get_template("array.html.j2")
+except ImportError:
+    ARRAY_TEMPLATE = None
+
+# Import blockwise functions from their module
+# Import broadcast
+from dask.array._array_expr._broadcast import broadcast_to
+
+# Import concatenate and stacking
+from dask.array._array_expr._concatenate import concatenate
+from dask.array._array_expr._stack import stack
+from dask.array._array_expr.core._blockwise_funcs import blockwise, elemwise
+
+# Import core conversion functions from their module
+from dask.array._array_expr.core._conversion import (
+    array,
+    asanyarray,
+    asarray,
+    from_array,
 )
-from dask.array._array_expr._io import FromArray, FromGraph
+from dask.array._array_expr.core._from_graph import from_graph
+
+# Import manipulation functions
+from dask.array._array_expr.manipulation._expand import (
+    atleast_1d,
+    atleast_2d,
+    atleast_3d,
+    expand_dims,
+)
+from dask.array._array_expr.manipulation._flip import flip, fliplr, flipud, rot90
+from dask.array._array_expr.manipulation._roll import roll
+from dask.array._array_expr.manipulation._transpose import (
+    moveaxis,
+    rollaxis,
+    transpose,
+)
+from dask.array._array_expr.stacking._block import block
+from dask.array._array_expr.stacking._simple import dstack, hstack, vstack
+
+# Type imports
 from dask.array.core import (
+    _HANDLED_FUNCTIONS,
     T_IntOrNaN,
     _should_delegate,
     check_if_handled_given_other,
     finalize,
-    getter_inline,
 )
-from dask.array.dispatch import concatenate_lookup
-from dask.array.utils import meta_from_array
-from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
-from dask.core import flatten
-from dask.utils import derived_from, is_arraylike, key_split
+
+__all__ = [
+    "Array",
+    "array",
+    "asanyarray",
+    "asarray",
+    "atleast_1d",
+    "atleast_2d",
+    "atleast_3d",
+    "block",
+    "blockwise",
+    "broadcast_to",
+    "concatenate",
+    "dstack",
+    "elemwise",
+    "expand_dims",
+    "flip",
+    "fliplr",
+    "flipud",
+    "from_array",
+    "from_graph",
+    "hstack",
+    "moveaxis",
+    "ravel",
+    "rechunk",
+    "reshape",
+    "reshape_blockwise",
+    "roll",
+    "rollaxis",
+    "rot90",
+    "squeeze",
+    "stack",
+    "swapaxes",
+    "transpose",
+    "vstack",
+]
 
 
 class Array(DaskMethodsMixin):
@@ -37,6 +108,7 @@ class Array(DaskMethodsMixin):
         named_schedulers.get("threads", named_schedulers["sync"])
     )
     __dask_optimize__ = staticmethod(lambda dsk, keys, **kwargs: dsk)
+    __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
     def __init__(self, expr):
         self._expr = expr
@@ -54,9 +126,15 @@ class Array(DaskMethodsMixin):
 
     def __dask_postpersist__(self):
         state = self.expr.lower_completely()
+        # Use original array's meta like legacy implementation
+        meta = self._meta
+        if meta is None:
+            # Fallback to synthetic meta if original is also None
+            meta = np.empty((0,) * state.ndim, dtype=state.dtype)
+        # Use self.chunks to preserve nan chunks for unknown-sized operations
         return from_graph, (
-            state._meta,
-            state.chunks,
+            meta,
+            self.chunks,
             # FIXME: This is using keys of the unoptimized graph
             list(flatten(state.__dask_keys__())),
             key_split(state._name),
@@ -89,6 +167,30 @@ class Array(DaskMethodsMixin):
     def simplify(self):
         return new_collection(self.expr.simplify())
 
+    def pprint(self):
+        """Pretty print the expression tree.
+
+        Uses rich table format if rich is installed, otherwise falls back
+        to the basic tree representation.
+        """
+        self.expr.pprint()
+
+    def visualize(self, tasks: bool = False, **kwargs):  # type: ignore[override]
+        """Visualize the expression or task graph.
+
+        Parameters
+        ----------
+        tasks : bool
+            Whether to visualize the task graph. By default
+            the expression graph will be visualized instead.
+        **kwargs
+            Additional arguments passed to the visualizer.
+        """
+        # color= options require task graph visualization
+        if tasks or kwargs.get("color"):
+            return super().visualize(**kwargs)
+        return self.expr.visualize(**kwargs)
+
     @property
     def _meta(self):
         return self.expr._meta
@@ -105,6 +207,39 @@ class Array(DaskMethodsMixin):
     def chunks(self):
         return self.expr.chunks
 
+    @chunks.setter
+    def chunks(self, chunks):
+        raise TypeError(
+            "Can not set chunks directly\n\n"
+            "Please use the rechunk method instead:\n"
+            f"  x.rechunk({chunks})\n\n"
+            "Documentation\n"
+            "-------------\n"
+            "https://docs.dask.org/en/latest/generated/dask.array.rechunk.html"
+        )
+
+    @property
+    def _chunks(self):
+        """Internal access to chunks (for compatibility with tests)."""
+        return self.expr.chunks
+
+    @_chunks.setter
+    def _chunks(self, chunks):
+        """Set chunks by wrapping the expression with ChunksOverride.
+
+        This is primarily for internal use and testing when simulating
+        arrays with unknown chunk sizes.
+        """
+        from dask.array._array_expr._expr import ChunksOverride
+
+        self._expr = ChunksOverride(self._expr, chunks)
+
+    @property
+    def chunksize(self) -> tuple:
+        from dask.array.core import cached_max
+
+        return tuple(cached_max(c) for c in self.chunks)
+
     @property
     def ndim(self):
         return self.expr.ndim
@@ -114,8 +249,95 @@ class Array(DaskMethodsMixin):
         return self.expr.numblocks
 
     @property
+    def npartitions(self):
+        from math import prod
+
+        return prod(self.numblocks)
+
+    def compute_chunk_sizes(self):
+        """
+        Compute the chunk sizes for a Dask array. This is especially useful
+        when the chunk sizes are unknown (e.g., when indexing one Dask array
+        with another).
+
+        Notes
+        -----
+        This function modifies the Dask array in-place.
+
+        Examples
+        --------
+        >>> import dask.array as da
+        >>> import numpy as np
+        >>> x = da.from_array([-2, -1, 0, 1, 2], chunks=2)
+        >>> x.chunks
+        ((2, 2, 1),)
+        >>> y = x[x <= 0]
+        >>> y.chunks
+        ((nan, nan, nan),)
+        >>> y.compute_chunk_sizes()  # in-place computation
+        dask.array<getitem, shape=(3,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>
+        >>> y.chunks
+        ((2, 1, 0),)
+        """
+        from dask.array.core import _get_chunk_shape
+        from dask.base import compute
+
+        chunk_shapes = self.map_blocks(
+            _get_chunk_shape,
+            dtype=int,
+            chunks=tuple(len(c) * (1,) for c in self.chunks) + ((self.ndim,),),
+            new_axis=self.ndim,
+        )
+
+        c = []
+        for i in range(self.ndim):
+            s = self.ndim * [0] + [i]
+            s[i] = slice(None)
+            s = tuple(s)
+
+            c.append(tuple(chunk_shapes[s]))
+
+        # `map_blocks` assigns numpy dtypes
+        # cast chunk dimensions back to python int before returning
+        new_chunks = tuple(
+            tuple(int(chunk) for chunk in chunks) for chunks in compute(tuple(c))[0]
+        )
+
+        # In the expression system, wrap with ChunksOverride to set the new chunks
+        from dask.array._array_expr._expr import ChunksOverride
+
+        self._expr = ChunksOverride(self._expr, new_chunks)
+
+        return self
+
+    @property
+    def _key_array(self):
+        return np.array(self.__dask_keys__(), dtype=object)
+
+    @property
+    def blocks(self):
+        from dask.array._array_expr.slicing._blocks import BlockView
+
+        return BlockView(self)
+
+    @property
+    def partitions(self):
+        """Slice an array by partitions. Alias of dask array .blocks attribute."""
+        return self.blocks
+
+    @property
     def size(self) -> T_IntOrNaN:
         return self.expr.size
+
+    @property
+    def nbytes(self) -> T_IntOrNaN:
+        """Number of bytes in array"""
+        return self.size * self.dtype.itemsize
+
+    @property
+    def itemsize(self) -> int:
+        """Length of one array element in bytes"""
+        return self.dtype.itemsize
 
     @property
     def name(self):
@@ -124,25 +346,133 @@ class Array(DaskMethodsMixin):
     def __len__(self):
         return self.expr.__len__()
 
+    def __repr__(self):
+        name = self.name.rsplit("-", 1)[0]
+        return (
+            "dask.array<{}, shape={}, dtype={}, chunksize={}, chunktype={}.{}>".format(
+                name,
+                self.shape,
+                self.dtype,
+                self.chunksize,
+                type(self._meta).__module__.split(".")[0],
+                type(self._meta).__name__,
+            )
+        )
+
+    def _repr_html_(self):
+        if ARRAY_TEMPLATE is None:
+            return repr(self)
+
+        try:
+            grid = self.to_svg(size=config.get("array.svg.size", 120))
+        except NotImplementedError:
+            grid = ""
+
+        if "sparse" in typename(type(self._meta)):
+            nbytes = None
+            cbytes = None
+        elif not math.isnan(self.nbytes):
+            nbytes = format_bytes(self.nbytes)
+            cbytes = format_bytes(math.prod(self.chunksize) * self.dtype.itemsize)
+        else:
+            nbytes = "unknown"
+            cbytes = "unknown"
+
+        return ARRAY_TEMPLATE.render(
+            array=self,
+            grid=grid,
+            nbytes=nbytes,
+            cbytes=cbytes,
+            layers="1 expression",
+        )
+
+    def __bool__(self):
+        if self.size > 1:
+            raise ValueError(
+                f"The truth value of a {self.__class__.__name__} is ambiguous. "
+                "Use a.any() or a.all()."
+            )
+        return bool(self.compute())
+
+    def _scalarfunc(self, cast_type):
+        if self.size > 1:
+            raise TypeError("Only length-1 arrays can be converted to Python scalars")
+        else:
+            return cast_type(self.compute().item())
+
+    def __int__(self):
+        return self._scalarfunc(int)
+
+    def __float__(self):
+        return self._scalarfunc(float)
+
+    def __complex__(self):
+        return self._scalarfunc(complex)
+
+    def __index__(self):
+        return self._scalarfunc(operator.index)
+
+    def __array__(self, dtype=None, copy=None, **kwargs):
+        import warnings
+
+        if kwargs:
+            warnings.warn(
+                f"Extra keyword arguments {kwargs} are ignored and won't be "
+                "accepted in the future",
+                FutureWarning,
+            )
+        if copy is False:
+            warnings.warn(
+                "Can't acquire a memory view of a Dask array. "
+                "This will raise in the future.",
+                FutureWarning,
+            )
+        x = self.compute()
+        return np.asarray(x, dtype=dtype)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if isinstance(index, str) or (
             isinstance(index, list) and index and all(isinstance(i, str) for i in index)
         ):
-            # TODO(expr-soon): needs map_blocks that we don't support yet,
-            #  but implementation is trivial after we have that
-            raise NotImplementedError()
+            from dask.array.chunk import getitem
+
+            if isinstance(index, str):
+                dt = self.dtype[index]
+            else:
+                dt = np.dtype(
+                    {
+                        "names": index,
+                        "formats": [self.dtype.fields[name][0] for name in index],
+                        "offsets": [self.dtype.fields[name][1] for name in index],
+                        "itemsize": self.dtype.itemsize,
+                    }
+                )
+
+            if dt.shape:
+                new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
+                chunks = self.chunks + tuple((i,) for i in dt.shape)
+                return self.map_blocks(
+                    getitem, index, dtype=dt.base, chunks=chunks, new_axis=new_axis
+                )
+            else:
+                return self.map_blocks(getitem, index, dtype=dt)
 
         if not isinstance(index, tuple):
             index = (index,)
 
-        from dask.array._array_expr._slicing import (
+        from dask.array._array_expr.slicing import (
+            normalize_index,
             slice_array,
             slice_with_int_dask_array,
         )
-        from dask.array.slicing import normalize_index
 
         index2 = normalize_index(index, self.shape)
+
         dependencies = {self.name}
         for i in index2:
             if isinstance(i, Array):
@@ -151,9 +481,9 @@ class Array(DaskMethodsMixin):
         if any(isinstance(i, Array) and i.dtype.kind in "iu" for i in index2):
             self, index2 = slice_with_int_dask_array(self, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
-            # TODO(expr-soon): This is simple but needs ravel which needs reshape,
-            # which is not simple. Trivial to add after we have reshape
-            raise NotImplementedError
+            from dask.array._array_expr.slicing import slice_with_bool_dask_array
+
+            self, index2 = slice_with_bool_dask_array(self, index2)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
             return self
@@ -161,39 +491,169 @@ class Array(DaskMethodsMixin):
         result = slice_array(self.expr, index2)
         return new_collection(result)
 
+    def __setitem__(self, key, value):
+        from dask.array.core import unknown_chunk_message
+
+        # Handle np.ma.masked assignment
+        if value is np.ma.masked:
+            value = np.ma.masked_all((), dtype=self.dtype)
+
+        # Check for NaN/inf in integer arrays
+        if not is_dask_collection(value) and self.dtype.kind in "iu":
+            if np.isnan(value).any():
+                raise ValueError("cannot convert float NaN to integer")
+            if np.isinf(value).any():
+                raise ValueError("cannot convert float infinity to integer")
+
+        # Suppress dtype broadcasting; __setitem__ can't change the dtype.
+        value = asanyarray(value, dtype=self.dtype)
+
+        # Handle 1D integer array index case
+        if isinstance(key, Array) and (
+            key.dtype.kind in "iu"
+            or (key.dtype == bool and key.ndim == 1 and self.ndim > 1)
+        ):
+            key = (key,)
+
+        # Use "where" method for any dask Array key (matches legacy behavior)
+        if isinstance(key, Array):
+            from dask.array._array_expr._broadcast import broadcast_to
+
+            left_shape = np.array(key.shape)
+            right_shape = np.array(self.shape)
+
+            # Treat unknown shapes as matching
+            match = left_shape == right_shape
+            match |= np.isnan(left_shape) | np.isnan(right_shape)
+
+            if not match.all():
+                raise IndexError(
+                    f"boolean index shape {key.shape} must match indexed array's "
+                    f"{self.shape}."
+                )
+
+            # If value has ndim > 0, they must be broadcastable to self.shape[idx].
+            if value.ndim:
+                value = broadcast_to(value, self[key].shape)
+
+            from dask.array._array_expr.routines._where import where
+
+            y = where(key, value, self)
+            self._expr = y.expr
+            return
+
+        # Check for unknown chunks
+        if np.isnan(self.shape).any():
+            raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
+
+        # Validate indices and value shape eagerly (before creating lazy expression)
+        import math
+
+        from dask.array.slicing import parse_assignment_indices
+
+        indices, implied_shape, _, implied_shape_positions = parse_assignment_indices(
+            key, self.shape
+        )
+        value_shape = value.shape
+
+        # Validate value shape vs implied shape (from setitem_array validation)
+        if 0 in implied_shape and value_shape and max(value_shape) > 1:
+            raise ValueError(
+                f"shape mismatch: value array of shape {value_shape} "
+                "could not be broadcast to indexing result "
+                f"of shape {tuple(implied_shape)}"
+            )
+
+        value_ndim = len(value_shape)
+        offset = len(implied_shape) - value_ndim
+        if offset >= 0:
+            array_common_shape = implied_shape[offset:]
+            value_common_shape = value_shape
+            implied_positions = implied_shape_positions[offset:]
+        else:
+            value_offset = -offset
+            array_common_shape = implied_shape
+            value_common_shape = value_shape[value_offset:]
+            implied_positions = implied_shape_positions
+            # All extra leading dimensions must have size 1
+            if value_shape[:value_offset] != (1,) * value_offset:
+                raise ValueError(
+                    "could not broadcast input array from shape"
+                    f"{value_shape} into shape {tuple(implied_shape)}"
+                )
+
+        # Check shape compatibility for each dimension
+        for _, (a, b, j) in enumerate(
+            zip(array_common_shape, value_common_shape, implied_positions)
+        ):
+            index = indices[j]
+            if is_dask_collection(index) and getattr(index, "dtype", None) == bool:
+                # For dask boolean index, value size must not exceed index size
+                if not math.isnan(b) and b > index.size:
+                    raise ValueError(
+                        f"shape mismatch: value array dimension size of {b} is "
+                        "greater then corresponding boolean index size of "
+                        f"{index.size}"
+                    )
+            elif b != 1 and a != b and not math.isnan(a):
+                raise ValueError(
+                    f"shape mismatch: value array of shape {value_shape} "
+                    "could not be broadcast to indexing result of shape "
+                    f"{tuple(implied_shape)}"
+                )
+
+        # Use SetItem expression for other index types
+        from dask.array._array_expr.slicing import SetItem
+
+        value_expr = value.expr if isinstance(value, Array) else value
+        y = new_collection(SetItem(self.expr, key, value_expr))
+        self._expr = y.expr
+
+    @check_if_handled_given_other
     def __add__(self, other):
         return elemwise(operator.add, self, other)
 
+    @check_if_handled_given_other
     def __radd__(self, other):
         return elemwise(operator.add, other, self)
 
+    @check_if_handled_given_other
     def __mul__(self, other):
         return elemwise(operator.mul, self, other)
 
+    @check_if_handled_given_other
     def __rmul__(self, other):
         return elemwise(operator.mul, other, self)
 
+    @check_if_handled_given_other
     def __sub__(self, other):
         return elemwise(operator.sub, self, other)
 
+    @check_if_handled_given_other
     def __rsub__(self, other):
         return elemwise(operator.sub, other, self)
 
+    @check_if_handled_given_other
     def __pow__(self, other):
         return elemwise(operator.pow, self, other)
 
+    @check_if_handled_given_other
     def __rpow__(self, other):
         return elemwise(operator.pow, other, self)
 
+    @check_if_handled_given_other
     def __truediv__(self, other):
         return elemwise(operator.truediv, self, other)
 
+    @check_if_handled_given_other
     def __rtruediv__(self, other):
         return elemwise(operator.truediv, other, self)
 
+    @check_if_handled_given_other
     def __floordiv__(self, other):
         return elemwise(operator.floordiv, self, other)
 
+    @check_if_handled_given_other
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
 
@@ -291,13 +751,15 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __matmul__(self, other):
-        # TODO(expr-soon)
-        raise NotImplementedError
+        from dask.array._array_expr.linalg import matmul
+
+        return matmul(self, other)
 
     @check_if_handled_given_other
     def __rmatmul__(self, other):
-        # TODO(expr-soon)
-        raise NotImplementedError
+        from dask.array._array_expr.linalg import matmul
+
+        return matmul(other, self)
 
     @check_if_handled_given_other
     def __divmod__(self, other):
@@ -312,10 +774,68 @@ class Array(DaskMethodsMixin):
         return divmod(other, self)
 
     def __array_function__(self, func, types, args, kwargs):
-        # TODO(expr-soon): Not done yet, but needed for assert_eq to identify us as an Array
-        raise NotImplementedError
+        import dask.array as module
+        from dask.base import compute
 
-    def transpose(self, axes=None):
+        def handle_nonmatching_names(func, args, kwargs):
+            if func not in _HANDLED_FUNCTIONS:
+                warnings.warn(
+                    f"The `{func.__module__}.{func.__name__}` function "
+                    "is not implemented by Dask array. "
+                    "You may want to use the da.map_blocks function "
+                    "or something similar to silence this warning. "
+                    "Your code may stop working in a future release.",
+                    FutureWarning,
+                )
+                # Need to convert to array object (e.g. numpy.ndarray or
+                # cupy.ndarray) as needed, so we can call the NumPy function
+                # again and it gets the chance to dispatch to the right
+                # implementation.
+                args, kwargs = compute(args, kwargs)
+                return func(*args, **kwargs)
+
+            return _HANDLED_FUNCTIONS[func](*args, **kwargs)
+
+        # First, verify that all types are handled by Dask. Otherwise, return NotImplemented.
+        if not all(
+            # Accept our own superclasses as recommended by NEP-13
+            # (https://numpy.org/neps/nep-0013-ufunc-overrides.html#subclass-hierarchies)
+            issubclass(type(self), type_) or is_valid_chunk_type(type_)
+            for type_ in types
+        ):
+            return NotImplemented
+
+        # Now try to find a matching function name.  If that doesn't work, we may
+        # be dealing with an alias or a function that's simply not in the Dask API.
+        # Handle aliases via the _HANDLED_FUNCTIONS dict mapping, and warn otherwise.
+        for submodule in func.__module__.split(".")[1:]:
+            try:
+                module = getattr(module, submodule)
+            except AttributeError:
+                return handle_nonmatching_names(func, args, kwargs)
+
+        if not hasattr(module, func.__name__):
+            return handle_nonmatching_names(func, args, kwargs)
+
+        da_func = getattr(module, func.__name__)
+        if da_func is func:
+            return handle_nonmatching_names(func, args, kwargs)
+
+        # If ``like`` is contained in ``da_func``'s signature, add ``like=self``
+        # to the kwargs dictionary.
+        if has_keyword(da_func, "like"):
+            kwargs["like"] = self
+
+        return da_func(*args, **kwargs)
+
+    def transpose(self, *axes):
+        from collections.abc import Iterable
+
+        if not axes:
+            axes = None
+        elif len(axes) == 1 and isinstance(axes[0], Iterable):
+            axes = axes[0]
+
         if axes:
             if len(axes) != self.ndim:
                 raise ValueError("axes don't match array")
@@ -323,11 +843,110 @@ class Array(DaskMethodsMixin):
         else:
             axes = tuple(range(self.ndim))[::-1]
 
+        # Identity transpose - return self
+        if axes == tuple(range(self.ndim)):
+            return self
+
         return new_collection(Transpose(self, axes))
 
     @property
     def T(self):
         return self.transpose()
+
+    @property
+    def A(self):
+        return self
+
+    def swapaxes(self, axis1, axis2):
+        """Interchange two axes of an array.
+
+        Refer to :func:`dask.array.swapaxes` for full documentation.
+        """
+        return swapaxes(self, axis1, axis2)
+
+    def squeeze(self, axis=None):
+        """Remove axes of length one from array.
+
+        Refer to :func:`dask.array.squeeze` for full documentation.
+        """
+        return squeeze(self, axis=axis)
+
+    def reshape(self, *shape, merge_chunks=True, limit=None):
+        """Reshape the array to a new shape.
+
+        Refer to :func:`dask.array.reshape` for full documentation.
+        """
+        if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
+            shape = shape[0]
+        return reshape(self, shape, merge_chunks=merge_chunks, limit=limit)
+
+    def flatten(self):
+        """Return a copy of the array collapsed into one dimension.
+
+        Returns
+        -------
+        dask Array
+            A 1-D array with the same data as self.
+        """
+        return reshape(self, (-1,))
+
+    def ravel(self):
+        """Return a flattened array.
+
+        Returns
+        -------
+        dask Array
+            A 1-D array with the same data as self.
+        """
+        return reshape(self, (-1,))
+
+    def repeat(self, repeats, axis=None):
+        """Repeat elements of an array.
+
+        Refer to :func:`dask.array.repeat` for full documentation.
+        """
+        from dask.array._array_expr.creation import repeat
+
+        return repeat(self, repeats, axis)
+
+    def choose(self, choices):
+        """Use an index array to construct a new array from a set of choices.
+
+        Refer to :func:`dask.array.choose` for full documentation.
+
+        See Also
+        --------
+        dask.array.choose : equivalent function
+        """
+        from dask.array._array_expr._routines import choose
+
+        return choose(self, choices)
+
+    def nonzero(self):
+        """Return the indices of the elements that are non-zero.
+
+        Refer to :func:`dask.array.nonzero` for full documentation.
+
+        See Also
+        --------
+        dask.array.nonzero : equivalent function
+        """
+        from dask.array._array_expr._routines import nonzero
+
+        return nonzero(self)
+
+    def round(self, decimals=0):
+        """Return array with each element rounded to the given number of decimals.
+
+        Refer to :func:`dask.array.round` for full documentation.
+
+        See Also
+        --------
+        dask.array.round : equivalent function
+        """
+        from dask.array._array_expr._routines import round
+
+        return round(self, decimals=decimals)
 
     def rechunk(
         self,
@@ -338,6 +957,225 @@ class Array(DaskMethodsMixin):
         method=None,
     ):
         return rechunk(self, chunks, threshold, block_size_limit, balance, method)
+
+    def shuffle(self, indexer, axis, chunks="auto"):
+        from dask.array._array_expr._shuffle import shuffle
+
+        return shuffle(self, indexer, axis, chunks)
+
+    def _vindex(self, key):
+        from dask.array._array_expr.slicing import _numpy_vindex, _vindex
+        from dask.base import is_dask_collection
+
+        if not isinstance(key, tuple):
+            key = (key,)
+        if any(k is None for k in key):
+            raise IndexError(
+                f"vindex does not support indexing with None (np.newaxis), got {key}"
+            )
+        if all(isinstance(k, slice) for k in key):
+            if all(
+                k.indices(d) == slice(0, d).indices(d) for k, d in zip(key, self.shape)
+            ):
+                return self
+            raise IndexError(
+                "vindex requires at least one non-slice to vectorize over "
+                "when the slices are not over the entire array (i.e, x[:]). "
+                f"Use normal slicing instead when only using slices. Got: {key}"
+            )
+        elif any(is_dask_collection(k) for k in key):
+            if math.prod(self.numblocks) == 1 and len(key) == 1 and self.ndim == 1:
+                idxr = key[0]
+                # we can broadcast in this case
+                return idxr.map_blocks(
+                    _numpy_vindex, self, dtype=self.dtype, chunks=idxr.chunks
+                )
+            else:
+                raise IndexError(
+                    "vindex does not support indexing with dask objects. Call compute "
+                    f"on the indexer first to get an evalurated array. Got: {key}"
+                )
+        return _vindex(self, *key)
+
+    @property
+    def vindex(self):
+        """Vectorized indexing with broadcasting.
+
+        This is equivalent to numpy's advanced indexing, using arrays that are
+        broadcast against each other. This allows for pointwise indexing:
+
+        >>> import dask.array as da
+        >>> x = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        >>> x = da.from_array(x, chunks=2)
+        >>> x.vindex[[0, 1, 2], [0, 1, 2]].compute()
+        array([1, 5, 9])
+
+        Mixed basic/advanced indexing with slices/arrays is also supported. The
+        order of dimensions in the result follows those proposed for
+        `ndarray.vindex <https://github.com/numpy/numpy/pull/6256>`_:
+        the subspace spanned by arrays is followed by all slices.
+
+        Note: ``vindex`` provides more general functionality than standard
+        indexing, but it also has fewer optimizations and can be significantly
+        slower.
+        """
+        from dask.utils import IndexCallable
+
+        return IndexCallable(self._vindex)
+
+    def store(self, target, **kwargs):
+        """Store array in array-like object.
+
+        Refer to :func:`dask.array.store` for full documentation.
+        """
+        from dask.array._array_expr.io import store
+
+        return store([self], [target], **kwargs)
+
+    def to_zarr(self, *args, **kwargs):
+        """Save array to the zarr storage format
+
+        See https://zarr.readthedocs.io for details about the format.
+
+        Refer to :func:`dask.array.to_zarr` for full documentation.
+
+        See also
+        --------
+        dask.array.to_zarr : equivalent function
+        """
+        from dask.array._array_expr.io import to_zarr
+
+        return to_zarr(self, *args, **kwargs)
+
+    def to_tiledb(self, uri, *args, **kwargs):
+        """Save array to the TileDB storage manager
+
+        See https://docs.tiledb.io for details about the format and engine.
+
+        Refer to :func:`dask.array.to_tiledb` for full documentation.
+
+        See also
+        --------
+        dask.array.to_tiledb : equivalent function
+        """
+        from dask.array.tiledb_io import to_tiledb
+
+        return to_tiledb(self, uri, *args, **kwargs)
+
+    def to_hdf5(self, filename, datapath, **kwargs):
+        """Store array in HDF5 file
+
+        >>> x.to_hdf5('myfile.hdf5', '/x')  # doctest: +SKIP
+
+        Optionally provide arguments as though to ``h5py.File.create_dataset``
+
+        >>> x.to_hdf5('myfile.hdf5', '/x', compression='lzf', shuffle=True)  # doctest: +SKIP
+
+        See Also
+        --------
+        dask.array.to_hdf5
+        h5py.File.create_dataset
+        """
+        from dask.array.core import to_hdf5
+
+        return to_hdf5(filename, datapath, self, **kwargs)
+
+    def to_backend(self, backend: str | None = None, **kwargs):
+        """Move to a new Array backend
+
+        Parameters
+        ----------
+        backend : str, Optional
+            The name of the new backend to move to. The default
+            is the current "array.backend" configuration.
+
+        Returns
+        -------
+        Array
+        """
+        from dask.array.creation import to_backend
+
+        return to_backend(self, backend=backend, **kwargs)  # type: ignore[arg-type]
+
+    def to_svg(self, size=500):
+        """Convert chunks from Dask Array into an SVG Image
+
+        Parameters
+        ----------
+        size : int
+            Rough size of the image
+
+        Returns
+        -------
+        str
+            An svg string depicting the array as a grid of chunks
+        """
+        from dask.array.svg import svg
+
+        return svg(self.chunks, size=size)
+
+    def copy(self):
+        """Copy array. This is a no-op for dask arrays, which are immutable."""
+        return Array(self._expr)
+
+    def __deepcopy__(self, memo):
+        c = self.copy()
+        memo[id(self)] = c
+        return c
+
+    def to_delayed(self, optimize_graph=True):
+        """Convert into an array of :class:`dask.delayed.Delayed` objects, one per chunk.
+
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            :class:`dask.delayed.Delayed` objects.
+
+        See Also
+        --------
+        dask.array.from_delayed
+        """
+        from dask.delayed import Delayed
+        from dask.utils import ndeepmap
+
+        keys = self.__dask_keys__()
+        graph = self.__dask_graph__()
+        if optimize_graph:
+            graph = self.__dask_optimize__(graph, keys)
+        L = ndeepmap(self.ndim, lambda k: Delayed(k, graph), keys)
+        return np.array(L, dtype=object)
+
+    def to_dask_dataframe(self, columns=None, index=None, meta=None):
+        """Convert dask Array to dask Dataframe
+
+        Parameters
+        ----------
+        columns: list or string
+            list of column names if DataFrame, single string if Series
+        index : dask.dataframe.Index, optional
+            An optional *dask* Index to use for the output Series or DataFrame.
+
+            The default output index depends on whether the array has any unknown
+            chunks. If there are any unknown chunks, the output has ``None``
+            for all the divisions (one per chunk). If all the chunks are known,
+            a default index with known divisions is created.
+
+            Specifying ``index`` can be useful if you're conforming a Dask Array
+            to an existing dask Series or DataFrame, and you would like the
+            indices to match.
+        meta : object, optional
+            An optional `meta` parameter can be passed for dask
+            to specify the concrete dataframe type to use for partitions of
+            the Dask dataframe. By default, pandas DataFrame is used.
+
+        See Also
+        --------
+        dask.dataframe.from_dask_array
+        """
+        from dask.dataframe.dask_expr._array import from_dask_array_expr
+
+        return from_dask_array_expr(self, columns=columns, index=index, meta=meta)
 
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         """
@@ -529,6 +1367,114 @@ class Array(DaskMethodsMixin):
 
         return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
+    def argmin(self, axis=None, *, keepdims=False, split_every=None, out=None):
+        """Return indices of the minimum values along the given axis.
+
+        Refer to :func:`dask.array.argmin` for full documentation.
+
+        See Also
+        --------
+        dask.array.argmin : equivalent function
+        """
+        from dask.array.reductions import argmin
+
+        return argmin(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
+
+    def argmax(self, axis=None, *, keepdims=False, split_every=None, out=None):
+        """Return indices of the maximum values along the given axis.
+
+        Refer to :func:`dask.array.argmax` for full documentation.
+
+        See Also
+        --------
+        dask.array.argmax : equivalent function
+        """
+        from dask.array.reductions import argmax
+
+        return argmax(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
+
+    def topk(self, k, axis=-1, split_every=None):
+        """The top k elements of an array.
+
+        Refer to :func:`dask.array.topk` for full documentation.
+
+        See Also
+        --------
+        dask.array.topk : equivalent function
+        """
+        from dask.array._array_expr._routines import topk
+
+        return topk(self, k, axis=axis, split_every=split_every)
+
+    def argtopk(self, k, axis=-1, split_every=None):
+        """The indices of the top k elements of an array.
+
+        Refer to :func:`dask.array.argtopk` for full documentation.
+
+        See Also
+        --------
+        dask.array.argtopk : equivalent function
+        """
+        from dask.array._array_expr._routines import argtopk
+
+        return argtopk(self, k, axis=axis, split_every=split_every)
+
+    def cumsum(self, axis, dtype=None, out=None, *, method="sequential"):
+        """Return the cumulative sum of the elements along the given axis.
+
+        Refer to :func:`dask.array.cumsum` for full documentation.
+
+        See Also
+        --------
+        dask.array.cumsum : equivalent function
+        """
+        from dask.array._array_expr.reductions import cumsum
+
+        return cumsum(self, axis=axis, dtype=dtype, out=out, method=method)
+
+    def cumprod(self, axis, dtype=None, out=None, *, method="sequential"):
+        """Return the cumulative product of the elements along the given axis.
+
+        Refer to :func:`dask.array.cumprod` for full documentation.
+
+        See Also
+        --------
+        dask.array.cumprod : equivalent function
+        """
+        from dask.array._array_expr.reductions import cumprod
+
+        return cumprod(self, axis=axis, dtype=dtype, out=out, method=method)
+
+    def trace(self, offset=0, axis1=0, axis2=1, dtype=None):
+        """Return the sum along diagonals of the array.
+
+        Refer to :func:`dask.array.trace` for full documentation.
+
+        See Also
+        --------
+        dask.array.trace : equivalent function
+        """
+        from dask.array._array_expr.reductions import trace
+
+        return trace(self, offset=offset, axis1=axis1, axis2=axis2, dtype=dtype)
+
+    def dot(self, other):
+        """Dot product of self and other.
+
+        Refer to :func:`dask.array.tensordot` for full documentation.
+
+        See Also
+        --------
+        dask.array.dot : equivalent function
+        """
+        from dask.array._array_expr.linalg import tensordot
+
+        return tensordot(self, other, axes=((self.ndim - 1,), (other.ndim - 2,)))
+
     def astype(self, dtype, **kwargs):
         """Copy of the array, cast to a specified type.
 
@@ -574,7 +1520,7 @@ class Array(DaskMethodsMixin):
                 f"Cannot cast array from {self.dtype!r} to {dtype!r} "
                 f"according to the rule {casting!r}"
             )
-        return self.map_blocks(chunk.astype, dtype=dtype, astype_dtype=dtype, **kwargs)
+        return elemwise(chunk.astype, self, dtype=dtype, astype_dtype=dtype, **kwargs)
 
     def map_blocks(self, func, *args, **kwargs):
         from dask.array._array_expr._map_blocks import map_blocks
@@ -624,6 +1570,55 @@ class Array(DaskMethodsMixin):
 
         return clip(self, min, max)
 
+    def view(self, dtype=None, order="C"):
+        """Get a view of the array as a new data type
+
+        Parameters
+        ----------
+        dtype:
+            The dtype by which to view the array.
+            The default, None, results in the view having the same data-type
+            as the original array.
+        order: string
+            'C' or 'F' (Fortran) ordering
+
+        This reinterprets the bytes of the array under a new dtype.  If that
+        dtype does not have the same size as the original array then the shape
+        will change.
+
+        Beware that both numpy and dask.array can behave oddly when taking
+        shape-changing views of arrays under Fortran ordering.  Under some
+        versions of NumPy this function will fail when taking shape-changing
+        views of Fortran ordered arrays if the first dimension has chunks of
+        size one.
+        """
+        if dtype is None:
+            dtype = self.dtype
+        else:
+            dtype = np.dtype(dtype)
+        mult = self.dtype.itemsize / dtype.itemsize
+
+        def _ensure_int(f):
+            i = int(f)
+            if i != f:
+                raise ValueError(f"Could not coerce {f:f} to integer")
+            return i
+
+        if order == "C":
+            chunks = self.chunks[:-1] + (
+                tuple(_ensure_int(c * mult) for c in self.chunks[-1]),
+            )
+        elif order == "F":
+            chunks = (
+                tuple(_ensure_int(c * mult) for c in self.chunks[0]),
+            ) + self.chunks[1:]
+        else:
+            raise ValueError("Order must be one of 'C' or 'F'")
+
+        return self.map_blocks(
+            chunk.view, dtype, order=order, dtype=dtype, chunks=chunks
+        )
+
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
@@ -632,7 +1627,7 @@ class Array(DaskMethodsMixin):
 
         if method == "__call__":
             if numpy_ufunc is np.matmul:
-                from dask.array.routines import matmul
+                from dask.array._array_expr.linalg import matmul
 
                 # special case until apply_gufunc handles optional dimensions
                 return matmul(*inputs, **kwargs)
@@ -679,903 +1674,12 @@ class Array(DaskMethodsMixin):
         )
 
 
-def from_graph(layer, _meta, chunks, keys, name_prefix):
-    return new_collection(
-        FromGraph(
-            layer=layer,
-            _meta=_meta,
-            chunks=chunks,
-            keys=keys,
-            name_prefix=name_prefix,
-        )
-    )
-
-
-def blockwise(
-    func,
-    out_ind,
-    *args,
-    name=None,
-    token=None,
-    dtype=None,
-    adjust_chunks=None,
-    new_axes=None,
-    align_arrays=True,
-    concatenate=None,
-    meta=None,
-    **kwargs,
-):
-    """Tensor operation: Generalized inner and outer products
-
-    A broad class of blocked algorithms and patterns can be specified with a
-    concise multi-index notation.  The ``blockwise`` function applies an in-memory
-    function across multiple blocks of multiple inputs in a variety of ways.
-    Many dask.array operations are special cases of blockwise including
-    elementwise, broadcasting, reductions, tensordot, and transpose.
-
-    Parameters
-    ----------
-    func : callable
-        Function to apply to individual tuples of blocks
-    out_ind : iterable
-        Block pattern of the output, something like 'ijk' or (1, 2, 3)
-    *args : sequence of Array, index pairs
-        You may also pass literal arguments, accompanied by None index
-        e.g. (x, 'ij', y, 'jk', z, 'i', some_literal, None)
-    **kwargs : dict
-        Extra keyword arguments to pass to function
-    dtype : np.dtype
-        Datatype of resulting array.
-    concatenate : bool, keyword only
-        If true concatenate arrays along dummy indices, else provide lists
-    adjust_chunks : dict
-        Dictionary mapping index to function to be applied to chunk sizes
-    new_axes : dict, keyword only
-        New indexes and their dimension lengths
-    align_arrays: bool
-        Whether or not to align chunks along equally sized dimensions when
-        multiple arrays are provided.  This allows for larger chunks in some
-        arrays to be broken into smaller ones that match chunk sizes in other
-        arrays such that they are compatible for block function mapping. If
-        this is false, then an error will be thrown if arrays do not already
-        have the same number of blocks in each dimension.
-
-    Examples
-    --------
-    2D embarrassingly parallel operation from two arrays, x, and y.
-
-    >>> import operator, numpy as np, dask.array as da
-    >>> x = da.from_array([[1, 2],
-    ...                    [3, 4]], chunks=(1, 2))
-    >>> y = da.from_array([[10, 20],
-    ...                    [0, 0]])
-    >>> z = blockwise(operator.add, 'ij', x, 'ij', y, 'ij', dtype='f8')
-    >>> z.compute()
-    array([[11, 22],
-           [ 3,  4]])
-
-    Outer product multiplying a by b, two 1-d vectors
-
-    >>> a = da.from_array([0, 1, 2], chunks=1)
-    >>> b = da.from_array([10, 50, 100], chunks=1)
-    >>> z = blockwise(np.outer, 'ij', a, 'i', b, 'j', dtype='f8')
-    >>> z.compute()
-    array([[  0,   0,   0],
-           [ 10,  50, 100],
-           [ 20, 100, 200]])
-
-    z = x.T
-
-    >>> z = blockwise(np.transpose, 'ji', x, 'ij', dtype=x.dtype)
-    >>> z.compute()
-    array([[1, 3],
-           [2, 4]])
-
-    The transpose case above is illustrative because it does transposition
-    both on each in-memory block by calling ``np.transpose`` and on the order
-    of the blocks themselves, by switching the order of the index ``ij -> ji``.
-
-    We can compose these same patterns with more variables and more complex
-    in-memory functions
-
-    z = X + Y.T
-
-    >>> z = blockwise(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji', dtype='f8')
-    >>> z.compute()
-    array([[11,  2],
-           [23,  4]])
-
-    Any index, like ``i`` missing from the output index is interpreted as a
-    contraction (note that this differs from Einstein convention; repeated
-    indices do not imply contraction.)  In the case of a contraction the passed
-    function should expect an iterable of blocks on any array that holds that
-    index.  To receive arrays concatenated along contracted dimensions instead
-    pass ``concatenate=True``.
-
-    Inner product multiplying a by b, two 1-d vectors
-
-    >>> def sequence_dot(a_blocks, b_blocks):
-    ...     result = 0
-    ...     for a, b in zip(a_blocks, b_blocks):
-    ...         result += a.dot(b)
-    ...     return result
-
-    >>> z = blockwise(sequence_dot, '', a, 'i', b, 'i', dtype='f8')
-    >>> z.compute()
-    250
-
-    Add new single-chunk dimensions with the ``new_axes=`` keyword, including
-    the length of the new dimension.  New dimensions will always be in a single
-    chunk.
-
-    >>> def f(a):
-    ...     return a[:, None] * np.ones((1, 5))
-
-    >>> z = blockwise(f, 'az', a, 'a', new_axes={'z': 5}, dtype=a.dtype)
-
-    New dimensions can also be multi-chunk by specifying a tuple of chunk
-    sizes.  This has limited utility as is (because the chunks are all the
-    same), but the resulting graph can be modified to achieve more useful
-    results (see ``da.map_blocks``).
-
-    >>> z = blockwise(f, 'az', a, 'a', new_axes={'z': (5, 5)}, dtype=x.dtype)
-    >>> z.chunks
-    ((1, 1, 1), (5, 5))
-
-    If the applied function changes the size of each chunk you can specify this
-    with a ``adjust_chunks={...}`` dictionary holding a function for each index
-    that modifies the dimension size in that index.
-
-    >>> def double(x):
-    ...     return np.concatenate([x, x])
-
-    >>> y = blockwise(double, 'ij', x, 'ij',
-    ...               adjust_chunks={'i': lambda n: 2 * n}, dtype=x.dtype)
-    >>> y.chunks
-    ((2, 2), (2,))
-
-    Include literals by indexing with None
-
-    >>> z = blockwise(operator.add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)
-    >>> z.compute()
-    array([[1235, 1236],
-           [1237, 1238]])
-    """
-    new_axes = new_axes or {}
-
-    # Input Validation
-    if len(set(out_ind)) != len(out_ind):
-        raise ValueError(
-            "Repeated elements not allowed in output index",
-            [k for k, v in toolz.frequencies(out_ind).items() if v > 1],
-        )
-    new = (
-        set(out_ind)
-        - {a for arg in args[1::2] if arg is not None for a in arg}
-        - set(new_axes or ())
-    )
-    if new:
-        raise ValueError("Unknown dimension", new)
-
-    return new_collection(
-        Blockwise(
-            func,
-            out_ind,
-            name,
-            token,
-            dtype,
-            adjust_chunks,
-            new_axes,
-            align_arrays,
-            concatenate,
-            meta,
-            kwargs,
-            *args,
-        )
-    )
-
-
-def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
-    """Apply an elementwise ufunc-like function blockwise across arguments.
-
-    Like numpy ufuncs, broadcasting rules are respected.
-
-    Parameters
-    ----------
-    op : callable
-        The function to apply. Should be numpy ufunc-like in the parameters
-        that it accepts.
-    *args : Any
-        Arguments to pass to `op`. Non-dask array-like objects are first
-        converted to dask arrays, then all arrays are broadcast together before
-        applying the function blockwise across all arguments. Any scalar
-        arguments are passed as-is following normal numpy ufunc behavior.
-    out : dask array, optional
-        If out is a dask.array then this overwrites the contents of that array
-        with the result.
-    where : array_like, optional
-        An optional boolean mask marking locations where the ufunc should be
-        applied. Can be a scalar, dask array, or any other array-like object.
-        Mirrors the ``where`` argument to numpy ufuncs, see e.g. ``numpy.add``
-        for more information.
-    dtype : dtype, optional
-        If provided, overrides the output array dtype.
-    name : str, optional
-        A unique key name to use when building the backing dask graph. If not
-        provided, one will be automatically generated based on the input
-        arguments.
-
-    Examples
-    --------
-    >>> elemwise(add, x, y)  # doctest: +SKIP
-    >>> elemwise(sin, x)  # doctest: +SKIP
-    >>> elemwise(sin, x, out=dask_array)  # doctest: +SKIP
-
-    See Also
-    --------
-    blockwise
-    """
-    if where is not True:
-        # TODO(expr-soon): Need asarray for this
-        where = True
-
-    if out is not None:
-        raise NotImplementedError("elemwise does not support out=")
-
-    args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
-
-    # TODO(expr-soon): We should probably go through blockwise here
-    args = [asanyarray(a) for a in args]
-
-    return new_collection(Elemwise(op, dtype, name, where, *args))
-
-
-def rechunk(
-    x,
-    chunks="auto",
-    threshold=None,
-    block_size_limit=None,
-    balance=False,
-    method=None,
-):
-    """
-    Convert blocks in dask array x for new chunks.
-
-    Parameters
-    ----------
-    x: dask array
-        Array to be rechunked.
-    chunks:  int, tuple, dict or str, optional
-        The new block dimensions to create. -1 indicates the full size of the
-        corresponding dimension. Default is "auto" which automatically
-        determines chunk sizes.
-    threshold: int, optional
-        The graph growth factor under which we don't bother introducing an
-        intermediate step.
-    block_size_limit: int, optional
-        The maximum block size (in bytes) we want to produce
-        Defaults to the configuration value ``array.chunk-size``
-    balance : bool, default False
-        If True, try to make each chunk to be the same size.
-
-        This means ``balance=True`` will remove any small leftover chunks, so
-        using ``x.rechunk(chunks=len(x) // N, balance=True)``
-        will almost certainly result in ``N`` chunks.
-    method: {'tasks', 'p2p'}, optional.
-        Rechunking method to use.
-
-
-    Examples
-    --------
-    >>> import dask.array as da
-    >>> x = da.ones((1000, 1000), chunks=(100, 100))
-
-    Specify uniform chunk sizes with a tuple
-
-    >>> y = x.rechunk((1000, 10))
-
-    Or chunk only specific dimensions with a dictionary
-
-    >>> y = x.rechunk({0: 1000})
-
-    Use the value ``-1`` to specify that you want a single chunk along a
-    dimension or the value ``"auto"`` to specify that dask can freely rechunk a
-    dimension to attain blocks of a uniform block size
-
-    >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
-
-    If a chunk size does not divide the dimension then rechunk will leave any
-    unevenness to the last chunk.
-
-    >>> x.rechunk(chunks=(400, -1)).chunks
-    ((400, 400, 200), (1000,))
-
-    However if you want more balanced chunks, and don't mind Dask choosing a
-    different chunksize for you then you can use the ``balance=True`` option.
-
-    >>> x.rechunk(chunks=(400, -1), balance=True).chunks
-    ((500, 500), (1000,))
-    """
-
-    return new_collection(
-        x.expr.rechunk(chunks, threshold, block_size_limit, balance, method)
-    )
-
-
-def from_array(
-    x,
-    chunks="auto",
-    lock=False,
-    asarray=None,
-    fancy=True,
-    getitem=None,
-    meta=None,
-    inline_array=False,
-    name=None,
-):
-    """Create dask array from something that looks like an array.
-
-    Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
-
-    Parameters
-    ----------
-    x : array_like
-    chunks : int, tuple
-        How to chunk the array. Must be one of the following forms:
-
-        - A blocksize like 1000.
-        - A blockshape like (1000, 1000).
-        - Explicit sizes of all blocks along all dimensions like
-          ((1000, 1000, 500), (400, 400)).
-        - A size in bytes, like "100 MiB" which will choose a uniform
-          block-like shape
-        - The word "auto" which acts like the above, but uses a configuration
-          value ``array.chunk-size`` for the chunk size
-
-        -1 or None as a blocksize indicate the size of the corresponding
-        dimension.
-    name : str or bool, optional
-        The key name to use for the array. Defaults to a hash of ``x``.
-
-        Hashing is useful if the same value of ``x`` is used to create multiple
-        arrays, as Dask can then recognise that they're the same and
-        avoid duplicate computations. However, it can also be slow, and if the
-        array is not contiguous it is copied for hashing. If the array uses
-        stride tricks (such as :func:`numpy.broadcast_to` or
-        :func:`skimage.util.view_as_windows`) to have a larger logical
-        than physical size, this copy can cause excessive memory usage.
-
-        If you don't need the deduplication provided by hashing, use
-        ``name=False`` to generate a random name instead of hashing, which
-        avoids the pitfalls described above. Using ``name=True`` is
-        equivalent to the default.
-
-        By default, hashing uses python's standard sha1. This behaviour can be
-        changed by installing cityhash, xxhash or murmurhash. If installed,
-        a large-factor speedup can be obtained in the tokenisation step.
-
-        .. note::
-
-           Because this ``name`` is used as the key in task graphs, you should
-           ensure that it uniquely identifies the data contained within. If
-           you'd like to provide a descriptive name that is still unique, combine
-           the descriptive name with :func:`dask.base.tokenize` of the
-           ``array_like``. See :ref:`graphs` for more.
-
-    lock : bool or Lock, optional
-        If ``x`` doesn't support concurrent reads then provide a lock here, or
-        pass in True to have dask.array create one for you.
-    asarray : bool, optional
-        If True then call np.asarray on chunks to convert them to numpy arrays.
-        If False then chunks are passed through unchanged.
-        If None (default) then we use True if the ``__array_function__`` method
-        is undefined.
-
-        .. note::
-
-            Dask does not preserve the memory layout of the original array when
-            the array is created using Fortran rather than C ordering.
-
-    fancy : bool, optional
-        If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
-        arrays) then set to False. Default is True.
-    meta : Array-like, optional
-        The metadata for the resulting dask array.  This is the kind of array
-        that will result from slicing the input array.
-        Defaults to the input array.
-    inline_array : bool, default False
-        How to include the array in the task graph. By default
-        (``inline_array=False``) the array is included in a task by itself,
-        and each chunk refers to that task by its key.
-
-        .. code-block:: python
-
-           >>> x = h5py.File("data.h5")["/x"]  # doctest: +SKIP
-           >>> a = da.from_array(x, chunks=500)  # doctest: +SKIP
-           >>> dict(a.dask)  # doctest: +SKIP
-           {
-              'array-original-<name>': <HDF5 dataset ...>,
-              ('array-<name>', 0): (getitem, "array-original-<name>", ...),
-              ('array-<name>', 1): (getitem, "array-original-<name>", ...)
-           }
-
-        With ``inline_array=True``, Dask will instead inline the array directly
-        in the values of the task graph.
-
-        .. code-block:: python
-
-           >>> a = da.from_array(x, chunks=500, inline_array=True)  # doctest: +SKIP
-           >>> dict(a.dask)  # doctest: +SKIP
-           {
-              ('array-<name>', 0): (getitem, <HDF5 dataset ...>, ...),
-              ('array-<name>', 1): (getitem, <HDF5 dataset ...>, ...)
-           }
-
-        Note that there's no key in the task graph with just the array `x`
-        anymore. Instead it's placed directly in the values.
-
-        The right choice for ``inline_array`` depends on several factors,
-        including the size of ``x``, how expensive it is to create, which
-        scheduler you're using, and the pattern of downstream computations.
-        As a heuristic, ``inline_array=True`` may be the right choice when
-        the array ``x`` is cheap to serialize and deserialize (since it's
-        included in the graph many times) and if you're experiencing ordering
-        issues (see :ref:`order` for more).
-
-        This has no effect when ``x`` is a NumPy array.
-
-    Examples
-    --------
-
-    >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
-    >>> a = da.from_array(x, chunks=(1000, 1000))  # doctest: +SKIP
-
-    If your underlying datastore does not support concurrent reads then include
-    the ``lock=True`` keyword argument or ``lock=mylock`` if you want multiple
-    arrays to coordinate around the same lock.
-
-    >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
-
-    If your underlying datastore has a ``.chunks`` attribute (as h5py and zarr
-    datasets do) then a multiple of that chunk shape will be used if you
-    do not provide a chunk shape.
-
-    >>> a = da.from_array(x, chunks='auto')  # doctest: +SKIP
-    >>> a = da.from_array(x, chunks='100 MiB')  # doctest: +SKIP
-    >>> a = da.from_array(x)  # doctest: +SKIP
-
-    If providing a name, ensure that it is unique
-
-    >>> import dask.base
-    >>> token = dask.base.tokenize(x)  # doctest: +SKIP
-    >>> a = da.from_array('myarray-' + token)  # doctest: +SKIP
-
-    NumPy ndarrays are eagerly sliced and then embedded in the graph.
-
-    >>> import dask.array
-    >>> a = dask.array.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,1))
-    >>> a.dask[a.name, 0, 0][0]
-    array([1])
-
-    Chunks with exactly-specified, different sizes can be created.
-
-    >>> import numpy as np
-    >>> import dask.array as da
-    >>> rng = np.random.default_rng()
-    >>> x = rng.random((100, 6))
-    >>> a = da.from_array(x, chunks=((67, 33), (6,)))
-    """
-    if isinstance(x, Array):
-        raise ValueError(
-            "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
-        )
-    elif is_dask_collection(x):
-        warnings.warn(
-            "Passing an object to dask.array.from_array which is already a "
-            "Dask collection. This can lead to unexpected behavior."
-        )
-
-    if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
-        x = np.array(x)
-
-    if is_arraylike(x) and hasattr(x, "copy"):
-        x = x.copy()
-
-    return new_collection(
-        FromArray(
-            x,
-            chunks,
-            lock=lock,
-            asarray=asarray,
-            fancy=fancy,
-            getitem=getitem,
-            meta=meta,
-            inline_array=inline_array,
-        )
-    )
-
-
-def _as_dtype(a, dtype):
-    if dtype is None:
-        return a
-    else:
-        return a.astype(dtype)
-
-
-def asarray(
-    a, allow_unknown_chunksizes=False, dtype=None, order=None, *, like=None, **kwargs
-):
-    """Convert the input to a dask array.
-
-    Parameters
-    ----------
-    a : array-like
-        Input data, in any form that can be converted to a dask array. This
-        includes lists, lists of tuples, tuples, tuples of tuples, tuples of
-        lists and ndarrays.
-    allow_unknown_chunksizes: bool
-        Allow unknown chunksizes, such as come from converting from dask
-        dataframes.  Dask.array is unable to verify that chunks line up.  If
-        data comes from differently aligned sources then this can cause
-        unexpected results.
-    dtype : data-type, optional
-        By default, the data-type is inferred from the input data.
-    order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
-        Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
-        ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
-        representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
-        otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
-    like: array-like
-        Reference object to allow the creation of Dask arrays with chunks
-        that are not NumPy arrays. If an array-like passed in as ``like``
-        supports the ``__array_function__`` protocol, the chunk type of the
-        resulting array will be defined by it. In this case, it ensures the
-        creation of a Dask array compatible with that passed in via this
-        argument. If ``like`` is a Dask array, the chunk type of the
-        resulting array will be defined by the chunk type of ``like``.
-        Requires NumPy 1.20.0 or higher.
-
-    Returns
-    -------
-    out : dask array
-        Dask array interpretation of a.
-
-    Examples
-    --------
-    >>> import dask.array as da
-    >>> import numpy as np
-    >>> x = np.arange(3)
-    >>> da.asarray(x)
-    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
-
-    >>> y = [[1, 2, 3], [4, 5, 6]]
-    >>> da.asarray(y)
-    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
-
-    .. warning::
-        `order` is ignored if `a` is an `Array`, has the attribute ``to_dask_array``,
-        or is a list or tuple of `Array`'s.
-    """
-    if like is None:
-        if isinstance(a, Array):
-            return _as_dtype(a, dtype)
-        elif hasattr(a, "to_dask_array"):
-            return _as_dtype(a.to_dask_array(), dtype)
-        elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-            return _as_dtype(asarray(a.data, order=order), dtype)
-        elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-            return _as_dtype(
-                stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes), dtype
-            )
-        elif not isinstance(getattr(a, "shape", None), Iterable):
-            a = np.asarray(a, dtype=dtype, order=order)
-    else:
-        like_meta = meta_from_array(like)
-        if isinstance(a, Array):
-            return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
-        else:
-            a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
-
-    a = from_array(a, getitem=getter_inline, **kwargs)
-    return _as_dtype(a, dtype)
-
-
-def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
-    """Convert the input to a dask array.
-
-    Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
-
-    Parameters
-    ----------
-    a : array-like
-        Input data, in any form that can be converted to a dask array. This
-        includes lists, lists of tuples, tuples, tuples of tuples, tuples of
-        lists and ndarrays.
-    dtype : data-type, optional
-        By default, the data-type is inferred from the input data.
-    order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
-        Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
-        ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
-        representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
-        otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
-    like: array-like
-        Reference object to allow the creation of Dask arrays with chunks
-        that are not NumPy arrays. If an array-like passed in as ``like``
-        supports the ``__array_function__`` protocol, the chunk type of the
-        resulting array will be defined by it. In this case, it ensures the
-        creation of a Dask array compatible with that passed in via this
-        argument. If ``like`` is a Dask array, the chunk type of the
-        resulting array will be defined by the chunk type of ``like``.
-        Requires NumPy 1.20.0 or higher.
-    inline_array:
-        Whether to inline the array in the resulting dask graph. For more information,
-        see the documentation for ``dask.array.from_array()``.
-
-    Returns
-    -------
-    out : dask array
-        Dask array interpretation of a.
-
-    Examples
-    --------
-    >>> import dask.array as da
-    >>> import numpy as np
-    >>> x = np.arange(3)
-    >>> da.asanyarray(x)
-    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
-
-    >>> y = [[1, 2, 3], [4, 5, 6]]
-    >>> da.asanyarray(y)
-    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
-
-    .. warning::
-        `order` is ignored if `a` is an `Array`, has the attribute ``to_dask_array``,
-        or is a list or tuple of `Array`'s.
-    """
-    if like is None:
-        if isinstance(a, Array):
-            return _as_dtype(a, dtype)
-        elif hasattr(a, "to_dask_array"):
-            return _as_dtype(a.to_dask_array(), dtype)
-        elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-            return _as_dtype(asarray(a.data, order=order), dtype)
-        elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-            return _as_dtype(stack(a), dtype)
-        elif not isinstance(getattr(a, "shape", None), Iterable):
-            a = np.asanyarray(a, dtype=dtype, order=order)
-    else:
-        like_meta = meta_from_array(like)
-        if isinstance(a, Array):
-            return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
-        else:
-            a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
-
-    a = from_array(
-        a,
-        chunks=a.shape,
-        getitem=getter_inline,
-        asarray=False,
-        inline_array=inline_array,
-    )
-    return _as_dtype(a, dtype)
-
-
-def stack(seq, axis=0, allow_unknown_chunksizes=False):
-    """
-    Stack arrays along a new axis
-
-    Given a sequence of dask arrays, form a new dask array by stacking them
-    along a new dimension (axis=0 by default)
-
-    Parameters
-    ----------
-    seq: list of dask.arrays
-    axis: int
-        Dimension along which to align all of the arrays
-    allow_unknown_chunksizes: bool
-        Allow unknown chunksizes, such as come from converting from dask
-        dataframes.  Dask.array is unable to verify that chunks line up.  If
-        data comes from differently aligned sources then this can cause
-        unexpected results.
-
-    Examples
-    --------
-
-    Create slices
-
-    >>> import dask.array as da
-    >>> import numpy as np
-
-    >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
-    ...         for i in range(3)]
-
-    >>> x = da.stack(data, axis=0)
-    >>> x.shape
-    (3, 4, 4)
-
-    >>> da.stack(data, axis=1).shape
-    (4, 3, 4)
-
-    >>> da.stack(data, axis=-1).shape
-    (4, 4, 3)
-
-    Result is a new dask Array
-
-    See Also
-    --------
-    concatenate
-    """
-    from dask.array import wrap
-
-    seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
-
-    if not seq:
-        raise ValueError("Need array(s) to stack")
-    if not allow_unknown_chunksizes and not all(x.shape == seq[0].shape for x in seq):
-        idx = first(i for i in enumerate(seq) if i[1].shape != seq[0].shape)
-        raise ValueError(
-            "Stacked arrays must have the same shape. The first array had shape "
-            f"{seq[0].shape}, while array {idx[0] + 1} has shape {idx[1].shape}."
-        )
-
-    meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
-    seq = [x.astype(meta.dtype) for x in seq]
-
-    ndim = meta.ndim - 1
-    if axis < 0:
-        axis = ndim + axis + 1
-    shape = tuple(
-        (
-            len(seq)
-            if i == axis
-            else (seq[0].shape[i] if i < axis else seq[0].shape[i - 1])
-        )
-        for i in range(meta.ndim)
-    )
-
-    seq2 = [a for a in seq if a.size]
-    if not seq2:
-        seq2 = seq
-
-    n = len(seq2)
-    if n == 0:
-        try:
-            return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
-        except TypeError:
-            return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
-
-    ind = list(range(ndim))
-    uc_args = list(concat((x.expr, ind) for x in seq2))
-    _, seq2, _ = unify_chunks_expr(*uc_args)
-
-    assert len({a.chunks for a in seq2}) == 1  # same chunks
-
-    return new_collection(Stack(seq2[0], axis, meta, *seq2[1:]))
-
-
-@derived_from(np)
-def array(x, dtype=None, ndmin=None, *, like=None):
-    x = asarray(x, like=like)
-    while ndmin is not None and x.ndim < ndmin:
-        x = x[None, :]
-    if dtype is not None and x.dtype != dtype:
-        x = x.astype(dtype)
-    return x
-
-
-def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
-    """
-    Concatenate arrays along an existing axis
-
-    Given a sequence of dask Arrays form a new dask Array by stacking them
-    along an existing dimension (axis=0 by default)
-
-    Parameters
-    ----------
-    seq: list of dask.arrays
-    axis: int
-        Dimension along which to align all of the arrays. If axis is None,
-        arrays are flattened before use.
-    allow_unknown_chunksizes: bool
-        Allow unknown chunksizes, such as come from converting from dask
-        dataframes.  Dask.array is unable to verify that chunks line up.  If
-        data comes from differently aligned sources then this can cause
-        unexpected results.
-
-    Examples
-    --------
-
-    Create slices
-
-    >>> import dask.array as da
-    >>> import numpy as np
-
-    >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
-    ...          for i in range(3)]
-
-    >>> x = da.concatenate(data, axis=0)
-    >>> x.shape
-    (12, 4)
-
-    >>> da.concatenate(data, axis=1).shape
-    (4, 12)
-
-    Result is a new dask Array
-
-    See Also
-    --------
-    stack
-    """
-    from dask.array import wrap
-
-    seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
-
-    if not seq:
-        raise ValueError("Need array(s) to concatenate")
-
-    if axis is None:
-        seq = [a.flatten() for a in seq]
-        axis = 0
-
-    seq_metas = [meta_from_array(s) for s in seq]
-    _concatenate = concatenate_lookup.dispatch(
-        type(max(seq_metas, key=lambda x: getattr(x, "__array_priority__", 0)))
-    )
-    meta = _concatenate(seq_metas, axis=axis)
-
-    # Promote types to match meta
-    seq = [a.astype(meta.dtype) for a in seq]
-
-    # Find output array shape
-    ndim = len(seq[0].shape)
-    shape = tuple(
-        sum(a.shape[i] for a in seq) if i == axis else seq[0].shape[i]
-        for i in range(ndim)
-    )
-
-    # Drop empty arrays
-    seq2 = [a for a in seq if a.size]
-    if not seq2:
-        seq2 = seq
-
-    if axis < 0:
-        axis = ndim + axis
-    if axis >= ndim:
-        msg = (
-            "Axis must be less than than number of dimensions"
-            "\nData has %d dimensions, but got axis=%d"
-        )
-        raise ValueError(msg % (ndim, axis))
-
-    n = len(seq2)
-    if n == 0:
-        try:
-            return wrap.empty_like(meta, shape=shape, chunks=shape, dtype=meta.dtype)
-        except TypeError:
-            return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
-    elif n == 1:
-        return seq2[0]
-
-    if not allow_unknown_chunksizes and not all(
-        i == axis or all(x.shape[i] == seq2[0].shape[i] for x in seq2)
-        for i in range(ndim)
-    ):
-        if any(map(np.isnan, seq2[0].shape)):
-            raise ValueError(
-                "Tried to concatenate arrays with unknown"
-                f" shape {seq2[0].shape}.\n\nTwo solutions:\n"
-                "  1. Force concatenation pass"
-                " allow_unknown_chunksizes=True.\n"
-                "  2. Compute shapes with "
-                "[x.compute_chunk_sizes() for x in seq]"
-            )
-        raise ValueError("Shapes do not align: %s", [x.shape for x in seq2])
-
-    inds = [list(range(ndim)) for i in range(n)]
-    for i, ind in enumerate(inds):
-        ind[axis] = -(i + 1)
-
-    seq_tmp = [s.expr for s in seq2]
-    uc_args = list(concat((s, i) for s, i in zip(seq_tmp, inds)))
-    _, seq2, _ = unify_chunks_expr(*uc_args)
-    return new_collection(Concatenate(seq2[0], axis, meta, *seq2[1:]))
+# Import rechunk, reshape, ravel from their modules
+from dask.array._array_expr._rechunk import rechunk
+from dask.array._array_expr._reshape import ravel, reshape, reshape_blockwise
+
+# Import swapaxes
+from dask.array._array_expr.manipulation._transpose import swapaxes
+
+# Import squeeze from its module
+from dask.array._array_expr.slicing import squeeze

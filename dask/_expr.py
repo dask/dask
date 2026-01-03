@@ -31,15 +31,25 @@ OptimizerStage: TypeAlias = Literal[
 
 
 def _unpack_collections(o):
+    """Unwrap collections to their underlying expressions.
+
+    If a collection (e.g., Array, DataFrame) has an `.expr` attribute,
+    extract it.
+    """
     from dask.delayed import Delayed
 
     if isinstance(o, Expr):
         return o
 
-    if hasattr(o, "expr") and not isinstance(o, Delayed):
-        return o.expr
-    else:
-        return o
+    if not isinstance(o, Delayed):
+        try:
+            return o.expr
+        except (AttributeError, ValueError):
+            # AttributeError: object doesn't have .expr
+            # ValueError: xarray DataArrays have .expr but it raises for non-chunked
+            pass
+
+    return o
 
 
 class Expr:
@@ -47,6 +57,10 @@ class Expr:
     _defaults: dict[str, Any] = {}
 
     _pickle_functools_cache: bool = True
+
+    # Whether to traverse list/tuple operands during optimization (rewrite/simplify/lower).
+    # Set to False for Fused classes that need substitute-only traversal.
+    _optimize_list_operands: bool = True
 
     operands: list
 
@@ -81,12 +95,20 @@ class Expr:
     def _operands_for_repr(self):
         return [f"{param}={op!r}" for param, op in zip(self._parameters, self.operands)]
 
-    def __str__(self):
+    def _simple_repr(self):
+        """Simple one-line representation."""
         s = ", ".join(self._operands_for_repr())
         return f"{type(self).__name__}({s})"
 
+    def __str__(self):
+        return self._simple_repr()
+
     def __repr__(self):
-        return str(self)
+        """Return rich table representation if available, else simple repr."""
+        try:
+            return repr(self._table())
+        except (ImportError, NotImplementedError, Exception):
+            return self._simple_repr()
 
     def _tree_repr_argument_construction(self, i, op, header):
         try:
@@ -126,9 +148,34 @@ class Expr:
 
         return explain(self, stage, format)
 
+    def _table(self, color: bool = True):
+        """Return a rich Table visualization of the expression tree.
+
+        Subclasses should override this to provide collection-specific tables.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement _table(). "
+            "Use pprint() for basic tree display."
+        )
+
     def pprint(self):
-        for line in self._tree_repr_lines():
-            print(line)
+        """Pretty print the expression tree.
+
+        Uses rich table format if available, otherwise falls back
+        to the basic tree representation.
+        """
+        try:
+            self._table().print()
+        except (ImportError, NotImplementedError):
+            for line in self._tree_repr_lines():
+                print(line)
+
+    def _repr_html_(self):
+        """Jupyter notebook display using rich table."""
+        try:
+            return self._table()._repr_html_()
+        except (ImportError, NotImplementedError):
+            return f"<pre>{self._simple_repr()}</pre>"
 
     def __hash__(self):
         return hash(self._name)
@@ -222,7 +269,7 @@ class Expr:
         # Dependencies are `Expr` operands only
         return [operand for operand in self.operands if isinstance(operand, Expr)]
 
-    def _task(self, key: Key, index: int) -> Task:
+    def _task(self, key: Key, index: Any) -> Task:
         """The task for the i'th partition
 
         Parameters
@@ -285,11 +332,12 @@ class Expr:
         Expr._task
         Expr.__dask_graph__
         """
-
-        return {
-            (self._name, i): self._task((self._name, i), i)
-            for i in range(self.npartitions)
-        }
+        raise NotImplementedError(
+            f"Expression {type(self).__name__} has no _layer() implementation. "
+            "This is typically an abstract expression that should be lowered "
+            "to a concrete form before graph generation. Check that _lower() "
+            "is correctly transforming this expression type."
+        )
 
     def rewrite(self, kind: str, rewritten):
         """Rewrite an expression
@@ -341,12 +389,34 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
+            # Traverse list/tuple operands if class opts in via custom dependencies() and _optimize_list_operands
+            traverse_lists = (
+                type(expr).dependencies is not Expr.dependencies
+                and expr._optimize_list_operands
+            )
             for operand in expr.operands:
                 if isinstance(operand, Expr):
                     new = operand.rewrite(kind=kind, rewritten=rewritten)
                     rewritten[operand._name] = new
                     if new._name != operand._name:
                         changed = True
+                elif traverse_lists and isinstance(operand, (list, tuple)):
+                    new_items = []
+                    list_changed = False
+                    for item in operand:
+                        if isinstance(item, Expr):
+                            new_item = item.rewrite(kind=kind, rewritten=rewritten)
+                            rewritten[item._name] = new_item
+                            if new_item._name != item._name:
+                                list_changed = True
+                            new_items.append(new_item)
+                        else:
+                            new_items.append(item)
+                    if list_changed:
+                        changed = True
+                        new = type(operand)(new_items)
+                    else:
+                        new = operand
                 else:
                     new = operand
                 new_operands.append(new)
@@ -408,6 +478,11 @@ class Expr:
             # Rewrite all of the children
             new_operands = []
             changed = False
+            # Traverse list/tuple operands if class opts in via custom dependencies() and _optimize_list_operands
+            traverse_lists = (
+                type(expr).dependencies is not Expr.dependencies
+                and expr._optimize_list_operands
+            )
             for operand in expr.operands:
                 if isinstance(operand, Expr):
                     # Bandaid for now, waiting for Singleton
@@ -418,6 +493,26 @@ class Expr:
                     simplified[operand._name] = new
                     if new._name != operand._name:
                         changed = True
+                elif traverse_lists and isinstance(operand, (list, tuple)):
+                    new_items = []
+                    list_changed = False
+                    for item in operand:
+                        if isinstance(item, Expr):
+                            dependents[item._name].append(weakref.ref(expr))
+                            new_item = item.simplify_once(
+                                dependents=dependents, simplified=simplified
+                            )
+                            simplified[item._name] = new_item
+                            if new_item._name != item._name:
+                                list_changed = True
+                            new_items.append(new_item)
+                        else:
+                            new_items.append(item)
+                    if list_changed:
+                        changed = True
+                        new = type(operand)(new_items)
+                    else:
+                        new = operand
                 else:
                     new = operand
                 new_operands.append(new)
@@ -429,7 +524,7 @@ class Expr:
 
         return expr
 
-    def optimize(self, fuse: bool = False) -> Expr:
+    def optimize(self, fuse: bool = True) -> Expr:
         stage: OptimizerStage = "fused" if fuse else "simplified-physical"
 
         return optimize_until(self, stage)
@@ -479,11 +574,32 @@ class Expr:
         # Lower all children
         new_operands = []
         changed = False
+        # Traverse list/tuple operands if class opts in via custom dependencies() and _optimize_list_operands
+        traverse_lists = (
+            type(out).dependencies is not Expr.dependencies
+            and out._optimize_list_operands
+        )
         for operand in out.operands:
             if isinstance(operand, Expr):
                 new = operand.lower_once(lowered)
                 if new._name != operand._name:
                     changed = True
+            elif traverse_lists and isinstance(operand, (list, tuple)):
+                new_items = []
+                list_changed = False
+                for item in operand:
+                    if isinstance(item, Expr):
+                        new_item = item.lower_once(lowered)
+                        if new_item._name != item._name:
+                            list_changed = True
+                        new_items.append(new_item)
+                    else:
+                        new_items.append(item)
+                if list_changed:
+                    changed = True
+                    new = type(operand)(new_items)
+                else:
+                    new = operand
             else:
                 new = operand
             new_operands.append(new)
@@ -617,29 +733,48 @@ class Expr:
             if isinstance(old, bool):
                 raise TypeError("Arguments to `substitute` cannot be bool.")
 
+        new_exprs, update = self._substitute_operands(
+            old, new, _seen, substitute_literal
+        )
+
+        if update:  # Only recreate if something changed
+            return type(self)(*new_exprs)
+        else:
+            _seen.add(self._name)
+        return self
+
+    def _substitute_operands(self, old, new, _seen, substitute_literal):
+        """Substitute operands and return (new_operands, changed).
+
+        Subclasses can override this to handle special operand structures
+        like list/tuple operands containing Exprs.
+        """
         new_exprs = []
         update = False
+        # Only descend into list/tuple operands for classes with custom dependencies()
+        has_custom_deps = type(self).dependencies is not Expr.dependencies
         for operand in self.operands:
             if isinstance(operand, Expr):
                 val = operand._substitute(old, new, _seen)
                 if operand._name != val._name:
                     update = True
                 new_exprs.append(val)
-            elif (
-                "Fused" in type(self).__name__
-                and isinstance(operand, list)
-                and all(isinstance(op, Expr) for op in operand)
-            ):
-                # Special handling for `Fused`.
-                # We make no promise to dive through a
-                # list operand in general, but NEED to
-                # do so for the `Fused.exprs` operand.
-                val = []
-                for op in operand:
-                    val.append(op._substitute(old, new, _seen))
-                    if val[-1]._name != op._name:
-                        update = True
-                new_exprs.append(val)
+            elif has_custom_deps and isinstance(operand, (list, tuple)):
+                new_items = []
+                list_changed = False
+                for item in operand:
+                    if isinstance(item, Expr):
+                        new_item = item._substitute(old, new, _seen)
+                        if new_item._name != item._name:
+                            list_changed = True
+                        new_items.append(new_item)
+                    else:
+                        new_items.append(item)
+                if list_changed:
+                    update = True
+                    new_exprs.append(type(operand)(new_items))
+                else:
+                    new_exprs.append(operand)
             elif (
                 substitute_literal
                 and not isinstance(operand, bool)
@@ -650,12 +785,7 @@ class Expr:
                 update = True
             else:
                 new_exprs.append(operand)
-
-        if update:  # Only recreate if something changed
-            return type(self)(*new_exprs)
-        else:
-            _seen.add(self._name)
-        return self
+        return new_exprs, update
 
     def substitute_parameters(self, substitutions: dict) -> Expr:
         """Substitute specific `Expr` parameters
@@ -1228,6 +1358,55 @@ class _ExprSequence(Expr):
 
     def __iter__(self):
         return iter(self.operands)
+
+    def fuse(self):
+        """Fuse operations within operands, preserving shared subexpressions.
+
+        Groups operands by type and calls fusion on the sequence, so that
+        shared subexpressions are detected via the combined dependents graph.
+        """
+        if not self.operands:
+            return self
+
+        # Group operands by their fusion function type
+        # Each expression type (array, dataframe) has its own fusion implementation
+        groups = {}  # module -> list of (original_index, operand)
+        for i, op in enumerate(self.operands):
+            fuse_method = getattr(op, "fuse", None)
+            if fuse_method is None or fuse_method.__func__ is Expr.fuse:
+                key = None  # No custom fusion
+            else:
+                key = type(op).__module__
+            groups.setdefault(key, []).append((i, op))
+
+        # Apply fusion to each group, passing the sequence to preserve sharing
+        fused_operands = [None] * len(self.operands)
+
+        for key, indexed_ops in groups.items():
+            if key is None:
+                # No fusion for these operands
+                for i, op in indexed_ops:
+                    fused_operands[i] = op
+            elif len(indexed_ops) == 1:
+                # Single operand, just call its fuse method
+                i, op = indexed_ops[0]
+                fused_operands[i] = op.fuse()
+            else:
+                # Multiple operands of same type - create sequence and fuse together
+                # This preserves shared subexpressions via combined dependents graph
+                ops = [op for _, op in indexed_ops]
+                temp_seq = _ExprSequence(*ops)
+                # Call the fusion function with the sequence
+                fused_seq = ops[0].fuse.__func__(temp_seq)
+                if isinstance(fused_seq, _ExprSequence):
+                    for (orig_i, _), fused_op in zip(indexed_ops, fused_seq.operands):
+                        fused_operands[orig_i] = fused_op
+                else:
+                    # Fusion returned something unexpected, fall back to individual
+                    for i, op in indexed_ops:
+                        fused_operands[i] = op.fuse()
+
+        return _ExprSequence(*fused_operands)
 
     def _simplify_down(self):
         from dask.highlevelgraph import HighLevelGraph
