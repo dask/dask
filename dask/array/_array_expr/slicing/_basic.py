@@ -406,12 +406,31 @@ def take(x, index, axis=0):
         if is_dask_collection(index):
             return slice_with_int_dask_array_on_axis(x, index, axis)
 
-        average_chunk_size = int(sum(x.chunks[axis]) / len(x.chunks[axis]))
+        index = asarray_safe(index, like=index)
+
+        # Group consecutive output positions by which input chunk they need.
+        # This produces output chunks aligned with input chunks for regular
+        # patterns like np.repeat, giving fewer, more natural output chunks.
+        chunk_boundaries = np.cumsum((0,) + x.chunks[axis])
+        input_chunk_ids = np.searchsorted(chunk_boundaries[1:], index, side="right")
 
         indexer = []
-        index = asarray_safe(index, like=index)
-        for i in range(0, len(index), average_chunk_size):
-            indexer.append(index[i : i + average_chunk_size].tolist())
+        current_group = []
+        current_chunk_id = None
+
+        for i, idx in enumerate(index):
+            chunk_id = input_chunk_ids[i]
+            if chunk_id == current_chunk_id:
+                current_group.append(int(idx))
+            else:
+                if current_group:
+                    indexer.append(current_group)
+                current_group = [int(idx)]
+                current_chunk_id = chunk_id
+
+        if current_group:
+            indexer.append(current_group)
+
         return _shuffle(x, indexer, axis, "getitem-")
     elif len(x.chunks[axis]) == 1:
         return TakeUnknownOneChunk(x, index, axis)

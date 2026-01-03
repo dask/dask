@@ -885,7 +885,13 @@ def test_getitem_avoids_large_chunks():
 
         result = arr[indexer]
         assert_eq(result, expected)
-        assert result.chunks == ((1,) * 12, (128,), (128,))
+        # With array-expr input chunk locality grouping: position 0 needs chunk 0,
+        # positions 1-11 need chunk 1, so we get (1, 11) chunks.
+        # Legacy path produces (1,) * 12.
+        if da._array_expr_enabled():
+            assert result.chunks == ((1, 11), (128,), (128,))
+        else:
+            assert result.chunks == ((1,) * 12, (128,), (128,))
 
         # Users can silence the warning
         with dask.config.set({"array.slicing.split-large-chunks": False}):
@@ -901,7 +907,10 @@ def test_getitem_avoids_large_chunks():
             assert_eq(result, expected)
             assert not record
 
-            assert result.chunks == ((1,) * 12, (128,), (128,))
+            if da._array_expr_enabled():
+                assert result.chunks == ((1, 11), (128,), (128,))
+            else:
+                assert result.chunks == ((1,) * 12, (128,), (128,))
 
 
 def test_getitem_avoids_large_chunks_missing():

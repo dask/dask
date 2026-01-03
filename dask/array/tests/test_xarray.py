@@ -64,15 +64,17 @@ def test_polyfit_reshaping():
 
 def test_positional_indexer_multiple_variables():
     n = 200
+    np_a = np.random.randint(1, 100, (10, 10, n))
+    np_b = np.random.randint(1, 100, (10, 10, n))
     ds = xr.Dataset(
         data_vars=dict(
             a=(
                 ["x", "y", "time"],
-                da.random.randint(1, 100, (10, 10, n), chunks=(-1, -1, n // 2)),
+                da.from_array(np_a, chunks=(-1, -1, n // 2)),
             ),
             b=(
                 ["x", "y", "time"],
-                da.random.randint(1, 100, (10, 10, n), chunks=(-1, -1, n // 2)),
+                da.from_array(np_b, chunks=(-1, -1, n // 2)),
             ),
         ),
         coords=dict(
@@ -84,6 +86,14 @@ def test_positional_indexer_multiple_variables():
     indexer = np.arange(n)
     np.random.shuffle(indexer)
     result = ds.isel(time=indexer)
+
+    # Verify correctness
+    expected_a = np_a[:, :, indexer]
+    expected_b = np_b[:, :, indexer]
+    np.testing.assert_array_equal(result["a"].values, expected_a)
+    np.testing.assert_array_equal(result["b"].values, expected_b)
+
+    # Verify graph structure - takers/sorters are efficiently shared
     graph = result.__dask_graph__()
     assert len({k for k in graph if "shuffle-taker" in k}) == 4
     assert len({k for k in graph if "shuffle-sorter" in k}) == 2

@@ -4112,7 +4112,11 @@ def test_uneven_chunks_that_fit_neatly():
     assert_eq(x + y, np.arange(10) + np.ones(10))
 
     z = x + y
-    assert z.chunks == ((5, 2, 3),)
+    # array-expr coarse_blockdim prefers fewer chunks when boundaries align
+    if da._array_expr_enabled():
+        assert z.chunks == ((5, 5),)
+    else:
+        assert z.chunks == ((5, 2, 3),)
 
 
 def test_elemwise_uneven_chunks():
