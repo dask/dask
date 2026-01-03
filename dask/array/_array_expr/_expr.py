@@ -292,6 +292,86 @@ class ArrayExpr(SingletonExpr):
         return FinalizeComputeArray(self)
 
 
+def coarse_blockdim(blockdims):
+    """Find the coarsest block dimension from a set of block dimensions.
+
+    Prefers the chunking with the fewest blocks, which results in larger
+    chunk sizes and fewer tasks. The finer-grained inputs will be rechunked
+    to match.
+
+    Unlike common_blockdim which finds the finest common divisor, this
+    function prefers larger chunks to minimize task overhead. However, if
+    the chunk boundaries don't align (one chunking's boundaries aren't a
+    subset of another's), falls back to common_blockdim behavior.
+
+    Parameters
+    ----------
+    blockdims : set of tuples
+        Set of chunk tuples for a single dimension
+
+    Returns
+    -------
+    tuple
+        The preferred chunk tuple (fewest blocks if alignable, otherwise
+        finest common divisor)
+
+    Examples
+    --------
+    >>> coarse_blockdim({(12, 12, 12, 12), (1, 1, 1, 1, 1)})  # prefer fewer chunks
+    (12, 12, 12, 12)
+    >>> coarse_blockdim({(10,), (5, 5)})  # single chunk preferred
+    (10,)
+    >>> coarse_blockdim({(4, 6), (6, 4)})  # incompatible - use common divisor
+    (4, 2, 4)
+    """
+    if not any(blockdims):
+        return ()
+
+    # Handle unknown chunks - same logic as common_blockdim
+    unknown_dims = [d for d in blockdims if np.isnan(sum(d))]
+    if unknown_dims:
+        all_lengths = {len(d) for d in blockdims}
+        if len(all_lengths) > 1:
+            raise ValueError(
+                "Chunks are unknown or misaligned along dimensions with missing values.\n\n"
+                "A possible solution:\n  x.compute_chunk_sizes()"
+            )
+        return toolz.first(unknown_dims)
+
+    # Filter out singleton dimensions (size 1) - they don't constrain chunking
+    non_trivial_dims = {d for d in blockdims if len(d) > 1}
+
+    if len(non_trivial_dims) == 0:
+        # All are singletons, pick any
+        return max(blockdims, key=toolz.first)
+
+    if len(non_trivial_dims) == 1:
+        # Only one non-trivial, use it
+        return toolz.first(non_trivial_dims)
+
+    # Multiple non-trivial dimensions - verify they have the same total size
+    if len(set(map(sum, non_trivial_dims))) > 1:
+        raise ValueError("Chunks do not add up to same value", blockdims)
+
+    # Find the coarsest chunking (fewest blocks)
+    coarsest = min(non_trivial_dims, key=len)
+
+    # Check if all other chunkings have boundaries that align with the coarsest
+    # i.e., the coarsest boundaries are a subset of each other chunking's boundaries
+    coarsest_boundaries = set(np.cumsum(coarsest[:-1]))
+
+    for chunks in non_trivial_dims:
+        if chunks == coarsest:
+            continue
+        other_boundaries = set(np.cumsum(chunks[:-1]))
+        if not coarsest_boundaries.issubset(other_boundaries):
+            # Boundaries don't align - fall back to common_blockdim
+            return common_blockdim(blockdims)
+
+    # All boundaries align with the coarsest, so use it
+    return coarsest
+
+
 def unify_chunks_expr(*args, warn=True):
     # TODO(expr): This should probably be a dedicated expression
     # This is the implementation that expects the inputs to be expressions, the public facing
@@ -319,7 +399,7 @@ def unify_chunks_expr(*args, warn=True):
         else:
             nameinds.append((a, ind))
 
-    chunkss = broadcast_dimensions(nameinds, blockdim_dict, consolidate=common_blockdim)
+    chunkss = broadcast_dimensions(nameinds, blockdim_dict, consolidate=coarse_blockdim)
     nparts = math.prod(map(len, chunkss.values())) if chunkss else 0
 
     if warn and nparts and nparts >= max_parts * 10:
