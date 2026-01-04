@@ -6069,10 +6069,21 @@ def _get_axis(indexes):
 def _vindex_slice_and_transpose(block, points, axis):
     """Pull out point-wise slices from block and rotate block so that
     points are on the first dimension"""
-    points = [p if isinstance(p, slice) else list(p) for p in points]
+    # Keep arrays as numpy arrays (not lists) to support all integer dtypes
+    points = [p if isinstance(p, slice) else np.asarray(p) for p in points]
     block = block[tuple(points)]
     axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
-    return block.transpose(axes)
+    # Only transpose if axes differ from identity (also handles sparse matrices
+    # which don't support axes parameter in transpose)
+    if axes != list(range(block.ndim)):
+        try:
+            return block.transpose(axes)
+        except TypeError:
+            # Sparse matrices don't support axes parameter - use moveaxis for 2D
+            if block.ndim == 2 and axes == [1, 0]:
+                return block.T
+            raise
+    return block
 
 
 def _vindex_merge(locations, values):

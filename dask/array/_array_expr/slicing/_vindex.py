@@ -87,6 +87,23 @@ def _vindex(x, *indexes):
     return x
 
 
+def _compute_indexer(index, chunks_along_axis):
+    """Compute Shuffle indexer by grouping consecutive indices from same input chunk.
+
+    Returns a list of lists, where each inner list contains indices that come from
+    a contiguous run accessing the same input chunk. This preserves locality for
+    patterns like np.repeat.
+    """
+    chunk_boundaries = np.cumsum((0,) + chunks_along_axis)
+    input_chunk_ids = np.searchsorted(chunk_boundaries[1:], index, side="right")
+    changes = np.concatenate(
+        [[0], np.where(np.diff(input_chunk_ids) != 0)[0] + 1, [len(index)]]
+    )
+    return [
+        index[changes[i] : changes[i + 1]].tolist() for i in range(len(changes) - 1)
+    ]
+
+
 def _vindex_array(x, dict_indexes):
     """Point wise indexing with only NumPy Arrays."""
     from dask.array._array_expr._collection import new_collection
@@ -103,6 +120,20 @@ def _vindex_array(x, dict_indexes):
             f"broadcast together with shapes {shapes_str}"
         ) from e
     npoints = math.prod(broadcast_shape)
+
+    # Single-axis case: delegate to Shuffle for optimization hooks
+    if len(dict_indexes) == 1 and npoints > 0:
+        from dask.array._array_expr._shuffle import _shuffle
+
+        axis = next(iter(dict_indexes.keys()))
+        index = next(iter(dict_indexes.values())).ravel()
+        indexer = _compute_indexer(index, x.chunks[axis])
+
+        result = new_collection(_shuffle(x.expr, indexer, axis, "vindex-"))
+        # Shuffle keeps axis in place; reshape for broadcast_shape along that axis
+        new_shape = list(result.shape)
+        new_shape[axis : axis + 1] = list(broadcast_shape)
+        return result.reshape(tuple(new_shape))
 
     if npoints > 0:
         result_1d = new_collection(
@@ -121,7 +152,11 @@ def _vindex_array(x, dict_indexes):
 
 
 class VIndexArray(ArrayExpr):
-    """Point-wise vectorized indexing with broadcasting."""
+    """Point-wise vectorized indexing with broadcasting.
+
+    Used for multi-axis fancy indexing where indices broadcast together.
+    Single-axis cases delegate to Shuffle for optimization hooks.
+    """
 
     _parameters = ["array", "dict_indexes", "broadcast_shape", "npoints"]
 
@@ -174,7 +209,6 @@ class VIndexArray(ArrayExpr):
         broadcast_shape = self.broadcast_shape
         npoints = self.npoints
         axes = self._axes
-        max_chunk_point_dimensions = self._max_chunk_point_dimensions
 
         bounds2 = tuple(
             np.array(cached_cumsum(c, initial_zero=True))
@@ -192,6 +226,9 @@ class VIndexArray(ArrayExpr):
         starts = (b[i] for i, b in zip(block_idxs, bounds2))
         inblock_idxs = []
         for idx, start in zip(dict_indexes.values(), starts):
+            # Convert unsigned integers to signed to avoid float promotion in subtraction
+            if idx.dtype.kind == "u":
+                idx = idx.astype(np.int64)
             a = idx - start
             if len(a) > 0:
                 dtype = np.min_scalar_type(np.max(a, axis=None))
@@ -201,6 +238,7 @@ class VIndexArray(ArrayExpr):
 
         inblock_idxs = np.broadcast_arrays(*inblock_idxs)  # type: ignore[assignment]
 
+        max_chunk_point_dimensions = self._max_chunk_point_dimensions
         n_chunks, remainder = divmod(npoints, max_chunk_point_dimensions)
 
         other_blocks = product(
