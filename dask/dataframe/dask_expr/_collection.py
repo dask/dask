@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import datetime
 import functools
 import inspect
@@ -23,6 +22,7 @@ from pandas.api.types import (
 )
 from pandas.api.types import is_scalar as pd_is_scalar
 from pandas.core.dtypes.common import is_extension_array_dtype
+from pandas.api.types import is_bool_dtype
 from pyarrow import fs as pa_fs
 from tlz import first
 
@@ -65,6 +65,7 @@ from dask.dataframe.dask_expr._expr import (
     Eval,
     FFill,
     FillnaCheck,
+    Filter,
     Query,
     Shift,
     ToDatetime,
@@ -148,6 +149,7 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
+from dask.dataframe.utils import is_series_like
 
 #
 # Utilities to wrap Expr API
@@ -401,11 +403,23 @@ class FrameBase(DaskMethodsMixin):
     def __reduce__(self):
         return new_collection, (self._expr,)
 
+    
     def __getitem__(self, other):
+
+    # Boolean indexing with a Dask Series should follow Pandas semantics:
+    # df[boolean_series] == df.loc[boolean_series]
+        if (
+            isinstance(other, FrameBase)
+            and other.ndim == 1
+            and is_bool_dtype(other.dtype)
+        ):
+            return self.loc[other]
+
         if isinstance(other, FrameBase):
             if not expr.are_co_aligned(self.expr, other.expr):
                 return new_collection(expr.FilterAlign(self, other))
             return new_collection(self.expr.__getitem__(other.expr))
+
         elif isinstance(other, slice):
             from pandas.api.types import is_float_dtype
 
@@ -420,13 +434,17 @@ class FrameBase(DaskMethodsMixin):
                 return self.iloc[other]
             else:
                 return self.loc[other]
+
         if isinstance(other, np.ndarray) or is_series_like(other):
             other = list(other)
         elif isinstance(other, list):
             other = other.copy()
         elif isinstance(other, np.generic):
             other = other.item()
+
         return new_collection(self.expr.__getitem__(other))
+
+             
 
     def __dask_tokenize__(self):
         return type(self).__name__, self._expr._name
