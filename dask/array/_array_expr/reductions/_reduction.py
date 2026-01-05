@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import builtins
 import math
+import warnings
 from functools import partial
 from itertools import product
 from numbers import Integral
 
+import numpy as np
 from tlz import compose, get, partition_all
 
 from dask import config
@@ -13,6 +15,7 @@ from dask._collections import new_collection
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array._array_expr._utils import compute_meta
 from dask.array.core import _concatenate2
+from dask.array.numpy_compat import ComplexWarning
 from dask.array.utils import is_arraylike, validate_axis
 from dask.blockwise import lol_tuples
 from dask.tokenize import _tokenize_deterministic
@@ -137,11 +140,14 @@ def reduction(
         remove them.
 
     """
-    if output_size != 1:
-        # TODO(expr-soon): i am not convinced that this is actually used. We don't have a single
-        # test for this as far as I can tell. If we want to keep this, we will most likely need
-        # different arguments for chunk and aggregate to handle differing behaviors
-        raise NotImplementedError("output_size != 1 is not yet supported")
+    # Convert non-dask arrays to dask arrays
+    from dask.array._array_expr._collection import Array
+
+    if not isinstance(x, Array):
+        from dask.array._array_expr.core._conversion import asanyarray
+
+        x = asanyarray(x)
+
     if axis is None:
         axis = tuple(range(x.ndim))
     if isinstance(axis, Integral):
@@ -163,12 +169,33 @@ def reduction(
     args = (x.expr, inds)
 
     if weights is not None:
-        # TODO(expr-soon): Needs more IO Stuff
-        raise NotImplementedError("Weights are not yet supported")
+        # Broadcast weights to x and add to args
+        from dask.array._array_expr._broadcast import broadcast_to
+        from dask.array._array_expr.core._conversion import asanyarray
+
+        wgt = asanyarray(weights)
+        try:
+            wgt = broadcast_to(wgt, x.shape)
+        except ValueError:
+            raise ValueError(
+                f"Weights with shape {wgt.shape} are not broadcastable "
+                f"to x with shape {x.shape}"
+            )
+
+        args += (wgt.expr, inds)
 
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
+    # Use adjust_chunks to set reduced axes to output_size (default 1)
+    adjust_chunks = {i: output_size for i in axis}
     tmp = blockwise(
-        chunk, inds, *args, axis=axis, keepdims=True, token=name, dtype=dtype or float
+        chunk,
+        inds,
+        *args,
+        axis=axis,
+        keepdims=True,
+        token=name,
+        dtype=dtype or float,
+        adjust_chunks=adjust_chunks,
     )
     if meta is None and hasattr(x, "_meta"):
         try:
@@ -196,6 +223,20 @@ def reduction(
         concatenate=concatenate,
         reduced_meta=reduced_meta if reduced_meta is not None else meta,
     )
+    # Override final chunks for output_size != 1
+    if keepdims and output_size != 1:
+        from dask.array._array_expr._expr import ChunksOverride
+
+        final_chunks = tuple(
+            (output_size,) if i in axis else c for i, c in enumerate(result.chunks)
+        )
+        result = new_collection(ChunksOverride(result.expr, final_chunks))
+
+    # Handle out= parameter
+    if out is not None:
+        from dask.array._array_expr.core._blockwise_funcs import _handle_out
+
+        return _handle_out(out, result)
     return result
 
 
@@ -293,6 +334,13 @@ class PartialReduce(ArrayExpr):
         )
 
     @cached_property
+    def dtype(self):
+        # Use the explicitly passed dtype parameter instead of inferring from meta
+        if self.operand("dtype") is not None:
+            return np.dtype(self.operand("dtype"))
+        return super().dtype
+
+    @cached_property
     def chunks(self):
         chunks = [
             (
@@ -336,31 +384,161 @@ class PartialReduce(ArrayExpr):
     @property
     def _meta(self):
         meta = self.array._meta
+        original_dtype = getattr(self.reduced_meta, "dtype", None) or getattr(
+            meta, "dtype", None
+        )
+
         if self.reduced_meta is not None:
             try:
                 meta = self.func(self.reduced_meta, computing_meta=True)
-            # no meta keyword argument exists for func, and it isn't required
             except TypeError:
+                # No computing_meta kwarg, try without it
                 try:
                     meta = self.func(self.reduced_meta)
                 except ValueError as e:
-                    # min/max functions have no identity, don't apply function to meta
                     if "zero-size array to reduction operation" in str(e):
                         meta = self.reduced_meta
-            # when no work can be computed on the empty array (e.g., func is a ufunc)
-            except ValueError:
-                pass
+                except IndexError:
+                    meta = self.reduced_meta
+            except (ValueError, IndexError):
+                # Can't compute on empty array (ufunc, argtopk, etc.)
+                meta = self.reduced_meta
 
-        # some functions can't compute empty arrays (those for which reduced_meta
-        # fall into the ValueError exception) and we have to rely on reshaping
-        # the array according to len(out_chunks)
+        # Ensure meta is array-like (func can return Python scalars for object dtype)
+        if not is_arraylike(meta) and meta is not None:
+            meta = np.array(meta, dtype=original_dtype or object)
+
+        # Reshape meta to match output dimensions
         if is_arraylike(meta) and meta.ndim != len(self.chunks):
             if len(self.chunks) == 0:
-                meta = meta.sum()
+                # 0D output - reduce to scalar
+                try:
+                    meta = meta.sum()
+                    if not hasattr(meta, "dtype"):
+                        meta = np.array(meta, dtype=original_dtype)
+                except TypeError:
+                    # dtype doesn't support sum (e.g., datetime64)
+                    meta = np.empty((), dtype=meta.dtype)
             else:
-                meta = meta.reshape((0,) * len(self.chunks))
+                target_shape = (0,) * len(self.chunks)
+                # Use np.prod(shape) for array-likes that don't expose .size
+                meta_size = getattr(meta, "size", None)
+                if meta_size is None:
+                    meta_size = np.prod(meta.shape)
+                if meta_size != 0:
+                    # Can't reshape non-empty array to empty shape (e.g., scalar)
+                    meta = np.empty(target_shape, dtype=meta.dtype)
+                else:
+                    meta = meta.reshape(target_shape)
+
+        # Ensure meta has the correct dtype if dtype is explicitly specified
+        if self.operand("dtype") is not None and hasattr(meta, "dtype"):
+            target_dtype = np.dtype(self.operand("dtype"))
+            if meta.dtype != target_dtype:
+                with warnings.catch_warnings():
+                    # Suppress ComplexWarning when casting complex to real (e.g., var)
+                    warnings.filterwarnings("ignore", category=ComplexWarning)
+                    meta = meta.astype(target_dtype)
+
+        # Convert MaskedConstant (np.ma.masked) to a proper MaskedArray
+        # since the singleton cannot be tokenized
+        if isinstance(meta, np.ma.core.MaskedConstant):
+            meta = np.ma.array(meta, ndmin=0)
 
         return meta
+
+    def _simplify_up(self, parent, dependents):
+        """Allow slice operations to push through PartialReduce."""
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        return None
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice being pushed through this PartialReduce.
+
+        For x.sum(axis=0)[:5], we transform to x[:, :5].sum(axis=0).
+        The key is mapping output slice indices back to input indices,
+        inserting slice(None) for the reduced axes.
+        """
+        from numbers import Integral
+
+        from dask._collections import new_collection
+
+        index = slice_expr.index
+        input_array = self.array
+
+        # Don't handle None/newaxis
+        if any(idx is None for idx in index):
+            return None
+
+        # Get reduced axes from split_every
+        reduced_axes = set(self.split_every.keys())
+        keepdims = self.keepdims
+        input_ndim = input_array.ndim
+
+        if keepdims:
+            # With keepdims, output has same ndim as input
+            full_index = index + (slice(None),) * (input_ndim - len(index))
+        else:
+            # Without keepdims, reduced axes are removed from output
+            out_axis = [i for i in range(input_ndim) if i not in reduced_axes]
+            output_ndim = len(out_axis)
+            full_index = index + (slice(None),) * (output_ndim - len(index))
+
+        # Convert integers to size-1 slices to preserve dimensions
+        slice_index = tuple(
+            slice(idx, idx + 1) if isinstance(idx, Integral) else idx
+            for idx in full_index
+        )
+        has_integers = any(isinstance(idx, Integral) for idx in full_index)
+
+        # Build input index mapping output axes to input axes
+        if keepdims:
+            input_index = slice_index
+        else:
+            input_index = []
+            out_pos = 0
+            for in_ax in range(input_ndim):
+                if in_ax in reduced_axes:
+                    input_index.append(slice(None))
+                else:
+                    input_index.append(slice_index[out_pos])
+                    out_pos += 1
+            input_index = tuple(input_index)
+
+        # Apply the slice to the input and create new PartialReduce
+        sliced_input = new_collection(input_array)[input_index]
+
+        # Don't push slice through if it would create empty arrays on non-reduced axes.
+        # Reductions on empty non-reduced dimensions cause issues with task aggregation.
+        for ax in range(input_ndim):
+            if ax not in reduced_axes and sliced_input.shape[ax] == 0:
+                return None
+
+        result = PartialReduce(
+            sliced_input.expr,
+            self.func,
+            self.split_every,
+            self.keepdims,
+            self.operand("dtype"),
+            self.operand("name"),
+            self.reduced_meta,
+        )
+
+        # If we converted integers to slices, extract with [0] to restore dimensions
+        if has_integers:
+            from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+            extract_index = tuple(
+                0 if isinstance(idx, Integral) else slice(None) for idx in full_index
+            )
+            return SliceSlicesIntegers(
+                result, extract_index, slice_expr.allow_getitem_optimization
+            )
+
+        return result
 
 
 from dask.array._array_expr._collection import blockwise

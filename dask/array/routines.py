@@ -2511,13 +2511,16 @@ def _average(
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
     # Wrapper used by da.average or da.ma.average.
-    a = asanyarray(a)
+    # Use late import to get array-expr version when enabled
+    import dask.array as da
+
+    a = da.asanyarray(a)
 
     if weights is None:
         avg = a.mean(axis, keepdims=keepdims)
         scl = avg.dtype.type(a.size / avg.size)
     else:
-        wgt = asanyarray(weights)
+        wgt = da.asanyarray(weights)
 
         if issubclass(a.dtype.type, (np.integer, np.bool_)):
             result_dtype = result_type(a.dtype, wgt.dtype, "f8")
@@ -2540,7 +2543,7 @@ def _average(
                 )
 
             # setup wgt to broadcast along axis
-            wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
+            wgt = da.broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
             wgt = wgt.swapaxes(-1, axis)
         if is_masked:
             from dask.array.ma import getmaskarray
@@ -2551,7 +2554,7 @@ def _average(
 
     if returned:
         if scl.shape != avg.shape:
-            scl = broadcast_to(scl, avg.shape).copy()
+            scl = da.broadcast_to(scl, avg.shape).copy()
         return avg, scl
     else:
         return avg

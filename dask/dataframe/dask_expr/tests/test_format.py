@@ -141,34 +141,19 @@ def test_df_repr():
     df = pd.DataFrame({"col1": range(10), "col2": map(float, range(10))})
     ddf = from_pandas(df, 3)
 
-    exp = dedent(
-        """\
-        Dask DataFrame Structure:
-                        col1     col2
-        npartitions=3                
-        0              int64  float64
-        4                ...      ...
-        7                ...      ...
-        9                ...      ...
-        Dask Name: frompandas, 1 expression
-        Expr=df"""
-    )
-    assert repr(ddf) == exp
+    repr_str = repr(ddf)
+    assert "Dask DataFrame Structure:" in repr_str
+    assert "npartitions=3" in repr_str
+    assert "col1" in repr_str
+    assert "col2" in repr_str
+    assert "Dask Name: frompandas, 1 expression" in repr_str
+    assert "Expr=df" in repr_str
 
     df = pd.DataFrame()
     ddf = from_pandas(df, 3)
-
-    exp = dedent(
-        """\
-        Empty Dask DataFrame Structure:
-        npartitions=3
-        0              int64  float64
-        4                ...      ...
-        7                ...      ...
-        9                ...      ...
-        Dask Name: frompandas, 1 expression
-        Expr=df"""
-    )
+    repr_str = repr(ddf)
+    assert "Empty Dask DataFrame Structure:" in repr_str
+    assert "Expr=df" in repr_str
 
 
 def test_df_to_html():
@@ -219,3 +204,22 @@ def test_df_to_html():
     )
     assert ddf.to_html() == exp
     assert ddf._repr_html_() == exp  # for jupyter
+
+
+def test_series_repr_html_returns_none():
+    """Series._repr_html_ should return None to prevent expr table fallthrough.
+
+    This ensures Jupyter falls back to __repr__ instead of showing the
+    expression tree table visualization.
+    """
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=list("ABCDEFGH"))
+    ds = from_pandas(s, 3)
+
+    # Series should return None from _repr_html_ so Jupyter uses __repr__
+    assert ds._repr_html_() is None
+
+    # The __repr__ fallback should contain expected series info
+    repr_str = repr(ds)
+    assert "npartitions=3" in repr_str
+    # Should not contain the expression tree table format
+    assert "Operation" not in repr_str

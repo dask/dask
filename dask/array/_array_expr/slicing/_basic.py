@@ -7,13 +7,13 @@ from numbers import Integral
 import numpy as np
 from toolz import pluck
 
-from dask._task_spec import Alias, DataNode, Task, TaskRef
+from dask._task_spec import Alias, Task, TaskRef
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array.chunk import getitem
+from dask.array.optimization import fuse_slice
 from dask.array.slicing import (
     _slice_1d,
     check_index,
-    expander,
     new_blockdim,
     normalize_slice,
     posify_index,
@@ -22,8 +22,57 @@ from dask.array.slicing import (
 )
 from dask.array.utils import meta_from_array
 from dask.layers import ArrayBlockwiseDep
-from dask.tokenize import tokenize
 from dask.utils import cached_cumsum, is_arraylike
+
+
+def _compute_sliced_chunks(chunks, slc, dim_size):
+    """Compute chunk sizes for the sliced region of a dimension."""
+    if slc == slice(None):
+        return chunks
+
+    start, stop, step = slc.indices(dim_size)
+
+    # Handle step == -1 (flip) specially - preserve chunks in reverse order
+    if step == -1:
+        # Check if this is a full flip (equivalent to slice(None, None, -1))
+        if start == dim_size - 1 and stop == -1:
+            # Full flip: reverse the chunks
+            return chunks[::-1]
+        else:
+            # Partial negative step: fall back to single chunk
+            new_size = len(range(start, stop, step))
+            return (new_size,)
+
+    if step != 1:
+        # For non-unit step (other than -1), fall back to single chunk
+        new_size = len(range(start, stop, step))
+        return (new_size,)
+
+    # Handle empty slice - return single chunk of size 0
+    if start >= stop:
+        return (0,)
+
+    # Find chunks that overlap with [start, stop)
+    result = []
+    pos = 0
+    for chunk_size in chunks:
+        chunk_start = pos
+        chunk_end = pos + chunk_size
+        pos = chunk_end
+
+        # Skip chunks entirely before the slice
+        if chunk_end <= start:
+            continue
+        # Stop at chunks entirely after the slice
+        if chunk_start >= stop:
+            break
+
+        # Compute the portion of this chunk included in the slice
+        included_start = max(chunk_start, start)
+        included_end = min(chunk_end, stop)
+        result.append(included_end - included_start)
+
+    return tuple(result) if result else (0,)
 
 
 def slice_with_int_dask_array(x, index):
@@ -63,11 +112,11 @@ def slice_with_int_dask_array(x, index):
         if isinstance(idx, Array) and idx.dtype.kind in "iu":
             if idx.ndim == 0:
                 idx = idx[np.newaxis]
-                x = slice_with_int_dask_array_on_axis(x, idx, out_axis, in_axis)
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
                 x = x[tuple(0 if i == out_axis else slice(None) for i in range(x.ndim))]
                 dropped_axis_cnt += 1
             elif idx.ndim == 1:
-                x = slice_with_int_dask_array_on_axis(x, idx, out_axis, in_axis)
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
                 out_index.append(slice(None))
             else:
                 raise NotImplementedError(
@@ -148,7 +197,7 @@ def normalize_index(idx, shape):
     return idx
 
 
-def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
+def slice_with_int_dask_array_on_axis(x, idx, axis):
     """Slice a ND dask array with a 1D dask arrays of ints along the given
     axis.
 
@@ -166,13 +215,14 @@ def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
         )
     x_axes = tuple(range(x.ndim))
     idx_axes = (x.ndim,)  # arbitrary index not already in x_axes
+    offset_axes = (axis,)
 
     # Calculate the offset at which each chunk starts along axis
     # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
     offset = np.roll(np.cumsum(np.asarray(x.chunks[axis], like=x._meta)), 1)
     offset[0] = 0
-    offset = ArrayOffsetDep(x.chunks, offset, in_axis)
-    # Define axis labels for blockwise
+    # ArrayOffsetDep needs 1D chunks matching x.chunks[axis], not full x.chunks
+    offset = ArrayOffsetDep((x.chunks[axis],), offset)
 
     p_axes = x_axes[: axis + 1] + idx_axes + x_axes[axis + 1 :]
     y_axes = x_axes[:axis] + idx_axes + x_axes[axis + 1 :]
@@ -186,7 +236,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
         idx,
         idx_axes,
         offset,
-        p_axes,
+        offset_axes,
         x_size=x.shape[axis],
         axis=axis,
         dtype=x.dtype,
@@ -211,15 +261,14 @@ def slice_with_int_dask_array_on_axis(x, idx, axis, in_axis):
 
 
 class ArrayOffsetDep(ArrayBlockwiseDep):
-    def __init__(
-        self, chunks: tuple[tuple[int, ...], ...], values: np.ndarray | dict, axis: int
-    ):
+    """1D BlockwiseDep that provides chunk offset values."""
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...], values: np.ndarray | dict):
         super().__init__(chunks)
         self.values = values
-        self.axis = axis
 
     def __getitem__(self, idx: tuple):
-        return self.values[idx[self.axis]]
+        return self.values[idx[0]]
 
 
 def slice_array(x, index):
@@ -245,8 +294,11 @@ def slice_with_newaxes(x, index):
     """
     Handle indexing with Nones
 
-    Strips out Nones then hands off to slice_wrap_lists
+    Strips out Nones then hands off to slice_wrap_lists, then wraps
+    result with ExpandDims if needed.
     """
+    from dask.array._array_expr.manipulation._expand import ExpandDims
+
     # Strip Nones from index
     index2 = tuple(ind for ind in index if ind is not None)
     where_none = [i for i, ind in enumerate(index) if ind is None]
@@ -259,10 +311,7 @@ def slice_with_newaxes(x, index):
     x = slice_wrap_lists(x, index2, not where_none)
 
     if where_none:
-        return SlicesWrapNone(
-            x.array, x.index, x.allow_getitem_optimization, where_none
-        )
-
+        return ExpandDims(x, tuple(where_none))
     else:
         return x
 
@@ -340,21 +389,29 @@ def slice_slices_and_integers(x, index, allow_getitem_optimization=False):
 
 
 def take(x, index, axis=0):
+    from dask.base import is_dask_collection
+
     if not np.isnan(x.chunks[axis]).any():
         from dask.array._array_expr._shuffle import _shuffle
         from dask.array.utils import arange_safe, asarray_safe
 
-        arange = arange_safe(np.sum(x.chunks[axis]), like=index)
-        if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
-            # no-op
-            return x
+        # No-op check only for numpy arrays (dask array comparison triggers warnings)
+        # Use is_dask_collection to catch both array-expr and legacy dask Arrays
+        if not is_dask_collection(index):
+            arange = arange_safe(np.sum(x.chunks[axis]), like=index)
+            if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
+                return x
 
-        average_chunk_size = int(sum(x.chunks[axis]) / len(x.chunks[axis]))
+        # If index is a dask collection, use lazy blockwise approach
+        if is_dask_collection(index):
+            return slice_with_int_dask_array_on_axis(x, index, axis)
 
-        indexer = []
         index = asarray_safe(index, like=index)
-        for i in range(0, len(index), average_chunk_size):
-            indexer.append(index[i : i + average_chunk_size].tolist())
+
+        # Compute indexer by grouping consecutive indices from same input chunk
+        from dask.array._array_expr.slicing._vindex import _compute_indexer
+
+        indexer = _compute_indexer(index, x.chunks[axis])
         return _shuffle(x, indexer, axis, "getitem-")
     elif len(x.chunks[axis]) == 1:
         return TakeUnknownOneChunk(x, index, axis)
@@ -381,6 +438,51 @@ class Slice(ArrayExpr):
 
 class SliceSlicesIntegers(Slice):
     _parameters = ["array", "index", "allow_getitem_optimization"]
+
+    def _simplify_down(self):
+        # Slice(Slice(x)) -> single Slice with fused indices
+        if isinstance(self.array, SliceSlicesIntegers):
+            try:
+                fused = fuse_slice(self.array.index, self.index)
+                normalized = tuple(
+                    normalize_slice(idx, dim) if isinstance(idx, slice) else idx
+                    for idx, dim in zip(fused, self.array.array.shape)
+                )
+                return SliceSlicesIntegers(
+                    self.array.array, normalized, self.allow_getitem_optimization
+                )
+            except NotImplementedError:
+                # Skip fusion for unsupported slicing patterns (e.g., negative step)
+                pass
+
+        # Check if the array implements _accept_slice (for operations like Elemwise,
+        # Transpose, Blockwise, PartialReduce, ExpandDims that use the simplify_up pattern).
+        if hasattr(self.array, "_accept_slice"):
+            result = self.array._accept_slice(self)
+            if result is not None:
+                return result
+
+    def _slice_chunks(self, chunks, start, length):
+        """Compute new chunks after slicing."""
+        result = []
+        cumsum = 0
+        for chunk_size in chunks:
+            chunk_start = cumsum
+            chunk_end = cumsum + chunk_size
+            cumsum = chunk_end
+
+            if chunk_end <= start:
+                continue
+            if chunk_start >= start + length:
+                break
+
+            overlap_start = max(start, chunk_start)
+            overlap_end = min(start + length, chunk_end)
+            overlap_size = overlap_end - overlap_start
+            if overlap_size > 0:
+                result.append(overlap_size)
+
+        return tuple(result) if result else (0,)
 
     @functools.cached_property
     def chunks(self):
@@ -429,41 +531,26 @@ class SliceSlicesIntegers(Slice):
         return dsk_out
 
 
-class SlicesWrapNone(SliceSlicesIntegers):
-    _parameters = ["array", "index", "allow_getitem_optimization", "where_none"]
+def _compose_slices(outer_slice, inner_slice, dim_size):
+    """Compose two slices: inner_slice is relative to outer_slice's result."""
+    # Get the range of the outer slice
+    outer_start, outer_stop, outer_step = outer_slice.indices(dim_size)
+    outer_len = len(range(outer_start, outer_stop, outer_step))
 
-    @functools.cached_property
-    def chunks(self):
-        return self.expand(super().chunks, (1,))
+    # Get the range of the inner slice relative to outer's result
+    inner_start, inner_stop, inner_step = inner_slice.indices(outer_len)
 
-    @functools.cached_property
-    def expand(self):
-        return expander(self.where_none)
+    # Compose: offset inner by outer_start
+    if outer_step != 1 or inner_step != 1:
+        new_start = outer_start + inner_start * outer_step
+        new_stop = outer_start + inner_stop * outer_step
+        new_step = outer_step * inner_step
+    else:
+        new_start = outer_start + inner_start
+        new_stop = outer_start + inner_stop
+        new_step = 1
 
-    def _layer(self) -> dict:
-        dsk = super()._layer()
-
-        where_none_orig = list(self.where_none)
-        expand_orig = expander(where_none_orig)
-
-        # Insert ",0" into the key:  ('x', 2, 3) -> ('x', 0, 2, 0, 3)
-        dsk2: dict = {}
-        for k, v in dsk.items():
-            if k[0] == self._name:
-                k2 = (self._name,) + self.expand(k[1:], 0)
-                if isinstance(v.args[1], Alias):
-                    # positional indexing with newaxis
-                    indexer = expand_orig(dsk[v.args[1].key].value[1], None)
-                    tok = "shuffle-taker-" + tokenize(indexer)
-                    dsk2[tok] = DataNode(tok, (1, indexer))
-                    arg = TaskRef(tok)
-                else:
-                    arg = expand_orig(v.args[1], None)
-                # raise NotImplementedError
-                dsk2[k2] = Task(k2, v.func, v.args[0], arg)
-            else:
-                dsk2[k] = v
-        return dsk2
+    return slice(new_start, new_stop, new_step if new_step != 1 else None)
 
 
 class TakeUnknownOneChunk(Slice):

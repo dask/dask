@@ -328,6 +328,18 @@ class FrameBase(DaskMethodsMixin):
     def _meta_nonempty(self):
         return meta_nonempty(self._meta)
 
+    def _repr_mimebundle_(self, **kwargs):
+        """Block __getattr__ fallthrough to expr for Jupyter display."""
+        # Return None so Jupyter falls back to _repr_html_
+        # This prevents __getattr__ from delegating to expr._repr_mimebundle_
+        return None
+
+    def _repr_html_(self):
+        """Block __getattr__ fallthrough to expr for Jupyter display."""
+        # Return None so Jupyter falls back to __repr__
+        # Subclasses (DataFrame) can override with actual HTML repr
+        return None
+
     @property
     def divisions(self):
         """
@@ -447,7 +459,7 @@ Expr={expr}"""
             data=data,
             name=key_split(self._name),
             n_expr=maybe_pluralize(n_expr, "expression"),
-            expr=self.expr,
+            expr=str(self.expr),
         )
 
     def __bool__(self):
@@ -627,7 +639,8 @@ Expr={expr}"""
             Whether to visualize the task graph. By default
             the expression graph will be visualized instead.
         """
-        if tasks:
+        # color= options require task graph visualization
+        if tasks or kwargs.get("color"):
             return super().visualize(**kwargs)
         return self.expr.visualize(**kwargs)
 
@@ -1414,18 +1427,25 @@ Expr={expr}"""
         -------
         A Dask Array
         """
+        import dask.array as da
+
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
 
-        arr = self.values
+        if da._array_expr_enabled():
+            from dask.dataframe.dask_expr._array import create_values_array
 
-        chunks = self._validate_chunks(arr, lengths)
-        arr._chunks = chunks
-
-        if meta is not None:
-            arr._meta = meta
-
-        return arr
+            # Only pass chunks if lengths override specified
+            chunks = self._validate_chunks_direct(lengths) if lengths else None
+            return create_values_array(self.expr, chunks, meta)
+        else:
+            # Traditional mode: create array then validate/mutate
+            arr = self.values
+            chunks = self._validate_chunks(arr, lengths)
+            arr._chunks = chunks
+            if meta is not None:
+                arr._meta = meta
+            return arr
 
     @property
     def values(self):
@@ -1441,6 +1461,14 @@ Expr={expr}"""
                 f"to arrays. Converting {self._meta.values.dtype} to object dtype.",
                 UserWarning,
             )
+
+        import dask.array as da
+
+        if da._array_expr_enabled():
+            from dask.dataframe.dask_expr._array import create_values_array
+
+            return create_values_array(self.expr)
+
         return self.map_partitions(methods.values)
 
     def __divmod__(self, other):
@@ -2483,6 +2511,30 @@ Expr={expr}"""
             raise ValueError(f"Unexpected value for 'lengths': '{lengths}'")
 
         return arr._chunks
+
+    def _validate_chunks_direct(self, lengths):
+        """Validate lengths and compute chunks.
+
+        Used by to_dask_array in array-expr mode when lengths are specified.
+        """
+        from collections.abc import Sequence
+
+        from dask.array.core import normalize_chunks
+
+        if not isinstance(lengths, Sequence):
+            raise ValueError(f"Unexpected value for 'lengths': '{lengths}'")
+
+        lengths = tuple(lengths)
+        if len(lengths) != self.npartitions:
+            raise ValueError(
+                "The number of items in 'lengths' does not match the number of "
+                f"partitions. {len(lengths)} != {self.npartitions}"
+            )
+
+        if self.ndim == 1:
+            return normalize_chunks((lengths,))
+        else:
+            return normalize_chunks((lengths, (len(self.columns),)))
 
     def to_bag(self, index=False, format="tuple"):
         """Create a Dask Bag from a Series"""
@@ -5089,10 +5141,19 @@ def from_dask_array(x, columns=None, index=None, meta=None) -> DataFrame:
     dask.dataframe.DataFrame.values: Reverse conversion
     dask.dataframe.DataFrame.to_records: Reverse conversion
     """
-    from dask.dataframe.io import from_dask_array
+    import dask.array as da
 
     if columns is not None and isinstance(columns, list) and not len(columns):
         columns = None
+
+    if da._array_expr_enabled():
+        # Use expression-based approach for array-expr
+        from dask.dataframe.dask_expr._array import from_dask_array_expr
+
+        return from_dask_array_expr(x, columns=columns, index=index, meta=meta)
+
+    from dask.dataframe.io import from_dask_array
+
     return from_dask_array(x, columns=columns, index=index, meta=meta)
 
 

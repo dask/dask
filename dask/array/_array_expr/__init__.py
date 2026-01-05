@@ -1,34 +1,142 @@
 from __future__ import annotations
 
 import dask.array._array_expr._backends
-from dask.array._array_expr import random
+from dask.array._array_expr import fft, random
 from dask.array._array_expr._collection import (
     Array,
     array,
     asanyarray,
     asarray,
+    atleast_1d,
+    atleast_2d,
+    atleast_3d,
+    block,
     blockwise,
+    broadcast_to,
     concatenate,
+    dstack,
     elemwise,
+    expand_dims,
+    flip,
+    fliplr,
+    flipud,
     from_array,
+    hstack,
+    moveaxis,
+    ravel,
     rechunk,
+    reshape,
+    reshape_blockwise,
+    roll,
+    rollaxis,
+    rot90,
+    squeeze,
     stack,
+    swapaxes,
+    transpose,
+    vstack,
 )
-from dask.array._array_expr._creation import (
+from dask.array._array_expr._einsum import einsum
+from dask.array._array_expr._gufunc import *
+from dask.array._array_expr._histogram import histogram, histogram2d, histogramdd
+from dask.array._array_expr._map_blocks import map_blocks
+from dask.array._array_expr._optimize import optimize
+from dask.array._array_expr._overlap import map_overlap, overlap, trim_overlap
+from dask.array._array_expr._routines import (
+    aligned_coarsen_chunks,
+    allclose,
+    append,
+    apply_along_axis,
+    apply_over_axes,
+    argtopk,
+    argwhere,
+    around,
+    average,
+    bincount,
+    broadcast_arrays,
+    choose,
+    coarsen,
+    compress,
+    corrcoef,
+    count_nonzero,
+    cov,
+    delete,
+    digitize,
+    ediff1d,
+    extract,
+    flatnonzero,
+    gradient,
+    insert,
+    isclose,
+    isin,
+    isnull,
+    ndim,
+    nonzero,
+    notnull,
+    outer,
+    piecewise,
+    ravel_multi_index,
+    result_type,
+    round,
+    searchsorted,
+    select,
+    shape,
+    take,
+    topk,
+    tril,
+    tril_indices,
+    tril_indices_from,
+    triu,
+    triu_indices,
+    triu_indices_from,
+    unify_chunks,
+    union1d,
+    unique,
+    unravel_index,
+)
+from dask.array._array_expr._shuffle import shuffle
+from dask.array._array_expr._ufunc import *
+from dask.array._array_expr.creation import (
     arange,
+    diag,
+    diagonal,
     empty,
     empty_like,
+    eye,
+    fromfunction,
     full,
     full_like,
+    indices,
     linspace,
+    meshgrid,
     ones,
     ones_like,
+    pad,
     repeat,
+    tile,
+    tri,
     zeros,
     zeros_like,
 )
-from dask.array._array_expr._gufunc import *
-from dask.array._array_expr._map_blocks import map_blocks
-from dask.array._array_expr._overlap import map_overlap, overlap, trim_overlap
-from dask.array._array_expr._reductions import _tree_reduce, reduction
-from dask.array._array_expr._ufunc import *
+from dask.array._array_expr.io import (
+    from_delayed,
+    from_npy_stack,
+    from_zarr,
+    store,
+    to_npy_stack,
+    to_zarr,
+)
+from dask.array._array_expr.linalg import dot, matmul, tensordot, vdot
+from dask.array._array_expr.reductions import (
+    _tree_reduce,
+    arg_reduction,
+    cumprod,
+    cumreduction,
+    cumsum,
+    nancumprod,
+    nancumsum,
+    reduction,
+    trace,
+)
+from dask.array._array_expr.routines._diff import diff
+from dask.array._array_expr.routines._where import where

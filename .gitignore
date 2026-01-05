@@ -17,6 +17,7 @@ log
 coverage.xml
 .DS_Store
 *.sqlite
+*.zarr
 *.swp
 *.swo
 .cache/
@@ -28,3 +29,4 @@ hdfs-initialized-indicator
 env.yaml
 uv.lock
 dask/_version.py
+*.ipynb

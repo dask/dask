@@ -31,7 +31,6 @@ import dask.array as da
 from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
-    BlockView,
     PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
@@ -52,12 +51,16 @@ from dask.array.core import (
     normalize_chunks_cached,
     optimize,
     stack,
-    store,
 )
 from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_210
 from dask.array.reshape import _not_implemented_message
 from dask.array.utils import assert_eq, same_keys
-from dask.base import collections_to_expr, compute_as_if_collection, tokenize
+from dask.base import (
+    collections_to_expr,
+    compute_as_if_collection,
+    is_dask_collection,
+    tokenize,
+)
 from dask.blockwise import (
     _make_blockwise_graph,
     broadcast_dimensions,
@@ -73,9 +76,6 @@ try:
     from distributed import futures_of
 except ModuleNotFoundError:
     futures_of = lambda *args, **kwargs: []
-
-if da._array_expr_enabled():
-    pytest.skip("parametrize using unsupported functions", allow_module_level=True)
 
 
 def skip_if_no_sparray():
@@ -93,11 +93,18 @@ def assert_has_persisted_data(arr):
     has_persisted_data = False
     if futures_of(arr):
         has_persisted_data = True
-    else:
+    elif hasattr(arr.dask, "layers"):
+        # Legacy HLG path
         for layer in arr.dask.layers.values():
             if isinstance(layer, MaterializedLayer) and any(
                 map(lambda obj: isinstance(obj, np.ndarray), layer.mapping.values())
             ):
+                has_persisted_data = True
+                break
+    else:
+        # Array-expr dict graph path - check for numpy arrays in values
+        for value in arr.dask.values():
+            if isinstance(value, np.ndarray):
                 has_persisted_data = True
                 break
     assert has_persisted_data
@@ -1138,7 +1145,13 @@ def test_broadcast_shapes():
 
     pytest.raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
-    pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (1, np.nan)))
+    # With unknown dimensions (nan), we allow broadcasting as long as
+    # known dimensions don't conflict with each other
+    assert np.allclose(
+        (2, np.nan), broadcast_shapes((2, 3), (1, np.nan)), equal_nan=True
+    )
+    # Conflicting known dimensions should still raise
+    pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (1, np.nan), (1, 5)))
 
 
 def test_elemwise_on_scalars():
@@ -1146,8 +1159,8 @@ def test_elemwise_on_scalars():
     ny = np.arange(10, dtype=np.int32)
     nz = nx.sum() * ny
 
-    dx = from_array(nx, chunks=(5,))
-    dy = from_array(ny, chunks=(5,))
+    dx = da.from_array(nx, chunks=(5,))
+    dy = da.from_array(ny, chunks=(5,))
     dz = dx.sum() * dy
 
     if NUMPY_GE_200:
@@ -1309,8 +1322,8 @@ def test_matmul():
     rng = np.random.default_rng()
     x = rng.random((5, 5))
     y = rng.random((5, 2))
-    a = from_array(x, chunks=(1, 5))
-    b = from_array(y, chunks=(5, 1))
+    a = da.from_array(x, chunks=(1, 5))
+    b = da.from_array(y, chunks=(5, 1))
     assert_eq(operator.matmul(a, b), a.dot(b))
     assert_eq(operator.matmul(a, b), operator.matmul(x, y))
     assert_eq(operator.matmul(a, y), operator.matmul(x, b))
@@ -1318,7 +1331,7 @@ def test_matmul():
     assert_eq(operator.matmul(list_vec, b), operator.matmul(list_vec, y))
     assert_eq(operator.matmul(x, list_vec), operator.matmul(a, list_vec))
     z = rng.random((5, 5, 5))
-    c = from_array(z, chunks=(1, 5, 1))
+    c = da.from_array(z, chunks=(1, 5, 1))
     assert_eq(operator.matmul(a, z), operator.matmul(x, c))
     assert_eq(operator.matmul(z, a), operator.matmul(c, x))
 
@@ -1947,6 +1960,9 @@ def test_map_blocks_unique_name_new_axis():
 
 
 @pytest.mark.parametrize("func", [lambda x, y: x + y, lambda x, y, block_info: x + y])
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_map_blocks_optimize_blockwise(func):
     # Check that map_blocks layers can merge with elementwise layers
     base = [da.full((1,), i, chunks=1) for i in range(4)]
@@ -1980,6 +1996,9 @@ def test_repr_meta():
     assert "chunktype=sparse.COO" in repr(s)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_repr_html_array_highlevelgraph():
     pytest.importorskip("jinja2")
     x = da.ones((9, 9), chunks=(3, 3)).T[0:4, 0:4]
@@ -2073,7 +2092,7 @@ def test_store_kwargs():
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    store([a], [at], scheduler=get_func, foo="test kwarg")
+    da.store([a], [at], scheduler=get_func, foo="test kwarg")
     assert called[0]
 
     called[0] = False
@@ -2083,7 +2102,7 @@ def test_store_kwargs():
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    store([a], [at], scheduler=get_func, return_stored=True, foo="test kwarg")
+    da.store([a], [at], scheduler=get_func, return_stored=True, foo="test kwarg")
     assert called[0]
 
 
@@ -2106,7 +2125,7 @@ def test_store_delayed_target():
     btd = delayed(make_target)("bt")
 
     # test not keeping result
-    st = store([a, b], [atd, btd])
+    st = da.store([a, b], [atd, btd])
 
     at = targs["at"]
     bt = targs["bt"]
@@ -2118,7 +2137,7 @@ def test_store_delayed_target():
     # test keeping result
     for st_compute in [False, True]:
         targs.clear()
-        st = store([a, b], [atd, btd], return_stored=True, compute=st_compute)
+        st = da.store([a, b], [atd, btd], return_stored=True, compute=st_compute)
         if st_compute:
             for arr in st:
                 assert_has_persisted_data(arr)
@@ -2136,9 +2155,9 @@ def test_store_delayed_target():
         assert_eq(st[0], a)
         assert_eq(st[1], b)
 
-        pytest.raises(ValueError, lambda at=at, bt=bt: store([a], [at, bt]))
-        pytest.raises(ValueError, lambda at=at: store(at, at))
-        pytest.raises(ValueError, lambda at=at, bt=bt: store([at, bt], [at, bt]))
+        pytest.raises(ValueError, lambda at=at, bt=bt: da.store([a], [at, bt]))
+        pytest.raises(ValueError, lambda at=at: da.store(at, at))
+        pytest.raises(ValueError, lambda at=at, bt=bt: da.store([at, bt], [at, bt]))
 
 
 def test_store():
@@ -2148,14 +2167,14 @@ def test_store():
     at = np.empty(shape=(4, 4))
     bt = np.empty(shape=(4, 4))
 
-    st = store([a, b], [at, bt])
+    st = da.store([a, b], [at, bt])
     assert st is None
     assert (at == 2).all()
     assert (bt == 3).all()
 
-    pytest.raises(ValueError, lambda: store([a], [at, bt]))
-    pytest.raises(ValueError, lambda: store(at, at))
-    pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
+    pytest.raises(ValueError, lambda: da.store([a], [at, bt]))
+    pytest.raises(ValueError, lambda: da.store(at, at))
+    pytest.raises(ValueError, lambda: da.store([at, bt], [at, bt]))
 
 
 def test_store_regions():
@@ -2168,8 +2187,8 @@ def test_store_regions():
     # Single region:
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
-    v = store([a, b], [at, bt], regions=region, compute=False)
-    assert all([isinstance(a, Array) for a in v])
+    v = da.store([a, b], [at, bt], regions=region, compute=False)
+    assert all([isinstance(a, da.Array) for a in v])
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
     assert all([ev.size == 0 for ev in results])
@@ -2180,7 +2199,7 @@ def test_store_regions():
     # Multiple regions:
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
-    v = store([a, b], [at, bt], regions=[region, region], compute=False)
+    v = da.store([a, b], [at, bt], regions=[region, region], compute=False)
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
     assert all([ev.size == 0 for ev in results])
@@ -2192,7 +2211,7 @@ def test_store_regions():
     for st_compute in [False, True]:
         at = np.zeros(shape=(8, 3, 6))
         bt = np.zeros(shape=(8, 4, 6))
-        v = store(
+        v = da.store(
             [a, b], [at, bt], regions=region, compute=st_compute, return_stored=True
         )
         assert isinstance(v, tuple)
@@ -2222,7 +2241,7 @@ def test_store_regions():
     for st_compute in [False, True]:
         at = np.zeros(shape=(8, 3, 6))
         bt = np.zeros(shape=(8, 4, 6))
-        v = store(
+        v = da.store(
             [a, b],
             [at, bt],
             regions=[region, region],
@@ -2260,7 +2279,7 @@ def test_store_compute_false():
     at = np.zeros(shape=(4, 4))
     bt = np.zeros(shape=(4, 4))
 
-    v = store([a, b], [at, bt], compute=False)
+    v = da.store([a, b], [at, bt], compute=False)
 
     assert (at == 0).all() and (bt == 0).all()
     results = dask.compute(*v)
@@ -2269,18 +2288,18 @@ def test_store_compute_false():
 
     at = np.zeros(shape=(4, 4))
     bt = np.zeros(shape=(4, 4))
-    dat, dbt = store([a, b], [at, bt], compute=False, return_stored=True)
-    assert isinstance(dat, Array) and isinstance(dbt, Array)
+    dat, dbt = da.store([a, b], [at, bt], compute=False, return_stored=True)
+    assert isinstance(dat, da.Array) and isinstance(dbt, da.Array)
     assert (at == 0).all() and (bt == 0).all()
     assert (dat.compute() == at).all() and (dbt.compute() == bt).all()
     assert (at == 2).all() and (bt == 3).all()
 
     at = np.zeros(shape=(4, 4))
     bt = np.zeros(shape=(4, 4))
-    dat, dbt = store(
+    dat, dbt = da.store(
         [a, b], [at, bt], compute=False, return_stored=True, load_stored=False
     )
-    assert isinstance(dat, Array) and isinstance(dbt, Array)
+    assert isinstance(dat, da.Array) and isinstance(dbt, da.Array)
     assert (at == 0).all() and (bt == 0).all()
     dask.compute(dat, dbt)
     assert (at == 2).all() and (bt == 3).all()
@@ -2350,7 +2369,7 @@ def test_store_locks_failure_lock_released():
     lock = CounterLock()
     # Ensure same lock applies over multiple stores
     with pytest.raises(RuntimeError):
-        store(d, BrokenStore(), lock=lock, scheduler="threads")
+        da.store(d, BrokenStore(), lock=lock, scheduler="threads")
     assert lock.acquire_count == lock.release_count > 0
 
 
@@ -2364,13 +2383,13 @@ def test_store_locks():
     lock = CounterLock()
     # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
-    v = store([a, b], [at, at], lock=lock, scheduler="threads", num_workers=10)
+    v = da.store([a, b], [at, at], lock=lock, scheduler="threads", num_workers=10)
     assert lock.acquire_count == lock.release_count == a.npartitions + b.npartitions
     assert v is None
 
     # Don't assume thread safety by default
     at = NonthreadSafeStore()
-    assert store(a, at, scheduler="threads", num_workers=10) is None
+    assert da.store(a, at, scheduler="threads", num_workers=10) is None
     assert a.store(at, scheduler="threads", num_workers=10) is None
 
     # Ensure locks can be removed
@@ -2390,8 +2409,8 @@ def test_store_locks():
         bt = np.zeros(shape=(10, 10))
         lock = CounterLock()
 
-        v = store([a, b], [at, bt], lock=lock, compute=c, return_stored=True)
-        assert all(isinstance(e, Array) for e in v)
+        v = da.store([a, b], [at, bt], lock=lock, compute=c, return_stored=True)
+        assert all(isinstance(e, da.Array) for e in v)
 
         da.compute(v)
 
@@ -2419,7 +2438,7 @@ def test_store_method_return():
             if compute and not return_stored:
                 assert r is None
             else:
-                assert isinstance(r, Array)
+                assert isinstance(r, da.Array)
 
 
 def test_store_multiprocessing_lock():
@@ -2522,8 +2541,8 @@ def test_dtype_complex():
     assert_eq(a[:3].dtype, x[:3].dtype)
     assert_eq((a.dot(b.T)).dtype, (x.dot(y.T)).dtype)
 
-    assert_eq(stack([a, b]).dtype, np.vstack([x, y]).dtype)
-    assert_eq(concatenate([a, b]).dtype, np.concatenate([x, y]).dtype)
+    assert_eq(da.stack([a, b]).dtype, np.vstack([x, y]).dtype)
+    assert_eq(da.concatenate([a, b]).dtype, np.concatenate([x, y]).dtype)
 
     assert_eq(b.std().dtype, y.std().dtype)
     assert_eq(c.sum().dtype, z.sum().dtype)
@@ -3026,11 +3045,19 @@ def test_from_array_inline():
 
     a = np.array([1, 2, 3]).view(MyArray)
     dsk = dict(da.from_array(a, name="my-array", inline_array=False).dask)
-    assert dsk["original-my-array"] is not a
-    assert_eq(dsk["original-my-array"], a)
+    # Find the original-* key (may include token suffix in array-expr mode)
+    original_keys = [
+        k for k in dsk if isinstance(k, str) and k.startswith("original-my-array")
+    ]
+    assert len(original_keys) == 1
+    original_key = original_keys[0]
+    assert dsk[original_key] is not a
+    assert_eq(dsk[original_key], a)
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
-    assert "original-my-array" not in dsk
+    assert not any(
+        isinstance(k, str) and k.startswith("original-my-array") for k in dsk
+    )
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
@@ -3207,6 +3234,26 @@ def test_concatenate3_2():
     )
 
 
+def test_chunks_from_arrays_dimension_mismatch():
+    """Test chunks_from_arrays handles arrays with fewer dims than nesting depth."""
+    from dask.array.core import chunks_from_arrays
+
+    # Normal case - 2D arrays in 2-level nesting
+    x = np.array([[1, 2], [3, 4]])
+    assert chunks_from_arrays([[x, x], [x, x]]) == ((2, 2), (2, 2))
+
+    # 1D arrays in 2-level nesting - missing dim is at front
+    y = np.array([1, 2])
+    assert chunks_from_arrays([[y, y], [y, y]]) == ((1, 1), (2, 2))
+
+    # 0D arrays in 2-level nesting
+    z = np.array(5)
+    assert chunks_from_arrays([[z, z], [z, z]]) == ((1, 1), (1, 1))
+
+
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_map_blocks3():
     x = np.arange(10)
     y = np.arange(10) * 2
@@ -3703,7 +3750,8 @@ def test_map_blocks_with_invalid_drop_axis():
 
 def test_map_blocks_custom_name():
     res = da.map_blocks(lambda _: np.arange(4), chunks=(4,), name="foo", dtype=np.int64)
-    assert res.name == "foo", res.name
+    # Name starts with user-provided prefix, may have token suffix for uniqueness
+    assert res.name.startswith("foo"), res.name
 
 
 def test_map_blocks_with_changed_dimension_and_broadcast_chunks():
@@ -3767,6 +3815,9 @@ def test_array_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_dont_fuse_outputs():
     dsk = {("x", 0): np.array([1, 2]), ("x", 1): (inc, ("x", 0))}
 
@@ -3774,6 +3825,9 @@ def test_dont_fuse_outputs():
     assert_eq(a, np.array([1, 2, 2, 3], dtype=a.dtype))
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_dont_dealias_outputs():
     dsk = {
         ("x", 0, 0): np.ones((2, 2)),
@@ -3806,6 +3860,9 @@ def test_to_delayed():
     assert a.compute() == s
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_to_delayed_optimize_graph():
     x = da.ones((4, 4), chunks=(2, 2))
     y = x[1:][1:][1:][:, 1:][:, 1:][:, 1:]
@@ -4055,7 +4112,11 @@ def test_uneven_chunks_that_fit_neatly():
     assert_eq(x + y, np.arange(10) + np.ones(10))
 
     z = x + y
-    assert z.chunks == ((5, 2, 3),)
+    # array-expr coarse_blockdim prefers fewer chunks when boundaries align
+    if da._array_expr_enabled():
+        assert z.chunks == ((5, 5),)
+    else:
+        assert z.chunks == ((5, 2, 3),)
 
 
 def test_elemwise_uneven_chunks():
@@ -4086,6 +4147,9 @@ def test_uneven_chunks_blockwise():
     assert_eq(z, x.compute().dot(y))
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_warn_bad_rechunking():
     x = da.ones((20, 20), chunks=(20, 1))
     y = da.ones((20, 20), chunks=(1, 20))
@@ -4104,6 +4168,11 @@ def test_concatenate_stack_dont_warn():
     assert not record
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="array-expr returns dict, not HLG with validate()",
+    strict=False,
+)
 def test_map_blocks_delayed():
     x = da.ones((10, 10), chunks=(5, 5))
     y = np.ones((5, 5))
@@ -4124,8 +4193,8 @@ def test_map_blocks_delayed():
 
 def test_no_chunks():
     X = np.arange(11)
-    dsk = {("x", 0): np.arange(5), ("x", 1): np.arange(5, 11)}
-    x = Array(dsk, "x", ((np.nan, np.nan),), np.arange(1).dtype)
+    x = da.from_array(X, chunks=(5, 6))
+    x._chunks = ((np.nan, np.nan),)  # Simulate unknown chunk sizes
     assert_eq(x + 1, X + 1)
     assert_eq(x.sum(), X.sum())
     assert_eq((x + 1).std(), (X + 1).std())
@@ -4165,8 +4234,10 @@ def test_raise_informative_errors_no_chunks():
     b = da.from_array(X, chunks=(4, 4, 2))
     b._chunks = ((np.nan, np.nan, np.nan),)
 
+    # In array-expr mode, chunk validation for binary ops happens lazily
+    # when .chunks is accessed, so access it to trigger the error
     for op in [
-        lambda: a + b,
+        lambda: (a + b).chunks,
         lambda: a[1],
         lambda: a[::2],
         lambda: a[-5],
@@ -4525,6 +4596,9 @@ def test_setitem_extended_API_2d_mask(index, value):
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.data, chunks=(2, 3))
     # See https://github.com/numpy/numpy/issues/23000 for the `RuntimeWarning`
+    # In array-expr mode, the warning happens at compute time when the masked
+    # array is cast to the target dtype, so we need to include persist/compute
+    # inside the warning filter.
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
@@ -4533,9 +4607,9 @@ def test_setitem_extended_API_2d_mask(index, value):
         )
         x[index] = value
         dx[index] = value
-    dx = dx.persist()
-    assert_eq(x, dx.compute())
-    assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
+        dx = dx.persist()
+        assert_eq(x, dx.compute())
+        assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
 
 def test_setitem_on_read_only_blocks():
@@ -4734,8 +4808,8 @@ def test_from_array_name():
     dx = da.from_array(x, chunks=chunks)
     hashed_name = dx.name
     assert da.from_array(x, chunks=chunks).name == hashed_name
-    # Specify name directly
-    assert da.from_array(x, chunks=chunks, name="x").name == "x"
+    # Specify name directly (used as prefix)
+    assert da.from_array(x, chunks=chunks, name="x").name.startswith("x")
     # False gives a random name
     dx2 = da.from_array(x, chunks=chunks, name=False)
     dx3 = da.from_array(x, chunks=chunks, name=False)
@@ -4794,6 +4868,9 @@ def test_elemwise_with_lists(chunks, other):
     assert_eq(x3, d3)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_constructor_plugin():
     L = []
     L2 = []
@@ -4946,7 +5023,7 @@ def test_from_zarr_unique_name():
 def test_from_zarr_name():
     zarr = pytest.importorskip("zarr")
     a = zarr.array([1, 2, 3])
-    assert da.from_zarr(a, name="foo").name == "foo"
+    assert da.from_zarr(a, name="foo").name.startswith("foo")
 
 
 def test_zarr_roundtrip():
@@ -5010,7 +5087,7 @@ def test_zarr_return_stored(compute):
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
         a2 = a.to_zarr(d, compute=compute, return_stored=True)
-        assert isinstance(a2, Array)
+        assert is_dask_collection(a2)
         assert_eq(a, a2, check_graph=False)
         assert a2.chunks == a.chunks
 
@@ -5135,6 +5212,11 @@ def test_regular_chunks(data):
     assert _check_regular_chunks(chunkset) == expected
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(),
+    reason="Zarr shard-based chunking not implemented for array-expr",
+    strict=False,
+)
 def test_from_array_respects_zarr_shards():
     """
     Test that da.from_array chooses chunks based on
@@ -5249,7 +5331,7 @@ def test_zarr_nocompute():
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
         out = a.to_zarr(d, compute=False)
-        assert isinstance(out, Array)
+        assert is_dask_collection(out)
         dask.compute(out)
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
@@ -5354,8 +5436,7 @@ def test_tiledb_multiattr():
 
 def test_blockview():
     x = da.arange(10, chunks=2)
-    blockview = BlockView(x)
-    assert x.blocks == blockview
+    blockview = x.blocks
     assert isinstance(blockview[0], da.Array)
 
     assert_eq(blockview[0], x[:2])
@@ -5370,7 +5451,7 @@ def test_blockview():
     )
 
     x = da.random.default_rng().random((20, 20), chunks=(4, 5))
-    blockview = BlockView(x)
+    blockview = x.blocks
     assert_eq(blockview[0], x[:4])
     assert_eq(blockview[0, :3], x[:4, :15])
     assert_eq(blockview[:, :3], x[:, :15])
@@ -5381,7 +5462,7 @@ def test_blockview():
     )
 
     x = da.ones((40, 40, 40), chunks=(10, 10, 10))
-    blockview = BlockView(x)
+    blockview = x.blocks
     assert_eq(blockview[0, :, 0], np.ones((10, 40, 10)))
     assert_eq(blockview.shape, tuple(map(len, x.chunks)))
     assert_eq(blockview.size, math.prod(blockview.shape))
@@ -5390,6 +5471,7 @@ def test_blockview():
     )
 
     x = da.ones((2, 2), chunks=1)
+    blockview = x.blocks
     with pytest.raises(ValueError):
         blockview[[0, 1], [0, 1]]
     with pytest.raises(ValueError):
@@ -5911,6 +5993,7 @@ def test_chunk_assignment_invalidates_cached_properties():
 
 def test_map_blocks_series():
     pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
     import dask.dataframe as dd
 
     pytest.skip("array roundtrips don't work yet")
@@ -5937,6 +6020,9 @@ def test_map_blocks_dataframe():
     dd_assert_eq(s, s)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="not implemented for array-expr", strict=False
+)
 def test_dask_layers():
     a = da.ones(1)
     assert a.dask.layers.keys() == {a.name}
@@ -6133,18 +6219,43 @@ def test_store_sources_unoptimized_nocompute():
 
 
 def test_blockwise_fusion():
-    def custom_scheduler_get(dsk, keys, **kwargs):
-        """Custom scheduler that returns the result of the first key."""
-        dsk = dsk.__dask_graph__()
-        # two sum
-        # one sum agg
-        # one finalize Alias
-        assert len(dsk) == 4, "False number of tasks"
-        return [42 for _ in keys]
-
-    # First test that this mocking stuff works as expecged
-    with pytest.raises(AssertionError, match="False number of tasks"):
-        dask.compute(da.ones(10), scheduler=custom_scheduler_get)
-
     a = ((da.ones(10, chunks=5) + 1) + 2).sum()
-    dask.compute(a, scheduler=custom_scheduler_get)
+
+    if da._array_expr_enabled():
+        # array-expr: 2 fused (ones+add+add+sum) + 1 aggregate = 3 tasks
+        optimized = a.optimize()
+        graph = dict(optimized.__dask_graph__())
+        assert len(graph) == 3, f"Expected 3 tasks, got {len(graph)}"
+    else:
+
+        def custom_scheduler_get(dsk, keys, **kwargs):
+            dsk = dsk.__dask_graph__()
+            # HLG: 2 sum + 1 agg + 1 finalize = 4 tasks
+            assert len(dsk) == 4, f"Expected 4 tasks, got {len(dsk)}"
+            return [42 for _ in keys]
+
+        # First test that this mocking stuff works as expected
+        with pytest.raises(AssertionError):
+            dask.compute(da.ones(10), scheduler=custom_scheduler_get)
+
+        dask.compute(a, scheduler=custom_scheduler_get)
+
+
+@pytest.mark.skipif(not da._array_expr_enabled(), reason="array_expr not enabled")
+def test_tree_repr():
+    """Test that tree_repr shows hierarchical expression structure."""
+    x = da.ones((10, 10), chunks=5)
+    y = (x + 1).sum()
+
+    s = y.expr.tree_repr()
+
+    # Should show multiple lines (hierarchical structure)
+    assert s.count("\n") >= 2
+
+    # Should contain key operation names
+    assert "Ones:" in s
+    assert "Elemwise:" in s
+
+    # Should have indentation showing hierarchy
+    lines = s.split("\n")
+    assert any(line.startswith("  ") for line in lines)

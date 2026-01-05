@@ -452,6 +452,9 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
     np = pytest.importorskip("numpy")
     from dask.array.utils import assert_eq
 
+    if da._array_expr_enabled():
+        pytest.xfail("array-expr doesn't fully support annotations yet")
+
     # A flaky doubling function -- need extra args because it is called before
     # application to establish dtype/meta.
     scale = varying([ZeroDivisionError("one"), ZeroDivisionError("two"), 2, 2])
@@ -508,8 +511,10 @@ def test_blockwise_array_creation(c, io, fuse):
     with dask.config.set({"optimization.fuse.active": fuse}):
         darr.compute()
         dsk = dask.array.optimize(darr.dask, darr.__dask_keys__())
-        # dsk should be a dict unless fuse is explicitly False
-        assert isinstance(dsk, dict) == (fuse is not False)
+        # In legacy mode, dsk is a dict unless fuse is explicitly False (returns HLG).
+        # In array-expr mode, optimize always returns a dict.
+        if not da._array_expr_enabled():
+            assert isinstance(dsk, dict) == (fuse is not False)
         da.assert_eq(darr, narr, scheduler=c)
 
 

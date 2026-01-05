@@ -1168,7 +1168,10 @@ def store(
         targets = [targets]  # type: ignore[list-item]
     targets = cast("Collection[ArrayLike | Delayed]", targets)
 
-    if any(not isinstance(s, Array) for s in sources):
+    if any(
+        not isinstance(s, Array) and not is_dask_collection(s)  # type: ignore[unreachable]
+        for s in sources
+    ):
         raise ValueError("All sources must be dask array objects")
 
     if len(sources) != len(targets):
@@ -3789,7 +3792,9 @@ def from_zarr(
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
-    return from_array(z, chunks, name=name, inline_array=inline_array)
+    import dask.array as da
+
+    return da.from_array(z, chunks, name=name, inline_array=inline_array)
 
 
 def _write_dask_to_existing_zarr(
@@ -4280,18 +4285,27 @@ def common_blockdim(blockdims):
     """
     if not any(blockdims):
         return ()
+
+    # If any dims have unknown chunks, return the unknown chunks
+    # (we can't verify alignment at graph-build time)
+    unknown_dims = [d for d in blockdims if np.isnan(sum(d))]
+    if unknown_dims:
+        # All arrays (both known and unknown) must have the same number of chunks
+        # to be alignable. We can't verify chunk sizes at graph-build time for
+        # unknown chunks, but we can verify the count matches.
+        all_lengths = {len(d) for d in blockdims}
+        if len(all_lengths) > 1:
+            raise ValueError(
+                "Chunks are unknown or misaligned along dimensions with missing values.\n\n"
+                "A possible solution:\n  x.compute_chunk_sizes()"
+            )
+        return first(unknown_dims)
+
     non_trivial_dims = {d for d in blockdims if len(d) > 1}
     if len(non_trivial_dims) == 1:
         return first(non_trivial_dims)
     if len(non_trivial_dims) == 0:
         return max(blockdims, key=first)
-
-    if np.isnan(sum(map(sum, blockdims))):
-        raise ValueError(
-            f"Arrays' chunk sizes ({blockdims}) are unknown.\n\n"
-            "A possible solution:\n"
-            "  x.compute_chunk_sizes()"
-        )
 
     if len(set(map(sum, non_trivial_dims))) > 1:
         raise ValueError("Chunks do not add up to same value", blockdims)
@@ -5063,15 +5077,26 @@ def broadcast_shapes(*shapes):
         return shapes[0]
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
-        if np.isnan(sizes).any():
+        has_nan = np.isnan(sizes).any()
+        # Filter out -1 (missing dims), 0 and 1 (broadcastable), and nan
+        non_trivial = [s for s in sizes if s not in (-1, 0, 1) and not np.isnan(s)]
+
+        if has_nan:
+            # If any nan, output is nan but we still validate non-nan values
             dim = np.nan
+            # All non-trivial sizes must match each other
+            if len(set(non_trivial)) > 1:
+                raise ValueError(
+                    "operands could not be broadcast together with "
+                    "shapes {}".format(" ".join(map(str, shapes)))
+                )
         else:
             dim = 0 if 0 in sizes else np.max(sizes).item()
-        if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
-            raise ValueError(
-                "operands could not be broadcast together with "
-                "shapes {}".format(" ".join(map(str, shapes)))
-            )
+            if any(i not in [-1, 0, 1, dim] for i in sizes):
+                raise ValueError(
+                    "operands could not be broadcast together with "
+                    "shapes {}".format(" ".join(map(str, shapes)))
+                )
         out.append(dim)
     return tuple(reversed(out))
 
@@ -5442,8 +5467,24 @@ def chunks_from_arrays(arrays):
         except AttributeError:
             return (1,)
 
+    # First, determine nesting depth
+    ndim = 0
+    temp = arrays
+    while isinstance(temp, (list, tuple)):
+        ndim += 1
+        temp = temp[0]
+
+    def get_dim(a, dim):
+        s = shape(deepfirst(a))
+        # When array has fewer dims than nesting, missing dims are at front
+        # (since expansion adds leading dims via arr[None, ...])
+        offset = ndim - len(s)
+        if dim < offset:
+            return 1
+        return s[dim - offset]
+
     while isinstance(arrays, (list, tuple)):
-        result.append(tuple(shape(deepfirst(a))[dim] for a in arrays))
+        result.append(tuple(get_dim(a, dim) for a in arrays))
         arrays = arrays[0]
         dim += 1
     return tuple(result)
@@ -5682,6 +5723,11 @@ def concatenate3(arrays):
                 arr = arr[None, ...]
         result[idx] = arr
 
+    # Preserve recarray type if inputs are recarrays
+    first = deepfirst(arrays)
+    if isinstance(first, np.recarray):
+        result = result.view(np.recarray)
+
     return result
 
 
@@ -5732,7 +5778,11 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
     """
     if len(args) == 1 and isinstance(args[0], dict):
         data = args[0]
-    elif len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], Array):
+    elif (
+        len(args) == 2
+        and isinstance(args[0], str)
+        and (isinstance(args[1], Array) or is_dask_collection(args[1]))
+    ):
         data = {args[0]: args[1]}
     else:
         raise ValueError("Please provide {'/data/path': array} dictionary")
@@ -6019,10 +6069,21 @@ def _get_axis(indexes):
 def _vindex_slice_and_transpose(block, points, axis):
     """Pull out point-wise slices from block and rotate block so that
     points are on the first dimension"""
-    points = [p if isinstance(p, slice) else list(p) for p in points]
+    # Keep arrays as numpy arrays (not lists) to support all integer dtypes
+    points = [p if isinstance(p, slice) else np.asarray(p) for p in points]
     block = block[tuple(points)]
     axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
-    return block.transpose(axes)
+    # Only transpose if axes differ from identity (also handles sparse matrices
+    # which don't support axes parameter in transpose)
+    if axes != list(range(block.ndim)):
+        try:
+            return block.transpose(axes)
+        except TypeError:
+            # Sparse matrices don't support axes parameter - use moveaxis for 2D
+            if block.ndim == 2 and axes == [1, 0]:
+                return block.T
+            raise
+    return block
 
 
 def _vindex_merge(locations, values):
@@ -6230,6 +6291,7 @@ class BlockView:
         graph: Graph = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
         hlg = HighLevelGraph.from_collections(name, graph, dependencies=[self._array])
+
         return Array(hlg, name, chunks, meta=self._array)
 
     def __eq__(self, other: object) -> bool:

@@ -94,11 +94,23 @@ class Expr(core.SingletonExpr):
     def __dask_keys__(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
-    def optimize(self, **kwargs):
-        return optimize(self, **kwargs)
+    def optimize(self, fuse: bool = True):
+        return optimize(self, fuse=fuse)
+
+    def _layer(self) -> dict:
+        return {
+            (self._name, i): self._task((self._name, i), i)
+            for i in range(self.npartitions)
+        }
 
     def __hash__(self):
         return hash(self._name)
+
+    def _table(self, color: bool = True):
+        """Return a rich Table visualization of the expression tree."""
+        from dask.dataframe.dask_expr._visualize import expr_table
+
+        return expr_table(self, color=color)
 
     @property
     def index(self):
@@ -142,13 +154,19 @@ class Expr(core.SingletonExpr):
         return lines
 
     def _operands_for_repr(self):
+        from dask.delayed import Delayed
+
         to_include = []
         for param, operand in zip(self._parameters, self.operands):
-            if isinstance(operand, Expr) or (
-                not isinstance(operand, (pd.Series, pd.DataFrame))
-                and operand != self._defaults.get(param)
-            ):
+            if isinstance(operand, Expr):
+                # Use str() for simple one-line format, not repr() which shows table
+                to_include.append(f"{param}={operand}")
+            elif isinstance(operand, Delayed):
+                # Delayed objects can't be compared for equality
                 to_include.append(f"{param}={operand!r}")
+            elif not isinstance(operand, (pd.Series, pd.DataFrame)):
+                if operand != self._defaults.get(param):
+                    to_include.append(f"{param}={operand!r}")
         return to_include
 
     def __getattr__(self, key):
@@ -3769,6 +3787,65 @@ class Fused(Blockwise):
     """
 
     _parameters = ["exprs"]
+    _optimize_list_operands = (
+        False  # Don't traverse exprs during optimization, only during substitute
+    )
+
+    def dependencies(self):
+        """Return external dependencies not included in the fused group."""
+        fused_names = {e._name for e in self.exprs}
+        external_deps = []
+        seen = set()
+        for expr in self.exprs:
+            for dep in expr.dependencies():
+                if dep._name not in fused_names and dep._name not in seen:
+                    external_deps.append(dep)
+                    seen.add(dep._name)
+        return external_deps
+
+    def _substitute_operands(self, old, new, _seen, substitute_literal):
+        """Traverse into exprs list for substitution.
+
+        Fused needs to traverse its exprs list during substitution (to update
+        references when an expression is replaced), but NOT during
+        rewrite/simplify/lower (which would modify the fused group).
+        """
+        new_exprs = []
+        update = False
+        for operand in self.operands:
+            if isinstance(operand, (list, tuple)):
+                # Handle the exprs operand
+                new_items = []
+                list_changed = False
+                for item in operand:
+                    if isinstance(item, Expr):
+                        new_item = item._substitute(old, new, _seen)
+                        if new_item._name != item._name:
+                            list_changed = True
+                        new_items.append(new_item)
+                    else:
+                        new_items.append(item)
+                if list_changed:
+                    update = True
+                    new_exprs.append(type(operand)(new_items))
+                else:
+                    new_exprs.append(operand)
+            elif isinstance(operand, Expr):
+                val = operand._substitute(old, new, _seen)
+                if operand._name != val._name:
+                    update = True
+                new_exprs.append(val)
+            elif (
+                substitute_literal
+                and not isinstance(operand, bool)
+                and isinstance(operand, type(old))
+                and operand == old
+            ):
+                new_exprs.append(new)
+                update = True
+            else:
+                new_exprs.append(operand)
+        return new_exprs, update
 
     @functools.cached_property
     def _meta(self):

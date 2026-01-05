@@ -1,6 +1,15 @@
 from __future__ import annotations
 
+import sys
+
 import pytest
+
+# Set array-expr env var early (at import time) so xdist workers inherit it
+# and test modules see it when they're imported
+if "--array-expr" in sys.argv:
+    import os
+
+    os.environ["DASK_ARRAY__QUERY_PLANNING"] = "True"
 
 pytest.register_assert_rewrite(
     "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
@@ -56,17 +65,14 @@ except ImportError:
 
 def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true", help="run slow tests")
-    parser.addoption("--runarrayexpr", action="store_true", help="run array-expr tests")
+    parser.addoption(
+        "--array-expr", action="store_true", help="enable array query-planning mode"
+    )
 
 
 def pytest_runtest_setup(item):
     if "slow" in item.keywords and not item.config.getoption("--runslow"):
         pytest.skip("need --runslow option to run")
-    if "array_expr" in item.keywords and not item.config.getoption("--runarrayexpr"):
-        pytest.skip("need --runarrayexpr option to run")
-    elif "array_expr" not in item.keywords and item.config.getoption("--runarrayexpr"):
-        if "normal_and_array_expr" not in item.keywords:
-            pytest.skip("only array-expr tests are being run")
 
 
 def pytest_assertrepr_compare(op, left, right):

@@ -203,6 +203,10 @@ def test_clone(layers):
 
 
 @pytest.mark.skipif("not da")
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr from_graph() doesn't accept rename parameter",
+)
 @pytest.mark.parametrize(
     "literal",
     [
@@ -233,6 +237,10 @@ def test_blockwise_clone_with_literals(literal):
 
 
 @pytest.mark.skipif("not da or not zarr")
+@pytest.mark.xfail(
+    da and da._array_expr_enabled(),
+    reason="array-expr returns dict graphs, not HLG with layers",
+)
 def test_blockwise_clone_with_no_indices():
     """https://github.com/dask/dask/issues/9621
 

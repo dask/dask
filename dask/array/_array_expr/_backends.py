@@ -21,21 +21,31 @@ except ImportError:
 
 
 def create_array_collection(expr):
-    # This is hacky and an abstraction leak, but utilizing get_collection_type
-    # to infer that we want to create an array is the only way that is guaranteed
-    # to be a general solution.
-    # We can get rid of this when we have an Array expression
+    """Create an Array collection from an expression.
+
+    In array-expr mode:
+    - ArrayExpr: wrap directly in Array
+    - DataFrame Expr with array meta: wrap in FrameToArray
+
+    In legacy mode: build graph and create legacy Array.
+    """
     import dask.array as da
-    from dask.highlevelgraph import HighLevelGraph
-    from dask.layers import Blockwise
 
     if da._array_expr_enabled():
+        from dask.array._array_expr._collection import Array
         from dask.array._array_expr._expr import ArrayExpr
 
         if isinstance(expr, ArrayExpr):
-            from dask.array._array_expr._collection import Array
-
             return Array(expr)
+
+        # DataFrame Expr that produces array output (e.g., map_partitions with to_records)
+        from dask.dataframe.dask_expr._array import FrameToArray
+
+        return Array(FrameToArray(expr))
+
+    # Legacy mode: lower to graph
+    from dask.highlevelgraph import HighLevelGraph
+    from dask.layers import Blockwise
 
     result = expr.optimize()
     dsk = result.__dask_graph__()
@@ -48,10 +58,8 @@ def create_array_collection(expr):
         if isinstance(dsk, HighLevelGraph):
             layer = dsk.layers[name]
         else:
-            # dask-expr provides a dict only
             layer = dsk
 
-        new_keys = []
         if isinstance(layer, Blockwise):
             layer.new_axes["j"] = chunks[1][0]
             layer.output_indices = layer.output_indices + ("j",)
@@ -65,25 +73,12 @@ def create_array_collection(expr):
                 if isinstance(task, Task):
                     task = Alias(new_key, task.key)
                 layer[new_key] = task
-                new_keys.append(new_key)
-    else:
-        new_keys = [(name, 0)]
-    if da._array_expr_enabled():
-        from dask.array._array_expr._collection import from_graph
 
-        return from_graph(dsk, meta, chunks, set(new_keys), name)
-    else:
-        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+    return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
 
 
 @get_collection_type.register(np.ndarray)
 def get_collection_type_array(_):
-    import dask.array as da
-
-    if da._array_expr_enabled():
-        from dask.array._array_expr._collection import Array
-
-        return Array
     return create_array_collection
 
 

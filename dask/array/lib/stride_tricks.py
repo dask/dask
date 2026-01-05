@@ -1,3 +1,7 @@
 from __future__ import annotations
 
-from dask.array.overlap import sliding_window_view  # noqa: F401
+
+def sliding_window_view(*args, **kwargs):
+    import dask.array as da
+
+    return da.overlap.sliding_window_view(*args, **kwargs)

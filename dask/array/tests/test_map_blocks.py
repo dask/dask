@@ -11,5 +11,10 @@ def test_map_blocks_block_id_fusion():
         return x
 
     result = arr.map_blocks(dummy).astype("f8")
-    dsk = collections_to_expr([result])
-    assert len(dsk.__dask_graph__()) == 20
+    if da._array_expr_enabled():
+        # For array-expr, fusion happens during expr.optimize()
+        optimized = result._expr.optimize()
+        assert len(optimized.__dask_graph__()) == 20
+    else:
+        dsk = collections_to_expr([result])
+        assert len(dsk.__dask_graph__()) == 20

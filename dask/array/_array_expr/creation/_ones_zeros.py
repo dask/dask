@@ -2,125 +2,29 @@ from __future__ import annotations
 
 import functools
 from functools import partial
-from numbers import Integral
 
 import numpy as np
-from tlz import sliding_window
 
 from dask._collections import new_collection
 from dask._task_spec import Task
-from dask.array._array_expr._collection import asarray, concatenate
+from dask.array._array_expr._collection import asarray
 from dask.array._array_expr._expr import ArrayExpr
-from dask.array.chunk import arange as _arange
-from dask.array.chunk import linspace as _linspace
-from dask.array.core import normalize_chunks
 from dask.array.creation import _get_like_function_shapes_chunks
 from dask.array.utils import meta_from_array
 from dask.array.wrap import _parse_wrap_args, broadcast_trick
-from dask.blockwise import blockwise as core_blockwise
-from dask.layers import ArrayChunkShapeDep
-from dask.utils import cached_cumsum, derived_from
-
-
-class Arange(ArrayExpr):
-    _parameters = ["start", "stop", "step", "chunks", "like", "dtype", "kwargs"]
-    _defaults = {"chunks": "auto", "like": None, "dtype": None, "kwargs": None}
-
-    @functools.cached_property
-    def num_rows(self):
-        return int(max(np.ceil((self.stop - self.start) / self.step), 0))
-
-    @functools.cached_property
-    def dtype(self):
-        return (
-            self.operand("dtype")
-            or np.arange(
-                self.start,
-                self.stop,
-                self.step * self.num_rows if self.num_rows else self.step,
-            ).dtype
-        )
-
-    @functools.cached_property
-    def _meta(self):
-        return meta_from_array(self.like, ndim=1, dtype=self.dtype)
-
-    @functools.cached_property
-    def chunks(self):
-        return normalize_chunks(
-            self.operand("chunks"), (self.num_rows,), dtype=self.dtype
-        )
-
-    def _layer(self) -> dict:
-        dsk = {}
-        elem_count = 0
-        start, step = self.start, self.step
-        like = self.like
-        func = partial(_arange, like=like)
-
-        for i, bs in enumerate(self.chunks[0]):
-            blockstart = start + (elem_count * step)
-            blockstop = start + ((elem_count + bs) * step)
-            task = Task(
-                (self._name, i),
-                func,
-                blockstart,
-                blockstop,
-                step,
-                bs,
-                self.dtype,
-            )
-            dsk[(self._name, i)] = task
-            elem_count += bs
-        return dsk
-
-
-class Linspace(Arange):
-    _parameters = ["start", "stop", "num", "endpoint", "chunks", "dtype"]
-    _defaults = {"num": 50, "endpoint": True, "chunks": "auto", "dtype": None}
-    like = None
-
-    @functools.cached_property
-    def num_rows(self):
-        return self.operand("num")
-
-    @functools.cached_property
-    def dtype(self):
-        return self.operand("dtype") or np.linspace(0, 1, 1).dtype
-
-    @functools.cached_property
-    def step(self):
-        range_ = self.stop - self.start
-
-        div = (self.num_rows - 1) if self.endpoint else self.num_rows
-        if div == 0:
-            div = 1
-
-        return float(range_) / div
-
-    def _layer(self) -> dict:
-        dsk = {}
-        blockstart = self.start
-        func = partial(_linspace, endpoint=self.endpoint, dtype=self.dtype)
-
-        for i, bs in enumerate(self.chunks[0]):
-            bs_space = bs - 1 if self.endpoint else bs
-            blockstop = blockstart + (bs_space * self.step)
-            task = Task(
-                (self._name, i),
-                func,
-                blockstart,
-                blockstop,
-                bs,
-            )
-            blockstart = blockstart + (self.step * bs)
-            dsk[task.key] = task
-        return dsk
 
 
 class BroadcastTrick(ArrayExpr):
-    _parameters = ["shape", "dtype", "chunks", "meta", "kwargs"]
-    _defaults = {"meta": None}
+    _parameters = ["shape", "dtype", "chunks", "meta", "kwargs", "name"]
+    _defaults = {"meta": None, "name": None}
+    _is_blockwise_fusable = True
+
+    @functools.cached_property
+    def _name(self):
+        custom_name = self.operand("name")
+        if custom_name is not None:
+            return custom_name
+        return f"{self._funcname}-{self.deterministic_token}"
 
     @functools.cached_property
     def _meta(self):
@@ -128,19 +32,130 @@ class BroadcastTrick(ArrayExpr):
             self.operand("meta"), ndim=self.ndim, dtype=self.operand("dtype")
         )
 
-    def _layer(self) -> dict:
+    @functools.cached_property
+    def _wrapped_func(self):
+        """Cache the wrapped broadcast function."""
         func = broadcast_trick(self.func)
         k = self.kwargs.copy()
         k.pop("meta", None)
-        func = partial(func, meta=self._meta, dtype=self.dtype, **k)
-        out_ind = dep_ind = tuple(range(len(self.shape)))
-        return core_blockwise(
-            func,
-            self._name,
-            out_ind,
-            ArrayChunkShapeDep(self.chunks),
-            dep_ind,
-            numblocks={},
+        return partial(func, meta=self._meta, dtype=self.dtype, **k)
+
+    def _layer(self) -> dict:
+        from itertools import product
+
+        result = {}
+        for block_id in product(*[range(len(c)) for c in self.chunks]):
+            key = (self._name, *block_id)
+            result[key] = self._task(key, block_id)
+        return result
+
+    def _task(self, key, block_id: tuple[int, ...]) -> Task:
+        """Generate task for a specific output block."""
+        # Compute chunk shape for this block
+        chunk_shape = tuple(self.chunks[i][block_id[i]] for i in range(len(block_id)))
+        return Task(key, self._wrapped_func, chunk_shape)
+
+    def _input_block_id(self, dep, block_id: tuple[int, ...]) -> tuple[int, ...]:
+        """BroadcastTrick has no dependencies, so this is never called."""
+        return block_id
+
+    def _simplify_up(self, parent, dependents):
+        """Allow slice and shuffle operations to simplify BroadcastTrick."""
+        from dask.array._array_expr._shuffle import Shuffle
+        from dask.array._array_expr.slicing import SliceSlicesIntegers
+
+        if isinstance(parent, SliceSlicesIntegers):
+            return self._accept_slice(parent)
+        if isinstance(parent, Shuffle):
+            return self._accept_shuffle(parent)
+        return None
+
+    def _accept_shuffle(self, shuffle_expr):
+        """Accept a shuffle - create new BroadcastTrick with shuffled shape.
+
+        Since all values are identical, we don't need to actually shuffle,
+        just create a new constant array with the correct output shape.
+        """
+        axis = shuffle_expr.axis
+        indexer = shuffle_expr.indexer
+
+        # Compute new shape - output size is total indices in indexer
+        new_size = sum(len(chunk) for chunk in indexer)
+        new_shape = list(self.shape)
+        new_shape[axis] = new_size
+
+        # Compute new chunks - one chunk per indexer group
+        new_axis_chunks = tuple(len(chunk) for chunk in indexer)
+        new_chunks = list(self.chunks)
+        new_chunks[axis] = new_axis_chunks
+
+        return self.substitute_parameters(
+            {
+                "shape": tuple(new_shape),
+                "chunks": tuple(new_chunks),
+                "name": None,
+            }
+        )
+
+    def _accept_slice(self, slice_expr):
+        """Accept a slice by creating a smaller BroadcastTrick.
+
+        For ones, zeros, full, empty - just create a new instance with
+        the sliced shape and chunks.
+        """
+        from numbers import Integral
+
+        index = slice_expr.index
+        old_shape = self.shape
+        old_chunks = self.chunks
+
+        # Pad index to full length
+        full_index = index + (slice(None),) * (len(old_shape) - len(index))
+
+        # Handle integers and newaxis - for now, only handle simple slices
+        if any(idx is None for idx in full_index):
+            return None
+        if any(isinstance(idx, Integral) for idx in full_index):
+            return None
+
+        # Compute new shape and chunks from slices
+        new_shape = []
+        new_chunks = []
+        for i, idx in enumerate(full_index):
+            if isinstance(idx, slice):
+                # Normalize slice
+                start, stop, step = idx.indices(old_shape[i])
+                if step != 1:
+                    return None  # Don't handle non-unit steps
+                new_dim = max(0, stop - start)
+                new_shape.append(new_dim)
+
+                # Compute new chunks for this dimension
+                old_axis_chunks = old_chunks[i]
+                axis_chunks = []
+                cumsum = 0
+                for chunk_size in old_axis_chunks:
+                    chunk_start = cumsum
+                    chunk_end = cumsum + chunk_size
+                    cumsum = chunk_end
+
+                    # Intersection of [chunk_start, chunk_end) with [start, stop)
+                    overlap_start = max(chunk_start, start)
+                    overlap_end = min(chunk_end, stop)
+                    if overlap_end > overlap_start:
+                        axis_chunks.append(overlap_end - overlap_start)
+
+                new_chunks.append(tuple(axis_chunks) if axis_chunks else (0,))
+            else:
+                return None  # Unexpected index type
+
+        # Substitute shape and chunks, clear name for new expression
+        return self.substitute_parameters(
+            {
+                "shape": tuple(new_shape),
+                "chunks": tuple(new_chunks),
+                "name": None,
+            }
         )
 
 
@@ -175,6 +190,7 @@ def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
             "Please use tuple, list, or a 1D numpy array instead."
         )
 
+    name = kwargs.pop("name", None)
     parsed = _parse_wrap_args(klass.func, args, kwargs, shape)
     return new_collection(
         klass(
@@ -183,6 +199,7 @@ def wrap_func_shape_as_first_arg(*args, klass, **kwargs):
             parsed["chunks"],
             kwargs.get("meta"),
             kwargs,
+            name,
         )
     )
 
@@ -195,95 +212,6 @@ ones = wrap(wrap_func_shape_as_first_arg, klass=Ones, dtype="f8")
 zeros = wrap(wrap_func_shape_as_first_arg, klass=Zeros, dtype="f8")
 empty = wrap(wrap_func_shape_as_first_arg, klass=Empty, dtype="f8")
 _full = wrap(wrap_func_shape_as_first_arg, klass=Full, dtype="f8")
-
-
-def arange(start=0, stop=None, step=1, *, chunks="auto", like=None, dtype=None):
-    """
-    Return evenly spaced values from `start` to `stop` with step size `step`.
-
-    The values are half-open [start, stop), so including start and excluding
-    stop. This is basically the same as python's range function but for dask
-    arrays.
-
-    When using a non-integer step, such as 0.1, the results will often not be
-    consistent. It is better to use linspace for these cases.
-
-    Parameters
-    ----------
-    start : int, optional
-        The starting value of the sequence. The default is 0.
-    stop : int
-        The end of the interval, this value is excluded from the interval.
-    step : int, optional
-        The spacing between the values. The default is 1 when not specified.
-    chunks :  int
-        The number of samples on each block. Note that the last block will have
-        fewer samples if ``len(array) % chunks != 0``.
-        Defaults to "auto" which will automatically determine chunk sizes.
-    dtype : numpy.dtype
-        Output dtype. Omit to infer it from start, stop, step
-        Defaults to ``None``.
-    like : array type or ``None``
-        Array to extract meta from. Defaults to ``None``.
-
-    Returns
-    -------
-    samples : dask array
-
-    See Also
-    --------
-    dask.array.linspace
-    """
-    if stop is None:
-        stop = start
-        start = 0
-    return new_collection(Arange(start, stop, step, chunks, like, dtype))
-
-
-def linspace(
-    start, stop, num=50, endpoint=True, retstep=False, chunks="auto", dtype=None
-):
-    """
-    Return `num` evenly spaced values over the closed interval [`start`,
-    `stop`].
-
-    Parameters
-    ----------
-    start : scalar
-        The starting value of the sequence.
-    stop : scalar
-        The last value of the sequence.
-    num : int, optional
-        Number of samples to include in the returned dask array, including the
-        endpoints. Default is 50.
-    endpoint : bool, optional
-        If True, ``stop`` is the last sample. Otherwise, it is not included.
-        Default is True.
-    retstep : bool, optional
-        If True, return (samples, step), where step is the spacing between
-        samples. Default is False.
-    chunks :  int
-        The number of samples on each block. Note that the last block will have
-        fewer samples if `num % blocksize != 0`
-    dtype : dtype, optional
-        The type of the output array.
-
-    Returns
-    -------
-    samples : dask array
-    step : float, optional
-        Only returned if ``retstep`` is True. Size of spacing between samples.
-
-    See Also
-    --------
-    dask.array.arange
-    """
-    num = int(num)
-    result = new_collection(Linspace(start, stop, num, endpoint, chunks, dtype))
-    if retstep:
-        return result, result.expr.step
-    else:
-        return result
 
 
 def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -531,53 +459,3 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
         name=name,
         meta=a._meta,
     )
-
-
-@derived_from(np)
-def repeat(a, repeats, axis=None):
-    if axis is None:
-        if a.ndim == 1:
-            axis = 0
-        else:
-            raise NotImplementedError("Must supply an integer axis value")
-
-    if not isinstance(repeats, Integral):
-        raise NotImplementedError("Only integer valued repeats supported")
-
-    if -a.ndim <= axis < 0:
-        axis += a.ndim
-    elif not 0 <= axis <= a.ndim - 1:
-        raise ValueError(f"axis(={axis}) out of bounds")
-
-    if repeats == 0:
-        return a[tuple(slice(None) if d != axis else slice(0) for d in range(a.ndim))]
-    elif repeats == 1:
-        return a
-
-    cchunks = cached_cumsum(a.chunks[axis], initial_zero=True)
-    slices = []
-    for c_start, c_stop in sliding_window(2, cchunks):
-        ls = np.linspace(c_start, c_stop, repeats).round(0)
-        for ls_start, ls_stop in sliding_window(2, ls):
-            if ls_start != ls_stop:
-                slices.append(slice(ls_start, ls_stop))
-
-    all_slice = slice(None, None, None)
-    slices = [
-        (all_slice,) * axis + (s,) + (all_slice,) * (a.ndim - axis - 1) for s in slices
-    ]
-
-    slabs = [a[slc] for slc in slices]
-
-    out = []
-    for slab in slabs:
-        chunks = list(slab.chunks)
-        assert len(chunks[axis]) == 1
-        chunks[axis] = (chunks[axis][0] * repeats,)
-        chunks = tuple(chunks)
-        result = slab.map_blocks(
-            np.repeat, repeats, axis=axis, chunks=chunks, dtype=slab.dtype
-        )
-        out.append(result)
-
-    return concatenate(out, axis=axis)

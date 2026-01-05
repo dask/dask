@@ -9,7 +9,7 @@ if [[ $COVERAGE == 'true' ]]; then
 fi
 
 if [[ $ARRAYEXPR == 'true' ]]; then
-    CMD="$CMD --runarrayexpr"
+    CMD="$CMD --array-expr"
 fi
 
 if [[ $PARALLEL == 'true' ]]; then
