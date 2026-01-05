@@ -1,9 +1,10 @@
-import dask.dataframe as dd
+from __future__ import annotations
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
 
+import dask.dataframe as dd
 
 rs = np.random.RandomState(96)
 
@@ -49,18 +50,13 @@ rs = np.random.RandomState(96)
         ),
         pd.DataFrame({"x": [1, 2, 3] * 1000}),
         pd.DataFrame({"x": np.random.random(1000)}),
-        pytest.param(
-            pd.DataFrame(
-                {
-                    "a": [1, 2, 3] * 3,
-                    "b": [1.2, 3.4, 5.6] * 3,
-                    "c": [1 + 2j, 3 + 4j, 5 + 6j] * 3,
-                    "d": -(np.arange(9, dtype=np.int8)),
-                }
-            ),
-            marks=[
-                pytest.mark.filterwarnings("ignore::numpy.core.numeric.ComplexWarning")
-            ],
+        pd.DataFrame(
+            {
+                "a": [1, 2, 3] * 3,
+                "b": [1.2, 3.4, 5.6] * 3,
+                "c": [1 + 2j, 3 + 4j, 5 + 6j] * 3,
+                "d": -(np.arange(9, dtype=np.int8)),
+            }
         ),
         pd.Series([1, 2, 3] * 1000),
         pd.Series(np.random.random(1000)),

@@ -1,3 +1,7 @@
+:orphan:
+
+.. this page is referenced from the topbar which comes from the theme
+
 Community
 =========
 
@@ -5,36 +9,54 @@ Dask is used and developed by individuals at a variety of institutions.  It
 sits within the broader Python numeric ecosystem commonly referred to as PyData
 or SciPy.
 
+Community Meeting
+-----------------
+
+.. note::
+
+    We've combined the monthly Dask Demo Day and Dask Developer Meeting into a single, monthly Dask community meeting.
+
+Join us for the monthly community meetings on the first Thursday of the month at
+10:00 US Central Time. `Join via Zoom <https://dask.org/meeting-room>`__.
+
+Have something you'd like to share? Let us know by dropping a comment on `this GitHub issue <https://github.com/dask/community/issues/307>`__.
+
+Meeting notes are available in
+`this Google doc <https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit>`_.
+
+.. raw:: html
+
+    <iframe id="calendariframe" src="https://calendar.google.com/calendar/embed?ctz=local&amp;src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>
+    <script>document.getElementById("calendariframe").src = document.getElementById("calendariframe").src.replace("ctz=local", "ctz=" + Intl.DateTimeFormat().resolvedOptions().timeZone)</script>
+
+You can subscribe to this calendar to be notified of changes:
+
+* `Google Calendar <https://calendar.google.com/calendar/u/0?cid=NGwwdnRzMGMxY2dkYnE1amhjb2dqNTVzZnNAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ>`__
+* `iCal <https://calendar.google.com/calendar/ical/4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com/public/basic.ics>`__
+
 Discussion
 ----------
 
 Conversation happens in the following places:
 
-1.  **Usage questions** are directed to `Stack Overflow with the #dask tag`_.
-    Dask developers monitor this tag and get e-mails whenever a question is
-    asked
-2.  **Bug reports and feature requests** are managed on the `GitHub issue
+#.  **Usage questions, requests for help, and general discussions** happen in the
+    `Dask Discourse forum`_. If your discussion topic is not a bug report
+    or a feature request, this is the best place to start. It's also a good
+    place to show off cool things you have built using Dask and to get to know other
+    community members.
+#.  **Usage questions** may also be directed to `Stack Overflow with the #dask tag`_,
+    which is monitored by Dask developers. However, the scope of what is considered
+    a good Stack Overflow question can be narrow, so the Dask Discourse forum may
+    be a better place to start.
+#.  **Bug reports and feature requests** are managed on the `GitHub issue
     tracker`_
-3.  **Chat** occurs on at `gitter.im/dask/dask <https://gitter.im/dask/dask>`_
-    for general conversation and `gitter.im/dask/dev
-    <https://gitter.im/dask/dev>`_ for developer conversation.  Note that
-    because gitter chat is not searchable by future users we discourage usage
-    questions and bug reports on gitter and instead ask people to use Stack
-    Overflow or GitHub.
-4.  **Monthly developer meeting** happens the first Thursday of the month at
-    10:00 US Central Time in `this video meeting <https://zoom.us/j/802251830>`_.
-    Meeting notes are available at
-    https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit
+#.  **Real-time chat** occurs on
+    `https://dask.slack.com/ <https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g>`_.
+    Note that Slack chat not easily searchable and indexed by search engines, so
+    detailed discussion topics around bug reports or usage should go to GitHub issues or
+    the Dask Discourse forum, respectively.
 
-    .. raw:: html
-
-       <iframe src="https://calendar.google.com/calendar/embed?src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>
-
-    You can subscribe to this calendar to be notified of changes:
-
-    * `Google Calendar <https://calendar.google.com/calendar/embed?src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com>`__
-    * `iCal <https://calendar.google.com/calendar/ical/4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com/public/basic.ics>`__
-
+.. _`Dask Discourse forum`: https://dask.discourse.group
 .. _`Stack Overflow with the #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues/
 
@@ -47,17 +69,16 @@ new to using the project.  There are a few things you can do to improve the
 likelihood of quickly getting a good answer.
 
 1.  **Ask questions in the right place**:  We strongly prefer the use
-    of Stack Overflow or GitHub issues over Gitter chat.  GitHub and
-    Stack Overflow are more easily searchable by future users, and therefore is more
-    efficient for everyone's time.  Gitter chat is strictly reserved for
-    developer and community discussion.
+    of `Dask Discourse forum`_ or `GitHub issues <https://github.com/dask/dask/issues/>`_ over Slack chat.  Discourse and
+    GitHub are more easily searchable by future users, and therefore can be
+    useful to many more people than those directly involved.
 
     If you have a general question about how something should work or
-    want best practices then use Stack Overflow.  If you think you have found a
+    want best practices then use Discourse.  If you think you have found a
     bug then use GitHub
 
 2.  **Ask only in one place**: Please restrict yourself to posting your
-    question in only one place (likely Stack Overflow or GitHub) and don't post
+    question in only one place (likely the Dask Discourse or GitHub) and don't post
     in both
 
 3.  **Create a minimal example**:  It is ideal to create `minimal, complete,
@@ -73,7 +94,9 @@ likelihood of quickly getting a good answer.
 
 Paid support
 ------------
-In addition to the previous options, paid support is available from
+In addition to the previous options, paid support is available from the
+following organizations (listed in alphabetical order):
 
--   Anaconda: `<https://www.anaconda.com/help>`_
--   Quansight: `<https://www.quansight.com/open-source-support>`_
+-   `Anaconda <https://www.anaconda.com/products/professional-services>`_
+-  `Coiled <https://coiled.io?utm_source=dask-docs&utm_medium=support>`_
+-   `Quansight <https://www.quansight.com/>`_

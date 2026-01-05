@@ -1,25 +1,21 @@
+from __future__ import annotations
+
+import numpy as np
 import pytest
 from numpy.testing import assert_equal
-import dask.array as da
-from dask.array.utils import assert_eq
-import numpy as np
 
-from dask.array.core import Array
-from dask.array.gufunc import (
-    _parse_gufunc_signature,
-    _validate_normalize_axes,
-    apply_gufunc,
-    gufunc,
-    as_gufunc,
-)
-from dask.array.numpy_compat import _numpy_120
-from dask.array.utils import IS_NEP18_ACTIVE
+import dask.array as da
+from dask.array import Array, apply_gufunc, as_gufunc, gufunc
+from dask.array.gufunc import _parse_gufunc_signature, _validate_normalize_axes
+from dask.array.utils import assert_eq
 
 
 # Copied from `numpy.lib.test_test_function_base.py`:
 def test__parse_gufunc_signature():
     assert_equal(_parse_gufunc_signature("(x)->()"), ([("x",)], ()))
     assert_equal(_parse_gufunc_signature("(x,y)->()"), ([("x", "y")], ()))
+    # whitespace
+    assert_equal(_parse_gufunc_signature("  (x, y) ->()"), ([("x", "y")], ()))
     assert_equal(_parse_gufunc_signature("(x),(y)->()"), ([("x",), ("y",)], ()))
     assert_equal(_parse_gufunc_signature("(x)->(y)"), ([("x",)], ("y",)))
     assert_equal(_parse_gufunc_signature("(x)->(y),()"), ([("x",)], [("y",), ()]))
@@ -41,7 +37,7 @@ def test_apply_gufunc_axes_input_validation_01():
     def foo(x):
         return np.mean(x, axis=-1)
 
-    a = da.random.normal(size=(20, 30), chunks=30)
+    a = da.random.default_rng().normal(size=(20, 30), chunks=30)
 
     with pytest.raises(ValueError):
         apply_gufunc(foo, "(i)->()", a, axes=0)
@@ -56,6 +52,16 @@ def test_apply_gufunc_axes_input_validation_01():
 
     with pytest.raises(ValueError):
         apply_gufunc(foo, "(i)->()", a, axes=[0, 0])
+
+
+def test_apply_gufunc_axes_args_validation():
+    def add(x, y):
+        return x + y
+
+    a = da.from_array(np.array([1, 2, 3]), chunks=2, name="a")
+    b = da.from_array(np.array([1, 2, 3]), chunks=2, name="b")
+    with pytest.raises(ValueError):
+        apply_gufunc(add, "(),()->()", a, b, 0, output_dtypes=a.dtype)
 
 
 def test__validate_normalize_axes_01():
@@ -115,7 +121,7 @@ def test_apply_gufunc_01():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
     result = apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2 * (a.dtype,))
     mean, std = result
     assert isinstance(result, tuple)
@@ -127,7 +133,7 @@ def test_apply_gufunc_01b():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=5)
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=5)
     mean, std = apply_gufunc(
         stats, "(i)->(),()", a, output_dtypes=2 * (a.dtype,), allow_rechunk=True
     )
@@ -140,7 +146,7 @@ def test_apply_gufunc_output_dtypes_string(vectorize):
     def stats(x):
         return np.mean(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
     mean = apply_gufunc(stats, "(i)->()", a, output_dtypes="f", vectorize=vectorize)
     assert mean.compute().shape == (10, 20)
 
@@ -148,14 +154,15 @@ def test_apply_gufunc_output_dtypes_string(vectorize):
 @pytest.mark.parametrize("vectorize", [False, True])
 def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     def stats(x):
-        return np.mean(x, axis=-1), np.std(x, axis=-1)
+        return np.mean(x, axis=-1), np.std(x, axis=-1), np.min(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
-    mean, std = apply_gufunc(
-        stats, "(i)->(),()", a, output_dtypes=("f", "f"), vectorize=vectorize
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    mean, std, min = apply_gufunc(
+        stats, "(i)->(),(),()", a, output_dtypes=("f", "f", "f"), vectorize=vectorize
     )
     assert mean.compute().shape == (10, 20)
     assert std.compute().shape == (10, 20)
+    assert min.compute().shape == (10, 20)
 
 
 def test_apply_gufunc_pass_additional_kwargs():
@@ -163,16 +170,17 @@ def test_apply_gufunc_pass_additional_kwargs():
         assert bar == 2
         return x
 
-    ret = apply_gufunc(foo, "()->()", 1.0, output_dtypes="f", bar=2)
-    assert_eq(ret, np.array(1.0, dtype="f"))
+    ret = apply_gufunc(foo, "()->()", 1.0, output_dtypes=float, bar=2)
+    assert_eq(ret, np.array(1.0, dtype=float))
 
 
 def test_apply_gufunc_02():
     def outer_product(x, y):
         return np.einsum("...i,...j->...ij", x, y)
 
-    a = da.random.normal(size=(20, 30), chunks=(5, 30))
-    b = da.random.normal(size=(10, 1, 40), chunks=(10, 1, 40))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(20, 30), chunks=(5, 30))
+    b = rng.normal(size=(10, 1, 40), chunks=(10, 1, 40))
     c = apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype)
 
     assert c.compute().shape == (10, 20, 30, 40)
@@ -283,7 +291,7 @@ def test_apply_gufunc_output_dtypes(output_dtypes):
     def foo(x):
         return y
 
-    x = np.random.randn(10)
+    x = np.random.default_rng().standard_normal(10)
     y = x.astype(int)
     dy = apply_gufunc(foo, "()->()", x, output_dtypes=output_dtypes)
     # print(x, x.compute())
@@ -310,8 +318,45 @@ def test_gufunc_mixed_inputs():
     assert_eq(x, 2 * np.ones((2, 8), dtype=int))
 
 
+def test_gufunc_mixed_inputs_vectorize():
+    def foo(x, y):
+        return (x + y).sum(axis=1)
+
+    a = da.ones((8, 3, 5), chunks=(2, 3, 5), dtype=int)
+    b = np.ones(5, dtype=int)
+    x = apply_gufunc(foo, "(m,n),(n)->(m)", a, b, vectorize=True)
+
+    assert_eq(x, np.full((8, 3), 10, dtype=int))
+
+
+def test_gufunc_vectorize_whitespace():
+    # Regression test for https://github.com/dask/dask/issues/7972.
+    # NumPy versions before https://github.com/numpy/numpy/pull/19627
+    # would not ignore whitespace characters in `signature` like they
+    # are supposed to. We remove the whitespace in Dask as a workaround.
+
+    def foo(x, y):
+        return (x + y).sum(axis=1)
+
+    a = da.ones((8, 3, 5), chunks=(2, 3, 5), dtype=int)
+    b = np.ones(5, dtype=int)
+    x = apply_gufunc(foo, "(m, n),(n)->(m)", a, b, vectorize=True)
+
+    assert_eq(x, np.full((8, 3), 10, dtype=int))
+
+    a = da.random.default_rng().random((6, 5, 5))
+
+    @da.as_gufunc(signature="(n, n)->(n, n)", output_dtypes=float, vectorize=True)
+    def gufoo(x):
+        return np.linalg.inv(x)
+
+    # Previously calling `gufoo` would raise an error due to the whitespace
+    # in its `signature`. Let's make sure it doesn't raise here.
+    gufoo(a)
+
+
 def test_gufunc():
-    x = da.random.normal(size=(10, 5), chunks=(2, 5))
+    x = da.random.default_rng().normal(size=(10, 5), chunks=(2, 5))
 
     def foo(x):
         return np.mean(x, axis=-1)
@@ -332,7 +377,7 @@ def test_gufunc():
 
 
 def test_as_gufunc():
-    x = da.random.normal(size=(10, 5), chunks=(2, 5))
+    x = da.random.default_rng().normal(size=(10, 5), chunks=(2, 5))
 
     @as_gufunc("(i)->()", axis=-1, keepdims=False, output_dtypes=float, vectorize=True)
     def foo(x):
@@ -351,8 +396,9 @@ def test_apply_gufunc_broadcasting_loopdims():
         x, y = np.broadcast_arrays(x, y)
         return x, y, x * y
 
-    a = da.random.normal(size=(10, 30), chunks=(8, 30))
-    b = da.random.normal(size=(20, 1, 30), chunks=(3, 1, 30))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(10, 30), chunks=(8, 30))
+    b = rng.normal(size=(20, 1, 30), chunks=(3, 1, 30))
 
     x, y, z = apply_gufunc(
         foo, "(i),(i)->(i),(i),(i)", a, b, output_dtypes=3 * (float,), vectorize=False
@@ -367,8 +413,9 @@ def test_apply_gufunc_check_same_dimsizes():
     def foo(x, y):
         return x + y
 
-    a = da.random.normal(size=(3,), chunks=(2,))
-    b = da.random.normal(size=(4,), chunks=(2,))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(3,), chunks=(2,))
+    b = rng.normal(size=(4,), chunks=(2,))
 
     with pytest.raises(ValueError) as excinfo:
         apply_gufunc(foo, "(),()->()", a, b, output_dtypes=float, allow_rechunk=True)
@@ -379,7 +426,7 @@ def test_apply_gufunc_check_coredim_chunksize():
     def foo(x):
         return np.sum(x, axis=-1)
 
-    a = da.random.normal(size=(8,), chunks=3)
+    a = da.random.default_rng().normal(size=(8,), chunks=3)
     with pytest.raises(ValueError) as excinfo:
         da.apply_gufunc(foo, "(i)->()", a, output_dtypes=float, allow_rechunk=False)
     assert "consists of multiple chunks" in str(excinfo.value)
@@ -389,8 +436,9 @@ def test_apply_gufunc_check_inhomogeneous_chunksize():
     def foo(x, y):
         return x + y
 
-    a = da.random.normal(size=(8,), chunks=((2, 2, 2, 2),))
-    b = da.random.normal(size=(8,), chunks=((2, 3, 3),))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(8,), chunks=((2, 2, 2, 2),))
+    b = rng.normal(size=(8,), chunks=((2, 3, 3),))
 
     with pytest.raises(ValueError) as excinfo:
         da.apply_gufunc(
@@ -446,7 +494,7 @@ def test_apply_gufunc_axis_01(keepdims):
     def mymedian(x):
         return np.median(x, axis=-1)
 
-    a = np.random.randn(10, 5)
+    a = np.random.default_rng().standard_normal((10, 5))
     da_ = da.from_array(a, chunks=2)
 
     m = np.median(a, axis=0, keepdims=keepdims)
@@ -460,7 +508,7 @@ def test_apply_gufunc_axis_02():
     def myfft(x):
         return np.fft.fft(x, axis=-1)
 
-    a = np.random.randn(10, 5)
+    a = np.random.default_rng().standard_normal((10, 5))
     da_ = da.from_array(a, chunks=2)
 
     m = np.fft.fft(a, axis=0)
@@ -475,7 +523,7 @@ def test_apply_gufunc_axis_02b():
         nx = np.fft.ifft(y, axis=axis)
         return np.real(nx)
 
-    a = np.random.randn(3, 6, 4)
+    a = np.random.default_rng().standard_normal((3, 6, 4))
     da_ = da.from_array(a, chunks=2)
 
     m = myfilter(a, axis=1)
@@ -487,7 +535,7 @@ def test_apply_gufunc_axis_03():
     def mydiff(x):
         return np.diff(x, axis=-1)
 
-    a = np.random.randn(3, 6, 4)
+    a = np.random.default_rng().standard_normal((3, 6, 4))
     da_ = da.from_array(a, chunks=2)
 
     m = np.diff(a, axis=1)
@@ -502,10 +550,10 @@ def test_apply_gufunc_axis_keepdims(axis):
     def mymedian(x):
         return np.median(x, axis=-1)
 
-    a = np.random.randn(10, 5)
+    a = np.random.default_rng().standard_normal((10, 5))
     da_ = da.from_array(a, chunks=2)
 
-    m = np.median(a, axis=-1 if not axis else axis, keepdims=True)
+    m = np.median(a, axis=axis or -1, keepdims=True)
     dm = apply_gufunc(
         mymedian, "(i)->()", da_, axis=axis, keepdims=True, allow_rechunk=True
     )
@@ -517,8 +565,9 @@ def test_apply_gufunc_axes_01(axes):
     def mystats(x, y):
         return np.std(x, axis=-1) * np.mean(y, axis=-1)
 
-    a = np.random.randn(10, 5)
-    b = np.random.randn(5, 6)
+    rng = np.random.default_rng()
+    a = rng.standard_normal((10, 5))
+    b = rng.standard_normal((5, 6))
     da_ = da.from_array(a, chunks=2)
     db_ = da.from_array(b, chunks=2)
 
@@ -531,8 +580,9 @@ def test_apply_gufunc_axes_02():
     def matmul(x, y):
         return np.einsum("...ij,...jk->...ik", x, y)
 
-    a = np.random.randn(3, 2, 1)
-    b = np.random.randn(3, 7, 5)
+    rng = np.random.default_rng()
+    a = rng.standard_normal((3, 2, 1))
+    b = rng.standard_normal((3, 7, 5))
 
     da_ = da.from_array(a, chunks=2)
     db = da.from_array(b, chunks=3)
@@ -550,8 +600,9 @@ def test_apply_gufunc_axes_02():
 
 
 def test_apply_gufunc_axes_two_kept_coredims():
-    a = da.random.normal(size=(20, 30), chunks=(10, 30))
-    b = da.random.normal(size=(10, 1, 40), chunks=(5, 1, 40))
+    rng = da.random.default_rng()
+    a = rng.normal(size=(20, 30), chunks=(10, 30))
+    b = rng.normal(size=(10, 1, 40), chunks=(5, 1, 40))
 
     def outer_product(x, y):
         return np.einsum("i,j->ij", x, y)
@@ -560,6 +611,9 @@ def test_apply_gufunc_axes_two_kept_coredims():
     assert c.compute().shape == (10, 20, 30, 40)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="numba doesn't tokenize deterministically"
+)
 def test_apply_gufunc_via_numba_01():
     numba = pytest.importorskip("numba")
 
@@ -570,8 +624,9 @@ def test_apply_gufunc_via_numba_01():
         for i in range(x.shape[0]):
             res[i] = x[i] + y[i]
 
-    a = da.random.normal(size=(20, 30), chunks=30)
-    b = da.random.normal(size=(20, 30), chunks=30)
+    rng = da.random.default_rng()
+    a = rng.normal(size=(20, 30), chunks=30)
+    b = rng.normal(size=(20, 30), chunks=30)
 
     x = a + b
     y = g(a, b, axis=0)
@@ -579,6 +634,9 @@ def test_apply_gufunc_via_numba_01():
     assert_eq(x, y)
 
 
+@pytest.mark.xfail(
+    da._array_expr_enabled(), reason="numba doesn't tokenize deterministically"
+)
 def test_apply_gufunc_via_numba_02():
     numba = pytest.importorskip("numba")
 
@@ -588,25 +646,20 @@ def test_apply_gufunc_via_numba_02():
         for i in range(x.shape[0]):
             res[0] += x[i]
 
-    a = da.random.normal(size=(20, 30), chunks=5)
+    a = da.random.default_rng().normal(size=(20, 30), chunks=30)
 
     x = a.sum(axis=0, keepdims=True)
-    y = mysum(a, axis=0, keepdims=True, allow_rechunk=True)
-
+    y = mysum(a, axis=0, keepdims=True)
     assert_eq(x, y)
 
 
-@pytest.mark.skipif(
-    not IS_NEP18_ACTIVE, reason="NEP18 required for sparse meta propagation"
-)
-@pytest.mark.xfail(_numpy_120, reason="https://github.com/pydata/sparse/issues/383")
 def test_preserve_meta_type():
     sparse = pytest.importorskip("sparse")
 
     def stats(x):
         return np.sum(x, axis=-1), np.mean(x, axis=-1)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
     a = a.map_blocks(sparse.COO.from_numpy)
     sum, mean = apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2 * (a.dtype,))
 
@@ -622,9 +675,51 @@ def test_apply_gufunc_with_meta():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1, dtype=np.float32)
 
-    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    a = da.random.default_rng().normal(size=(10, 20, 30), chunks=(5, 5, 30))
     meta = (np.ones(0, dtype=np.float64), np.ones(0, dtype=np.float32))
     result = apply_gufunc(stats, "(i)->(),()", a, meta=meta)
     expected = stats(a.compute())
     assert_eq(expected[0], result[0])
     assert_eq(expected[1], result[1])
+
+
+@pytest.mark.xfail(da._array_expr_enabled(), reason="Create our Own Scalar Class")
+def test_as_gufunc_with_meta():
+    stack = da.ones((1, 50, 60), chunks=(1, -1, -1))
+    expected = (stack, stack.max())
+
+    meta = (np.array((), dtype=np.float64), np.array((), dtype=np.float64))
+
+    @da.as_gufunc(signature="(i,j) ->(i,j), ()", meta=meta)
+    def array_and_max(arr):
+        return arr, np.atleast_1d(arr.max())
+
+    result = array_and_max(stack)
+    assert_eq(expected[0], result[0])
+
+    # Because `np.max` returns a scalar instead of an `np.ndarray`, we cast
+    # the expected output to a `np.ndarray`, as `meta` defines the output
+    # should be.
+    assert_eq(np.array([expected[1].compute()]), result[1].compute())
+
+
+def test_gufunc_chunksizes_adjustment():
+    def foo(x, *args):
+        # simulating xarray interpolate (kind off)
+        return x
+
+    arr = da.random.random((1, 459, 750), chunks=(1, -1, 250))
+    arr2 = da.random.random((750,), chunks=(-1,))
+
+    result = apply_gufunc(
+        foo,
+        "(dim0_0),(dim0_1),(dim0_2)->(dim0)",
+        *[arr, arr2, arr2.copy()],
+        keepdims=False,
+        output_dtypes=["float64"],
+        output_sizes={"dim0": 750},
+        vectorize=False,
+        allow_rechunk=True,
+    )
+    assert result.chunks == ((1,), (153, 153, 153), (750,))
+    assert_eq(result, arr.compute())

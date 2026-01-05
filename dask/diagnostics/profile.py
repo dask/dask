@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 from collections import namedtuple
 from itertools import starmap
-from timeit import default_timer
+from multiprocessing import Pipe, Process, current_process
 from time import sleep
-from multiprocessing import Process, Pipe, current_process
+from timeit import default_timer
 
-from ..callbacks import Callback
-from ..utils import import_required
-
+from dask.callbacks import Callback
+from dask.utils import import_required
 
 # Stores execution data for each task
 TaskData = namedtuple(
@@ -29,28 +30,30 @@ class Profiler(Callback):
 
     >>> from operator import add, mul
     >>> from dask.threaded import get
+    >>> from dask.diagnostics import Profiler
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
     >>> with Profiler() as prof:
     ...     get(dsk, 'z')
     22
 
-    >>> prof.results  # doctest: +SKIP
-    [('y', (add, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
-     ('z', (mul, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
+    >>> prof.results        # doctest: +SKIP
+    [TaskData(key='y', task=(add, 'x', 10), start_time=..., end_time=..., worker_id=...),
+     TaskData(key='z', task=(mul, 'y', 2), start_time=..., end_time=..., worker_id=...)]
 
     These results can be visualized in a bokeh plot using the ``visualize``
     method. Note that this requires bokeh to be installed.
 
-    >>> prof.visualize() # doctest: +SKIP
+    >>> prof.visualize()    # doctest: +SKIP
 
     You can activate the profiler globally
 
-    >>> prof.register()  # doctest: +SKIP
+    >>> prof.register()
 
     If you use the profiler globally you will need to clear out old results
     manually.
 
     >>> prof.clear()
+    >>> prof.unregister()
 
     """
 
@@ -58,10 +61,17 @@ class Profiler(Callback):
         self._results = {}
         self.results = []
         self._dsk = {}
+        self.start_time = None
+        self.end_time = None
 
     def __enter__(self):
         self.clear()
-        return super(Profiler, self).__enter__()
+        self.start_time = default_timer()
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        self.end_time = default_timer()
+        return super().__exit__(*args)
 
     def _start(self, dsk):
         self._dsk.update(dsk)
@@ -75,14 +85,16 @@ class Profiler(Callback):
         self._results[key] += (end, id)
 
     def _finish(self, dsk, state, failed):
-        results = dict((k, v) for k, v in self._results.items() if len(v) == 5)
+        results = {k: v for k, v in self._results.items() if len(v) == 5}
         self.results += list(starmap(TaskData, results.values()))
         self._results.clear()
 
     def _plot(self, **kwargs):
-        from .profile_visualize import plot_tasks
+        from dask.diagnostics.profile_visualize import plot_tasks
 
-        return plot_tasks(self.results, self._dsk, **kwargs)
+        return plot_tasks(
+            self.results, self._dsk, self.start_time, self.end_time, **kwargs
+        )
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
@@ -91,7 +103,7 @@ class Profiler(Callback):
         --------
         dask.diagnostics.profile_visualize.visualize
         """
-        from .profile_visualize import visualize
+        from dask.diagnostics.profile_visualize import visualize
 
         return visualize(self, **kwargs)
 
@@ -100,6 +112,8 @@ class Profiler(Callback):
         self._results.clear()
         del self.results[:]
         self._dsk = {}
+        self.start_time = None
+        self.end_time = None
 
 
 ResourceData = namedtuple("ResourceData", ("time", "mem", "cpu"))
@@ -119,7 +133,7 @@ class ResourceProfiler(Callback):
     >>> from operator import add, mul
     >>> from dask.threaded import get
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
-    >>> with ResourceProfiler() as prof:  # doctest: +SKIP
+    >>> with ResourceProfiler() as prof:
     ...     get(dsk, 'z')
     22
 
@@ -130,16 +144,18 @@ class ResourceProfiler(Callback):
 
     You can activate the profiler globally
 
-    >>> prof.register()  # doctest: +SKIP
+    >>> prof.register()
 
     If you use the profiler globally you will need to clear out old results
     manually.
 
-    >>> prof.clear()  # doctest: +SKIP
+    >>> prof.clear()
 
     Note that when used as a context manager data will be collected throughout
     the duration of the enclosed block. In contrast, when registered globally
     data will only be collected while a dask scheduler is active.
+
+    >>> prof.unregister()
     """
 
     def __init__(self, dt=1):
@@ -147,6 +163,8 @@ class ResourceProfiler(Callback):
         self._entered = False
         self._tracker = None
         self.results = []
+        self.start_time = None
+        self.end_time = None
 
     def _is_running(self):
         return self._tracker is not None and self._tracker.is_alive()
@@ -165,14 +183,16 @@ class ResourceProfiler(Callback):
     def __enter__(self):
         self._entered = True
         self.clear()
+        self.start_time = default_timer()
         self._start_collect()
-        return super(ResourceProfiler, self).__enter__()
+        return super().__enter__()
 
     def __exit__(self, *args):
         self._entered = False
         self._stop_collect()
         self.close()
-        super(ResourceProfiler, self).__exit__(*args)
+        self.end_time = default_timer()
+        super().__exit__(*args)
 
     def _start(self, dsk):
         self._start_collect()
@@ -191,11 +211,13 @@ class ResourceProfiler(Callback):
 
     def clear(self):
         self.results = []
+        self.start_time = None
+        self.end_time = None
 
     def _plot(self, **kwargs):
-        from .profile_visualize import plot_resources
+        from dask.diagnostics.profile_visualize import plot_resources
 
-        return plot_resources(self.results, **kwargs)
+        return plot_resources(self.results, self.start_time, self.end_time, **kwargs)
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
@@ -204,7 +226,7 @@ class ResourceProfiler(Callback):
         --------
         dask.diagnostics.profile_visualize.visualize
         """
-        from .profile_visualize import visualize
+        from dask.diagnostics.profile_visualize import visualize
 
         return visualize(self, **kwargs)
 
@@ -213,7 +235,7 @@ class _Tracker(Process):
     """Background process for tracking resource usage"""
 
     def __init__(self, dt=1):
-        Process.__init__(self)
+        super().__init__()
         self.daemon = True
         self.dt = dt
         self.parent_pid = current_process().pid
@@ -231,7 +253,6 @@ class _Tracker(Process):
         ]
 
     def run(self):
-
         psutil = import_required(
             "psutil", "Tracking resource usage requires `psutil` to be installed"
         )
@@ -289,23 +310,25 @@ class CacheProfiler(Callback):
 
     >>> from operator import add, mul
     >>> from dask.threaded import get
+    >>> from dask.diagnostics import CacheProfiler
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
     >>> with CacheProfiler() as prof:
     ...     get(dsk, 'z')
     22
 
     >>> prof.results    # doctest: +SKIP
-    [CacheData('y', (add, 'x', 10), 1, 1435352238.48039, 1435352238.480655),
-     CacheData('z', (mul, 'y', 2), 1, 1435352238.480657, 1435352238.480803)]
+    [CacheData(key='y', task=(add, 'x', 10), metric=1, cache_time=..., free_time=...),
+     CacheData(key='z', task=(mul, 'y', 2), metric=1, cache_time=..., free_time=...)]
 
     The default is to count each task (``metric`` is 1 for all tasks). Other
     functions may used as a metric instead through the ``metric`` keyword. For
     example, the ``nbytes`` function found in ``cachey`` can be used to measure
     the number of bytes in the cache.
 
-    >>> from cachey import nbytes    # doctest: +SKIP
+    >>> from cachey import nbytes                   # doctest: +SKIP
     >>> with CacheProfiler(metric=nbytes) as prof:  # doctest: +SKIP
     ...     get(dsk, 'z')
+    22
 
     The profiling results can be visualized in a bokeh plot using the
     ``visualize`` method. Note that this requires bokeh to be installed.
@@ -314,12 +337,13 @@ class CacheProfiler(Callback):
 
     You can activate the profiler globally
 
-    >>> prof.register()  # doctest: +SKIP
+    >>> prof.register()
 
     If you use the profiler globally you will need to clear out old results
     manually.
 
     >>> prof.clear()
+    >>> prof.unregister()
 
     """
 
@@ -335,17 +359,20 @@ class CacheProfiler(Callback):
 
     def __enter__(self):
         self.clear()
-        return super(CacheProfiler, self).__enter__()
+        self.start_time = default_timer()
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        self.end_time = default_timer()
+        return super().__exit__(*args)
 
     def _start(self, dsk):
         self._dsk.update(dsk)
-        if not self._start_time:
-            self._start_time = default_timer()
 
     def _posttask(self, key, value, dsk, state, id):
         t = default_timer()
         self._cache[key] = (self._metric(value), t)
-        for k in state["released"].intersection(self._cache):
+        for k in state["released"] & self._cache.keys():
             metric, start = self._cache.pop(k)
             self.results.append(CacheData(k, dsk[k], metric, start, t))
 
@@ -356,10 +383,15 @@ class CacheProfiler(Callback):
         self._cache.clear()
 
     def _plot(self, **kwargs):
-        from .profile_visualize import plot_cache
+        from dask.diagnostics.profile_visualize import plot_cache
 
         return plot_cache(
-            self.results, self._dsk, self._start_time, self._metric_name, **kwargs
+            self.results,
+            self._dsk,
+            self.start_time,
+            self.end_time,
+            self._metric_name,
+            **kwargs,
         )
 
     def visualize(self, **kwargs):
@@ -369,7 +401,7 @@ class CacheProfiler(Callback):
         --------
         dask.diagnostics.profile_visualize.visualize
         """
-        from .profile_visualize import visualize
+        from dask.diagnostics.profile_visualize import visualize
 
         return visualize(self, **kwargs)
 
@@ -378,4 +410,5 @@ class CacheProfiler(Callback):
         self.results = []
         self._cache = {}
         self._dsk = {}
-        self._start_time = None
+        self.start_time = None
+        self.end_time = None

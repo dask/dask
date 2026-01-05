@@ -1,5 +1,8 @@
-import dask
+from __future__ import annotations
+
 import pytest
+
+import dask
 
 
 def test_mimesis():
@@ -17,6 +20,15 @@ def test_full_dataset():
     assert b.count().compute() == 20
 
 
+def test_make_dataset_with_processes():
+    pytest.importorskip("mimesis")
+    b = dask.datasets.make_people(npartitions=2)
+    try:
+        b.compute(scheduler="processes")
+    except TypeError:
+        pytest.fail("Failed to execute make_people using processes")
+
+
 def test_no_mimesis():
     try:
         import mimesis  # noqa: F401
@@ -30,5 +42,7 @@ def test_no_mimesis():
 def test_deterministic():
     pytest.importorskip("mimesis")
 
+    a = dask.datasets.make_people(seed=123)
     b = dask.datasets.make_people(seed=123)
-    assert b.take(1)[0]["name"] == ("Leandro", "Orr")
+
+    assert a.take(1)[0]["name"] == b.take(1)[0]["name"]

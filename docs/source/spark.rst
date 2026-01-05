@@ -1,3 +1,5 @@
+:orphan:
+
 Comparison to Spark
 ===================
 
@@ -17,6 +19,7 @@ Generally Dask is smaller and lighter weight than Spark.  This means that it
 has fewer features and, instead, is used in conjunction with other libraries,
 particularly those in the numeric Python ecosystem.  It couples with libraries
 like Pandas or Scikit-Learn to achieve high-level functionality.
+Additionally, Dask is often faster and more robustly performant on `standard benchmarks <https://docs.coiled.io/blog/tpch.html?utm_source=dask-docs&utm_medium=spark-vs-dask#dask-vs-spark>`_ than Spark.
 
 Language
 ~~~~~~~~
@@ -35,7 +38,7 @@ Ecosystem
     integrates well with many other Apache projects.
 
 -   Dask is a component of the larger Python ecosystem.  It couples with and
-    enhances other libraries like NumPy, Pandas, and Scikit-Learn.
+    enhances other libraries like NumPy, pandas, and Scikit-learn.
 
 
 Age and Trust
@@ -45,7 +48,7 @@ Age and Trust
     well-trusted tool in the Big Data enterprise world.
 
 -   Dask is younger (since 2014) and is an extension of the
-    well trusted NumPy/Pandas/Scikit-learn/Jupyter stack.
+    well trusted NumPy/pandas/Scikit-learn/Jupyter stack.
 
 Scope
 ~~~~~
@@ -100,7 +103,7 @@ Machine Learning
     performance.
 
 -   Dask relies on and interoperates with existing libraries like
-    Scikit-Learn and XGBoost.  These can be more familiar or higher
+    Scikit-learn and XGBoost.  These can be more familiar or higher
     performance, but generally results in a less-cohesive whole.  See the
     `dask-ml`_ project for integrations.
 
@@ -233,7 +236,7 @@ Conclusion
     parallelism to existing solutions, then Dask may be a good fit, especially if
     you are already using Python and associated libraries like NumPy and Pandas.
 
-If you are looking to manage a terabyte or less of tabular CSV or JSON data,
+If you are looking to manage 100GB or less of tabular CSV or JSON data,
 then you should forget both Spark and Dask and use Postgres_ or MongoDB_.
 
 

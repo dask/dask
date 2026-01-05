@@ -1,0 +1,242 @@
+[build-system]
+requires = ["setuptools>=80", "setuptools-scm>=9"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dask"
+description = "Parallel PyData with Task Scheduling"
+maintainers = [{name = "Matthew Rocklin", email = "mrocklin@gmail.com"}]
+license = "BSD-3-Clause"
+license-files = [
+    "LICENSE.txt",
+    "dask/array/NUMPY_LICENSE.txt",
+]
+keywords = ["task-scheduling parallel numpy pandas pydata"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Distributed Computing",
+]
+readme = "README.rst"
+urls = {Homepage = "https://github.com/dask/dask/"}
+requires-python = ">=3.10"
+dependencies = [
+    # NOTE: These are tested in `continuous_integration/test_imports.sh` If
+    # you modify these, make sure to change the corresponding line there.
+    "click >= 8.1",
+    "cloudpickle >= 3.0.0",
+    "fsspec >= 2021.09.0",
+    "packaging >= 20.0",
+    "partd >= 1.4.0",
+    "pyyaml >= 5.3.1",
+    "toolz >= 0.12.0",
+    # importlib.metadata has the following bugs fixed in 3.10.9 and 3.11.1
+    # https://github.com/python/cpython/issues/99130
+    # https://github.com/python/cpython/issues/98706
+    # Additionally, importlib.metadata.entry_points changed return type in 3.12
+    # https://docs.python.org/3/library/importlib.metadata.html#importlib.metadata.entry_points
+    "importlib_metadata >= 4.13.0; python_version < '3.12' ",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+# NOTE: These are tested in `continuous_integration/test_imports.sh` If
+# you modify these, make sure to change the corresponding line there.
+array = ["numpy >= 1.24"]
+# keeping for backwards compatibility
+bag = []
+dataframe = [
+    "dask[array]",
+    "pandas >= 2.0",
+    "pyarrow >= 14.0.1",
+]
+distributed = ["distributed >= 2025.12.0,<2025.12.1"]
+diagnostics = [
+    "bokeh >= 3.1.0",
+    "jinja2 >= 2.10.3",
+]
+# keeping for backwards compatibility
+delayed = []
+complete = [
+    "dask[array,dataframe,distributed,diagnostics]",
+    "pyarrow >= 14.0.1",
+    "lz4 >= 4.3.2",
+]
+test = [
+    "pandas[test]",
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-rerunfailures",
+    "pytest-timeout",
+    "pytest-xdist",
+    "pre-commit",
+]
+
+[project.entry-points."dask.array.backends"]
+cupy = "dask.array.cupy_entry_point:CupyBackendEntrypoint"
+
+[project.scripts]
+dask = "dask.__main__:main"
+
+[tool.setuptools.packages]
+find = {namespaces = false}
+
+[tool.setuptools.package-data]
+dask = ["py.typed"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# By default, Ruff enables Flake8's F rules, along with a subset of the
+# E rules, omitting any stylistic rules that overlap with the use of a
+# formatter, like ruff format or Black. 
+# We specify additional rules with extend-select.
+extend-select = [
+    "B",
+    "T10",
+    "ISC",
+    "TID",
+    "I",
+    "PGH",
+    "PLR",
+    "UP",
+    "FURB",
+]
+ignore = [
+    "B011",     # Do not `assert False`, raise `AssertionError()`
+    "B018",     # Found useless expression
+    "B028",     # FIXME: No explicit `stacklevel` keyword argument found
+    "B904",     # Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling
+    "B905",     # `zip()` without an explicit `strict=` parameter
+    "E402",     # Module level import not at top of file
+    "E714",     # Test for object identity should be `is not`
+    "E721",     # Use `is` and `is not` for type comparisons, or `isinstance()` for isinstance checks
+    "E731",     # Do not assign a `lambda` expression, use a `def`
+    "E741",     # Ambiguous variable name: `l`
+    "PLR0124",  # Name compared with itself, consider replacing `... == ...`
+    "PLR0206",  # Cannot have defined parameters for properties
+    "PLR09",    # Too many statements, branches, arguments in function definition, statements, ...
+    "PLR1704",  # Redefining argument with local name
+    "PLR1714",  # Consider merging multiple comparisons
+    "PLR1730",  # Replace `if` statement with `min()` or `max()`
+    "PLR1733",  # Unnecessary lookup of dictionary value by key
+    "PLR2004",  # Magic value used in comparison, consider replacing with a constant variable
+    "PLR2044",  # Line with empty comment
+    "FURB157",  # Verbose expression in `Decimal` constructor
+]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"__init__.py" = ["F401", "F403", "F811"]
+"dask/tokenize.py" = ["F811"]
+"*_test.py" = ["B011"]
+"**/tests/*" = ["B011", "F811"]
+"dask/array/svg.py" = ["UP032"]
+
+[tool.setuptools_scm]
+version_file = "dask/_version.py"
+version_scheme = "post-release"
+
+[tool.pytest.ini_options]
+markers = [
+    "network: Test requires an internet connection",
+    "slow: Skipped unless --runslow passed",
+    "gpu: marks tests we want to run on GPUs",
+    "skip_with_pyarrow_strings: Tests that should be skipped when pyarrow string conversion is turned on",
+    "xfail_with_pyarrow_strings: Tests that should be xfailed when pyarrow string conversion is turned on",
+    "array_expr: Tests that are array-expr specific",
+    "normal_and_array_expr: Tests that should run with and without array-expr",
+]
+addopts = [
+    "-v",
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+    "--durations=10",
+    "--color=yes",
+    "--cov-config=pyproject.toml",
+]
+filterwarnings = [
+    "error:::dask[.*]",
+    "error:::pandas[.*]",
+    "error:::numpy[.*]",
+    "error:::distributed[.*]",
+    # From https://github.com/numpy/numpy/issues/20225
+    'ignore:The distutils\.sysconfig module is deprecated, use sysconfig instead:DeprecationWarning:numpy',
+    # With no network access, distributed raises a warning when detecting local IP address
+    "ignore:Couldn't detect a suitable IP address:RuntimeWarning:distributed",
+    # Ignore FutureWarning for change in group_keys behavior: no changes required on the dask side.
+    # https://pandas.pydata.org/docs/dev/whatsnew/v1.5.0.html#using-group-keys-with-transformers-in-groupby-apply
+    "ignore:Not prepending group keys:FutureWarning",
+    "ignore:.*:dask.tests.warning_aliases.RemovedIn20Warning",
+    "ignore:When grouping with a length-1 list-like, you will need to pass a length-1 tuple to get_group in a future version of pandas:FutureWarning",
+    'ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead:DeprecationWarning',  # https://github.com/apache/arrow/issues/35081
+    'ignore:The previous implementation of stack is deprecated and will be removed in a future version of pandas\.:FutureWarning',
+    "ignore:distutils Version classes are deprecated. Use packaging.version instead.:DeprecationWarning",
+]
+log_cli_level = "INFO"
+xfail_strict = true
+# pytest-timeout settings
+# 'thread' kills off the whole test suite. 'signal' only kills the offending test.
+# However, 'signal' doesn't work on Windows (due to lack of SIGALRM).
+# The CI script modifies this config file on the fly on Linux and MacOS.
+timeout_method = "thread"
+# This should not be reduced; Windows CI has been observed to be occasionally
+# exceptionally slow.
+timeout = 300
+
+[tool.mypy]
+# Silence errors about Python 3.9-style delayed type annotations on Python 3.8
+python_version = "3.10"
+# See https://github.com/python/mypy/issues/12286 for automatic multi-platform support
+platform = "linux"
+# platform = win32
+# platform = darwin
+disallow_untyped_decorators = true
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+exclude = "dask/dataframe/dask_expr/"
+
+[[tool.mypy.overrides]]
+
+# Recent or recently overhauled modules featuring stricter validation
+module = [
+    "dask.order",
+]
+disallow_untyped_defs = true
+
+[tool.codespell]
+ignore-words-list = "coo,dout,excpt,fo,medias,nd,nin,notin,ser"
+skip = "docs/source/changelog.rst"
+
+[tool.coverage.run]
+omit = [
+    "*/test_*.py",
+    "dask/_version.py",
+]
+source = ["dask"]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    "if TYPE_CHECKING:",
+    "pragma: no cover",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+ignore_errors = true

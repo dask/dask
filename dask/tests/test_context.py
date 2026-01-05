@@ -1,9 +1,14 @@
-from dask.context import globalmethod
-import dask.array as da
+from __future__ import annotations
+
+import pytest
+
 import dask
+from dask.context import globalmethod
 
 
 def test_with_get():
+    pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
     var = [0]
 
     def myget(dsk, keys, **kwargs):
@@ -32,9 +37,9 @@ def bar():
     return "bar"
 
 
-class Foo(object):
+class Foo:
     @globalmethod(key="f")
-    def f():
+    def f():  # type: ignore[misc]
         return 1
 
     g = globalmethod(foo, key="g", falsey=bar)

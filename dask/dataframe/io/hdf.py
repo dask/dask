@@ -1,27 +1,29 @@
-from fnmatch import fnmatch
-from glob import glob
+from __future__ import annotations
+
 import os
 import uuid
+from fnmatch import fnmatch
+from glob import glob
 from warnings import warn
 
 import pandas as pd
+from fsspec.utils import build_name_function, stringify_path
 from tlz import merge
 
-# this import checks for the importability of fsspec
-from ...bytes import read_bytes  # noqa
-from fsspec.utils import build_name_function, stringify_path
+import dask.dataframe as dd
+from dask import config
+from dask.base import compute_as_if_collection, get_scheduler, named_schedulers
+from dask.dataframe.backends import dataframe_creation_dispatch
+from dask.dataframe.io.io import _link
+from dask.dataframe.io.utils import SupportsLock
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import get_scheduler_lock
 
-from .io import _link
-from ...base import get_scheduler
-from ..core import DataFrame, new_dd_object
-from ... import config, multiprocessing
-from ...base import tokenize, compute_as_if_collection
-from ...delayed import Delayed, delayed
-from ...utils import get_scheduler_lock
+MP_GET = named_schedulers.get("processes", object())
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
-    """ A wrapper function around pd_to_hdf that enables locking"""
+    """A wrapper function around pd_to_hdf that enables locking"""
 
     if lock:
         lock.acquire()
@@ -30,8 +32,6 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     finally:
         if lock:
             lock.release()
-
-    return None
 
 
 def to_hdf(
@@ -44,8 +44,8 @@ def to_hdf(
     name_function=None,
     compute=True,
     lock=None,
-    dask_kwargs={},
-    **kwargs
+    dask_kwargs=None,
+    **kwargs,
 ):
     """Store Dask Dataframe to Hierarchical Data Format (HDF) files
 
@@ -79,7 +79,7 @@ def to_hdf(
     compute : bool
         Whether or not to execute immediately.  If False then this returns a
         ``dask.Delayed`` value.
-    lock : Lock, optional
+    lock : bool, Lock, optional
         Lock to use to prevent concurrency issues.  By default a
         ``threading.Lock``, ``multiprocessing.Lock`` or ``SerializableLock``
         will be used depending on your scheduler if a lock is required. See
@@ -133,9 +133,13 @@ def to_hdf(
     read_hdf:
     to_parquet:
     """
-    name = "to-hdf-" + uuid.uuid1().hex
+    df = df.optimize()
+    if dask_kwargs is None:
+        dask_kwargs = {}
 
-    pd_to_hdf = getattr(df._partition_type, "to_hdf")
+    name = f"to-hdf-{uuid.uuid1().hex}"
+
+    pd_to_hdf = df._partition_type.to_hdf
 
     single_file = True
     single_node = True
@@ -183,9 +187,18 @@ def to_hdf(
 
     # If user did not specify scheduler and write is sequential default to the
     # sequential scheduler. otherwise let the _get method choose the scheduler
+    try:
+        from distributed import default_client
+
+        default_client()
+        client_available = True
+    except (ImportError, ValueError):
+        client_available = False
+
     if (
         scheduler is None
         and not config.get("scheduler", None)
+        and not client_available
         and single_node
         and single_file
     ):
@@ -196,25 +209,34 @@ def to_hdf(
     if lock is None:
         if not single_node:
             lock = True
-        elif not single_file and _actual_get is not multiprocessing.get:
+        elif not single_file and _actual_get is not MP_GET:
             # if we're writing to multiple files with the multiprocessing
             # scheduler we don't need to lock
             lock = True
         else:
             lock = False
-    if lock:
+
+    # TODO: validation logic to ensure that provided locks are compatible with the scheduler
+    if isinstance(lock, bool) and lock:
         lock = get_scheduler_lock(df, scheduler=scheduler)
-
-    kwargs.update({"format": "table", "mode": mode, "append": append})
-
+    elif lock:
+        assert isinstance(lock, SupportsLock)
     dsk = dict()
 
     i_name = name_function(0)
+    kwargs.update(
+        {
+            "format": "table",
+            "mode": mode,
+            "append": append,
+            "key": key.replace("*", i_name),
+        }
+    )
     dsk[(name, 0)] = (
         _pd_to_hdf,
         pd_to_hdf,
         lock,
-        [(df._name, 0), fmt_obj(path, i_name), key.replace("*", i_name)],
+        [(df._name, 0), fmt_obj(path, i_name)],
         kwargs,
     )
 
@@ -231,31 +253,42 @@ def to_hdf(
 
     for i in range(1, df.npartitions):
         i_name = name_function(i)
+        kwargs2["key"] = key.replace("*", i_name)
         task = (
             _pd_to_hdf,
             pd_to_hdf,
             lock,
-            [(df._name, i), fmt_obj(path, i_name), key.replace("*", i_name)],
-            kwargs2,
+            [(df._name, i), fmt_obj(path, i_name)],
+            kwargs2.copy(),
         )
         if single_file:
             link_dep = i - 1 if single_node else 0
             task = (_link, (name, link_dep), task)
         dsk[(name, i)] = task
 
-    dsk = merge(df.dask, dsk)
     if single_file and single_node:
         keys = [(name, df.npartitions - 1)]
     else:
         keys = [(name, i) for i in range(df.npartitions)]
 
+    final_name = f"{name}-final"
+    dsk[(final_name, 0)] = (lambda x: None, keys)
+    graph = HighLevelGraph.from_collections((name, 0), dsk, dependencies=[df])
+
+    from dask.dataframe import DataFrame
+
     if compute:
         compute_as_if_collection(
-            DataFrame, dsk, keys, scheduler=scheduler, **dask_kwargs
+            DataFrame, graph, keys, scheduler=scheduler, **dask_kwargs
         )
         return filenames
     else:
-        return delayed([Delayed(k, dsk) for k in keys])
+        from dask.dataframe import from_graph
+
+        dsk.update(df.optimize().__dask_graph__())
+        return from_graph(
+            dsk, None, (None, None), [(final_name, 0)], "to_hdf_persister"
+        )
 
 
 dont_use_fixed_error_message = """
@@ -272,149 +305,7 @@ and stopping index per file, or starting and stopping index of the global
 dataset."""
 
 
-def _read_single_hdf(
-    path,
-    key,
-    start=0,
-    stop=None,
-    columns=None,
-    chunksize=int(1e6),
-    sorted_index=False,
-    lock=None,
-    mode="a",
-):
-    """
-    Read a single hdf file into a dask.dataframe. Used for each file in
-    read_hdf.
-    """
-
-    def get_keys_stops_divisions(path, key, stop, sorted_index, chunksize):
-        """
-        Get the "keys" or group identifiers which match the given key, which
-        can contain wildcards. This uses the hdf file identified by the
-        given path. Also get the index of the last row of data for each matched
-        key.
-        """
-        with pd.HDFStore(path, mode=mode) as hdf:
-            import glob
-            from distutils.version import LooseVersion
-
-            if LooseVersion(pd.__version__) >= LooseVersion("0.24"):
-                if not glob.has_magic(key):
-                    keys = [key]
-                else:
-                    keys = [k for k in hdf.keys() if fnmatch(k, key)]
-                    # https://github.com/dask/dask/issues/5934
-                    # TODO: remove this part if/when pandas copes with all keys
-                    keys.extend(
-                        n._v_pathname
-                        for n in hdf._handle.walk_nodes("/", classname="Table")
-                        if fnmatch(n._v_pathname, key)
-                        and n._v_name != u"table"
-                        and n._v_pathname not in keys
-                    )
-            else:
-                # TODO: remove if we require pandas >= 0.24
-                keys = [k for k in hdf.keys() if fnmatch(k, key)]
-            stops = []
-            divisions = []
-            for k in keys:
-                storer = hdf.get_storer(k)
-                if storer.format_type != "table":
-                    raise TypeError(dont_use_fixed_error_message)
-                if stop is None:
-                    stops.append(storer.nrows)
-                elif stop > storer.nrows:
-                    raise ValueError(
-                        "Stop keyword exceeds dataset number "
-                        "of rows ({})".format(storer.nrows)
-                    )
-                else:
-                    stops.append(stop)
-                if sorted_index:
-                    division = [
-                        storer.read_column("index", start=start, stop=start + 1)[0]
-                        for start in range(0, storer.nrows, chunksize)
-                    ]
-                    division_end = storer.read_column(
-                        "index", start=storer.nrows - 1, stop=storer.nrows
-                    )[0]
-
-                    division.append(division_end)
-                    divisions.append(division)
-                else:
-                    divisions.append(None)
-
-        return keys, stops, divisions
-
-    def one_path_one_key(path, key, start, stop, columns, chunksize, division, lock):
-        """
-        Get the data frame corresponding to one path and one key (which should
-        not contain any wildcards).
-        """
-        empty = pd.read_hdf(path, key, mode=mode, stop=0)
-        if columns is not None:
-            empty = empty[columns]
-
-        token = tokenize(
-            (path, os.path.getmtime(path), key, start, stop, empty, chunksize, division)
-        )
-        name = "read-hdf-" + token
-        if empty.ndim == 1:
-            base = {"name": empty.name, "mode": mode}
-        else:
-            base = {"columns": empty.columns, "mode": mode}
-
-        if start >= stop:
-            raise ValueError(
-                "Start row number ({}) is above or equal to stop "
-                "row number ({})".format(start, stop)
-            )
-
-        def update(s):
-            new = base.copy()
-            new.update({"start": s, "stop": s + chunksize})
-            return new
-
-        dsk = dict(
-            ((name, i), (_pd_read_hdf, path, key, lock, update(s)))
-            for i, s in enumerate(range(start, stop, chunksize))
-        )
-
-        if division:
-            divisions = division
-        else:
-            divisions = [None] * (len(dsk) + 1)
-
-        return new_dd_object(dsk, name, empty, divisions)
-
-    keys, stops, divisions = get_keys_stops_divisions(
-        path, key, stop, sorted_index, chunksize
-    )
-    if (start != 0 or stop is not None) and len(keys) > 1:
-        raise NotImplementedError(read_hdf_error_msg)
-    from ..multi import concat
-
-    return concat(
-        [
-            one_path_one_key(path, k, start, s, columns, chunksize, d, lock)
-            for k, s, d in zip(keys, stops, divisions)
-        ]
-    )
-
-
-def _pd_read_hdf(path, key, lock, kwargs):
-    """ Read from hdf5 file with a lock """
-    if lock:
-        lock.acquire()
-    try:
-        result = pd.read_hdf(path, key, **kwargs)
-    finally:
-        if lock:
-            lock.release()
-    return result
-
-
+@dataframe_creation_dispatch.register_inplace("pandas")
 def read_hdf(
     pattern,
     key,
@@ -424,7 +315,7 @@ def read_hdf(
     chunksize=1000000,
     sorted_index=False,
     lock=True,
-    mode="a",
+    mode="r",
 ):
     """
     Read HDF files into a Dask DataFrame
@@ -452,7 +343,7 @@ def read_hdf(
         index (default is False).
     lock : boolean, optional
         Option to use a lock to prevent concurrency issues (default is True).
-    mode : {'a', 'r', 'r+'}, default 'a'. Mode to use when opening file(s).
+    mode : {'a', 'r', 'r+'}, default 'r'. Mode to use when opening file(s).
         'r'
             Read-only; no data can be modified.
         'a'
@@ -484,7 +375,8 @@ def read_hdf(
     if lock is True:
         lock = get_scheduler_lock()
 
-    key = key if key.startswith("/") else "/" + key
+    if not key.startswith("/"):
+        key = f"/{key}"
     # Convert path-like objects to a string
     pattern = stringify_path(pattern)
 
@@ -496,16 +388,14 @@ def read_hdf(
     if not isinstance(pattern, str) and len(paths) == 0:
         raise ValueError("No files provided")
     if not paths or len(paths) == 0:
-        raise IOError("File(s) not found: {0}".format(pattern))
+        raise OSError(f"File(s) not found: {pattern}")
     for path in paths:
         try:
             exists = os.path.exists(path)
         except (ValueError, TypeError):
             exists = False
         if not exists:
-            raise IOError(
-                "File not found or insufficient permissions: {0}".format(path)
-            )
+            raise OSError(f"File not found or insufficient permissions: {path}")
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
     if chunksize <= 0:
@@ -515,26 +405,148 @@ def read_hdf(
             "When assuming pre-partitioned data, data must be "
             "read in its entirety using the same chunksizes"
         )
-    from ..multi import concat
 
-    return concat(
-        [
-            _read_single_hdf(
-                path,
-                key,
-                start=start,
-                stop=stop,
-                columns=columns,
-                chunksize=chunksize,
-                sorted_index=sorted_index,
-                lock=lock,
-                mode=mode,
-            )
-            for path in paths
-        ]
+    # Build metadata
+    with pd.HDFStore(paths[0], mode=mode) as hdf:
+        meta_key = _expand_key(key, hdf)[0]
+        try:
+            meta = pd.read_hdf(hdf, meta_key, stop=0)
+        except IndexError:  # if file is empty, don't set stop
+            meta = pd.read_hdf(hdf, meta_key)
+    if columns is not None:
+        meta = meta[columns]
+
+    # Common kwargs
+    if meta.ndim == 1:
+        common_kwargs = {"name": meta.name, "mode": mode}
+    else:
+        common_kwargs = {"mode": mode}
+
+    # Build parts
+    parts, divisions = _build_parts(
+        paths, key, start, stop, chunksize, sorted_index, mode
+    )
+
+    return dd.from_map(
+        _read_hdf,
+        parts,
+        meta=meta,
+        divisions=divisions,
+        lock=lock,
+        common_kwargs=common_kwargs,
+        columns=columns,
     )
 
 
-from ..core import _Frame
+def _read_hdf(part, *, common_kwargs, lock, columns=None):
+    """Read from hdf5 file with a lock"""
 
-_Frame.to_hdf.__doc__ = to_hdf.__doc__
+    path, key, kwargs = part
+    if lock:
+        lock.acquire()
+    try:
+        result = pd.read_hdf(path, key, **merge(common_kwargs, kwargs))
+    finally:
+        if lock:
+            lock.release()
+    if columns is not None:
+        result = result[columns]
+    return result
+
+
+def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
+    """
+    Build the list of partition inputs and divisions for read_hdf
+    """
+    parts = []
+    global_divisions = []
+    for path in paths:
+        keys, stops, divisions = _get_keys_stops_divisions(
+            path, key, stop, sorted_index, chunksize, mode
+        )
+
+        for k, s, d in zip(keys, stops, divisions):
+            if d and global_divisions:
+                global_divisions = global_divisions[:-1] + d
+            elif d:
+                global_divisions = d
+
+            parts.extend(_one_path_one_key(path, k, start, s, chunksize))
+
+    return parts, global_divisions or [None] * (len(parts) + 1)
+
+
+def _one_path_one_key(path, key, start, stop, chunksize):
+    """
+    Get the DataFrame corresponding to one path and one key (which
+    should not contain any wildcards).
+    """
+
+    if start >= stop:
+        raise ValueError(
+            f"Start row number ({start}) is above or equal to stop row number ({stop})"
+        )
+
+    return [
+        (path, key, {"start": s, "stop": s + chunksize})
+        for i, s in enumerate(range(start, stop, chunksize))
+    ]
+
+
+def _expand_key(key, hdf):
+    import glob
+
+    if not glob.has_magic(key):
+        keys = [key]
+    else:
+        keys = [k for k in hdf.keys() if fnmatch(k, key)]
+        # https://github.com/dask/dask/issues/5934
+        # TODO: remove this part if/when pandas copes with all keys
+        keys.extend(
+            n._v_pathname
+            for n in hdf._handle.walk_nodes("/", classname="Table")
+            if fnmatch(n._v_pathname, key)
+            and n._v_name != "table"
+            and n._v_pathname not in keys
+        )
+    return keys
+
+
+def _get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
+    """
+    Get the "keys" or group identifiers which match the given key, which
+    can contain wildcards (see _expand_path). This uses the hdf file
+    identified by the given path. Also get the index of the last row of
+    data for each matched key.
+    """
+    with pd.HDFStore(path, mode=mode) as hdf:
+        stops = []
+        divisions = []
+        keys = _expand_key(key, hdf)
+        for k in keys:
+            storer = hdf.get_storer(k)
+            if storer.format_type != "table":
+                raise TypeError(dont_use_fixed_error_message)
+            if stop is None:
+                stops.append(storer.nrows)
+            elif stop > storer.nrows:
+                raise ValueError(
+                    f"Stop keyword exceeds dataset number of rows ({storer.nrows})"
+                )
+            else:
+                stops.append(stop)
+            if sorted_index:
+                division = [
+                    storer.read_column("index", start=start, stop=start + 1)[0]
+                    for start in range(0, storer.nrows, chunksize)
+                ]
+                division_end = storer.read_column(
+                    "index", start=storer.nrows - 1, stop=storer.nrows
+                )[0]
+
+                division.append(division_end)
+                divisions.append(division)
+            else:
+                divisions.append(None)
+
+    return keys, stops, divisions

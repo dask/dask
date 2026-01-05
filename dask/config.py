@@ -1,41 +1,63 @@
+from __future__ import annotations
+
 import ast
-import builtins
-from collections.abc import Mapping
+import base64
+import builtins  # Explicitly use builtins.set as 'set' will be shadowed by a function
+import json
 import os
+import pathlib
+import site
 import sys
 import threading
 import warnings
+from collections.abc import Iterator, Mapping, Sequence
+from typing import Any, Literal, overload
 
 import yaml
 
+from dask.typing import no_default
 
-no_default = "__no_default__"
+
+def _get_paths():
+    """Get locations to search for YAML configuration files.
+
+    This logic exists as a separate function for testing purposes.
+    """
+
+    paths = [
+        os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
+        os.path.join(sys.prefix, "etc", "dask"),
+        *[os.path.join(prefix, "etc", "dask") for prefix in site.PREFIXES],
+        os.path.join(os.path.expanduser("~"), ".config", "dask"),
+    ]
+    if "DASK_CONFIG" in os.environ:
+        paths.append(os.environ["DASK_CONFIG"])
+
+    # Remove duplicate paths while preserving ordering
+    paths = list(reversed(list(dict.fromkeys(reversed(paths)))))
+
+    return paths
 
 
-paths = [
-    os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
-    os.path.join(sys.prefix, "etc", "dask"),
-    os.path.join(os.path.expanduser("~"), ".config", "dask"),
-    os.path.join(os.path.expanduser("~"), ".dask"),
-]
+paths = _get_paths()
 
 if "DASK_CONFIG" in os.environ:
     PATH = os.environ["DASK_CONFIG"]
-    paths.append(PATH)
 else:
     PATH = os.path.join(os.path.expanduser("~"), ".config", "dask")
 
 
-global_config = config = {}
+config: dict = {}
+global_config = config  # alias
 
 
 config_lock = threading.Lock()
 
 
-defaults = []
+defaults: list[Mapping] = []
 
 
-def canonical_name(k, config):
+def canonical_name(k: str, config: dict) -> str:
     """Return the canonical name for a key.
 
     Handles user choice of '-' or '_' conventions by standardizing on whichever
@@ -58,7 +80,12 @@ def canonical_name(k, config):
     return k
 
 
-def update(old, new, priority="new"):
+def update(
+    old: dict,
+    new: Mapping,
+    priority: Literal["old", "new", "new-defaults"] = "new",
+    defaults: Mapping | None = None,
+) -> dict:
     """Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
@@ -67,9 +94,12 @@ def update(old, new, priority="new"):
 
     Parameters
     ----------
-    priority: string {'old', 'new'}
+    priority: string {'old', 'new', 'new-defaults'}
         If new (default) then the new dictionary has preference.
         Otherwise the old dictionary does.
+        If 'new-defaults', a mapping should be given of the current defaults.
+        Only if a value in ``old`` matches the current default, it will be
+        updated with ``new``.
 
     Examples
     --------
@@ -83,6 +113,12 @@ def update(old, new, priority="new"):
     >>> update(a, b, priority='old')  # doctest: +SKIP
     {'x': 1, 'y': {'a': 2, 'b': 3}}
 
+    >>> d = {'x': 0, 'y': {'a': 2}}
+    >>> a = {'x': 1, 'y': {'a': 2}}
+    >>> b = {'x': 2, 'y': {'a': 3, 'b': 3}}
+    >>> update(a, b, priority='new-defaults', defaults=d)  # doctest: +SKIP
+    {'x': 1, 'y': {'a': 3, 'b': 3}}
+
     See Also
     --------
     dask.config.merge
@@ -91,17 +127,30 @@ def update(old, new, priority="new"):
         k = canonical_name(k, old)
 
         if isinstance(v, Mapping):
-            if k not in old or old[k] is None:
+            if k not in old or old[k] is None or not isinstance(old[k], dict):
                 old[k] = {}
-            update(old[k], v, priority=priority)
-        else:
-            if priority == "new" or k not in old:
-                old[k] = v
+            update(
+                old[k],
+                v,
+                priority=priority,
+                defaults=defaults.get(k) if defaults else None,
+            )
+        elif (
+            priority == "new"
+            or k not in old
+            or (
+                priority == "new-defaults"
+                and defaults
+                and k in defaults
+                and defaults[k] == old[k]
+            )
+        ):
+            old[k] = v
 
     return old
 
 
-def merge(*dicts):
+def merge(*dicts: Mapping) -> dict:
     """Update a sequence of nested dictionaries
 
     This prefers the values in the latter dictionaries to those in the former
@@ -117,13 +166,49 @@ def merge(*dicts):
     --------
     dask.config.update
     """
-    result = {}
+    result: dict = {}
     for d in dicts:
         update(result, d)
     return result
 
 
-def collect_yaml(paths=paths):
+def _load_config_file(path: str) -> dict | None:
+    """A helper for loading a config file from a path, and erroring
+    appropriately if the file is malformed."""
+    try:
+        with open(path) as f:
+            config = yaml.safe_load(f.read())
+    except OSError:
+        # Ignore permission errors
+        return None
+    except Exception as exc:
+        raise ValueError(
+            f"A dask config file at {path!r} is malformed, original error "
+            f"message:\n\n{exc}"
+        ) from None
+    if config is not None and not isinstance(config, dict):
+        raise ValueError(
+            f"A dask config file at {path!r} is malformed - config files must have "
+            f"a dict as the top level object, got a {type(config).__name__} instead"
+        )
+    return config
+
+
+@overload
+def collect_yaml(
+    paths: Sequence[str], *, return_paths: Literal[False] = False
+) -> Iterator[dict]: ...
+
+
+@overload
+def collect_yaml(
+    paths: Sequence[str], *, return_paths: Literal[True]
+) -> Iterator[tuple[pathlib.Path, dict]]: ...
+
+
+def collect_yaml(
+    paths: Sequence[str], *, return_paths: bool = False
+) -> Iterator[dict | tuple[pathlib.Path, dict]]:
     """Collect configuration from yaml files
 
     This searches through a list of paths, expands to find all yaml or json
@@ -137,12 +222,10 @@ def collect_yaml(paths=paths):
                 try:
                     file_paths.extend(
                         sorted(
-                            [
-                                os.path.join(path, p)
-                                for p in os.listdir(path)
-                                if os.path.splitext(p)[1].lower()
-                                in (".json", ".yaml", ".yml")
-                            ]
+                            os.path.join(path, p)
+                            for p in os.listdir(path)
+                            if os.path.splitext(p)[1].lower()
+                            in (".json", ".yaml", ".yml")
                         )
                     )
                 except OSError:
@@ -151,22 +234,17 @@ def collect_yaml(paths=paths):
             else:
                 file_paths.append(path)
 
-    configs = []
-
     # Parse yaml files
     for path in file_paths:
-        try:
-            with open(path) as f:
-                data = yaml.safe_load(f.read()) or {}
-                configs.append(data)
-        except (OSError, IOError):
-            # Ignore permission errors
-            pass
-
-    return configs
+        config = _load_config_file(path)
+        if config is not None:
+            if return_paths:
+                yield pathlib.Path(path), config
+            else:
+                yield config
 
 
-def collect_env(env=None):
+def collect_env(env: Mapping[str, str] | None = None) -> dict:
     """Collect config from environment variables
 
     This grabs environment variables of the form "DASK_FOO__BAR_BAZ=123" and
@@ -176,25 +254,61 @@ def collect_env(env=None):
     -  Lower-cases the key text
     -  Treats ``__`` (double-underscore) as nested access
     -  Calls ``ast.literal_eval`` on the value
+
+    Any serialized config passed via ``DASK_INTERNAL_INHERIT_CONFIG`` is also set here.
+
     """
+
     if env is None:
         env = os.environ
-    d = {}
+
+    if "DASK_INTERNAL_INHERIT_CONFIG" in env:
+        d = deserialize(env["DASK_INTERNAL_INHERIT_CONFIG"])
+    else:
+        d = {}
+
     for name, value in env.items():
         if name.startswith("DASK_"):
             varname = name[5:].lower().replace("__", ".")
-            try:
-                d[varname] = ast.literal_eval(value)
-            except (SyntaxError, ValueError):
-                d[varname] = value
+            d[varname] = interpret_value(value)
 
-    result = {}
+    result: dict = {}
     set(d, config=result)
-
     return result
 
 
-def ensure_file(source, destination=None, comment=True):
+def interpret_value(value: str) -> Any:
+    try:
+        return ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        pass
+
+    # Avoid confusion of YAML vs. Python syntax
+    hardcoded_map = {"none": None, "null": None, "false": False, "true": True}
+    return hardcoded_map.get(value.lower(), value)
+
+
+def paths_containing_key(
+    key: str,
+    paths: Sequence[str] = paths,
+) -> Iterator[pathlib.Path]:
+    """
+    Generator yielding paths which contain the given key.
+    """
+    # Check existing config files for any which contains this key.
+    for path_ in paths:
+        for path, config in collect_yaml([path_], return_paths=True):
+            try:
+                get(key, config=config)
+            except KeyError:
+                continue
+            else:
+                yield pathlib.Path(path)
+
+
+def ensure_file(
+    source: str, destination: str | None = None, comment: bool = True
+) -> None:
     """
     Copy file to default location if it does not already exist
 
@@ -234,7 +348,7 @@ def ensure_file(source, destination=None, comment=True):
             # Atomically create destination.  Parallel testing discovered
             # a race condition where a process can be busy creating the
             # destination while another process reads an empty config file.
-            tmp = "%s.tmp.%d" % (destination, os.getpid())
+            tmp = f"{destination}.tmp.{os.getpid()}"
             with open(source) as f:
                 lines = list(f)
 
@@ -251,11 +365,11 @@ def ensure_file(source, destination=None, comment=True):
                 os.rename(tmp, destination)
             except OSError:
                 os.remove(tmp)
-    except (IOError, OSError):
+    except OSError:
         pass
 
 
-class set(object):
+class set:
     """Temporarily set configuration values within a context manager
 
     Parameters
@@ -291,7 +405,20 @@ class set(object):
     dask.config.get
     """
 
-    def __init__(self, arg=None, config=config, lock=config_lock, **kwargs):
+    config: dict
+    # [(op, path, value), ...]
+    _record: list[tuple[Literal["insert", "replace"], tuple[str, ...], Any]]
+
+    def __init__(
+        self,
+        arg: Mapping | None = None,
+        config: dict | None = None,
+        lock: threading.Lock = config_lock,
+        **kwargs,
+    ):
+        if config is None:  # Keep Sphinx autofunction documentation clean
+            config = global_config
+
         with lock:
             self.config = config
             self._record = []
@@ -325,7 +452,14 @@ class set(object):
                 else:
                     d.pop(path[-1], None)
 
-    def _assign(self, keys, value, d, path=(), record=True):
+    def _assign(
+        self,
+        keys: Sequence[str],
+        value: Any,
+        d: dict,
+        path: tuple[str, ...] = (),
+        record: bool = True,
+    ) -> None:
         """Assign value into a nested configuration dictionary
 
         Parameters
@@ -336,7 +470,7 @@ class set(object):
         d : dict
             The part of the nested dictionary into which we want to assign the
             value
-        path : Tuple[str], optional
+        path : tuple[str], optional
             The path history up to this point.
         record : bool, optional
             Whether this operation needs to be recorded to allow for rollback.
@@ -362,16 +496,16 @@ class set(object):
             self._assign(keys[1:], value, d[key], path, record=record)
 
 
-def collect(paths=paths, env=None):
+def collect(paths: list[str] = paths, env: Mapping[str, str] | None = None) -> dict:
     """
     Collect configuration from paths and environment variables
 
     Parameters
     ----------
-    paths : List[str]
+    paths : list[str]
         A list of paths to search for yaml config files
 
-    env : dict
+    env : Mapping[str, str]
         The system environment variables
 
     Returns
@@ -385,13 +519,13 @@ def collect(paths=paths, env=None):
     if env is None:
         env = os.environ
 
-    configs = collect_yaml(paths=paths)
-    configs.append(collect_env(env=env))
-
+    configs = [*collect_yaml(paths=paths), collect_env(env=env)]
     return merge(*configs)
 
 
-def refresh(config=config, defaults=defaults, **kwargs):
+def refresh(
+    config: dict | None = None, defaults: list[Mapping] = defaults, **kwargs
+) -> None:
     """
     Update configuration by re-reading yaml files and env variables
 
@@ -404,6 +538,7 @@ def refresh(config=config, defaults=defaults, **kwargs):
     2.  Updating from the stored defaults from downstream libraries
         (see update_defaults)
     3.  Updating from yaml files and environment variables
+    4.  Automatically renaming deprecated keys (with a warning)
 
     Note that some functionality only checks configuration once at startup and
     may not change behavior, even if configuration changes.  It is recommended
@@ -415,17 +550,29 @@ def refresh(config=config, defaults=defaults, **kwargs):
     dask.config.collect: for parameters
     dask.config.update_defaults
     """
+    if config is None:  # Keep Sphinx autofunction documentation clean
+        config = global_config
+
     config.clear()
 
     for d in defaults:
         update(config, d, priority="old")
 
     update(config, collect(**kwargs))
+    rename(deprecations, config)
 
 
-def get(key, default=no_default, config=config):
+def get(
+    key: str,
+    default: Any = no_default,
+    config: dict | None = None,
+    override_with: Any = None,
+) -> Any:
     """
     Get elements from global config
+
+    If ``override_with`` is not None this value will be passed straight back.
+    Useful for getting kwarg defaults from Dask config.
 
     Use '.' for nested access
 
@@ -441,10 +588,22 @@ def get(key, default=no_default, config=config):
     >>> config.get('foo.x.y', default=123)  # doctest: +SKIP
     123
 
+    >>> config.get('foo.y', override_with=None)  # doctest: +SKIP
+    2
+
+    >>> config.get('foo.y', override_with=3)  # doctest: +SKIP
+    3
+
     See Also
     --------
     dask.config.set
     """
+    if override_with is not None:
+        return override_with
+
+    if config is None:  # Keep Sphinx autofunction documentation clean
+        config = global_config
+
     keys = key.split(".")
     result = config
     for k in keys:
@@ -452,46 +611,54 @@ def get(key, default=no_default, config=config):
         try:
             result = result[k]
         except (TypeError, IndexError, KeyError):
-            if default is not no_default:
-                return default
-            else:
+            if default is no_default:
                 raise
+            return default
+
     return result
 
 
-def rename(aliases, config=config):
-    """Rename old keys to new keys
+def pop(key: str, default: Any = no_default, config: dict = config) -> Any:
+    """Like ``get``, but remove the element if found
 
-    This helps migrate older configuration versions over time
+    See Also
+    --------
+    dask.config.get
+    dask.config.set
     """
-    old = []
-    new = {}
-    for o, n in aliases.items():
-        value = get(o, None, config=config)
-        if value is not None:
-            old.append(o)
-            new[n] = value
+    keys = key.split(".")
+    result = config
+    for i, k in enumerate(keys):
+        k = canonical_name(k, result)
+        try:
+            if i == len(keys) - 1:
+                return result.pop(k)
+            else:
+                result = result[k]
+        except (TypeError, IndexError, KeyError):
+            if default is no_default:
+                raise
+            return default
 
-    for k in old:
-        del config[canonical_name(k, config)]  # TODO: support nested keys
 
-    set(new, config=config)
-
-
-def update_defaults(new, config=config, defaults=defaults):
+def update_defaults(
+    new: Mapping, config: dict = config, defaults: list[Mapping] = defaults
+) -> None:
     """Add a new set of defaults to the configuration
 
     It does two things:
 
     1.  Add the defaults to a global collection to be used by refresh later
-    2.  Updates the global config with the new configuration
-        prioritizing older values over newer ones
+    2.  Updates the global config with the new configuration.
+        Old values are prioritized over new ones, unless the current value
+        is the old default, in which case it's updated to the new default.
     """
+    current_defaults = merge(*defaults)
     defaults.append(new)
-    update(config, new, priority="old")
+    update(config, new, priority="new-defaults", defaults=current_defaults)
 
 
-def expand_environment_variables(config):
+def expand_environment_variables(config: Any) -> Any:
     """Expand environment variables in a nested config dictionary
 
     This function will recursively search through any nested dictionaries
@@ -516,22 +683,69 @@ def expand_environment_variables(config):
     elif isinstance(config, str):
         return os.path.expandvars(config)
     elif isinstance(config, (list, tuple, builtins.set)):
-        return type(config)([expand_environment_variables(v) for v in config])
+        return type(config)(expand_environment_variables(v) for v in config)
     else:
         return config
 
 
-deprecations = {
-    "fuse_ave_width": "optimization.fuse.ave-width",
-    "fuse_max_height": "optimization.fuse.max-height",
-    "fuse_max_width": "optimization.fuse.max-width",
-    "fuse_subgraphs": "optimization.fuse.subgraphs",
-    "fuse_rename_keys": "optimization.fuse.rename-keys",
-    "fuse_max_depth_new_edges": "optimization.fuse.max-depth-new-edges",
+#: Mapping of {deprecated key: new key} for renamed keys, or {deprecated key: None} for
+#: removed keys. All deprecated keys must use '-' instead of '_'.
+#: This is used in three places:
+#: 1. In refresh(), which calls rename() to rename and warn upon loading
+#:    from ~/.config/dask.yaml, DASK_ env variables, etc.
+#: 2. in distributed/config.py and equivalent modules, where we perform additional
+#:    distributed-specific renames for the yaml/env config and enrich this dict
+#: 3. from individual calls to dask.config.set(), which internally invoke
+#     check_deprecations()
+deprecations: dict[str, str | None] = {
+    "fuse-ave-width": "optimization.fuse.ave-width",
+    "fuse-max-height": "optimization.fuse.max-height",
+    "fuse-max-width": "optimization.fuse.max-width",
+    "fuse-rename-keys": "optimization.fuse.rename-keys",
+    "fuse-max-depth-new-edges": "optimization.fuse.max-depth-new-edges",
+    # See https://github.com/dask/distributed/pull/4916
+    "ucx.cuda-copy": "distributed.ucx.cuda_copy",
+    "ucx.tcp": "distributed.ucx.tcp",
+    "ucx.nvlink": "distributed.ucx.nvlink",
+    "ucx.infiniband": "distributed.ucx.infiniband",
+    "ucx.rdmacm": "distributed.ucx.rdmacm",
+    "ucx.net-devices": "distributed.ucx.net-devices",
+    "ucx.reuse-endpoints": "distributed.ucx.reuse-endpoints",
+    "rmm.pool-size": "distributed.rmm.pool-size",
+    "shuffle": "dataframe.shuffle.algorithm",
+    "array.rechunk-threshold": "array.rechunk.threshold",
+    "dataframe.shuffle.algorithm": "dataframe.shuffle.method",
+    "dataframe.shuffle-compression": "dataframe.shuffle.compression",
+    "admin.traceback.shorten.what": "admin.traceback.shorten",  # changed in 2023.9.0
+    "array.shuffle.chunksize-tolerance": "array.chunk-size-tolerance",
 }
 
 
-def check_deprecations(key: str, deprecations: dict = deprecations):
+def rename(
+    deprecations: Mapping[str, str | None] = deprecations, config: dict = config
+) -> None:
+    """Rename old keys to new keys
+
+    This helps migrate older configuration versions over time
+
+    See Also
+    --------
+    check_deprecations
+    """
+    for key in deprecations:
+        try:
+            value = pop(key, config=config)
+        except (TypeError, IndexError, KeyError):
+            continue
+        key = canonical_name(key, config=config)
+        new = check_deprecations(key, deprecations)
+        if new:
+            set({new: value}, config=config)
+
+
+def check_deprecations(
+    key: str, deprecations: Mapping[str, str | None] = deprecations
+) -> str:
     """Check if the provided value has been renamed or removed
 
     Parameters
@@ -545,12 +759,12 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
     --------
     >>> deprecations = {"old_key": "new_key", "invalid": None}
     >>> check_deprecations("old_key", deprecations=deprecations)  # doctest: +SKIP
-    UserWarning: Configuration key "old_key" has been deprecated. Please use "new_key" instead.
+    FutureWarning: Dask configuration key 'old_key' has been deprecated; please use "new_key" instead
 
     >>> check_deprecations("invalid", deprecations=deprecations)
     Traceback (most recent call last):
         ...
-    ValueError: Configuration value "invalid" has been removed
+    ValueError: Dask configuration key 'invalid' has been removed
 
     >>> check_deprecations("another_key", deprecations=deprecations)
     'another_key'
@@ -560,24 +774,67 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
     new: str
         The proper key, whether the original (if no deprecation) or the aliased
         value
+
+    See Also
+    --------
+    rename
     """
-    if key in deprecations:
-        new = deprecations[key]
+    old = key.replace("_", "-")
+    if old in deprecations:
+        new = deprecations[old]
         if new:
             warnings.warn(
-                'Configuration key "{}" has been deprecated. '
-                'Please use "{}" instead'.format(key, new)
+                f"Dask configuration key {key!r} has been deprecated; "
+                f"please use {new!r} instead",
+                FutureWarning,
             )
             return new
         else:
-            raise ValueError('Configuration value "{}" has been removed'.format(key))
+            raise ValueError(f"Dask configuration key {key!r} has been removed")
     else:
         return key
 
 
-def _initialize():
+def serialize(data: Any) -> str:
+    """Serialize config data into a string.
+
+    Typically used to pass config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
+
+    Parameters
+    ----------
+    data: json-serializable object
+        The data to serialize
+
+    Returns
+    -------
+    serialized_data: str
+        The serialized data as a string
+
+    """
+    return base64.urlsafe_b64encode(json.dumps(data).encode()).decode()
+
+
+def deserialize(data: str) -> Any:
+    """De-serialize config data into the original object.
+
+    Typically when receiving config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
+
+    Parameters
+    ----------
+    data: str
+        String serialized by :func:`dask.config.serialize`
+
+    Returns
+    -------
+    deserialized_data: obj
+        The de-serialized data
+
+    """
+    return json.loads(base64.urlsafe_b64decode(data.encode()).decode())
+
+
+def _initialize() -> None:
     fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
-    ensure_file(source=fn)
 
     with open(fn) as f:
         _defaults = yaml.safe_load(f)

@@ -1,4 +1,4 @@
-u"""Implementation of HyperLogLog
+"""Implementation of HyperLogLog
 
 This implements the HyperLogLog algorithm for cardinality estimation, found
 in
@@ -9,6 +9,9 @@ in
         (2007)
 
 """
+
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 from pandas.util import hash_pandas_object
@@ -75,6 +78,6 @@ def estimate_count(Ms, b):
         V = (M == 0).sum()
         if V:
             return m * np.log(m / V)
-    if E > 2 ** 32 / 30.0:
-        return -(2 ** 32) * np.log1p(-E / 2 ** 32)
+    if E > 2**32 / 30.0:
+        return -(2**32) * np.log1p(-E / 2**32)
     return E

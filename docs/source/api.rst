@@ -1,12 +1,11 @@
-API
-===
+API Reference
+=============
 
 Dask APIs generally follow from upstream APIs:
 
 -  :doc:`Arrays<array-api>` follows NumPy
 -  :doc:`DataFrames <dataframe-api>` follows Pandas
 -  :doc:`Bag <bag-api>` follows map/filter/groupby/reduce common in Spark and Python iterators
--  `Dask-ML <https://ml.dask.org/modules/api.html>`_ follows the Scikit-Learn and others
 -  :doc:`Delayed <delayed-api>` wraps general Python code
 -  :doc:`Futures <futures>` follows `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_ from the standard library for real-time computation.
 
@@ -17,7 +16,6 @@ Dask APIs generally follow from upstream APIs:
    Array <array-api.rst>
    DataFrame <dataframe-api.rst>
    Bag <bag-api.rst>
-   Machine Learning <https://ml.dask.org/modules/api.html>
    Delayed <delayed-api.rst>
    Futures <futures>
 
@@ -35,6 +33,15 @@ These more general Dask functions are described below:
    persist
    visualize
 
+.. currentmodule:: dask.tokenize
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   tokenize
+   TokenizationError
+
 These functions work with any scheduler.  More advanced operations are
 available when using the newer scheduler and starting a
 :obj:`dask.distributed.Client` (which, despite its name, runs nicely on a
@@ -46,6 +53,10 @@ real-time or advanced operation.
 This more advanced API is available in the `Dask distributed documentation
 <https://distributed.dask.org/en/latest/api.html>`_
 
+.. currentmodule:: dask
+
+.. autofunction:: annotate
+.. autofunction:: get_annotations
 .. autofunction:: compute
 .. autofunction:: is_dask_collection
 .. autofunction:: optimize
@@ -62,6 +73,43 @@ Dask has a few helpers for generating demo datasets
 .. autofunction:: make_people
 .. autofunction:: timeseries
 
+Datasets with defined specs
+---------------------------
+
+The following helpers are still experimental:
+
+.. currentmodule:: dask.dataframe.io.demo
+
+.. autofunction:: with_spec
+
+The ``ColumnSpec`` class
+************************
+.. autoclass:: dask.dataframe.io.demo.ColumnSpec
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+The ``RangeIndexSpec`` class
+****************************
+.. autoclass:: dask.dataframe.io.demo.RangeIndexSpec
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+The ``DatetimeIndexSpec`` class
+*******************************
+.. autoclass:: dask.dataframe.io.demo.DatetimeIndexSpec
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+The ``DatasetSpec`` class
+*************************
+.. autoclass:: dask.dataframe.io.demo.DatasetSpec
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. _api.utilities:
 
 Utilities
@@ -72,6 +120,7 @@ configuration values.
 
 .. currentmodule:: dask.utils
 
+.. autofunction:: apply
 .. autofunction:: format_bytes
 .. autofunction:: format_time
 .. autofunction:: parse_bytes

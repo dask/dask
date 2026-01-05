@@ -31,128 +31,52 @@ Before reading this you should read and understand:
 The Dask Collection Interface
 -----------------------------
 
-To create your own Dask collection, you need to fulfill the following
-interface. Note that there is no required base class.
+To create your own Dask collection, you need to fulfill the interface
+defined by the :py:class:`dask.typing.DaskCollection` protocol. Note
+that there is no required base class.
 
 It is recommended to also read :ref:`core-method-internals` to see how this
 interface is used inside Dask.
 
+Collection Protocol
+~~~~~~~~~~~~~~~~~~~~
 
-.. method:: __dask_graph__(self)
+.. autoclass:: dask.typing.DaskCollection
+   :members: __dask_graph__, __dask_keys__, __dask_postcompute__,
+             __dask_postpersist__, __dask_tokenize__,
+             __dask_optimize__, __dask_scheduler__, compute, persist,
+             visualize
 
-    The Dask graph.
+HLG Collection Protocol
+~~~~~~~~~~~~~~~~~~~~~~~
 
-    Returns
-    -------
-    dsk : MutableMapping, None
-        The Dask graph.  If ``None``, this instance will not be interpreted as a
-        Dask collection, and none of the remaining interface methods will be
-        called.
+.. note::
+    HighLevelGraphs are being deprecated in favor of expressions. New projects are encouraged to not implement their own HLG Layers.
 
+Collections backed by Dask's :ref:`high-level-graphs` must implement
+an additional method, defined by this protocol:
 
-.. method:: __dask_keys__(self)
+.. autoclass:: dask.typing.HLGDaskCollection
+   :members: __dask_layers__
 
-    The output keys for the Dask graph.
+Scheduler ``get`` Protocol
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    Returns
-    -------
-    keys : list
-        A possibly nested list of keys that represent the outputs of the graph.
-        After computation, the results will be returned in the same layout,
-        with the keys replaced with their corresponding outputs.
+The ``SchedulerGetProtocol`` defines the signature that a Dask
+collection's ``__dask_scheduler__`` definition must adhere to.
 
+.. autoclass:: dask.typing.SchedulerGetCallable
+   :members: __call__
 
-.. staticmethod:: __dask_optimize__(dsk, keys, \*\*kwargs)
+Post-persist Callable Protocol
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    Given a graph and keys, return a new optimized graph.
+Collections must define a ``__dask_postpersist__`` method which
+returns a callable that adheres to the ``PostPersistCallable``
+interface.
 
-    This method can be either a ``staticmethod`` or a ``classmethod``, but not
-    an ``instancemethod``.
-
-    Note that graphs and keys are merged before calling ``__dask_optimize__``;
-    as such, the graph and keys passed to this method may represent more than
-    one collection sharing the same optimize method.
-
-    If not implemented, defaults to returning the graph unchanged.
-
-    Parameters
-    ----------
-    dsk : MutableMapping
-        The merged graphs from all collections sharing the same
-        ``__dask_optimize__`` method.
-    keys : list
-        A list of the outputs from ``__dask_keys__`` from all collections
-        sharing the same ``__dask_optimize__`` method.
-    \*\*kwargs
-        Extra keyword arguments forwarded from the call to ``compute`` or
-        ``persist``. Can be used or ignored as needed.
-
-    Returns
-    -------
-    optimized_dsk : MutableMapping
-        The optimized Dask graph.
-
-
-.. staticmethod:: __dask_scheduler__(dsk, keys, \*\*kwargs)
-
-    The default scheduler ``get`` to use for this object.
-
-    Usually attached to the class as a staticmethod, e.g.:
-
-    >>> import dask.threaded
-    >>> class MyCollection(object):
-    ...     # Use the threaded scheduler by default
-    ...     __dask_scheduler__ = staticmethod(dask.threaded.get)
-
-
-.. method:: __dask_postcompute__(self)
-
-    Return the finalizer and (optional) extra arguments to convert the computed
-    results into their in-memory representation.
-
-    Used to implement ``dask.compute``.
-
-    Returns
-    -------
-    finalize : callable
-        A function with the signature ``finalize(results, *extra_args)``.
-        Called with the computed results in the same structure as the
-        corresponding keys from ``__dask_keys__``, as well as any extra
-        arguments as specified in ``extra_args``. Should perform any necessary
-        finalization before returning the corresponding in-memory collection
-        from ``compute``. For example, the ``finalize`` function for
-        ``dask.array.Array`` concatenates all the individual array chunks into
-        one large numpy array, which is then the result of ``compute``.
-    extra_args : tuple
-        Any extra arguments to pass to ``finalize`` after ``results``. If no
-        extra arguments should be an empty tuple.
-
-
-.. method:: __dask_postpersist__(self)
-
-    Return the rebuilder and (optional) extra arguments to rebuild an equivalent
-    Dask collection from a persisted graph.
-
-    Used to implement ``dask.persist``.
-
-    Returns
-    -------
-    rebuild : callable
-        A function with the signature ``rebuild(dsk, *extra_args)``. Called
-        with a persisted graph containing only the keys and results from
-        ``__dask_keys__``, as well as any extra arguments as specified in
-        ``extra_args``. Should return an equivalent Dask collection with the
-        same keys as ``self``, but with the results already computed. For
-        example, the ``rebuild`` function for ``dask.array.Array`` is just the
-        ``__init__`` method called with the new graph but the same metadata.
-    extra_args : tuple
-        Any extra arguments to pass to ``rebuild`` after ``dsk``. If no extra
-        arguments should be an empty tuple.
-
-
-.. note:: It's also recommended to define ``__dask_tokenize__``,
-          see :ref:`deterministic-hashing`.
-
+.. autoclass:: dask.typing.PostPersistCallable
+   :members: __call__
 
 .. _core-method-internals:
 
@@ -179,26 +103,49 @@ Compute
 
 The operation of ``compute`` can be broken into three stages:
 
-1. **Graph Merging & Optimization**
+1. **Graph Merging, finalization**
 
-   First, the individual collections are converted to a single large graph and
-   nested list of keys. How this happens depends on the value of the
-   ``optimize_graph`` keyword, which each function takes:
+   First, the individual collections are converted to a single large expression
+   and nested list of keys. This is done by
+   :func:`~dask.base.collections_to_expr` and ensures that all collections are
+   optimized together to eliminate common sub-expressions.
 
-   - If ``optimize_graph`` is ``True`` (default), then the collections are first
-     grouped by their ``__dask_optimize__`` methods.  All collections with the
-     same ``__dask_optimize__`` method have their graphs merged and keys
-     concatenated, and then a single call to each respective
-     ``__dask_optimize__`` is made with the merged graphs and keys.  The
-     resulting graphs are then merged.
+   .. note::
 
-   - If ``optimize_graph`` is ``False``, then all the graphs are merged and all
-     the keys concatenated.
+       At this stage, legacy HLG graphs are wrapped into a ``HLGExpr`` that
+       encodes __dask_postcompute__ and the low level optimizer as determined by `__dask_optimize__` into the expression.
 
-   After this stage there is a single large graph and nested list of keys which
-   represents all the collections.
+       The ``optimize_graph`` argument is only relevant for HLG graphs and
+       controls whether low level optimizations are considered.
 
-2. **Computation**
+       - If ``optimize_graph`` is ``True`` (default), then the collections are
+         first grouped by their ``__dask_optimize__`` methods.  All collections with the same ``__dask_optimize__`` method have their graphs merged and keys concatenated, and then a single call to each respective ``__dask_optimize__`` is made with the merged graphs and keys.  The resulting graphs are then merged.
+
+       - If ``optimize_graph`` is ``False``, then all the graphs are merged and
+         all the keys concatenated.
+
+   The combined graph is _finalized_ with a ``FinalizeCompute`` expression
+   which instructs the expression / graph to reduce to a single partition,
+   suitable to be returned to the user after compute. This is either done by
+   implemengint the ``__dask_postcompute__`` method of the collection or by
+   implementing an optimization path of the expression.
+
+   For the example of a DataFrame, the ``FinalizeCompute`` simplifies to a ``RepartitionToFewer(..., npartition=1)`` which simply concatenates all results to one ordinary DataFrame.
+
+2. **(Expression) Optimization**
+
+   The merged expression is optimized. This step should not be confused with
+   the low level optimization that is defined by `__dask_optimize__` for legacy
+   graphs. This is a step that is always performed and is a required step to
+   simplify and lower expressions to their final form that can be used to
+   actually generate the executable task graph. See also, :doc:`/dataframe-optimizer`.
+
+   For legacy HLG graphs, the low level optimization step is embedded in the
+   graph materialization which typically only happens after the graph has been
+   passed to the scheduler (see below).
+
+
+3. **Computation**
 
    After the graphs are merged and any optimizations performed, the resulting
    large graph and nested list of keys are passed on to the scheduler.  The
@@ -215,66 +162,6 @@ The operation of ``compute`` can be broken into three stages:
    ``results`` is a nested list of values. The structure of this list mirrors
    that of ``keys``, with each key substituted with its corresponding result.
 
-3. **Postcompute**
-
-   After the results are generated, the output values of ``compute`` need to be
-   built. This is what the ``__dask_postcompute__`` method is for.
-   ``__dask_postcompute__`` returns two things:
-
-   - A ``finalize`` function, which takes in the results for the corresponding
-     keys
-   - A tuple of extra arguments to pass to ``finalize`` after the results
-
-   To build the outputs, the list of collections and results is iterated over,
-   and the finalizer for each collection is called on its respective results.
-
-In pseudocode, this process looks like the following:
-
-.. code:: python
-
-    def compute(*collections, **kwargs):
-        # 1. Graph Merging & Optimization
-        # -------------------------------
-        if kwargs.pop('optimize_graph', True):
-            # If optimization is turned on, group the collections by
-            # optimization method, and apply each method only once to the merged
-            # sub-graphs.
-            optimization_groups = groupby_optimization_methods(collections)
-            graphs = []
-            for optimize_method, cols in optimization_groups:
-                # Merge the graphs and keys for the subset of collections that
-                # share this optimization method
-                sub_graph = merge_graphs([x.__dask_graph__() for x in cols])
-                sub_keys = [x.__dask_keys__() for x in cols]
-                # kwargs are forwarded to ``__dask_optimize__`` from compute
-                optimized_graph = optimize_method(sub_graph, sub_keys, **kwargs)
-                graphs.append(optimized_graph)
-            graph = merge_graphs(graphs)
-        else:
-            graph = merge_graphs([x.__dask_graph__() for x in collections])
-        # Keys are always the same
-        keys = [x.__dask_keys__() for x in collections]
-
-        # 2. Computation
-        # --------------
-        # Determine appropriate get function based on collections, global
-        # settings, and keyword arguments
-        get = determine_get_function(collections, **kwargs)
-        # Pass the merged graph, keys, and kwargs to ``get``
-        results = get(graph, keys, **kwargs)
-
-        # 3. Postcompute
-        # --------------
-        output = []
-        # Iterate over the results and collections
-        for res, collection in zip(results, collections):
-            finalize, extra_args = collection.__dask_postcompute__()
-            out = finalize(res, **extra_args)
-            output.append(out)
-
-        # `dask.compute` always returns tuples
-        return tuple(output)
-
 
 Persist
 ~~~~~~~
@@ -282,24 +169,29 @@ Persist
 Persist is very similar to ``compute``, except for how the return values are
 created. It too has three stages:
 
-1. **Graph Merging & Optimization**
+1. **Graph Merging, *no* finalization**
+
+   Same as in ``compute`` but without a finalization. In the case of persist we
+   do not want to concatenate all output partitions but instead want to return a
+   future for every partition.
+
+2. **(Expression) Optimization**
 
    Same as in ``compute``.
 
-2. **Computation**
+3. **Computation**
 
-   Same as in ``compute``, except in the case of the distributed scheduler,
-   where the values in ``results`` are futures instead of values.
+   Same as in ``compute`` with the difference that the returned results are a list of Futures.
 
-3. **Postpersist**
+4. **Postpersist**
 
-   Similar to ``__dask_postcompute__``, ``__dask_postpersist__`` is used to
-   rebuild values in a call to ``persist``. ``__dask_postpersist__`` returns
-   two things:
+   The futures returned by the scheduler are used with ``__dask_postpersist__`` to rebuild a collection that is pointing to the remote data.
+
+   ``__dask_postpersist__`` returns two things:
 
    - A ``rebuild`` function, which takes in a persisted graph.  The keys of
      this graph are the same as ``__dask_keys__`` for the corresponding
-     collection, and the values are computed results (for the single machine
+     collection, and the values are computed results (for the single-machine
      scheduler) or futures (for the distributed scheduler).
    - A tuple of extra arguments to pass to ``rebuild`` after the graph
 
@@ -307,79 +199,26 @@ created. It too has three stages:
    iterated over, and the rebuilder for each collection is called on the graph
    for its respective results.
 
-In pseudocode, this looks like the following:
-
-.. code:: python
-
-    def persist(*collections, **kwargs):
-        # 1. Graph Merging & Optimization
-        # -------------------------------
-        # **Same as in compute**
-        graph = ...
-        keys = ...
-
-        # 2. Computation
-        # --------------
-        # **Same as in compute**
-        results = ...
-
-        # 3. Postpersist
-        # --------------
-        output = []
-        # Iterate over the results and collections
-        for res, collection in zip(results, collections):
-            # res has the same structure as keys
-            keys = collection.__dask_keys__()
-            # Get the computed graph for this collection.
-            # Here flatten converts a nested list into a single list
-            subgraph = {k: r for (k, r) in zip(flatten(keys), flatten(res))}
-
-            # Rebuild the output dask collection with the computed graph
-            rebuild, extra_args = collection.__dask_postpersist__()
-            out = rebuild(subgraph, *extra_args)
-
-            output.append(out)
-
-        # dask.persist always returns tuples
-        return tuple(output)
-
 
 Optimize
 ~~~~~~~~
 
 The operation of ``optimize`` can be broken into two stages:
 
-1. **Graph Merging & Optimization**
+1. **Graph Merging, *no* finalization**
 
-   Same as in ``compute``.
+   Same as in ``persist``.
 
-2. **Rebuilding**
+2. **(Expression) Optimization**
 
+   Same as in ``compute`` and ``persist``.
+
+3. **Materialization and Rebuilding**
+
+   The entire graph is materialized (which also performs low level optimization).
    Similar to ``persist``, the ``rebuild`` function and arguments from
    ``__dask_postpersist__`` are used to reconstruct equivalent collections from
    the optimized graph.
-
-In pseudocode, this looks like the following:
-
-.. code:: python
-
-    def optimize(*collections, **kwargs):
-        # 1. Graph Merging & Optimization
-        # -------------------------------
-        # **Same as in compute**
-        graph = ...
-
-        # 2. Rebuilding
-        # -------------
-        # Rebuild each dask collection using the same large optimized graph
-        output = []
-        for collection in collections:
-            rebuild, extra_args = collection.__dask_postpersist__()
-            out = rebuild(graph, *extra_args)
-            output.append(out)
-
-        # dask.optimize always returns tuples
-        return tuple(output)
 
 
 Visualize
@@ -396,21 +235,6 @@ Visualize is the simplest of the 4 core functions. It only has two stages:
    The resulting merged graph is drawn using ``graphviz`` and outputs to the
    specified file.
 
-In pseudocode, this looks like the following:
-
-.. code:: python
-
-    def visualize(*collections, **kwargs):
-        # 1. Graph Merging & Optimization
-        # -------------------------------
-        # **Same as in compute**
-        graph = ...
-
-        # 2. Graph Drawing
-        # ----------------
-        # Draw the graph with graphviz's `dot` tool and return the result.
-        return dot_graph(graph, **kwargs)
-
 
 .. _adding-methods-to-class:
 
@@ -422,6 +246,17 @@ functions (``dask.compute``, ``dask.persist``, ``dask.visualize``, etc.). To
 add corresponding method versions of these, you can subclass from
 ``dask.base.DaskMethodsMixin`` which adds implementations of ``compute``,
 ``persist``, and ``visualize`` based on the interface above.
+
+
+Expressions to define computation
+---------------------------------
+
+It is recommended to define dask graphs using the :class:`dask.expr.Expr` class.
+To get started, a minimal set of methods have to be implemented.
+
+.. autoclass:: dask.Expr
+   :members: _task, _layer, __dask_keys__, __dask_graph__
+
 
 .. _example-dask-collection:
 
@@ -435,32 +270,26 @@ elements of ``dask.delayed``:
 
 .. code:: python
 
-    # Saved as dask_tuple.py
-    from dask.base import DaskMethodsMixin
-    from dask.optimization import cull
+    import dask
+    from dask.base import DaskMethodsMixin, replace_name_in_key
+    from dask.expr import Expr, LLGExpr
+    from dask.typing import Key
+    from dask.task_spec import Task, DataNode, Alias
 
-    # We subclass from DaskMethodsMixin to add common dask methods to our
-    # class. This is nice but not necessary for creating a dask collection.
+
+    # We subclass from DaskMethodsMixin to add common dask methods to
+    # our class (compute, persist, and visualize). This is nice but not
+    # necessary for creating a Dask collection (you can define them
+    # yourself).
     class Tuple(DaskMethodsMixin):
-        def __init__(self, dsk, keys):
-            # The init method takes in a dask graph and a set of keys to use
-            # as outputs.
-            self._dsk = dsk
-            self._keys = keys
+        def __init__(self, expr):
+            self._expr = expr
 
         def __dask_graph__(self):
-            return self._dsk
+            return self._expr.__dask_graph__()
 
         def __dask_keys__(self):
-            return self._keys
-
-        @staticmethod
-        def __dask_optimize__(dsk, keys, **kwargs):
-            # We cull unnecessary tasks here. Note that this isn't necessary,
-            # dask will do this automatically, this just shows one optimization
-            # you could do.
-            dsk2, _ = cull(dsk, keys)
-            return dsk2
+            return self._expr.__dask_keys__()
 
         # Use the threaded scheduler by default.
         __dask_scheduler__ = staticmethod(dask.threaded.get)
@@ -472,51 +301,72 @@ elements of ``dask.delayed``:
             return tuple, ()
 
         def __dask_postpersist__(self):
-            # Since our __init__ takes a graph as its first argument, our
-            # rebuild function can just be the class itself. For extra
-            # arguments we also return a tuple containing just the keys.
-            return Tuple, (self._keys,)
+            return Tuple._rebuild, ("mysuffix",)
+
+        @staticmethod
+        def _rebuild(futures: dict, name: str):
+            expr = LLGExpr({
+                (name, i): DataNode((name, i), val)
+                for i, val in  enumerate(futures.values())
+            })
+            return Tuple(expr)
 
         def __dask_tokenize__(self):
             # For tokenize to work we want to return a value that fully
-            # represents this object. In this case it's the list of keys
-            # to be computed.
-            return tuple(self._keys)
+            # represents this object. In this case this is done by a type
+            identifier plus the (also tokenized) name of the expression
+            return (type(self), self._expr._name)
+
+    class RemoteTuple(Expr):
+        @property
+        def npartitions(self):
+            return len(self.operands)
+
+        def __dask_keys__(self):
+            return [(self._name, i) for i in range(self.npartitions)]
+
+        def _task(self, name: Key, index: int) -> Task:
+            return DataNode(name, self.operands[index])
+
+
 
 Demonstrating this class:
 
 .. code:: python
 
     >>> from dask_tuple import Tuple
-    >>> from operator import add, mul
 
-    # Define a dask graph
-    >>> dsk = {'a': 1,
-    ...        'b': 2,
-    ...        'c': (add, 'a', 'b'),
-    ...        'd': (mul, 'b', 2),
-    ...        'e': (add, 'b', 'c')}
+    def from_pytuple(pytup: tuple) -> Tuple:
+        return Tuple(RemoteTuple(*pytup))
 
-    # The output keys for this graph
-    >>> keys = ['b', 'c', 'd', 'e']
+    >>> dask_tup = from_pytuple(tuple(range(5)))
 
-    >>> x = Tuple(dsk, keys)
+    >>> dask_tup.__dask_keys__()
+    [('remotetuple-b7ea9a26c3ab8287c78d11fd45f26793', 0),
+    ('remotetuple-b7ea9a26c3ab8287c78d11fd45f26793', 1),
+    ('remotetuple-b7ea9a26c3ab8287c78d11fd45f26793', 2)]
 
     # Compute turns Tuple into a tuple
-    >>> x.compute()
-    (2, 3, 4, 5)
+    >>> dask_tup.compute()
+    (0, 1, 2)
 
     # Persist turns Tuple into a Tuple, with each task already computed
-    >>> x2 = x.persist()
-    >>> isinstance(x2, Tuple)
+    >>> dask_tup2 = dask_tup.persist()
+    >>> isinstance(dask_tup2, Tuple)
     True
-    >>> x2.__dask_graph__()
-    {'b': 2,
-     'c': 3,
-     'd': 4,
-     'e': 5}
+
+    >>> dask_tup2.__dask_graph__()
+    {('newname', 0): DataNode(0),
+    ('newname', 1): DataNode(1),
+    ('newname', 2): DataNode(2)}
+
     >>> x2.compute()
-    (2, 3, 4, 5)
+    (0, 1, 2)
+
+    # Run-time typechecking
+    >>> from dask.typing import DaskCollection
+    >>> isinstance(x, DaskCollection)
+    True
 
 
 .. _is-dask-collection:
@@ -556,7 +406,8 @@ implementation. There are two ways to do this:
 
    Where possible, it is recommended to define the ``__dask_tokenize__`` method.
    This method takes no arguments and should return a value fully
-   representative of the object.
+   representative of the object. It is a good idea to call ``dask.base.normalize_token``
+   from it before returning any non-trivial objects.
 
 2. Register a function with ``dask.base.normalize_token``
 
@@ -582,38 +433,41 @@ Example
     >>> from dask.base import tokenize, normalize_token
 
     # Define a tokenize implementation using a method.
-    >>> class Foo(object):
-    ...     def __init__(self, a, b):
-    ...         self.a = a
-    ...         self.b = b
-    ...
-    ...     def __dask_tokenize__(self):
-    ...         # This tuple fully represents self
-    ...         return (Foo, self.a, self.b)
-
-    >>> x = Foo(1, 2)
-    >>> tokenize(x)
-    '5988362b6e07087db2bc8e7c1c8cc560'
-    >>> tokenize(x) == tokenize(x)  # token is deterministic
-    True
-
-    # Register an implementation with normalize_token
-    >>> class Bar(object):
+    >>> class Point:
     ...     def __init__(self, x, y):
     ...         self.x = x
     ...         self.y = y
+    ...
+    ...     def __dask_tokenize__(self):
+    ...         # This tuple fully represents self
+    ...         # Wrap non-trivial objects with normalize_token before returning them
+    ...         return normalize_token(Point), self.x, self.y
 
-    >>> @normalize_token.register(Bar)
-    ... def tokenize_bar(x):
-    ...     return (Bar, x.x, x.x)
+    >>> x = Point(1, 2)
+    >>> tokenize(x)
+    '5988362b6e07087db2bc8e7c1c8cc560'
+    >>> tokenize(x) == tokenize(x)  # token is idempotent
+    True
+    >>> tokenize(Point(1, 2)) == tokenize(Point(1, 2))  # token is deterministic
+    True
+    >>> tokenize(Point(1, 2)) == tokenize(Point(2, 1))  # tokens are unique
+    False
 
-    >>> y = Bar(1, 2)
+
+    # Register an implementation with normalize_token
+    >>> class Point3D:
+    ...     def __init__(self, x, y, z):
+    ...         self.x = x
+    ...         self.y = y
+    ...         self.z = z
+
+    >>> @normalize_token.register(Point3D)
+    ... def normalize_point3d(x):
+    ...     return normalize_token(Point3D), x.x, x.y, x.z
+
+    >>> y = Point3D(1, 2, 3)
     >>> tokenize(y)
     '5a7e9c3645aa44cf13d021c14452152e'
-    >>> tokenize(y) == tokenize(y)
-    True
-    >>> tokenize(y) == tokenize(x)  # tokens for different objects aren't equal
-    False
 
 
 For more examples, see ``dask/base.py`` or any of the built-in Dask collections.

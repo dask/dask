@@ -1,0 +1,32 @@
+name: Additional
+
+on: [push, pull_request]
+
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
+jobs:
+  doctest:
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 90
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v3.2.0
+        with:
+          miniforge-version: latest
+          use-mamba: true
+          channel-priority: strict
+          environment-file: continuous_integration/environment-3.12.yaml
+          activate-environment: test-environment
+          auto-activate-base: false
+
+      - name: Install
+        run: source continuous_integration/scripts/install.sh
+
+      - name: Run tests
+        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' --ignore='dask/array/_array_expr/' dask

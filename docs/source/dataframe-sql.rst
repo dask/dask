@@ -25,18 +25,17 @@ description for mapping SQL onto Pandas syntax can be found in the
 
 .. _pandas docs: https://pandas.pydata.org/docs/getting_started/comparison/comparison_with_sql.html
 
-The following packages may be of interest
+The following packages may be of interest:
 
-- `blazingSQL`_, part of the Rapids project, implements SQL queries using ``cuDF``
-  and Dask, for execution on CUDA/GPU-enabled hardware, including referencing
-  externally-stored data
+- `dask-sql`_ adds a SQL query engine on top of Dask.
+  In addition to working on CPU, it offers experimental support for CUDA-enabled GPUs through RAPIDS libraries such as `cuDF`_.
 
-- `pandasql`_ allows executing SQL queries on a pandas table by writing the data to
-  ``SQLite``, which may be useful for small toy examples (this package has not been
-  maintained for some time)
+- `FugueSQL`_ provides a unified interface to run SQL code on a variety of different computing frameworks.
+  Specifying ``DaskExecutionEngine`` or ``DaskSQLExecutionEngine`` as the execution engine for queries allows them to be computed using Dask or dask-sql, respectively.
 
-.. _blazingSQL: https://docs.blazingdb.com/docs
-.. _pandasql: https://github.com/yhat/pandasql/
+.. _dask-sql: https://dask-sql.readthedocs.io/en/latest/
+.. _cuDF: https://docs.rapids.ai/api/cudf/stable/
+.. _FugueSQL: https://fugue-tutorials.readthedocs.io/en/latest/tutorials/fugue_sql/index.html
 
 Database or Dask?
 -----------------
@@ -66,14 +65,14 @@ You may find the dask API easier to use than writing SQL (if you
 are already used to Pandas), and the diagnostic feedback more useful.
 These points can debatably be in Dask's favour.
 
-Loading from SQL with read_sql_table
-------------------------------------
+Loading from SQL with read_sql_table or read_sql_query
+------------------------------------------------------
 
 Dask allows you to build dataframes from SQL tables and queries using the
-function :func:`dask.dataframe.read_sql_table`, based on the `Pandas version`_,
-sharing most arguments, and using SQLAlchemy for the actual handling of the
-queries. You may need to install additional driver packages for your chosen
-database server.
+function :func:`dask.dataframe.read_sql_table` and :func:`dask.dataframe.read_sql_query`,
+based on the `Pandas version`_, sharing most arguments, and using SQLAlchemy
+for the actual handling of the queries. You may need to install additional
+driver packages for your chosen database server.
 
 .. _Pandas version: https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_sql_table.html
 
@@ -83,7 +82,7 @@ on a cluster, the following are the main differences versus Pandas to watch out 
 - Dask does not support arbitrary text queries, only whole tables and SQLAlchemy
   `sql expressions`_
 
-- the engine argument must be a `URI string`_, not an SQLAlchemy engine/connection
+- the con argument must be a `URI string`_, not an SQLAlchemy engine/connection
 
 - partitioning information is *required*, which can be as simple as providing
   an index column argument, or can be more explicit (see below)
@@ -114,7 +113,7 @@ recreated into a fresh engine on the workers.
 Similarly, we cannot accommodate chunked queries
 which rely on the internal state of a database cursor; nor LIMIT/OFFSET
 queries, which are not guaranteed to be repeatable, and involve scanning
-the whole query on th server (which is very inefficient).
+the whole query on the server (which is very inefficient).
 
 **If** your data is small enough not to require Dask's out-of-core and/or
 distributed capabilities, then you are probably better to use Pandas or SQLAlchemy
@@ -138,7 +137,7 @@ consider so that Dask doesn't need to query for these. Alternatively,
 you can have Dask fetch the first few row (5 by default) and use
 them to guess the typical bytes/row, and base the partitioning size on
 this. Needless to say, the results will vary a lot for tables that are
-not uncommonly homogenous.
+not uncommonly homogeneous.
 
 Specific partitioning
 ^^^^^^^^^^^^^^^^^^^^^
@@ -178,13 +177,13 @@ the point of execution.
             number, name, sql.func.length(name).label("lenname")
         ]
         ).select_from(sql.table("test"))
-    data = read_sql_table(
-        "test", db, npartitions=2, index_col=number
+    data = read_sql_query(
+        s1, db, npartitions=2, index_col=number
     )
 
 Here we have also demonstrated the use of the function ``length`` to
 perform an operation server-side. Note that it is necessary to *label* such
-operations, but you can use them for the index column (by name or expression),
+operations, but you can use them for the index column,
 so long as it is also
 in the set of selected columns. If using for the index/partitioning, the
 column should still be indexed in the database, for performance.
@@ -205,34 +204,30 @@ Load from SQL, manual approaches
 If ``read_sql_table`` is not sufficient for your needs, you can try one of
 the following methods.
 
-Delayed functions
-^^^^^^^^^^^^^^^^^
+From Map functions
+^^^^^^^^^^^^^^^^^^
 
 Often you know more about your data and server than the generic approach above
 allows. Indeed, some database-like servers may simply not be supported by
-SQLAlchemy, or provide an alternate API which is better optimised
-(`snowflake example`_).
-
-.. _snowflake example: https://www.saturncloud.io/s/snowflake-and-dask/
+SQLAlchemy, or provide an alternate API which is better optimised.
 
 If you already have a way to fetch data from the database in partitions,
-then you can wrap this function in :func:`dask.delayed` and construct a
-dataframe this way. It might look something like
+then you can use :func:`dask.dataframe.from_map` and construct a
+dataframe this way. It might look something like.
 
 .. code-block:: python
 
-   from dask import delayed
    import dask.dataframe as dd
 
-   @delayed
    def fetch_partition(part):
        conn = establish_connection()
        df = fetch_query(base_query.format(part))
        return df.astype(known_types)
 
-    ddf = dd.from_delayed([fetch_partition(part) for part in parts],
-                          meta=known_types,
-                          divisions=div_from_parts(parts))
+   ddf = dd.from_map(fetch_partition,
+                     parts,
+                     meta=known_types,
+                     divisions=div_from_parts(parts))
 
 Where you must provide your own functions for setting up a connection to the server,
 your own query, and a way to format that query to be specific to each partition.
@@ -240,9 +235,6 @@ For example, you might have ranges or specific unique values with a WHERE
 clause. The ``known_types`` here is used to transform the dataframe partition and provide
 a ``meta``, to help for consistency and avoid Dask having to analyse one partition
 up front to guess the columns/types; you may also want to explicitly set the index.
-Furthermore, it is a good idea to provide
-``divisions`` (the start/end of each partition in the index column), if possible,
-since you likely know these from the subqueries you are constructing.
 
 Stream via client
 ^^^^^^^^^^^^^^^^^

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import builtins
 import io
 import os
@@ -25,7 +27,7 @@ def test_cpu_count_cgroups(dirname, monkeypatch):
 
     monkeypatch.setattr(os, "cpu_count", mycpu_count)
 
-    class MyProcess(object):
+    class MyProcess:
         def cpu_affinity(self):
             # No affinity set
             return []
@@ -34,8 +36,8 @@ def test_cpu_count_cgroups(dirname, monkeypatch):
 
     if dirname:
         paths = {
-            "/sys/fs/cgroup/%s/cpu.cfs_quota_us" % dirname: io.StringIO("2005"),
-            "/sys/fs/cgroup/%s/cpu.cfs_period_us" % dirname: io.StringIO("10"),
+            f"/sys/fs/cgroup/{dirname}/cpu.cfs_quota_us": io.StringIO("2005"),
+            f"/sys/fs/cgroup/{dirname}/cpu.cfs_period_us": io.StringIO("10"),
         }
         builtin_open = builtins.open
 
@@ -53,3 +55,44 @@ def test_cpu_count_cgroups(dirname, monkeypatch):
         assert count == 201
     else:
         assert count == 250
+
+
+@pytest.mark.parametrize("group_name", ["/", "/user.slice", "/user.slice/more.slice"])
+@pytest.mark.parametrize("quota", ["max", "2005"])
+def test_cpu_count_cgroups_v2(quota, group_name, monkeypatch):
+    def mycpu_count():
+        # Absurdly high, unlikely to match real value
+        return 250
+
+    monkeypatch.setattr(os, "cpu_count", mycpu_count)
+
+    class MyProcess:
+        def cpu_affinity(self):
+            # No affinity set
+            return []
+
+    monkeypatch.setattr(psutil, "Process", MyProcess)
+
+    if not group_name.endswith("/"):
+        group_name = f"{group_name}/"
+
+    paths = {
+        "/proc/self/cgroup": io.StringIO(f"0::{group_name}"),
+        f"/sys/fs/cgroup{group_name}cpu.max": io.StringIO(f"{quota} 10"),
+    }
+    builtin_open = builtins.open
+
+    def myopen(path, *args, **kwargs):
+        if path in paths:
+            return paths.get(path)
+        return builtin_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", myopen)
+    monkeypatch.setattr(sys, "platform", "linux")
+
+    count = cpu_count()
+    if quota == "max":
+        assert count == 250
+    else:
+        # Rounds up
+        assert count == 201

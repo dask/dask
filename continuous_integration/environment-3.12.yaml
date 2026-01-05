@@ -1,0 +1,75 @@
+# This job includes coverage
+name: test-environment
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  # required dependencies
+  - python=3.12
+  - packaging
+  - pyyaml
+  - click
+  - cloudpickle
+  - partd
+  - fsspec
+  - toolz
+  # test dependencies
+  - pre-commit
+  - pytest
+  - pytest-cov
+  - pytest-mock
+  - pytest-rerunfailures
+  - pytest-timeout
+  - pytest-xdist
+  - moto<5
+  # Optional dependencies
+  - mimesis
+  - numpy
+  - pandas
+  - numba
+  - numbagg  # only here to test others with numpy
+  - flask
+  - h5py
+  - pytables
+  - zarr
+  # - pyspark  # Huge package; limit where it is tested
+  - tiledb-py
+  - tiledb
+  - xarray
+  - sqlalchemy
+  - pyarrow
+  - coverage
+  - jsonschema
+  # other -- IO
+  - boto3
+  - botocore
+  - bokeh
+  - bottleneck
+  - httpretty
+  - aiohttp
+  - s3fs>=2021.9.0
+  - crick
+  - cytoolz
+  - distributed
+  - ipython
+  - ipycytoscape
+  - ipywidgets
+  - ipykernel
+  - lz4
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - python-snappy
+  - sparse
+  - cachey
+  - python-graphviz
+  - python-cityhash
+  - python-xxhash
+  - mmh3
+  - jinja2
+  - matplotlib  # visualize test
+  - pip
+  - pip:
+    - git+https://github.com/dask/distributed

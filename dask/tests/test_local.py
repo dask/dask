@@ -1,9 +1,12 @@
+from __future__ import annotations
+
+import pytest
+
 import dask
-
-from dask.local import start_state_from_dask, get_sync, finish_task, sortkey
+from dask._task_spec import Task, TaskRef
+from dask.local import finish_task, get_sync, sortkey, start_state_from_dask
 from dask.order import order
-from dask.utils_test import GetFunctionTestMixin, inc, add
-
+from dask.utils_test import GetFunctionTestMixin, add, inc
 
 fib_dask = {"f0": 0, "f1": 1, "f2": 1, "f3": 2, "f4": 3, "f5": 5, "f6": 8}
 
@@ -15,18 +18,18 @@ def test_start_state():
     expected = {
         "cache": {"x": 1, "y": 2},
         "dependencies": {
-            "w": set(["y", "z"]),
-            "x": set([]),
-            "y": set([]),
-            "z": set(["x"]),
+            "w": {"y", "z"},
+            "x": set(),
+            "y": set(),
+            "z": {"x"},
         },
-        "dependents": {"w": set([]), "x": set(["z"]), "y": set(["w"]), "z": set(["w"])},
-        "finished": set([]),
-        "released": set([]),
-        "running": set([]),
+        "dependents": {"w": set(), "x": {"z"}, "y": {"w"}, "z": {"w"}},
+        "finished": set(),
+        "released": set(),
+        "running": set(),
         "ready": ["z"],
-        "waiting": {"w": set(["z"])},
-        "waiting_data": {"x": set(["z"]), "y": set(["w"]), "z": set(["w"])},
+        "waiting": {"w": {"z"}},
+        "waiting_data": {"w": set(), "x": {"z"}, "y": {"w"}, "z": {"w"}},
     }
     assert result == expected
 
@@ -35,7 +38,7 @@ def test_start_state_looks_at_cache():
     dsk = {"b": (inc, "a")}
     cache = {"a": 1}
     result = start_state_from_dask(dsk, cache)
-    assert result["dependencies"]["b"] == set(["a"])
+    assert result["dependencies"]["b"] == {"a"}
     assert result["ready"] == ["b"]
 
 
@@ -54,7 +57,7 @@ def test_start_state_with_tasks_no_deps():
     state = start_state_from_dask(dsk)
     assert list(state["cache"].keys()) == ["b"]
     assert "a" in state["ready"] and "c" in state["ready"]
-    deps = dict((k, set()) for k in "abc")
+    deps = {k: set() for k in "abc"}
     assert state["dependencies"] == deps
     assert state["dependents"] == deps
 
@@ -64,7 +67,7 @@ def test_finish_task():
     sortkey = order(dsk).get
     state = start_state_from_dask(dsk)
     state["ready"].remove("z")
-    state["running"] = set(["z", "other-task"])
+    state["running"] = {"z", "other-task"}
     task = "z"
     result = 2
 
@@ -74,18 +77,18 @@ def test_finish_task():
     assert state == {
         "cache": {"y": 2, "z": 2},
         "dependencies": {
-            "w": set(["y", "z"]),
-            "x": set([]),
-            "y": set([]),
-            "z": set(["x"]),
+            "w": {"y", "z"},
+            "x": set(),
+            "y": set(),
+            "z": {"x"},
         },
-        "finished": set(["z"]),
-        "released": set(["x"]),
-        "running": set(["other-task"]),
-        "dependents": {"w": set([]), "x": set(["z"]), "y": set(["w"]), "z": set(["w"])},
+        "finished": {"z"},
+        "released": {"x"},
+        "running": {"other-task"},
+        "dependents": {"w": set(), "x": {"z"}, "y": {"w"}, "z": {"w"}},
         "ready": ["w"],
         "waiting": {},
-        "waiting_data": {"y": set(["w"]), "z": set(["w"])},
+        "waiting_data": {"w": set(), "y": {"w"}, "z": {"w"}},
     }
 
 
@@ -97,11 +100,7 @@ class TestGetAsync(GetFunctionTestMixin):
 
 
 def test_cache_options():
-    try:
-        from chest import Chest
-    except ImportError:
-        return
-    cache = Chest()
+    cache = {}
 
     def inc2(x):
         assert "y" in cache
@@ -171,4 +170,53 @@ def test_ordering():
 
     get_sync(dsk, "y")
 
-    assert L == sorted(L)
+    assert L == sorted(L, reverse=True)
+
+
+def test_complex_ordering():
+    pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+    from dask.diagnostics import Callback
+
+    actual_order = []
+
+    def track_order(key, dask, state):
+        actual_order.append(key)
+
+    x = da.random.normal(size=(20, 20), chunks=(-1, -1))
+    res = (x.dot(x.T) - x.mean(axis=0)).std()
+    dsk = dict(res.__dask_graph__())
+    exp_order_dict = order(dsk)
+    exp_order = sorted(exp_order_dict.keys(), key=exp_order_dict.get)
+    with Callback(pretask=track_order):
+        get_sync(dsk, exp_order[-1])
+    assert actual_order == exp_order
+
+
+def test_ensure_calculate_only_whats_needed():
+    counter = 0
+
+    def only_once():
+        nonlocal counter
+        if counter > 0:
+            raise RuntimeError("Should only be called once")
+        counter += 1
+        return 1
+
+    def add(x, y):
+        return x + y
+
+    tasks = [
+        Task("x1", only_once),
+        (t1 := Task("x2", only_once)),
+        Task("y", add, 1, t1.ref()),
+    ]
+    dsk = {t.key: t for t in tasks}
+    assert get_sync(dsk, "y") == 2
+
+
+def test_detect_malformed_graph():
+    dsk = {"y": Task("y", lambda x: x, TaskRef("x"))}
+    with pytest.raises(ValueError, match="Missing dependency"):
+        get_sync(dsk, "y")
+    assert get_sync(dsk, "y", cache={"x": 1}) == 1

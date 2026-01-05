@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import itertools
 import math
@@ -5,65 +7,81 @@ import operator
 import uuid
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Iterator
-from functools import wraps, partial, reduce
+from collections.abc import Iterable, Iterator, Sequence
+from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
 
 import tlz as toolz
+from fsspec.core import open_files
 from tlz import (
-    merge,
-    take,
-    valmap,
-    partition_all,
-    remove,
+    accumulate,
     compose,
+    count,
     curry,
     first,
-    second,
-    accumulate,
-    peek,
     frequencies,
-    merge_with,
-    join,
-    reduceby,
-    count,
-    pluck,
     groupby,
+    join,
+    merge,
+    merge_with,
+    partition_all,
+    peek,
+    pluck,
+    reduceby,
+    remove,
+    second,
+    take,
     topk,
     unique,
-    accumulate,
+    valmap,
 )
 
-from .. import config
-from .avro import to_avro
-from ..base import tokenize, dont_optimize, DaskMethodsMixin
-from ..bytes import open_files
-from ..context import globalmethod
-from ..core import quote, istask, get_dependencies, reverse_dict, flatten
-from ..sizeof import sizeof
-from ..delayed import Delayed, unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..multiprocessing import get as mpget
-from ..optimization import fuse, cull, inline
-from ..utils import (
+from dask import config
+from dask._task_spec import (
+    GraphNode,
+    List,
+    Task,
+    TaskRef,
+    _execute_subgraph,
+    convert_legacy_graph,
+    cull,
+    fuse_linear_task_spec,
+)
+from dask.bag import chunk
+from dask.bag.avro import to_avro
+from dask.base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    named_schedulers,
+    replace_name_in_key,
+    tokenize,
+)
+from dask.blockwise import blockwise
+from dask.context import globalmethod
+from dask.core import flatten, istask, quote
+from dask.delayed import Delayed, unpack_collections
+from dask.highlevelgraph import HighLevelGraph
+from dask.sizeof import sizeof
+from dask.typing import Graph, NestedKeys, no_default
+from dask.utils import (
     apply,
-    system_encoding,
-    takes_multiple_arguments,
-    funcname,
     digit,
-    insert,
-    ensure_dict,
     ensure_bytes,
     ensure_unicode,
+    funcname,
+    get_default_shuffle_method,
+    insert,
+    is_empty,
+    iter_chunks,
     key_split,
     parse_bytes,
-    iter_chunks,
+    system_encoding,
+    takes_multiple_arguments,
 )
-from . import chunk
 
+DEFAULT_GET = named_schedulers.get("processes", named_schedulers["sync"])
 
-no_default = "__no__default__"
 no_result = type(
     "no_result", (object,), {"__slots__": (), "__reduce__": lambda self: "no_result"}
 )
@@ -79,20 +97,55 @@ def lazify_task(task, start=True):
 
     Examples
     --------
-    >>> task = (sum, (list, (map, inc, [1, 2, 3])))  # doctest: +SKIP
-    >>> lazify_task(task)  # doctest: +SKIP
-    (sum, (map, inc, [1, 2, 3]))
+    >>> def inc(x):
+    ...     return x + 1
+    >>> task = (sum, (list, (map, inc, [1, 2, 3])))
+    >>> lazify_task(task)  # doctest: +ELLIPSIS
+    (<built-in function sum>, (<class 'map'>, <function inc at ...>, [1, 2, 3]))
     """
-    if type(task) is list and len(task) < 50:
-        return [lazify_task(arg, False) for arg in task]
-    if not istask(task):
-        return task
-    head, tail = task[0], task[1:]
-    if not start and head in (list, reify):
-        task = task[1]
-        return lazify_task(*tail, start=False)
+
+    if isinstance(task, GraphNode):
+        if isinstance(task, List) and len(task.args) < 50:
+            return List(*[lazify_task(arg, False) for arg in task.args])
+        if not isinstance(task, Task):
+            return task
+        if not start and task.func in (list, reify) and isinstance(task.args[0], Task):
+            assert len(task.args) == 1
+            task = task.args[0]
+        if task.func is _execute_subgraph:
+            subgraph, outkey, inkeys, *dependencies = task.args
+            # If there is a reify at the output of the subgraph we don't want to act
+            final_task = lazify_task(subgraph[outkey], True)
+            subgraph = {
+                k: lazify_task(v, False) for k, v in subgraph.items() if k != outkey
+            }
+            subgraph[outkey] = final_task
+            return Task(
+                task.key,
+                _execute_subgraph,
+                subgraph,
+                outkey,
+                inkeys,
+                *dependencies,
+                _data_producer=task.data_producer,
+            )
+        return Task(
+            task.key,
+            task.func,
+            *[lazify_task(arg, False) for arg in task.args],
+            **task.kwargs,
+        )
     else:
-        return (head,) + tuple([lazify_task(arg, False) for arg in tail])
+        if type(task) is list and len(task) < 50:
+            return [lazify_task(arg, False) for arg in task]
+        if not istask(task):
+            return task
+        head, tail = task[0], task[1:]
+        if not start and head in (list, reify):
+            task = task[1]
+            return lazify_task(*tail, start=False)
+        else:
+            return (head,) + tuple(lazify_task(arg, False) for arg in tail)
 
 
 def lazify(dsk):
@@ -106,49 +159,20 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-def inline_singleton_lists(dsk, keys, dependencies=None):
-    """Inline lists that are only used once.
-
-    >>> d = {'b': (list, 'a'),
-    ...      'c': (f, 'b', 1)}     # doctest: +SKIP
-    >>> inline_singleton_lists(d)  # doctest: +SKIP
-    {'c': (f, (list, 'a'), 1)}
-
-    Pairs nicely with lazify afterwards.
-    """
-    if dependencies is None:
-        dependencies = {k: get_dependencies(dsk, task=v) for k, v in dsk.items()}
-    dependents = reverse_dict(dependencies)
-
-    inline_keys = {
-        k
-        for k, v in dsk.items()
-        if istask(v) and v and v[0] is list and len(dependents[k]) == 1
-    }
-    inline_keys.difference_update(flatten(keys))
-    dsk = inline(dsk, inline_keys, inline_constants=False)
-    for k in inline_keys:
-        del dsk[k]
-    return dsk
-
-
-def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=None, **kwargs):
-    """ Optimize a dask from a dask Bag. """
-    dsk = ensure_dict(dsk)
-    dsk2, dependencies = cull(dsk, keys)
-    kwargs = {}
-    if rename_fused_keys is not None:
-        kwargs["rename_keys"] = rename_fused_keys
-    dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies, **kwargs)
-    dsk4 = inline_singleton_lists(dsk3, keys, dependencies)
-    dsk5 = lazify(dsk4)
-    return dsk5
+def optimize(dsk, keys, fuse_keys=None, **kwargs):
+    """Optimize a dask from a dask Bag."""
+    dsk = convert_legacy_graph(dsk)
+    keys = list(flatten(keys))
+    dsk2 = cull(dsk, keys)
+    dsk3 = fuse_linear_task_spec(dsk2, keys + (fuse_keys or []))
+    dsk4 = lazify(dsk3)
+    return dsk4
 
 
 def _to_textfiles_chunk(data, lazy_file, last_endline):
     with lazy_file as f:
         if isinstance(f, io.TextIOWrapper):
-            endline = u"\n"
+            endline = "\n"
             ensure = ensure_unicode
         else:
             endline = b"\n"
@@ -173,7 +197,7 @@ def to_textfiles(
     compute=True,
     storage_options=None,
     last_endline=False,
-    **kwargs
+    **kwargs,
 ):
     """Write dask Bag to disk, one filename per partition, one line per element.
 
@@ -239,10 +263,10 @@ def to_textfiles(
         encoding=encoding,
         name_function=name_function,
         num=b.npartitions,
-        **(storage_options or {})
+        **(storage_options or {}),
     )
 
-    name = "to-textfiles-" + uuid.uuid4().hex
+    name = f"to-textfiles-{uuid.uuid4().hex}"
     dsk = {
         (name, i): (_to_textfiles_chunk, (b.name, i), f, last_endline)
         for i, f in enumerate(files)
@@ -273,7 +297,7 @@ def finalize_item(results):
     return results[0]
 
 
-class StringAccessor(object):
+class StringAccessor:
     """String processing functions
 
     Examples
@@ -331,7 +355,7 @@ class StringAccessor(object):
 
 
 def robust_wraps(wrapper):
-    """ A weak version of wraps that only copies doc. """
+    """A weak version of wraps that only copies doc."""
 
     def _(wrapped):
         wrapped.__doc__ = wrapper.__doc__
@@ -341,28 +365,44 @@ def robust_wraps(wrapper):
 
 
 class Item(DaskMethodsMixin):
-    def __init__(self, dsk, key):
+    def __init__(self, dsk, key, layer=None):
         self.dask = dsk
         self.key = key
         self.name = key
 
-    def __dask_graph__(self):
+        # NOTE: Layer only used by `Item.from_delayed`, to handle Delayed objects created by other collections.
+        # e.g.: Item.from_delayed(da.ones(1).to_delayed()[0])
+        # See Delayed.__init__
+        self._layer = layer or key
+        if isinstance(dsk, HighLevelGraph) and self._layer not in dsk.layers:
+            raise ValueError(
+                f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
+            )
+
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [self.key]
+
+    def __dask_layers__(self) -> Sequence[str]:
+        return (self._layer,)
 
     def __dask_tokenize__(self):
         return self.key
 
     __dask_optimize__ = globalmethod(optimize, key="bag_optimize", falsey=dont_optimize)
-    __dask_scheduler__ = staticmethod(mpget)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize_item, ()
 
     def __dask_postpersist__(self):
-        return Item, (self.key,)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, *, rename=None):
+        key = replace_name_in_key(self.key, rename) if rename else self.key
+        return Item(dsk, key)
 
     @staticmethod
     def from_delayed(value):
@@ -375,7 +415,7 @@ class Item(DaskMethodsMixin):
         if not isinstance(value, Delayed) and hasattr(value, "key"):
             value = delayed(value)
         assert isinstance(value, Delayed)
-        return Item(ensure_dict(value.dask), value.key)
+        return Item(value.dask, value.key, layer=value.__dask_layers__()[0])
 
     @property
     def _args(self):
@@ -388,7 +428,7 @@ class Item(DaskMethodsMixin):
         self.dask, self.key = state
 
     def apply(self, func):
-        name = "{0}-{1}".format(funcname(func), tokenize(self, func, "apply"))
+        name = "{}-{}".format(funcname(func), tokenize(self, func, "apply"))
         dsk = {name: (func, self.key)}
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return Item(graph, name)
@@ -409,7 +449,7 @@ class Item(DaskMethodsMixin):
         dsk = self.__dask_graph__()
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
-        return Delayed(self.key, dsk)
+        return Delayed(self.key, dsk, layer=self._layer)
 
 
 class Bag(DaskMethodsMixin):
@@ -421,7 +461,7 @@ class Bag(DaskMethodsMixin):
 
     >>> import dask.bag as db
     >>> b = db.from_sequence(range(5))
-    >>> list(b.filter(lambda x: x % 2 == 0).map(lambda x: x * 10))  # doctest: +SKIP
+    >>> list(b.filter(lambda x: x % 2 == 0).map(lambda x: x * 10))
     [0, 20, 40]
 
     Create Bag from filename or globstring of filenames
@@ -433,45 +473,51 @@ class Bag(DaskMethodsMixin):
     >>> dsk = {('x', 0): (range, 5),
     ...        ('x', 1): (range, 5),
     ...        ('x', 2): (range, 5)}
-    >>> b = Bag(dsk, 'x', npartitions=3)
+    >>> b = db.Bag(dsk, 'x', npartitions=3)
 
-    >>> sorted(b.map(lambda x: x * 10))  # doctest: +SKIP
+    >>> sorted(b.map(lambda x: x * 10))
     [0, 0, 0, 10, 10, 10, 20, 20, 20, 30, 30, 30, 40, 40, 40]
 
-    >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
+    >>> int(b.fold(lambda x, y: x + y))
     30
     """
 
-    def __init__(self, dsk, name, npartitions):
+    def __init__(self, dsk: Graph, name: str, npartitions: int):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> Graph:
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> NestedKeys:
         return [(self.name, i) for i in range(self.npartitions)]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> Sequence[str]:
         return (self.name,)
 
     def __dask_tokenize__(self):
         return self.name
 
     __dask_optimize__ = globalmethod(optimize, key="bag_optimize", falsey=dont_optimize)
-    __dask_scheduler__ = staticmethod(mpget)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize, ()
 
     def __dask_postpersist__(self):
-        return type(self), (self.name, self.npartitions)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, *, rename=None):
+        name = self.name
+        if rename:
+            name = rename.get(name, name)
+        return type(self)(dsk, name, self.npartitions)
 
     def __str__(self):
-        return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
+        return f"dask.bag<{key_split(self.name)}, npartitions={self.npartitions}>"
 
     __repr__ = __str__
 
@@ -583,9 +629,7 @@ class Bag(DaskMethodsMixin):
         >>> b.starmap(myadd, z=max_second).compute()
         [13, 17, 21, 25, 29]
         """
-        name = "{0}-{1}".format(
-            funcname(func), tokenize(self, func, "starmap", **kwargs)
-        )
+        name = "{}-{}".format(funcname(func), tokenize(self, func, "starmap", **kwargs))
         dependencies = [self]
         if kwargs:
             kwargs, collections = unpack_scalar_dask_kwargs(kwargs)
@@ -616,14 +660,14 @@ class Bag(DaskMethodsMixin):
 
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
-        >>> list(b.filter(iseven))  # doctest: +SKIP
+        >>> list(b.filter(iseven))
         [0, 2, 4]
         """
-        name = "filter-{0}-{1}".format(funcname(predicate), tokenize(self, predicate))
-        dsk = dict(
-            ((name, i), (reify, (filter, predicate, (self.name, i))))
+        name = f"filter-{funcname(predicate)}-{tokenize(self, predicate)}"
+        dsk = {
+            (name, i): (reify, (filter, predicate, (self.name, i)))
             for i in range(self.npartitions)
-        )
+        }
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return type(self)(graph, name, self.npartitions)
 
@@ -642,18 +686,18 @@ class Bag(DaskMethodsMixin):
         Examples
         --------
         >>> import dask.bag as db
-        >>> b = db.from_sequence(range(5))
-        >>> list(b.random_sample(0.5, 43))
-        [0, 3, 4]
-        >>> list(b.random_sample(0.5, 43))
-        [0, 3, 4]
+        >>> b = db.from_sequence(range(10))
+        >>> b.random_sample(0.5, 43).compute()
+        [0, 1, 3, 4, 7, 9]
+        >>> b.random_sample(0.5, 43).compute()
+        [0, 1, 3, 4, 7, 9]
         """
         if not 0 <= prob <= 1:
             raise ValueError("prob must be a number in the interval [0, 1]")
         if not isinstance(random_state, Random):
             random_state = Random(random_state)
 
-        name = "random-sample-%s" % tokenize(self, prob, random_state.getstate())
+        name = f"random-sample-{tokenize(self, prob, random_state.getstate())}"
         state_data = random_state_data_python(self.npartitions, random_state)
         dsk = {
             (name, i): (reify, (random_sample, (self.name, i), state, prob))
@@ -670,14 +714,14 @@ class Bag(DaskMethodsMixin):
 
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
-        >>> list(b.remove(iseven))  # doctest: +SKIP
+        >>> list(b.remove(iseven))
         [1, 3]
         """
-        name = "remove-{0}-{1}".format(funcname(predicate), tokenize(self, predicate))
-        dsk = dict(
-            ((name, i), (reify, (remove, predicate, (self.name, i))))
+        name = f"remove-{funcname(predicate)}-{tokenize(self, predicate)}"
+        dsk = {
+            (name, i): (reify, (remove, predicate, (self.name, i)))
             for i in range(self.npartitions)
-        )
+        }
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return type(self)(graph, name, self.npartitions)
 
@@ -727,25 +771,26 @@ class Bag(DaskMethodsMixin):
     def pluck(self, key, default=no_default):
         """Select item from all tuples/dicts in collection.
 
-        >>> b = from_sequence([{'name': 'Alice', 'credits': [1, 2, 3]},
-        ...                    {'name': 'Bob',   'credits': [10, 20]}])
-        >>> list(b.pluck('name'))  # doctest: +SKIP
+        >>> import dask.bag as db
+        >>> b = db.from_sequence([{'name': 'Alice', 'credits': [1, 2, 3]},
+        ...                       {'name': 'Bob',   'credits': [10, 20]}])
+        >>> list(b.pluck('name'))
         ['Alice', 'Bob']
-        >>> list(b.pluck('credits').pluck(0))  # doctest: +SKIP
+        >>> list(b.pluck('credits').pluck(0))
         [1, 10]
         """
         name = "pluck-" + tokenize(self, key, default)
         key = quote(key)
-        if default == no_default:
-            dsk = dict(
-                ((name, i), (list, (pluck, key, (self.name, i))))
+        if default is no_default:
+            dsk = {
+                (name, i): (list, (pluck, key, (self.name, i)))
                 for i in range(self.npartitions)
-            )
+            }
         else:
-            dsk = dict(
-                ((name, i), (list, (pluck, key, (self.name, i), default)))
+            dsk = {
+                (name, i): (list, (pluck, key, (self.name, i), default))
                 for i in range(self.npartitions)
-            )
+            }
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return type(self)(graph, name, self.npartitions)
 
@@ -754,9 +799,10 @@ class Bag(DaskMethodsMixin):
 
         Examples
         --------
-        >>> b = from_sequence([(i, i + 1, i + 2) for i in range(10)])
+        >>> import dask.bag as db
+        >>> b = db.from_sequence([(i, i + 1, i + 2) for i in range(10)])
         >>> first, second, third = b.unzip(3)
-        >>> isinstance(first, Bag)
+        >>> isinstance(first, db.Bag)
         True
         >>> first.compute()
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -777,7 +823,7 @@ class Bag(DaskMethodsMixin):
         compute=True,
         storage_options=None,
         last_endline=False,
-        **kwargs
+        **kwargs,
     ):
         return to_textfiles(
             self,
@@ -788,7 +834,7 @@ class Bag(DaskMethodsMixin):
             compute,
             storage_options=storage_options,
             last_endline=last_endline,
-            **kwargs
+            **kwargs,
         )
 
     @wraps(to_avro)
@@ -802,7 +848,7 @@ class Bag(DaskMethodsMixin):
         sync_interval=16000,
         metadata=None,
         compute=True,
-        **kwargs
+        **kwargs,
     ):
         return to_avro(
             self,
@@ -814,7 +860,7 @@ class Bag(DaskMethodsMixin):
             sync_interval,
             metadata,
             compute,
-            **kwargs
+            **kwargs,
         )
 
     def fold(
@@ -842,14 +888,15 @@ class Bag(DaskMethodsMixin):
         >>> def add(x, y):
         ...     return x + y
 
-        >>> b = from_sequence(range(5))
-        >>> b.fold(add).compute()  # doctest: +SKIP
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(5))
+        >>> b.fold(add).compute()
         10
 
         In full form we provide both binary operators as well as their default
         arguments
 
-        >>> b.fold(binop=add, combine=add, initial=0).compute()  # doctest: +SKIP
+        >>> b.fold(binop=add, combine=add, initial=0).compute()
         10
 
         More complex binary operators are also doable
@@ -857,8 +904,8 @@ class Bag(DaskMethodsMixin):
         >>> def add_to_set(acc, x):
         ...     ''' Add new element x to set acc '''
         ...     return acc | set([x])
-        >>> b.fold(add_to_set, set.union, initial=set()).compute()  # doctest: +SKIP
-        {1, 2, 3, 4, 5}
+        >>> b.fold(add_to_set, set.union, initial=set()).compute()
+        {0, 1, 2, 3, 4}
 
         See Also
         --------
@@ -886,8 +933,9 @@ class Bag(DaskMethodsMixin):
     def frequencies(self, split_every=None, sort=False):
         """Count number of occurrences of each distinct element.
 
-        >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
-        >>> dict(b.frequencies())  # doctest: +SKIP
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(['Alice', 'Bob', 'Alice'])
+        >>> dict(b.frequencies())       # doctest: +SKIP
         {'Alice': 2, 'Bob', 1}
         """
         result = self.reduction(
@@ -906,11 +954,12 @@ class Bag(DaskMethodsMixin):
 
         Optionally ordered by some key function
 
-        >>> b = from_sequence([10, 3, 5, 7, 11, 4])
-        >>> list(b.topk(2))  # doctest: +SKIP
+        >>> import dask.bag as db
+        >>> b = db.from_sequence([10, 3, 5, 7, 11, 4])
+        >>> list(b.topk(2))
         [11, 10]
 
-        >>> list(b.topk(2, lambda x: -x))  # doctest: +SKIP
+        >>> list(b.topk(2, lambda x: -x))
         [3, 4]
         """
         if key:
@@ -940,10 +989,11 @@ class Bag(DaskMethodsMixin):
 
         Examples
         --------
-        >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(['Alice', 'Bob', 'Alice'])
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
-        >>> b = from_sequence([{'name': 'Alice'}, {'name': 'Bob'}, {'name': 'Alice'}])
+        >>> b = db.from_sequence([{'name': 'Alice'}, {'name': 'Bob'}, {'name': 'Alice'}])
         >>> b.distinct(key=lambda x: x['name']).compute()
         [{'name': 'Alice'}, {'name': 'Bob'}]
         >>> b.distinct(key='name').compute()
@@ -973,7 +1023,8 @@ class Bag(DaskMethodsMixin):
 
         Examples
         --------
-        >>> b = from_sequence(range(10))
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(10))
         >>> b.reduction(sum, sum).compute()
         45
         """
@@ -983,7 +1034,7 @@ class Bag(DaskMethodsMixin):
             split_every = self.npartitions
 
         token = tokenize(self, perpartition, aggregate, split_every)
-        a = "%s-part-%s" % (name or funcname(perpartition), token)
+        a = f"{name or funcname(perpartition)}-part-{token}"
         is_last = self.npartitions == 1
         dsk = {
             (a, i): (empty_safe_apply, perpartition, (self.name, i), is_last)
@@ -991,7 +1042,7 @@ class Bag(DaskMethodsMixin):
         }
         k = self.npartitions
         b = a
-        fmt = "%s-aggregate-%s" % (name or funcname(aggregate), token)
+        fmt = f"{name or funcname(aggregate)}-aggregate-{token}"
         depth = 0
 
         while k > split_every:
@@ -1023,31 +1074,55 @@ class Bag(DaskMethodsMixin):
             return Bag(graph, fmt, 1)
 
     def sum(self, split_every=None):
-        """ Sum all elements """
+        """Sum all elements"""
         return self.reduction(sum, sum, split_every=split_every)
 
     def max(self, split_every=None):
-        """ Maximum element """
+        """Maximum element"""
         return self.reduction(max, max, split_every=split_every)
 
     def min(self, split_every=None):
-        """ Minimum element """
+        """Minimum element"""
         return self.reduction(min, min, split_every=split_every)
 
     def any(self, split_every=None):
-        """ Are any of the elements truthy? """
+        """Are any of the elements truthy?
+
+        Examples
+        --------
+        >>> import dask.bag as db
+        >>> bool_bag = db.from_sequence([True, True, False])
+        >>> bool_bag.any().compute()
+        True
+        """
         return self.reduction(any, any, split_every=split_every)
 
     def all(self, split_every=None):
-        """ Are all elements truthy? """
+        """Are all elements truthy?
+
+        Examples
+        --------
+        >>> import dask.bag as db
+        >>> bool_bag = db.from_sequence([True, True, False])
+        >>> bool_bag.all().compute()
+        False
+        """
         return self.reduction(all, all, split_every=split_every)
 
     def count(self, split_every=None):
-        """ Count the number of elements. """
+        """Count the number of elements.
+
+        Examples
+        --------
+        >>> import dask.bag as db
+        >>> numbers = db.from_sequence([1, 2, 3])
+        >>> numbers.count().compute()
+        3
+        """
         return self.reduction(count, sum, split_every=split_every)
 
     def mean(self):
-        """ Arithmetic mean """
+        """Arithmetic mean"""
 
         def mean_chunk(seq):
             total, n = 0.0, 0
@@ -1063,13 +1138,13 @@ class Bag(DaskMethodsMixin):
         return self.reduction(mean_chunk, mean_aggregate, split_every=False)
 
     def var(self, ddof=0):
-        """ Variance """
+        """Variance"""
         return self.reduction(
             chunk.var_chunk, partial(chunk.var_aggregate, ddof=ddof), split_every=False
         )
 
     def std(self, ddof=0):
-        """ Standard deviation """
+        """Standard deviation"""
         return self.var(ddof=ddof).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
@@ -1101,9 +1176,10 @@ class Bag(DaskMethodsMixin):
 
         Examples
         --------
-        >>> people = from_sequence(['Alice', 'Bob', 'Charlie'])
+        >>> import dask.bag as db
+        >>> people = db.from_sequence(['Alice', 'Bob', 'Charlie'])
         >>> fruit = ['Apple', 'Apricot', 'Banana']
-        >>> list(people.join(fruit, lambda x: x[0]))  # doctest: +SKIP
+        >>> list(people.join(fruit, lambda x: x[0]))
         [('Apple', 'Alice'), ('Apricot', 'Alice'), ('Banana', 'Bob')]
         """
         name = "join-" + tokenize(self, other, on_self, on_other)
@@ -1112,7 +1188,7 @@ class Bag(DaskMethodsMixin):
             if other.npartitions == 1:
                 dsk.update(other.dask)
                 other = other.__dask_keys__()[0]
-                dsk["join-%s-other" % name] = (list, other)
+                dsk[f"join-{name}-other"] = (list, other)
             else:
                 msg = (
                     "Multi-bag joins are not implemented. "
@@ -1122,12 +1198,10 @@ class Bag(DaskMethodsMixin):
         elif isinstance(other, Delayed):
             dsk.update(other.dask)
             other = other._key
-        elif isinstance(other, Iterable):
-            other = other
-        else:
+        elif not isinstance(other, Iterable):
             msg = (
                 "Joined argument must be single-partition Bag, "
-                " delayed object, or Iterable, got %s" % type(other).__name
+                f" delayed object, or Iterable, got {type(other).__name}"
             )
             raise TypeError(msg)
 
@@ -1141,18 +1215,18 @@ class Bag(DaskMethodsMixin):
         return type(self)(graph, name, self.npartitions)
 
     def product(self, other):
-        """ Cartesian product between two bags. """
+        """Cartesian product between two bags."""
         assert isinstance(other, Bag)
         name = "product-" + tokenize(self, other)
         n, m = self.npartitions, other.npartitions
-        dsk = dict(
-            (
-                (name, i * m + j),
-                (list, (itertools.product, (self.name, i), (other.name, j))),
+        dsk = {
+            (name, i * m + j): (
+                list,
+                (itertools.product, (self.name, i), (other.name, j)),
             )
             for i in range(n)
             for j in range(m)
-        )
+        }
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, other])
         return type(self)(graph, name, n * m)
 
@@ -1183,10 +1257,11 @@ class Bag(DaskMethodsMixin):
 
         But uses minimal communication and so is *much* faster.
 
-        >>> b = from_sequence(range(10))
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(10))
         >>> iseven = lambda x: x % 2 == 0
         >>> add = lambda x, y: x + y
-        >>> dict(b.foldby(iseven, add))                         # doctest: +SKIP
+        >>> dict(b.foldby(iseven, add))
         {True: 20, False: 25}
 
         **Key Function**
@@ -1357,8 +1432,9 @@ class Bag(DaskMethodsMixin):
             Whether to warn if the number of elements returned is less than
             requested, default is True.
 
-        >>> b = from_sequence(range(1_000))
-        >>> b.take(3)  # doctest: +SKIP
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(1_000))
+        >>> b.take(3)
         (0, 1, 2)
         """
 
@@ -1366,8 +1442,7 @@ class Bag(DaskMethodsMixin):
             npartitions = self.npartitions
         if npartitions > self.npartitions:
             raise ValueError(
-                "only {} partitions, take "
-                "received {}".format(self.npartitions, npartitions)
+                f"only {self.npartitions} partitions, take received {npartitions}"
             )
 
         token = tokenize(self, k, npartitions)
@@ -1396,7 +1471,8 @@ class Bag(DaskMethodsMixin):
     def flatten(self):
         """Concatenate nested lists into one long list.
 
-        >>> b = from_sequence([[1], [2, 3]])
+        >>> import dask.bag as db
+        >>> b = db.from_sequence([[1], [2, 3]])
         >>> list(b)
         [[1], [2, 3]]
 
@@ -1404,10 +1480,10 @@ class Bag(DaskMethodsMixin):
         [1, 2, 3]
         """
         name = "flatten-" + tokenize(self)
-        dsk = dict(
-            ((name, i), (list, (toolz.concat, (self.name, i))))
+        dsk = {
+            (name, i): (list, (toolz.concat, (self.name, i)))
             for i in range(self.npartitions)
-        )
+        }
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return type(self)(graph, name, self.npartitions)
 
@@ -1419,7 +1495,7 @@ class Bag(DaskMethodsMixin):
         grouper,
         method=None,
         npartitions=None,
-        blocksize=2 ** 20,
+        blocksize=2**20,
         max_branch=None,
         shuffle=None,
     ):
@@ -1447,9 +1523,10 @@ class Bag(DaskMethodsMixin):
 
         Examples
         --------
-        >>> b = from_sequence(range(10))
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(10))
         >>> iseven = lambda x: x % 2 == 0
-        >>> dict(b.groupby(iseven))  # doctest: +SKIP
+        >>> dict(b.groupby(iseven))             # doctest: +SKIP
         {True: [0, 2, 4, 6, 8], False: [1, 3, 5, 7, 9]}
 
         See Also
@@ -1459,12 +1536,14 @@ class Bag(DaskMethodsMixin):
         if method is not None:
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
-            shuffle = config.get("shuffle", None)
-        if shuffle is None:
-            if "distributed" in config.get("scheduler", ""):
+            try:
+                shuffle = get_default_shuffle_method()
+            except ImportError:
                 shuffle = "tasks"
             else:
-                shuffle = "disk"
+                if shuffle == "p2p":
+                    # Not implemented for Bags
+                    shuffle = "tasks"
         if shuffle == "disk":
             return groupby_disk(
                 self, grouper, npartitions=npartitions, blocksize=blocksize
@@ -1475,7 +1554,7 @@ class Bag(DaskMethodsMixin):
             msg = "Shuffle must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
-    def to_dataframe(self, meta=None, columns=None):
+    def to_dataframe(self, meta=None, columns=None, optimize_graph=True):
         """Create Dask Dataframe from a Dask Bag.
 
         Bag should contain tuples, dict records, or scalars.
@@ -1503,6 +1582,10 @@ class Bag(DaskMethodsMixin):
             result (any names not found in the data will become all-NA
             columns).  Note that if ``meta`` is provided, column names will be
             taken from there and this parameter is invalid.
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            :class:`dask.dataframe.DataFrame`.
+
 
         Examples
         --------
@@ -1520,6 +1603,7 @@ class Bag(DaskMethodsMixin):
         0  Charlie      300
         """
         import pandas as pd
+
         import dask.dataframe as dd
 
         if meta is None:
@@ -1534,19 +1618,22 @@ class Bag(DaskMethodsMixin):
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:
-            meta = dd.utils.make_meta(meta)
+            meta = dd.utils.make_meta(meta, parent_meta=pd.DataFrame())
         # Serializing the columns and dtypes is much smaller than serializing
         # the empty frame
         cols = list(meta.columns)
         dtypes = meta.dtypes.to_dict()
-        name = "to_dataframe-" + tokenize(self, cols, dtypes)
-        dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
 
-        for i in range(self.npartitions):
-            dsk[(name, i)] = (to_dataframe, (self.name, i), cols, dtypes)
+        dfs = self.map_partitions(to_dataframe, cols, dtypes)
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dfs.dask, dfs.__dask_keys__())
+        else:
+            dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
-        return dd.DataFrame(dsk, name, meta, divisions)
+        from dask.dataframe.dask_expr import from_graph
+
+        return from_graph(dsk, meta, divisions, dfs.__dask_keys__(), "from-bag")
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
@@ -1565,9 +1652,12 @@ class Bag(DaskMethodsMixin):
 
         keys = self.__dask_keys__()
         dsk = self.__dask_graph__()
+        layer = self.name
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, keys)
-        return [Delayed(k, dsk) for k in keys]
+            layer = f"delayed-{layer}"
+            dsk = HighLevelGraph.from_collections(layer, dsk, dependencies=())
+        return [Delayed(k, dsk, layer=layer) for k in keys]
 
     def repartition(self, npartitions=None, partition_size=None):
         """Repartition Bag across new divisions.
@@ -1611,22 +1701,23 @@ class Bag(DaskMethodsMixin):
 
         Examples
         --------
+        >>> import dask.bag as db
         >>> from operator import add
-        >>> b = from_sequence([1, 2, 3, 4, 5], npartitions=2)
-        >>> b.accumulate(add).compute()  # doctest: +SKIP
+        >>> b = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
+        >>> b.accumulate(add).compute()
         [1, 3, 6, 10, 15]
 
         Accumulate also takes an optional argument that will be used as the
         first value.
 
-        >>> b.accumulate(add, initial=-1)  # doctest: +SKIP
+        >>> b.accumulate(add, initial=-1).compute()
         [-1, 0, 2, 5, 9, 14]
         """
         token = tokenize(self, binop, initial)
         binop_name = funcname(binop)
-        a = "%s-part-%s" % (binop_name, token)
-        b = "%s-first-%s" % (binop_name, token)
-        c = "%s-second-%s" % (binop_name, token)
+        a = f"{binop_name}-part-{token}"
+        b = f"{binop_name}-first-{token}"
+        c = f"{binop_name}-second-{token}"
         dsk = {
             (a, 0): (accumulate_part, binop, (self.name, 0), initial, True),
             (b, 0): (first, (a, 0)),
@@ -1641,7 +1732,7 @@ class Bag(DaskMethodsMixin):
 
 
 def accumulate_part(binop, seq, initial, is_first=False):
-    if initial == no_default:
+    if initial is no_default:
         res = list(accumulate(binop, seq))
     else:
         res = list(accumulate(binop, seq, initial=initial))
@@ -1650,19 +1741,19 @@ def accumulate_part(binop, seq, initial, is_first=False):
     return res[1:], res[-1]
 
 
-def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
-    """ Partition a bag along a grouper, store partitions on disk. """
+def partition(grouper, sequence, npartitions, p, nelements=2**20):
+    """Partition a bag along a grouper, store partitions on disk."""
     for block in partition_all(nelements, sequence):
         d = groupby(grouper, block)
         d2 = defaultdict(list)
         for k, v in d.items():
-            d2[abs(hash(k)) % npartitions].extend(v)
+            d2[abs(int(tokenize(k), 16)) % npartitions].extend(v)
         p.append(d2, fsync=True)
     return p
 
 
 def collect(grouper, group, p, barrier_token):
-    """ Collect partitions from disk and yield k,v group pairs. """
+    """Collect partitions from disk and yield k,v group pairs."""
     d = groupby(grouper, p.get(group, lock=False))
     return list(d.items())
 
@@ -1688,7 +1779,8 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 
     Examples
     --------
-    >>> b = from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
+    >>> import dask.bag as db
+    >>> b = db.from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
 
     See Also
     --------
@@ -1696,17 +1788,20 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     """
     seq = list(seq)
     if npartitions and not partition_size:
-        partition_size = int(math.ceil(len(seq) / npartitions))
+        if len(seq) <= 100:
+            partition_size = int(math.ceil(len(seq) / npartitions))
+        else:
+            partition_size = max(1, int(math.floor(len(seq) / npartitions)))
     if npartitions is None and partition_size is None:
-        if len(seq) < 100:
+        if len(seq) <= 100:
             partition_size = 1
         else:
-            partition_size = int(len(seq) / 100)
+            partition_size = max(1, math.ceil(math.sqrt(len(seq)) / math.sqrt(100)))
 
     parts = list(partition_all(partition_size, seq))
     name = "from_sequence-" + tokenize(seq, partition_size)
     if len(parts) > 0:
-        d = dict(((name, i), list(part)) for i, part in enumerate(parts))
+        d = {(name, i): list(part) for i, part in enumerate(parts)}
     else:
         d = {(name, 0): []}
 
@@ -1718,27 +1813,27 @@ def from_url(urls):
 
     Examples
     --------
-    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/master/README.rst')  # doctest: +SKIP
-    >>> a.npartitions  # doctest: +SKIP
+    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/main/README.rst')
+    >>> a.npartitions
     1
 
     >>> a.take(8)  # doctest: +SKIP
     (b'Dask\\n',
      b'====\\n',
      b'\\n',
-     b'|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status|\\n',
+     b'|Build Status| |Coverage| |Doc Status| |Discourse| |Version Status| |NumFOCUS|\\n',
      b'\\n',
      b'Dask is a flexible parallel computing library for analytics.  See\\n',
      b'documentation_ for more information.\\n',
      b'\\n')
 
-    >>> b = from_url(['http://github.com', 'http://google.com'])  # doctest: +SKIP
-    >>> b.npartitions  # doctest: +SKIP
+    >>> b = from_url(['http://github.com', 'http://google.com'])
+    >>> b.npartitions
     2
     """
     if isinstance(urls, str):
         urls = [urls]
-    name = "from_url-" + uuid.uuid4().hex
+    name = f"from_url-{uuid.uuid4().hex}"
     dsk = {}
     for i, u in enumerate(urls):
         dsk[(name, i)] = (list, (urlopen, u))
@@ -1775,7 +1870,11 @@ def concat(bags):
 def reify(seq):
     if isinstance(seq, Iterator):
         seq = list(seq)
-    if len(seq) and isinstance(seq[0], Iterator):
+    try:
+        first = next(iter(seq))
+    except StopIteration:
+        return seq  # empty iterator
+    if isinstance(first, Iterator):
         seq = list(map(list, seq))
     return seq
 
@@ -1809,17 +1908,25 @@ def from_delayed(values):
 
     if isinstance(values, Delayed):
         values = [values]
-    values = [
-        delayed(v) if not isinstance(v, Delayed) and hasattr(v, "key") else v
-        for v in values
-    ]
+    futures = [v for v in values if isinstance(v, TaskRef)]
+    if all_futures := (len(futures) == len(values)):
+        # All futures. Fast path
+        values = futures
+    else:
+        # Every Delayed generates a Layer, i.e. this path is much more expensive
+        # if there are many input values.
+        values = [
+            delayed(v) if not isinstance(v, (Delayed,)) and hasattr(v, "key") else v
+            for v in values
+        ]
 
     name = "bag-from-delayed-" + tokenize(*values)
-    names = [(name, i) for i in range(len(values))]
-    values2 = [(reify, v.key) for v in values]
-    dsk = dict(zip(names, values2))
+    tasks = [Task((name, i), reify, TaskRef(v.key)) for i, v in enumerate(values)]
+    dsk = {t.key: t for t in tasks}
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=values)
+    graph = HighLevelGraph.from_collections(
+        name, dsk, dependencies=values if not all_futures else ()
+    )
     return Bag(graph, name, len(values))
 
 
@@ -1861,9 +1968,9 @@ def bag_range(n, npartitions):
     [0, 1, 2, 3, 4]
     """
     size = n // npartitions
-    name = "range-%d-npartitions-%d" % (n, npartitions)
+    name = f"range-{n}-npartitions-{npartitions}"
     ijs = list(enumerate(take(npartitions, range(0, n, size))))
-    dsk = dict(((name, i), (reify, (range, j, min(j + size, n)))) for i, j in ijs)
+    dsk = {(name, i): (reify, (range, j, min(j + size, n))) for i, j in ijs}
 
     if n % npartitions != 0:
         i, j = ijs[-1]
@@ -1896,28 +2003,29 @@ def bag_zip(*bags):
 
     Incorrect usage:
 
-    >>> numbers = db.range(20) # doctest: +SKIP
-    >>> fizz = numbers.filter(lambda n: n % 3 == 0) # doctest: +SKIP
-    >>> buzz = numbers.filter(lambda n: n % 5 == 0) # doctest: +SKIP
-    >>> fizzbuzz = db.zip(fizz, buzz) # doctest: +SKIP
-    >>> list(fizzbuzzz) # doctest: +SKIP
+    >>> numbers = db.range(31, npartitions=1)
+    >>> fizz = numbers.filter(lambda n: n % 3 == 0)
+    >>> buzz = numbers.filter(lambda n: n % 5 == 0)
+    >>> fizzbuzz = db.zip(fizz, buzz)
+    >>> list(fizzbuzz)
     [(0, 0), (3, 5), (6, 10), (9, 15), (12, 20), (15, 25), (18, 30)]
 
     When what you really wanted was more along the lines of the following:
 
-    >>> list(fizzbuzzz) # doctest: +SKIP
-    [(0, 0), (3, None), (None, 5), (6, None), (None 10), (9, None),
-    (12, None), (15, 15), (18, None), (None, 20), (None, 25), (None, 30)]
+    >>> list(fizzbuzz) # doctest: +SKIP
+    (0, 0), (3, None), (None, 5), (6, None), (9, None), (None, 10),
+    (12, None), (15, 15), (18, None), (None, 20),
+    (21, None), (24, None), (None, 25), (27, None), (30, 30)
     """
     npartitions = bags[0].npartitions
     assert all(bag.npartitions == npartitions for bag in bags)
     # TODO: do more checks
 
     name = "zip-" + tokenize(*bags)
-    dsk = dict(
-        ((name, i), (reify, (zip,) + tuple((bag.name, i) for bag in bags)))
+    dsk = {
+        (name, i): (reify, (zip,) + tuple((bag.name, i) for bag in bags))
         for i in range(npartitions)
-    )
+    }
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=bags)
     return Bag(graph, name, npartitions)
 
@@ -2003,8 +2111,6 @@ def unpack_scalar_dask_kwargs(kwargs):
         else:
             kwargs2[k] = vv
             dependencies.extend(collections)
-    if dependencies:
-        kwargs2 = (dict, (zip, list(kwargs2), list(kwargs2.values())))
     return kwargs2, dependencies
 
 
@@ -2064,8 +2170,7 @@ def bag_map(func, *args, **kwargs):
     >>> db.map(myadd, b, b.max()).compute()
     [4, 5, 6, 7, 8]
     """
-    name = "%s-%s" % (funcname(func), tokenize(func, "map", *args, **kwargs))
-    dsk = {}
+    name = "{}-{}".format(funcname(func), tokenize(func, "map", *args, **kwargs))
     dependencies = []
 
     bags = []
@@ -2163,21 +2268,19 @@ def map_partitions(func, *args, **kwargs):
     single graph, and then computes everything at once, and in some cases
     may be more efficient.
     """
-    name = "%s-%s" % (funcname(func), tokenize(func, "map-partitions", *args, **kwargs))
-    dsk = {}
-    dependencies = []
-
+    name = kwargs.pop("token", None) or funcname(func)
+    name = "{}-{}".format(name, tokenize(func, "map-partitions", *args, **kwargs))
     bags = []
     args2 = []
+    dependencies = []
     for a in args:
         if isinstance(a, Bag):
             bags.append(a)
             args2.append(a)
-        elif isinstance(a, (Item, Delayed)):
-            args2.append(a.key)
-            dependencies.append(a)
         else:
+            a, collections = unpack_collections(a)
             args2.append(a)
+            dependencies.extend(collections)
 
     bag_kwargs = {}
     other_kwargs = {}
@@ -2199,29 +2302,53 @@ def map_partitions(func, *args, **kwargs):
         raise ValueError("All bags must have the same number of partitions.")
     npartitions = npartitions.pop()
 
-    def build_args(n):
-        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+    if bag_kwargs:
 
-    def build_bag_kwargs(n):
-        if not bag_kwargs:
-            return {}
-        return (
-            dict,
-            (zip, list(bag_kwargs), [(b.name, n) for b in bag_kwargs.values()]),
-        )
+        def build_args(n):
+            return [TaskRef((a.name, n)) if isinstance(a, Bag) else a for a in args2]
 
-    if kwargs:
+        def build_bag_kwargs(n) -> dict:
+            if not bag_kwargs:
+                return other_kwargs
+            rv = {
+                k: TaskRef((b.name, n)) if isinstance(b, Bag) else b
+                for k, b in bag_kwargs.items()
+            }
+            rv.update(other_kwargs)
+            return rv
+
+        # Avoid using `blockwise` when a key-word
+        # argument is being used to refer to a collection.
         dsk = {
-            (name, n): (
-                apply,
+            (name, n): Task(
+                (name, n),
                 func,
-                build_args(n),
-                (merge, build_bag_kwargs(n), other_kwargs),
+                *build_args(n),
+                **build_bag_kwargs(n),
             )
             for n in range(npartitions)
         }
     else:
-        dsk = {(name, n): (func,) + tuple(build_args(n)) for n in range(npartitions)}
+        pairs = []
+        numblocks = {}
+        for arg in args2:
+            # TODO: Allow interaction with Frame/Array
+            # collections with proper partitioning
+            if isinstance(arg, Bag):
+                pairs.extend([arg.name, "i"])
+                numblocks[arg.name] = (arg.npartitions,)
+            else:
+                pairs.extend([arg, None])
+        dsk = blockwise(
+            func,
+            name,
+            "i",
+            *pairs,
+            numblocks=numblocks,
+            concatenate=True,
+            dependencies=dependencies,
+            **other_kwargs,
+        )
 
     # If all bags are the same type, use that type, otherwise fallback to Bag
     return_type = set(map(type, bags))
@@ -2241,12 +2368,12 @@ def _reduce(binop, sequence, initial=no_default):
 
 def make_group(k, stage):
     def h(x):
-        return x[0] // k ** stage % k
+        return x[0] // k**stage % k
 
     return h
 
 
-def groupby_tasks(b, grouper, hash=hash, max_branch=32):
+def groupby_tasks(b, grouper, hash=lambda x: int(tokenize(x), 16), max_branch=32):
     max_branch = max_branch or 32
     n = b.npartitions
 
@@ -2260,15 +2387,15 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     splits = []
     joins = []
 
-    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k**stages)]
 
     b2 = b.map(partial(chunk.groupby_tasks_group_hash, hash=hash, grouper=grouper))
 
     token = tokenize(b, grouper, hash, max_branch)
 
-    shuffle_join_name = "shuffle-join-" + token
-    shuffle_group_name = "shuffle-group-" + token
-    shuffle_split_name = "shuffle-split-" + token
+    shuffle_join_name = f"shuffle-join-{token}"
+    shuffle_group_name = f"shuffle-group-{token}"
+    shuffle_split_name = f"shuffle-split-{token}"
 
     start = {}
 
@@ -2300,39 +2427,33 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
         splits.append(split)
 
     for stage in range(1, stages + 1):
-        join = dict(
-            (
-                (shuffle_join_name, stage, inp),
+        join = {
+            (shuffle_join_name, stage, inp): (
+                list,
                 (
-                    list,
-                    (
-                        toolz.concat,
-                        [
-                            (
-                                shuffle_split_name,
-                                stage,
-                                inp[stage - 1],
-                                insert(inp, stage - 1, j),
-                            )
-                            for j in range(k)
-                        ],
-                    ),
+                    toolz.concat,
+                    [
+                        (
+                            shuffle_split_name,
+                            stage,
+                            inp[stage - 1],
+                            insert(inp, stage - 1, j),
+                        )
+                        for j in range(k)
+                    ],
                 ),
             )
             for inp in inputs
-        )
+        }
 
         joins.append(join)
 
-    name = "shuffle-" + token
+    name = f"shuffle-{token}"
 
-    end = dict(
-        (
-            (name, i),
-            (list, (dict.items, (groupby, grouper, (pluck, 1, j)))),
-        )
+    end = {
+        (name, i): (list, (dict.items, (groupby, grouper, (pluck, 1, j))))
         for i, j in enumerate(join)
-    )
+    }
 
     groups.extend(splits)
     groups.extend(joins)
@@ -2342,14 +2463,14 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     return type(b)(graph, name, len(inputs))
 
 
-def groupby_disk(b, grouper, npartitions=None, blocksize=2 ** 20):
+def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     if npartitions is None:
         npartitions = b.npartitions
     token = tokenize(b, grouper, npartitions, blocksize)
 
     import partd
 
-    p = ("partd-" + token,)
+    p = (f"partd-{token}",)
     dirname = config.get("temporary_directory", None)
     if dirname:
         file = (apply, partd.File, (), {"dir": dirname})
@@ -2361,22 +2482,22 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2 ** 20):
         dsk1 = {p: (partd.Python, file)}
 
     # Partition data on disk
-    name = "groupby-part-{0}-{1}".format(funcname(grouper), token)
-    dsk2 = dict(
-        ((name, i), (partition, grouper, (b.name, i), npartitions, p, blocksize))
+    name = f"groupby-part-{funcname(grouper)}-{token}"
+    dsk2 = {
+        (name, i): (partition, grouper, (b.name, i), npartitions, p, blocksize)
         for i in range(b.npartitions)
-    )
+    }
 
     # Barrier
-    barrier_token = "groupby-barrier-" + token
+    barrier_token = f"groupby-barrier-{token}"
 
     dsk3 = {barrier_token: (chunk.barrier,) + tuple(dsk2)}
 
     # Collect groups
-    name = "groupby-collect-" + token
-    dsk4 = dict(
-        ((name, i), (collect, grouper, i, p, barrier_token)) for i in range(npartitions)
-    )
+    name = f"groupby-collect-{token}"
+    dsk4 = {
+        (name, i): (collect, grouper, i, p, barrier_token) for i in range(npartitions)
+    }
 
     dsk = merge(dsk1, dsk2, dsk3, dsk4)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b])
@@ -2391,7 +2512,7 @@ def empty_safe_apply(func, part, is_last):
             if not is_last:
                 return no_result
         return func(part)
-    elif not is_last and len(part) == 0:
+    elif not is_last and is_empty(part):
         return no_result
     else:
         return func(part)
@@ -2406,9 +2527,8 @@ def safe_take(n, b, warn=True):
     r = list(take(n, b))
     if len(r) != n and warn:
         warnings.warn(
-            "Insufficient elements for `take`. {0} elements "
-            "requested, only {1} elements available. Try passing "
-            "larger `npartitions` to `take`.".format(n, len(r))
+            f"Insufficient elements for `take`. {n} elements requested, only {len(r)} "
+            "elements available. Try passing larger `npartitions` to `take`."
         )
     return r
 
@@ -2432,7 +2552,9 @@ def random_sample(x, state_data, prob):
             yield i
 
 
-def random_state_data_python(n, random_state=None):
+def random_state_data_python(
+    n: int, random_state: int | Random | None = None
+) -> list[tuple[int, tuple[int, ...], None]]:
     """Return a list of tuples that can be passed to
     ``random.Random.setstate``.
 
@@ -2442,19 +2564,37 @@ def random_state_data_python(n, random_state=None):
         Number of tuples to return.
     random_state : int or ``random.Random``, optional
         If an int, is used to seed a new ``random.Random``.
-    """
-    if not isinstance(random_state, Random):
-        random_state = Random(random_state)
 
+    See Also
+    --------
+    dask.utils.random_state_data
+    """
     maxuint32 = 1 << 32
-    return [
-        (
-            3,
-            tuple(random_state.randint(0, maxuint32) for i in range(624)) + (624,),
-            None,
-        )
-        for i in range(n)
-    ]
+
+    try:
+        import numpy as np
+
+        if isinstance(random_state, Random):
+            random_state = random_state.randint(0, maxuint32)
+        np_rng = np.random.default_rng(random_state)
+
+        random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
+        arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
+        return [(3, tuple(row) + (624,), None) for row in np.atleast_2d(arr).tolist()]
+
+    except ImportError:
+        # Pure python (much slower)
+        if not isinstance(random_state, Random):
+            random_state = Random(random_state)
+
+        return [
+            (
+                3,
+                tuple(random_state.randint(0, maxuint32) for _ in range(624)) + (624,),
+                None,
+            )
+            for _ in range(n)
+        ]
 
 
 def split(seq, n):
@@ -2474,13 +2614,16 @@ def split(seq, n):
 
 def to_dataframe(seq, columns, dtypes):
     import pandas as pd
+    from packaging.version import Version
 
     seq = reify(seq)
     # pd.DataFrame expects lists, only copy if necessary
     if not isinstance(seq, list):
         seq = list(seq)
+
+    kwargs = {} if Version(pd.__version__).major >= 3 else {"copy": False}
     res = pd.DataFrame(seq, columns=list(columns))
-    return res.astype(dtypes, copy=False)
+    return res.astype(dtypes, **kwargs)
 
 
 def repartition_npartitions(bag, npartitions):
@@ -2492,7 +2635,7 @@ def repartition_npartitions(bag, npartitions):
     if npartitions == bag.npartitions:
         return bag
 
-    new_name = "repartition-%d-%s" % (npartitions, tokenize(bag, npartitions))
+    new_name = f"repartition-{npartitions}-{tokenize(bag, npartitions)}"
     if bag.npartitions > npartitions:
         ratio = bag.npartitions / npartitions
         new_partitions_boundaries = [
@@ -2508,13 +2651,10 @@ def repartition_npartitions(bag, npartitions):
 
 
 def total_mem_usage(partition):
-    from copy import deepcopy
-    from itertools import chain
-
-    # if repartition is called multiple times prior to calling compute(), the partitions
-    # will be itertools.chain objects. Copy the object to avoid consuming the iterable.
-    if isinstance(partition, chain):
-        partition = reify(deepcopy(partition))
+    # Reify iterables to measure actual memory size.
+    # Each compute creates a fresh iterator from the graph.
+    if isinstance(partition, Iterable):
+        partition = reify(partition)
     return sizeof(partition)
 
 
@@ -2529,8 +2669,8 @@ def repartition_size(bag, size):
 
     # 1. split each partition that is larger than partition size
     nsplits = [1 + mem_usage // size for mem_usage in mem_usages]
-    if any((nsplit > 1 for nsplit in nsplits)):
-        split_name = "repartition-split-{}".format(tokenize(bag, size))
+    if any(nsplit > 1 for nsplit in nsplits):
+        split_name = f"repartition-split-{tokenize(bag, size)}"
         bag = _split_partitions(bag, nsplits, split_name)
         # update mem_usages to account for the split partitions
         split_mem_usages = []
@@ -2539,10 +2679,10 @@ def repartition_size(bag, size):
         mem_usages = split_mem_usages
 
     # 2. now that all partitions are less than size, concat them up to size
-    assert all((mem_usage <= size for mem_usage in mem_usages))
+    assert all(mem_usage <= size for mem_usage in mem_usages)
     new_npartitions = list(map(len, iter_chunks(mem_usages, size)))
     new_partitions_boundaries = accumulate(operator.add, new_npartitions)
-    new_name = "repartition-{}".format(tokenize(bag, size))
+    new_name = f"repartition-{tokenize(bag, size)}"
     return _repartition_from_boundaries(bag, new_partitions_boundaries, new_name)
 
 
@@ -2563,9 +2703,9 @@ def _split_partitions(bag, nsplits, new_name):
     repartition_size
     """
     if len(nsplits) != bag.npartitions:
-        raise ValueError("nsplits should have len={}".format(bag.npartitions))
+        raise ValueError(f"nsplits should have len={bag.npartitions}")
     dsk = {}
-    split_name = "split-{}".format(tokenize(bag, nsplits))
+    split_name = f"split-{tokenize(bag, nsplits)}"
     j = 0
     for i, k in enumerate(nsplits):
         if k == 1:

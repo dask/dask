@@ -81,3 +81,25 @@ data directly into *known* categoricals by specifying instances of
 
     >>> dtype = {'col': pd.api.types.CategoricalDtype(['a', 'b', 'c'])}
     >>> ddf = dd.read_csv(..., dtype=dtype)
+
+If you write and read to parquet, Dask will forget known categories.
+This happens because, due to performance concerns, all the categories are
+saved in every partition rather than in the parquet metadata.
+It is possible to manually load the categories:
+
+.. code-block:: python
+
+    >>> import dask.dataframe as dd
+    >>> import pandas as pd
+    >>> df = pd.DataFrame(data=list('abcaabbcc'), columns=['col'])
+    >>> df.col = df.col.astype('category')
+    >>> ddf = dd.from_pandas(df, npartitions=1)
+    >>> ddf.col.cat.known
+    True
+    >>> ddf.to_parquet('tmp')
+    >>> ddf2 = dd.read_parquet('tmp')
+    >>> ddf2.col.cat.known
+    False
+    >>> ddf2.col = ddf2.col.cat.set_categories(ddf2.col.head(1).cat.categories)
+    >>> ddf2.col.cat.known
+    True

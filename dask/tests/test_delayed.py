@@ -1,27 +1,31 @@
-from collections import namedtuple
-from operator import add, setitem
-from functools import partial
-import pickle
-from random import random
-import types
+from __future__ import annotations
 
-from tlz import merge
+import pickle
+import types
+from collections import namedtuple
+from dataclasses import dataclass, field
+from functools import partial
+from operator import add, setitem
+from random import random
+from typing import NamedTuple
+
+import cloudpickle
 import pytest
+from tlz import merge
 
 import dask
+import dask.bag as db
 from dask import compute
-from dask.delayed import delayed, to_task_dask, Delayed
+from dask._task_spec import Task
+from dask.base import collections_to_expr
+from dask.delayed import Delayed, delayed, to_task_dask
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import inc
-from dask.dataframe.utils import assert_eq
-
-try:
-    from operator import matmul
-except ImportError:
-    matmul = None
 
 
-class Tuple(object):
+class Tuple:
     __dask_scheduler__ = staticmethod(dask.threaded.get)
+    __dask_optimize__ = None
 
     def __init__(self, dsk, keys):
         self._dask = dsk
@@ -55,11 +59,11 @@ def test_to_task_dask():
     assert task == (dict, [["b", 2], ["a", 1]]) or task == (dict, [["a", 1], ["b", 2]])
     assert dict(dask) == merge(a.dask, b.dask)
 
-    f = namedtuple("f", ["x", "y"])
-    x = f(1, 2)
+    f = namedtuple("f", ["a", "b", "c"])
+    x = f(a, b, 3)
     task, dask = to_task_dask(x)
-    assert task == x
-    assert dict(dask) == {}
+    assert task == (f, "a", "b", 3)
+    assert dict(dask) == merge(a.dask, b.dask)
 
     task, dask = to_task_dask(slice(a, b, 3))
     assert task == (slice, "a", "b", 3)
@@ -78,7 +82,8 @@ def test_to_task_dask():
     task, dask = to_task_dask(x)
     assert task in dask
     f = dask.pop(task)
-    assert f == (tuple, ["a", "b", "c"])
+    assert f.func == tuple
+    assert f.dependencies == {"a", "b", "c"}
     assert dask == x._dask
 
 
@@ -90,22 +95,136 @@ def test_delayed():
 
     a = delayed(1)
     assert a.compute() == 1
-    assert 1 in a.dask.values()
     b = add2(add2(a, 2), 3)
     assert a.key in b.dask
 
 
-def test_delayed_with_dataclass():
-    dataclasses = pytest.importorskip("dataclasses")
-
-    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
+def test_delayed_with_namedtuple():
+    class ANamedTuple(NamedTuple):
+        a: int  # type: ignore[annotation-unchecked]
 
     literal = dask.delayed(3)
-    with_class = dask.delayed({"a": ADataClass(a=literal)})
+    with_class = dask.delayed({"a": ANamedTuple(a=literal)})
+    assert with_class.compute() == {"a": ANamedTuple(a=3)}
 
     def return_nested(obj):
         return obj["a"].a
+
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
+
+
+@dataclass
+class ANonFrozenDataClass:
+    a: int
+
+
+@dataclass(frozen=True)
+class AFrozenDataClass:
+    a: int
+
+
+@pytest.mark.parametrize("cls", (ANonFrozenDataClass, AFrozenDataClass))
+def test_delayed_with_dataclass(cls):
+    literal = delayed(3)
+    with_class = delayed({"data": cls(a=literal)})
+
+    def return_nested(obj):
+        return obj["data"].a
+
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
+
+
+def test_delayed_with_dataclass_with_custom_init():
+    @dataclass()
+    class ADataClass:
+        a: int  # type: ignore[annotation-unchecked]
+
+        def __init__(self, b: int):
+            self.a = b
+
+    literal = dask.delayed(3)
+
+    with pytest.raises(TypeError) as e:
+        dask.delayed({"data": ADataClass(b=literal)})
+
+    e.match(r"ADataClass")
+    e.match(r"custom __init__ is not supported")
+
+
+def test_delayed_with_dataclass_with_eager_custom_init():
+    @dataclass()
+    class ADataClass:
+        a: int  # type: ignore[annotation-unchecked]
+
+        def __init__(self, b: int):
+            self.a = b
+
+    with_class = delayed({"data": ADataClass(b=3)})
+
+    def return_nested(obj):
+        return obj["data"].a
+
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
+
+
+def test_delayed_with_eager_dataclass_with_set_init_false_field():
+    @dataclass
+    class ADataClass:
+        a: int  # type: ignore[annotation-unchecked]
+        b: int = field(init=False)  # type: ignore[annotation-unchecked]
+
+    def prep_dataclass(a):
+        data = ADataClass(a=a)
+        data.b = 4
+        return data
+
+    with_class = delayed({"data": prep_dataclass(3)})
+
+    def return_nested(obj):
+        return obj["data"].a
+
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
+
+
+def test_delayed_with_dataclass_with_set_init_false_field():
+    @dataclass
+    class ADataClass:
+        a: int  # type: ignore[annotation-unchecked]
+        b: int = field(init=False)  # type: ignore[annotation-unchecked]
+
+    literal = dask.delayed(3)
+
+    def prep_dataclass(a):
+        data = ADataClass(a=a)
+        data.b = 4
+        return data
+
+    with pytest.raises(ValueError) as e:
+        dask.delayed(prep_dataclass(literal))
+
+    e.match(r"ADataClass")
+    e.match(r"`init=False` are not supported")
+
+
+def test_delayed_with_dataclass_with_unset_init_false_field():
+    @dataclass
+    class ADataClass:
+        a: int  # type: ignore[annotation-unchecked]
+        b: int = field(init=False)  # type: ignore[annotation-unchecked]
+
+    literal = dask.delayed(3)
+    with_class = delayed({"data": ADataClass(a=literal)})
+
+    def return_nested(obj):
+        return obj["data"].a
 
     final = delayed(return_nested)(with_class)
 
@@ -124,18 +243,15 @@ def test_operators():
     assert (1 + a).compute() == 11
     assert (a >> 1).compute() == 5
     assert (a > 2).compute()
-    assert (a ** 2).compute() == 100
+    assert (a**2).compute() == 100
 
-    if matmul:
+    class dummy:
+        def __matmul__(self, other):
+            return 4
 
-        class dummy:
-            def __matmul__(self, other):
-                return 4
-
-        c = delayed(dummy())  # noqa
-        d = delayed(dummy())  # noqa
-
-        assert (eval("c @ d")).compute() == 4
+    c = delayed(dummy())
+    d = delayed(dummy())
+    assert (c @ d).compute() == 4
 
 
 def test_methods():
@@ -159,7 +275,9 @@ def test_method_getattr_call_same_task():
     a = delayed([1, 2, 3])
     o = a.index(1)
     # Don't getattr the method, then call in separate task
-    assert getattr not in set(v[0] for v in o.__dask_graph__().values())
+    tasks = {v.func for v in o.__dask_graph__().values() if isinstance(v, Task)}
+    assert tasks
+    assert getattr not in tasks
 
 
 def test_np_dtype_of_delayed():
@@ -167,7 +285,8 @@ def test_np_dtype_of_delayed():
     # https://github.com/dask/dask/pull/4374#issuecomment-454381465
     np = pytest.importorskip("numpy")
     x = delayed(1)
-    with pytest.raises(TypeError):
+    with pytest.raises((ValueError, TypeError)):
+        # ValueError in numpy 2.4+, TypeError earlier.
         np.dtype(x)
     assert delayed(np.array([1], dtype="f8")).dtype.compute() == np.dtype("f8")
 
@@ -215,13 +334,6 @@ def test_common_subexpressions():
     assert len(res.dask) == 3
 
 
-def test_delayed_optimize():
-    x = Delayed("b", {"a": 1, "b": (inc, "a"), "c": (inc, "b")})
-    (x2,) = dask.optimize(x)
-    # Delayed's __dask_optimize__ culls out 'c'
-    assert sorted(x2.dask.keys()) == ["a", "b"]
-
-
 def test_lists():
     a = delayed(1)
     b = delayed(2)
@@ -236,8 +348,8 @@ def test_literates():
     assert delayed(lit).compute() == (1, 2, 3)
     lit = [a, b, 3]
     assert delayed(lit).compute() == [1, 2, 3]
-    lit = set((a, b, 3))
-    assert delayed(lit).compute() == set((1, 2, 3))
+    lit = {a, b, 3}
+    assert delayed(lit).compute() == {1, 2, 3}
     lit = {a: "a", b: "b", 3: "c"}
     assert delayed(lit).compute() == {1: "a", 2: "b", 3: "c"}
     assert delayed(lit)[a].compute() == "a"
@@ -262,17 +374,19 @@ def test_lists_are_concrete():
     assert c.compute() == 20
 
 
-def test_iterators():
+@pytest.mark.parametrize("typ", [list, tuple, set])
+def test_iterators(typ):
     a = delayed(1)
     b = delayed(2)
-    c = delayed(sum)(iter([a, b]))
+    c = delayed(sum)(iter(typ([a, b])))
 
-    assert c.compute() == 3
+    x = c.compute()
+    assert x == 3
 
     def f(seq):
         return sum(seq)
 
-    c = delayed(f)(iter([a, b]))
+    c = delayed(f)(iter(typ([a, b])))
     assert c.compute() == 3
 
 
@@ -394,6 +508,18 @@ def test_nout():
     assert x.compute() == tuple()
 
 
+@pytest.mark.parametrize(
+    "x",
+    [[1, 2], (1, 2), (add, 1, 2), [], ()],
+)
+def test_nout_with_tasks(x):
+    length = len(x)
+    d = delayed(x, nout=length)
+    assert len(d) == length
+    assert len(list(d)) == length
+    assert d.compute() == x
+
+
 def test_kwargs():
     def mysum(a, b, c=(), **kwargs):
         return a + b + sum(c) + sum(kwargs.values())
@@ -434,20 +560,75 @@ def test_array_delayed():
     assert val[0, 0].compute() == (arr + arr + 1)[0, 0]
 
     task, dsk = to_task_dask(darr)
-    orig = set(darr.dask)
-    final = set(dsk)
-    assert orig.issubset(final)
-    diff = final.difference(orig)
+    assert not darr.dask.keys() - dsk.keys()
+    diff = dsk.keys() - darr.dask.keys()
     assert len(diff) == 1
 
     delayed_arr = delayed(darr)
     assert (delayed_arr.compute() == arr).all()
 
 
-def test_array_bag_delayed():
-    db = pytest.importorskip("dask.bag")
-    da = pytest.importorskip("dask.array")
+def test_array_delayed_complex_optimization():
+    # Ensure that when multiple collections are passed to a Delayed function,
+    # they are optimized together
     np = pytest.importorskip("numpy")
+    pytest.importorskip("dask.array")
+    from dask.array.core import from_func
+    from dask.array.utils import assert_eq
+
+    called = False
+
+    def only_once():
+        nonlocal called
+        if called:
+            raise RuntimeError("Already executed")
+
+        called = True
+        return np.arange(100).reshape((10, 10))
+
+    darr = from_func(only_once, shape=(10, 10), dtype=int)
+    a = darr + 1
+    b = darr + 2
+    val = delayed(sum)([a, b, 1])
+    assert isinstance(val, Delayed)
+    np_arr = np.arange(100).reshape((10, 10))
+    assert_eq(val.compute(), (np_arr + 1) + (np_arr + 2) + 1)
+
+
+def test_array_delayed_complex_optimization_kwargs():
+    # Ensure that collections that if multiple collections are passed to a
+    # Delayed function that they are optimized together
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("dask.array")
+    from dask.array.core import from_func
+    from dask.array.utils import assert_eq
+
+    called = False
+
+    def only_once():
+        nonlocal called
+        if called:
+            raise RuntimeError("Already executed")
+
+        called = True
+        return np.arange(100).reshape((10, 10))
+
+    darr = from_func(only_once, shape=(10, 10), dtype=int)
+    a = darr + 1
+    b = darr + 2
+
+    def sum_kwargs_only(*, a, b, c):
+        return sum([a, b, c])
+
+    val = delayed(sum_kwargs_only)(a=a, b=b, c=1)
+    assert isinstance(val, Delayed)
+    np_arr = np.arange(100).reshape((10, 10))
+    assert_eq(val.compute(), (np_arr + 1) + (np_arr + 2) + 1)
+
+
+def test_array_bag_delayed():
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
 
     arr1 = np.arange(100).reshape((10, 10))
     arr2 = arr1.dot(arr1.T)
@@ -494,9 +675,7 @@ def test_delayed_method_descriptor():
 def test_delayed_callable():
     f = delayed(add, pure=True)
     v = f(1, 2)
-    assert v.dask == {v.key: (add, 1, 2)}
-
-    assert f.dask == {f.key: add}
+    assert v.compute() == 3
     assert f.compute() == add
 
 
@@ -506,7 +685,7 @@ def test_delayed_name_on_call():
 
 
 def test_callable_obj():
-    class Foo(object):
+    class Foo:
         def __init__(self, a):
             self.a = a
 
@@ -524,15 +703,11 @@ def identity(x):
     return x
 
 
-def test_name_consistent_across_instances():
+def test_deterministic_name():
     func = delayed(identity, pure=True)
-
-    data = {"x": 1, "y": 25, "z": [1, 2, 3]}
-    assert func(data)._key == "identity-02129ed1acaffa7039deee80c5da547c"
-
-    data = {"x": 1, 1: "x"}
-    assert func(data)._key == func(data)._key
-    assert func(1)._key == "identity-ca2fae46a3b938016331acac1908ae45"
+    data1 = {"x": 1, "y": 25, "z": [1, 2, 3]}
+    data2 = {"x": 1, "y": 25, "z": [1, 2, 3]}
+    assert func(data1)._key == func(data2)._key
 
 
 def test_sensitive_to_partials():
@@ -554,6 +729,7 @@ def test_delayed_name():
 
 
 def test_finalize_name():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
 
     x = da.ones(10, chunks=5)
@@ -563,12 +739,14 @@ def test_finalize_name():
     def key(s):
         if isinstance(s, tuple):
             s = s[0]
-        return s.split("-")[0]
+        # Ignore _ in 'ones_like'
+        return s.split("-")[0].replace("_", "")
 
     assert all(key(k).isalpha() for k in v.dask)
 
 
 def test_keys_from_array():
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     from dask.array.utils import _check_dsk
 
@@ -580,7 +758,7 @@ def test_keys_from_array():
 
 # Mostly copied from https://github.com/pytoolz/toolz/pull/220
 def test_delayed_decorator_on_method():
-    class A(object):
+    class A:
         BASE = 10
 
         def __init__(self, base):
@@ -630,17 +808,17 @@ def test_attribute_of_attribute():
 
 
 def test_check_meta_flag():
+    pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
     from pandas import Series
-    from dask.delayed import delayed
-    from dask.dataframe import from_delayed
 
     a = Series(["a", "b", "a"], dtype="category")
     b = Series(["a", "c", "a"], dtype="category")
     da = delayed(lambda x: x)(a)
     db = delayed(lambda x: x)(b)
 
-    c = from_delayed([da, db], verify_meta=False)
-    assert_eq(c, c)
+    c = dd.from_delayed([da, db], verify_meta=False)
+    dd.utils.assert_eq(c, c)
 
 
 def modlevel_eager(x):
@@ -675,7 +853,112 @@ def test_pickle(f):
     "f", [delayed(modlevel_eager), modlevel_delayed1, modlevel_delayed2]
 )
 def test_cloudpickle(f):
-    cloudpickle = pytest.importorskip("cloudpickle")
     d = f(2)
     d = cloudpickle.loads(cloudpickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
     assert d.compute() == 3
+
+
+def test_dask_layers():
+    d1 = delayed(1)
+    assert d1.dask.layers.keys() == {d1.key}
+    assert d1.dask.dependencies == {d1.key: set()}
+    assert d1.__dask_layers__() == (d1.key,)
+    d2 = modlevel_delayed1(d1)
+    assert d2.dask.layers.keys() == {d1.key, d2.key}
+    assert d2.dask.dependencies == {d1.key: set(), d2.key: {d1.key}}
+    assert d2.__dask_layers__() == (d2.key,)
+
+    hlg = HighLevelGraph.from_collections("foo", {"alias": d2.key}, dependencies=[d2])
+    with pytest.raises(ValueError, match="not in"):
+        Delayed("alias", hlg)
+
+    explicit = Delayed("alias", hlg, layer="foo")
+    assert explicit.__dask_layers__() == ("foo",)
+    explicit.dask.validate()
+
+
+def test_annotations_survive_optimization():
+    with dask.annotate(foo="bar"):
+        graph = HighLevelGraph.from_collections(
+            "b",
+            {"a": 1, "b": (inc, "a"), "c": (inc, "b")},
+            [],
+        )
+        d = Delayed("b", graph)
+
+    assert type(d.dask) is HighLevelGraph
+    assert len(d.dask.layers) == 1
+    assert len(d.dask.layers["b"]) == 3
+    assert d.dask.layers["b"].annotations == {"foo": "bar"}
+    optimized = collections_to_expr([d]).optimize()
+    assert optimized.__dask_annotations__() == {
+        "foo": dict.fromkeys(optimized.__dask_graph__(), "bar")
+    }
+
+
+def test_delayed_function_attributes_forwarded():
+    @delayed
+    def add(x, y):
+        """This is a docstring"""
+        return x + y
+
+    assert add.__name__ == "add"
+    assert add.__doc__ == "This is a docstring"
+    assert add.__wrapped__(1, 2) == 3
+
+
+def test_delayed_fusion():
+    @delayed
+    def test(i):
+        return i + 1
+
+    @delayed
+    def test2(i):
+        return i + 2
+
+    @delayed
+    def test3(i):
+        return i + 3
+
+    obj = test3(test2(test(10)))
+    dsk = collections_to_expr([obj]).__dask_graph__()
+    assert len(dsk) == 3
+
+    obj2 = test3(test2(test(10)))
+    with dask.config.set({"optimization.fuse.delayed": True}):
+        dsk2 = collections_to_expr([obj]).optimize().__dask_graph__()
+        result = dask.compute(obj2)
+    assert len(dsk2) == 2
+    assert dask.compute(obj) == result
+
+
+def test_p2p_as_delayed():
+    pytest.importorskip("distributed")
+    pytest.importorskip("numpy")
+    pytest.importorskip("dask.dataframe")
+    from distributed.utils_test import gen_cluster
+
+    import dask.dataframe as dd
+
+    @gen_cluster(client=True)
+    async def _test(c, s, *workers):
+        test_df = dd.from_dict(
+            {
+                "partition": [0, 1, 2, 3, 0, 1, 2, 3],
+                "value": [1, 2, 3, 4, 5, 6, 7, 8],
+            },
+            npartitions=2,
+        )
+        part_df = test_df.shuffle("partition", force=True, shuffle_method="p2p")
+
+        @delayed
+        def delayed_func(x):
+            return x
+
+        delay_df = delayed_func(part_df)
+        dd.utils.assert_eq(
+            await c.gather(c.compute(delay_df)),
+            await c.gather(c.compute(part_df)),
+        )
+
+    _test()

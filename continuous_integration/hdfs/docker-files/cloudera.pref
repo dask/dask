@@ -1,3 +1,0 @@
-Package: *
-Pin: release o=Cloudera, l=Cloudera
-Pin-Priority: 501

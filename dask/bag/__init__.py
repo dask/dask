@@ -1,21 +1,41 @@
+from __future__ import annotations
+
+__all__ = [
+    "Bag",
+    "Item",
+    "map",
+    "range",
+    "zip",
+    "concat",
+    "from_delayed",
+    "from_sequence",
+    "from_url",
+    "map_partitions",
+    "to_textfiles",
+    "read_avro",
+    "read_text",
+    "assert_eq",
+    "compute",
+]
+
 try:
-    from .core import (
+    from dask.bag.avro import read_avro
+    from dask.bag.core import (
         Bag,
         Item,
-        from_sequence,
-        from_url,
-        to_textfiles,
         concat,
         from_delayed,
+        from_sequence,
+        from_url,
         map_partitions,
-        bag_range as range,
-        bag_zip as zip,
-        bag_map as map,
+        to_textfiles,
     )
-    from .text import read_text
-    from .utils import assert_eq
-    from .avro import read_avro
-    from ..base import compute
+    from dask.bag.core import bag_map as map
+    from dask.bag.core import bag_range as range
+    from dask.bag.core import bag_zip as zip
+    from dask.bag.text import read_text
+    from dask.bag.utils import assert_eq
+    from dask.base import compute
 except ImportError as e:
     msg = (
         "Dask bag requirements are not installed.\n\n"
@@ -23,4 +43,4 @@ except ImportError as e:
         "  conda install dask               # either conda install\n"
         '  python -m pip install "dask[bag]" --upgrade  # or python -m pip install'
     )
-    raise ImportError(str(e) + "\n\n" + msg) from e
+    raise ImportError(f"{e}\n\n{msg}") from e

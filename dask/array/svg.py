@@ -1,9 +1,15 @@
+from __future__ import annotations
+
 import math
 import re
+from functools import lru_cache
 
 import numpy as np
 
+from dask.utils import cached_cumsum
 
+
+@lru_cache(maxsize=512)
 def svg(chunks, size=200, **kwargs):
     """Convert chunks from Dask Array into an SVG Image
 
@@ -45,11 +51,12 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200, sizes=None):
     sizes = sizes or draw_sizes(shape, size=size)
     y, x = grid_points(chunks, sizes)
 
-    lines, (min_x, max_x, min_y, max_y) = svg_grid(x, y, offset=offset, skew=skew)
+    lines, (min_x, max_x, min_y, max_y) = svg_grid(
+        x, y, offset=offset, skew=skew, size=size
+    )
 
-    header = (
-        '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
-        % (max_x + 50, max_y + 50)
+    header = '<svg width="{}" height="{}" style="stroke:rgb(0,0,0);stroke-width:1" >\n'.format(
+        int(max_x + 50), int(max_y + 50)
     )
     footer = "\n</svg>"
 
@@ -61,10 +68,18 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200, sizes=None):
     text = [
         "",
         "  <!-- Text -->",
-        '  <text x="%f" y="%f" %s >%d</text>'
-        % (max_x / 2, max_y + 20, text_style, shape[1]),
-        '  <text x="%f" y="%f" %s transform="rotate(%d,%f,%f)">%d</text>'
-        % (max_x + 20, max_y / 2, text_style, rotate, max_x + 20, max_y / 2, shape[0]),
+        '  <text x="{}" y="{}" {} >{}</text>'.format(
+            max_x / 2, max_y + 20, text_style, shape[1]
+        ),
+        '  <text x="{}" y="{}" {} transform="rotate({},{},{})">{}</text>'.format(
+            max_x + 20,
+            max_y / 2,
+            text_style,
+            rotate,
+            max_x + 20,
+            max_y / 2,
+            shape[0],
+        ),
     ]
 
     return header + "\n".join(lines + text) + footer
@@ -77,17 +92,18 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
     ox, oy = offset
 
     xy, (mnx, mxx, mny, mxy) = svg_grid(
-        x / 1.7, y, offset=(ox + 10, oy + 0), skew=(1, 0)
+        x / 1.7, y, offset=(ox + 10, oy + 0), skew=(1, 0), size=size
     )
 
-    zx, (_, _, _, max_x) = svg_grid(z, x / 1.7, offset=(ox + 10, oy + 0), skew=(0, 1))
+    zx, (_, _, _, max_x) = svg_grid(
+        z, x / 1.7, offset=(ox + 10, oy + 0), skew=(0, 1), size=size
+    )
     zy, (min_z, max_z, min_y, max_y) = svg_grid(
-        z, y, offset=(ox + max_x + 10, oy + max_x), skew=(0, 0)
+        z, y, offset=(ox + max_x + 10, oy + max_x), skew=(0, 0), size=size
     )
 
-    header = (
-        '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
-        % (max_z + 50, max_y + 50)
+    header = '<svg width="{}" height="{}" style="stroke:rgb(0,0,0);stroke-width:1" >\n'.format(
+        int(max_z + 50), int(max_y + 50)
     )
     footer = "\n</svg>"
 
@@ -99,10 +115,13 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
     text = [
         "",
         "  <!-- Text -->",
-        '  <text x="%f" y="%f" %s >%d</text>'
-        % ((min_z + max_z) / 2, max_y + 20, text_style, shape[2]),
-        '  <text x="%f" y="%f" %s transform="rotate(%d,%f,%f)">%d</text>'
-        % (
+        '  <text x="{}" y="{}" {} >{}</text>'.format(
+            (min_z + max_z) / 2,
+            max_y + 20,
+            text_style,
+            shape[2],
+        ),
+        '  <text x="{}" y="{}" {} transform="rotate({},{},{})">{}</text>'.format(
             max_z + 20,
             (min_y + max_y) / 2,
             text_style,
@@ -111,8 +130,7 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
             (min_y + max_y) / 2,
             shape[1],
         ),
-        '  <text x="%f" y="%f" %s transform="rotate(45,%f,%f)">%d</text>'
-        % (
+        '  <text x="{}" y="{}" {} transform="rotate(45,{},{})">{}</text>'.format(
             (mnx + mxx) / 2 - 10,
             mxy - (mxx - mnx) / 2 + 20,
             text_style,
@@ -152,15 +170,14 @@ def svg_nd(chunks, size=200):
 
         out.append(o)
 
-    header = (
-        '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
-        % (left, total_height)
+    header = '<svg width="{}" height="{}" style="stroke:rgb(0,0,0);stroke-width:1" >\n'.format(
+        int(left), int(total_height)
     )
     footer = "\n</svg>"
     return header + "\n\n".join(out) + footer
 
 
-def svg_lines(x1, y1, x2, y2):
+def svg_lines(x1, y1, x2, y2, max_n=20):
     """Convert points into lines of text for an SVG plot
 
     Examples
@@ -170,9 +187,17 @@ def svg_lines(x1, y1, x2, y2):
      '  <line x1="1" y1="0" x2="11" y2="1" style="stroke-width:2" />']
     """
     n = len(x1)
+
+    if n > max_n:
+        indices = np.linspace(0, n - 1, max_n, dtype="int")
+    else:
+        indices = range(n)
+
     lines = [
-        '  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (x1[i], y1[i], x2[i], y2[i])
-        for i in range(n)
+        '  <line x1="{}" y1="{}" x2="{}" y2="{}" />'.format(
+            int(x1[i]), int(y1[i]), int(x2[i]), int(y2[i])
+        )
+        for i in indices
     ]
 
     lines[0] = lines[0].replace(" /", ' style="stroke-width:2" /')
@@ -180,7 +205,7 @@ def svg_lines(x1, y1, x2, y2):
     return lines
 
 
-def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
+def svg_grid(x, y, offset=(0, 0), skew=(0, 0), size=200):
     """Create lines of SVG text that show a grid
 
     Parameters
@@ -207,8 +232,9 @@ def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
     min_y = min(y1.min(), y2.min())
     max_x = max(x1.max(), x2.max())
     max_y = max(y1.max(), y2.max())
+    max_n = size // 6
 
-    h_lines = ["", "  <!-- Horizontal lines -->"] + svg_lines(x1, y1, x2, y2)
+    h_lines = ["", "  <!-- Horizontal lines -->"] + svg_lines(x1, y1, x2, y2, max_n)
 
     # Vertical lines
     x1 = x + offset[0]
@@ -222,13 +248,14 @@ def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
     if skew[1]:
         x2 += skew[1] * y.max()
 
-    v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2)
+    v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2, max_n)
 
+    color = "ECB172" if len(x) < max_n and len(y) < max_n else "8B4903"
+    corners = f"{x1[0]},{y1[0]} {x1[-1]},{y1[-1]} {x2[-1]},{y2[-1]} {x2[0]},{y2[0]}"
     rect = [
         "",
         "  <!-- Colored Rectangle -->",
-        '  <polygon points="%f,%f %f,%f %f,%f %f,%f" style="fill:#ECB172A0;stroke-width:0"/>'
-        % (x1[0], y1[0], x1[-1], y1[-1], x2[-1], y2[-1], x2[0], y2[0]),
+        f'  <polygon points="{corners}" style="fill:#{color}A0;stroke-width:0"/>',
     ]
 
     return h_lines + v_lines + rect, (min_x, max_x, min_y, max_y)
@@ -239,13 +266,13 @@ def svg_1d(chunks, sizes=None, **kwargs):
 
 
 def grid_points(chunks, sizes):
-    cumchunks = [np.cumsum((0,) + c) for c in chunks]
+    cumchunks = [np.array(cached_cumsum(c, initial_zero=True)) for c in chunks]
     points = [x * size / x[-1] for x, size in zip(cumchunks, sizes)]
     return points
 
 
 def draw_sizes(shape, size=200):
-    """ Get size in pixels for all dimensions """
+    """Get size in pixels for all dimensions"""
     mx = max(shape)
     ratios = [mx / max(0.1, d) for d in shape]
     ratios = [ratio_response(r) for r in ratios]

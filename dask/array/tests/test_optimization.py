@@ -1,157 +1,43 @@
+from __future__ import annotations
+
 import pytest
+
+from dask._task_spec import Alias, DataNode
 
 pytest.importorskip("numpy")
 
 import numpy as np
+
 import dask
 import dask.array as da
-from dask.optimization import fuse
-from dask.utils import SerializableLock
-from dask.array.core import getter, getter_nofancy
-from dask.array.optimization import getitem, optimize, optimize_slices, fuse_slice
+from dask.array.chunk import getitem
+from dask.array.core import getter
+from dask.array.optimization import fuse_slice, optimize, optimize_blockwise
 from dask.array.utils import assert_eq
+from dask.highlevelgraph import HighLevelGraph
 
 
-def test_fuse_getitem():
-    pairs = [
-        (
-            (getter, (getter, "x", slice(1000, 2000)), slice(15, 20)),
-            (getter, "x", slice(1015, 1020)),
-        ),
-        (
-            (
-                getitem,
-                (getter, "x", (slice(1000, 2000), slice(100, 200))),
-                (slice(15, 20), slice(50, 60)),
-            ),
-            (getter, "x", (slice(1015, 1020), slice(150, 160))),
-        ),
-        (
-            (
-                getitem,
-                (getter_nofancy, "x", (slice(1000, 2000), slice(100, 200))),
-                (slice(15, 20), slice(50, 60)),
-            ),
-            (getter_nofancy, "x", (slice(1015, 1020), slice(150, 160))),
-        ),
-        ((getter, (getter, "x", slice(1000, 2000)), 10), (getter, "x", 1010)),
-        (
-            (getitem, (getter, "x", (slice(1000, 2000), 10)), (slice(15, 20),)),
-            (getter, "x", (slice(1015, 1020), 10)),
-        ),
-        (
-            (getitem, (getter_nofancy, "x", (slice(1000, 2000), 10)), (slice(15, 20),)),
-            (getter_nofancy, "x", (slice(1015, 1020), 10)),
-        ),
-        (
-            (getter, (getter, "x", (10, slice(1000, 2000))), (slice(15, 20),)),
-            (getter, "x", (10, slice(1015, 1020))),
-        ),
-        (
-            (
-                getter,
-                (getter, "x", (slice(1000, 2000), slice(100, 200))),
-                (slice(None, None), slice(50, 60)),
-            ),
-            (getter, "x", (slice(1000, 2000), slice(150, 160))),
-        ),
-        (
-            (getter, (getter, "x", (None, slice(None, None))), (slice(None, None), 5)),
-            (getter, "x", (None, 5)),
-        ),
-        (
-            (
-                getter,
-                (getter, "x", (slice(1000, 2000), slice(10, 20))),
-                (slice(5, 10),),
-            ),
-            (getter, "x", (slice(1005, 1010), slice(10, 20))),
-        ),
-        (
-            (
-                getitem,
-                (getitem, "x", (slice(1000, 2000),)),
-                (slice(5, 10), slice(10, 20)),
-            ),
-            (getitem, "x", (slice(1005, 1010), slice(10, 20))),
-        ),
-        (
-            (getter, (getter, "x", slice(1000, 2000), False, False), slice(15, 20)),
-            (getter, "x", slice(1015, 1020)),
-        ),
-        (
-            (getter, (getter, "x", slice(1000, 2000)), slice(15, 20), False, False),
-            (getter, "x", slice(1015, 1020)),
-        ),
-        (
-            (
-                getter,
-                (getter_nofancy, "x", slice(1000, 2000), False, False),
-                slice(15, 20),
-                False,
-                False,
-            ),
-            (getter_nofancy, "x", slice(1015, 1020), False, False),
-        ),
-    ]
+def _check_get_task_eq(a, b) -> bool:
+    """
+    Check that two tasks (possibly containing nested tasks) are equal, where
+    equality is lax by allowing the callable in a SubgraphCallable to be the same
+    as a non-wrapped task.
+    """
+    if len(a) < 1 or len(a) != len(b):
+        return False
 
-    for inp, expected in pairs:
-        result = optimize_slices({"y": inp})
-        assert result == {"y": expected}
+    a_callable = a[0]
+    b_callable = b[0]
+    if a_callable != b_callable:
+        return False
 
-
-def test_fuse_getitem_lock():
-    lock1 = SerializableLock()
-    lock2 = SerializableLock()
-
-    pairs = [
-        (
-            (getter, (getter, "x", slice(1000, 2000), True, lock1), slice(15, 20)),
-            (getter, "x", slice(1015, 1020), True, lock1),
-        ),
-        (
-            (
-                getitem,
-                (getter, "x", (slice(1000, 2000), slice(100, 200)), True, lock1),
-                (slice(15, 20), slice(50, 60)),
-            ),
-            (getter, "x", (slice(1015, 1020), slice(150, 160)), True, lock1),
-        ),
-        (
-            (
-                getitem,
-                (
-                    getter_nofancy,
-                    "x",
-                    (slice(1000, 2000), slice(100, 200)),
-                    True,
-                    lock1,
-                ),
-                (slice(15, 20), slice(50, 60)),
-            ),
-            (getter_nofancy, "x", (slice(1015, 1020), slice(150, 160)), True, lock1),
-        ),
-        (
-            (
-                getter,
-                (getter, "x", slice(1000, 2000), True, lock1),
-                slice(15, 20),
-                True,
-                lock2,
-            ),
-            (
-                getter,
-                (getter, "x", slice(1000, 2000), True, lock1),
-                slice(15, 20),
-                True,
-                lock2,
-            ),
-        ),
-    ]
-
-    for inp, expected in pairs:
-        result = optimize_slices({"y": inp})
-        assert result == {"y": expected}
+    for ae, be in zip(a[1:], b[1:]):
+        if dask.core.istask(ae):
+            if not _check_get_task_eq(ae, be):
+                return False
+        elif ae != be:
+            return False
+    return True
 
 
 def test_optimize_with_getitem_fusion():
@@ -162,33 +48,8 @@ def test_optimize_with_getitem_fusion():
     }
 
     result = optimize(dsk, ["c"])
-    expected_task = (getter, "some-array", (15, slice(150, 160)))
-    assert any(v == expected_task for v in result.values())
+    assert isinstance(result["c"], Alias)
     assert len(result) < len(dsk)
-
-
-def test_optimize_slicing():
-    dsk = {
-        "a": (range, 10),
-        "b": (getter, "a", (slice(None, None, None),)),
-        "c": (getter, "b", (slice(None, None, None),)),
-        "d": (getter, "c", (slice(0, 5, None),)),
-        "e": (getter, "d", (slice(None, None, None),)),
-    }
-
-    expected = {"e": (getter, (range, 10), (slice(0, 5, None),))}
-    result = optimize_slices(fuse(dsk, [], rename_keys=False)[0])
-    assert result == expected
-
-    # protect output keys
-    expected = {
-        "c": (getter, (range, 10), (slice(0, None, None),)),
-        "d": (getter, "c", (slice(0, 5, None),)),
-        "e": (getter, "d", (slice(None, None, None),)),
-    }
-    result = optimize_slices(fuse(dsk, ["c", "d", "e"], rename_keys=False)[0])
-
-    assert result == expected
 
 
 def test_fuse_slice():
@@ -247,38 +108,19 @@ def test_nonfusible_fancy_indexing():
             fuse_slice(a, b)
 
 
-def test_hard_fuse_slice_cases():
-    dsk = {
-        "x": (getter, (getter, "x", (None, slice(None, None))), (slice(None, None), 5))
-    }
-    assert optimize_slices(dsk) == {"x": (getter, "x", (None, 5))}
-
-
 def test_dont_fuse_numpy_arrays():
     x = np.ones(10)
-    for chunks in [(5,), (10,)]:
+    for _ in [(5,), (10,)]:
         y = da.from_array(x, chunks=(10,))
 
         dsk = y.__dask_optimize__(y.dask, y.__dask_keys__())
-        assert sum(isinstance(v, np.ndarray) for v in dsk.values()) == 1
-
-
-def test_minimize_data_transfer():
-    x = np.ones(100)
-    y = da.from_array(x, chunks=25)
-    z = y + 1
-    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-
-    keys = list(dsk)
-    results = dask.get(dsk, keys)
-    big_key = [k for k, r in zip(keys, results) if r is x][0]
-    dependencies, dependents = dask.core.get_deps(dsk)
-    deps = dependents[big_key]
-
-    assert len(deps) == 4
-    for dep in deps:
-        assert dsk[dep][0] in (getitem, getter)
-        assert dsk[dep][1] == big_key
+        assert (
+            sum(
+                isinstance(v, DataNode) and isinstance(v.value, np.ndarray)
+                for v in dsk.values()
+            )
+            == 1
+        )
 
 
 def test_fuse_slices_with_alias():
@@ -290,23 +132,7 @@ def test_fuse_slices_with_alias():
     }
     keys = [("dx2", 0)]
     dsk2 = optimize(dsk, keys)
-    assert len(dsk2) == 3
-    fused_key = set(dsk2).difference(["x", ("dx2", 0)]).pop()
-    assert dsk2[fused_key] == (getter, "x", (slice(0, 4), 0))
-
-
-def test_dont_fuse_fancy_indexing_in_getter_nofancy():
-    dsk = {
-        "a": (
-            getitem,
-            (getter_nofancy, "x", (slice(10, 20, None), slice(100, 200, None))),
-            ([1, 3], slice(50, 60, None)),
-        )
-    }
-    assert optimize_slices(dsk) == dsk
-
-    dsk = {"a": (getitem, (getter_nofancy, "x", [1, 2, 3]), 0)}
-    assert optimize_slices(dsk) == dsk
+    assert len(dsk2) == 2
 
 
 @pytest.mark.parametrize("chunks", [10, 5, 3])
@@ -315,45 +141,14 @@ def test_fuse_getter_with_asarray(chunks):
     y = da.ones(10, chunks=chunks)
     z = x + y
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-    assert any(v is x for v in dsk.values())
-    for v in dsk.values():
-        s = str(v)
-        assert s.count("getitem") + s.count("getter") <= 1
-        if v is not x:
-            assert "1234567890" not in s
-    n_getters = len([v for v in dsk.values() if v[0] in (getitem, getter)])
-    if y.npartitions > 1:
-        assert n_getters == y.npartitions
+    if chunks == 10:
+        assert len(dsk) == 2 and any(isinstance(t, Alias) for t in dsk.values())
     else:
-        assert n_getters == 0
-
+        assert any(
+            isinstance(v, DataNode) and isinstance(v.value, np.ndarray)
+            for v in dsk.values()
+        )
     assert_eq(z, x + 1)
-
-
-@pytest.mark.parametrize(
-    "get,remove", [(getter, False), (getter_nofancy, False), (getitem, True)]
-)
-def test_remove_no_op_slices_if_get_is_not_getter_or_getter_nofancy(get, remove):
-    # Test that no-op slices are removed as long as get is not getter or
-    # getter_nofancy. This ensures that `get` calls are always made in all
-    # tasks created by `from_array`, even after optimization
-    null = slice(0, None)
-    opts = [
-        (
-            (get, "x", null, False, False),
-            "x" if remove else (get, "x", null, False, False),
-        ),
-        (
-            (getitem, (get, "x", null, False, False), null),
-            "x" if remove else (get, "x", null, False, False),
-        ),
-        (
-            (getitem, (get, "x", (null, null), False, False), ()),
-            "x" if remove else (get, "x", (null, null), False, False),
-        ),
-    ]
-    for orig, final in opts:
-        assert optimize_slices({"a": orig}) == {"a": final}
 
 
 @pytest.mark.xfail(reason="blockwise fusion does not respect this, which is ok")
@@ -368,6 +163,38 @@ def test_turn_off_fusion():
 
     assert dask.get(a, y.__dask_keys__()) == dask.get(b, y.__dask_keys__())
     assert len(a) < len(b)
+
+
+def test_disable_lowlevel_fusion():
+    """Check that by disabling fusion, the HLG survives through optimizations"""
+
+    with dask.config.set({"optimization.fuse.active": False}):
+        y = da.ones(3, chunks=(3,), dtype="int")
+        optimize = y.__dask_optimize__
+        dsk1 = y.__dask_graph__()
+        dsk2 = optimize(dsk1, y.__dask_keys__())
+        assert isinstance(dsk1, HighLevelGraph)
+        assert isinstance(dsk2, HighLevelGraph)
+        assert dsk1 == dsk2
+        y = y.persist()
+        assert isinstance(y.__dask_graph__(), HighLevelGraph)
+        assert_eq(y, [1] * 3)
+
+
+def test_array_creation_blockwise_fusion():
+    """
+    Check that certain array creation routines work with blockwise and can be
+    fused with other blockwise operations.
+    """
+    x = da.ones(3, chunks=(3,))
+    y = da.zeros(3, chunks=(3,))
+    z = da.full(3, fill_value=2, chunks=(3,))
+    a = x + y + z
+    dsk1 = a.__dask_graph__()
+    assert len(dsk1) == 5
+    dsk2 = optimize_blockwise(dsk1)
+    assert len(dsk2) == 1
+    assert_eq(a, np.full(3, 3.0))
 
 
 def test_gh3937():
@@ -394,8 +221,36 @@ def test_double_dependencies():
 def test_fuse_roots():
     x = da.ones(10, chunks=(2,))
     y = da.zeros(10, chunks=(2,))
-    z = (x + 1) + (2 * y ** 2)
+    z = (x + 1) + (2 * y**2)
     (zz,) = dask.optimize(z)
     # assert len(zz.dask) == 5
     assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
     assert_eq(zz, z)
+
+
+def test_fuse_roots_annotations():
+    x = da.ones(10, chunks=(2,))
+    y = da.zeros(10, chunks=(2,))
+
+    with dask.annotate(foo="bar"):
+        y = y**2
+
+    z = (x + 1) + (2 * y)
+    hlg = dask.blockwise.optimize_blockwise(z.dask)
+    assert len(hlg.layers) == 3
+    assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
+    za = da.Array(hlg, z.name, z.chunks, z.dtype)
+    assert_eq(za, z)
+
+
+@pytest.mark.parametrize("optimize_graph", [True, False])
+def test_optimize_blockwise_duplicate_dependency(optimize_graph):
+    # Two blockwise operations in a row with duplicate name
+    # (See: https://github.com/dask/dask/issues/8535)
+    xx = da.from_array(np.array([[1, 1], [2, 2]]), chunks=1)
+    xx = xx * 2
+    z = da.matmul(xx, xx)
+
+    # Compare to known answer
+    result = z.compute(optimize_graph=optimize_graph)
+    assert assert_eq(result, [[12, 12], [24, 24]])

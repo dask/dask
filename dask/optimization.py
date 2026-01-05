@@ -1,18 +1,20 @@
+from __future__ import annotations
+
 import math
 import numbers
 from enum import Enum
 
-from . import config, core, utils
-from .core import (
-    istask,
+from dask import config, utils
+from dask._task_spec import GraphNode
+from dask.core import (
+    flatten,
     get_dependencies,
+    ishashable,
+    istask,
+    reverse_dict,
     subs,
     toposort,
-    flatten,
-    reverse_dict,
-    ishashable,
 )
-from .utils_test import add, inc  # noqa: F401
 
 
 def cull(dsk, keys):
@@ -23,12 +25,18 @@ def cull(dsk, keys):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
+
+    >>> def add(x, y):
+    ...     return x + y
+
     >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
-    >>> dsk, dependencies = cull(d, 'out')  # doctest: +SKIP
-    >>> dsk  # doctest: +SKIP
-    {'x': 1, 'out': (add, 'x', 10)}
-    >>> dependencies  # doctest: +SKIP
-    {'x': set(), 'out': set(['x'])}
+    >>> dsk, dependencies = cull(d, 'out')
+    >>> dsk                                                     # doctest: +ELLIPSIS
+    {'out': (<function add at ...>, 'x', 10), 'x': 1}
+    >>> dependencies                                            # doctest: +ELLIPSIS
+    {'out': ['x'], 'x': []}
 
     Returns
     -------
@@ -100,16 +108,22 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
+
+    >>> def add(x, y):
+    ...     return x + y
+
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dsk, dependencies = fuse(d)
     >>> dsk # doctest: +SKIP
     {'a-b-c': (inc, (inc, 1)), 'c': 'a-b-c'}
     >>> dsk, dependencies = fuse(d, rename_keys=False)
-    >>> dsk # doctest: +SKIP
-    {'c': (inc, (inc, 1))}
+    >>> dsk # doctest: +ELLIPSIS
+    {'c': (<function inc at ...>, (<function inc at ...>, 1))}
     >>> dsk, dependencies = fuse(d, keys=['b'], rename_keys=False)
-    >>> dsk  # doctest: +SKIP
-    {'b': (inc, 1), 'c': (inc, 'b')}
+    >>> dsk  # doctest: +ELLIPSIS
+    {'b': (<function inc at ...>, 1), 'c': (<function inc at ...>, 'b')}
 
     Returns
     -------
@@ -233,15 +247,21 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
+
+    >>> def add(x, y):
+    ...     return x + y
+
     >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
-    >>> inline(d)  # doctest: +SKIP
-    {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
+    >>> inline(d)       # doctest: +ELLIPSIS
+    {'x': 1, 'y': (<function inc at ...>, 1), 'z': (<function add at ...>, 1, 'y')}
 
-    >>> inline(d, keys='y')  # doctest: +SKIP
-    {'x': 1, 'y': (inc, 1), 'z': (add, 1, (inc, 1))}
+    >>> inline(d, keys='y') # doctest: +ELLIPSIS
+    {'x': 1, 'y': (<function inc at ...>, 1), 'z': (<function add at ...>, 1, (<function inc at ...>, 1))}
 
-    >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
-    {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
+    >>> inline(d, keys='y', inline_constants=False) # doctest: +ELLIPSIS
+    {'x': 1, 'y': (<function inc at ...>, 'x'), 'z': (<function add at ...>, 'x', (<function inc at ...>, 'x'))}
     """
     if dependencies and isinstance(next(iter(dependencies.values())), list):
         dependencies = {k: set(v) for k, v in dependencies.items()}
@@ -261,7 +281,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     # Keys may depend on other keys, so determine replace order with toposort.
     # The values stored in `keysubs` do not include other keys.
     replaceorder = toposort(
-        dict((k, dsk[k]) for k in keys if k in dsk), dependencies=dependencies
+        {k: dsk[k] for k in keys if k in dsk}, dependencies=dependencies
     )
     keysubs = {}
     for key in replaceorder:
@@ -291,6 +311,9 @@ def inline_functions(
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
+    >>> double = lambda x: x * 2
     >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
     ...        'i': (inc, 'x'),
     ...        'd': (double, 'y'),
@@ -319,17 +342,23 @@ def inline_functions(
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
 
-    def inlinable(v):
-        try:
-            return functions_of(v).issubset(fast_functions)
-        except TypeError:
-            return False
+    def inlinable(key, task):
+        if (
+            not isinstance(task, GraphNode)
+            and istask(task)
+            and key not in output
+            and dependents[key]
+        ):
+            try:
+                if functions_of(task).issubset(fast_functions) and not any(
+                    isinstance(dsk[d], GraphNode) for d in dependents[key]
+                ):
+                    return True
+            except TypeError:
+                pass
+        return False
 
-    keys = [
-        k
-        for k, v in dsk.items()
-        if istask(v) and dependents[k] and k not in output and inlinable(v)
-    ]
+    keys = [k for k, v in dsk.items() if inlinable(k, v)]
 
     if keys:
         dsk = inline(
@@ -351,6 +380,9 @@ def functions_of(task):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
+    >>> mul = lambda x, y: x * y
     >>> task = (add, (mul, 1, 2), (inc, 3))  # doctest: +SKIP
     >>> functions_of(task)  # doctest: +SKIP
     set([add, mul, inc])
@@ -432,7 +464,6 @@ def fuse(
     max_height=_default,
     max_depth_new_edges=_default,
     rename_keys=_default,
-    fuse_subgraphs=_default,
 ):
     """Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
@@ -478,11 +509,6 @@ def fuse(
         If False, then the top-most key will be used.  For advanced usage, a
         function to create the new name is also accepted.
         dask.config key: ``optimization.fuse.rename-keys``
-    fuse_subgraphs : bool or None, optional (default None)
-        Whether to fuse multiple tasks into ``SubgraphCallable`` objects.
-        Set to None to let the default optimizer of individual dask collections decide.
-        If no collection-specific default exists, None defaults to False.
-        dask.config key: ``optimization.fuse.subgraphs``
 
     Returns
     -------
@@ -492,7 +518,10 @@ def fuse(
         dict mapping dependencies after fusion.  Useful side effect to accelerate other
         downstream optimizations.
     """
-    if not config.get("optimization.fuse.active"):
+
+    # Perform low-level fusion unless the user has
+    # specified False explicitly.
+    if config.get("optimization.fuse.active") is False:
         return dsk, dependencies
 
     if keys is not None and not isinstance(keys, set):
@@ -517,11 +546,6 @@ def fuse(
         assert max_width is not _default
     if max_width is None:
         max_width = 1.5 + ave_width * math.log(ave_width + 1)
-    if fuse_subgraphs is _default:
-        fuse_subgraphs = config.get("optimization.fuse.subgraphs")
-        assert fuse_subgraphs is not _default
-    if fuse_subgraphs is None:
-        fuse_subgraphs = False
 
     if not ave_width or not max_height:
         return dsk, dependencies
@@ -542,7 +566,10 @@ def fuse(
     if dependencies is None:
         deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
     else:
-        deps = dict(dependencies)
+        deps = {
+            k: v if isinstance(v, list) else get_dependencies(dsk, k, as_list=True)
+            for k, v in dependencies.items()
+        }
 
     rdeps = {}
     for k, vals in deps.items():
@@ -553,19 +580,21 @@ def fuse(
                 rdeps[v].append(k)
         deps[k] = set(vals)
 
-    reducible = {k for k, vals in rdeps.items() if len(vals) == 1}
-    if keys:
-        reducible -= keys
+    reducible = set()
+    for k, vals in rdeps.items():
+        if (
+            len(vals) == 1
+            and k not in (keys or ())
+            and k in dsk
+            and not isinstance(dsk[k], GraphNode)
+            and (type(dsk[k]) is tuple or isinstance(dsk[k], (numbers.Number, str)))
+            and not any(isinstance(dsk[v], GraphNode) for v in vals)
+        ):
+            reducible.add(k)
 
-    for k, v in dsk.items():
-        if type(v) is not tuple and not isinstance(v, (numbers.Number, str)):
-            reducible.discard(k)
-
-    if not reducible and (
-        not fuse_subgraphs or all(len(set(v)) != 1 for v in rdeps.values())
-    ):
+    if not reducible and (all(len(set(v)) != 1 for v in rdeps.values())):
         # Quick return if there's nothing to do. Only progress if there's tasks
-        # fusible by the main `fuse`, or by `fuse_subgraphs` if enabled.
+        # fusible by the main `fuse`
         return dsk, deps
 
     rv = dsk.copy()
@@ -649,6 +678,11 @@ def fuse(
                         and
                         # Sanity check; don't go too deep if new levels introduce new edge dependencies
                         (no_new_edges or height < max_depth_new_edges)
+                        and (
+                            not isinstance(dsk[parent], GraphNode)
+                            # TODO: substitute can be implemented with GraphNode.inline
+                            # or isinstance(dsk[child_key], GraphNode)
+                        )
                     ):
                         # Perform substitutions as we go
                         val = subs(dsk[parent], child_key, child_task)
@@ -727,9 +761,9 @@ def fuse(
                     children_info = info_stack[-num_children:]
                     del info_stack[-num_children:]
                     for (
-                        cur_key,
-                        cur_task,
-                        cur_keys,
+                        _,
+                        _,
+                        _,
                         cur_height,
                         cur_width,
                         cur_num_nodes,
@@ -766,6 +800,16 @@ def fuse(
                         and
                         # Sanity check; don't go too deep if new levels introduce new edge dependencies
                         (no_new_edges or height < max_depth_new_edges)
+                        and (
+                            not isinstance(dsk[parent], GraphNode)
+                            and not any(
+                                isinstance(dsk[child_key], GraphNode)
+                                for child_key in children
+                            )
+                            # TODO: substitute can be implemented with GraphNode.inline
+                            # or all(
+                            #     isintance(dsk[child], GraphNode) for child in children
+                        )
                     ):
                         # Perform substitutions as we go
                         val = dsk[parent]
@@ -832,9 +876,6 @@ def fuse(
                 # Traverse upwards
                 parent = rdeps[parent][0]
 
-    if fuse_subgraphs:
-        _inplace_fuse_subgraphs(rv, keys, deps, fused_trees, rename_keys)
-
     if key_renamer:
         for root_key, fused_keys in fused_trees.items():
             alias = key_renamer(fused_keys)
@@ -845,121 +886,3 @@ def fuse(
                 deps[root_key] = {alias}
 
     return rv, deps
-
-
-def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
-    """Subroutine of fuse.
-
-    Mutates dsk, depenencies, and fused_trees inplace"""
-    # locate all members of linear chains
-    child2parent = {}
-    unfusible = set()
-    for parent in dsk:
-        deps = dependencies[parent]
-        has_many_children = len(deps) > 1
-        for child in deps:
-            if keys is not None and child in keys:
-                unfusible.add(child)
-            elif child in child2parent:
-                del child2parent[child]
-                unfusible.add(child)
-            elif has_many_children:
-                unfusible.add(child)
-            elif child not in unfusible:
-                child2parent[child] = parent
-
-    # construct the chains from ancestor to descendant
-    chains = []
-    parent2child = {v: k for k, v in child2parent.items()}
-    while child2parent:
-        child, parent = child2parent.popitem()
-        chain = [child, parent]
-        while parent in child2parent:
-            parent = child2parent.pop(parent)
-            del parent2child[parent]
-            chain.append(parent)
-        chain.reverse()
-        while child in parent2child:
-            child = parent2child.pop(child)
-            del child2parent[child]
-            chain.append(child)
-        # Skip chains with < 2 executable tasks
-        ntasks = 0
-        for key in chain:
-            ntasks += istask(dsk[key])
-            if ntasks > 1:
-                chains.append(chain)
-                break
-
-    # Mutate dsk fusing chains into subgraphs
-    for chain in chains:
-        subgraph = {k: dsk[k] for k in chain}
-        outkey = chain[0]
-
-        # Update dependencies and graph
-        inkeys_set = dependencies[outkey] = dependencies[chain[-1]]
-        for k in chain[1:]:
-            del dependencies[k]
-            del dsk[k]
-
-        # Create new task
-        inkeys = tuple(inkeys_set)
-        dsk[outkey] = (SubgraphCallable(subgraph, outkey, inkeys),) + inkeys
-
-        # Mutate `fused_trees` if key renaming is needed (renaming done in fuse)
-        if rename_keys:
-            chain2 = []
-            for k in chain:
-                subchain = fused_trees.pop(k, False)
-                if subchain:
-                    chain2.extend(subchain)
-                else:
-                    chain2.append(k)
-            fused_trees[outkey] = chain2
-
-
-class SubgraphCallable(object):
-    """Create a callable object from a dask graph.
-
-    Parameters
-    ----------
-    dsk : dict
-        A dask graph
-    outkey : hashable
-        The output key from the graph
-    inkeys : list
-        A list of keys to be used as arguments to the callable.
-    name : str, optional
-        The name to use for the function.
-    """
-
-    __slots__ = ("dsk", "outkey", "inkeys", "name")
-
-    def __init__(self, dsk, outkey, inkeys, name="subgraph_callable"):
-        self.dsk = dsk
-        self.outkey = outkey
-        self.inkeys = inkeys
-        self.name = name
-
-    def __repr__(self):
-        return self.name
-
-    def __eq__(self, other):
-        return (
-            type(self) is type(other)
-            and self.dsk == other.dsk
-            and self.outkey == other.outkey
-            and set(self.inkeys) == set(other.inkeys)
-            and self.name == other.name
-        )
-
-    def __ne__(self, other):
-        return not (self == other)
-
-    def __call__(self, *args):
-        if not len(args) == len(self.inkeys):
-            raise ValueError("Expected %d args, got %d" % (len(self.inkeys), len(args)))
-        return core.get(self.dsk, self.outkey, dict(zip(self.inkeys, args)))
-
-    def __reduce__(self):
-        return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))

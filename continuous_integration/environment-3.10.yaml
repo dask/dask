@@ -1,0 +1,75 @@
+# This job includes coverage
+name: test-environment-310
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  # required dependencies
+  - python=3.10
+  - packaging
+  - pyyaml
+  - click
+  - cloudpickle
+  - partd
+  - fsspec
+  - importlib_metadata
+  - toolz
+  # test dependencies
+  - pre-commit
+  - pytest
+  - pytest-cov
+  - pytest-mock
+  - pytest-rerunfailures
+  - pytest-timeout
+  - pytest-xdist
+  - moto<5
+  # Optional dependencies
+  - mimesis
+  - numpy=1.24
+  - pandas=2.1
+  - numba
+  - flask
+  - h5py
+  - pytables
+  - zarr
+  - pyspark !=4.1.0  # avoid regression in Windows
+  - tiledb-py
+  - tiledb
+  - xarray
+  - numexpr
+  - sqlalchemy
+  - pyarrow=14.0.1
+  - coverage
+  - jsonschema
+  # other -- IO
+  - boto3
+  - botocore
+  - bokeh
+  - bottleneck
+  - httpretty
+  - aiohttp
+  - s3fs>=2021.9.0
+  - crick
+  - cytoolz
+  - distributed
+  - ipython
+  - ipycytoscape
+  - ipywidgets
+  - ipykernel
+  - lz4
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - python-snappy
+  - sparse
+  - cachey
+  - python-graphviz
+  - python-cityhash
+  - python-xxhash
+  - mmh3
+  - jinja2
+  - pip
+  - pip:
+    - git+https://github.com/dask/distributed

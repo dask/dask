@@ -1,11 +1,15 @@
+from __future__ import annotations
+
+import contextlib
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-
 from dask.dataframe._compat import tm
-from dask.dataframe.utils import assert_eq, make_meta, PANDAS_GT_0240
+from dask.dataframe.utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -25,6 +29,15 @@ def test_get_dummies(data):
     res = dd.get_dummies(ddata)
     assert_eq(res, exp)
     tm.assert_index_equal(res.columns, exp.columns)
+
+
+def test_get_dummies_categories_order():
+    df = pd.DataFrame({"a": [0.0, 0.0, 1.0, 1.0, 0.0], "b": [1.0, 0.0, 1.0, 0.0, 1.0]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf = ddf.categorize(columns=["a", "b"])
+    res_p = pd.get_dummies(df.astype("category"))
+    res_d = dd.get_dummies(ddf)
+    assert_eq(res_d, res_p)
 
 
 def test_get_dummies_object():
@@ -60,14 +73,10 @@ def test_get_dummies_kwargs():
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, prefix="X", prefix_sep="-")
     assert_eq(res, exp)
-    tm.assert_index_equal(res.columns, pd.Index(["X-1", "X-2", "X-3", "X-4"]))
 
     exp = pd.get_dummies(s, drop_first=True)
-
-    ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, drop_first=True)
     assert_eq(res, exp)
-    tm.assert_index_equal(res.columns, exp.columns)
 
     # nan
     s = pd.Series([1, 1, 1, 2, np.nan, 3, np.nan, 5], dtype="category")
@@ -76,15 +85,24 @@ def test_get_dummies_kwargs():
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds)
     assert_eq(res, exp)
-    tm.assert_index_equal(res.columns, exp.columns)
 
     # dummy_na
     exp = pd.get_dummies(s, dummy_na=True)
-
-    ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, dummy_na=True)
     assert_eq(res, exp)
-    tm.assert_index_equal(res.columns, pd.Index([1, 2, 3, 5, np.nan]))
+
+
+@contextlib.contextmanager
+def ignore_numpy_bool8_deprecation():
+    # This warning comes from inside `pandas`. We can't do anything about it, so we ignore the warning.
+    # Note it's been fixed upstream in `pandas` https://github.com/pandas-dev/pandas/pull/49886.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=DeprecationWarning,
+            message="`np.bool8` is a deprecated alias for `np.bool_`",
+        )
+        yield
 
 
 def test_get_dummies_sparse():
@@ -93,19 +111,19 @@ def test_get_dummies_sparse():
 
     exp = pd.get_dummies(s, sparse=True)
     res = dd.get_dummies(ds, sparse=True)
-    assert_eq(exp, res)
+    with ignore_numpy_bool8_deprecation():
+        assert_eq(exp, res)
 
-    if PANDAS_GT_0240:
-        exp_dtype = "Sparse[uint8, 0]"
-    else:
-        exp_dtype = "uint8"
-    assert res.compute().a.dtype == exp_dtype
-    assert pd.api.types.is_sparse(res.a.compute())
+    dtype = res.compute().a.dtype
+    assert dtype.fill_value == bool(0)
+    assert dtype.subtype == bool
+    assert isinstance(res.a.compute().dtype, pd.SparseDtype)
 
     exp = pd.get_dummies(s.to_frame(name="a"), sparse=True)
     res = dd.get_dummies(ds.to_frame(name="a"), sparse=True)
-    assert_eq(exp, res)
-    assert pd.api.types.is_sparse(res.a_a.compute())
+    with ignore_numpy_bool8_deprecation():
+        assert_eq(exp, res)
+    assert isinstance(res.a_a.compute().dtype, pd.SparseDtype)
 
 
 def test_get_dummies_sparse_mix():
@@ -119,14 +137,13 @@ def test_get_dummies_sparse_mix():
 
     exp = pd.get_dummies(df, sparse=True)
     res = dd.get_dummies(ddf, sparse=True)
-    assert_eq(exp, res)
+    with ignore_numpy_bool8_deprecation():
+        assert_eq(exp, res)
 
-    if PANDAS_GT_0240:
-        exp_dtype = "Sparse[uint8, 0]"
-    else:
-        exp_dtype = "uint8"
-    assert res.compute().A_a.dtype == exp_dtype
-    assert pd.api.types.is_sparse(res.A_a.compute())
+    dtype = res.compute().A_a.dtype
+    assert dtype.fill_value == bool(0)
+    assert dtype.subtype == bool
+    assert isinstance(res.A_a.compute().dtype, pd.SparseDtype)
 
 
 def test_get_dummies_dtype():
@@ -158,7 +175,7 @@ def test_get_dummies_errors():
     # unknown categories
     df = pd.DataFrame({"x": list("abcbc"), "y": list("bcbcb")})
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf._meta = make_meta({"x": "category", "y": "category"})
+    ddf = ddf.astype("category")
 
     with pytest.raises(NotImplementedError):
         dd.get_dummies(ddf)
@@ -171,7 +188,7 @@ def test_get_dummies_errors():
 
 
 @pytest.mark.parametrize("values", ["B", ["B"], ["B", "D"]])
-@pytest.mark.parametrize("aggfunc", ["mean", "sum", "count"])
+@pytest.mark.parametrize("aggfunc", ["mean", "sum", "count", "first", "last"])
 def test_pivot_table(values, aggfunc):
     df = pd.DataFrame(
         {
@@ -181,10 +198,12 @@ def test_pivot_table(values, aggfunc):
             "D": np.random.randn(100),
         }
     )
-    ddf = dd.from_pandas(df, 5)
+    ddf = dd.from_pandas(df, 5).repartition((0, 20, 40, 60, 80, 98, 99))
 
     res = dd.pivot_table(ddf, index="A", columns="C", values=values, aggfunc=aggfunc)
-    exp = pd.pivot_table(df, index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = pd.pivot_table(
+        df, index="A", columns="C", values=values, aggfunc=aggfunc, observed=False
+    )
     if aggfunc == "count":
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
@@ -193,15 +212,45 @@ def test_pivot_table(values, aggfunc):
 
     # method
     res = ddf.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
-    exp = df.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = df.pivot_table(
+        index="A", columns="C", values=values, aggfunc=aggfunc, observed=False
+    )
     if aggfunc == "count":
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
     assert_eq(res, exp)
 
 
-def test_pivot_table_dtype():
+@pytest.mark.parametrize("values", ["B", ["D"], ["B", "D"]])
+@pytest.mark.parametrize("aggfunc", ["first", "last"])
+def test_pivot_table_firstlast(values, aggfunc):
+    df = pd.DataFrame(
+        {
+            "A": np.random.choice(list("XYZ"), size=100),
+            "B": np.random.randn(100),
+            "C": pd.Categorical(np.random.choice(list("abc"), size=100)),
+            "D": np.random.choice(list("abc"), size=100),
+        }
+    )
+    ddf = dd.from_pandas(df, 5).repartition((0, 20, 40, 60, 80, 98, 99))
 
+    res = dd.pivot_table(ddf, index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = pd.pivot_table(
+        df, index="A", columns="C", values=values, aggfunc=aggfunc, observed=False
+    )
+
+    assert_eq(exp, res)
+
+    # method
+    res = ddf.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = df.pivot_table(
+        index="A", columns="C", values=values, aggfunc=aggfunc, observed=False
+    )
+
+    assert_eq(exp, res)
+
+
+def test_pivot_table_dtype():
     df = pd.DataFrame(
         {"A": list("AABB"), "B": pd.Categorical(list("ABAB")), "C": [1, 2, 3, 4]}
     )
@@ -213,7 +262,7 @@ def test_pivot_table_dtype():
     tm.assert_series_equal(res.dtypes, exp)
 
     exp = pd.pivot_table(
-        df, index="A", columns="B", values="C", aggfunc="count"
+        df, index="A", columns="B", values="C", aggfunc="count", observed=False
     ).astype(np.float64)
 
     assert_eq(res, exp)
@@ -230,7 +279,7 @@ def test_pivot_table_index_dtype():
     ddf = dd.from_pandas(df, 2)
     res = dd.pivot_table(ddf, index="A", columns="B", values="C", aggfunc="count")
 
-    assert res.index.dtype == np.dtype("datetime64[ns]")
+    assert res.index.dtype == df["A"].dtype
 
 
 def test_pivot_table_errors():
@@ -256,7 +305,7 @@ def test_pivot_table_errors():
         dd.pivot_table(ddf, index="A", columns="C", values=[["B"]])
     assert msg in str(err.value)
 
-    msg = "aggfunc must be either 'mean', 'sum' or 'count'"
+    msg = "aggfunc must be either 'mean', 'sum', 'count', 'first', 'last'"
     with pytest.raises(ValueError) as err:
         dd.pivot_table(ddf, index="A", columns="C", values="B", aggfunc=["sum"])
     assert msg in str(err.value)
@@ -266,7 +315,7 @@ def test_pivot_table_errors():
     assert msg in str(err.value)
 
     # unknown categories
-    ddf._meta = make_meta({"A": object, "B": float, "C": "category"})
+    ddf["C"] = ddf.C.cat.as_unknown()
     msg = "'columns' must have known categories"
     with pytest.raises(ValueError) as err:
         dd.pivot_table(ddf, index="A", columns="C", values=["B"])

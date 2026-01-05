@@ -1,9 +1,13 @@
 """
 Control global computation context
 """
+
+from __future__ import annotations
+
 import threading
 from functools import partial
-from . import config
+
+from dask import config
 
 _globals = config.config
 
@@ -31,7 +35,7 @@ def globalmethod(default=None, key=None, falsey=None):
     Examples
     --------
     >>> import dask
-    >>> class Foo(object):
+    >>> class Foo:
     ...     @globalmethod(key='bar', falsey=lambda: 3)
     ...     def bar():
     ...         return 1
@@ -50,7 +54,7 @@ def globalmethod(default=None, key=None, falsey=None):
     return GlobalMethod(default=default, key=key, falsey=falsey)
 
 
-class GlobalMethod(object):
+class GlobalMethod:
     def __init__(self, default, key, falsey=None):
         self._default = default
         self._key = key

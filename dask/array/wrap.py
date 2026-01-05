@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 from functools import partial
 from itertools import product
 
 import numpy as np
-
 from tlz import curry
 
-from ..base import tokenize
-from ..utils import funcname
-from .core import Array, normalize_chunks
-from .utils import meta_from_array
+from dask.array.backends import array_creation_dispatch
+from dask.array.core import Array, normalize_chunks
+from dask.array.utils import meta_from_array
+from dask.base import tokenize
+from dask.blockwise import blockwise as core_blockwise
+from dask.layers import ArrayChunkShapeDep
+from dask.utils import funcname
 
 
 def _parse_wrap_args(func, args, kwargs, shape):
@@ -62,14 +66,19 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     chunks = parsed["chunks"]
     name = parsed["name"]
     kwargs = parsed["kwargs"]
-
-    keys = product([name], *[range(len(bd)) for bd in chunks])
-    shapes = product(*chunks)
     func = partial(func, dtype=dtype, **kwargs)
-    vals = ((func,) + (s,) + args for s in shapes)
 
-    dsk = dict(zip(keys, vals))
-    return Array(dsk, name, chunks, dtype=dtype)
+    out_ind = dep_ind = tuple(range(len(shape)))
+    graph = core_blockwise(
+        func,
+        name,
+        out_ind,
+        ArrayChunkShapeDep(chunks),
+        dep_ind,
+        numblocks={},
+    )
+
+    return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
 def wrap_func_like(func, *args, **kwargs):
@@ -100,20 +109,8 @@ def wrap_func_like(func, *args, **kwargs):
     return Array(dsk, name, chunks, meta=meta.astype(dtype))
 
 
-def wrap_func_like_safe(func, func_like, *args, **kwargs):
-    """
-    Safe implementation for wrap_func_like(), attempts to use func_like(),
-    if the shape keyword argument, falls back to func().
-    """
-    try:
-        return func_like(*args, **kwargs)
-    except TypeError:
-        return func(*args, **kwargs)
-
-
 @curry
-def wrap(wrap_func, func, **kwargs):
-    func_like = kwargs.pop("func_like", None)
+def wrap(wrap_func, func, func_like=None, **kwargs):
     if func_like is None:
         f = partial(wrap_func, func, **kwargs)
     else:
@@ -128,7 +125,7 @@ def wrap(wrap_func, func, **kwargs):
     """
     if func.__doc__ is not None:
         f.__doc__ = template % {"name": func.__name__} + func.__doc__
-        f.__name__ = "blocked_" + func.__name__
+        f.__name__ = f"blocked_{func.__name__}"
     return f
 
 
@@ -142,6 +139,10 @@ class _BroadcastToFunc:
     standard library pickle while preserving function name/doc for Dask's
     naming and doc generation utilities.
     """
+    inner = _broadcast_trick_inner(func)
+    inner.__doc__ = func.__doc__
+    inner.__name__ = func.__name__
+    return inner
 
     def __init__(self, func):
         self.func = func
@@ -162,12 +163,13 @@ def broadcast_trick(func):
     return _BroadcastToFunc(func)
 
 
-ones = w(broadcast_trick(np.ones), dtype="f8")
-zeros = w(broadcast_trick(np.zeros), dtype="f8")
-empty = w(broadcast_trick(np.empty), dtype="f8")
+empty = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    name="empty",
+)(w(broadcast_trick(np.empty_like), dtype="f8"))
 
 
-w_like = wrap(wrap_func_like_safe)
+w_like = wrap(wrap_func_like)
 
 
 empty_like = w_like(np.empty, func_like=np.empty_like)
@@ -175,8 +177,23 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full = w(broadcast_trick(np.full))
+_full = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    name="full",
+)(w(broadcast_trick(np.full_like)))
 _full_like = w_like(np.full, func_like=np.full_like)
+
+
+# workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
+if _full.__doc__ is not None:
+    _full.__doc__ = _full.__doc__.replace(
+        "array([0.1,  0.1,  0.1,  0.1,  0.1,  0.1])",
+        "array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])",
+    )
+    _full.__doc__ = _full.__doc__.replace(
+        ">>> np.full_like(y, [0, 0, 255])",
+        ">>> np.full_like(y, [0, 0, 255])  # doctest: +NORMALIZE_WHITESPACE",
+    )
 
 
 def full(shape, fill_value, *args, **kwargs):
@@ -186,7 +203,12 @@ def full(shape, fill_value, *args, **kwargs):
         raise ValueError(
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
-    return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
+    if kwargs.get("dtype") is None:
+        if hasattr(fill_value, "dtype"):
+            kwargs["dtype"] = fill_value.dtype
+        else:
+            kwargs["dtype"] = type(fill_value)
+    return _full(*args, shape=shape, fill_value=fill_value, **kwargs)
 
 
 def full_like(a, fill_value, *args, **kwargs):
@@ -195,9 +217,9 @@ def full_like(a, fill_value, *args, **kwargs):
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
     return _full_like(
+        *args,
         a=a,
         fill_value=fill_value,
-        *args,
         **kwargs,
     )
 

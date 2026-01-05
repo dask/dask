@@ -1,37 +1,98 @@
+from __future__ import annotations
+
 import datetime
 import functools
 import operator
 import pickle
+from array import array
 
-import numpy as np
 import pytest
+from tlz import curry
 
+from dask import get
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils import (
-    getargspec,
-    takes_multiple_arguments,
     Dispatch,
-    random_state_data,
+    M,
+    SerializableLock,
+    _deprecated,
+    asciitable,
+    cached_cumsum,
+    derived_from,
+    ensure_bytes,
+    ensure_dict,
+    ensure_set,
+    ensure_unicode,
+    extra_titles,
+    format_bytes,
+    format_time,
+    funcname,
+    get_meta_library,
+    getargspec,
+    has_keyword,
+    is_arraylike,
+    is_empty,
+    itemgetter,
+    iter_chunks,
     memory_repr,
     methodcaller,
-    M,
-    skip_doctest,
-    SerializableLock,
-    funcname,
     ndeepmap,
-    ensure_dict,
-    extra_titles,
-    asciitable,
-    itemgetter,
-    partial_by_order,
-    has_keyword,
-    derived_from,
-    parse_timedelta,
     parse_bytes,
-    is_arraylike,
-    iter_chunks,
+    parse_timedelta,
+    partial_by_order,
+    random_state_data,
+    skip_doctest,
+    stringify,
+    takes_multiple_arguments,
+    tmpfile,
+    typename,
 )
 from dask.utils_test import inc
-from dask.highlevelgraph import HighLevelGraph
+
+
+def test_ensure_bytes():
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array("B", b"1")]
+    for d in data:
+        result = ensure_bytes(d)
+        assert isinstance(result, bytes)
+        assert result == b"1"
+
+
+def test_ensure_bytes_ndarray():
+    np = pytest.importorskip("numpy")
+    result = ensure_bytes(np.arange(12))
+    assert isinstance(result, bytes)
+
+
+def test_ensure_bytes_pyarrow_buffer():
+    pa = pytest.importorskip("pyarrow")
+    buf = pa.py_buffer(b"123")
+    result = ensure_bytes(buf)
+    assert isinstance(result, bytes)
+
+
+def test_ensure_unicode():
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array("B", b"1")]
+    for d in data:
+        result = ensure_unicode(d)
+        assert isinstance(result, str)
+        assert result == "1"
+
+
+def test_ensure_unicode_ndarray():
+    np = pytest.importorskip("numpy")
+    a = np.frombuffer(b"123", dtype="u1")
+    result = ensure_unicode(a)
+    assert isinstance(result, str)
+    assert result == "123"
+
+
+def test_ensure_unicode_pyarrow_buffer():
+    pa = pytest.importorskip("pyarrow")
+    buf = pa.py_buffer(b"123")
+    result = ensure_unicode(buf)
+    assert isinstance(result, str)
+    assert result == "123"
 
 
 def test_getargspec():
@@ -50,7 +111,7 @@ def test_getargspec():
     wrapper.__wrapped__ = func
     assert getargspec(wrapper).args == ["x", "y"]
 
-    class MyType(object):
+    class MyType:
         def __init__(self, x, y):
             pass
 
@@ -64,11 +125,11 @@ def test_takes_multiple_arguments():
     def multi(a, b, c):
         return a, b, c
 
-    class Singular(object):
+    class Singular:
         def __init__(self, a):
             pass
 
-    class Multi(object):
+    class Multi:
         def __init__(self, a, b):
             pass
 
@@ -95,12 +156,12 @@ def test_dispatch():
     foo.register(tuple, lambda a: tuple(foo(i) for i in a))
 
     def f(a):
-        """ My Docstring """
+        """My Docstring"""
         return a
 
     foo.register(object, f)
 
-    class Bar(object):
+    class Bar:
         pass
 
     b = Bar()
@@ -152,7 +213,40 @@ def test_dispatch_lazy():
     assert foo(1) == 1
 
 
+def test_dispatch_lazy_walks_mro():
+    """Check that subclasses of classes with lazily registered handlers still
+    use their parent class's handler by default"""
+    import decimal
+
+    class Lazy(decimal.Decimal):
+        pass
+
+    class Eager(Lazy):
+        pass
+
+    foo = Dispatch()
+
+    @foo.register(Eager)
+    def eager_handler(x):
+        return "eager"
+
+    def lazy_handler(a):
+        return "lazy"
+
+    @foo.register_lazy("decimal")
+    def register_decimal():
+        foo.register(decimal.Decimal, lazy_handler)
+
+    assert foo.dispatch(Lazy) == lazy_handler
+    assert foo(Lazy(1)) == "lazy"
+    assert foo.dispatch(decimal.Decimal) == lazy_handler
+    assert foo(decimal.Decimal(1)) == "lazy"
+    assert foo.dispatch(Eager) == eager_handler
+    assert foo(Eager(1)) == "eager"
+
+
 def test_random_state_data():
+    np = pytest.importorskip("numpy")
     seed = 37
     state = np.random.RandomState(seed)
     n = 10000
@@ -177,7 +271,7 @@ def test_random_state_data():
 
 def test_memory_repr():
     for power, mem_repr in enumerate(["1.0 bytes", "1.0 KB", "1.0 MB", "1.0 GB"]):
-        assert memory_repr(1024 ** power) == mem_repr
+        assert memory_repr(1024**power) == mem_repr
 
 
 def test_method_caller():
@@ -340,7 +434,7 @@ def test_funcname():
     assert funcname(M.sum) == "sum"
     assert funcname(lambda: 1) == "lambda"
 
-    class Foo(object):
+    class Foo:
         pass
 
     assert funcname(Foo) == "Foo"
@@ -359,9 +453,7 @@ def test_funcname_long():
 
 
 def test_funcname_toolz():
-    toolz = pytest.importorskip("tlz")
-
-    @toolz.curry
+    @curry
     def foo(a, b, c):
         pass
 
@@ -413,17 +505,34 @@ def test_ndeepmap():
 def test_ensure_dict():
     d = {"x": 1}
     assert ensure_dict(d) is d
-    hlg = HighLevelGraph.from_collections("x", d)
-    assert type(ensure_dict(hlg)) is dict
-    assert ensure_dict(hlg) == d
 
     class mydict(dict):
         pass
 
-    md = mydict()
-    md["x"] = 1
-    assert type(ensure_dict(md)) is dict
-    assert ensure_dict(md) == d
+    d2 = ensure_dict(d, copy=True)
+    d3 = ensure_dict(HighLevelGraph.from_collections("x", d))
+    d4 = ensure_dict(mydict(d))
+
+    for di in (d2, d3, d4):
+        assert type(di) is dict
+        assert di is not d
+        assert di == d
+
+
+def test_ensure_set():
+    s = {1}
+    assert ensure_set(s) is s
+
+    class myset(set):
+        pass
+
+    s2 = ensure_set(s, copy=True)
+    s3 = ensure_set(myset(s))
+
+    for si in (s2, s3):
+        assert type(si) is set
+        assert si is not s
+        assert si == s
 
 
 def test_itemgetter():
@@ -433,6 +542,10 @@ def test_itemgetter():
     g2 = pickle.loads(pickle.dumps(g))
     assert g2(data) == 2
     assert g2.index == 1
+
+    assert itemgetter(1) == itemgetter(1)
+    assert itemgetter(1) != itemgetter(2)
+    assert itemgetter(1) != 123
 
 
 def test_partial_by_order():
@@ -486,7 +599,35 @@ def test_derived_from():
     assert "not supported" in b_arg.lower()
     assert "dask" in b_arg.lower()
 
-    assert "  extra docstring\n\n" in Zap.f.__doc__
+    assert "extra docstring\n\n" in Zap.f.__doc__
+
+
+@pytest.mark.parametrize(
+    "decorator",
+    [property, functools.cached_property],
+    ids=["@property", "@cached_property"],
+)
+def test_derived_from_prop_cached_prop(decorator):
+    class Base:
+        @decorator
+        def prop(self):
+            """A property
+
+            Long details"""
+            return 1
+
+    class Derived:
+        @decorator
+        @derived_from(Base)
+        def prop(self):
+            "Some extra doc"
+            return 3
+
+    docstring = Derived.prop.__doc__
+    assert docstring is not None
+    assert docstring.strip().startswith("A property")
+    assert any("inconsistencies" in line for line in docstring.split("\n"))
+    assert any("Some extra doc" in line for line in docstring.split("\n"))
 
 
 def test_derived_from_func():
@@ -503,6 +644,7 @@ def test_derived_from_func():
 
 
 def test_derived_from_dask_dataframe():
+    pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
     assert "inconsistencies" in dd.DataFrame.dropna.__doc__
@@ -513,6 +655,8 @@ def test_derived_from_dask_dataframe():
     assert "not supported" in axis_arg.lower()
     assert "dask" in axis_arg.lower()
 
+    assert "Object with missing values filled" in dd.DataFrame.ffill.__doc__
+
 
 def test_parse_bytes():
     assert parse_bytes("100") == 100
@@ -521,7 +665,7 @@ def test_parse_bytes():
     assert parse_bytes("5kB") == 5000
     assert parse_bytes("5.4 kB") == 5400
     assert parse_bytes("1kiB") == 1024
-    assert parse_bytes("1Mi") == 2 ** 20
+    assert parse_bytes("1Mi") == 2**20
     assert parse_bytes("1e6") == 1000000
     assert parse_bytes("1e6 kB") == 1000000000
     assert parse_bytes("MB") == 1000000
@@ -542,6 +686,8 @@ def test_parse_timedelta():
         ("3500 us", 0.0035),
         ("1 ns", 1e-9),
         ("2m", 120),
+        ("5 days", 5 * 24 * 60 * 60),
+        ("2 w", 2 * 7 * 24 * 60 * 60),
         ("2 minutes", 120),
         (None, None),
         (3, 3),
@@ -556,8 +702,20 @@ def test_parse_timedelta():
     assert parse_timedelta("1", default="ms") == 0.001
     assert parse_timedelta(1, default="ms") == 0.001
 
+    assert parse_timedelta("1ms", default=False) == 0.001
+    with pytest.raises(ValueError):
+        parse_timedelta(1, default=False)
+    with pytest.raises(ValueError):
+        parse_timedelta("1", default=False)
+    with pytest.raises(TypeError):
+        parse_timedelta("1", default=None)
+    with pytest.raises(KeyError, match="Invalid time unit: foo. Valid units are"):
+        parse_timedelta("1 foo")
+
 
 def test_is_arraylike():
+    np = pytest.importorskip("numpy")
+
     assert is_arraylike(0) is False
     assert is_arraylike(()) is False
     assert is_arraylike(0) is False
@@ -582,3 +740,289 @@ def test_iter_chunks():
     ]
     assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
     assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
+
+
+def test_stringify():
+    obj = "Hello"
+    assert stringify(obj) is obj
+    obj = b"Hello"
+    assert stringify(obj) is obj
+    dsk = {"x": 1}
+
+    assert stringify(dsk) == str(dsk)
+    assert stringify(dsk, exclusive=()) == dsk
+
+    dsk = {("x", 1): (inc, 1)}
+    assert stringify(dsk) == str({("x", 1): (inc, 1)})
+    assert stringify(dsk, exclusive=()) == {("x", 1): (inc, 1)}
+
+    dsk = {("x", 1): (inc, 1), ("x", 2): (inc, ("x", 1))}
+    assert stringify(dsk, exclusive=dsk) == {
+        ("x", 1): (inc, 1),
+        ("x", 2): (inc, str(("x", 1))),
+    }
+
+    dsks = [
+        {"x": 1},
+        {("x", 1): (inc, 1), ("x", 2): (inc, ("x", 1))},
+        {("x", 1): (sum, [1, 2, 3]), ("x", 2): (sum, [("x", 1), ("x", 1)])},
+    ]
+    for dsk in dsks:
+        sdsk = {stringify(k): stringify(v, exclusive=dsk) for k, v in dsk.items()}
+        keys = list(dsk)
+        skeys = [str(k) for k in keys]
+        assert all(isinstance(k, str) for k in sdsk)
+        assert get(dsk, keys) == get(sdsk, skeys)
+
+
+@pytest.mark.parametrize(
+    "n,expect",
+    [
+        (0, "0 B"),
+        (920, "920 B"),
+        (930, "0.91 kiB"),
+        (921.23 * 2**10, "921.23 kiB"),
+        (931.23 * 2**10, "0.91 MiB"),
+        (921.23 * 2**20, "921.23 MiB"),
+        (931.23 * 2**20, "0.91 GiB"),
+        (921.23 * 2**30, "921.23 GiB"),
+        (931.23 * 2**30, "0.91 TiB"),
+        (921.23 * 2**40, "921.23 TiB"),
+        (931.23 * 2**40, "0.91 PiB"),
+        (2**60, "1024.00 PiB"),
+    ],
+)
+def test_format_bytes(n, expect):
+    assert format_bytes(int(n)) == expect
+
+
+def test_format_time():
+    assert format_time(1.4) == "1.40 s"
+    assert format_time(10.4) == "10.40 s"
+    assert format_time(100.4) == "100.40 s"
+    assert format_time(1000.4) == "16m 40s"
+    assert format_time(10000.4) == "2hr 46m"
+    assert format_time(1234.567) == "20m 34s"
+    assert format_time(12345.67) == "3hr 25m"
+    assert format_time(123456.78) == "34hr 17m"
+    assert format_time(1234567.8) == "14d 6hr"
+
+
+def test_deprecated():
+    @_deprecated()
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning) as record:
+        assert foo() == "bar"
+
+    assert len(record) == 1
+    msg = str(record[0].message)
+    assert "foo is deprecated" in msg
+    assert "removed in a future release" in msg
+
+
+def test_deprecated_version():
+    @_deprecated(version="1.2.3")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning, match="deprecated in version 1.2.3"):
+        assert foo() == "bar"
+
+
+def test_deprecated_after_version():
+    @_deprecated(after_version="1.2.3")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning, match="deprecated after version 1.2.3"):
+        assert foo() == "bar"
+
+
+def test_deprecated_category():
+    @_deprecated(category=DeprecationWarning)
+    def foo():
+        return "bar"
+
+    with pytest.warns(DeprecationWarning):
+        assert foo() == "bar"
+
+
+def test_deprecated_message():
+    @_deprecated(message="woohoo")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning) as record:
+        assert foo() == "bar"
+
+    assert len(record) == 1
+    assert str(record[0].message) == "woohoo"
+
+
+def test_typename():
+    assert typename(HighLevelGraph) == "dask.highlevelgraph.HighLevelGraph"
+    assert typename(HighLevelGraph, short=True) == "dask.HighLevelGraph"
+
+
+class MyType:
+    pass
+
+
+def test_typename_on_instances():
+    instance = MyType()
+    assert typename(instance) == typename(MyType)
+
+
+def test_cached_cumsum():
+    a = (1, 2, 3, 4)
+    x = cached_cumsum(a)
+    y = cached_cumsum(a, initial_zero=True)
+    assert x == (1, 3, 6, 10)
+    assert y == (0, 1, 3, 6, 10)
+
+
+def test_cached_cumsum_nan():
+    np = pytest.importorskip("numpy")
+    a = (1, np.nan, 3)
+    x = cached_cumsum(a)
+    y = cached_cumsum(a, initial_zero=True)
+    np.testing.assert_equal(x, (1, np.nan, np.nan))
+    np.testing.assert_equal(y, (0, 1, np.nan, np.nan))
+
+
+def test_cached_cumsum_non_tuple():
+    a = [1, 2, 3]
+    assert cached_cumsum(a) == (1, 3, 6)
+    a[1] = 4
+    assert cached_cumsum(a) == (1, 5, 8)
+
+
+def test_tmpfile_naming():
+    with tmpfile() as fn:
+        # Do not end file or directory name with a period.
+        #  This causes issues on Windows.
+        assert fn[-1] != "."
+
+    with tmpfile(extension="jpg") as fn:
+        assert fn[-4:] == ".jpg"
+
+    with tmpfile(extension=".jpg") as fn:
+        assert fn[-4:] == ".jpg"
+        assert fn[-5] != "."
+
+
+def test_get_meta_library():
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(pd.DataFrame()) == pd
+    assert get_meta_library(np.array([])) == np
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(pd.DataFrame)
+    assert get_meta_library(np.ndarray([])) == get_meta_library(np.ndarray)
+
+    assert get_meta_library(pd.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1)
+    )
+    assert get_meta_library(np.ndarray([])) == get_meta_library(da.from_array([]))
+
+
+def test_get_meta_library_gpu():
+    cp = pytest.importorskip("cupy")
+    cudf = pytest.importorskip("cudf")
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+
+    assert get_meta_library(cudf.DataFrame()) == cudf
+    assert get_meta_library(cp.array([])) == cp
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(cudf.DataFrame)
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(cp.ndarray)
+
+    assert get_meta_library(cudf.DataFrame()) == get_meta_library(
+        dd.from_dict({}, npartitions=1).to_backend("cudf")
+    )
+    assert get_meta_library(cp.ndarray([])) == get_meta_library(
+        da.from_array([]).to_backend("cupy")
+    )
+
+
+def test_is_empty_list_and_tuple():
+    assert is_empty([]) is True
+    assert is_empty([1]) is False
+    assert is_empty(()) is True
+    assert is_empty((1,)) is False
+
+
+def test_is_empty_numpy_array():
+    np = pytest.importorskip("numpy")
+
+    assert is_empty(np.array([])) is True
+    assert is_empty(np.array([1, 2])) is False
+    # len() == 3 → not empty even though one dimension is 0
+    assert is_empty(np.empty((3, 0))) is False
+
+
+def test_is_empty_fake_sparse_like_object():
+    """Simulate sparse arrays via fake .nnz and .shape attributes."""
+
+    class FakeSparse:
+        def __init__(self, nnz, shape):
+            self.nnz = nnz
+            self.shape = shape
+
+    assert is_empty(FakeSparse(0, (10, 10))) is True  # nnz == 0 → True
+    assert is_empty(FakeSparse(5, (10, 10))) is False  # nnz != 0 → False
+    assert (
+        is_empty(FakeSparse(10, (0, 5))) is False
+    )  # nnz != 0 → False (never checks shape)
+
+
+def test_is_empty_object_with_nnz_only():
+    class FakeSparse:
+        def __init__(self, nnz):
+            self.nnz = nnz
+
+    assert is_empty(FakeSparse(0)) is True
+    assert is_empty(FakeSparse(3)) is False
+
+
+def test_is_empty_object_with_shape_only():
+    class FakeShape:
+        def __init__(self, shape):
+            self.shape = shape
+
+    assert is_empty(FakeShape((0, 5))) is True
+    assert is_empty(FakeShape((3, 5))) is False
+
+
+def test_is_empty_fallback_object():
+    class Dummy:
+        pass
+
+    assert is_empty(Dummy()) is False
+
+
+def test_is_empty_typeerror_in_len():
+    """Force TypeError in len() to trigger nnz/shape logic."""
+
+    class FakeObj:
+        def __len__(self):
+            raise TypeError
+
+        nnz = 0
+
+    assert is_empty(FakeObj()) is True
+
+
+def test_is_empty_handles_invalid_nnz_and_shape():
+    class Weird:
+        nnz = "not comparable"
+        shape = "not iterable"
+
+    # The function should handle these gracefully and return False
+    assert is_empty(Weird()) is False

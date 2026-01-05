@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 r""" Static order of nodes in dask graph
 
 Dask makes decisions on what tasks to prioritize both
@@ -43,45 +45,45 @@ the docstrings of tests in dask/tests/test_order.py.  These tests usually have
 graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 
-
-Policy
-------
-
-Work towards *small goals* with *big steps*.
-
-1.  **Small goals**: prefer tasks that have few total dependents and whose final
-    dependents have few total dependencies.
-
-    We prefer to prioritize those tasks that help branches of computation that
-    can terminate quickly.
-
-    With more detail, we compute the total number of dependencies that each
-    task depends on (both its own dependencies, and the dependencies of its
-    dependencies, and so on), and then we choose those tasks that drive towards
-    results with a low number of total dependencies.  We choose to prioritize
-    tasks that work towards finishing shorter computations first.
-
-2.  **Big steps**: prefer tasks with many dependents
-
-    However, many tasks work towards the same final dependents.  Among those,
-    we choose those tasks with the most work left to do.  We want to finish
-    the larger portions of a sub-computation before we start on the smaller
-    ones.
-
-3.  **Name comparison**: break ties with key name
-
-    Often graphs are made with regular keynames.  When no other structural
-    difference exists between two keys, use the key name to break ties.
-    This relies on the regularity of graph constructors like dask.array to be a
-    good proxy for ordering.  This is usually a good idea and a sane default.
 """
-from collections import defaultdict
-from math import log
-from .core import get_dependencies, reverse_dict, get_deps, getcycle  # noqa: F401
-from .utils_test import add, inc  # noqa: F401
+from collections import defaultdict, deque, namedtuple
+from collections.abc import Callable, Iterable, Mapping, MutableMapping
+from typing import Any, Literal, NamedTuple, overload
+
+from dask._task_spec import DataNode, DependenciesMapping
+from dask.core import get_deps, getcycle, istask, reverse_dict
+from dask.typing import Key
 
 
-def order(dsk, dependencies=None):
+class Order(NamedTuple):
+    priority: int
+    critical_path: float | int
+
+
+@overload
+def order(
+    dsk: Mapping[Key, Any],
+    dependencies: Mapping[Key, set[Key]] | None = None,
+    *,
+    return_stats: Literal[True],
+) -> dict[Key, Order]: ...
+
+
+@overload
+def order(
+    dsk: Mapping[Key, Any],
+    dependencies: Mapping[Key, set[Key]] | None = None,
+    *,
+    return_stats: Literal[False] = False,
+) -> dict[Key, int]: ...
+
+
+def order(
+    dsk: Mapping[Key, Any],
+    dependencies: Mapping[Key, set[Key]] | None = None,
+    *,
+    return_stats: bool = False,
+) -> dict[Key, Order] | dict[Key, int]:
     """Order nodes in dask graph
 
     This produces an ordering over our tasks that we use to break ties when
@@ -89,17 +91,12 @@ def order(dsk, dependencies=None):
     scheduler and also to assist in static analysis.
 
     This currently traverses the graph as a single-threaded scheduler would
-    traverse it.  It breaks ties in the following ways:
-
-    1.  Begin at a leaf node that is a dependency of a root node that has the
-        largest subgraph (start hard things first)
-    2.  Prefer tall branches with few dependents (start hard things first and
-        try to avoid memory usage)
-    3.  Prefer dependents that are dependencies of root nodes that have
-        the smallest subgraph (do small goals that can terminate quickly)
+    traverse it.
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> order(dsk)
     {'a': 0, 'c': 1, 'b': 2, 'd': 3}
@@ -107,519 +104,607 @@ def order(dsk, dependencies=None):
     if not dsk:
         return {}
 
-    if dependencies is None:
-        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    dsk = dict(dsk)
 
+    dependencies = DependenciesMapping(dsk)
     dependents = reverse_dict(dependencies)
+
+    external_keys = set()
+    if len(dependents) != len(dependencies):
+        # There are external keys. Let's add a DataNode to ensure the algo below
+        # is encountering a complete graph. Those artificial data nodes will be
+        # ignored when assigning results
+        for k in dependents:
+            if k not in dependencies:
+                external_keys.add(k)
+                dsk[k] = DataNode(k, object())
+
+    expected_len = len(dsk)
+    leaf_nodes = {k for k, v in dependents.items() if not v}
+    root_nodes = {k for k, v in dependencies.items() if not v}
+
+    result: dict[Key, Order | int] = {}
+
+    # Normalize the graph by removing leaf nodes that are not actual tasks, see
+    # for instance da.store where the task is merely an alias
+    # to multiple keys, i.e. [key1, key2, ...,]
+
+    # Similarly, we are removing root nodes that are pure data tasks. Those task
+    # are embedded in the run_spec of a task and are not runnable. We have to
+    # assign a priority but their priority has no impact on performance.
+    # The removal of those tasks typically transforms the graph topology in a
+    # way that is simpler to handle
+    all_tasks = False
+    n_removed_leaves = 0
+    requires_data_task = defaultdict(set)
+
+    while not all_tasks:
+        all_tasks = True
+        for leaf in list(leaf_nodes):
+            if leaf in root_nodes:
+                continue
+            if (
+                not istask(dsk[leaf])
+                # Having a linear chain is fine
+                and len(dependencies[leaf]) > 1
+            ):
+                all_tasks = False
+                # Put non-tasks at the very end since they are merely aliases
+                # and have no impact on performance at all
+                prio = len(dsk) - 1 - n_removed_leaves
+                if return_stats:
+                    result[leaf] = Order(prio, -1)
+                else:
+                    result[leaf] = prio
+                n_removed_leaves += 1
+                leaf_nodes.remove(leaf)
+                for dep in dependencies[leaf]:
+                    dependents[dep].remove(leaf)
+                    if not dependents[dep]:
+                        leaf_nodes.add(dep)
+                del dsk[leaf]
+                del dependencies[leaf]
+                del dependents[leaf]
+
+        for root in list(root_nodes):
+            if root in leaf_nodes:
+                continue
+            deps_root = dependents[root]
+            if not istask(dsk[root]) and len(deps_root) > 1:
+                del dsk[root]
+                del dependencies[root]
+                root_nodes.remove(root)
+                del dependents[root]
+                for dep in deps_root:
+                    requires_data_task[dep].add(root)
+                    if not dependencies[dep]:
+                        root_nodes.add(dep)
+
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
-    metrics = graph_metrics(dependencies, dependents, total_dependencies)
-    if len(metrics) != len(dsk):
+    if len(total_dependencies) != len(dsk):
         cycle = getcycle(dsk, None)
         raise RuntimeError(
-            "Cycle detected between the following keys:\n  -> %s"
-            % "\n  -> ".join(str(x) for x in cycle)
+            "Cycle detected between the following keys:\n  -> {}".format(
+                "\n  -> ".join(str(x) for x in cycle)
+            )
         )
-
-    # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
-    # Let's calculate the `initial_stack_key` as we determine `init_stack` set.
-    init_stack = {
-        # First prioritize large, tall groups, then prioritize the same as ``dependents_key``.
-        key: (
-            # at a high-level, work towards a large goal (and prefer tall and narrow)
-            -max_dependencies,
-            num_dependents - max_heights,
-            # tactically, finish small connected jobs first
-            min_dependencies,
-            num_dependents - min_heights,  # prefer tall and narrow
-            -total_dependents,  # take a big step
-            # try to be memory efficient
-            num_dependents,
-            # tie-breaker
-            StrComparable(key),
-        )
-        for key, num_dependents, (
-            total_dependents,
-            min_dependencies,
-            max_dependencies,
-            min_heights,
-            max_heights,
-        ) in (
-            (key, len(dependents[key]), metrics[key])
-            for key, val in dependencies.items()
-            if not val
-        )
-    }
-    # `initial_stack_key` chooses which task to run at the very beginning.
-    # This value is static, so we pre-compute as the value of this dict.
-    initial_stack_key = init_stack.__getitem__
-
-    def dependents_key(x):
-        """Choose a path from our starting task to our tactical goal
-
-        This path is connected to a large goal, but focuses on completing
-        a small goal and being memory efficient.
-        """
-        return (
-            # Focus on being memory-efficient
-            len(dependents[x]) - len(dependencies[x]) + num_needed[x],
-            -metrics[x][3],  # min_heights
-            # tie-breaker
-            StrComparable(x),
-        )
-
-    def dependencies_key(x):
-        """Choose which dependency to run as part of a reverse DFS
-
-        This is very similar to both ``initial_stack_key``.
-        """
-        num_dependents = len(dependents[x])
-        (
-            total_dependents,
-            min_dependencies,
-            max_dependencies,
-            min_heights,
-            max_heights,
-        ) = metrics[x]
-        # Prefer short and narrow instead of tall in narrow, because we're going in
-        # reverse along dependencies.
-        return (
-            # at a high-level, work towards a large goal (and prefer short and narrow)
-            -max_dependencies,
-            num_dependents + max_heights,
-            # tactically, finish small connected jobs first
-            min_dependencies,
-            num_dependents + min_heights,  # prefer short and narrow
-            -total_dependencies[x],  # go where the work is
-            # try to be memory efficient
-            num_dependents - len(dependencies[x]) + num_needed[x],
-            num_dependents,
-            total_dependents,  # already found work, so don't add more
-            # tie-breaker
-            StrComparable(x),
-        )
-
-    def finish_now_key(x):
-        """ Determine the order of dependents that are ready to run and be released"""
-        return (-len(dependencies[x]), StrComparable(x))
-
-    # Computing this for all keys can sometimes be relatively expensive :(
-    partition_keys = {
-        key: (
-            (min_dependencies - total_dependencies[key] + 1)
-            * (total_dependents - min_heights)
-        )
-        for key, (
-            total_dependents,
-            min_dependencies,
-            _,
-            min_heights,
-            _,
-        ) in metrics.items()
-    }
-
-    result = {}
+    assert dependencies is not None
+    roots_connected, max_dependents = _connecting_to_roots(dependencies, dependents)
+    leafs_connected, _ = _connecting_to_roots(dependents, dependencies)
     i = 0
 
-    # `inner_stask` is used to perform a DFS along dependencies.  Once emptied
-    # (when traversing dependencies), this continue down a path along dependents
-    # until a root node is reached.
-    #
-    # Sometimes, a better path along a dependent is discovered (i.e., something
-    # that is easier to compute and doesn't requiring holding too much in memory).
-    # In this case, the current `inner_stack` is appended to `inner_stacks` and
-    # we begin a new DFS from the better node.
-    #
-    # A "better path" is determined by comparing `partition_keys`.
-    inner_stacks = [[min(init_stack, key=initial_stack_key)]]
-    inner_stacks_append = inner_stacks.append
-    inner_stacks_extend = inner_stacks.extend
-    inner_stacks_pop = inner_stacks.pop
+    runnable_hull = set()
+    reachable_hull = set()
 
-    # Okay, now we get to the data structures used for fancy behavior.
-    #
-    # As we traverse nodes in the DFS along dependencies, we partition the dependents
-    # via `partition_key`.  A dependent goes to:
-    #    1) `inner_stack` if it's better than our current target,
-    #    2) `next_nodes` if the partition key is lower than it's parent,
-    #    3) `later_nodes` otherwise.
-    # When the inner stacks are depleted, we process `next_nodes`.  If `next_nodes` is
-    # empty (and `outer_stacks` is empty`), then we process `later_nodes` the same way.
-    # These dicts use `partition_keys` as keys.  We process them by placing the values
-    # in `outer_stack` so that the smallest keys will be processed first.
-    next_nodes = defaultdict(list)
-    later_nodes = defaultdict(list)
+    runnable: list[Key] = []
 
-    # `outer_stack` is used to populate `inner_stacks`.  From the time we partition the
-    # dependents of a node, we group them: one list per partition key per parent node.
-    # This likely results in many small lists.  We do this to avoid sorting many larger
-    # lists (i.e., to avoid n*log(n) behavior).  So, we have many small lists that we
-    # partitioned, and we keep them in the order that we saw them (we will process them
-    # in a FIFO manner).  By delaying sorting for as long as we can, we can first filter
-    # out nodes that have already been computed.  All this complexity is worth it!
-    outer_stack = []
-    outer_stack_extend = outer_stack.extend
-    outer_stack_pop = outer_stack.pop
+    known_runnable_paths: dict[Key, list[list[Key]]] = {}
+    known_runnable_paths_pop = known_runnable_paths.pop
 
-    # Keep track of nodes that are in `inner_stack` or `inner_stacks` so we don't
-    # process them again.
-    seen = set()  # seen in an inner_stack (and has dependencies)
-    seen_update = seen.update
-    seen_add = seen.add
+    crit_path_counter = 0
+    scrit_path: set[Key] = set()
+    _crit_path_counter_offset: int | float = 0
+    _sort_keys_cache: dict[Key, tuple[int, int, int, int, str]] = {}
 
-    # alias for speed
-    set_difference = set.difference
+    def sort_key(x: Key) -> tuple[int, int, int, int, str]:
+        try:
+            return _sort_keys_cache[x]
+        except KeyError:
+            assert dependencies is not None
+            _sort_keys_cache[x] = rv = (
+                total_dependencies[x],
+                len(dependencies[x]),
+                len(roots_connected[x]),
+                -max_dependents[x],
+                # Converting to str is actually faster than creating some
+                # wrapper class and comparisons that come this far are
+                # relatively rare so we prefer fast init over fast comparison
+                str(x),
+            )
+            return rv
 
-    is_init_sorted = False
-    while True:
-        while inner_stacks:
-            inner_stack = inner_stacks_pop()
-            inner_stack_pop = inner_stack.pop
-            while inner_stack:
-                # Perform a DFS along dependencies until we complete our tactical goal
-                item = inner_stack_pop()
-                if item in result:
-                    continue
-                if num_needed[item]:
-                    inner_stack.append(item)
-                    deps = set_difference(dependencies[item], result)
-                    if 1 < len(deps) < 1000:
-                        inner_stack.extend(
-                            sorted(deps, key=dependencies_key, reverse=True)
-                        )
-                    else:
-                        inner_stack.extend(deps)
-                    seen_update(deps)
-                    continue
-
-                result[item] = i
-                i += 1
-                deps = dependents[item]
-
-                # If inner_stack is empty, then we typically add the best dependent to it.
-                # However, we don't add to it if we complete a node early via "finish_now" below
-                # or if a dependent is already on an inner_stack.  In this case, we add the
-                # dependents (not in an inner_stack) to next_nodes or later_nodes to handle later.
-                # This serves three purposes:
-                #   1. shrink `deps` so that it can be processed faster,
-                #   2. make sure we don't process the same dependency repeatedly, and
-                #   3. make sure we don't accidentally continue down an expensive-to-compute path.
-                add_to_inner_stack = True
-                if metrics[item][3] == 1:  # min_height
-                    # Don't leave any dangling single nodes!  Finish all dependents that are
-                    # ready and are also root nodes.
-                    finish_now = {
-                        dep
-                        for dep in deps
-                        if not dependents[dep] and num_needed[dep] == 1
-                    }
-                    if finish_now:
-                        deps -= finish_now  # Safe to mutate
-                        if len(finish_now) > 1:
-                            finish_now = sorted(finish_now, key=finish_now_key)
-                        for dep in finish_now:
-                            result[dep] = i
-                            i += 1
-                        add_to_inner_stack = False
-
-                if deps:
-                    for dep in deps:
-                        num_needed[dep] -= 1
-
-                    already_seen = deps & seen
-                    if already_seen:
-                        if len(deps) == len(already_seen):
-                            continue
-                        add_to_inner_stack = False
-                        deps -= already_seen
-
-                    if len(deps) == 1:
-                        # Fast path!  We trim down `deps` above hoping to reach here.
-                        (dep,) = deps
-                        if not inner_stack:
-                            if add_to_inner_stack:
-                                inner_stack = [dep]
-                                inner_stack_pop = inner_stack.pop
-                                seen_add(dep)
-                                continue
-                            key = partition_keys[dep]
-                        else:
-                            key = partition_keys[dep]
-                            if key < partition_keys[inner_stack[0]]:
-                                # Run before `inner_stack` (change tactical goal!)
-                                inner_stacks_append(inner_stack)
-                                inner_stack = [dep]
-                                inner_stack_pop = inner_stack.pop
-                                seen_add(dep)
-                                continue
-                        if key < partition_keys[item]:
-                            next_nodes[key].append(deps)
-                        else:
-                            later_nodes[key].append(deps)
-                    else:
-                        # Slow path :(.  This requires grouping by partition_key.
-                        dep_pools = defaultdict(list)
-                        for dep in deps:
-                            dep_pools[partition_keys[dep]].append(dep)
-                        item_key = partition_keys[item]
-                        if inner_stack:
-                            # If we have an inner_stack, we need to look for a "better" path
-                            prev_key = partition_keys[inner_stack[0]]
-                            now_keys = []  # < inner_stack[0]
-                            for key, vals in dep_pools.items():
-                                if key < prev_key:
-                                    now_keys.append(key)
-                                elif key < item_key:
-                                    next_nodes[key].append(vals)
-                                else:
-                                    later_nodes[key].append(vals)
-                            if now_keys:
-                                # Run before `inner_stack` (change tactical goal!)
-                                inner_stacks_append(inner_stack)
-                                if 1 < len(now_keys):
-                                    now_keys.sort(reverse=True)
-                                for key in now_keys:
-                                    pool = dep_pools[key]
-                                    if 1 < len(pool) < 100:
-                                        pool.sort(key=dependents_key, reverse=True)
-                                    inner_stacks_extend([dep] for dep in pool)
-                                    seen_update(pool)
-                                inner_stack = inner_stacks_pop()
-                                inner_stack_pop = inner_stack.pop
-                        else:
-                            # If we don't have an inner_stack, then we don't need to look
-                            # for a "better" path, but we do need traverse along dependents.
-                            if add_to_inner_stack:
-                                min_key = min(dep_pools)
-                                min_pool = dep_pools.pop(min_key)
-                                if len(min_pool) == 1:
-                                    inner_stack = min_pool
-                                    seen_update(inner_stack)
-                                elif (
-                                    10 * item_key
-                                    > 11 * len(min_pool) * len(min_pool) * min_key
-                                ):
-                                    # Put all items in min_pool onto inner_stacks.
-                                    # I know this is a weird comparison.  Hear me out.
-                                    # Although it is often beneficial to put all of the items in `min_pool`
-                                    # onto `inner_stacks` to process next, it is very easy to be overzealous.
-                                    # Sometimes it is actually better to defer until `next_nodes` is handled.
-                                    # We should only put items onto `inner_stacks` that we're reasonably
-                                    # confident about.  The above formula is a best effort heuristic given
-                                    # what we have easily available.  It is obviously very specific to our
-                                    # choice of partition_key.  Dask tests take this route about 40%.
-                                    if len(min_pool) < 100:
-                                        min_pool.sort(key=dependents_key, reverse=True)
-                                    inner_stacks_extend([dep] for dep in min_pool)
-                                    inner_stack = inner_stacks_pop()
-                                    seen_update(min_pool)
-                                else:
-                                    # Put one item in min_pool onto inner_stack and the rest into next_nodes.
-                                    if len(min_pool) < 100:
-                                        inner_stack = [
-                                            min(min_pool, key=dependents_key)
-                                        ]
-                                    else:
-                                        inner_stack = [min_pool.pop()]
-                                    next_nodes[min_key].append(min_pool)
-                                    seen_update(inner_stack)
-
-                                inner_stack_pop = inner_stack.pop
-                            for key, vals in dep_pools.items():
-                                if key < item_key:
-                                    next_nodes[key].append(vals)
-                                else:
-                                    later_nodes[key].append(vals)
-
-        if len(dependencies) == len(result):
-            break  # all done!
-
-        if next_nodes:
-            for key in sorted(next_nodes, reverse=True):
-                # `outer_stacks` may not be empty here--it has data from previous `next_nodes`.
-                # Since we pop things off of it (onto `inner_nodes`), this means we handle
-                # multiple `next_nodes` in a LIFO manner.
-                outer_stack_extend(reversed(next_nodes[key]))
-            next_nodes = defaultdict(list)
-
-        while outer_stack:
-            # Try to add a few items to `inner_stacks`
-            deps = [x for x in outer_stack_pop() if x not in result]
-            if deps:
-                if 1 < len(deps) < 100:
-                    deps.sort(key=dependents_key, reverse=True)
-                inner_stacks_extend([dep] for dep in deps)
-                seen_update(deps)
-                break
-
-        if inner_stacks:
-            continue
-
-        if later_nodes:
-            # You know all those dependents with large keys we've been hanging onto to run "later"?
-            # Well, "later" has finally come.
-            next_nodes, later_nodes = later_nodes, next_nodes
-            continue
-
-        # We just finished computing a connected group.
-        # Let's choose the first `item` in the next group to compute.
-        # If we have few large groups left, then it's best to find `item` by taking a minimum.
-        # If we have many small groups left, then it's best to sort.
-        # If we have many tiny groups left, then it's best to simply iterate.
-        if not is_init_sorted:
-            prev_len = len(init_stack)
-            if type(init_stack) is dict:
-                init_stack = set(init_stack)
-            init_stack = set_difference(init_stack, result)
-            N = len(init_stack)
-            m = prev_len - N
-            # is `min` likely better than `sort`?
-            if m >= N or N + (N - m) * log(N - m) < N * log(N):
-                item = min(init_stack, key=initial_stack_key)
+    def add_to_result(item: Key) -> None:
+        # Earlier versions recursed into this method but this could cause
+        # recursion depth errors. This is the only reason for the while loop
+        next_items = [item]
+        nonlocal i
+        nonlocal min_leaf_degree  # type: ignore[misc]
+        while next_items:
+            item = next_items.pop()
+            runnable_hull.discard(item)
+            reachable_hull.discard(item)
+            leaf_nodes.discard(item)
+            if item in result:
                 continue
 
-            if len(init_stack) < 10000:
-                init_stack = sorted(init_stack, key=initial_stack_key, reverse=True)
+            while requires_data_task[item]:
+                add_to_result(requires_data_task[item].pop())
+            if return_stats:
+                result[item] = Order(i, crit_path_counter - _crit_path_counter_offset)
             else:
-                init_stack = list(init_stack)
-            init_stack_pop = init_stack.pop
-            is_init_sorted = True
+                result[item] = i
+            if item not in external_keys:
+                i += 1
+            if item in root_nodes:
+                for leaf in leafs_connected[item]:
+                    if leaf in leaf_nodes:
+                        degree = leafs_degree.pop(leaf)
+                        leafs_per_degree[degree].remove(leaf)
 
-        item = init_stack_pop()
-        while item in result:
-            item = init_stack_pop()
-        inner_stacks_append([item])
+                        new_degree = degree - 1
+                        if new_degree > 0:
+                            if new_degree < min_leaf_degree:
+                                min_leaf_degree = new_degree
+                            leafs_per_degree[new_degree].add(leaf)
+                            leafs_degree[leaf] = new_degree
+                        elif not leafs_per_degree[degree]:
+                            assert degree == min_leaf_degree
+                            while min_leaf_degree != max_leaf_degree and (
+                                min_leaf_degree not in leafs_per_degree
+                                or not leafs_per_degree[min_leaf_degree]
+                            ):
+                                min_leaf_degree += 1
 
-    return result
+            # Note: This is a `set` and therefore this introduces a certain
+            # randomness. However, this randomness should not have any impact on
+            # the final result since the `process_runnable` should produce
+            # equivalent results regardless of the order in which runnable is
+            # populated (not identical but equivalent)
+            for dep in dependents.get(item, ()):
+                num_needed[dep] -= 1
+                reachable_hull.add(dep)
+                if not num_needed[dep]:
+                    if len(dependents[item]) == 1:
+                        next_items.append(dep)
+                    else:
+                        runnable.append(dep)
+
+    def _with_offset(func: Callable[..., None]) -> Callable[..., None]:
+        # This decorator is only used to reduce indentation levels. The offset
+        # is purely cosmetical and used for some visualizations and I haven't
+        # settled on how to implement this best so I didn't want to have large
+        # indentations that make things harder to read
+
+        def wrapper(*args: Any, **kwargs: Any) -> None:
+            nonlocal _crit_path_counter_offset
+            _crit_path_counter_offset = 0.5
+            try:
+                func(*args, **kwargs)
+            finally:
+                _crit_path_counter_offset = 0
+
+        return wrapper
+
+    @_with_offset
+    def process_runnables() -> None:
+        """Compute all currently runnable paths and either cache or execute them
+
+        This is designed to ensure we are running tasks that are free to execute
+        (e.g. the result of a splitter task) not too eagerly. If we executed
+        such free tasks too early we'd be walking the graph in a too wide /
+        breadth first fashion that is not optimal. If instead we were to only
+        execute them once they are needed for a final result, this can cause
+        very high memory pressure since valuable reducers are executed too
+        late.
+
+        The strategy here is to take all runnable tasks and walk forwards until
+        we hit a reducer node (i.e. a node with more than one dependency). We
+        will remember/cache the path to this reducer node.
+        If this path leads to a leaf or if we find enough runnable paths for a
+        reducer to be runnable, we will execute the path.
+
+        If instead of a reducer a splitter is encountered that is runnable, we
+        will follow its splitter paths individually and apply the same logic to
+        each branch.
+        """
+        while runnable:
+            candidates = runnable.copy()
+            runnable.clear()
+            while candidates:
+                key = candidates.pop()
+                if key in runnable_hull or key in result:
+                    continue
+                if key in leaf_nodes:
+                    add_to_result(key)
+                    continue
+                path = [key]
+                branches = deque([(0, path)])
+
+                while branches:
+                    nsplits, path = branches.popleft()
+                    while True:
+                        # Loop invariant. Too expensive to compute at runtime
+                        # assert not set(known_runnable_paths).intersection(runnable_hull)
+                        current = path[-1]
+                        runnable_hull.add(current)
+                        deps_downstream = dependents[current]
+                        deps_upstream = dependencies[current]
+                        if not deps_downstream:
+                            # FIXME: The fact that it is possible for
+                            # num_needed[current] == 0 means we're doing some
+                            # work twice
+                            if num_needed[current] <= 1:
+                                for k in path:
+                                    add_to_result(k)
+                            else:
+                                runnable_hull.discard(current)
+                        elif len(path) == 1 or len(deps_upstream) == 1:
+                            if len(deps_downstream) > 1:
+                                nsplits += 1
+                                for d in sorted(deps_downstream, key=sort_key):
+                                    # This ensures we're only considering splitters
+                                    # that are genuinely splitting and not
+                                    # interleaving
+                                    if len(dependencies[d]) == 1:
+                                        branch = path.copy()
+                                        branch.append(d)
+                                        branches.append((nsplits, branch))
+                                break
+                            path.extend(deps_downstream)
+                            continue
+                        elif current in known_runnable_paths:
+                            known_runnable_paths[current].append(path)
+                            runnable_hull.discard(current)
+                            if (
+                                len(known_runnable_paths[current])
+                                >= num_needed[current]
+                            ):
+                                pruned_branches: deque[list[Key]] = deque()
+                                for path in known_runnable_paths_pop(current):
+                                    if path[-2] not in result:
+                                        pruned_branches.append(path)
+                                if len(pruned_branches) < num_needed[current]:
+                                    known_runnable_paths[current] = list(
+                                        pruned_branches
+                                    )
+                                else:
+                                    if nsplits > 1:
+                                        path = []
+                                        for pruned in pruned_branches:
+                                            path.extend(pruned)
+                                        branches.append((nsplits - 1, path))
+                                        break
+
+                                    while pruned_branches:
+                                        path = pruned_branches.popleft()
+                                        for k in path:
+                                            if num_needed[k]:
+                                                pruned_branches.append(path)
+                                                break
+                                            add_to_result(k)
+                        elif (
+                            len(dependencies[current]) > 1 and num_needed[current] <= 1
+                        ):
+                            for k in path:
+                                add_to_result(k)
+                        else:
+                            known_runnable_paths[current] = [path]
+                            runnable_hull.discard(current)
+                        break
+
+    # Pick strategy
+    # Note: We're trying to be smart here by picking a strategy on how to
+    # determine the critical path. This is not always clear and we may want to
+    # consider just calculating both orderings and picking the one with less
+    # pressure. The only concern to this would be performance but at time of
+    # writing, the most expensive part of ordering is the prep work (mostly
+    # connected roots + sort_key) which can be reused for multiple orderings.
+
+    # Degree in this context is the number root nodes that have to be loaded for
+    # this leaf to become accessible. Zero means the leaf is already accessible
+    # in which case it _should_ either already be in result or be accessible via
+    # process_runnables
+    # When picking a new target, we prefer the leafs with the least number of
+    # roots that need loading.
+    leafs_degree = {}
+    leafs_per_degree = defaultdict(set)
+    min_leaf_degree = len(dsk)
+    max_leaf_degree = len(dsk)
+    for leaf in leaf_nodes - root_nodes:
+        degree = len(roots_connected[leaf])
+        min_leaf_degree = min(min_leaf_degree, degree)
+        max_leaf_degree = max(max_leaf_degree, degree)
+        leafs_degree[leaf] = degree
+        leafs_per_degree[degree].add(leaf)
+
+    def get_target() -> Key:
+        # If we're already mid run and there is a runnable_hull we'll attempt to
+        # pick the next target in a way that minimizes the number of additional
+        # root nodes that are needed
+        all_leafs_accessible = min_leaf_degree == max_leaf_degree
+        is_trivial_lookup = not reachable_hull or all_leafs_accessible
+        if not is_trivial_lookup:
+            candidates = reachable_hull & leafs_per_degree[min_leaf_degree]
+            if not candidates:
+                candidates = leafs_per_degree[min_leaf_degree]
+            # Even without reachable hull overlap this should be relatively
+            # small so one full pass should be fine
+            return min(candidates, key=sort_key)
+        else:
+            return leaf_nodes_sorted.pop()
+
+    def use_longest_path() -> bool:
+        size = 0
+        # Heavy reducer / splitter topologies often benefit from a very
+        # traditional critical path that expresses the longest chain of
+        # tasks.
+        if abs(len(root_nodes) - len(leaf_nodes)) / len(root_nodes) < 0.8:
+            # If the graph stays about the same, we are checking for symmetry
+            # and choose a "quickest path first" approach if the graph appears
+            # to be asymmetrical
+            for r in root_nodes:
+                if not size:
+                    size = len(leafs_connected[r])
+                elif size != len(leafs_connected[r]):
+                    return False
+
+        return True
+
+    # Some topologies benefit if the node with the most dependencies
+    # is used as first choice, others benefit from the opposite.
+    longest_path = use_longest_path()
+    leaf_nodes_sorted = sorted(leaf_nodes, key=sort_key, reverse=not longest_path)
+
+    # *************************************************************************
+    # CORE ALGORITHM STARTS HERE
+    #
+    # 0. Nomenclature
+    #
+    #   - roots: Nodes that have no dependencies (i.e. typically data producers)
+    #   - leafs: Nodes that have no dependents (i.e. user requested keys)
+    #   - critical_path: The strategic path through the graph.
+    #   - walking forwards: Starting from a root node we walk the graph as if we
+    #     were to compute the individual nodes, i.e. along dependents
+    #   - walking backwards: Starting from a leaf node we walk the graph in
+    #     reverse direction, i.e. along dependencies
+    #   - runnable: Nodes that are ready to be computed because all their
+    #     dependencies are in result
+    #   - runnable_hull: Nodes that could be reached and executed without
+    #     "walking back". This typically means that these are tasks than can be
+    #     executed without loading additional data/executing additional root
+    #     nodes
+    #  -  reachable_hull: Nodes that are touching the result, i.e. all nodes in
+    #     reachable_hull have at least one dependency in result
+    #
+    # A. Build the critical path
+    #
+    #   To build the critical path we will use a provided `get_target` function
+    #   that returns a node that is anywhere in the graph, typically a leaf
+    #   node. This node is not required to be runnable. We will walk the graph
+    #   backwards, i.e. from leafs to roots and append nodes to the graph as we
+    #   go. The critical path is a
+    #   linear path in the graph. While this is a viable strategy, it is not
+    #   required for the critical path to be a classical "longest path" but it
+    #   can define any route through the graph that should be considered as top
+    #   priority.
+    #
+    #   1. Determine the target node by calling ``get_target`` and append the
+    #      target to the critical path stack
+    #   2. Take the _most valuable_ (max given a `sort_key`) of its dependents
+    #      and append it to the critical path stack. This key is the new target.
+    #   3. Repeat step 2 until we reach a node that has no dependencies and is
+    #      therefore runnable
+    #
+    # B. Walk the critical path
+    #
+    #   Only the first element of the critical path is an actually runnable node
+    #   and this is where we're starting the sort. Strategically, this is the
+    #   most important goal to achieve but since not all of the nodes are
+    #   immediately runnable we have to walk back and compute other nodes first
+    #   before we can unlock the critical path. This typically requires us also
+    #   to load more data / run more root tasks.
+    #   While walking the critical path we will also unlock non-critical tasks
+    #   that could be run but are not contributing to our strategic goal. Under
+    #   certain circumstances, those runnable tasks are allowed to be run right
+    #   away to reduce memory pressure. This is described in more detail in
+    #   `process_runnable`.
+    #   Given this, the algorithm is as follows:
+    #
+    #   1. Pop the first element of the critical path
+    #   2a. If the node is already in the result, continue
+    #   2b. If the node is not runnable, we will put it back on the stack and
+    #       put all its dependencies on the stack and continue with step 1. This
+    #       is what we refer to as "walking back"
+    #   2c. Else, we add the node to the result
+    #   3.  If we previously had to walk back we will consider running
+    #       non-critical tasks (by calling process_runnables)
+    #   4a. If critical path is not empty, repeat step 1
+    #   4b. Go back to A.) and build a new critical path given a new target that
+    #       accounts for the already computed nodes.
+    #
+    # *************************************************************************
+
+    critical_path: list[Key] = []
+    cpath_append = critical_path.append
+    scpath_add = scrit_path.add
+
+    def path_append(item: Key) -> None:
+        cpath_append(item)
+        scpath_add(item)
+
+    scpath_update = scrit_path.update
+    cpath_extend = critical_path.extend
+
+    def path_extend(items: Iterable[Key]) -> None:
+        cpath_extend(items)
+        scpath_update(items)
+
+    cpath_pop = critical_path.pop
+    scpath_discard = scrit_path.discard
+
+    def path_pop() -> Key:
+        item = cpath_pop()
+        scpath_discard(item)
+        return item
+
+    while len(result) < expected_len:
+        crit_path_counter += 1
+        assert not critical_path
+        assert not scrit_path
+
+        # A. Build the critical path
+        target = get_target()
+        next_deps = dependencies[target]
+        path_append(target)
+
+        while next_deps:
+            item = max(next_deps, key=sort_key)
+            path_append(item)
+            next_deps = dependencies[item].difference(result)
+            path_extend(next_deps)
+
+        # B. Walk the critical path
+
+        walked_back = False
+        while critical_path:
+            item = path_pop()
+            if item in result:
+                continue
+            if num_needed[item]:
+                path_append(item)
+                deps = dependencies[item].difference(result)
+                unknown: list[Key] = []
+                known: list[Key] = []
+                k_append = known.append
+                uk_append = unknown.append
+                for d in sorted(deps, key=sort_key):
+                    if d in known_runnable_paths:
+                        k_append(d)
+                    else:
+                        uk_append(d)
+                if len(unknown) > 1:
+                    walked_back = True
+
+                for d in unknown:
+                    path_append(d)
+                for d in known:
+                    for path in known_runnable_paths_pop(d):
+                        path_extend(reversed(path))
+
+                del deps
+                continue
+            else:
+                if walked_back and len(runnable) < len(critical_path):
+                    process_runnables()
+                add_to_result(item)
+        process_runnables()
+
+    assert len(result) == expected_len
+    for k in external_keys:
+        del result[k]
+    return result  # type: ignore[return-value]
 
 
-def graph_metrics(dependencies, dependents, total_dependencies):
-    r"""Useful measures of a graph used by ``dask.order.order``
+def _connecting_to_roots(
+    dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
+) -> tuple[dict[Key, frozenset[Key]], dict[Key, int]]:
+    """Determine for every node which root nodes are connected to it (i.e.
+    ancestors). If arguments of dependencies and dependents are switched, this
+    can also be used to determine which leaf nodes are connected to which node
+    (i.e. descendants).
 
-    Example DAG (a1 has no dependencies; b2 and c1 are root nodes):
+    Also computes a weight that is defined as (cheaper to compute here)
 
-    c1
-    |
-    b1  b2
-     \  /
-      a1
+            `max(len(dependents[k]) for k in connected_roots[key])`
 
-    For each key we return:
-    1.  The number of keys that can only be run after this key is run.  The
-        root nodes have value 1 while deep child nodes will have larger values.
-
-        1
-        |
-        2   1
-         \ /
-          4
-
-    2.  The minimum value of the total number of dependencies of
-        all final dependents (see module-level comment for more).
-        In other words, the minimum of ``ndependencies`` of root
-        nodes connected to the current node.
-
-        3
-        |
-        3   2
-         \ /
-          2
-
-    3.  The maximum value of the total number of dependencies of
-        all final dependents (see module-level comment for more).
-        In other words, the maximum of ``ndependencies`` of root
-        nodes connected to the current node.
-
-        3
-        |
-        3   2
-         \ /
-          3
-
-    4.  The minimum height from a root node
-
-        0
-        |
-        1   0
-         \ /
-          1
-
-    5.  The maximum height from a root node
-
-        0
-        |
-        1   0
-         \ /
-          2
-
-    Examples
-    --------
-    >>> dsk = {'a1': 1, 'b1': (inc, 'a1'), 'b2': (inc, 'a1'), 'c1': (inc, 'b1')}
-    >>> dependencies, dependents = get_deps(dsk)
-    >>> _, total_dependencies = ndependencies(dependencies, dependents)
-    >>> metrics = graph_metrics(dependencies, dependents, total_dependencies)
-    >>> sorted(metrics.items())
-    [('a1', (4, 2, 3, 1, 2)), ('b1', (2, 3, 3, 1, 1)), ('b2', (1, 2, 2, 0, 0)), ('c1', (1, 3, 3, 0, 0))]
-
-    Returns
-    -------
-    metrics: Dict[key, Tuple[int, int, int, int, int]]
     """
     result = {}
-    num_needed = {k: len(v) for k, v in dependents.items() if v}
     current = []
-    current_pop = current.pop
-    current_append = current.append
-    for key, deps in dependents.items():
-        if not deps:
-            val = total_dependencies[key]
-            result[key] = (1, val, val, 0, 0)
-            for child in dependencies[key]:
+    num_needed = {k: len(v) for k, v in dependencies.items() if v}
+    max_dependents = {}
+    roots = set()
+    for k, v in dependencies.items():
+        if not v:
+            # Note: Hashing the full keys is relatively expensive. Hashing
+            # integers would be much faster so this could be sped up by just
+            # introducing a counter here. However, the order algorithm is also
+            # sometimes interested in the actual keys and the only way to
+            # benefit from the speedup of using integers would be to convert
+            # this back on demand which makes the code very hard to read.
+            roots.add(k)
+            result[k] = frozenset({k})
+            deps = dependents[k]
+            max_dependents[k] = len(deps)
+            for child in deps:
                 num_needed[child] -= 1
                 if not num_needed[child]:
-                    current_append(child)
+                    current.append(child)
 
+    dedup_mapping: dict[frozenset[Key], frozenset[Key]] = {}
     while current:
-        key = current_pop()
-        parents = dependents[key]
-        if len(parents) == 1:
-            (parent,) = parents
-            (
-                total_dependents,
-                min_dependencies,
-                max_dependencies,
-                min_heights,
-                max_heights,
-            ) = result[parent]
-            result[key] = (
-                1 + total_dependents,
-                min_dependencies,
-                max_dependencies,
-                1 + min_heights,
-                1 + max_heights,
-            )
-        else:
-            (
-                total_dependents,
-                min_dependencies,
-                max_dependencies,
-                min_heights,
-                max_heights,
-            ) = zip(*(result[parent] for parent in dependents[key]))
-            result[key] = (
-                1 + sum(total_dependents),
-                min(min_dependencies),
-                max(max_dependencies),
-                1 + min(min_heights),
-                1 + max(max_heights),
-            )
+        key = current.pop()
+        if key in result:
+            continue
+        for parent in dependents[key]:
+            num_needed[parent] -= 1
+            if not num_needed[parent]:
+                current.append(parent)
+        # At some point, all the roots are the same, particularly for dense
+        # graphs. We don't want to create new sets over and over again
+        transitive_deps = []
+        transitive_deps_ids = set()
+        max_dependents_key = list()
         for child in dependencies[key]:
-            num_needed[child] -= 1
-            if not num_needed[child]:
-                current_append(child)
-    return result
+            r_child = result[child]
+            if id(r_child) in transitive_deps_ids:
+                continue
+            transitive_deps.append(r_child)
+            transitive_deps_ids.add(id(r_child))
+            max_dependents_key.append(max_dependents[child])
+
+        max_dependents[key] = max(max_dependents_key)
+        if len(transitive_deps_ids) == 1:
+            result[key] = transitive_deps[0]
+        else:
+            d = transitive_deps[0]
+            if all(tdeps.issubset(d) for tdeps in transitive_deps[1:]):
+                result[key] = d
+            else:
+                res = set(d)
+                for tdeps in transitive_deps[1:]:
+                    res.update(tdeps)
+                # frozenset is unfortunately triggering a copy. In the event of
+                # a cache hit, this is wasted time but we can't hash the set
+                # otherwise (unless we did it manually) and can therefore not
+                # deduplicate without this copy
+                frozen_res = frozenset(res)
+                del res, tdeps
+                try:
+                    result[key] = dedup_mapping[frozen_res]
+                except KeyError:
+                    dedup_mapping[frozen_res] = frozen_res
+                    result[key] = frozen_res
+    del dedup_mapping
+
+    empty_set: frozenset[Key] = frozenset()
+    for r in roots:
+        result[r] = empty_set
+    return result, max_dependents
 
 
-def ndependencies(dependencies, dependents):
+def ndependencies(
+    dependencies: Mapping[Key, set[Key]], dependents: Mapping[Key, set[Key]]
+) -> tuple[dict[Key, int], dict[Key, int]]:
     """Number of total data elements on which this key depends
 
     For each key we return the number of tasks that must be run for us to run
@@ -627,6 +712,7 @@ def ndependencies(dependencies, dependents):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> num_dependencies, total_dependencies = ndependencies(dependencies, dependents)
@@ -646,7 +732,7 @@ def ndependencies(dependencies, dependents):
             result[k] = 1
 
     num_dependencies = num_needed.copy()
-    current = []
+    current: list[Key] = []
     current_pop = current.pop
     current_append = current.append
 
@@ -665,30 +751,89 @@ def ndependencies(dependencies, dependents):
     return num_dependencies, result
 
 
-class StrComparable(object):
-    """Wrap object so that it defaults to string comparison
+OrderInfo = namedtuple(
+    "OrderInfo",
+    (
+        "order",
+        "age",
+        "num_data_when_run",
+        "num_data_when_released",
+        "num_dependencies_freed",
+    ),
+)
 
-    When comparing two objects of different types Python fails
 
-    >>> 'a' < 1  # doctest: +SKIP
-    Traceback (most recent call last):
-        ...
-    TypeError: '<' not supported between instances of 'str' and 'int'
+def diagnostics(
+    dsk: MutableMapping[Key, Any],
+    o: Mapping[Key, int] | None = None,
+    dependencies: MutableMapping[Key, set[Key]] | None = None,
+) -> tuple[dict[Key, OrderInfo], list[int]]:
+    """Simulate runtime metrics as though running tasks one at a time in order.
 
-    This class wraps the object so that, when this would occur it instead
-    compares the string representation
+    These diagnostics can help reveal behaviors of and issues with ``order``.
 
-    >>> StrComparable('a') < StrComparable(1)
-    False
+    Returns a dict of `namedtuple("OrderInfo")` and a list of the number of outputs held over time.
+
+    OrderInfo fields:
+    - order : the order in which the node is run.
+    - age : how long the output of a node is held.
+    - num_data_when_run : the number of outputs held in memory when a node is run.
+    - num_data_when_released : the number of outputs held in memory when the output is released.
+    - num_dependencies_freed : the number of dependencies freed by running the node.
     """
+    if dependencies is None:
+        dependencies, dependents = get_deps(dsk)
+    else:
+        dependents = reverse_dict(dependencies)
+    assert dependencies is not None
+    if o is None:
+        o = order(dsk, dependencies=dependencies, return_stats=False)
 
-    __slots__ = ("obj",)
+    pressure = []
+    num_in_memory = 0
+    age = {}
+    runpressure = {}
+    releasepressure = {}
+    freed = {}
+    num_needed = {key: len(val) for key, val in dependents.items()}
+    for i, key in enumerate(sorted(dsk, key=o.__getitem__)):
+        pressure.append(num_in_memory)
+        runpressure[key] = num_in_memory
+        released = 0
+        for dep in dependencies[key]:
+            num_needed[dep] -= 1
+            if num_needed[dep] == 0:
+                age[dep] = i - o[dep]
+                releasepressure[dep] = num_in_memory
+                released += 1
+        freed[key] = released
+        if dependents[key]:
+            num_in_memory -= released - 1
+        else:
+            age[key] = 0
+            releasepressure[key] = num_in_memory
+            num_in_memory -= released
 
-    def __init__(self, obj):
-        self.obj = obj
+    rv = {
+        key: OrderInfo(
+            val, age[key], runpressure[key], releasepressure[key], freed[key]
+        )
+        for key, val in o.items()
+    }
+    return rv, pressure
 
-    def __lt__(self, other):
-        try:
-            return self.obj < other.obj
-        except Exception:
-            return str(self.obj) < str(other.obj)
+
+def _f() -> None: ...
+
+
+def sanitize_dsk(dsk: MutableMapping[Key, Any]) -> dict:
+    """Take a dask graph and replace callables with a dummy function and remove
+    payload data like numpy arrays, dataframes, etc.
+    """
+    from dask._task_spec import Task, TaskRef
+
+    new = {}
+    deps = DependenciesMapping(dsk)
+    for key, values in deps.items():
+        new[key] = Task(key, _f, *(TaskRef(k) for k in values))
+    return new

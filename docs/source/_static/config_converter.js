@@ -53,7 +53,7 @@ window.addEventListener('load', (event) => {
  * @return {object} The parsed data
  */
 function parseYAML(raw) {
-    return jsyaml.load(raw)
+    return YAML.parse(raw)
 }
 
 /**
@@ -79,6 +79,7 @@ function parseEnv(raw) {
             }
             try {
                 value = JSON.parse(value)
+                break
             } catch (err) {
                 break
             }
@@ -116,15 +117,18 @@ function parseCode(raw) {
         while (true) {
             if (value === "True") {
                 value = true
+                break
             }
             if (value === "False") {
                 value = false
+                break
             }
             if (value === true || value === false) {
                 break
             }
             try {
                 value = JSON.parse(value)
+                break
             } catch (err) {
                 break
             }
@@ -147,7 +151,7 @@ function parseCode(raw) {
  * @return {str} YAML configuration
  */
 function dumpYAML(config) {
-    return jsyaml.dump(config)
+    return YAML.stringify(config, 10, 2)
 }
 
 /**
@@ -248,7 +252,7 @@ function walkCode(config, prefix = "") {
  * // returns "hello-world"
  */
 function toKey(str) {
-    return str.toLowerCase().replace("_", "-")
+    return str.toLowerCase().replaceAll("_", "-")
 }
 
 /**
@@ -262,7 +266,7 @@ function toKey(str) {
  * // returns "HELLO_WORLD"
  */
 function fromKey(key) {
-    return key.toUpperCase().replace("-", "_")
+    return key.toUpperCase().replaceAll("-", "_")
 }
 
 /**
@@ -306,6 +310,7 @@ function mergeDeep(...objects) {
  */
 function runTests() {
     console.assert(dumpEnv(parseYAML("distributed:\n  logging:\n    distributed: info\n")) == 'export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"')
+    console.assert(dumpEnv(parseYAML("distributed:\n    deploy:\n      lost-worker-timeout: 15s")) == 'export DASK_DISTRIBUTED__DEPLOY__LOST_WORKER_TIMEOUT="15s"')
     console.assert(dumpCode(parseYAML("distributed:\n  logging:\n    distributed: info\n")) == '>>> dask.config.set({"distributed.logging.distributed": "info"})')
     console.assert(dumpYAML(parseEnv('export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"')) == "distributed:\n  logging:\n    distributed: info\n")
     console.assert(dumpCode(parseEnv('export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"')) == '>>> dask.config.set({"distributed.logging.distributed": "info"})')

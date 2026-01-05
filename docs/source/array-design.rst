@@ -4,10 +4,10 @@ Internal Design
 Overview
 --------
 
-.. image:: images/array.png
+.. image:: images/array.svg
    :width: 40 %
    :align: right
-   :alt: A dask array
+   :alt: 12 rectangular blocks arranged as a 4-row, 3-column layout. Each block includes 'x' and its location in the table starting with ('x',0,0) in the top-left, and a size of 5x8.
 
 Dask arrays define a large array with a grid of blocks of smaller arrays.
 These arrays may be actual arrays or functions that produce arrays. We 
@@ -103,6 +103,32 @@ Some ways in which ``chunks`` reflects properties of our array:
 
        ('x', 0, 0), ('x', 0, 1), ('x', 0, 2)
        ('x', 1, 0), ('x', 1, 1), ('x', 1, 2)
+
+
+Metadata
+--------
+
+Many Array operations rely on knowing the dtype (int, float,..) and type (numpy, cupy,...).  To
+keep track of this information, all Dask Array objects have a ``_meta``
+attribute which contains an empty Numpy object with the same dtypes.
+For example:
+
+.. code-block:: python
+
+   >>> np_array = np.arange(15).reshape(3, 5)
+   >>> da_array = da.from_array(np_array, npartitions=2)
+   >>> da_array._meta
+   Empty Array
+   Shape: (0, 0)
+   dtype: int64
+   array([], shape=(0, 0), dtype=int64)
+
+   >>> ddf._meta.dtype
+   dtype: int64
+
+Internally, Dask Array does its best to propagate this information
+through all operations, so most of the time a user shouldn't have to worry
+about this. 
 
 
 Create an Array Object

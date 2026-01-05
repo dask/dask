@@ -1,6 +1,10 @@
+from __future__ import annotations
+
+import pytest
+
+from dask.callbacks import Callback
 from dask.local import get_sync
 from dask.threaded import get as get_threaded
-from dask.callbacks import Callback
 from dask.utils_test import add
 
 
@@ -23,7 +27,7 @@ def test_start_state_callback():
     class MyCallback(Callback):
         def _start_state(self, dsk, state):
             flag[0] = True
-            assert dsk["x"] == 1
+            assert dsk["x"]() == 1
             assert len(state["cache"]) == 1
 
     with MyCallback():
@@ -65,11 +69,9 @@ def test_finish_always_called():
 
     dsk = {"x": (raise_keyboard,)}
     flag[0] = False
-    try:
+    with pytest.raises(KeyboardInterrupt):
         with MyCallback():
             get_sync(dsk, "x")
-    except BaseException as e:
-        assert isinstance(e, KeyboardInterrupt)
     assert flag[0]
 
 
@@ -96,8 +98,8 @@ def test_nested_schedulers():
         get_threaded(outer_dsk, "b")
 
     assert not Callback.active
-    assert outer_callback.dsk == outer_dsk
-    assert inner_callback.dsk == inner_dsk
+    assert outer_callback.dsk.keys() == outer_dsk.keys()
+    assert inner_callback.dsk.keys() == inner_dsk.keys()
     assert not Callback.active
 
 

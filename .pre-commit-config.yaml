@@ -1,11 +1,43 @@
 repos:
--   repo: https://github.com/python/black
-    rev: stable
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-    - id: black
-      language_version: python3.7
--   repo: https://gitlab.com/pycqa/flake8
-    rev: 3.7.9
+      - id: end-of-file-fixer
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.2
     hooks:
-    - id: flake8
-      language_version: python3.7
+      - id: ruff-check
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 25.11.0
+    hooks:
+      - id: black
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      -   id: codespell
+          types_or: [rst, markdown]
+          files: docs
+          additional_dependencies:
+            - tomli
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    # pinned due to
+    # https://github.com/python/typeshed/pull/9771 and
+    # https://github.com/python/mypy/issues/15257 for DaskCollection.__dask_scheduler__
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        # Override default --ignore-missing-imports
+        # Use pyproject.toml if possible instead of adding command line parameters here
+        args: [--warn-unused-configs]
+        exclude: dask/dataframe/dask_expr/
+        additional_dependencies:
+          # Type stubs
+          # - pandas-stubs  # TODO
+          - types-docutils
+          - types-PyYAML
+          - types-psutil
+          - types-requests
+          - types-setuptools
+          # Typed libraries
+          - numpy
+          - pytest

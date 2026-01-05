@@ -1,16 +1,13 @@
 Futures
 =======
 
+.. meta::
+    :description: Dask futures reimplements the Python futures API so you can scale your Python futures workflow across a Dask cluster.
+
 Dask supports a real-time task framework that extends Python's
 `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_
-interface.  This interface is good for arbitrary task scheduling like
-:doc:`dask.delayed <delayed>`, but is immediate rather than lazy, which
-provides some more flexibility in situations where the computations may evolve
-over time.
-
-These features depend on the second generation task scheduler found in
-`dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
-despite its name, runs very well on a single machine).
+interface. Dask futures allow you to scale generic Python workflows across
+a Dask cluster with minimal code changes.
 
 .. raw:: html
 
@@ -23,6 +20,14 @@ despite its name, runs very well on a single machine).
            allowfullscreen></iframe>
 
 .. currentmodule:: distributed
+
+This interface is good for arbitrary task scheduling like
+:doc:`dask.delayed <delayed>`, but is immediate rather than lazy, which
+provides some more flexibility in situations where the computations may evolve
+over time. These features depend on the second generation task scheduler found in
+`dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
+despite its name, runs very well on a single machine).
+
 
 Examples
 --------
@@ -44,7 +49,7 @@ among the various worker processes or threads:
    # or
    client = Client(processes=False)  # start local workers as threads
 
-If you have `Bokeh <https://bokeh.pydata.org>`_ installed, then this starts up a
+If you have `Bokeh <https://docs.bokeh.org>`_ installed, then this starts up a
 diagnostic dashboard at ``http://localhost:8787`` .
 
 Submit Tasks
@@ -289,6 +294,8 @@ Additionally, for iterative algorithms, you can add more futures into the
            new_future = client.submit(...)
            seq.add(new_future)  # add back into the loop
 
+or use ``seq.update(futures)`` to add multiple futures at once.
+
 
 Fire and Forget
 ---------------
@@ -331,6 +338,30 @@ part of a function:
 
     for filename in filenames:
         process(filename)
+
+
+Submit task and retrieve results from a different process
+---------------------------------------------------------
+
+Sometimes we care about retrieving a result but not necessarily from the same process.
+
+.. code-block:: python
+
+   from distributed import Variable
+
+   var = Variable("my-result")
+   fut = client.submit(...)
+   var.set(fut)
+
+Using a ``Variable`` instructs dask to remember the result of this task under
+the given name so that it can be retrieved later without having to keep the
+Client alive in the meantime.
+
+.. code-block:: python
+
+   var = Variable("my-result")
+   fut = var.get()
+   result = fut.result()
 
 
 Submit Tasks from Tasks
@@ -442,8 +473,6 @@ Coordination Primitives
    Lock
    Event
    Semaphore
-   Pub
-   Sub
 
 .. note: These are advanced features and are rarely necessary in the common case.
 
@@ -452,7 +481,7 @@ with each other in ways beyond normal task scheduling with futures.  In these
 cases Dask provides additional primitives to help in complex situations.
 
 Dask provides distributed versions of coordination primitives like locks, events,
-queues, global variables, and pub-sub systems that, where appropriate, match
+queues, and global variables that, where appropriate, match
 their in-memory counterparts.  These can be used to control access to external
 resources, track progress of ongoing computations, or share data in
 side-channels between many workers, clients, and tasks sensibly.
@@ -539,8 +568,6 @@ futures.  These futures may point to much larger pieces of data safely:
    # Or use futures for metadata
    >>> q.put({'status': 'OK', 'stage=': 1234})
 
-If you're looking to move large amounts of data between workers, then you might
-also want to consider the Pub/Sub system described a few sections below.
 
 Global Variables
 ~~~~~~~~~~~~~~~~
@@ -706,25 +733,8 @@ database.
    client.gather(futures)
    sem.close()
 
-
-Publish-Subscribe
-~~~~~~~~~~~~~~~~~
-
-.. autosummary::
-   Pub
-   Sub
-
-Dask implements the `Publish Subscribe pattern <https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern>`_,
-providing an additional channel of communication between ongoing tasks.
-
-.. autoclass:: Pub
-   :members:
-
 Actors
 ------
-
-.. note:: This is an advanced feature and is rarely necessary in the common case.
-.. note:: This is an experimental feature and is subject to change without notice.
 
 Actors allow workers to manage rapidly changing state without coordinating with
 the central scheduler.  This has the advantage of reducing latency
@@ -760,10 +770,12 @@ worker:
            return self.n
 
    from dask.distributed import Client
-   client = Client()
 
-   future = client.submit(Counter, actor=True)
-   counter = future.result()
+   if __name__ == '__main__':
+       client = Client()
+
+       future = client.submit(Counter, actor=True)
+       counter = future.result()
 
    >>> counter
    <Actor: Counter, key=Counter-afa1cdfb6b4761e616fa2cfab42398c8>
@@ -827,7 +839,7 @@ The client will calculate the gradient of the loss function above.
    ps_future = client.submit(ParameterServer, actor=True)
    ps = ps_future.result()
 
-   ps.put('parameters', np.random.random(1000))
+   ps.put('parameters', np.random.default_rng().random(1000))
    for k in range(20):
        params = ps.get('parameters').result()
        new_params = train(params)
@@ -856,6 +868,12 @@ All operations that require talking to the remote worker are awaitable:
 
        n = await counter.n  # attribute access also must be awaited
 
+Generally, all I/O operations that trigger computations (e.g. ``to_parquet``) should be done using the ``compute=False``
+parameter to avoid asynchronous blocking:
+
+.. code-block:: python
+
+   await client.compute(ddf.to_parquet('/tmp/some.parquet', compute=False))
 
 API
 ---
@@ -885,9 +903,6 @@ API
    Client.scatter
    Client.shutdown
    Client.scheduler_info
-   Client.shutdown
-   Client.start_ipython_workers
-   Client.start_ipython_scheduler
    Client.submit
    Client.unpublish_dataset
    Client.upload_file
@@ -914,6 +929,8 @@ API
    secede
    rejoin
    wait
+   print
+   warn
 
 .. autofunction:: as_completed
 .. autofunction:: fire_and_forget
@@ -921,6 +938,8 @@ API
 .. autofunction:: secede
 .. autofunction:: rejoin
 .. autofunction:: wait
+.. autofunction:: print
+.. autofunction:: warn
 
 .. autoclass:: Client
    :members:
@@ -940,8 +959,5 @@ API
 .. autoclass:: Event
    :members:
 
-.. autoclass:: Pub
-   :members:
-
-.. autoclass:: Sub
+.. autoclass:: Semaphore
    :members:

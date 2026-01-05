@@ -1,10 +1,14 @@
-from dask.callbacks import Callback
-from dask.cache import Cache
-from dask.local import get_sync
-from dask.threaded import get
+from __future__ import annotations
+
 from operator import add
 from time import sleep
+
 import pytest
+
+from dask.cache import Cache
+from dask.callbacks import Callback
+from dask.local import get_sync
+from dask.threaded import get
 
 cachey = pytest.importorskip("cachey")
 
@@ -51,6 +55,7 @@ def test_cache_with_number():
 def test_cache_correctness():
     # https://github.com/dask/dask/issues/3631
     c = Cache(10000)
+    pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
     from numpy import ones, zeros
 

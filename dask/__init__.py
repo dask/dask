@@ -1,19 +1,24 @@
-from . import config, datasets
-from .core import istask
-from .local import get_sync as get
+from __future__ import annotations
+
+from dask import config, datasets
+from dask._expr import Expr, HLGExpr, LLGExpr, SingletonExpr
 
 try:
-    from .delayed import delayed
-except ImportError:
-    pass
-try:
-    from .base import visualize, compute, persist, optimize, is_dask_collection
-except ImportError:
-    pass
-
-from ._version import get_versions
-
-versions = get_versions()
-__version__ = versions["version"]
-__git_revision__ = versions["full-revisionid"]
-del get_versions, versions
+    # Backwards compatibility with versioneer
+    from dask._version import __commit_id__ as __git_revision__
+    from dask._version import __version__
+except ImportError:  # pragma: no cover
+    __git_revision__ = "unknown"
+    __version__ = "unknown"
+from dask.base import (
+    annotate,
+    compute,
+    get_annotations,
+    is_dask_collection,
+    optimize,
+    persist,
+    visualize,
+)
+from dask.core import istask
+from dask.delayed import delayed
+from dask.local import get_sync as get

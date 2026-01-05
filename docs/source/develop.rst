@@ -8,27 +8,29 @@ This page provides resources on how best to contribute.
 .. note:: Dask strives to be a welcoming community of individuals with diverse
    backgrounds. For more information on our values, please see our
    `code of conduct
-   <https://github.com/dask/governance/blob/master/code-of-conduct.md>`_
+   <https://github.com/dask/governance/blob/main/code-of-conduct.md>`_
    and
-   `diversity statement <https://github.com/dask/governance/blob/master/diversity.md>`_
+   `diversity statement <https://github.com/dask/governance/blob/main/diversity.md>`_
 
 Where to ask for help
 ---------------------
 
 Dask conversation happens in the following places:
 
-1.  `Stack Overflow #dask tag`_: for usage questions
-2.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
-3.  `Gitter chat`_: for real-time discussion
+#.  `Dask Discourse forum`_: for usage questions and general discussion
+#.  `Stack Overflow #dask tag`_: for usage questions
+#.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
+#.  `Dask Community Slack`_: for real-time discussion
 
-For usage questions and bug reports we strongly prefer the use of Stack Overflow
-and GitHub issues over gitter chat.  GitHub and Stack Overflow are more easily
-searchable by future users and so is more efficient for everyone's time.
-Gitter chat is generally reserved for community discussion.
+For usage questions and bug reports we prefer the use of Discourse, Stack Overflow
+and GitHub issues over Slack chat.  Discourse, GitHub and Stack Overflow are more easily
+searchable by future users, so conversations had there can be useful to many more people
+than just those directly involved.
 
+.. _`Dask Discourse forum`: https://dask.discourse.group
 .. _`Stack Overflow  #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub Issue Tracker`: https://github.com/dask/dask/issues/
-.. _`Gitter chat`: https://gitter.im/dask/dask
+.. _`Dask Community Slack`: https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g
 
 
 Separate Code Repositories
@@ -50,8 +52,8 @@ non-exhaustive list follows:
 
 Git and GitHub can be challenging at first.  Fortunately good materials exist
 on the internet.  Rather than repeat these materials here, we refer you to
-Pandas' documentation and links on this subject at
-https://pandas.pydata.org/pandas-docs/stable/contributing.html
+pandas' documentation and links on this subject at
+https://pandas.pydata.org/docs/dev/development/contributing.html
 
 
 Issues
@@ -63,7 +65,7 @@ you should raise it there to start public discussion.
 
 If you are looking for an introductory issue to get started with development,
 then check out the `"good first issue" label`_, which contains issues that are good
-for starting developers.  Generally, familiarity with Python, NumPy, Pandas, and
+for starting developers.  Generally, familiarity with Python, NumPy, pandas, and
 some parallel computing are assumed.
 
 .. _`"good first issue" label`: https://github.com/dask/dask/labels/good%20first%20issue
@@ -78,28 +80,35 @@ Download code
 Make a fork of the main `Dask repository <https://github.com/dask/dask>`_ and
 clone the fork::
 
-   git clone https://github.com/<your-github-username>/dask
+   git clone https://github.com/<your-github-username>/dask.git
+   cd dask
+
+You should also pull the latest git tags (this ensures ``pip``'s dependency resolver
+can successfully install Dask)::
+
+   git remote add upstream https://github.com/dask/dask.git
+   git pull upstream main --tags
 
 Contributions to Dask can then be made by submitting pull requests on GitHub.
 
+.. _develop-install:
 
 Install
 ~~~~~~~
 
-To build the library you can install the necessary requirements using
-pip or conda_::
-
-  cd dask
+From the top level of your cloned Dask repository you can install a
+local version of Dask, along with all necessary dependencies, using
+pip or conda_
 
 .. _conda: https://conda.io/
 
 ``pip``::
 
-  python -m pip install -e ".[complete]"
+  python -m pip install -e ".[complete,test]"
 
 ``conda``::
 
-  conda env create -n dask-dev -f continuous_integration/environment-latest.yaml
+  conda env create -n dask-dev -f continuous_integration/environment-3.12.yaml
   conda activate dask-dev
   python -m pip install --no-deps -e .
 
@@ -124,8 +133,10 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.5, 3.6, and 3.7.
+Dask supports Python versions 3.9 to 3.12.
 Name changes are handled by the :file:`dask/compatibility.py` file.
+
+.. _develop-test:
 
 Test
 ~~~~
@@ -152,16 +163,21 @@ and running quickly (slow test suites get run less often).
 
 You can run tests locally by running ``py.test`` in the local dask directory::
 
-   py.test dask --verbose
+   py.test dask
 
 You can also test certain modules or individual tests for faster response::
 
-   py.test dask/dataframe --verbose
+   py.test dask/dataframe
 
    py.test dask/dataframe/tests/test_dataframe.py::test_rename_index
 
-Tests run automatically on the Travis.ci and Appveyor continuous testing
-frameworks on every push to every pull request on GitHub.
+If you want the tests to run faster, you can run them in parallel using
+``pytest-xdist``::
+
+   py.test dask -n auto
+
+Tests run automatically on GitHub Actions on every push to every pull
+request on GitHub.
 
 Tests are organized within the various modules' subdirectories::
 
@@ -172,7 +188,7 @@ Tests are organized within the various modules' subdirectories::
     dask/diagnostics/tests/test_*.py
 
 For the Dask collections like Dask Array and Dask DataFrame, behavior is
-typically tested directly against the NumPy or Pandas libraries using the
+typically tested directly against the NumPy or pandas libraries using the
 ``assert_eq`` functions:
 
 .. code-block:: python
@@ -182,7 +198,8 @@ typically tested directly against the NumPy or Pandas libraries using the
    from dask.array.utils import assert_eq
 
    def test_aggregations():
-       nx = np.random.random(100)
+       rng = np.random.default_rng()
+       nx = rng.random(100)
        dx = da.from_array(nx, chunks=(10,))
 
        assert_eq(nx.sum(), dx.sum())
@@ -237,7 +254,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
+Docstrings are tested under Python 3.12 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
@@ -250,34 +267,19 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses `Black <https://black.readthedocs.io/en/stable/>`_ and
-`Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent code
-format throughout the project. ``black`` and ``flake8`` can be installed with
-``pip``::
+Dask uses several code linters (flake8, black, isort, pyupgrade, mypy), which are
+enforced by CI. Developers should run them locally before they submit a PR, through the
+single command ``pre-commit run --all-files``. This makes sure that linter versions and
+options are aligned for all developers.
 
-   python -m pip install black flake8
-
-and then run from the root of the Dask repository::
-
-   black dask
-   flake8 dask
-
-to auto-format your code. Additionally, many editors have plugins that will
-apply ``black`` as you edit files.
-
-Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
-to automatically run ``black`` and ``flake8`` when you make a git commit. This
-can be done by installing ``pre-commit``::
-
-   python -m pip install pre-commit
-
-and then running::
+Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
+run automatically when you make a git commit. This can be done by running::
 
    pre-commit install
 
-from the root of the Dask repository. Now ``black`` and ``flake8`` will be run
-each time you commit changes. You can skip these checks with
-``git commit --no-verify``.
+from the root of the Dask repository. Now the code linters will be run each time you
+commit changes. You can skip these checks with ``git commit --no-verify`` or with the
+short version ``git commit -n``.
 
 
 Contributing to Documentation
@@ -288,20 +290,30 @@ Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
 
-To build the documentation locally, clone this repository and install 
-the necessary requirements using ``pip`` or ``conda``::
+The documentation is automatically built, and a live preview is available,
+for each pull request submitted to Dask. Additionally, you may also
+build the documentation yourself locally by following the instructions outlined
+below.
 
-  git clone https://github.com/dask/dask.git
+How to build the Dask documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To build the documentation locally, make a fork of the main
+`Dask repository <https://github.com/dask/dask>`_, clone the fork::
+
+  git clone https://github.com/<your-github-username>/dask.git
   cd dask/docs
 
-``pip``::
+Install the packages in ``requirements-docs.txt``.
+
+Optionally create and activate a ``conda`` environment first::
+
+  conda create -n daskdocs -c conda-forge python=3.8
+  conda activate daskdocs
+
+Install the dependencies with ``pip``::
 
   python -m pip install -r requirements-docs.txt
-
-``conda``::
-
-  conda create -n daskdocs -c conda-forge --file requirements-docs.txt
-  conda activate daskdocs
 
 Then build the documentation with ``make``::
 
@@ -311,5 +323,25 @@ The resulting HTML files end up in the ``build/html`` directory.
 
 You can now make edits to rst files and run ``make html`` again to update
 the affected pages.
+
+
+Dask CI Infrastructure
+----------------------
+
+Github Actions
+~~~~~~~~~~~~~~
+
+Dask uses Github Actions for Continuous Integration (CI) testing for each PR.
+These CI builds will run the test suite across a variety of Python versions, operating
+systems, and package dependency versions.  Additionally, if a commit message
+includes the phrase ``test-upstream``, then an additional CI build will be
+triggered which uses the development versions of several dependencies
+including: NumPy, pandas, fsspec, etc.
+
+The CI workflows for Github Actions are defined in
+`.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
+with additional scripts and metadata located in `continuous_integration
+<https://github.com/dask/dask/tree/main/continuous_integration>`_
+
 
 .. _Sphinx: https://www.sphinx-doc.org/

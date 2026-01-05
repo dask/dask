@@ -1,11 +1,16 @@
-import numpy as np
-from numpy.compat import basestring
+from __future__ import annotations
 
-from .core import blockwise, asarray, einsum_lookup
-from ..utils import derived_from
+import math
+
+import numpy as np
+
+from dask.array._shuffle import _calculate_new_chunksizes
+from dask.array.core import asarray, blockwise, einsum_lookup
+from dask.utils import cached_max, derived_from
 
 einsum_symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 einsum_symbols_set = set(einsum_symbols)
+from dask import config
 
 
 def chunk_einsum(*operands, **kwargs):
@@ -51,7 +56,7 @@ def parse_einsum_input(operands):
     if len(operands) == 0:
         raise ValueError("No input operands")
 
-    if isinstance(operands[0], basestring):
+    if isinstance(operands[0], str):
         subscripts = operands[0].replace(" ", "")
         operands = [asarray(o) for o in operands[1:]]
 
@@ -60,13 +65,13 @@ def parse_einsum_input(operands):
             if s in ".,->":
                 continue
             if s not in einsum_symbols_set:
-                raise ValueError("Character %s is not a valid symbol." % s)
+                raise ValueError(f"Character {s} is not a valid symbol.")
 
     else:
         tmp_operands = list(operands)
         operand_list = []
         subscript_list = []
-        for p in range(len(operands) // 2):
+        for _ in range(len(operands) // 2):
             operand_list.append(tmp_operands.pop(0))
             subscript_list.append(tmp_operands.pop(0))
 
@@ -158,12 +163,12 @@ def parse_einsum_input(operands):
             tmp_subscripts = subscripts.replace(",", "")
             for s in sorted(set(tmp_subscripts)):
                 if s not in einsum_symbols_set:
-                    raise ValueError("Character %s is not a valid symbol." % s)
+                    raise ValueError(f"Character {s} is not a valid symbol.")
                 if tmp_subscripts.count(s) == 1:
                     output_subscript += s
             normal_inds = "".join(sorted(set(output_subscript) - set(out_ellipse)))
 
-            subscripts += "->" + out_ellipse + normal_inds
+            subscripts += f"->{out_ellipse}{normal_inds}"
 
     # Build output string if does not exist
     if "->" in subscripts:
@@ -175,14 +180,14 @@ def parse_einsum_input(operands):
         output_subscript = ""
         for s in sorted(set(tmp_subscripts)):
             if s not in einsum_symbols_set:
-                raise ValueError("Character %s is not a valid symbol." % s)
+                raise ValueError(f"Character {s} is not a valid symbol.")
             if tmp_subscripts.count(s) == 1:
                 output_subscript += s
 
     # Make sure output subscripts are in the input
     for char in output_subscript:
         if char not in input_subscripts:
-            raise ValueError("Output character %s did not appear in the input" % char)
+            raise ValueError(f"Output character {char} did not appear in the input")
 
     # Make sure number operands is equivalent to the number of terms
     if len(input_subscripts.split(",")) != len(operands):
@@ -194,10 +199,14 @@ def parse_einsum_input(operands):
 
 
 @derived_from(np)
-def einsum(*operands, **kwargs):
-    dtype = kwargs.pop("dtype", None)
-    optimize = kwargs.pop("optimize", False)
-    split_every = kwargs.pop("split_every", None)
+def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
+    """Dask added an additional keyword-only argument ``split_every``.
+
+    split_every: int >= 2 or dict(axis: int), optional
+        Determines the depth of the recursive aggregation.
+        Defaults to ``None`` which would let dask heuristically
+        decide a good default.
+    """
 
     einsum_dtype = dtype
 
@@ -218,11 +227,46 @@ def einsum(*operands, **kwargs):
     inputs = [tuple(i) for i in inputs.split(",")]
 
     # Set of all indices
-    all_inds = set(a for i in inputs for a in i)
+    all_inds = {a for i in inputs for a in i}
 
     # Which indices are contracted?
     contract_inds = all_inds - set(outputs)
     ncontract_inds = len(contract_inds)
+
+    if len(inputs) > 1 and len(outputs) > 0:
+        # Calculate the increase in chunk size compared to the largest input chunk
+        max_chunk_sizes, max_chunk_size_input = {}, 1
+        for op, input in zip(ops, inputs):
+            max_chunk_size_input = max(
+                math.prod(map(cached_max, op.chunks)), max_chunk_size_input
+            )
+            max_chunk_sizes.update(
+                {
+                    inp: max(cached_max(op.chunks[i]), max_chunk_sizes.get(inp, 1))
+                    for i, inp in enumerate(input)
+                    if inp not in contract_inds
+                }
+            )
+
+        max_chunk_size_output = math.prod(max_chunk_sizes.values())
+        factor = max_chunk_size_output / (
+            max_chunk_size_input * config.get("array.chunk-size-tolerance")
+        )
+
+        # Rechunk inputs to make input chunks smaller to avoid an increase in
+        # output chunks
+        new_ops = []
+        for op, input in zip(ops, inputs):
+            changeable_dimensions = {ctr for ctr, i in enumerate(input) if i in outputs}
+            f = max(factor ** (len(changeable_dimensions) / len(outputs)), 1)
+            result = _calculate_new_chunksizes(
+                op.chunks,
+                list(op.chunks),
+                changeable_dimensions,
+                math.prod(map(cached_max, op.chunks)) / f,
+            )
+            new_ops.append(op.rechunk(result))
+        ops = new_ops
 
     # Introduce the contracted indices into the blockwise product
     # so that we get numpy arrays, not lists
@@ -231,14 +275,14 @@ def einsum(*operands, **kwargs):
         tuple(outputs) + tuple(contract_inds),
         *(a for ap in zip(ops, inputs) for a in ap),
         # blockwise parameters
-        adjust_chunks={ind: 1 for ind in contract_inds},
+        adjust_chunks=dict.fromkeys(contract_inds, 1),
         dtype=dtype,
         # np.einsum parameters
         subscripts=subscripts,
         kernel_dtype=einsum_dtype,
         ncontract_inds=ncontract_inds,
         optimize=optimize,
-        **kwargs
+        **kwargs,
     )
 
     # Now reduce over any extra contraction dimensions

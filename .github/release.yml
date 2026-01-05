@@ -1,0 +1,26 @@
+# .github/release.yml
+
+changelog:
+  categories:
+    - title: New Features
+      labels:
+        - feature
+    - title: Enhancements
+      labels:
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - bug
+    - title: Deprecations
+      labels:
+        - deprecation
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Maintenance
+      labels:
+        - tests
+        - hygiene
+    - title: Misc
+      labels:
+        - "*"

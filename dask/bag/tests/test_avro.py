@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import os
-import pytest
 import random
+
+import pytest
+
 import dask.bag as db
 
 fastavro = pytest.importorskip("fastavro")

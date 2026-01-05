@@ -1,4 +1,11 @@
+from __future__ import annotations
+
+import pickle
+
 import pytest
+
+from dask._task_spec import Alias
+from dask.base import collections_to_expr
 
 pytest.importorskip("numpy")
 
@@ -9,10 +16,14 @@ from tlz import concat
 import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
-from dask.array.utils import assert_eq, same_keys, AxisError
-from dask.array.numpy_compat import _numpy_117, _numpy_118
+from dask.array.numpy_compat import NUMPY_GE_210, AxisError
+from dask.array.utils import assert_eq, same_keys
 
 
+@pytest.mark.parametrize(
+    "backend",
+    ["numpy", pytest.param("cupy", marks=pytest.mark.gpu)],
+)
 @pytest.mark.parametrize(
     "funcname",
     [
@@ -32,50 +43,55 @@ from dask.array.numpy_compat import _numpy_117, _numpy_118
 @pytest.mark.parametrize("name", [None, "my-name"])
 @pytest.mark.parametrize("order", ["C", "F"])
 @pytest.mark.parametrize("dtype", ["i4"])
-def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name, order):
-    np_func = getattr(np, funcname)
-    da_func = getattr(da, funcname)
-    shape = cast_shape(shape)
-    chunks = cast_chunks(chunks)
+def test_arr_like(
+    funcname, shape, cast_shape, dtype, cast_chunks, chunks, name, order, backend
+):
+    backend_lib = pytest.importorskip(backend)
+    with dask.config.set({"array.backend": backend}):
+        np_func = getattr(backend_lib, funcname)
+        da_func = getattr(da, funcname)
+        shape = cast_shape(shape)
+        chunks = cast_chunks(chunks)
 
-    if "full" in funcname:
-        old_np_func = np_func
-        old_da_func = da_func
+        if "full" in funcname:
+            old_np_func = np_func
+            old_da_func = da_func
 
-        np_func = lambda *a, **k: old_np_func(*a, fill_value=5, **k)
-        da_func = lambda *a, **k: old_da_func(*a, fill_value=5, **k)
+            np_func = lambda *a, **k: old_np_func(*a, fill_value=5, **k)
+            da_func = lambda *a, **k: old_da_func(*a, fill_value=5, **k)
 
-    dtype = np.dtype(dtype)
+        dtype = np.dtype(dtype)
 
-    if "like" in funcname:
-        a = np.random.randint(0, 10, shape).astype(dtype)
+        if "like" in funcname:
+            a = backend_lib.random.randint(0, 10, shape).astype(dtype)
 
-        np_r = np_func(a, order=order)
-        da_r = da_func(a, order=order, chunks=chunks, name=name)
-    else:
-        np_r = np_func(shape, order=order, dtype=dtype)
-        da_r = da_func(shape, order=order, dtype=dtype, chunks=chunks, name=name)
+            np_r = np_func(a, order=order)
+            da_r = da_func(a, order=order, chunks=chunks, name=name)
+        else:
+            np_r = np_func(shape, order=order, dtype=dtype)
+            da_r = da_func(shape, order=order, dtype=dtype, chunks=chunks, name=name)
 
-    assert np_r.shape == da_r.shape
-    assert np_r.dtype == da_r.dtype
+        assert np_r.shape == da_r.shape
+        assert np_r.dtype == da_r.dtype
 
-    if "empty" not in funcname:
-        assert (np_r == np.asarray(da_r)).all()
+        # Make sure we are using the desired backend
+        assert isinstance(da_r._meta, backend_lib.ndarray)
+        assert isinstance(da_r.compute(), backend_lib.ndarray)
 
-    if name is None:
-        assert funcname.split("_")[0] in da_r.name
-    else:
-        assert da_r.name == name
+        if "empty" not in funcname:
+            assert_eq(np_r, da_r)
 
-    if "order" == "F":
-        assert np.isfortran(da_r.compute())
-    else:
-        assert not np.isfortran(da_r.compute())
+        if name is None:
+            assert funcname.split("_")[0] in da_r.name
+        else:
+            assert da_r.name == name
+
+        if "order" == "F":  # FIXME: this is clearly a bug!  # noqa: PLR0133
+            assert np.isfortran(da_r.compute())
+        else:
+            assert not np.isfortran(da_r.compute())
 
 
-@pytest.mark.skipif(
-    not _numpy_117, reason="requires NumPy>=1.17 for shape argument support"
-)
 @pytest.mark.parametrize(
     "funcname, kwargs",
     [
@@ -142,6 +158,35 @@ def test_linspace(endpoint):
         da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask
     ) == sorted(da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask)
 
+    x = da.array([0.2, 6.4, 3.0, 1.6])
+    nparr = np.linspace(0, 2, 8, endpoint=endpoint)
+    darr = da.linspace(da.argmin(x), da.argmax(x) + 1, 8, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(0, 0, 0, endpoint=endpoint)
+    darr = da.linspace(0, 0, 0, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 1, 0, endpoint=endpoint)
+    darr = da.linspace(1, 1, 0, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 5, 0, endpoint=endpoint)
+    darr = da.linspace(1, 5, 0, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(0, 0, 1, endpoint=endpoint)
+    darr = da.linspace(0, 0, 1, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 1, 1, endpoint=endpoint)
+    darr = da.linspace(1, 1, 1, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 5, 1, endpoint=endpoint)
+    darr = da.linspace(1, 5, 1, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
 
 def test_arange():
     darr = da.arange(77, chunks=13)
@@ -184,6 +229,26 @@ def test_arange():
     nparr = np.arange(0, -1, 0.5)
     assert_eq(darr, nparr)
 
+    # stop and/or step as kwargs
+    darr = da.arange(stop=10)
+    nparr = np.arange(stop=10)
+    assert_eq(darr, nparr)
+
+    darr = da.arange(10, step=2)
+    nparr = np.arange(10, step=2)
+    assert_eq(darr, nparr)
+
+    darr = da.arange(stop=10, step=2)
+    nparr = np.arange(stop=10, step=2)
+    assert_eq(darr, nparr)
+
+    darr = da.arange(3, stop=10, step=2)
+    nparr = np.arange(3, stop=10, step=2)
+    assert_eq(darr, nparr)
+
+    with pytest.raises(TypeError, match="requires stop"):
+        da.arange()
+
     # Unexpected or missing kwargs
     with pytest.raises(TypeError, match="whatsthis"):
         da.arange(10, chunks=-1, whatsthis=1)
@@ -191,35 +256,61 @@ def test_arange():
     assert da.arange(10).chunks == ((10,),)
 
 
+arange_dtypes = [
+    np.uint8,
+    np.uint64,
+    np.int8,
+    np.int64,
+    np.float32,
+    np.float64,
+]
+
+
+# FIXME hypothesis would be much better suited for this
+@pytest.mark.parametrize("start_type", arange_dtypes + [int, float])
+@pytest.mark.parametrize("stop_type", arange_dtypes + [int, float])
+@pytest.mark.parametrize("step_type", arange_dtypes + [int, float])
+def test_arange_dtype_infer(start_type, stop_type, step_type):
+    start = start_type(3)
+    stop = stop_type(13)
+    step = step_type(2)
+    a_np = np.arange(start, stop, step)
+    a_da = da.arange(start, stop, step)
+    assert_eq(a_np, a_da)
+
+
+@pytest.mark.parametrize("dtype", arange_dtypes)
+def test_arange_dtype_force(dtype):
+    assert da.arange(10, dtype=dtype).dtype == dtype
+    assert da.arange(np.float32(10), dtype=dtype).dtype == dtype
+    assert da.arange(np.int64(10), dtype=dtype).dtype == dtype
+
+
+@pytest.mark.skipif(np.array(0).dtype == np.int32, reason="64-bit platforms only")
 @pytest.mark.parametrize(
-    "start,stop,step,dtype",
+    "start,stop,step",
     [
-        (0, 1, 1, None),  # int64
-        (1.5, 2, 1, None),  # float64
-        (1, 2.5, 1, None),  # float64
-        (1, 2, 0.5, None),  # float64
-        (np.float32(1), np.float32(2), np.float32(1), None),  # promoted to float64
-        (np.int32(1), np.int32(2), np.int32(1), None),  # promoted to int64
-        (np.uint32(1), np.uint32(2), np.uint32(1), None),  # promoted to int64
-        (np.uint64(1), np.uint64(2), np.uint64(1), None),  # promoted to float64
-        (np.uint32(1), np.uint32(2), np.uint32(1), np.uint32),
-        (np.uint64(1), np.uint64(2), np.uint64(1), np.uint64),
-        # numpy.arange gives unexpected results
-        # https://github.com/numpy/numpy/issues/11505
-        # (1j, 2, 1, None),
-        # (1, 2j, 1, None),
-        # (1, 2, 1j, None),
-        # (1+2j, 2+3j, 1+.1j, None),
+        (2**63 - 10_000, 2**63 - 1, 1),
+        (2**63 - 1, 2**63 - 10_000, -1),
+        (0, 2**63 - 1, 2**63 - 10_000),
+        (0.0, 2**63 - 1, 2**63 - 10_000),
+        (0.0, -9_131_138_316_486_228_481, -92_233_720_368_547_759),
+        (-72_057_594_037_927_945, -72_057_594_037_927_938, 1.0),
+        (-72_057_594_037_927_945, -72_057_594_037_927_938, 1.5),
     ],
 )
-def test_arange_dtypes(start, stop, step, dtype):
-    a_np = np.arange(start, stop, step, dtype=dtype)
-    a_da = da.arange(start, stop, step, dtype=dtype, chunks=-1)
+@pytest.mark.parametrize("chunks", ["auto", 1])
+def test_arange_very_large_args(start, stop, step, chunks):
+    """Test args that are very close to 2**63
+    https://github.com/dask/dask/issues/11706
+    """
+    a_np = np.arange(start, stop, step)
+    a_da = da.arange(start, stop, step, chunks=chunks)
     assert_eq(a_np, a_da)
 
 
 @pytest.mark.xfail(
-    reason="Casting floats to ints is not supported since edge"
+    reason="Casting floats to ints is not supported since edge "
     "behavior is not specified or guaranteed by NumPy."
 )
 def test_arange_cast_float_int_step():
@@ -265,7 +356,7 @@ def test_indices_dimensions_chunks():
         assert expected == actual
 
 
-def test_empty_indicies():
+def test_empty_indices():
     darr = da.indices(tuple(), chunks=tuple())
     nparr = np.indices(tuple())
     assert darr.shape == nparr.shape
@@ -291,7 +382,7 @@ def test_empty_indicies():
     assert_eq(darr, nparr)
 
 
-def test_indicies():
+def test_indices():
     darr = da.indices((1,), chunks=(1,))
     nparr = np.indices((1,))
     assert_eq(darr, nparr)
@@ -341,7 +432,7 @@ def test_meshgrid(shapes, chunks, indexing, sparse):
     r_a = np.meshgrid(*xi_a, indexing=indexing, sparse=sparse)
     r_d = da.meshgrid(*xi_d, indexing=indexing, sparse=sparse)
 
-    assert isinstance(r_d, list)
+    assert type(r_d) is type(r_a)
     assert len(r_a) == len(r_d)
 
     for e_r_a, e_r_d, i in zip(r_a, r_d, do):
@@ -365,53 +456,21 @@ def test_meshgrid_inputcoercion():
     assert_eq(z, z_d)
 
 
-def test_tril_triu():
-    A = np.random.randn(20, 20)
-    for chk in [5, 4]:
-        dA = da.from_array(A, (chk, chk))
-
-        assert np.allclose(da.triu(dA).compute(), np.triu(A))
-        assert np.allclose(da.tril(dA).compute(), np.tril(A))
-
-        for k in [
-            -25,
-            -20,
-            -19,
-            -15,
-            -14,
-            -9,
-            -8,
-            -6,
-            -5,
-            -1,
-            1,
-            4,
-            5,
-            6,
-            8,
-            10,
-            11,
-            15,
-            16,
-            19,
-            20,
-            21,
-        ]:
-            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
-            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
-
-
-def test_tril_triu_errors():
-    A = np.random.randint(0, 11, (10, 10, 10))
-    dA = da.from_array(A, chunks=(5, 5, 5))
-    pytest.raises(ValueError, lambda: da.triu(dA))
-
-
-def test_tril_triu_non_square_arrays():
-    A = np.random.randint(0, 11, (30, 35))
-    dA = da.from_array(A, chunks=(5, 5))
-    assert_eq(da.triu(dA), np.triu(A))
-    assert_eq(da.tril(dA), np.tril(A))
+@pytest.mark.parametrize(
+    "N, M, k, dtype, chunks",
+    [
+        (3, None, 0, float, "auto"),
+        (4, None, 0, float, "auto"),
+        (3, 4, 0, bool, "auto"),
+        (3, None, 1, int, "auto"),
+        (3, None, -1, int, "auto"),
+        (3, None, 2, int, 1),
+        (6, 8, -2, int, (3, 4)),
+        (6, 8, 0, int, (3, "auto")),
+    ],
+)
+def test_tri(N, M, k, dtype, chunks):
+    assert_eq(da.tri(N, M, k, dtype, chunks), np.tri(N, M, k, dtype))
 
 
 def test_eye():
@@ -431,38 +490,106 @@ def test_eye():
 
     assert_eq(da.eye(9, chunks=3, dtype=int), np.eye(9, dtype=int))
     assert_eq(da.eye(10, chunks=3, dtype=int), np.eye(10, dtype=int))
+    assert_eq(da.eye(10, chunks=-1, dtype=int), np.eye(10, dtype=int))
+    assert_eq(da.eye(9, chunks=3, dtype=None), np.eye(9, dtype=None))
 
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.eye(10000, "auto")
         assert 4 < x.npartitions < 32
 
 
-def test_diag():
-    v = np.arange(11)
-    assert_eq(da.diag(v), np.diag(v))
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_bad_input(k):
+    # when input numpy array is neither 1d nor 2d:
+    v = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    with pytest.raises(ValueError, match="Array must be 1d or 2d only"):
+        da.diag(v, k)
 
+    # when input dask array is neither 1d nor 2d:
+    v = da.arange(2 * 3 * 4).reshape((2, 3, 4))
+    with pytest.raises(ValueError, match="Array must be 1d or 2d only"):
+        da.diag(v, k)
+
+    # when input is not an array:
+    v = 1
+    with pytest.raises(TypeError, match="v must be a dask array or numpy array"):
+        da.diag(v, k)
+
+
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_2d_array_creation(k):
+    # when input 1d-array is a numpy array:
+    v = np.arange(11)
+    assert_eq(da.diag(v, k), np.diag(v, k))
+
+    # when input 1d-array is a dask array:
     v = da.arange(11, chunks=3)
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+    assert sorted(da.diag(v, k).dask) == sorted(da.diag(v, k).dask)
 
     v = v + v + 3
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
 
     v = da.arange(11, chunks=11)
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+    assert sorted(da.diag(v, k).dask) == sorted(da.diag(v, k).dask)
 
+
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_extraction(k):
+    # when input 2d-array is a square numpy array:
     x = np.arange(64).reshape((8, 8))
-    assert_eq(da.diag(x), np.diag(x))
-
+    assert_eq(da.diag(x, k), np.diag(x, k))
+    # when input 2d-array is a square dask array:
     d = da.from_array(x, chunks=(4, 4))
-    assert_eq(da.diag(d), np.diag(x))
+    assert_eq(da.diag(d, k), np.diag(x, k))
+    # heterogeneous chunks:
+    d = da.from_array(x, chunks=((3, 2, 3), (4, 1, 2, 1)))
+    assert_eq(da.diag(d, k), np.diag(x, k))
+
+    # when input 2d-array is a rectangular numpy array:
+    y = np.arange(5 * 8).reshape((5, 8))
+    assert_eq(da.diag(y, k), np.diag(y, k))
+    # when input 2d-array is a rectangular dask array:
+    d = da.from_array(y, chunks=(4, 4))
+    assert_eq(da.diag(d, k), np.diag(y, k))
+    # heterogeneous chunks:
+    d = da.from_array(y, chunks=((3, 2), (4, 1, 2, 1)))
+    assert_eq(da.diag(d, k), np.diag(y, k))
+
+
+def test_creation_data_producers():
+    x = np.arange(64).reshape((8, 8))
+    d = da.from_array(x, chunks=(4, 4))
+    dsk = collections_to_expr([d]).__dask_graph__()
+    assert all(v.data_producer for v in dsk.values())
+
+    # blockwise fusion
+    x = d.astype("float64")
+    dsk = collections_to_expr([x]).__dask_graph__()
+    assert sum(v.data_producer for v in dsk.values()) == 4
+    assert sum(isinstance(v, Alias) for v in dsk.values()) == 4
+    assert len(dsk) == 8
+
+    # linear fusion
+    x = d[slice(0, 6), None].astype("float64")
+    dsk = collections_to_expr([x]).__dask_graph__()
+    assert sum(v.data_producer for v in dsk.values()) == 4
+    assert sum(isinstance(v, Alias) for v in dsk.values()) == 4
+    assert len(dsk) == 8
+
+    # no fusion
+    x = d[[1, 3, 5, 7, 6, 4, 2, 0]].astype("float64")
+    dsk = collections_to_expr([x]).__dask_graph__()
+    assert sum(v.data_producer and "array-" in k[0] for k, v in dsk.items()) == 4
+    assert sum(v.data_producer for v in dsk.values()) == 8  # getitem data nodes
+    assert len(dsk) == 24
 
 
 def test_diagonal():
@@ -494,7 +621,7 @@ def test_diagonal():
     assert_eq(da.diagonal(v, axis1=-1), np.diagonal(v, axis1=-1))
     assert_eq(da.diagonal(v, offset=1, axis1=-1), np.diagonal(v, offset=1, axis1=-1))
 
-    # Heterogenous chunks.
+    # Heterogeneous chunks.
     v = np.arange(2 * 3 * 4 * 5 * 6).reshape((2, 3, 4, 5, 6))
     v = da.from_array(v, chunks=(1, (1, 2), (1, 2, 1), (2, 1, 2), (5, 1)))
 
@@ -680,9 +807,6 @@ def test_tile_np_kroncompare_examples(shape, reps):
     assert_eq(np.tile(x, reps), da.tile(d, reps))
 
 
-skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
-
-
 @pytest.mark.parametrize(
     "shape, chunks, pad_width, mode, kwargs",
     [
@@ -692,16 +816,7 @@ skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
         ((10, 11), (4, 5), 0, "reflect", {}),
         ((10, 11), (4, 5), 0, "symmetric", {}),
         ((10, 11), (4, 5), 0, "wrap", {}),
-        pytest.param(
-            (10, 11),
-            (4, 5),
-            0,
-            "empty",
-            {},
-            marks=pytest.mark.skipif(
-                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
-            ),
-        ),
+        ((10, 11), (4, 5), 0, "empty", {}),
     ],
 )
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
@@ -721,6 +836,7 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
     [
         ((10,), (3,), 1, "constant", {}),
         ((10,), (3,), 2, "constant", {"constant_values": -1}),
+        ((10,), (3,), 2, "constant", {"constant_values": np.array(-1)}),
         ((10,), (3,), ((2, 3)), "constant", {"constant_values": (-1, -2)}),
         (
             (10, 11),
@@ -745,16 +861,7 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
         ((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
-        pytest.param(
-            (10,),
-            (3,),
-            1,
-            "empty",
-            {},
-            marks=pytest.mark.skipif(
-                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
-            ),
-        ),
+        ((10,), (3,), 1, "empty", {}),
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
@@ -771,6 +878,49 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         assert_eq(np_r, da_r)
 
 
+@pytest.mark.parametrize(
+    ["np_a", "pad_value"],
+    (
+        (np.arange(4, dtype="int64"), np.int64(1)),
+        (np.arange(4, dtype="float64"), np.float64(0)),
+        (
+            np.array(
+                ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04"],
+                dtype="datetime64[ns]",
+            ),
+            np.datetime64("1972-01-01"),
+        ),
+        (np.array([True, False, True, True], dtype=np.bool_), np.bool_(False)),
+        (np.array(["ab", "bc", "de", "ef"], dtype=np.str_), np.str_("00")),
+        (np.arange(4, dtype="int64"), np.array(1, dtype="int64")),
+        (np.arange(4, dtype="float64"), np.array(0, dtype="float64")),
+        (
+            np.array(
+                ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04"],
+                dtype="datetime64[ns]",
+            ),
+            np.array("1972-01-01", dtype="datetime64[ns]"),
+        ),
+        (
+            np.array([True, False, True, True], dtype=np.bool_),
+            np.array(False, dtype=np.bool_),
+        ),
+        (
+            np.array(["ab", "bc", "de", "ef"], dtype=np.str_),
+            np.array("00", dtype=np.str_),
+        ),
+    ),
+)
+def test_pad_constant_values(np_a, pad_value):
+    pad_width = (1, 1)
+    da_a = da.from_array(np_a, chunks=(2,))
+
+    np_r = np.pad(np_a, pad_width, mode="constant", constant_values=pad_value)
+    da_r = da.pad(da_a, pad_width, mode="constant", constant_values=pad_value)
+
+    assert_eq(np_r, da_r)
+
+
 @pytest.mark.parametrize("dtype", [np.uint8, np.int16, np.float32, bool])
 @pytest.mark.parametrize(
     "pad_widths", [2, (2,), (2, 3), ((2, 3),), ((3, 1), (0, 0), (2, 0))]
@@ -780,12 +930,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     [
         "constant",
         "edge",
-        pytest.param(
-            "linear_ramp",
-            marks=pytest.mark.skipif(
-                not _numpy_118, reason="numpy changed pad behaviour"
-            ),
-        ),
+        "linear_ramp",
         "maximum",
         "mean",
         "minimum",
@@ -851,7 +996,120 @@ def test_pad_udf(kwargs):
     assert_eq(np_r, da_r)
 
 
+def test_pad_constant_chunksizes():
+    array = dask.array.ones((10, 10), chunks=(1, 1))
+    result = dask.array.pad(
+        array, ((0, 16 - 10), (0, 0)), mode="constant", constant_values=0
+    )
+    assert tuple(map(max, result.chunks)) == (1, 1)
+    assert_eq(
+        result,
+        np.pad(
+            array.compute(),
+            mode="constant",
+            constant_values=0,
+            pad_width=((0, 16 - 10), (0, 0)),
+        ),
+    )
+
+
 def test_auto_chunks():
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.ones((10000, 10000))
         assert 4 < x.npartitions < 32
+
+
+def test_string_auto_chunk():
+    with pytest.raises(ValueError):
+        da.full((10000, 10000), "auto_chunk", chunks="auto")
+
+
+def test_diagonal_zero_chunks():
+    x = da.ones((8, 8), chunks=(4, 4))
+    dd = da.ones((8, 8), chunks=(4, 4))
+    d = da.diagonal(dd)
+
+    expected = np.ones((8,))
+    assert_eq(d, expected)
+    assert_eq(d + d, 2 * expected)
+    A = d + x
+    assert_eq(A, np.full((8, 8), 2.0))
+
+
+@pytest.mark.parametrize("fn", ["zeros_like", "ones_like"])
+@pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
+@pytest.mark.parametrize("dtype", ["u4", np.float32, None, np.int64])
+def test_nan_zeros_ones_like(fn, shape_chunks, dtype):
+    dafn = getattr(da, fn)
+    npfn = getattr(np, fn)
+    shape, chunks = shape_chunks
+    x1 = da.random.standard_normal(size=shape, chunks=chunks)
+    y1 = x1[x1 < 0.5]
+    x2 = x1.compute()
+    y2 = x2[x2 < 0.5]
+    assert_eq(
+        dafn(y1, dtype=dtype),
+        npfn(y2, dtype=dtype),
+    )
+
+
+def test_from_array_getitem_fused():
+    arr = np.arange(100).reshape(10, 10)
+    darr = da.from_array(arr, chunks=(5, 5))
+    result = darr[slice(1, 5), :][slice(1, 3), :]
+    dsk = collections_to_expr([result]).__dask_graph__()
+    # Ensure that slices are merged properly
+    key = [k for k in dsk if "array-getitem" in k[0]][0]
+    key_2 = [
+        k
+        for k, v in dsk[key].args[0].items()
+        if "getitem" in k[0] and not isinstance(v, Alias)
+    ][0]
+    assert dsk[key].args[0][key_2].args[1] == ((slice(2, 4), slice(0, None)))
+    assert_eq(result, arr[slice(1, 5), :][slice(1, 3), :])
+
+
+@pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
+@pytest.mark.parametrize("dtype", ["u4", np.float32, None, np.int64])
+def test_nan_empty_like(shape_chunks, dtype):
+    shape, chunks = shape_chunks
+    x1 = da.random.standard_normal(size=shape, chunks=chunks)
+    y1 = x1[x1 < 0.5]
+    x2 = x1.compute()
+    y2 = x2[x2 < 0.5]
+    a_da = da.empty_like(y1, dtype=dtype).compute()
+    a_np = np.empty_like(y2, dtype=dtype)
+    assert a_da.shape == a_np.shape
+    assert a_da.dtype == a_np.dtype
+
+
+@pytest.mark.parametrize("val", [0, 0.0, 99, -1])
+@pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
+@pytest.mark.parametrize("dtype", ["u4", np.float32, None, np.int64])
+def test_nan_full_like(val, shape_chunks, dtype):
+    if NUMPY_GE_210 and val == -1 and dtype == "u4":
+        pytest.xfail("can't insert negative numbers into unsigned integer")
+    shape, chunks = shape_chunks
+    x1 = da.random.standard_normal(size=shape, chunks=chunks)
+    y1 = x1[x1 < 0.5]
+    x2 = x1.compute()
+    y2 = x2[x2 < 0.5]
+    assert_eq(
+        da.full_like(y1, val, dtype=dtype),
+        np.full_like(y2, val, dtype=dtype),
+    )
+
+
+@pytest.mark.parametrize(
+    "func", [da.array, da.asarray, da.asanyarray, da.arange, da.tri]
+)
+def test_like_forgets_graph(func):
+    """Test that array creation functions with like=x do not
+    internally store the graph of x
+    """
+    x = da.arange(3).map_blocks(lambda x: x)
+    with pytest.raises(Exception, match="local object"):
+        pickle.dumps(x)
+
+    a = func(1, like=x)
+    pickle.dumps(a)

@@ -5,24 +5,29 @@ The rechunk module defines:
     rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
-import math
-import heapq
-from functools import reduce
 
-from itertools import product, chain, count
-from operator import getitem, add, mul, itemgetter
+from __future__ import annotations
+
+import heapq
+import math
+from functools import reduce
+from itertools import chain, count, product
+from operator import add, itemgetter, mul
+from warnings import warn
 
 import numpy as np
 import tlz as toolz
 from tlz import accumulate
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import parse_bytes
-from .core import concatenate3, Array, normalize_chunks
-from .utils import validate_axis
-from .wrap import empty
-from .. import config
+from dask import config
+from dask._task_spec import Alias, Task, TaskRef, parse_input
+from dask.array.chunk import getitem
+from dask.array.core import Array, concatenate_shaped, normalize_chunks
+from dask.array.utils import validate_axis
+from dask.array.wrap import empty
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import parse_bytes
 
 
 def cumdims_label(chunks, const):
@@ -73,37 +78,77 @@ def _intersect_1d(breaks):
     breaks: list of tuples
         Each tuple is ('o', 8) or ('n', 8)
         These are pairs of 'o' old or new 'n'
-        indicator with a corresponding cumulative sum.
-
+        indicator with a corresponding cumulative sum,
+        or breakpoint (a position along the chunking axis).
+        The list of pairs is already ordered by breakpoint.
+        Note that an 'o' pair always occurs BEFORE
+        an 'n' pair if both share the same breakpoint.
     Uses 'o' and 'n' to make new tuples of slices for
     the new block crosswalk to old blocks.
     """
-    start = 0
+    # EXPLANATION:
+    # We know each new chunk is obtained from the old chunks, but
+    # from which ones and how? This function provides the answer.
+    # On return, each new chunk is represented as a list of slices
+    # of the old chunks. Therefore,  paired with each slice is the
+    # index of the old chunk to which that slice refers.
+    # NOTE: if any nonzero-size new chunks extend beyond the total
+    #    span of the old chunks, then those new chunks are assumed
+    #    to be obtained from an imaginary old chunk that extends
+    #    from the end of that total span to infinity. The chunk-
+    #    index of this imaginary chunk follows in consecutive order
+    #    from the chunk-indices of the actual old chunks.
+
+    # First, let us determine the index of the last old_chunk:
+    o_pairs = [pair for pair in breaks if pair[0] == "o"]
+    last_old_chunk_idx = len(o_pairs) - 2
+    last_o_br = o_pairs[-1][1]  # end of range spanning all old chunks
+
+    start = 0  # start of a slice of an old chunk
     last_end = 0
-    old_idx = 0
-    ret = []
-    ret_next = []
-    for idx in range(1, len(breaks)):
+    old_idx = 0  # index of old chunk
+    last_o_end = 0
+    ret = []  # will hold the list of new chunks
+    ret_next = []  # will hold the list of slices comprising one new chunk
+    for idx in range(1, len(breaks)):  # Note start from the 2nd pair
+        # the interval between any two consecutive breakpoints is a potential
+        # new chunk:
         label, br = breaks[idx]
         last_label, last_br = breaks[idx - 1]
         if last_label == "n":
+            # This always denotes the end of a new chunk or the start
+            # of the next new chunk or both
+            start = last_end
             if ret_next:
                 ret.append(ret_next)
                 ret_next = []
-        if last_label == "o":
-            start = 0
         else:
-            start = last_end
-        end = br - last_br + start
+            start = 0
+        end = br - last_br + start  # end of a slice of an old chunk
         last_end = end
         if br == last_br:
+            # Here we have a zero-size interval between the previous and
+            # current breakpoints. This should not result in a slice unless
+            # this interval's end-points (`last_label` and `label`) are both
+            # equal to 'n'
             if label == "o":
                 old_idx += 1
-            continue
+                last_o_end = end
+            if label == "n" and last_label == "n":
+                if br == last_o_br:
+                    # zero-size new chunks located at the edge of the range
+                    # spanning all the old chunks are assumed to come from the
+                    # end of the last old chunk:
+                    slc = slice(last_o_end, last_o_end)
+                    ret_next.append((last_old_chunk_idx, slc))
+                    continue
+            else:
+                continue
         ret_next.append((old_idx, slice(start, end)))
         if label == "o":
             old_idx += 1
             start = 0
+            last_o_end = end
 
     if ret_next:
         ret.append(ret_next)
@@ -111,48 +156,63 @@ def _intersect_1d(breaks):
     return ret
 
 
-def _old_to_new(old_chunks, new_chunks):
+def old_to_new(old_chunks, new_chunks):
     """Helper to build old_chunks to new_chunks.
 
-    Handles missing values, as long as the missing dimension
+    Handles missing values, as long as the dimension with the missing chunk values
     is unchanged.
+
+    Notes
+    -----
+    This function expects that the arguments have been pre-processed by
+    :func:`dask.array.core.normalize_chunks`. In particular any ``nan`` values should
+    have been replaced (and are so by :func:`dask.array.core.normalize_chunks`)
+    by the canonical ``np.nan``. It also expects that the arguments have been validated
+    with `_validate_rechunk` and rechunking is thus possible.
 
     Examples
     --------
     >>> old = ((10, 10, 10, 10, 10), )
     >>> new = ((25, 5, 20), )
-    >>> _old_to_new(old, new)  # doctest: +NORMALIZE_WHITESPACE
+    >>> old_to_new(old, new)  # doctest: +NORMALIZE_WHITESPACE
     [[[(0, slice(0, 10, None)), (1, slice(0, 10, None)), (2, slice(0, 5, None))],
       [(2, slice(5, 10, None))],
       [(3, slice(0, 10, None)), (4, slice(0, 10, None))]]]
     """
-    old_known = [x for x in old_chunks if not any(math.isnan(y) for y in x)]
-    new_known = [x for x in new_chunks if not any(math.isnan(y) for y in x)]
 
-    n_missing = [sum(math.isnan(y) for y in x) for x in old_chunks]
-    n_missing2 = [sum(math.isnan(y) for y in x) for x in new_chunks]
+    def is_unknown(dim):
+        return any(math.isnan(chunk) for chunk in dim)
 
-    cmo = cumdims_label(old_known, "o")
-    cmn = cumdims_label(new_known, "n")
+    dims_unknown = [is_unknown(dim) for dim in old_chunks]
 
-    sums = [sum(o) for o in old_known]
-    sums2 = [sum(n) for n in new_known]
+    known_indices = []
+    unknown_indices = []
+    for i, unknown in enumerate(dims_unknown):
+        if unknown:
+            unknown_indices.append(i)
+        else:
+            known_indices.append(i)
 
-    if not sums == sums2:
-        raise ValueError("Cannot change dimensions from %r to %r" % (sums, sums2))
-    if not n_missing == n_missing2:
-        raise ValueError(
-            "Chunks must be unchanging along unknown dimensions.\n\n"
-            "A possible solution:\n  x.compute_chunk_sizes()"
-        )
+    old_known = [old_chunks[i] for i in known_indices]
+    new_known = [new_chunks[i] for i in known_indices]
 
-    old_to_new = [_intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn)]
-    for idx, missing in enumerate(n_missing):
-        if missing:
-            # Missing dimensions are always unchanged, so old -> new is everything
-            extra = [[(i, slice(0, None))] for i in range(missing)]
-            old_to_new.insert(idx, extra)
-    return old_to_new
+    cmos = cumdims_label(old_known, "o")
+    cmns = cumdims_label(new_known, "n")
+
+    sliced = [None] * len(old_chunks)
+    for i, cmo, cmn in zip(known_indices, cmos, cmns):
+        sliced[i] = _intersect_1d(_breakpoints(cmo, cmn))
+
+    for i in unknown_indices:
+        dim = old_chunks[i]
+        # Unknown dimensions are always unchanged, so old -> new is everything
+        extra = [
+            [(j, slice(0, size if not math.isnan(size) else None))]
+            for j, size in enumerate(dim)
+        ]
+        sliced[i] = extra
+    assert all(x is not None for x in sliced)
+    return sliced
 
 
 def intersect_chunks(old_chunks, new_chunks):
@@ -175,14 +235,46 @@ def intersect_chunks(old_chunks, new_chunks):
     new_chunks: iterable of tuples
         block sizes along each dimension (converts to new_chunks)
     """
-    old_to_new = _old_to_new(old_chunks, new_chunks)
-
-    cross1 = product(*old_to_new)
+    cross1 = product(*old_to_new(old_chunks, new_chunks))
     cross = chain(tuple(product(*cr)) for cr in cross1)
     return cross
 
 
-def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
+def _validate_rechunk(old_chunks, new_chunks):
+    """Validates that rechunking an array from ``old_chunks`` to ``new_chunks``
+    is possible, raises an error if otherwise.
+
+    Notes
+    -----
+    This function expects ``old_chunks`` and ``new_chunks`` to have matching
+    dimensionality and will not raise an informative error if they don't.
+    """
+    assert len(old_chunks) == len(new_chunks)
+
+    old_shapes = tuple(map(sum, old_chunks))
+    new_shapes = tuple(map(sum, new_chunks))
+
+    for old_shape, old_dim, new_shape, new_dim in zip(
+        old_shapes, old_chunks, new_shapes, new_chunks
+    ):
+        if old_shape != new_shape:
+            if not (
+                math.isnan(old_shape) and math.isnan(new_shape)
+            ) or not np.array_equal(old_dim, new_dim, equal_nan=True):
+                raise ValueError(
+                    "Chunks must be unchanging along dimensions with missing values.\n\n"
+                    "A possible solution:\n  x.compute_chunk_sizes()"
+                )
+
+
+def rechunk(
+    x,
+    chunks="auto",
+    threshold=None,
+    block_size_limit=None,
+    balance=False,
+    method=None,
+):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -200,6 +292,15 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     block_size_limit: int, optional
         The maximum block size (in bytes) we want to produce
         Defaults to the configuration value ``array.chunk-size``
+    balance : bool, default False
+        If True, try to make each chunk to be the same size.
+
+        This means ``balance=True`` will remove any small leftover chunks, so
+        using ``x.rechunk(chunks=len(x) // N, balance=True)``
+        will almost certainly result in ``N`` chunks.
+    method: {'tasks', 'p2p'}, optional.
+        Rechunking method to use.
+
 
     Examples
     --------
@@ -219,14 +320,29 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     dimension to attain blocks of a uniform block size
 
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
+
+    If a chunk size does not divide the dimension then rechunk will leave any
+    unevenness to the last chunk.
+
+    >>> x.rechunk(chunks=(400, -1)).chunks
+    ((400, 400, 200), (1000,))
+
+    However if you want more balanced chunks, and don't mind Dask choosing a
+    different chunksize for you then you can use the ``balance=True`` option.
+
+    >>> x.rechunk(chunks=(400, -1), balance=True).chunks
+    ((500, 500), (1000,))
     """
     # don't rechunk if array is empty
     if x.ndim > 0 and all(s == 0 for s in x.shape):
         return x
+
     if isinstance(chunks, dict):
         chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
         for i in range(x.ndim):
             if i not in chunks:
+                chunks[i] = x.chunks[i]
+            elif chunks[i] is None:
                 chunks[i] = x.chunks[i]
     if isinstance(chunks, (tuple, list)):
         chunks = tuple(lc if lc is not None else rc for lc, rc in zip(chunks, x.chunks))
@@ -234,24 +350,61 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
         chunks, x.shape, limit=block_size_limit, dtype=x.dtype, previous_chunks=x.chunks
     )
 
-    if chunks == x.chunks:
-        return x
+    # Now chunks are tuple of tuples
     ndim = x.ndim
     if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
-    new_shapes = tuple(map(sum, chunks))
 
-    for new, old in zip(new_shapes, x.shape):
-        if new != old and not math.isnan(old) and not math.isnan(new):
-            raise ValueError("Provided chunks are not consistent with shape")
+    if not balance and (chunks == x.chunks):
+        return x
 
-    steps = plan_rechunk(
-        x.chunks, chunks, x.dtype.itemsize, threshold, block_size_limit
-    )
-    for c in steps:
-        x = _compute_rechunk(x, c)
+    if balance:
+        chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
 
-    return x
+    _validate_rechunk(x.chunks, chunks)
+
+    if method is None:
+        method = _choose_rechunk_method(x.chunks, chunks, threshold=threshold)
+
+    if method == "tasks":
+        steps = plan_rechunk(
+            x.chunks, chunks, x.dtype.itemsize, threshold, block_size_limit
+        )
+        for c in steps:
+            x = _compute_rechunk(x, c)
+
+        return x
+
+    elif method == "p2p":
+        from distributed.shuffle import rechunk_p2p
+
+        return rechunk_p2p(
+            x,
+            chunks,
+            threshold=threshold,
+            block_size_limit=block_size_limit,
+            balance=balance,
+        )
+
+    else:
+        raise NotImplementedError(f"Unknown rechunking method '{method}'")
+
+
+def _choose_rechunk_method(old_chunks, new_chunks, threshold=None):
+    if method := config.get("array.rechunk.method", None):
+        return method
+    try:
+        from distributed import default_client
+
+        default_client()
+    except (ImportError, ValueError):
+        return "tasks"
+
+    _old_to_new = old_to_new(old_chunks, new_chunks)
+    graph_size = math.prod(sum(len(ins) for ins in axis) for axis in _old_to_new)
+    threshold = threshold or config.get("array.rechunk.threshold")
+    graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
+    return "tasks" if graph_size < graph_size_threshold else "p2p"
 
 
 def _number_of_blocks(chunks):
@@ -468,20 +621,18 @@ def plan_rechunk(
     No intermediate steps will be planned if any dimension of ``old_chunks``
     is unknown.
     """
-    threshold = threshold or config.get("array.rechunk-threshold")
+    threshold = threshold or config.get("array.rechunk.threshold")
     block_size_limit = block_size_limit or config.get("array.chunk-size")
     if isinstance(block_size_limit, str):
         block_size_limit = parse_bytes(block_size_limit)
 
-    ndim = len(new_chunks)
-    steps = []
-    has_nans = [any(math.isnan(y) for y in x) for x in old_chunks]
+    has_nans = (any(math.isnan(y) for y in x) for x in old_chunks)
 
-    if ndim <= 1 or not all(new_chunks) or any(has_nans):
+    if len(new_chunks) <= 1 or not all(new_chunks) or any(has_nans):
         # Trivial array / unknown dim => no need / ability for an intermediate
-        return steps + [new_chunks]
+        return [new_chunks]
 
-    # Make it a number ef elements
+    # Make it a number of elements
     block_size_limit /= itemsize
 
     # Fix block_size_limit if too small for either old_chunks or new_chunks
@@ -490,12 +641,11 @@ def plan_rechunk(
     block_size_limit = max([block_size_limit, largest_old_block, largest_new_block])
 
     # The graph size above which to optimize
-    graph_size_threshold = threshold * (
-        _number_of_blocks(old_chunks) + _number_of_blocks(new_chunks)
-    )
+    graph_size_threshold = _graph_size_threshold(old_chunks, new_chunks, threshold)
 
     current_chunks = old_chunks
     first_pass = True
+    steps = []
 
     while True:
         graph_size = estimate_graph_size(current_chunks, new_chunks)
@@ -528,6 +678,10 @@ def plan_rechunk(
     return steps + [new_chunks]
 
 
+def _graph_size_threshold(old_chunks, new_chunks, threshold):
+    return threshold * (_number_of_blocks(old_chunks) + _number_of_blocks(new_chunks))
+
+
 def _compute_rechunk(x, chunks):
     """Compute the rechunk of *x* to the given *chunks*."""
     if x.size == 0:
@@ -543,7 +697,7 @@ def _compute_rechunk(x, chunks):
     split_name = "rechunk-split-" + token
     split_name_suffixes = count()
 
-    # Pre-allocate old block references, to allow re-use and reduce the
+    # Pre-allocate old block references, to allow reuse and reduce the
     # graph's memory footprint a bit.
     old_blocks = np.empty([len(c) for c in x.chunks], dtype="O")
     for index in np.ndindex(old_blocks.shape):
@@ -569,18 +723,25 @@ def _compute_rechunk(x, chunks):
                 slc.start == 0 and slc.stop == x.chunks[i][ind]
                 for i, (slc, ind) in enumerate(zip(slices, old_index))
             ):
-                rec_cat_arg_flat[rec_cat_index] = old_blocks[old_block_index]
+                rec_cat_arg_flat[rec_cat_index] = TaskRef(old_blocks[old_block_index])
             else:
-                intermediates[name] = (getitem, old_blocks[old_block_index], slices)
-                rec_cat_arg_flat[rec_cat_index] = name
+                intermediates[name] = Task(
+                    name, getitem, TaskRef(old_blocks[old_block_index]), slices
+                )
+                rec_cat_arg_flat[rec_cat_index] = TaskRef(name)
 
         assert rec_cat_index == rec_cat_arg.size - 1
 
         # New block is formed by concatenation of sliced old blocks
         if all(d == 1 for d in rec_cat_arg.shape):
-            x2[key] = rec_cat_arg.flat[0]
+            x2[key] = Alias(key, rec_cat_arg.flat[0])
         else:
-            x2[key] = (concatenate3, rec_cat_arg.tolist())
+            x2[key] = Task(
+                key,
+                concatenate_shaped,
+                parse_input(list(rec_cat_arg.flatten())),
+                subdims1,
+            )
 
     del old_blocks, new_index
 
@@ -589,7 +750,7 @@ def _compute_rechunk(x, chunks):
     return Array(graph, merge_name, chunks, meta=x)
 
 
-class _PrettyBlocks(object):
+class _PrettyBlocks:
     def __init__(self, blocks):
         self.blocks = blocks
 
@@ -622,7 +783,7 @@ class _PrettyBlocks(object):
             if repeats is None:
                 parts.append(str(run))
             else:
-                parts.append("%d*[%s]" % (repeats, run))
+                parts.append(f"{repeats}*[{run}]")
         return " | ".join(parts)
 
     __repr__ = __str__
@@ -660,3 +821,50 @@ def format_plan(plan):
     [(3*[10], 2*[15]), ([30], 3*[10])]
     """
     return [format_chunks(c) for c in plan]
+
+
+def _get_chunks(n, chunksize):
+    leftover = n % chunksize
+    n_chunks = n // chunksize
+
+    chunks = [chunksize] * n_chunks
+    if leftover:
+        chunks.append(leftover)
+    return tuple(chunks)
+
+
+def _balance_chunksizes(chunks: tuple[int, ...]) -> tuple[int, ...]:
+    """
+    Balance the chunk sizes
+
+    Parameters
+    ----------
+    chunks : tuple[int, ...]
+        Chunk sizes for Dask array.
+
+    Returns
+    -------
+    new_chunks : tuple[int, ...]
+        New chunks for Dask array with balanced sizes.
+    """
+    median_len = np.median(chunks).astype(int)
+    n_chunks = len(chunks)
+    eps = median_len // 2
+    if min(chunks) <= 0.5 * max(chunks):
+        n_chunks -= 1
+
+    new_chunks = [
+        _get_chunks(sum(chunks), chunk_len)
+        for chunk_len in range(median_len - eps, median_len + eps + 1)
+    ]
+    possible_chunks = [c for c in new_chunks if len(c) == n_chunks]
+    if not len(possible_chunks):
+        warn(
+            "chunk size balancing not possible with given chunks. "
+            "Try increasing the chunk size."
+        )
+        return chunks
+
+    diffs = [max(c) - min(c) for c in possible_chunks]
+    best_chunk_size = np.argmin(diffs)
+    return possible_chunks[best_chunk_size]

@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import pytest
 
 pytest.importorskip("numpy")
 
+import operator
+
 import numpy as np
 
-from dask.array.chunk import coarsen, keepdims_wrapper
 import dask.array as da
+from dask.array.chunk import coarsen, getitem, keepdims_wrapper
 
 
 def test_keepdims_wrapper_no_axis():
@@ -96,6 +100,13 @@ def test_coarsen():
     assert y[0, 0] == np.sum(x[:2, :4])
 
 
+def test_coarsen_unaligned_shape():
+    """https://github.com/dask/dask/issues/10274"""
+    x = da.random.random(100)
+    res = da.coarsen(np.mean, x, {0: 3}, trim_excess=True)
+    assert res.chunks == ((33,),)
+
+
 """
 def test_coarsen_on_uneven_shape():
     x = np.random.randint(10, size=(23, 24))
@@ -108,3 +119,15 @@ def test_coarsen_on_uneven_shape():
 
 def test_integer_input():
     assert da.zeros((4, 6), chunks=2).rechunk(3).chunks == ((3, 1), (3, 3))
+
+
+def test_getitem():
+    x = np.random.rand(1_000_000)
+    y = getitem(x, slice(120, 122))
+
+    assert y.flags.owndata
+    assert not getitem(x, slice(1, None)).flags.owndata
+
+    y_op = operator.getitem(x, slice(120, 122))
+    assert not y_op.flags.owndata
+    assert not operator.getitem(x, slice(1, None)).flags.owndata

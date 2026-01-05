@@ -1,5 +1,5 @@
-Shuffling for GroupBy and Join
-==============================
+Shuffling Performance
+=====================
 
 .. currentmodule:: dask.dataframe
 
@@ -28,9 +28,9 @@ time:
 
 .. code-block:: python
 
-   >>> df.groupby(columns).known_reduction()             # Fast and common case
-   >>> df.groupby(columns_with_index).apply(user_fn)     # Fast and common case
-   >>> dask_df.join(pandas_df, on=column)                # Fast and common case
+   >>> ddf.groupby(columns).known_reduction()            # Fast and common case
+   >>> ddf.groupby(columns_with_index).apply(user_fn)    # Fast and common case
+   >>> ddf.join(pandas_df, on=column)                    # Fast and common case
    >>> lhs.join(rhs)                                     # Fast and common case
    >>> lhs.merge(rhs, on=columns_with_index)             # Fast and common case
 
@@ -44,9 +44,9 @@ trigger a full dataset shuffle:
 
 .. code-block:: python
 
-   >>> df.groupby(columns_no_index).apply(user_fn)   # Requires shuffle
-   >>> lhs.join(rhs, on=columns_no_index)            # Requires shuffle
-   >>> df.set_index(column)                          # Requires shuffle
+   >>> ddf.groupby(columns_no_index).apply(user_fn)   # Requires shuffle
+   >>> lhs.join(rhs, on=columns_no_index)             # Requires shuffle
+   >>> ddf.set_index(column)                          # Requires shuffle
 
 A shuffle is necessary when we need to re-sort our data along a new index.  For
 example, if we have banking records that are organized by time and we now want
@@ -57,11 +57,14 @@ don't assume that all data fits in memory, we must be a bit more careful.
 Re-sorting the data can be avoided by restricting yourself to the easy cases
 mentioned above.
 
+
+.. _shuffle-methods:
+
 Shuffle Methods
 ---------------
 
 There are currently two strategies to shuffle data depending on whether you are
-on a single machine or on a distributed cluster: shuffle on disk and shuffle 
+on a single machine or on a distributed cluster: shuffle on disk and shuffle
 over the network.
 
 Shuffle on Disk
@@ -79,16 +82,13 @@ Shuffle over the Network
 When operating on a distributed cluster, the Dask workers may not have access to
 a shared hard drive.  In this case, we shuffle data by breaking input partitions
 into many pieces based on where they will end up and moving these pieces
-throughout the network.  This prolific expansion of intermediate partitions
-can stress the task scheduler.  To manage for many-partitioned datasets we
-sometimes shuffle in stages, causing undue copies but reducing the ``n**2``
-effect of shuffling to something closer to ``n log(n)`` with ``log(n)`` copies.
+throughout the network.
 
 Selecting methods
 `````````````````
 
-Dask will use on-disk shuffling by default, but will switch to task-based
-distributed shuffling if the default scheduler is set to use a
+Dask will use on-disk shuffling by default, but will switch to a
+distributed shuffling algorithm if the default scheduler is set to use a
 ``dask.distributed.Client``, such as would be the case if the user sets the
 Client as default:
 
@@ -97,30 +97,31 @@ Client as default:
     client = Client('scheduler:8786', set_as_default=True)
 
 Alternatively, if you prefer to avoid defaults, you can configure the global
-shuffling method by using the ``dask.config.set(shuffle=...)`` command.
+shuffling method with the ``dataframe.shuffle.method`` configuration option.
 This can be done globally:
 
 .. code-block:: python
 
-    dask.config.set(shuffle='tasks')
+    dask.config.set({"dataframe.shuffle.method": "p2p"})
 
-    df.groupby(...).apply(...)
+    ddf.groupby(...).apply(...)
 
 or as a context manager:
 
 .. code-block:: python
 
-    with dask.config.set(shuffle='tasks'):
-        df.groupby(...).apply(...)
+    with dask.config.set({"dataframe.shuffle.method": "p2p"}):
+        ddf.groupby(...).apply(...)
 
 
-In addition, ``set_index`` also accepts a ``shuffle`` keyword argument that
+In addition, ``set_index`` also accepts a ``shuffle_method`` keyword argument that
 can be used to select either on-disk or task-based shuffling:
 
 .. code-block:: python
 
-    df.set_index(column, shuffle='disk')
-    df.set_index(column, shuffle='tasks')
+    ddf.set_index(column, shuffle_method='disk')
+    ddf.set_index(column, shuffle_method='tasks')
+    ddf.set_index(column, shuffle_method='p2p')
 
 
 .. _dataframe.groupby.aggregate:
@@ -129,12 +130,12 @@ Aggregate
 =========
 
 Dask supports Pandas' ``aggregate`` syntax to run multiple reductions on the
-same groups.  Common reductions such as ``max``, ``sum``, and ``mean`` are 
+same groups.  Common reductions such as ``max``, ``sum``, ``list`` and ``mean`` are
 directly supported:
 
 .. code-block:: python
 
-    >>> df.groupby(columns).aggregate(['sum', 'mean', 'max', 'min'])
+    >>> ddf.groupby(columns).aggregate(['sum', 'mean', 'max', 'min', list])
 
 Dask also supports user defined reductions.  To ensure proper performance, the
 reduction has to be formulated in terms of three independent steps. The
@@ -150,7 +151,7 @@ For example, ``sum`` could be implemented as:
 .. code-block:: python
 
     custom_sum = dd.Aggregation('custom_sum', lambda s: s.sum(), lambda s0: s0.sum())
-    df.groupby('g').agg(custom_sum)
+    ddf.groupby('g').agg(custom_sum)
 
 The name argument should be different from existing reductions to avoid data
 corruption.  The arguments to each function are pre-grouped series objects,
@@ -168,7 +169,7 @@ A mean function can be implemented as:
         lambda count, sum: (count.sum(), sum.sum()),
         lambda count, sum: sum / count,
     )
-    df.groupby('g').agg(custom_mean)
+    ddf.groupby('g').agg(custom_mean)
 
 
 For example, let's compute the group-wise extent (maximum - minimum)
@@ -208,19 +209,6 @@ Finally, we create and use the aggregation
    a  2
    b  4
 
-Another example of a custom aggregation is the Dask DataFrame version of 
-Pandas' ``df.groupby('a').agg(list)``:
-
-.. code-block:: python
-
-   >>> import itertools as it
-   >>> collect_list = dd.Aggregation(
-   ...     name="collect_list",
-   ...     chunk=lambda s: s.apply(list),
-   ...     agg=lambda s0: s0.apply(lambda chunks: list(it.chain.from_iterable(chunks))),
-   ... )
-   >>> ddf.groupby('a').agg(collect_list)
-
 To apply :py:class:`dask.dataframe.groupby.SeriesGroupBy.nunique` to more than one
 column you can use:
 
@@ -235,3 +223,9 @@ column you can use:
     ...     finalize=lambda s1: s1.apply(lambda final: len(set(final))),
     ... )
     >>> ddf.groupby('a').agg({'b':nunique, 'c':nunique})
+
+To access NumPy functions use ``apply`` with a lambda function such as ``.apply(lambda r: np.sum(r))``. Here's an example of how a sum of squares aggregation would look like:
+
+.. code-block:: python
+
+    >>> dd.Aggregation(name="sum_of_squares", chunk=lambda s: s.apply(lambda r: np.sum(np.power(r, 2))), agg=lambda s: s.sum())

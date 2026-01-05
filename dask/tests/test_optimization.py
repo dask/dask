@@ -1,23 +1,21 @@
-import itertools
-import pickle
+from __future__ import annotations
+
 from functools import partial
 
 import pytest
 
 import dask
-from dask.utils_test import add, inc
+from dask._task_spec import Alias, Task, TaskRef, convert_legacy_graph
 from dask.core import get_dependencies
-from dask.local import get_sync
 from dask.optimization import (
     cull,
+    functions_of,
     fuse,
+    fuse_linear,
     inline,
     inline_functions,
-    functions_of,
-    fuse_linear,
-    SubgraphCallable,
 )
-from dask.utils import partial_by_order, apply
+from dask.utils_test import add, inc
 
 
 def double(x):
@@ -204,6 +202,48 @@ def test_fuse_keys():
     )
 
 
+def test_donot_substitute_same_key_multiple_times():
+    already_called = False
+
+    def inc_only_once(x):
+        nonlocal already_called
+        if already_called:
+            raise RuntimeError
+        already_called = True
+        return x + 1
+
+    # This is the graph topology of a Z.T @ Z after blockwise fusion as given in
+    # https://github.com/dask/dask/issues/10645
+    dsk = {
+        # Note that there is some logic in there that actually checks the type
+        # of this and an integer is inlined while an array is not. However, data
+        # keys are also flagged as forbidden to be fused so this should not be a
+        # problem
+        "A": 42,  # Array
+        "B": (inc_only_once, "A"),  # Add
+        "C": (add, "B", "B"),  # matmul
+        "D": (inc, "C"),  # getitem
+    }
+
+    # fuse accepts dependencies to avoid having to recompute it. However,
+    # internally it actually requires it to be in the format of dict[Key,
+    # list[Key]] which is rarely used elsewhere since most applications are
+    # using lists.
+    # It uses these lists to infer duplicates in dependencies and avoids fusing
+    # those since substituting the same key multiple times also causes them to
+    # be computed multiple times. A better logic would replace those with a
+    # SubGraphCallable
+    dependencies = {"A": set(), "B": {"A"}, "C": {"B"}, "D": {"C"}}
+    fused_dsk = fuse(
+        dsk,
+        keys=["A", "D"],
+        dependencies=dependencies,
+    )[0]
+    from dask.core import get
+
+    assert get(fused_dsk, "D") > 1
+
+
 def test_inline():
     d = {"a": 1, "b": (inc, "a"), "c": (inc, "b"), "d": (add, "a", "c")}
     assert inline(d) == {"a": 1, "b": (inc, 1), "c": (inc, "b"), "d": (add, 1, "c")}
@@ -243,7 +283,7 @@ def test_inline_functions():
     x, y, i, d = "xyid"
     dsk = {"out": (add, i, d), i: (inc, x), d: (double, y), x: 1, y: 1}
 
-    result = inline_functions(dsk, [], fast_functions=set([inc]))
+    result = inline_functions(dsk, [], fast_functions={inc})
     expected = {"out": (add, (inc, x), d), d: (double, y), x: 1, y: 1}
     assert result == expected
 
@@ -251,13 +291,13 @@ def test_inline_functions():
 def test_inline_ignores_curries_and_partials():
     dsk = {"x": 1, "y": 2, "a": (partial(add, 1), "x"), "b": (inc, "a")}
 
-    result = inline_functions(dsk, [], fast_functions=set([add]))
+    result = inline_functions(dsk, [], fast_functions={add})
     assert result["b"] == (inc, dsk["a"])
     assert "a" not in result
 
 
 def test_inline_functions_non_hashable():
-    class NonHashableCallable(object):
+    class NonHashableCallable:
         def __call__(self, a):
             return a + 1
 
@@ -275,7 +315,7 @@ def test_inline_functions_non_hashable():
 
 def test_inline_doesnt_shrink_fast_functions_at_top():
     dsk = {"x": (inc, "y"), "y": 1}
-    result = inline_functions(dsk, [], fast_functions=set([inc]))
+    result = inline_functions(dsk, [], fast_functions={inc})
     assert result == dsk
 
 
@@ -283,7 +323,7 @@ def test_inline_traverses_lists():
     x, y, i, d = "xyid"
     dsk = {"out": (sum, [i, d]), i: (inc, x), d: (double, y), x: 1, y: 1}
     expected = {"out": (sum, [(inc, x), d]), d: (double, y), x: 1, y: 1}
-    result = inline_functions(dsk, [], fast_functions=set([inc]))
+    result = inline_functions(dsk, [], fast_functions={inc})
     assert result == expected
 
 
@@ -296,13 +336,13 @@ def test_inline_functions_protects_output_keys():
 def test_functions_of():
     a = lambda x: x
     b = lambda x: x
-    assert functions_of((a, 1)) == set([a])
-    assert functions_of((a, (b, 1))) == set([a, b])
-    assert functions_of((a, [(b, 1)])) == set([a, b])
-    assert functions_of((a, [[[(b, 1)]]])) == set([a, b])
+    assert functions_of((a, 1)) == {a}
+    assert functions_of((a, (b, 1))) == {a, b}
+    assert functions_of((a, [(b, 1)])) == {a, b}
+    assert functions_of((a, [[[(b, 1)]]])) == {a, b}
     assert functions_of(1) == set()
     assert functions_of(a) == set()
-    assert functions_of((a,)) == set([a])
+    assert functions_of((a,)) == {a}
 
 
 def test_inline_cull_dependencies():
@@ -1092,202 +1132,6 @@ def func_with_kwargs(a, b, c=2):
     return a + b + c
 
 
-def test_SubgraphCallable():
-    non_hashable = [1, 2, 3]
-
-    dsk = {
-        "a": (apply, add, ["in1", 2]),
-        "b": (
-            apply,
-            partial_by_order,
-            ["in2"],
-            {"function": func_with_kwargs, "other": [(1, 20)], "c": 4},
-        ),
-        "c": (
-            apply,
-            partial_by_order,
-            ["in2", "in1"],
-            {"function": func_with_kwargs, "other": [(1, 20)]},
-        ),
-        "d": (inc, "a"),
-        "e": (add, "c", "d"),
-        "f": ["a", 2, "b", (add, "b", (sum, non_hashable))],
-        "h": (add, (sum, "f"), (sum, ["a", "b"])),
-    }
-
-    f = SubgraphCallable(dsk, "h", ["in1", "in2"], name="test")
-    assert f.name == "test"
-    assert repr(f) == "test"
-
-    dsk2 = dsk.copy()
-    dsk2.update({"in1": 1, "in2": 2})
-    assert f(1, 2) == get_sync(cull(dsk2, ["h"])[0], ["h"])[0]
-    assert f(1, 2) == f(1, 2)
-
-    f2 = pickle.loads(pickle.dumps(f))
-    assert f2(1, 2) == f(1, 2)
-
-
-def test_fuse_subgraphs():
-    dsk = {
-        "x-1": 1,
-        "inc-1": (inc, "x-1"),
-        "inc-2": (inc, "inc-1"),
-        "add-1": (add, "x-1", "inc-2"),
-        "inc-3": (inc, "add-1"),
-        "inc-4": (inc, "inc-3"),
-        "add-2": (add, "add-1", "inc-4"),
-        "inc-5": (inc, "add-2"),
-        "inc-6": (inc, "inc-5"),
-    }
-
-    res = fuse(dsk, "inc-6", fuse_subgraphs=True)
-    sol = with_deps(
-        {
-            "inc-6": "add-inc-x-1",
-            "add-inc-x-1": (
-                SubgraphCallable(
-                    {
-                        "x-1": 1,
-                        "add-1": (add, "x-1", (inc, (inc, "x-1"))),
-                        "inc-6": (inc, (inc, (add, "add-1", (inc, (inc, "add-1"))))),
-                    },
-                    "inc-6",
-                    (),
-                ),
-            ),
-        }
-    )
-    assert res == sol
-
-    res = fuse(dsk, "inc-6", fuse_subgraphs=True, rename_keys=False)
-    sol = with_deps(
-        {
-            "inc-6": (
-                SubgraphCallable(
-                    {
-                        "x-1": 1,
-                        "add-1": (add, "x-1", (inc, (inc, "x-1"))),
-                        "inc-6": (inc, (inc, (add, "add-1", (inc, (inc, "add-1"))))),
-                    },
-                    "inc-6",
-                    (),
-                ),
-            )
-        }
-    )
-    assert res == sol
-
-    res = fuse(dsk, "add-2", fuse_subgraphs=True)
-    sol = with_deps(
-        {
-            "add-inc-x-1": (
-                SubgraphCallable(
-                    {
-                        "x-1": 1,
-                        "add-1": (add, "x-1", (inc, (inc, "x-1"))),
-                        "add-2": (add, "add-1", (inc, (inc, "add-1"))),
-                    },
-                    "add-2",
-                    (),
-                ),
-            ),
-            "add-2": "add-inc-x-1",
-            "inc-6": (inc, (inc, "add-2")),
-        }
-    )
-    assert res == sol
-
-    res = fuse(dsk, "inc-2", fuse_subgraphs=True)
-    # ordering of arguments is unstable, check all permutations
-    sols = []
-    for inkeys in itertools.permutations(("x-1", "inc-2")):
-        sols.append(
-            with_deps(
-                {
-                    "x-1": 1,
-                    "inc-2": (inc, (inc, "x-1")),
-                    "inc-6": "inc-add-1",
-                    "inc-add-1": (
-                        SubgraphCallable(
-                            {
-                                "add-1": (add, "x-1", "inc-2"),
-                                "inc-6": (
-                                    inc,
-                                    (inc, (add, "add-1", (inc, (inc, "add-1")))),
-                                ),
-                            },
-                            "inc-6",
-                            inkeys,
-                        ),
-                    )
-                    + inkeys,
-                }
-            )
-        )
-    assert res in sols
-
-    res = fuse(dsk, ["inc-2", "add-2"], fuse_subgraphs=True)
-    # ordering of arguments is unstable, check all permutations
-    sols = []
-    for inkeys in itertools.permutations(("x-1", "inc-2")):
-        sols.append(
-            with_deps(
-                {
-                    "x-1": 1,
-                    "inc-2": (inc, (inc, "x-1")),
-                    "inc-add-1": (
-                        SubgraphCallable(
-                            {
-                                "add-1": (add, "x-1", "inc-2"),
-                                "add-2": (add, "add-1", (inc, (inc, "add-1"))),
-                            },
-                            "add-2",
-                            inkeys,
-                        ),
-                    )
-                    + inkeys,
-                    "add-2": "inc-add-1",
-                    "inc-6": (inc, (inc, "add-2")),
-                }
-            )
-        )
-    assert res in sols
-
-
-def test_fuse_subgraphs_linear_chains_of_duplicate_deps():
-    dsk = {
-        "x-1": 1,
-        "add-1": (add, "x-1", "x-1"),
-        "add-2": (add, "add-1", "add-1"),
-        "add-3": (add, "add-2", "add-2"),
-        "add-4": (add, "add-3", "add-3"),
-        "add-5": (add, "add-4", "add-4"),
-    }
-
-    res = fuse(dsk, "add-5", fuse_subgraphs=True)
-    sol = with_deps(
-        {
-            "add-x-1": (
-                SubgraphCallable(
-                    {
-                        "x-1": 1,
-                        "add-1": (add, "x-1", "x-1"),
-                        "add-2": (add, "add-1", "add-1"),
-                        "add-3": (add, "add-2", "add-2"),
-                        "add-4": (add, "add-3", "add-3"),
-                        "add-5": (add, "add-4", "add-4"),
-                    },
-                    "add-5",
-                    (),
-                ),
-            ),
-            "add-5": "add-x-1",
-        }
-    )
-    assert res == sol
-
-
 def test_dont_fuse_numpy_arrays():
     """
     Some types should stay in the graph bare
@@ -1344,3 +1188,194 @@ def test_fused_keys_max_length():  # generic fix for gh-5999
     fused, deps = fuse(d, rename_keys=True)
     for key in fused:
         assert len(key) < 150
+
+
+def func(*args):
+    try:
+        return "-".join(args)
+    except TypeError:
+        return "-".join(map(str, args))
+
+
+def func2(*args):
+    return "=".join(args)
+
+
+def func3(*args, **kwargs):
+    return "+".join(args) + "//" + "+".join(f"{k}={v}" for k, v in kwargs.items())
+
+
+def test_hybrid_legacy_new():
+    # e.g. after low level fusion
+
+    dsk = {
+        "foo": (func, Task("bar", func2, Alias("a"), "b"), "c"),
+    }
+    new_dsk = convert_legacy_graph(dsk)
+    assert new_dsk["foo"]({"a": "a"}) == "a=b-c"
+
+
+def test_fusion_legacy_hybrid():
+    dsk = {
+        "foo": (func, "a", "b"),
+        "bar": (func2, "foo", "c"),
+    }
+    from dask.optimization import fuse
+
+    # The first part of this test just tests a couple of basic assumptions about
+    # how fusing works. We want to make sure that this topology is detected by
+    # the fusion logic since otherwise the test below won't make any sense
+    fused, fused_deps = fuse(dsk, ["bar"])
+    assert len(fused) == 2
+    assert "bar" in fused
+    keys = set(fused)
+    keys.remove("bar")
+    fused_task_key = keys.pop()
+    assert fused["bar"] == fused_task_key
+    assert not fused_deps[fused_task_key]
+
+    new_dsk = convert_legacy_graph(fused)
+    assert isinstance(new_dsk["bar"], Alias)
+    assert new_dsk["bar"].key == "bar"
+    assert not new_dsk[fused_task_key].dependencies
+    assert new_dsk[fused_task_key]() == "a-b=c"
+
+    # Below this is the real test. Fusion should block when encountering a
+    # new style task
+
+    dsk = {
+        "foo": Task("foo", func, "a", "b"),
+        "bar": (func2, "foo", "c"),
+    }
+    fused, fused_deps = fuse(dsk, ["bar"])
+    assert len(fused) == 2
+    assert dsk == fused
+
+    dsk = {
+        "foo": (func, "a", "b"),
+        "bar": Task("bar", func2, TaskRef("foo"), "c"),
+    }
+    fused, fused_deps = fuse(dsk, ["bar"])
+    assert len(fused) == 2
+    assert dsk == fused
+
+
+def test_fusion_wide_legacy_hybrid():
+    with dask.config.set({"optimization.fuse.ave-width": 2}):
+        dsk = {
+            ("foo", 0): (func, "a", "b"),
+            ("foo", 1): (func, "a", "b"),
+            "bar": (func2, ("foo", 1), ("foo", 0)),
+        }
+        from dask.optimization import fuse
+
+        # The first part of this test just tests a couple of basic assumptions
+        # about how fusing works. We want to make sure that this topology is
+        # detected by the fusion logic since otherwise the test below won't make
+        # any sense
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert len(fused) == 2
+
+        keys = set(fused)
+        keys.remove("bar")
+        fused_task_key = keys.pop()
+        assert fused["bar"] == fused_task_key
+        assert not fused_deps[fused_task_key]
+
+        new_dsk = convert_legacy_graph(fused)
+        assert isinstance(new_dsk["bar"], Alias)
+        assert new_dsk["bar"].key == "bar"
+        assert not new_dsk[fused_task_key].dependencies
+        assert new_dsk[fused_task_key]() == "a-b=a-b"
+
+        # Below this is the real test. Fusion should block when encountering a
+        # new style tasks
+
+        t = Task(("foo", 0), func, "a", "b")
+        dsk = {
+            ("foo", 0): t,
+            ("foo", 1): (func, "a", "b"),
+            "bar": (func2, ("foo", 1), ("foo", 0)),
+        }
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert fused == {
+            ("foo", 0): t,
+            "foo-bar": (func2, (func, "a", "b"), ("foo", 0)),
+            "bar": "foo-bar",
+        }
+
+        t = Task(("foo", 1), func, "a", "b")
+        dsk = {
+            ("foo", 0): (func, "a", "b"),
+            ("foo", 1): t,
+            "bar": (func2, ("foo", 1), ("foo", 0)),
+        }
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert fused == {
+            ("foo", 1): t,
+            "foo-bar": (func2, ("foo", 1), (func, "a", "b")),
+            "bar": "foo-bar",
+        }
+
+        dsk = {
+            ("foo", 0): Task(("foo", 0), func, "a", "b"),
+            ("foo", 1): Task(("foo", 1), func, "a", "b"),
+            "bar": (func2, ("foo", 1), ("foo", 0)),
+        }
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert dsk == fused
+
+        dsk = {
+            ("foo", 0): (func, "a", "b"),
+            ("foo", 1): (func, "a", "b"),
+            "bar": Task("bar", func2, TaskRef(("foo", 1)), TaskRef(("foo", 0))),
+        }
+        fused, fused_deps = fuse(dsk, ["bar"])
+        assert dsk == fused
+
+
+def test_do_not_inline_legacy_hybrid():
+    from dask.core import get
+
+    dsk = {
+        "out": (func, "i", "d"),  # doctest: +SKIP
+        "i": (func2, "x"),
+        "d": (func3, "y"),
+        "x": "1",
+        "y": "1",
+    }
+    inlined = inline_functions(dsk, [], [func2])
+    assert get(inlined, ["out"]) == get(dsk, ["out"])
+    dsk = {
+        "foo": (func, "a", "b"),
+        "bar": (func2, "foo", "c"),
+        "baz": "bar",
+    }
+
+    inlined = inline_functions(
+        dsk,
+        {"baz"},
+        fast_functions=(func,),
+    )
+    assert len(inlined) == 2
+    assert inlined["baz"] == "bar"
+    assert get(dsk, ["baz"]) == get(inlined, ["baz"])
+
+    dsk = {
+        "foo": (func, "a", "b"),
+        "bar": Task("bar", func2, (TaskRef("foo"), "c")),
+        "baz": "bar",
+    }
+
+    inlined = inline_functions(
+        dsk,
+        {"baz"},
+        fast_functions=set(),
+    )
+    assert dsk == inlined
+    inlined = inline_functions(
+        dsk,
+        {"baz"},
+        fast_functions=(func,),
+    )
+    assert dsk == inlined

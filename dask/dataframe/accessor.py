@@ -1,8 +1,47 @@
+from __future__ import annotations
+
+import functools
+import warnings
+
 import numpy as np
 import pandas as pd
-from functools import partial
 
-from ..utils import derived_from
+from dask.utils import derived_from
+
+
+def _bind_method(cls, pd_cls, attr, min_version=None):
+    def func(self, *args, **kwargs):
+        return self._function_map(attr, *args, **kwargs)
+
+    func.__name__ = attr
+    func.__qualname__ = f"{cls.__name__}.{attr}"
+    try:
+        func.__wrapped__ = getattr(pd_cls, attr)
+    except Exception:
+        pass
+    setattr(cls, attr, derived_from(pd_cls, version=min_version)(func))
+
+
+def _bind_property(cls, pd_cls, attr, min_version=None):
+    def func(self):
+        return self._property_map(attr)
+
+    func.__name__ = attr
+    func.__qualname__ = f"{cls.__name__}.{attr}"
+    try:
+        # Attempt to determine the method we are wrapping
+        original_prop = getattr(pd_cls, attr)
+        if isinstance(original_prop, property):
+            method = original_prop.fget
+        elif isinstance(original_prop, functools.cached_property):
+            method = original_prop.func
+        else:
+            method = original_prop
+            func.__wrapped__ = method
+    except Exception:
+        # If we can't then no matter, the function still works.
+        pass
+    setattr(cls, attr, property(derived_from(pd_cls, version=min_version)(func)))
 
 
 def maybe_wrap_pandas(obj, x):
@@ -13,163 +52,84 @@ def maybe_wrap_pandas(obj, x):
     return x
 
 
-class Accessor(object):
+# Ported from pandas
+# https://github.com/pandas-dev/pandas/blob/master/pandas/core/accessor.py
+class CachedAccessor:
     """
-    Base class for pandas Accessor objects cat, dt, and str.
+    Custom property-like object (descriptor) for caching accessors.
 
-    Notes
-    -----
-    Subclasses should define ``_accessor_name``
+    Parameters
+    ----------
+    name : str
+        The namespace this will be accessed under, e.g. ``df.foo``
+    accessor : cls
+        The class with the extension methods. The class' __init__ method
+        should expect one of a ``Series``, ``DataFrame`` or ``Index`` as
+        the single argument ``data``
     """
 
-    _not_implemented = set()
+    def __init__(self, name, accessor):
+        self._name = name
+        self._accessor = accessor
 
-    def __init__(self, series):
-        from .core import Series
+    def __get__(self, obj, cls):
+        if obj is None:
+            # we're accessing the attribute of the class, i.e., Dataset.geo
+            return self._accessor
+        accessor_obj = self._accessor(obj)
+        # Replace the property with the accessor object. Inspired by:
+        # http://www.pydanny.com/cached-property.html
+        # We need to use object.__setattr__ because we overwrite __setattr__ on
+        # NDFrame
+        object.__setattr__(obj, self._name, accessor_obj)
+        return accessor_obj
 
-        if not isinstance(series, Series):
-            raise ValueError("Accessor cannot be initialized")
 
-        series_meta = series._meta
-        if hasattr(series_meta, "to_series"):  # is index-like
-            series_meta = series_meta.to_series()
-        meta = getattr(series_meta, self._accessor_name)
-
-        self._meta = meta
-        self._series = series
-
-    @staticmethod
-    def _delegate_property(obj, accessor, attr):
-        out = getattr(getattr(obj, accessor, obj), attr)
-        return maybe_wrap_pandas(obj, out)
-
-    @staticmethod
-    def _delegate_method(obj, accessor, attr, args, kwargs):
-        out = getattr(getattr(obj, accessor, obj), attr)(*args, **kwargs)
-        return maybe_wrap_pandas(obj, out)
-
-    def _property_map(self, attr):
-        meta = self._delegate_property(self._series._meta, self._accessor_name, attr)
-        token = "%s-%s" % (self._accessor_name, attr)
-        return self._series.map_partitions(
-            self._delegate_property, self._accessor_name, attr, token=token, meta=meta
-        )
-
-    def _function_map(self, attr, *args, **kwargs):
-        if "meta" in kwargs:
-            meta = kwargs.pop("meta")
-        else:
-            meta = self._delegate_method(
-                self._series._meta_nonempty, self._accessor_name, attr, args, kwargs
+def _register_accessor(name, cls):
+    def decorator(accessor):
+        if hasattr(cls, name):
+            warnings.warn(
+                f"registration of accessor {accessor!r} under name {name!r} for type "
+                f"{cls!r} is overriding a preexisting attribute with the same "
+                "name.",
+                UserWarning,
+                stacklevel=2,
             )
-        token = "%s-%s" % (self._accessor_name, attr)
-        return self._series.map_partitions(
-            self._delegate_method,
-            self._accessor_name,
-            attr,
-            args,
-            kwargs,
-            meta=meta,
-            token=token,
-        )
+        setattr(cls, name, CachedAccessor(name, accessor))
+        cls._accessors.add(name)
+        return accessor
 
-    @property
-    def _delegates(self):
-        return set(dir(self._meta)).difference(self._not_implemented)
-
-    def __dir__(self):
-        o = self._delegates
-        o.update(self.__dict__)
-        o.update(dir(type(self)))
-        return list(o)
-
-    def __getattr__(self, key):
-        if key in self._delegates:
-            if callable(getattr(self._meta, key)):
-                return partial(self._function_map, key)
-            else:
-                return self._property_map(key)
-        else:
-            raise AttributeError(key)
+    return decorator
 
 
-class DatetimeAccessor(Accessor):
-    """Accessor object for datetimelike properties of the Series values.
-
-    Examples
-    --------
-
-    >>> s.dt.microsecond  # doctest: +SKIP
+def register_dataframe_accessor(name):
     """
+    Register a custom accessor on :class:`dask.dataframe.DataFrame`.
 
-    _accessor_name = "dt"
-
-
-class StringAccessor(Accessor):
-    """Accessor object for string properties of the Series values.
-
-    Examples
-    --------
-
-    >>> s.str.lower()  # doctest: +SKIP
+    See :func:`pandas.api.extensions.register_dataframe_accessor` for more.
     """
+    from dask.dataframe import DataFrame
 
-    _accessor_name = "str"
-    _not_implemented = {"get_dummies"}
-
-    @derived_from(pd.core.strings.StringMethods)
-    def split(self, pat=None, n=-1, expand=False):
-        if expand:
-            if n == -1:
-                raise NotImplementedError(
-                    "To use the expand parameter you must specify the number of "
-                    "expected splits with the n= parameter. Usually n splits result in n+1 output columns."
-                )
-            else:
-                delimiter = " " if pat is None else pat
-                meta = type(self._series._meta)([delimiter.join(["a"] * (n + 1))])
-                meta = meta.str.split(n=n, expand=expand, pat=pat)
-        else:
-            meta = (self._series.name, object)
-        return self._function_map("split", pat=pat, n=n, expand=expand, meta=meta)
-
-    @derived_from(pd.core.strings.StringMethods)
-    def cat(self, others=None, sep=None, na_rep=None):
-        from .core import Series, Index
-
-        if others is None:
-            raise NotImplementedError("x.str.cat() with `others == None`")
-
-        valid_types = (Series, Index, pd.Series, pd.Index)
-        if isinstance(others, valid_types):
-            others = [others]
-        elif not all(isinstance(a, valid_types) for a in others):
-            raise TypeError("others must be Series/Index")
-
-        return self._series.map_partitions(
-            str_cat, *others, sep=sep, na_rep=na_rep, meta=self._series._meta
-        )
-
-    @derived_from(pd.core.strings.StringMethods)
-    def extractall(self, pat, flags=0):
-        # TODO: metadata inference here won't be necessary for pandas >= 0.23.0
-        meta = self._series._meta.str.extractall(pat, flags=flags)
-        return self._series.map_partitions(
-            str_extractall, pat, flags, meta=meta, token="str-extractall"
-        )
-
-    def __getitem__(self, index):
-        return self._series.map_partitions(str_get, index, meta=self._series._meta)
+    return _register_accessor(name, DataFrame)
 
 
-def str_extractall(series, pat, flags):
-    return series.str.extractall(pat, flags=flags)
+def register_series_accessor(name):
+    """
+    Register a custom accessor on :class:`dask.dataframe.Series`.
+
+    See :func:`pandas.api.extensions.register_series_accessor` for more.
+    """
+    from dask.dataframe import Series
+
+    return _register_accessor(name, Series)
 
 
-def str_get(series, index):
-    """ Implements series.str[index] """
-    return series.str[index]
+def register_index_accessor(name):
+    """
+    Register a custom accessor on :class:`dask.dataframe.Index`.
 
+    See :func:`pandas.api.extensions.register_index_accessor` for more.
+    """
+    from dask.dataframe import Index
 
-def str_cat(self, *others, **kwargs):
-    return self.str.cat(others=others, **kwargs)
+    return _register_accessor(name, Index)

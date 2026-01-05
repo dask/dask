@@ -11,7 +11,8 @@ You can calculate various measures of an array including skewness, kurtosis, and
 .. code-block:: python
 
    >>> from dask.array import stats
-   >>> x = da.random.beta(1, 1, size=(1000,), chunks=10)
+   >>> rng = da.random.default_rng()
+   >>> x = rng.beta(1, 1, size=(1000,), chunks=10)
    >>> k, s, m = [stats.kurtosis(x), stats.skew(x), stats.moment(x, 5)]
    >>> dask.compute(k, s, m)
    (1.7612340817172787, -0.064073498030693302, -0.00054523780628304799)
@@ -27,8 +28,9 @@ results.
 
 .. code-block:: python
 
-   >>> a = da.random.uniform(size=(50,), chunks=(25,))
-   >>> b = a + da.random.uniform(low=-0.15, high=0.15, size=(50,), chunks=(25,))
+   >>> rng = da.random.default_rng()
+   >>> a = rng.uniform(size=(50,), chunks=(25,))
+   >>> b = a + rng.uniform(low=-0.15, high=0.15, size=(50,), chunks=(25,))
    >>> result = stats.ttest_rel(a, b)
    >>> result.compute()
    Ttest_relResult(statistic=-1.5102104380013242, pvalue=0.13741197274874514)

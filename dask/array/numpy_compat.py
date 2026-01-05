@@ -1,15 +1,35 @@
-from distutils.version import LooseVersion
+from __future__ import annotations
 
-import numpy as np
 import warnings
 
-from ..utils import derived_from
+from dask._compatibility import import_optional_dependency
 
-_numpy_115 = LooseVersion(np.__version__) >= "1.15.0"
-_numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
-_numpy_117 = LooseVersion(np.__version__) >= "1.17.0"
-_numpy_118 = LooseVersion(np.__version__) >= "1.18.0"
-_numpy_120 = LooseVersion(np.__version__) >= "1.20.0"
+import_optional_dependency("numpy")
+import numpy as np
+from packaging.version import Version
+
+from dask.utils import derived_from
+
+_np_version = Version(np.__version__)
+NUMPY_GE_125 = _np_version.release >= (1, 25)
+NUMPY_GE_200 = _np_version.release >= (2, 0)
+NUMPY_GE_210 = _np_version.release >= (2, 1)
+NUMPY_GE_220 = _np_version.release >= (2, 2)
+NUMPY_GE_240 = _np_version.release >= (2, 4)
+
+
+if NUMPY_GE_200:
+    from numpy.exceptions import AxisError, ComplexWarning
+    from numpy.lib.array_utils import normalize_axis_index, normalize_axis_tuple
+else:
+    from numpy import (  # type: ignore[no-redef, attr-defined] # noqa: F401
+        AxisError,
+        ComplexWarning,
+    )
+    from numpy.core.numeric import (  # type: ignore[no-redef]
+        normalize_axis_index,
+        normalize_axis_tuple,
+    )
 
 
 # Taken from scikit-learn:
@@ -33,7 +53,7 @@ try:
 
 except TypeError:
     # Divide with dtype doesn't work on Python 3
-    def divide(x1, x2, out=None, dtype=None):
+    def divide(x1, x2, out=None, dtype=None):  # type: ignore[misc]
         """Implementation of numpy.divide that works with dtype kwarg.
 
         Temporary compatibility fix for a bug in numpy's version. See
@@ -44,169 +64,11 @@ except TypeError:
         return x
 
     ma_divide = np.ma.core._DomainedBinaryOperation(
-        divide, np.ma.core._DomainSafeDivide(), 0, 1
+        divide, np.ma.core._DomainSafeDivide(), 0, 1  # type: ignore[attr-defined]
     )
 
 
-if LooseVersion(np.__version__) < "1.15.0":
-    # These functions were added in numpy 1.15.0. For previous versions they
-    # are duplicated here
-
-    def _make_along_axis_idx(arr_shape, indices, axis):
-        # compute dimensions to iterate over
-        if not np.issubdtype(indices.dtype, np.integer):
-            raise IndexError("`indices` must be an integer array")
-        if len(arr_shape) != indices.ndim:
-            raise ValueError(
-                "`indices` and `arr` must have the same number of dimensions"
-            )
-        shape_ones = (1,) * indices.ndim
-        dest_dims = list(range(axis)) + [None] + list(range(axis + 1, indices.ndim))
-
-        # build a fancy index, consisting of orthogonal aranges, with the
-        # requested index inserted at the right location
-        fancy_index = []
-        for dim, n in zip(dest_dims, arr_shape):
-            if dim is None:
-                fancy_index.append(indices)
-            else:
-                ind_shape = shape_ones[:dim] + (-1,) + shape_ones[dim + 1 :]
-                fancy_index.append(np.arange(n).reshape(ind_shape))
-
-        return tuple(fancy_index)
-
-    def take_along_axis(arr, indices, axis):
-        """
-        Take values from the input array by matching 1d index and data slices.
-        This iterates over matching 1d slices oriented along the specified axis in
-        the index and data arrays, and uses the former to look up values in the
-        latter. These slices can be different lengths.
-        Functions returning an index along an axis, like `argsort` and
-        `argpartition`, produce suitable indices for this function.
-        .. versionadded:: 1.15.0
-        Parameters
-        ----------
-        arr: ndarray (Ni..., M, Nk...)
-            Source array
-        indices: ndarray (Ni..., J, Nk...)
-            Indices to take along each 1d slice of `arr`. This must match the
-            dimension of arr, but dimensions Ni and Nj only need to broadcast
-            against `arr`.
-        axis: int
-            The axis to take 1d slices along. If axis is None, the input array is
-            treated as if it had first been flattened to 1d, for consistency with
-            `sort` and `argsort`.
-        Returns
-        -------
-        out: ndarray (Ni..., J, Nk...)
-            The indexed result.
-        Notes
-        -----
-        This is equivalent to (but faster than) the following use of `ndindex` and
-        `s_`, which sets each of ``ii`` and ``kk`` to a tuple of indices::
-            Ni, M, Nk = a.shape[:axis], a.shape[axis], a.shape[axis+1:]
-            J = indices.shape[axis]  # Need not equal M
-            out = np.empty(Nk + (J,) + Nk)
-            for ii in ndindex(Ni):
-                for kk in ndindex(Nk):
-                    a_1d       = a      [ii + s_[:,] + kk]
-                    indices_1d = indices[ii + s_[:,] + kk]
-                    out_1d     = out    [ii + s_[:,] + kk]
-                    for j in range(J):
-                        out_1d[j] = a_1d[indices_1d[j]]
-        Equivalently, eliminating the inner loop, the last two lines would be::
-                    out_1d[:] = a_1d[indices_1d]
-        See Also
-        --------
-        take : Take along an axis, using the same indices for every 1d slice
-        put_along_axis :
-            Put values into the destination array by matching 1d index and data slices
-        Examples
-        --------
-        For this sample array
-        >>> a = np.array([[10, 30, 20], [60, 40, 50]])
-
-        We can sort either by using sort directly, or argsort and this function
-        >>> np.sort(a, axis=1)
-        array([[10, 20, 30],
-               [40, 50, 60]])
-        >>> ai = np.argsort(a, axis=1); ai
-        array([[0, 2, 1],
-               [1, 2, 0]])
-        >>> take_along_axis(a, ai, axis=1)
-        array([[10, 20, 30],
-               [40, 50, 60]])
-
-        The same works for max and min, if you expand the dimensions:
-        >>> np.expand_dims(np.max(a, axis=1), axis=1)
-        array([[30],
-               [60]])
-        >>> ai = np.expand_dims(np.argmax(a, axis=1), axis=1)
-        >>> ai
-        array([[1],
-               [0]])
-        >>> take_along_axis(a, ai, axis=1)
-        array([[30],
-               [60]])
-
-        If we want to get the max and min at the same time,
-        we can stack the indices first:
-        >>> ai_min = np.expand_dims(np.argmin(a, axis=1), axis=1)
-        >>> ai_max = np.expand_dims(np.argmax(a, axis=1), axis=1)
-        >>> ai = np.concatenate([ai_min, ai_max], axis=1)
-        >>> ai
-        array([[0, 1],
-               [1, 0]])
-        >>> take_along_axis(a, ai, axis=1)
-        array([[10, 30],
-               [40, 60]])
-        """
-        # normalize inputs
-        if axis is None:
-            arr = arr.flat
-            arr_shape = (len(arr),)  # flatiter has no .shape
-            axis = 0
-        else:
-            if axis < 0:
-                axis = arr.ndim + axis
-            arr_shape = arr.shape
-
-        # use the fancy index
-        return arr[_make_along_axis_idx(arr_shape, indices, axis)]
-
-
-def _make_sliced_dtype_np_ge_16(dtype, index):
-    # This was briefly added in 1.14.0
-    # https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
-    # which was then reverted in 1.14.1 with
-    # https://github.com/numpy/numpy/pull/10411
-    # And then was finally released with
-    # https://github.com/numpy/numpy/pull/12447
-    # in version 1.16.0
-    new = {
-        "names": index,
-        "formats": [dtype.fields[name][0] for name in index],
-        "offsets": [dtype.fields[name][1] for name in index],
-        "itemsize": dtype.itemsize,
-    }
-    return np.dtype(new)
-
-
-def _make_sliced_dtype_np_lt_14(dtype, index):
-    # For numpy < 1.14
-    dt = np.dtype([(name, dtype[name]) for name in index])
-    return dt
-
-
-if LooseVersion(np.__version__) >= LooseVersion("1.16.0") or LooseVersion(
-    np.__version__
-) == LooseVersion("1.14.0"):
-    _make_sliced_dtype = _make_sliced_dtype_np_ge_16
-else:
-    _make_sliced_dtype = _make_sliced_dtype_np_lt_14
-
-
-class _Recurser(object):
+class _Recurser:
     """
     Utility class for recursing over nested iterables
     """
@@ -224,7 +86,7 @@ class _Recurser(object):
         f_map=lambda x, **kwargs: x,
         f_reduce=lambda x, **kwargs: x,
         f_kwargs=lambda **kwargs: kwargs,
-        **kwargs
+        **kwargs,
     ):
         """
         Iterate over the nested list, applying:
@@ -284,24 +146,15 @@ class _Recurser(object):
             return
         for i, xi in enumerate(x):
             # yield from ...
-            for v in self.walk(xi, index + (i,)):
-                yield v
-
-
-if _numpy_116:
-    _unravel_index_keyword = "shape"
-else:
-    _unravel_index_keyword = "dims"
+            yield from self.walk(xi, index + (i,))
 
 
 # Implementation taken directly from numpy:
 # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/core/numeric.py#L1336-L1405
 @derived_from(np)
 def moveaxis(a, source, destination):
-    source = np.core.numeric.normalize_axis_tuple(source, a.ndim, "source")
-    destination = np.core.numeric.normalize_axis_tuple(
-        destination, a.ndim, "destination"
-    )
+    source = normalize_axis_tuple(source, a.ndim, "source")
+    destination = normalize_axis_tuple(destination, a.ndim, "destination")
     if len(source) != len(destination):
         raise ValueError(
             "`source` and `destination` arguments must have "
@@ -321,7 +174,7 @@ def moveaxis(a, source, destination):
 # https://github.com/numpy/numpy/blob/v1.17.0/numpy/core/numeric.py#L1107-L1204
 def rollaxis(a, axis, start=0):
     n = a.ndim
-    axis = np.core.numeric.normalize_axis_index(axis, n)
+    axis = normalize_axis_index(axis, n)
     if start < 0:
         start += n
     msg = "'%s' arg requires %d <= %s < %d, but %d was passed in"

@@ -52,8 +52,32 @@ analyze pipeline:
           'analyze': (analyze, ['clean-%d' % i for i in [1, 2, 3]]),
           'store': (store, 'analyze')}
 
-   from dask.multiprocessing import get
+   from dask.threaded import get
    get(dsk, 'store')  # executes in parallel
+
+
+Keyword arguments in custom Dask graphs
+---------------------------------------
+
+Sometimes, you may want to pass keyword arguments to a function 
+in a custom Dask graph.
+You can do that using the :func:`dask.utils.apply` function, like this:
+
+.. code-block:: python
+
+   from dask.utils import apply
+
+   task = (apply, func, args, kwargs)  # equivalent to func(*args, **kwargs)
+
+   dsk = {'task-name': task,
+           ...
+          }
+
+
+In the example above:
+
+- ``args`` should be a tuple (eg: ``(arg_1, arg_2, arg_3)``), and
+- ``kwargs`` should be a dictionary (eg: ``{"kwarg_1": value, "kwarg_2": value}``
 
 
 Related Projects
@@ -74,11 +98,11 @@ logic.
 Dask schedulers differ in the following ways:
 
 1.  You specify the entire graph as a Python dict rather than using a
-    specialized API
-2.  You get a variety of schedulers ranging from single machine, single core 
-    to threaded, multiprocessing, distributed, and
-3.  The Dask single-machine schedulers have logic to execute the graph in a
-    way that minimizes memory footprint
+    specialized API.
+2.  You get a variety of schedulers, ranging from a single-machine, single-core
+    scheduler to threaded, multi-process, and distributed options.
+3.  You benefit from logic to execute the graph in a way that minimizes memory
+    footprint with the Dask single-machine schedulers.
 
 But the other projects offer different advantages and different programming
 paradigms.  One should inspect all such projects before selecting one.

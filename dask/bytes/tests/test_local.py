@@ -1,19 +1,23 @@
+from __future__ import annotations
+
 import gzip
 import os
 import pathlib
 import sys
-from time import sleep
 from functools import partial
+from time import sleep
 
+import cloudpickle
 import pytest
+from fsspec.compression import compr
+from fsspec.core import open_files
+from fsspec.implementations.local import LocalFileSystem
 from tlz import concat, valmap
 
 from dask import compute
-from dask.utils import filetexts
-from fsspec.implementations.local import LocalFileSystem
-from fsspec.compression import compr
-from dask.bytes.core import read_bytes, open_files
+from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
+from dask.utils import filetexts
 
 compute = partial(compute, scheduler="sync")
 
@@ -34,9 +38,9 @@ files = {
 
 
 csv_files = {
-    ".test.fakedata.1.csv": (b"a,b\n" b"1,2\n"),
-    ".test.fakedata.2.csv": (b"a,b\n" b"3,4\n"),
-    "subdir/.test.fakedata.2.csv": (b"a,b\n" b"5,6\n"),
+    ".test.fakedata.1.csv": (b"a,b\n1,2\n"),
+    ".test.fakedata.2.csv": (b"a,b\n3,4\n"),
+    "subdir/.test.fakedata.2.csv": (b"a,b\n5,6\n"),
 }
 
 
@@ -45,7 +49,6 @@ def to_uri(path):
 
 
 def test_unordered_urlpath_errors():
-
     # Unordered urlpath argument
     with pytest.raises(TypeError):
         read_bytes(
@@ -121,16 +124,9 @@ def test_read_bytes_blocksize_float_errs():
 def test_read_bytes_include_path():
     with filetexts(files, mode="b"):
         _, _, paths = read_bytes(".test.accounts.*", include_path=True)
-        assert {os.path.split(path)[1] for path in paths} == set(files.keys())
+        assert {os.path.split(path)[1] for path in paths} == files.keys()
 
 
-@pytest.mark.xfail(
-    os.environ.get("GITHUB_ACTIONS")
-    and sys.platform == "win32"
-    and sys.version_info[:2] == (3, 6),
-    reason="TODO: Fails on GitHub Actions when running Python 3.6 on Windows."
-    "See https://github.com/dask/dask/pull/5862.",
-)
 def test_with_urls():
     with filetexts(files, mode="b"):
         # OS-independent file:// URI with glob *
@@ -155,7 +151,9 @@ def test_read_bytes_block():
     with filetexts(files, mode="b"):
         for bs in [5, 15, 45, 1500]:
             sample, vals = read_bytes(".test.account*", blocksize=bs)
-            assert list(map(len, vals)) == [(len(v) // bs + 1) for v in files.values()]
+            assert list(map(len, vals)) == [
+                max((len(v) // bs), 1) for v in files.values()
+            ]
 
             results = compute(*concat(vals))
             assert sum(len(r) for r in results) == sum(len(v) for v in files.values())
@@ -315,7 +313,6 @@ def test_open_files_write(tmpdir, compression_opener):
 
 def test_pickability_of_lazy_files(tmpdir):
     tmpdir = str(tmpdir)
-    cloudpickle = pytest.importorskip("cloudpickle")
 
     with filetexts(files, mode="b"):
         myfiles = open_files(".test.accounts.*")
@@ -355,12 +352,3 @@ def test_abs_paths(tmpdir):
     with fs.open(out[0], "r") as f:
         res = f.read()
     assert res == "hi"
-
-
-def test_get_pyarrow_filesystem():
-    from fsspec.implementations.local import LocalFileSystem
-
-    pa = pytest.importorskip("pyarrow")
-
-    fs = LocalFileSystem()
-    assert isinstance(fs, pa.filesystem.FileSystem)

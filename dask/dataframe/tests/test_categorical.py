@@ -1,4 +1,8 @@
+from __future__ import annotations
+
+import contextlib
 import operator
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -6,16 +10,11 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
 from dask.dataframe import _compat
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_300, tm
+from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import _concat
-from dask.dataframe.utils import (
-    make_meta,
-    assert_eq,
-    is_categorical_dtype,
-    clear_known_categories,
-)
-
+from dask.dataframe.utils import assert_eq, get_string_dtype, pyarrow_strings_enabled
 
 # Generate a list of categorical series and indices
 cat_series = []
@@ -117,48 +116,97 @@ def test_concat_unions_categoricals():
     tm.assert_frame_equal(_concat(frames5), pd.concat(frames6))
 
 
-def test_unknown_categoricals():
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames)},
-        "unknown",
-        make_meta(
-            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
+@pytest.mark.gpu
+def test_unknown_categories_cudf():
+    # We should always start with unknown categories
+    # if `clear_known_categories` is working.
+    pytest.importorskip("dask_cudf")
+
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf = dd.from_dict({"a": [0, 1, 0]}, npartitions=1)
+    ddf["a"] = ddf["a"].astype("category")
+    assert not ddf["a"].cat.known
+
+
+# TODO: Remove the filterwarnings below
+@pytest.mark.parametrize(
+    "numeric_only",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=[
+                pytest.mark.xfail(reason="numeric_only=False not implemented"),
+            ],
         ),
-        [None] * 4,
-    )
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(reason="numeric_only=False not implemented"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("npartitions", [None, 10])
+@pytest.mark.parametrize("split_out", [1, 4])
+@pytest.mark.filterwarnings("ignore:The default value of numeric_only")
+@pytest.mark.filterwarnings("ignore:Dropping")
+def test_unknown_categoricals(
+    shuffle_method, numeric_only, npartitions, split_out, request
+):
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames)}
+    meta = {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
+    ddf = dd.from_pandas(pd.concat(dsk.values()).astype(meta), npartitions=4)
+    if npartitions is not None:
+        ddf = ddf.repartition(npartitions=npartitions)
     # Compute
     df = ddf.compute()
 
     assert_eq(ddf.w.value_counts(), df.w.value_counts())
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
-    assert_eq(ddf.groupby(ddf.w).sum(), df.groupby(df.w).sum())
-    assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
-    assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
+    ctx = (
+        pytest.warns(FutureWarning, match="The default of observed=False")
+        if PANDAS_GE_210 and not PANDAS_GE_300
+        else contextlib.nullcontext()
+    )
+    numeric_kwargs = {} if numeric_only is None else {"numeric_only": numeric_only}
+    with ctx:
+        expected = df.groupby(df.w).sum(**numeric_kwargs)
+    with ctx:
+        result = ddf.groupby(ddf.w).sum(**numeric_kwargs)
+    assert_eq(result, expected)
 
+    with ctx:
+        expected = df.groupby(df.w).y.nunique()
+    with ctx:
+        result = ddf.groupby(ddf.w, sort=False).y.nunique(split_out=split_out)
+    assert_eq(result, expected)
 
-def test_is_categorical_dtype():
-    df = pd.DataFrame({"cat": pd.Categorical([1, 2, 3, 4]), "x": [1, 2, 3, 4]})
-
-    assert is_categorical_dtype(df["cat"])
-    assert not is_categorical_dtype(df["x"])
-
-    ddf = dd.from_pandas(df, 2)
-
-    assert is_categorical_dtype(ddf["cat"])
-    assert not is_categorical_dtype(ddf["x"])
+    with ctx:
+        expected = df.y.groupby(df.w).count()
+    with ctx:
+        result = ddf.y.groupby(ddf.w).count()
+    assert_eq(result, expected)
 
 
 def test_categorize():
     # rename y to y_ to avoid pandas future warning about ambiguous
     # levels
-    meta = clear_known_categories(frames4[0]).rename(columns={"y": "y_"})
-    ddf = dd.DataFrame(
-        {("unknown", i): df for (i, df) in enumerate(frames3)},
-        "unknown",
-        meta,
-        [None] * 4,
-    ).rename(columns={"y": "y_"})
+    pdf = frames4[0]
+    if pyarrow_strings_enabled():
+        # we explicitly provide meta, so it has to have pyarrow strings
+        pdf = to_pyarrow_string(pdf)
+    dsk = {("unknown", i): df for (i, df) in enumerate(frames3)}
+    pdf = (
+        pd.concat(dsk.values())
+        .rename(columns={"y": "y_"})
+        .astype({"w": "category", "y_": "category"})
+    )
+    pdf.index = pdf.index.astype("category")
+    ddf = dd.from_pandas(pdf, npartitions=4, sort=False)
+    ddf["w"] = ddf.w.cat.as_unknown()
+    ddf["y_"] = ddf.y_.cat.as_unknown()
+    ddf.index = ddf.index.cat.as_unknown()
+
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
     assert ddf.w.cat.known
     assert not ddf.y_.cat.known
@@ -190,7 +238,7 @@ def test_categorize():
 
         ddf2 = ddf.categorize("y_", index=index)
         assert ddf2.y_.cat.known
-        assert ddf2.v.dtype == "object"
+        assert ddf2.v.dtype == get_string_dtype()
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df)
 
@@ -232,14 +280,15 @@ def test_categorical_dtype():
 
 def test_categorize_index():
     # Object dtype
-    ddf = dd.from_pandas(_compat.makeDataFrame(), npartitions=5)
-    df = ddf.compute()
+    pdf = _compat.makeDataFrame()
+    ddf = dd.from_pandas(pdf, npartitions=5)
+    result = ddf.compute()
 
     ddf2 = ddf.categorize()
     assert ddf2.index.cat.known
     assert_eq(
         ddf2,
-        df.set_index(pd.CategoricalIndex(df.index)),
+        result.set_index(pd.CategoricalIndex(result.index)),
         check_divisions=False,
         check_categorical=False,
     )
@@ -247,14 +296,14 @@ def test_categorize_index():
     assert ddf.categorize(index=False) is ddf
 
     # Non-object dtype
-    ddf = dd.from_pandas(df.set_index(df.A.rename("idx")), npartitions=5)
-    df = ddf.compute()
+    ddf = dd.from_pandas(result.set_index(result.A.rename("idx")), npartitions=5)
+    result = ddf.compute()
 
     ddf2 = ddf.categorize(index=True)
     assert ddf2.index.cat.known
     assert_eq(
         ddf2,
-        df.set_index(pd.CategoricalIndex(df.index)),
+        result.set_index(pd.CategoricalIndex(result.index)),
         check_divisions=False,
         check_categorical=False,
     )
@@ -262,27 +311,26 @@ def test_categorize_index():
     assert ddf.categorize() is ddf
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_categorical_set_index(shuffle):
+def test_categorical_set_index(shuffle_method):
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": ["a", "b", "b", "c"]})
     df["y"] = pd.Categorical(df["y"], categories=["a", "b", "c"], ordered=True)
     a = dd.from_pandas(df, npartitions=2)
 
-    with dask.config.set(scheduler="sync", shuffle=shuffle):
+    with dask.config.set(scheduler="sync"):
         b = a.set_index("y", npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ["a"]
-        assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
+        assert sorted(d2.index.compute()) == ["b", "b", "c"]
 
         b = a.set_index(a.y, npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ["a"]
-        assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
+        assert sorted(d2.index.compute()) == ["b", "b", "c"]
 
         b = a.set_index("y", divisions=["a", "b", "c"], npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ["a"]
-        assert list(sorted(d2.index.compute())) == ["b", "b", "c"]
+        assert sorted(d2.index.compute()) == ["b", "b", "c"]
 
 
 @pytest.mark.parametrize("ncategories", [1, 3, 6])
@@ -292,7 +340,7 @@ def test_categorical_set_index_npartitions_vs_ncategories(npartitions, ncategori
     rows_per_category = 10
     n_rows = ncategories * rows_per_category
 
-    categories = ["CAT" + str(i) for i in range(ncategories)]
+    categories = [f"CAT{i}" for i in range(ncategories)]
     pdf = pd.DataFrame(
         {"id": categories * rows_per_category, "value": np.random.random(n_rows)}
     )
@@ -305,6 +353,11 @@ def test_categorical_set_index_npartitions_vs_ncategories(npartitions, ncategori
 @pytest.mark.parametrize("npartitions", [1, 4])
 def test_repartition_on_categoricals(npartitions):
     df = pd.DataFrame({"x": range(10), "y": list("abababcbcb")})
+    if pyarrow_strings_enabled():
+        # we need this because a CategoricalDtype backed by arrow strings
+        # is not the same as CategoricalDtype backed by object strings
+        df = to_pyarrow_string(df)
+
     ddf = dd.from_pandas(df, npartitions=2)
     ddf["y"] = ddf["y"].astype("category")
     ddf2 = ddf.repartition(npartitions=npartitions)
@@ -335,9 +388,9 @@ def test_categorize_nan():
     df = dd.from_pandas(
         pd.DataFrame({"A": ["a", "b", "a", float("nan")]}), npartitions=2
     )
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         df.categorize().compute()
-    assert len(record) == 0
+    assert not record
 
 
 def get_cat(x):
@@ -358,7 +411,7 @@ def test_return_type_known_categories():
     df["A"] = df["A"].astype("category")
     dask_df = dd.from_pandas(df, 2)
     ret_type = dask_df.A.cat.as_known()
-    assert isinstance(ret_type, dd.core.Series)
+    assert isinstance(ret_type, dd.Series)
 
 
 class TestCategoricalAccessor:
@@ -431,9 +484,14 @@ class TestCategoricalAccessor:
         da = da.cat.as_unknown()
         assert not da.cat.known
 
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError, match="with unknown categories"):
             da.cat.categories
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError, match="with unknown categories"):
+            da.cat.codes
+        # Also AttributeError so glob searching in IPython such as `da.cat.*?` works
+        with pytest.raises(AttributeError, match="with unknown categories"):
+            da.cat.categories
+        with pytest.raises(AttributeError, match="with unknown categories"):
             da.cat.codes
 
         db = da.cat.set_categories(["a", "b", "c"])

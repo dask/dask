@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import binascii
 import hashlib
-
 
 hashers = []  # In decreasing performance order
 
@@ -87,7 +88,7 @@ def hash_buffer(buf, hasher=None):
             return hasher(buf)
         except (TypeError, OverflowError):
             pass
-    raise TypeError("unsupported type for hashing: %s" % (type(buf),))
+    raise TypeError(f"unsupported type for hashing: {type(buf)}")
 
 
 def hash_buffer_hex(buf, hasher=None):

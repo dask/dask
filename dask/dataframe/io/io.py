@@ -1,41 +1,44 @@
-from math import ceil
-from operator import getitem
-import os
+from __future__ import annotations
+
+import bisect
 from threading import Lock
+from typing import TYPE_CHECKING
 
-import pandas as pd
 import numpy as np
-from tlz import merge
+import pandas as pd
 
-from ...base import tokenize
-from ... import array as da
-from ...delayed import delayed
+from dask.blockwise import BlockwiseDepDict, blockwise
+from dask.dataframe.dispatch import meta_lib_from_array, tolist
+from dask.dataframe.utils import pyarrow_strings_enabled
+from dask.highlevelgraph import HighLevelGraph
+from dask.tokenize import tokenize
+from dask.utils import ensure_dict, is_series_like
 
-from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
-from ..shuffle import set_partition
-from ..utils import insert_meta_param_description, check_meta, make_meta, is_series_like
+if TYPE_CHECKING:
+    pass
 
-from ...utils import M, ensure_dict
 
 lock = Lock()
 
 
 def _meta_from_array(x, columns=None, index=None, meta=None):
-    """ Create empty DataFrame or Series which has correct dtype """
+    """Create empty DataFrame or Series which has correct dtype"""
 
     if x.ndim > 2:
         raise ValueError(
             "from_array does not input more than 2D array, got"
-            " array with shape %r" % (x.shape,)
+            f" array with shape {x.shape!r}"
         )
 
     if index is not None:
+        from dask.dataframe import Index
+
         if not isinstance(index, Index):
             raise ValueError("'index' must be an instance of dask.dataframe.Index")
         index = index._meta
 
     if meta is None:
-        meta = pd.DataFrame()
+        meta = meta_lib_from_array(x).DataFrame()
 
     if getattr(x.dtype, "names", None) is not None:
         # record array has named columns
@@ -45,7 +48,7 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
             raise ValueError("For a struct dtype, columns must be a list.")
         elif not all(i in x.dtype.names for i in columns):
             extra = sorted(set(columns).difference(x.dtype.names))
-            raise ValueError("dtype {0} doesn't have fields {1}".format(x.dtype, extra))
+            raise ValueError(f"dtype {x.dtype} doesn't have fields {extra}")
         fields = x.dtype.fields
         dtypes = [fields[n][0] if n in fields else "f8" for n in columns]
     elif x.ndim == 1:
@@ -67,9 +70,8 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
             columns = list(range(x.shape[1])) if x.ndim == 2 else [0]
         elif len(columns) != x.shape[1]:
             raise ValueError(
-                "Number of column names must match width of the "
-                "array. Got {0} names for {1} "
-                "columns".format(len(columns), x.shape[1])
+                "Number of column names must match width of the array. "
+                f"Got {len(columns)} names for {x.shape[1]} columns"
             )
         dtypes = [x.dtype] * len(columns)
 
@@ -77,320 +79,24 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
     return meta._constructor(data, columns=columns, index=index)
 
 
-def from_array(x, chunksize=50000, columns=None, meta=None):
-    """Read any sliceable array into a Dask Dataframe
+def _partition_from_array(data, index=None, initializer=None, **kwargs):
+    """Create a Dask partition for either a DataFrame or Series.
 
-    Uses getitem syntax to pull slices out of the array.  The array need not be
-    a NumPy array but must support slicing syntax
+    Designed to be used with :func:`dask.blockwise.blockwise`. ``data`` is the array
+    from which the partition will be created. ``index`` can be:
 
-        x[50000:100000]
+    1. ``None``, in which case each partition has an independent RangeIndex
+    2. a `tuple` with two elements, the start and stop values for a RangeIndex for
+       this partition, which gives a continuously varying RangeIndex over the
+       whole Dask DataFrame
+    3. an instance of a ``pandas.Index`` or a subclass thereof
 
-    and have 2 dimensions:
-
-        x.ndim == 2
-
-    or have a record dtype:
-
-        x.dtype == [('name', 'O'), ('balance', 'i8')]
-
-    Parameters
-    ----------
-    x : array_like
-    chunksize : int, optional
-        The number of rows per partition to use.
-    columns : list or string, optional
-        list of column names if DataFrame, single string if Series
-    meta : object, optional
-        An optional `meta` parameter can be passed for dask
-        to specify the concrete dataframe type to use for partitions of
-        the Dask dataframe. By default, pandas DataFrame is used.
-
-    Returns
-    -------
-    dask.DataFrame or dask.Series
-        A dask DataFrame/Series
+    The ``kwargs`` _must_ contain an ``initializer`` key which is set by calling
+    ``type(meta)``.
     """
-    if isinstance(x, da.Array):
-        return from_dask_array(x, columns=columns, meta=meta)
-
-    meta = _meta_from_array(x, columns, meta=meta)
-
-    divisions = tuple(range(0, len(x), chunksize))
-    divisions = divisions + (len(x) - 1,)
-    token = tokenize(x, chunksize, columns)
-    name = "from_array-" + token
-
-    dsk = {}
-    for i in range(0, int(ceil(len(x) / chunksize))):
-        data = (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
-        if is_series_like(meta):
-            dsk[name, i] = (type(meta), data, None, meta.dtype, meta.name)
-        else:
-            dsk[name, i] = (type(meta), data, None, meta.columns)
-    return new_dd_object(dsk, name, meta, divisions)
-
-
-def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
-    """
-    Construct a Dask DataFrame from a Pandas DataFrame
-
-    This splits an in-memory Pandas dataframe into several parts and constructs
-    a dask.dataframe from those parts on which Dask.dataframe can operate in
-    parallel.
-
-    Note that, despite parallelism, Dask.dataframe may not always be faster
-    than Pandas.  We recommend that you stay with Pandas for as long as
-    possible before switching to Dask.dataframe.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame or pandas.Series
-        The DataFrame/Series with which to construct a Dask DataFrame/Series
-    npartitions : int, optional
-        The number of partitions of the index to create. Note that depending on
-        the size and index of the dataframe, the output may have fewer
-        partitions than requested.
-    chunksize : int, optional
-        The number of rows per index partition to use.
-    sort: bool
-        Sort input first to obtain cleanly divided partitions or don't sort and
-        don't get cleanly divided partitions
-    name: string, optional
-        An optional keyname for the dataframe.  Defaults to hashing the input
-
-    Returns
-    -------
-    dask.DataFrame or dask.Series
-        A dask DataFrame/Series partitioned along the index
-
-    Examples
-    --------
-    >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
-    ...                   index=pd.date_range(start='20100101', periods=6))
-    >>> ddf = from_pandas(df, npartitions=3)
-    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
-    (Timestamp('2010-01-01 00:00:00', freq='D'),
-     Timestamp('2010-01-03 00:00:00', freq='D'),
-     Timestamp('2010-01-05 00:00:00', freq='D'),
-     Timestamp('2010-01-06 00:00:00', freq='D'))
-    >>> ddf = from_pandas(df.a, npartitions=3)  # Works with Series too!
-    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
-    (Timestamp('2010-01-01 00:00:00', freq='D'),
-     Timestamp('2010-01-03 00:00:00', freq='D'),
-     Timestamp('2010-01-05 00:00:00', freq='D'),
-     Timestamp('2010-01-06 00:00:00', freq='D'))
-
-    Raises
-    ------
-    TypeError
-        If something other than a ``pandas.DataFrame`` or ``pandas.Series`` is
-        passed in.
-
-    See Also
-    --------
-    from_array : Construct a dask.DataFrame from an array that has record dtype
-    read_csv : Construct a dask.DataFrame from a CSV file
-    """
-    if isinstance(getattr(data, "index", None), pd.MultiIndex):
-        raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
-
-    if not has_parallel_type(data):
-        raise TypeError("Input must be a pandas DataFrame or Series")
-
-    if (npartitions is None) == (chunksize is None):
-        raise ValueError("Exactly one of npartitions and chunksize must be specified.")
-
-    nrows = len(data)
-
-    if chunksize is None:
-        chunksize = int(ceil(nrows / npartitions))
-
-    name = name or ("from_pandas-" + tokenize(data, chunksize))
-
-    if not nrows:
-        return new_dd_object({(name, 0): data}, name, data, [None, None])
-
-    if sort and not data.index.is_monotonic_increasing:
-        data = data.sort_index(ascending=True)
-    if sort:
-        divisions, locations = sorted_division_locations(
-            data.index, chunksize=chunksize
-        )
-    else:
-        locations = list(range(0, nrows, chunksize)) + [len(data)]
-        divisions = [None] * len(locations)
-
-    dsk = {
-        (name, i): data.iloc[start:stop]
-        for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
-    }
-    return new_dd_object(dsk, name, data, divisions)
-
-
-def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
-    """Read BColz CTable into a Dask Dataframe
-
-    BColz is a fast on-disk compressed column store with careful attention
-    given to compression.  https://bcolz.readthedocs.io/en/latest/
-
-    Parameters
-    ----------
-    x : bcolz.ctable
-    chunksize : int, optional
-        The size(rows) of blocks to pull out from ctable.
-    categorize : bool, defaults to True
-        Automatically categorize all string dtypes
-    index : string, optional
-        Column to make the index
-    lock: bool or Lock
-        Lock to use when reading or False for no lock (not-thread-safe)
-
-    See Also
-    --------
-    from_array: more generic function not optimized for bcolz
-    """
-    if lock is True:
-        lock = Lock()
-
-    import dask.array as da
-    import bcolz
-
-    if isinstance(x, str):
-        x = bcolz.ctable(rootdir=x)
-    bc_chunklen = max(x[name].chunklen for name in x.names)
-    if chunksize is None and bc_chunklen > 10000:
-        chunksize = bc_chunklen
-
-    categories = dict()
-    if categorize:
-        for name in x.names:
-            if (
-                np.issubdtype(x.dtype[name], np.string_)
-                or np.issubdtype(x.dtype[name], np.unicode_)
-                or np.issubdtype(x.dtype[name], np.object_)
-            ):
-                a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
-                categories[name] = da.unique(a).compute()
-
-    columns = tuple(x.dtype.names)
-    divisions = tuple(range(0, len(x), chunksize))
-    divisions = divisions + (len(x) - 1,)
-    if x.rootdir:
-        token = tokenize(
-            (x.rootdir, os.path.getmtime(x.rootdir)),
-            chunksize,
-            categorize,
-            index,
-            kwargs,
-        )
-    else:
-        token = tokenize(
-            (id(x), x.shape, x.dtype), chunksize, categorize, index, kwargs
-        )
-    new_name = "from_bcolz-" + token
-
-    dsk = dict(
-        (
-            (new_name, i),
-            (
-                dataframe_from_ctable,
-                x,
-                (slice(i * chunksize, (i + 1) * chunksize),),
-                columns,
-                categories,
-                lock,
-            ),
-        )
-        for i in range(0, int(ceil(len(x) / chunksize)))
-    )
-
-    meta = dataframe_from_ctable(x, slice(0, 0), columns, categories, lock)
-    result = DataFrame(dsk, new_name, meta, divisions)
-
-    if index:
-        assert index in x.names
-        a = da.from_array(x[index], chunks=(chunksize * len(x.names),))
-        q = np.linspace(0, 100, len(x) // chunksize + 2)
-        divisions = tuple(da.percentile(a, q).compute())
-        return set_partition(result, index, divisions, **kwargs)
-    else:
-        return result
-
-
-def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
-    """Get DataFrame from bcolz.ctable
-
-    Parameters
-    ----------
-    x: bcolz.ctable
-    slc: slice
-    columns: list of column names or None
-
-    >>> import bcolz
-    >>> x = bcolz.ctable([[1, 2, 3, 4], [10, 20, 30, 40]], names=['a', 'b'])
-    >>> dataframe_from_ctable(x, slice(1, 3))
-       a   b
-    1  2  20
-    2  3  30
-
-    >>> dataframe_from_ctable(x, slice(1, 3), columns=['b'])
-        b
-    1  20
-    2  30
-
-    >>> dataframe_from_ctable(x, slice(1, 3), columns='b')
-    1    20
-    2    30
-    Name: b, dtype: int...
-
-    """
-    import bcolz
-
-    if columns is None:
-        columns = x.dtype.names
-    if isinstance(columns, tuple):
-        columns = list(columns)
-
-    x = x[columns]
-    if type(slc) is slice:
-        start = slc.start
-        stop = slc.stop if slc.stop < len(x) else len(x)
-    else:
-        start = slc[0].start
-        stop = slc[0].stop if slc[0].stop < len(x) else len(x)
-    idx = pd.Index(range(start, stop))
-
-    if lock:
-        lock.acquire()
-    try:
-        if isinstance(x, bcolz.ctable):
-            chunks = [x[name][slc] for name in columns]
-            if categories is not None:
-                chunks = [
-                    pd.Categorical.from_codes(
-                        np.searchsorted(categories[name], chunk), categories[name], True
-                    )
-                    if name in categories
-                    else chunk
-                    for name, chunk in zip(columns, chunks)
-                ]
-            result = pd.DataFrame(
-                dict(zip(columns, chunks)), columns=columns, index=idx
-            )
-
-        elif isinstance(x, bcolz.carray):
-            chunk = x[slc]
-            if categories is not None and columns and columns in categories:
-                chunk = pd.Categorical.from_codes(
-                    np.searchsorted(categories[columns], chunk),
-                    categories[columns],
-                    True,
-                )
-            result = pd.Series(chunk, name=columns, index=idx)
-    finally:
-        if lock:
-            lock.release()
-    return result
+    if isinstance(index, tuple):
+        index = pd.RangeIndex(*index)
+    return initializer(data, index=index, **kwargs)
 
 
 def from_dask_array(x, columns=None, index=None, meta=None):
@@ -435,53 +141,88 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     See Also
     --------
     dask.bag.to_dataframe: from dask.bag
-    dask.dataframe._Frame.values: Reverse conversion
-    dask.dataframe._Frame.to_records: Reverse conversion
     """
     meta = _meta_from_array(x, columns, index, meta=meta)
 
-    if x.ndim == 2 and len(x.chunks[1]) > 1:
-        x = x.rechunk({1: x.shape[1]})
-
-    name = "from-dask-array" + tokenize(x, columns)
-    to_merge = []
+    name = "from-dask-array-" + tokenize(x, columns)
+    graph_dependencies = [x]
+    arrays_and_indices = [x.name, "ij" if x.ndim == 2 else "i"]
+    numblocks = {x.name: x.numblocks}
 
     if index is not None:
-        if not isinstance(index, Index):
-            raise ValueError("'index' must be an instance of dask.dataframe.Index")
+        # An index is explicitly given by the caller, so we can pass it through to the
+        # initializer after a few checks.
         if index.npartitions != x.numblocks[0]:
             msg = (
                 "The index and array have different numbers of blocks. "
-                "({} != {})".format(index.npartitions, x.numblocks[0])
+                f"({index.npartitions} != {x.numblocks[0]})"
             )
             raise ValueError(msg)
         divisions = index.divisions
-        to_merge.append(ensure_dict(index.dask))
-        index = index.__dask_keys__()
+        graph_dependencies.append(index)
+        arrays_and_indices.extend([index._name, "i"])
+        numblocks[index._name] = (index.npartitions,)
 
     elif np.isnan(sum(x.shape)):
+        # The shape of the incoming array is not known in at least one dimension. As
+        # such, we can't create an index for the entire output DataFrame and we set
+        # the divisions to None to represent that.
         divisions = [None] * (len(x.chunks[0]) + 1)
-        index = [None] * len(x.chunks[0])
     else:
+        # The shape of the incoming array is known and we don't have an explicit index.
+        # Create a mapping of chunk number in the incoming array to
+        # (start row, stop row) tuples. These tuples will be used to create a sequential
+        # RangeIndex later on that is continuous over the whole DataFrame.
+        n_elements = sum(x.chunks[0])
         divisions = [0]
-        for c in x.chunks[0]:
-            divisions.append(divisions[-1] + c)
-        index = [
-            (np.arange, a, b, 1, "i8") for a, b in zip(divisions[:-1], divisions[1:])
-        ]
-        divisions[-1] -= 1
+        stop = 0
+        index_mapping = {}
+        for i, increment in enumerate(x.chunks[0]):
+            stop += increment
+            index_mapping[(i,)] = (divisions[i], stop)
 
-    dsk = {}
-    for i, (chunk, ind) in enumerate(zip(x.__dask_keys__(), index)):
-        if x.ndim == 2:
-            chunk = chunk[0]
-        if is_series_like(meta):
-            dsk[name, i] = (type(meta), chunk, ind, x.dtype, meta.name)
-        else:
-            dsk[name, i] = (type(meta), chunk, ind, meta.columns)
+            # last division corrected, even if there are empty chunk(s) at the end
+            if stop == n_elements:
+                stop -= 1
 
-    to_merge.extend([ensure_dict(x.dask), dsk])
-    return new_dd_object(merge(*to_merge), name, meta, divisions)
+            divisions.append(stop)
+
+        arrays_and_indices.extend([BlockwiseDepDict(mapping=index_mapping), "i"])
+
+    if is_series_like(meta):
+        kwargs = {"dtype": x.dtype, "name": meta.name, "initializer": type(meta)}
+    else:
+        kwargs = {"columns": meta.columns, "initializer": type(meta)}
+
+    blk = blockwise(
+        _partition_from_array,
+        name,
+        "i",
+        *arrays_and_indices,
+        numblocks=numblocks,
+        concatenate=True,
+        # kwargs passed through to the DataFrame/Series initializer
+        **kwargs,
+    )
+
+    graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
+
+    from dask.array.optimization import optimize
+    from dask.dataframe.dask_expr._collection import from_graph, new_collection
+    from dask.dataframe.dask_expr._expr import ArrowStringConversion
+    from dask.utils import key_split
+
+    keys = [(name, i) for i in range(len(divisions) - 1)]
+    result = from_graph(
+        optimize(ensure_dict(graph), keys),
+        meta,
+        divisions,
+        keys,
+        key_split(name),
+    )
+    if pyarrow_strings_enabled():
+        return new_collection(ArrowStringConversion(result.expr))
+    return result
 
 
 def _link(token, result):
@@ -493,124 +234,23 @@ def _link(token, result):
     return None
 
 
-def _df_to_bag(df, index=False):
+def _df_to_bag(df, index=False, format="tuple"):
     if isinstance(df, pd.DataFrame):
-        return list(map(tuple, df.itertuples(index)))
+        if format == "tuple":
+            return list(map(tuple, df.itertuples(index)))
+        elif format == "dict":
+            if index:
+                return [
+                    {"index": idx, **values}
+                    for values, idx in zip(df.to_dict("records"), df.index)
+                ]
+            else:
+                return df.to_dict(orient="records")
     elif isinstance(df, pd.Series):
-        return list(df.iteritems()) if index else list(df)
-
-
-def to_bag(df, index=False):
-    """Create Dask Bag from a Dask DataFrame
-
-    Parameters
-    ----------
-    index : bool, optional
-        If True, the elements are tuples of ``(index, value)``, otherwise
-        they're just the ``value``.  Default is False.
-
-    Examples
-    --------
-    >>> bag = df.to_bag()  # doctest: +SKIP
-    """
-    from ...bag.core import Bag
-
-    if not isinstance(df, (DataFrame, Series)):
-        raise TypeError("df must be either DataFrame or Series")
-    name = "to_bag-" + tokenize(df, index)
-    dsk = dict(
-        ((name, i), (_df_to_bag, block, index))
-        for (i, block) in enumerate(df.__dask_keys__())
-    )
-    dsk.update(df.__dask_optimize__(df.__dask_graph__(), df.__dask_keys__()))
-    return Bag(dsk, name, df.npartitions)
-
-
-def to_records(df):
-    """Create Dask Array from a Dask Dataframe
-
-    Warning: This creates a dask.array without precise shape information.
-    Operations that depend on shape information, like slicing or reshaping,
-    will not work.
-
-    Examples
-    --------
-    >>> df.to_records()  # doctest: +SKIP
-    dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,), chunktype=numpy.ndarray>  # noqa: E501
-
-    See Also
-    --------
-    dask.dataframe._Frame.values
-    dask.dataframe.from_dask_array
-    """
-    return df.map_partitions(M.to_records)
-
-
-@insert_meta_param_description
-def from_delayed(
-    dfs, meta=None, divisions=None, prefix="from-delayed", verify_meta=True
-):
-    """Create Dask DataFrame from many Dask Delayed objects
-
-    Parameters
-    ----------
-    dfs : list of Delayed
-        An iterable of ``dask.delayed.Delayed`` objects, such as come from
-        ``dask.delayed`` These comprise the individual partitions of the
-        resulting dataframe.
-    $META
-    divisions : tuple, str, optional
-        Partition boundaries along the index.
-        For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
-        For string 'sorted' will compute the delayed values to find index
-        values.  Assumes that the indexes are mutually sorted.
-        If None, then won't use index information
-    prefix : str, optional
-        Prefix to prepend to the keys.
-    verify_meta : bool, optional
-        If True check that the partitions have consistent metadata, defaults to True.
-    """
-    from dask.delayed import Delayed
-
-    if isinstance(dfs, Delayed):
-        dfs = [dfs]
-    dfs = [
-        delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
-        for df in dfs
-    ]
-    for df in dfs:
-        if not isinstance(df, Delayed):
-            raise TypeError("Expected Delayed object, got %s" % type(df).__name__)
-
-    if meta is None:
-        meta = delayed(make_meta)(dfs[0]).compute()
-    else:
-        meta = make_meta(meta)
-
-    name = prefix + "-" + tokenize(*dfs)
-    dsk = merge(df.dask for df in dfs)
-    if verify_meta:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
-    else:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = df.key
-
-    if divisions is None or divisions == "sorted":
-        divs = [None] * (len(dfs) + 1)
-    else:
-        divs = tuple(divisions)
-        if len(divs) != len(dfs) + 1:
-            raise ValueError("divisions should be a tuple of len(dfs) + 1")
-
-    df = new_dd_object(dsk, name, meta, divs)
-
-    if divisions == "sorted":
-        from ..shuffle import compute_and_set_divisions
-
-        df = compute_and_set_divisions(df)
-
-    return df
+        if format == "tuple":
+            return list(df.items()) if index else list(df)
+        elif format == "dict":
+            return df.to_frame().to_dict(orient="records")
 
 
 def sorted_division_locations(seq, npartitions=None, chunksize=None):
@@ -628,10 +268,10 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
 
     >>> L = ['A', 'A', 'A', 'A', 'B', 'B', 'B', 'C']
     >>> sorted_division_locations(L, chunksize=3)
-    (['A', 'B', 'C'], [0, 4, 8])
+    (['A', 'B', 'C', 'C'], [0, 4, 7, 8])
 
     >>> sorted_division_locations(L, chunksize=2)
-    (['A', 'B', 'C'], [0, 4, 8])
+    (['A', 'B', 'C', 'C'], [0, 4, 7, 8])
 
     >>> sorted_division_locations(['A'], chunksize=2)
     (['A', 'A'], [0, 1])
@@ -639,27 +279,91 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     if (npartitions is None) == (chunksize is None):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
+    # Convert from an ndarray to a plain list so that
+    # any divisions we extract from seq are plain Python scalars.
+    seq = tolist(seq)
+    # we use bisect later, so we need sorted.
+    seq_unique = sorted(set(seq))
+    duplicates = len(seq_unique) < len(seq)
+    enforce_exact = False
+
+    if duplicates:
+        offsets = [bisect.bisect_left(seq, x) for x in seq_unique]
+        enforce_exact = npartitions and len(offsets) >= npartitions
+    else:
+        offsets = seq_unique = None
+
+    # Define chunksize and residual so that
+    # npartitions can be exactly satisfied
+    # when duplicates is False
+    residual = 0
+    subtract_drift = False
     if npartitions:
-        chunksize = ceil(len(seq) / npartitions)
+        chunksize = len(seq) // npartitions
+        residual = len(seq) % npartitions
+        subtract_drift = True
 
-    positions = [0]
-    values = [seq[0]]
-    for pos in range(0, len(seq), chunksize):
-        if pos <= positions[-1]:
-            continue
-        while pos + 1 < len(seq) and seq[pos - 1] == seq[pos]:
-            pos += 1
-        values.append(seq[pos])
-        if pos == len(seq) - 1:
-            pos += 1
-        positions.append(pos)
+    def chunksizes(ind):
+        # Helper function to satisfy npartitions
+        return chunksize + int(ind < residual)
 
-    if positions[-1] != len(seq):
-        positions.append(len(seq))
-        values.append(seq[-1])
+    # Always start with 0th item in seqarr,
+    # and then try to take chunksize steps
+    # along the seqarr array
+    divisions = [seq[0]]
+    locations = [0]
+    i = chunksizes(0)
+    ind = None  # ind cache (sometimes avoids nonzero call)
+    drift = 0  # accumulated drift away from ideal chunksizes
+    divs_remain = npartitions - len(divisions) if enforce_exact else None
+    while i < len(seq):
+        # Map current position selection (i)
+        # to the corresponding division value (div)
+        div = seq[i]
+        # pos is the position of the first occurrence of
+        # div (which is i when seq has no duplicates)
+        if duplicates:
+            # Note: cupy requires casts to `int` below
+            if ind is None:
+                ind = bisect.bisect_left(seq_unique, seq[i])
+            if enforce_exact:
+                # Avoid "over-stepping" too many unique
+                # values when npartitions is approximately
+                # equal to len(offsets)
+                offs_remain = len(offsets) - ind
+                if divs_remain > offs_remain:
+                    ind -= divs_remain - offs_remain
+                    i = offsets[ind]
+                    div = seq[i]
+            pos = int(offsets[ind])
+        else:
+            pos = i
+        if div <= divisions[-1]:
+            # pos overlaps with divisions.
+            # Try the next element on the following pass
+            if duplicates:
+                ind += 1
+                # Note: cupy requires cast to `int`
+                i = int(offsets[ind]) if ind < len(offsets) else len(seq)
+            else:
+                i += 1
+        else:
+            # pos does not overlap with divisions.
+            # Append candidate pos/div combination, and
+            # take another chunksize step
+            if subtract_drift:
+                # Only subtract drift when user specified npartitions
+                drift = drift + ((pos - locations[-1]) - chunksizes(len(divisions) - 1))
+            if enforce_exact:
+                divs_remain -= 1
+            i = pos + max(1, chunksizes(len(divisions)) - drift)
+            divisions.append(div)
+            locations.append(pos)
+            ind = None
 
-    return values, positions
+    # The final element of divisions/locations
+    # will always be the same
+    divisions.append(seq[-1])
+    locations.append(len(seq))
 
-
-DataFrame.to_records.__doc__ = to_records.__doc__
-DataFrame.to_bag.__doc__ = to_bag.__doc__
+    return divisions, locations
