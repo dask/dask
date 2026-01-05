@@ -7,7 +7,6 @@ from typing import Literal
 
 import numpy as np
 
-from dask import config
 from dask._task_spec import DataNode, List, Task, TaskRef
 from dask.array._array_expr._expr import ArrayExpr
 from dask.array.chunk import getitem
@@ -139,33 +138,30 @@ class Shuffle(ArrayExpr):
         return tuple(output_chunks)
 
     @functools.cached_property
-    def _chunksize_tolerance(self):
-        return config.get("array.chunk-size-tolerance")
-
-    @functools.cached_property
     def _chunk_size_limit(self):
-        return int(
-            sum(self.array.chunks[self.axis])
-            / len(self.array.chunks[self.axis])
-            * self._chunksize_tolerance
-        )
+        """Max input chunk size on the shuffle axis."""
+        return max(self.array.chunks[self.axis])
 
     @functools.cached_property
     def _new_chunks(self):
         current_chunk, new_chunks = [], []
+        limit = self._chunk_size_limit
         for idx in copy.deepcopy(self.indexer):
-            if (
-                len(current_chunk) + len(idx) > self._chunk_size_limit
-                and len(current_chunk) > 0
-            ):
+            # Split oversized groups into limit-sized pieces
+            if len(idx) > limit:
+                # Flush current chunk first
+                if current_chunk:
+                    new_chunks.append(current_chunk)
+                    current_chunk = []
+                # Split large group into limit-sized pieces
+                for i in range(0, len(idx), limit):
+                    new_chunks.append(idx[i : i + limit])
+            elif len(current_chunk) + len(idx) > limit and len(current_chunk) > 0:
                 new_chunks.append(current_chunk)
                 current_chunk = idx.copy()
             else:
                 current_chunk.extend(idx)
-                if (
-                    len(current_chunk)
-                    > self._chunk_size_limit / self._chunksize_tolerance
-                ):
+                if len(current_chunk) > limit:
                     new_chunks.append(current_chunk)
                     current_chunk = []
         if len(current_chunk) > 0:

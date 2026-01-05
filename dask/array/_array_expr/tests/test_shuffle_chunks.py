@@ -13,17 +13,19 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_contiguous_indexing_aligns_with_input_chunks():
-    """np.repeat pattern: outputs align with input chunks -> fewer output chunks."""
+def test_contiguous_indexing_splits_to_input_chunk_size():
+    """np.repeat pattern: output chunks stay close to input chunk size."""
     np_x = np.arange(100 * 10).reshape(100, 10)
-    x = da.from_array(np_x, chunks=(25, 10))  # 4 input chunks
+    x = da.from_array(np_x, chunks=(25, 10))  # 4 input chunks of 25 each
 
     # Contiguous: each input element repeated 3 times
+    # Each input chunk of 25 elements becomes 75 output elements
+    # These get split into chunks of 25, so 3 output chunks per input chunk = 12 total
     indexer = np.repeat(np.arange(100), 3)  # [0,0,0,1,1,1,...,99,99,99]
     result = x[indexer, :]
 
-    # Output chunks align with input chunks (not one per output element)
-    assert result.numblocks[0] == x.numblocks[0]  # 4, not 300
+    assert max(result.chunks[0]) == 25
+    assert result.numblocks[0] == 12  # 4 input chunks * 3 splits each
     assert_eq(result, np_x[indexer, :])
 
 
@@ -49,3 +51,21 @@ def test_identity_indexing_no_shuffle():
 
     assert not isinstance(result.expr, Shuffle)
     assert_eq(result, np_x)
+
+
+def test_large_repeat_splits_oversized_groups():
+    """np.repeat with large factor should not create oversized chunks.
+
+    When each element is repeated many times, the output chunks should be
+    split to match input chunk sizes, not grow unboundedly.
+    """
+    np_x = np.arange(100 * 10).reshape(100, 10)
+    x = da.from_array(np_x, chunks=(25, 10))  # 4 input chunks, 25 elements each
+
+    # Each element repeated 100 times -> naive would give chunks of 25*100=2500
+    # With max input chunk size of 25, groups get split into chunks of 25
+    indexer = np.repeat(np.arange(100), 100)
+    result = x[indexer, :]
+
+    assert max(result.chunks[0]) == 25
+    assert_eq(result, np_x[indexer, :])
