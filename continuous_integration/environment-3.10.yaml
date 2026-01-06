@@ -22,6 +22,7 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
+  - coverage
   - moto<5
   # Optional dependencies
   - mimesis
@@ -39,7 +40,6 @@ dependencies:
   - numexpr
   - sqlalchemy
   - pyarrow=14.0.1
-  - coverage
   - jsonschema
   # other -- IO
   - boto3
