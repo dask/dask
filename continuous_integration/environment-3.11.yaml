@@ -22,11 +22,19 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
-  - moto<5
-  # Optional dependencies
-  - mimesis
+  - coverage
+  # key optional dependencies
   - numpy
   - pandas
+  - pyarrow
+  - distributed  # Overridden by git tip below; used to pull in dependencies  
+  # optional s3 I/O
+  - boto3
+  - botocore
+  - moto<5
+  - s3fs>=2021.9.0
+  # other optional dependencies  
+  - mimesis
   - numba
   - flask
   - h5py
@@ -37,20 +45,13 @@ dependencies:
   - tiledb
   - xarray
   - sqlalchemy
-  - pyarrow
-  - coverage
   - jsonschema
-  # other -- IO
-  - boto3
-  - botocore
   - bokeh
   - bottleneck
   - httpretty
   - aiohttp
-  - s3fs>=2021.9.0
   - crick
   - cytoolz
-  - distributed
   - ipython
   - ipycytoscape
   - ipywidgets
