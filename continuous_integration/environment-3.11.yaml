@@ -26,6 +26,7 @@ dependencies:
   # key optional dependencies
   - numpy
   - pandas
+  - pyarrow
   - distributed  # Overridden by git tip below; used to pull in dependencies  
   # optional s3 I/O
   - boto3
