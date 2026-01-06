@@ -23,8 +23,12 @@ dependencies:
   - pytest-timeout
   - pytest-xdist
   - coverage
+  # optional s3 I/O
+  - boto3
+  - botocore
   - moto<5
-  # Optional dependencies
+  - s3fs>=2021.9.0
+  # other optional dependencies  
   - mimesis
   - numpy
   - pandas
@@ -41,13 +45,10 @@ dependencies:
   - pyarrow
   - jsonschema
   # other -- IO
-  - boto3
-  - botocore
   - bokeh
   - bottleneck
   - httpretty
   - aiohttp
-  - s3fs>=2021.9.0
   - crick
   - cytoolz
   - distributed
