@@ -23,6 +23,10 @@ dependencies:
   - pytest-timeout
   - pytest-xdist
   - coverage
+  # key optional dependencies
+  - numpy
+  - pandas
+  - distributed  # Overridden by git tip below; used to pull in dependencies  
   # optional s3 I/O
   - boto3
   - botocore
@@ -30,8 +34,6 @@ dependencies:
   - s3fs>=2021.9.0
   # other optional dependencies  
   - mimesis
-  - numpy
-  - pandas
   - numba
   - flask
   - h5py
@@ -42,7 +44,6 @@ dependencies:
   - tiledb
   - xarray
   - sqlalchemy
-  - pyarrow
   - jsonschema
   - bokeh
   - bottleneck
@@ -50,7 +51,6 @@ dependencies:
   - aiohttp
   - crick
   - cytoolz
-  - distributed  # Overridden by git tip below
   - ipython
   - ipycytoscape
   - ipywidgets
