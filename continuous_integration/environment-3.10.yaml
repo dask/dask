@@ -45,14 +45,13 @@ dependencies:
   - sqlalchemy
   - pyarrow=14.0.1
   - jsonschema
-  # other -- IO
   - bokeh
   - bottleneck
   - httpretty
   - aiohttp
   - crick
   - cytoolz
-  - distributed
+  - distributed  # Overridden by git tip below
   - ipython
   - ipycytoscape
   - ipywidgets
