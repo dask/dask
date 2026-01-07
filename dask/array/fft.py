@@ -164,7 +164,7 @@ def fft_wrap(fft_func, kind=None, dtype=None, allow_fftpack=False):
     try:
         out_chunk_fn = _out_chunk_fns[kind.rstrip("2n")]
     except KeyError:
-        raise ValueError("Given unknown `kind` %s." % kind)
+        raise ValueError(f"Given unknown `kind` {kind}.")
 
     def func(a, s=None, axes=None, norm=None):
         a = asarray(a)
@@ -185,9 +185,8 @@ def fft_wrap(fft_func, kind=None, dtype=None, allow_fftpack=False):
                     axes = tuple(range(len(s)))
             else:
                 axes = (-1,)
-        else:
-            if len(set(axes)) < len(axes):
-                raise ValueError("Duplicate axes not allowed.")
+        elif len(set(axes)) < len(axes):
+            raise ValueError("Duplicate axes not allowed.")
 
         _dtype = dtype
         if _dtype is None:
@@ -227,7 +226,7 @@ def fft_wrap(fft_func, kind=None, dtype=None, allow_fftpack=False):
 
     func_mod = inspect.getmodule(fft_func)
     func_name = fft_func.__name__
-    func_fullname = func_mod.__name__ + "." + func_name
+    func_fullname = f"{func_mod.__name__}.{func_name}"
     if fft_func.__doc__ is not None:
         func.__doc__ = fft_preamble % (2 * (func_fullname,))
         func.__doc__ += fft_func.__doc__

@@ -22,44 +22,41 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
-  - moto<5
-  # Optional dependencies
-  - mimesis
+  - coverage
+  # key optional dependencies
   - numpy=1.24
   - pandas=2.1
+  - pyarrow=14.0.1
+  - distributed  # Overridden by git tip below; used to pull in dependencies
+  # optional s3 I/O
+  - boto3
+  - botocore
+  - moto<5
+  - s3fs>=2021.9.0
+  # other optional dependencies
+  - mimesis
   - numba
   - flask
   - h5py
   - pytables
   - zarr
-  # `tiledb-py=0.17.5` lead to strange seg faults in CI.
-  # We should unpin when possible.
-  # https://github.com/dask/dask/pull/9569
-  - tiledb-py<0.17.4
-  - pyspark
+  - pyspark !=4.1.0  # avoid regression in Windows
+  - tiledb-py
   - tiledb
   - xarray
-  - numexpr>=2.8  # Something is pinning it to 2.7
+  - numexpr
   - sqlalchemy
-  - pyarrow=14.0.1
-  - coverage
   - jsonschema
-  # other -- IO
-  - boto3
-  - botocore
   - bokeh
   - bottleneck
   - httpretty
   - aiohttp
-  - s3fs>=2021.9.0
   - crick
   - cytoolz
-  - distributed
   - ipython
   - ipycytoscape
-  # until https://github.com/jupyter-widgets/ipywidgets/issues/3731 is fixed
-  - ipywidgets<8.0.5
-  - ipykernel<6.22.0
+  - ipywidgets
+  - ipykernel
   - lz4
   - psutil
   - requests

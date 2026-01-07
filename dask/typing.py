@@ -8,6 +8,7 @@ from typing import (
     Any,
     Literal,
     Protocol,
+    TypeAlias,
     TypeVar,
     Union,
     runtime_checkable,
@@ -15,9 +16,6 @@ from typing import (
 
 if TYPE_CHECKING:
     # IPython import is relatively slow. Avoid if not necessary
-    # TODO import from typing (requires Python >=3.10)
-    from typing import TypeAlias
-
     from IPython.display import DisplayObject
 
 CollType = TypeVar("CollType", bound="DaskCollection")
@@ -25,7 +23,7 @@ CollType_co = TypeVar("CollType_co", bound="DaskCollection", covariant=True)
 PostComputeCallable = Callable
 
 
-Key: TypeAlias = Union[str, int, float, tuple["Key", ...]]
+Key: TypeAlias = str | int | float | tuple["Key", ...]
 # FIXME: This type is a little misleading. Low level graphs are often
 # MutableMappings but HLGs are not
 Graph: TypeAlias = Mapping[Key, Any]

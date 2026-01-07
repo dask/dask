@@ -147,8 +147,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
             pass
         else:
             raise TypeError(
-                "'workers' annotation must be a sequence of str, a str or a callable, but got %s."
-                % annotations["workers"]
+                "'workers' annotation must be a sequence of str, a str or a callable, but got {}.".format(
+                    annotations["workers"]
+                )
             )
 
     if (
@@ -157,8 +158,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
         and not callable(annotations["priority"])
     ):
         raise TypeError(
-            "'priority' annotation must be a Number or a callable, but got %s"
-            % annotations["priority"]
+            "'priority' annotation must be a Number or a callable, but got {}".format(
+                annotations["priority"]
+            )
         )
 
     if (
@@ -167,8 +169,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
         and not callable(annotations["retries"])
     ):
         raise TypeError(
-            "'retries' annotation must be a Number or a callable, but got %s"
-            % annotations["retries"]
+            "'retries' annotation must be a Number or a callable, but got {}".format(
+                annotations["retries"]
+            )
         )
 
     if (
@@ -177,8 +180,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
         and not callable(annotations["resources"])
     ):
         raise TypeError(
-            "'resources' annotation must be a dict, but got %s"
-            % annotations["resources"]
+            "'resources' annotation must be a dict, but got {}".format(
+                annotations["resources"]
+            )
         )
 
     if (
@@ -187,8 +191,9 @@ def annotate(**annotations: Any) -> Iterator[None]:
         and not callable(annotations["allow_other_workers"])
     ):
         raise TypeError(
-            "'allow_other_workers' annotations must be a bool or a callable, but got %s"
-            % annotations["allow_other_workers"]
+            "'allow_other_workers' annotations must be a bool or a callable, but got {}".format(
+                annotations["allow_other_workers"]
+            )
         )
     ctx_annot = _annotations.get()
     if ctx_annot is None:
@@ -491,7 +496,7 @@ def unpack_collections(*args, traverse=True):
             return TaskRef(tok)
 
         tok = uuid.uuid4().hex
-        tsk: DataNode | Task  # type: ignore
+        tsk: DataNode | Task  # type: ignore[annotation-unchecked]
         if not traverse:
             tsk = DataNode(None, expr)
         else:
@@ -573,9 +578,9 @@ def optimize(*args, traverse=True, **kwargs):
     >>> a2, b2 = dask.optimize(a, b)
 
     >>> a2.compute() == a.compute()
-    np.True_
+    True
     >>> b2.compute() == b.compute()
-    np.True_
+    True
     """
     # TODO: This API is problematic. The approach to using postpersist forces us
     # to materialize the graph. Most low level optimizations will materialize as
@@ -636,12 +641,12 @@ def compute(
     >>> a = da.arange(10, chunks=2).sum()
     >>> b = da.arange(10, chunks=2).mean()
     >>> dask.compute(a, b)
-    (np.int64(45), np.float64(4.5))
+    (45, 4.5)
 
     By default, dask objects inside python collections will also be computed:
 
     >>> dask.compute({'a': a, 'b': b, 'c': 1})
-    ({'a': np.int64(45), 'b': np.float64(4.5), 'c': 1},)
+    ({'a': 45, 'b': 4.5, 'c': 1},)
     """
 
     collections, repack = unpack_collections(*args, traverse=traverse)
@@ -868,7 +873,7 @@ def visualize_dsk(
             if color.startswith("order-"):
 
                 def label(x):
-                    return str(o[x]) + "-" + str(values[x])
+                    return f"{o[x]}-{values[x]}"
 
         else:
             values = o
@@ -891,7 +896,7 @@ def visualize_dsk(
         }
         kwargs["data_attributes"] = {k: {"color": v} for k, v in data_colors.items()}
     elif color:
-        raise NotImplementedError("Unknown value color=%s" % color)
+        raise NotImplementedError(f"Unknown value color={color}")
 
     # Determine which engine to dispatch to, first checking the kwarg, then config,
     # then whichever of graphviz or ipycytoscape are installed, in that order.
@@ -1038,10 +1043,8 @@ def _colorize(t):
     '#002080'
     """
     t = t[:3]
-    i = sum(v * 256 ** (len(t) - i - 1) for i, v in enumerate(t))
-    h = hex(int(i))[2:].upper()
-    h = "0" * (6 - len(h)) + h
-    return "#" + h
+    i = sum(v << 8 * i for i, v in enumerate(reversed(t)))
+    return f"#{i:>06X}"
 
 
 named_schedulers: dict[str, SchedulerGetCallable] = {
@@ -1152,8 +1155,9 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                 return _ensure_not_async(client)
             else:
                 raise ValueError(
-                    "Expected one of [distributed, %s]"
-                    % ", ".join(sorted(named_schedulers))
+                    "Expected one of [distributed, {}]".format(
+                        ", ".join(sorted(named_schedulers))
+                    )
                 )
         elif isinstance(scheduler, Executor):
             # Get `num_workers` from `Executor`'s `_max_workers` attribute.
@@ -1164,7 +1168,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             assert isinstance(num_workers, Integral) and num_workers > 0
             return partial(local.get_async, scheduler.submit, num_workers)
         else:
-            raise ValueError("Unexpected scheduler: %s" % repr(scheduler))
+            raise ValueError(f"Unexpected scheduler: {scheduler!r}")
         # else:  # try to connect to remote scheduler with this name
         #     return get_client(scheduler).get
 

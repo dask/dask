@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("distributed")
 
-from distributed.utils_test import *  # noqa
+from distributed.utils_test import *  # noqa: F403
 
 from dask.dataframe.dask_expr import from_pandas
 from dask.dataframe.dask_expr.tests._util import _backend_library
@@ -35,6 +35,6 @@ def test_analyze(df, client, tmpdir):
         lambda x: x, meta=df._meta.groupby(df.columns[1]).apply(lambda x: x)
     )
     digraph = expr.analyze(filename=filename)
-    assert os.path.exists(filename + ".svg")
+    assert os.path.exists(f"{filename}.svg")
     for exp in expr.optimize().walk():
         assert any(exp._name in el for el in digraph.body)

@@ -325,8 +325,8 @@ class SimpleShuffle(PartitionsFiltered, Shuffle):
 
     def _layer(self):
         """Construct graph for a simple shuffle operation."""
-        shuffle_group_name = "group-" + self._name
-        split_name = "split-" + self._name
+        shuffle_group_name = f"group-{self._name}"
+        split_name = f"split-{self._name}"
         npartitions = self.npartitions_out
 
         dsk = {}
@@ -417,8 +417,8 @@ class TaskShuffle(SimpleShuffle):
                 name = f"stage-{stage}-{self._name}"
                 _filter = None
 
-            shuffle_group_name = "group-" + name
-            split_name = "split-" + name
+            shuffle_group_name = f"group-{name}"
+            split_name = f"split-{name}"
 
             for global_part, part in enumerate(parts_out):
                 out = inputs[part]
@@ -472,7 +472,7 @@ class TaskShuffle(SimpleShuffle):
                         )
 
         if npartitions != npartitions_input:
-            repartition_group_name = "repartition-group-" + name
+            repartition_group_name = f"repartition-group-{name}"
 
             dsk2 = {
                 (repartition_group_name, i): (
@@ -514,19 +514,19 @@ class DiskShuffle(SimpleShuffle):
 
         always_new_token = uuid.uuid1().hex
 
-        p = ("zpartd-" + always_new_token,)
+        p = (f"zpartd-{always_new_token}",)
         encode_cls = partd_encode_dispatch(df._meta)
         dsk1 = {p: (maybe_buffered_partd(encode_cls=encode_cls),)}
 
         # Partition data on disk
-        name = "shuffle-partition-" + always_new_token
+        name = f"shuffle-partition-{always_new_token}"
         dsk2 = {
             (name, i): (self._shuffle_group, key, column, self._partitions, p)
             for i, key in enumerate(df.__dask_keys__())
         }
 
         # Barrier
-        barrier_token = ("barrier-" + always_new_token,)
+        barrier_token = (f"barrier-{always_new_token}",)
         dsk3 = {barrier_token: (barrier, list(dsk2))}
 
         # Collect groups
@@ -572,7 +572,7 @@ class P2PShuffle(SimpleShuffle):
         token = self._name.split("-")[-1]
         shuffle_id = ShuffleId(token)
         _barrier_key = barrier_key(shuffle_id)
-        name = "shuffle-transfer-" + token
+        name = f"shuffle-transfer-{token}"
 
         parts_out = (
             self._partitions if self._filtered else list(range(self.npartitions_out))
@@ -735,7 +735,7 @@ class AssignPartitioningIndex(Blockwise):
     _preserves_partitioning_information = True
 
     @staticmethod
-    def operation(df, index, name: str, npartitions: int, meta, index_shuffle: bool):  # type: ignore
+    def operation(df, index, name: str, npartitions: int, meta, index_shuffle: bool):
         """Construct a hash-based partitioning index"""
 
         def _get_index(idx, obj):
@@ -1316,7 +1316,7 @@ class SetIndexBlockwise(Blockwise):
             )
 
 
-divisions_lru = LRU(10)  # type: ignore
+divisions_lru = LRU(10)  # type: ignore[var-annotated]
 
 
 def _get_divisions(
@@ -1379,7 +1379,7 @@ def _calculate_divisions(
         else:
             raise e
 
-    sizes = []  # type: ignore
+    sizes = []  # type: ignore[var-annotated]
 
     empty_dataframe_detected = pd.isna(divisions).all()
     if empty_dataframe_detected:

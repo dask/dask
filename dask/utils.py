@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import codecs
+import contextlib
 import functools
 import gc
 import inspect
@@ -229,9 +230,9 @@ def _deprecated_kwarg(
             if old_arg_value is not no_default:
                 if new_arg_name is None:
                     msg = (
-                        f"the {repr(old_arg_name)} keyword is deprecated and "
+                        f"the {old_arg_name!r} keyword is deprecated and "
                         "will be removed in a future version. Please take "
-                        f"steps to stop the use of {repr(old_arg_name)}"
+                        f"steps to stop the use of {old_arg_name!r}"
                     ) + comment_
                     warnings.warn(msg, FutureWarning, stacklevel=stacklevel)
                     kwargs[old_arg_name] = old_arg_value
@@ -243,22 +244,22 @@ def _deprecated_kwarg(
                     else:
                         new_arg_value = mapping.get(old_arg_value, old_arg_value)
                     msg = (
-                        f"the {old_arg_name}={repr(old_arg_value)} keyword is "
+                        f"the {old_arg_name}={old_arg_value!r} keyword is "
                         "deprecated, use "
-                        f"{new_arg_name}={repr(new_arg_value)} instead."
+                        f"{new_arg_name}={new_arg_value!r} instead."
                     )
                 else:
                     new_arg_value = old_arg_value
                     msg = (
-                        f"the {repr(old_arg_name)} keyword is deprecated, "
-                        f"use {repr(new_arg_name)} instead."
+                        f"the {old_arg_name!r} keyword is deprecated, "
+                        f"use {new_arg_name!r} instead."
                     )
 
                 warnings.warn(msg + comment_, FutureWarning, stacklevel=stacklevel)
                 if kwargs.get(new_arg_name) is not None:
                     msg = (
-                        f"Can only specify {repr(old_arg_name)} "
-                        f"or {repr(new_arg_name)}, not both."
+                        f"Can only specify {old_arg_name!r} "
+                        f"or {new_arg_name!r}, not both."
                     )
                     raise TypeError(msg)
                 kwargs[new_arg_name] = new_arg_value
@@ -358,7 +359,7 @@ def tmpfile(extension="", dir=None):
     """
     extension = extension.lstrip(".")
     if extension:
-        extension = "." + extension
+        extension = f".{extension}"
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
     os.remove(filename)
@@ -479,7 +480,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
                 os.makedirs(os.path.dirname(filename))
             except OSError:
                 pass
-            f = open(filename, "w" + mode)
+            f = open(filename, f"w{mode}")
             try:
                 f.write(text)
             finally:
@@ -786,7 +787,7 @@ class Dispatch:
             func = self.dispatch(object)
             return func.__doc__
         except TypeError:
-            return "Single Dispatch for %s" % self.__name__
+            return f"Single Dispatch for {self.__name__}"
 
 
 def ensure_not_exists(filename) -> None:
@@ -807,9 +808,9 @@ def _skip_doctest(line):
         return line
     elif ">>>" in stripped and "+SKIP" not in stripped:
         if "# doctest:" in line:
-            return line + ", +SKIP"
+            return f"{line}, +SKIP"
         else:
-            return line + "  # doctest: +SKIP"
+            return f"{line}  # doctest: +SKIP"
     else:
         return line
 
@@ -831,7 +832,7 @@ def extra_titles(doc):
     seen = set()
     for i, title in sorted(titles.items()):
         if title in seen:
-            new_title = "Extra " + title
+            new_title = f"Extra {title}"
             lines[i] = lines[i].replace(title, new_title)
             lines[i + 1] = lines[i + 1].replace("-" * len(title), "-" * len(new_title))
         else:
@@ -845,11 +846,7 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0, inconsistencies=None)
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from {}.{}.{}.\n\n".format(
-            cls.__module__,
-            cls.__name__,
-            name,
-        )
+        l1 = f"This docstring was copied from {cls.__module__}.{cls.__name__}.{name}.\n\n"
     else:
         l1 = f"This docstring was copied from {cls.__name__}.{name}.\n\n"
     l2 = "Some inconsistencies with the Dask version may exist."
@@ -892,7 +889,7 @@ def unsupported_arguments(doc, args):
         ]
         if len(subset) == 1:
             [(i, line)] = subset
-            lines[i] = line + "  (Not supported in Dask)"
+            lines[i] = f"{line}  (Not supported in Dask)"
     return "\n".join(lines)
 
 
@@ -1075,7 +1072,7 @@ def typename(typ: Any, short: bool = False) -> str:
                 module, *_ = typ.__module__.split(".")
             else:
                 module = typ.__module__
-            return module + "." + typ.__name__
+            return f"{module}.{typ.__name__}"
     except AttributeError:
         return str(typ)
 
@@ -1192,7 +1189,7 @@ def asciitable(columns, rows):
     widths = tuple(max(*map(len, x), len(c)) for x, c in zip(zip(*rows), columns))
     row_template = ("|" + (" %%-%ds |" * len(columns))) % widths
     header = row_template % tuple(columns)
-    bar = "+%s+" % "+".join("-" * (w + 2) for w in widths)
+    bar = "+{}+".format("+".join("-" * (w + 2) for w in widths))
     data = "\n".join(row_template % r for r in rows)
     return "\n".join([bar, header, bar, data, bar])
 
@@ -1390,7 +1387,7 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
     if type(d) is dict:
         return d.copy() if copy else d
     try:
-        layers = d.layers  # type: ignore
+        layers = d.layers  # type: ignore[attr-defined]
     except AttributeError:
         return dict(d)
 
@@ -1615,7 +1612,7 @@ def parse_bytes(s: float | str) -> int:
         return int(s)
     s = s.replace(" ", "")
     if not any(char.isdigit() for char in s):
-        s = "1" + s
+        s = f"1{s}"
 
     for i in range(len(s) - 1, -1, -1):
         if not s[i].isalpha():
@@ -1628,12 +1625,12 @@ def parse_bytes(s: float | str) -> int:
     try:
         n = float(prefix)
     except ValueError as e:
-        raise ValueError("Could not interpret '%s' as a number" % prefix) from e
+        raise ValueError(f"Could not interpret '{prefix}' as a number") from e
 
     try:
         multiplier = byte_sizes[suffix.lower()]
     except KeyError as e:
-        raise ValueError("Could not interpret '%s' as a byte unit" % suffix) from e
+        raise ValueError(f"Could not interpret '{suffix}' as a byte unit") from e
 
     result = n * multiplier
     return int(result)
@@ -1692,7 +1689,7 @@ def format_time(n: float) -> str:
         s = int(n - m * 60)
         return f"{m}m {s}s"
     if n >= 1:
-        return "%.2f s" % n
+        return f"{n:.2f} s"
     if n >= 1e-3:
         return "%.2f ms" % (n * 1e3)
     return "%.2f us" % (n * 1e6)
@@ -1820,7 +1817,7 @@ tds2 = {
     "microsecond": 1e-6,
     "nanosecond": 1e-9,
 }
-tds2.update({k + "s": v for k, v in tds2.items()})
+tds2.update({f"{k}s": v for k, v in tds2.items()})
 timedelta_sizes.update(tds2)
 timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
@@ -1867,7 +1864,7 @@ def parse_timedelta(s, default="seconds"):
         s = str(s)
     s = s.replace(" ", "")
     if not s[0].isdigit():
-        s = "1" + s
+        s = f"1{s}"
 
     for i in range(len(s) - 1, -1, -1):
         if not s[i].isalpha():
@@ -1989,7 +1986,7 @@ def key_split(s):
             if word.isalpha() and not (
                 len(word) == 8 and hex_pattern.match(word) is not None
             ):
-                result += "-" + word
+                result += f"-{word}"
             else:
                 break
         if len(result) == 32 and re.match(r"[a-f0-9]{32}", result):
@@ -2196,8 +2193,6 @@ def show_versions() -> None:
 
     stdout.writelines(dumps(result, indent=2))
 
-    return
-
 
 def maybe_pluralize(count, noun, plural_form=None):
     """Pluralize a count-noun string pattern when necessary"""
@@ -2325,3 +2320,43 @@ class disable_gc(ContextDecorator):
         if self._gc_enabled:
             gc.enable()
         return False
+
+
+def is_empty(obj):
+    """
+    Duck-typed check for “emptiness” of an object.
+
+    Works for standard sequences (lists, tuples, etc.), NumPy arrays,
+    and sparse-like objects (e.g., SciPy sparse arrays).
+
+    The function checks:
+        1. If the object supports len(), returns True if len(obj) == 0.
+        2. If the object has a `.nnz` attribute (number of non-zero elements),
+           returns True if `.nnz == 0`.
+        3. If the object has a `.shape` attribute, returns True if any
+           dimension is zero.
+        4. Otherwise, returns False (assumes non-empty).
+
+    Parameters
+    ----------
+    obj : any
+        The object to check for emptiness.
+
+    Returns
+    -------
+    bool
+        True if the object is considered empty, False otherwise.
+    """
+    # Check standard sequences
+    with contextlib.suppress(Exception):
+        return len(obj) == 0
+
+    # Sparse-like objects
+    with contextlib.suppress(Exception):
+        return obj.nnz == 0
+
+    with contextlib.suppress(Exception):
+        return 0 in obj.shape
+
+    # Fallback: assume non-empty
+    return False

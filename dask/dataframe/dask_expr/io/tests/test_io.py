@@ -166,9 +166,9 @@ def test_io_fusion_merge(tmpdir):
     pdf = pd.DataFrame({c: range(10) for c in "ab"})
     pdf2 = pd.DataFrame({c: range(10) for c in "uvwxyz"})
     dd.from_pandas(pdf, 10).to_parquet(tmpdir)
-    dd.from_pandas(pdf2, 10).to_parquet(tmpdir + "x")
+    dd.from_pandas(pdf2, 10).to_parquet(f"{tmpdir}x")
     df = read_parquet(tmpdir)
-    df2 = read_parquet(tmpdir + "x")
+    df2 = read_parquet(f"{tmpdir}x")
     result = df.merge(df2, left_on="a", right_on="w")[["a", "b", "u"]]
     assert_eq(
         result,
@@ -192,7 +192,7 @@ def test_io_culling(tmpdir, fmt):
         df = read_parquet(tmpdir)
     elif fmt == "csv":
         dd.from_pandas(pdf, 2).to_csv(tmpdir)
-        df = read_csv(tmpdir + "/*")
+        df = read_csv(f"{tmpdir}/*")
     else:
         df = from_pandas(pdf, 2)
 
@@ -298,7 +298,7 @@ def test_combine_similar_no_projection_on_one_branch(tmpdir):
 def test_from_map(tmpdir, meta, label, allow_projection, enforce_metadata):
     pdf = pd.DataFrame({c: range(10) for c in "abcdefghijklmn"})
     dd.from_pandas(pdf, 3).to_parquet(tmpdir, write_index=False)
-    files = sorted(glob.glob(str(tmpdir) + "/*.parquet"))
+    files = sorted(glob.glob(f"{tmpdir}/*.parquet"))
     if allow_projection:
         func = pd.read_parquet
     else:
@@ -536,3 +536,26 @@ def test_map_partitions_assign_fusedio(tmpdir):
     y_pred = df.map_partitions(len)
     df["y_pred"] = y_pred
     assert_eq(df["y_pred"], pd.Series([1, 1, 1], name="y_pred"), check_index=False)
+
+
+def test_tune_optimization_disabled_from_map(tmpdir):
+    """Test that optimization.tune.active=False preserves partitions for from_map."""
+    n_partitions = 10
+    pdf = pd.DataFrame({"x": np.random.randn(1000), "y": np.random.randn(1000)})
+    dd.from_pandas(pdf, npartitions=n_partitions).to_parquet(tmpdir, write_index=False)
+    files = sorted(glob.glob(f"{tmpdir}/*.parquet"))
+
+    with config.set({"optimization.tune.active": False}):
+        result = from_map(pd.read_parquet, files)
+
+        # Verify that the number of partitions is preserved
+        assert result.npartitions == n_partitions
+
+        # Verify that map_partitions(len) gives consistent results
+        # for both the full DataFrame and a column selection
+        full_lens = result.map_partitions(len).compute()
+        col_lens = result["x"].map_partitions(len).compute()
+
+        assert len(full_lens) == n_partitions
+        assert len(col_lens) == n_partitions
+        assert_eq(full_lens, col_lens)

@@ -26,7 +26,7 @@ def _sanitize_index_element(ind):
     if isinstance(ind, Number):
         ind2 = int(ind)
         if ind2 != ind:
-            raise IndexError("Bad index.  Must be integer-like: %s" % ind)
+            raise IndexError(f"Bad index.  Must be integer-like: {ind}")
         else:
             return ind2
     elif ind is None:
@@ -92,7 +92,7 @@ def sanitize_index(ind):
         else:
             check_int = np.isclose(index_array, int_index)
             first_err = index_array.ravel()[np.flatnonzero(~check_int)[0]]
-            raise IndexError("Bad index.  Must be integer-like: %s" % first_err)
+            raise IndexError(f"Bad index.  Must be integer-like: {first_err}")
     else:
         raise TypeError("Invalid index type", type(ind), ind)
 
@@ -564,9 +564,9 @@ def issorted(seq):
     """Is sequence sorted?
 
     >>> issorted([1, 2, 3])
-    np.True_
+    True
     >>> issorted([3, 1, 2])
-    np.False_
+    False
     """
     if len(seq) == 0:
         return True
@@ -601,10 +601,11 @@ def take(outname, inname, chunks, index, axis=0):
 
     if not np.isnan(chunks[axis]).any():
         from dask.array._shuffle import _shuffle
-        from dask.array.utils import arange_safe, asarray_safe
+        from dask.array.utils import asarray_safe
 
-        arange = arange_safe(np.sum(chunks[axis]), like=index)
-        if len(index) == len(arange) and np.abs(index - arange).sum() == 0:
+        # verify if this is a full arange (the equivalent of `slice(None)`)
+        full_length = sum(chunks[axis])
+        if len(index) == full_length and index[0] == 0 and np.all(np.diff(index) == 1):
             # TODO: This should be a real no-op, but the call stack is
             # too deep to do this efficiently for now
             chunk_tuples = product(*(range(len(c)) for i, c in enumerate(chunks)))
@@ -614,7 +615,7 @@ def take(outname, inname, chunks, index, axis=0):
             }
             return tuple(chunks), graph
 
-        average_chunk_size = int(sum(chunks[axis]) / len(chunks[axis]))
+        average_chunk_size = int(full_length / len(chunks[axis]))
 
         indexer = []
         index = asarray_safe(index, like=index)
@@ -693,9 +694,9 @@ def _expander(where):
             if i in where:
                 left.append("val, ")
             else:
-                left.append("seq[%d], " % j)
+                left.append(f"seq[{j}], ")
                 j += 1
-        right = "seq[%d:]" % j
+        right = f"seq[{j}:]"
         left = "".join(left)
         decl = decl.format(**locals())
         ns = {}
@@ -735,7 +736,7 @@ def new_blockdim(dim_shape, lengths, index):
         for i, slc in pairs
     ]
     if isinstance(index, slice) and index.step and index.step < 0:
-        slices = slices[::-1]
+        slices.reverse()
     return [int(math.ceil((1.0 * slc.stop - slc.start) / slc.step)) for slc in slices]
 
 
@@ -2084,7 +2085,7 @@ def setitem(x, v, indices):
     >>> y is x
     True
     """
-    if not v.size:
+    if not math.prod(v.shape):
         return x
 
     # Normalize integer array indices

@@ -18,7 +18,7 @@ from dask.dataframe.dask_expr._expr import (
 )
 from dask.utils import derived_from
 
-BlockwiseDep = namedtuple(typename="BlockwiseDep", field_names=["iterable"])  # type: ignore
+BlockwiseDep = namedtuple(typename="BlockwiseDep", field_names=["iterable"])  # type: ignore[misc]
 
 
 def _rolling_agg(

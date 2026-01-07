@@ -5,6 +5,184 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v5025.12.0:
+
+2025.12.0
+---------
+
+Highlights
+^^^^^^^^^^
+
+- More improvements for pandas 3.x `Tom Augspurger`_
+- Support zarr sharding through create_array (:pr:`12153`) `Wouter-Michiel Vierdag`_
+- Various improvements for project linting and type hinting `Dimitri Papadopoulos Orfanos`_
+- Add new "optimization.tune.active" configuration option to disable partition fusion (:pr:`12194`) `Richard (Rick) Zamora`_
+
+
+.. dropdown:: Additional changes
+
+  - Stable sort in Series.value_counts for pandas 3.x (:pr:`12191`) `Tom Augspurger`_
+  - Add new "optimization.tune.active" configuration option to disable partition fusion (:pr:`12194`) `Richard (Rick) Zamora`_
+  - Build llms.txt files in Sphinx documentation (:pr:`12192`) `Jacob Tomlinson`_
+  - Support zarr sharding through create_array (:pr:`12153`) `Wouter-Michiel Vierdag`_
+  - Support min/max of datetime (:pr:`12183`) `Julia Signell`_
+  - pandas 3.x compatibility (:pr:`12180`) `Tom Augspurger`_
+  - Minimal version of setuptools-scm (:pr:`12184`) `Dimitri Papadopoulos Orfanos`_
+  - Update `test_ufunc_meta` for upstream-dev failure (:pr:`12170`) `Tom Augspurger`_
+  - Upstream compat (:pr:`12165`) `Tom Augspurger`_
+  - Enforce a few more ruff rules (:pr:`12157`) `Dimitri Papadopoulos Orfanos`_
+  - Enforce ruff/refurb rules (FURB) (:pr:`12144`) `Dimitri Papadopoulos Orfanos`_
+  - DEP: bump minimal requirement on toolz (0.10.0 -> 0.12.0) (:pr:`12163`) `Clément Robert`_
+  - Fix execution stop in da.to_zarr due to (misleading) PerformanceWarning raised as exception (:pr:`12161`) `Marvin Albert`_
+  - Use f-string interpolation where possible (:pr:`12140`) `Dimitri Papadopoulos Orfanos`_
+  - pre-commit black hook: use implicit defaults (:pr:`12156`) `Dimitri Papadopoulos Orfanos`_
+  - Enforce ruff/pygrep-hooks rules (PGH) (:pr:`12143`) `Dimitri Papadopoulos Orfanos`_
+  - Apply Repo-Review rules (:pr:`12148`) `Dimitri Papadopoulos Orfanos`_
+  - Document groupby: split_every, split_out (:pr:`12135`) `Jayesh Manani`_
+  - isort → ruff (:pr:`12149`) `Dimitri Papadopoulos Orfanos`_
+  - Enforce ruff/pyupgrade rule UP031 (:pr:`12137`) `Dimitri Papadopoulos Orfanos`_
+  - Replace pre-commit hook with ruff rule (:pr:`12142`) `Dimitri Papadopoulos Orfanos`_
+  - Fix reify to handle sparse arrays and other objects without __len__ (:pr:`12103`) `Gautham Hullikunte`_
+  - Ruff supersedes absolufy-imports (:pr:`12141`) `Dimitri Papadopoulos Orfanos`_
+  - Enforce ruff/pyupgrade rule UP032 (:pr:`12136`) `Dimitri Papadopoulos Orfanos`_
+  - Typing fixes (:distributed-pr:`9159`) `Jacob Tomlinson`_
+
+  - Explicit setuptools-scm minimum version (:distributed-pr:`9160`) `Jacob Tomlinson`_
+  - Enforce ruff rules (RUF) (:distributed-pr:`9153`) `Dimitri Papadopoulos Orfanos`_
+  - Clean up `MANIFEST.in` (:distributed-pr:`9149`) `Dimitri Papadopoulos Orfanos`_
+  - isort → ruff (:distributed-pr:`9152`) `Dimitri Papadopoulos Orfanos`_
+  - Ruff supersedes absolufy-imports (:distributed-pr:`9154`) `Dimitri Papadopoulos Orfanos`_
+  - Bump minimum supported ``toolz`` to 0.12.0 (:distributed-pr:`9151`) `James Bourbeau`_
+  - flake8, bugbear, pyupgrade → ruff (:distributed-pr:`9147`) `Dimitri Papadopoulos Orfanos`_
+  - Fix typos found by codespell (:distributed-pr:`9145`) `Dimitri Papadopoulos Orfanos`_
+  - Clean up setuptools-specific configuration (:distributed-pr:`9150`) `Dimitri Papadopoulos Orfanos`_
+  - PEP 639 compliance (:distributed-pr:`9146`) `Dimitri Papadopoulos Orfanos`_
+  - Update black (:distributed-pr:`9148`) `Dimitri Papadopoulos Orfanos`_
+  - Fix empty progress bar (:distributed-pr:`9144`) `Jacob Tomlinson`_
+  - Exclude broken `tblib` versions in CI (:distributed-pr:`9141`) `Jacob Tomlinson`_
+
+.. _v2025.11.0:
+
+2025.11.0
+---------
+
+Highlights
+^^^^^^^^^^
+- Use shard shape when available in ``to_zarr`` (:pr:`12105`) `Davis Bennett`_
+- Improve worker and nanny support for ipv6 (:pr-distributed:`9133`) `Jianyu Sun`_
+- Linting and type hinting improvements across the codebase
+
+.. dropdown:: Additional changes
+
+  - Replace ``versioneer`` with ``setuptools-scm`` (:pr:`12133`) `Jacob Tomlinson`_
+  - Apply ruff/Pylint Refactor rules (PLR) (:pr:`12010`) `Dimitri Papadopoulos Orfanos`_
+  - Remove files from ``MANIFEST.in`` (:pr:`12041`) `Dimitri Papadopoulos Orfanos`_
+  - Stabilize ``test_filter_nonpartition_columns`` (:pr:`12131`) `DongWon`_
+  - Enforce ruff/pyupgrade rules UP007 and UP033 (:pr:`12125`) `Dimitri Papadopoulos Orfanos`_
+  - Update ``np.accumulate`` workaround comment (:pr:`12129`) `Jacob Tomlinson`_
+  - ``flake8``, ``bugbear``, ``pyupgrade`` → ``ruff`` (:pr:`12002`) `Dimitri Papadopoulos Orfanos`_
+  - Adjust pyarrow version skip in ``test_parquet`` (:pr:`12124`) `Tom Augspurger`_
+  - Fix ufunc in ``dask.array.cumreduction`` (:pr:`12119`) `Tony Ding`_
+  - Fix docs footer (:pr:`12120`) `Jacob Tomlinson`_
+  - Use integer multiple of shard shape when rechunking in ``to_zarr`` (:pr:`12106`) `Davis Bennett`_
+  - Ensure that the shard shape is used as the default chunk shape for sharded Zarr arrays (:pr:`12104`) `Davis Bennett`_
+  - Skip ``test_parquet`` for ``pyarrow==22.0`` (:pr:`12116`) `Tom Augspurger`_
+  - Clean up setuptools-specific configuration (:pr:`12040`) `Dimitri Papadopoulos Orfanos`_
+  - PEP 639 compliance (:pr:`12024`) `Dimitri Papadopoulos Orfanos`_
+  - Fix deprecated quantile ``interpolation`` being passed to numpy (:pr:`12108`) `David Hoese`_
+  - Add ``uv.lock`` to ``.gitignore`` (:pr:`12110`) `Jacob Tomlinson`_
+  - Use shard shape when available in ``to_zarr`` (:pr:`12105`) `Davis Bennett`_
+  - Add more optional dependencies to Python 3.13 CI builds (:pr:`12100`) `James Bourbeau`_
+  - Remove ``pip`` pin for docs (:pr:`12102`) `James Bourbeau`_
+  - Address collection-based ``meta`` arguments in ``GroupByApply`` (:pr:`12099`) `Richard (Rick) Zamora`_
+
+  - Replace versioneer with setuptools-scm (:pr-distributed:`9137`) `Jacob Tomlinson`_
+  - Improve worker and nanny support for ipv6 (:pr-distributed:`9133`) `Jianyu Sun`_
+  - Fix CI Multiple aliased keys in file ``/Users/runner/.condarc`` (:pr-distributed:`9136`) `Jacob Tomlinson`_
+  - Remove ``pip`` pin for docs (:pr-distributed:`9132`) `James Bourbeau`_
+  - Remove UCX configuration schema (:pr-distributed:`9127`) `Peter Andreas Entschev`_
+  - Add generic type support to ``Future`` and ``Client`` methods (:pr-distributed:`9123`) `Simon-Martin Schröder`_
+
+.. _v2025.10.0:
+
+2025.10.0
+---------
+
+Highlights
+^^^^^^^^^^
+- Several Dask Array bug fixes including :pr:`12097`, :pr:`12089`, :pr:`12088`, and :pr:`12090`.
+
+.. dropdown:: Additional changes
+
+  - Use updated docs theme (:pr:`12093`) `Jacob Tomlinson`_
+  - Fix: ``dask.array.cumprod`` does not deal with ``dtype`` (:pr:`12097`) `Tony Ding`_
+  - CuPy compatibility for percentile (:pr:`12098`) `Tom Augspurger`_
+  - Avoid using ``methods.concat`` on empty lists (:pr:`12096`) `Tony Ding`_
+  - Add distribution check for optional dependencies (:pr:`12087`) `James Bourbeau`_
+  - Fix percentile inconsistencies (:pr:`12088`) `Oisin-M`_
+  - Fix warning in ``test_ufunc_where_no_out`` (:pr:`12094`) `Tom Augspurger`_
+  - Fix/choose trivial case (:pr:`12090`) `Oisin-M`_
+  - Add input validation on ``dask.dataframe.read_sql_query()`` (:pr:`12091`) `Jacob Tomlinson`_
+  - Numpy 2.2 updates for ``cov`` function with tests (:pr:`12079`) `Mike McCarty`_
+  - Fix ``nanvar`` (:pr:`12089`) `Oisin-M`_
+  - Document manually triggering the conda-forge bots (:pr:`12083`) `Jacob Tomlinson`_
+  - Fix mixed HLG/Expr handling in ``_ExprSequence._simplify_down`` (:pr:`12081`) `Richard (Rick) Zamora`_
+  - Add ``dask.tokenize`` to API docs (:pr:`12080`) `Username46786`_
+  - ``CreateOverlappingPartitions``: Add before and after to prepend name (:pr:`11965`) `Fabien Aulaire`_
+  - Fix ``scipy.sparce.csc_matrix`` scalar declaration in ``_array_like_safe`` (:pr:`12078`) `Ilan Gold`_
+
+  - Update docs theme and remove docs env pins (:pr-distributed:`9125`) `Jacob Tomlinson`_
+  - Add worker name as prefix to ``ThreadPoolExecutor`` name (:pr-distributed:`9120`) `Maneesh Sutar`_
+  - Skip hanging SSH tests on Windows (:pr-distributed:`9115`) `Jacob Tomlinson`_
+  - Fix macOS CI failure during job startup (:pr-distributed:`9113`) `Jacob Tomlinson`_
+  - Prevent task stream dashboard showing 1970 date (:pr-distributed:`9109`) `Guillaume Eynard-Bontemps`_
+
+
+.. _v2025.9.1:
+
+2025.9.1
+--------
+
+Highlights
+^^^^^^^^^^
+- Avoid unconditional pyarrow dependency in dataframe.backends (:pr:`12075`) `Tom Augspurger`_
+- pandas 3.x compatibility for `.groups` (:pr:`12071`) `Tom Augspurger`_
+
+.. dropdown:: Additional changes
+
+  - Avoid unconditional pyarrow dependency in dataframe.backends (:pr:`12075`) `Tom Augspurger`_
+  - pandas 3.x compatibility for `.groups` (:pr:`12071`) `Tom Augspurger`_
+  - Expose details about worker start timeout in the exception message (:pr-distributed:`9092`) `Taylor Braun-Jones`_
+  - pynvml => nvidia-ml-py in CI (:pr-distributed:`9111`) `Jacob Tomlinson`_
+
+.. _v2025.9.0:
+
+2025.9.0
+--------
+
+Highlights
+^^^^^^^^^^
+- pandas 3.x compatibility (:pr:`12025`) `Tom Augspurger`_
+- Remove protocol="ucx" support in favor of distributed-ucxx (:pr-distributed:`9105`) `Peter Andreas Entschev`_
+
+.. dropdown:: Additional changes
+
+  - Fix `0` scalar setting for `scipy.sparse` (:pr:`12027`) `Ilan Gold`_
+  - Workaround failing upstream-dev tests (:pr:`12061`) `Tom Augspurger`_
+  - avoid instantiating a potentially very large arange in `take` (:pr:`11998`) `Justus Magin`_
+  - MAINT: address NumPy deprecation in `np.minimum` (:pr:`12059`) `Marco Edward Gorelli`_
+  - CI fixes (:pr:`12058`) `Tom Augspurger`_
+  - MAINT: Address NumPy DeprecationWarning (:pr:`12056`) `Marco Edward Gorelli`_
+  - Fix ``test_enforce_columns`` on Python 3.14 (:pr:`12047`) `Elliott Sales de Andrade`_
+  - Fix "th" --> "the" typo in DataFrame SQL docs (:pr:`12038`) `Peter A. Jonsson`_
+  - Advance rng state in permutation (:pr:`12031`) `James Bourbeau`_
+  - Fix ``pyarrow`` chunked array conversion (:pr:`12034`) `James Bourbeau`_
+  - Fix ``xfail`` condition for ``pyarrow`` ``large_string`` issue (:pr:`12032`) `James Bourbeau`_
+  - pandas 3.x compatibility (:pr:`12025`) `Tom Augspurger`_
+  - Fix `name` not propagated correctly in `map_blocks` (:pr:`11952`) `Ilan Gold`_
+
+  - Clean tuples dict keys from workers_info in /api/v1/retire_workers. (:pr-distributed:`8996`) `Florian Courtial`_
+  - Remove protocol="ucx" support in favor of distributed-ucxx (:pr-distributed:`9105`) `Peter Andreas Entschev`_
 
 .. _v2025.7.0:
 
@@ -9605,3 +9783,16 @@ Other
 .. _`Lukas Bindreiter`: https://github.com/lukasbindreiter
 .. _`Marvin Albert`: https://github.com/m-albert
 .. _`Peter Fackeldey`: https://github.com/pfackeldey
+.. _`Marco Edward Gorelli`: https://github.com/MarcoGorelli
+.. _`Peter A. Jonsson`: https://github.com/pjonsson
+.. _`Florian Courtial`: https://github.com/fcourtial
+.. _`Tony Ding`: https://github.com/tonyyuyiding
+.. _`Oisin-M`: https://github.com/Oisin-M
+.. _`Username46786`: https://github.com/Username46786
+.. _`Maneesh Sutar`: https://github.com/maneesh29s
+.. _`Jianyu Sun`: https://github.com/csfldf
+.. _`DongWon`: https://github.com/dongwonmoon
+.. _`Simon-Martin Schröder`: https://github.com/moi90
+.. _`Wouter-Michiel Vierdag`: https://github.com/melonora
+.. _`Clément Robert`: https://github.com/neutrinoceros
+.. _`Gautham Hullikunte`: https://github.com/batcity

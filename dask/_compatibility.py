@@ -21,16 +21,6 @@ MACOS = sys.platform == "darwin"
 WINDOWS = sys.platform == "win32"
 
 
-def entry_points(group=None):
-    warnings.warn(
-        "`dask._compatibility.entry_points` has been replaced by `importlib_metadata.entry_points` and will be removed "
-        "in a future version. Please use `importlib_metadata.entry_points` instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return importlib_metadata.entry_points(group=group)
-
-
 VERSIONS = {
     "numpy": "1.21.0",
     "pandas": "2.0.0",
@@ -50,14 +40,10 @@ INSTALL_MAPPING = {
 
 
 def get_version(module: types.ModuleType) -> str:
-    version = getattr(module, "__version__", None)
-
-    if version is None:
-        raise ImportError(f"Can't determine version for {module.__name__}")
-    if module.__name__ == "psycopg2":
-        # psycopg2 appends " (dt dec pq3 ext lo64)" to it's version
-        version = version.split()[0]
-    return version
+    try:
+        return module.__version__
+    except AttributeError as e:  # pragma: no cover
+        raise ImportError(f"Can't determine version for {module.__name__}") from e
 
 
 def import_optional_dependency(
@@ -111,8 +97,12 @@ def import_optional_dependency(
         f"Use pip or conda to install {install_name}."
     )
     try:
+        # NOTE: Use `importlib_metadata.distribution` check to differentiate
+        # between something that's importable (e.g. a directory named `xarray`)
+        # and the library we want to check for (i.e. the `xarray`` library)
+        importlib_metadata.distribution(name)
         module = importlib.import_module(name)
-    except ImportError as err:
+    except (importlib_metadata.PackageNotFoundError, ImportError) as err:
         if errors == "raise":
             raise ImportError(msg) from err
         return None

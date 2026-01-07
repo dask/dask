@@ -172,7 +172,7 @@ def tree_width(N, to_binary=False):
         group_size = int(math.log(N))
     num_groups = N // group_size
     if to_binary or num_groups < 16:
-        return 2 ** int(math.log(N / group_size, 2))
+        return 2 ** int(math.log2(N / group_size))
     else:
         return num_groups
 
@@ -251,13 +251,13 @@ def percentiles_to_weights(qs, vals, length):
     between the first and second percentiles, and then scaled by length:
 
     >>> 0.5 * length * (percentiles[1] - percentiles[0])
-    np.float64(125.0)
+    125.0
 
     The second weight uses the difference of percentiles on both sides, so
     it will be twice the first weight if the percentiles are equally spaced:
 
     >>> 0.5 * length * (percentiles[2] - percentiles[0])
-    np.float64(250.0)
+    250.0
     """
     if length == 0:
         return ()
@@ -374,7 +374,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         left = np.searchsorted(q_weights, q_target, side="left")
         right = np.searchsorted(q_weights, q_target, side="right") - 1
         # stay inbounds
-        np.maximum(right, 0, right)
+        np.maximum(right, 0, out=right)
         lower = np.minimum(left, right)
         trimmed = trimmed_vals[lower]
 

@@ -701,7 +701,7 @@ def test_groupby_rolling():
     df = pd.DataFrame(
         {
             "column1": range(600),
-            "group1": 5 * ["g" + str(i) for i in range(120)],
+            "group1": 5 * [f"g{i}" for i in range(120)],
         },
         index=pd.date_range("20190101", periods=60).repeat(10),
     )
@@ -745,7 +745,7 @@ def test_rolling_groupby_projection():
         {
             "column1": range(600),
             "a": 1,
-            "group1": 5 * ["g" + str(i) for i in range(120)],
+            "group1": 5 * [f"g{i}" for i in range(120)],
         },
         index=pd.date_range("20190101", periods=60).repeat(10),
     )
@@ -1069,4 +1069,18 @@ def test_groupby_getitem_apply_group_keys():
     df = from_pandas(pdf, npartitions=4)
     result = df.groupby("A", group_keys=False).B.apply(lambda x: x, meta=("B", int))
     expected = pdf.groupby("A", group_keys=False).B.apply(lambda x: x)
+    assert_eq(result, expected)
+
+
+def test_groupby_apply_meta_collection():
+    pdf = pd.DataFrame({"A": [0, 1] * 4, "B": [1, 2, 3, 4] * 2, "C": [1] * 8})
+
+    def _filter(x: pd.DataFrame) -> pd.DataFrame:
+        return x[x["B"] == 2]
+
+    df = from_pandas(pdf, npartitions=4)
+    result = df.groupby("A", group_keys=False)[["C", "B"]].apply(
+        _filter, meta=df[["C", "B"]]
+    )
+    expected = pdf.groupby("A", group_keys=False)[["C", "B"]].apply(_filter)
     assert_eq(result, expected)

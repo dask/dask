@@ -138,6 +138,7 @@ def register_cupy():
     percentile_lookup.register(cupy.ndarray, percentile)
     numel_lookup.register(cupy.ndarray, _numel_arraylike)
     nannumel_lookup.register(cupy.ndarray, _nannumel)
+    empty_lookup.register(cupy.ndarray, cupy.empty)
 
     @to_numpy_dispatch.register(cupy.ndarray)
     def cupy_to_numpy(data, **kwargs):
@@ -182,7 +183,7 @@ def register_cupyx():
         else:
             msg = (
                 "Can only concatenate cupy sparse matrices for axis in "
-                "{0, 1}.  Got %s" % axis
+                f"{{0, 1}}.  Got {axis}"
             )
             raise ValueError(msg)
 
@@ -223,7 +224,7 @@ def register_scipy_sparse():
         else:
             msg = (
                 "Can only concatenate scipy sparse matrices for axis in "
-                "{0, 1}.  Got %s" % axis
+                f"{{0, 1}}.  Got {axis}"
             )
             raise ValueError(msg)
 

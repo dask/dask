@@ -219,7 +219,7 @@ def _get_display_cls(format):
     """
     dummy = lambda *args, **kwargs: None
     try:
-        import IPython.display as display
+        from IPython import display
     except ImportError:
         # Can't return a display object if no IPython.
         return dummy
@@ -234,7 +234,7 @@ def _get_display_cls(format):
     elif format == "svg":
         return display.SVG
     else:
-        raise ValueError("Unknown format '%s' passed to `dot_graph`" % format)
+        raise ValueError(f"Unknown format '{format}' passed to `dot_graph`")
 
 
 def dot_graph(dsk, filename="mydask", format=None, **kwargs):
@@ -544,6 +544,7 @@ def cytoscape_graph(
     if filename is not None:
         from ipywidgets.embed import embed_minimal_html
 
-        filename = filename if filename.endswith(".html") else filename + ".html"
+        if not filename.endswith(".html"):
+            filename = f"{filename}.html"
         embed_minimal_html(filename, views=[g], title="Dask task graph")
     return g

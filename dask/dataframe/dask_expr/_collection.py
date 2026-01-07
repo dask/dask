@@ -15,16 +15,19 @@ import pyarrow as pa
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 from pandas import CategoricalDtype
-from pandas.api.types import is_bool_dtype, is_datetime64_any_dtype, is_numeric_dtype
+from pandas.api.types import (
+    is_bool_dtype,
+    is_datetime64_any_dtype,
+    is_numeric_dtype,
+    is_timedelta64_dtype,
+)
 from pandas.api.types import is_scalar as pd_is_scalar
-from pandas.api.types import is_timedelta64_dtype
 from pandas.core.dtypes.common import is_extension_array_dtype
 from pyarrow import fs as pa_fs
 from tlz import first
 
 import dask.array as da
 import dask.dataframe.dask_expr._backends  # noqa: F401
-import dask.dataframe.methods as methods
 from dask import compute, get_annotations
 from dask._collections import new_collection
 from dask._expr import OptimizerStage
@@ -32,6 +35,7 @@ from dask._task_spec import Dict, TaskRef
 from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
+from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from dask.dataframe.accessor import CachedAccessor
 from dask.dataframe.core import (
@@ -241,7 +245,7 @@ def _wrap_expr_method_operator(name, class_):
 
     elif class_ == Series:
 
-        def method(self, other, level=None, fill_value=None, axis=0):  # type: ignore
+        def method(self, other, level=None, fill_value=None, axis=0):  # type: ignore[misc]
             if level is not None:
                 raise NotImplementedError("level must be None")
 
@@ -614,7 +618,7 @@ Expr={expr}"""
                 # Raise original error
                 raise err
 
-    def visualize(self, tasks: bool = False, **kwargs):  # type: ignore
+    def visualize(self, tasks: bool = False, **kwargs):  # type: ignore[override]
         """Visualize the expression or task graph
 
         Parameters
@@ -736,7 +740,7 @@ Expr={expr}"""
             ):
                 # Can broadcast
                 return new_collection(expr.Isin(self, values=values))
-            raise NotImplementedError("Passing a %r to `isin`" % typename(type(values)))
+            raise NotImplementedError(f"Passing a {typename(type(values))!r} to `isin`")
 
         # We wrap values in a delayed for two reasons:
         # - avoid serializing data in every task
@@ -837,7 +841,7 @@ Expr={expr}"""
 
     def shuffle(
         self,
-        on: str | list | no_default = no_default,  # type: ignore
+        on: str | list | no_default = no_default,  # type: ignore[valid-type]
         ignore_index: bool = False,
         npartitions: int | None = None,
         shuffle_method: str | None = None,
@@ -880,7 +884,7 @@ Expr={expr}"""
         --------
         >>> df = df.shuffle(df.columns[0])  # doctest: +SKIP
         """
-        if on is no_default and not on_index:  # type: ignore
+        if on is no_default and not on_index:  # type: ignore[unreachable]
             raise TypeError(
                 "Must shuffle on either columns or the index; currently shuffling on "
                 "neither. Pass column(s) to 'on' or set 'on_index' to True."
@@ -905,7 +909,7 @@ Expr={expr}"""
             elif isinstance(on, (str, int)):
                 on = [on]
             elif on_index:
-                on = []  # type: ignore
+                on = []  # type: ignore[unreachable]
             bad_cols = [
                 index_col
                 for index_col in on
@@ -1735,7 +1739,7 @@ Expr={expr}"""
                 M.kurtosis,
                 self,
                 meta=meta,
-                token=self._token_prefix + "kurtosis",
+                token=f"{self._token_prefix}kurtosis",
                 axis=axis,
                 enforce_metadata=False,
             )
@@ -2207,7 +2211,7 @@ Expr={expr}"""
         >>> res = ddf.x.reduction(count_greater, aggregate=lambda x: x.sum(),
         ...                       chunk_kwargs={'value': 25})
         >>> res.compute()
-        np.int64(25)
+        25
 
         Aggregate both the sum and count of a Series at the same time:
 
@@ -2517,7 +2521,7 @@ Expr={expr}"""
             frame = self
         keys = frame.__dask_keys__()
         graph = frame.__dask_graph__()
-        layer = "delayed-" + frame._name
+        layer = f"delayed-{frame._name}"
         graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
         return [Delayed(k, graph, layer=layer) for k in keys]
 
@@ -2562,7 +2566,7 @@ Expr={expr}"""
             func, target = func
             if target in kwargs:
                 raise ValueError(
-                    "%s is both the pipe target and a keyword argument" % target
+                    f"{target} is both the pipe target and a keyword argument"
                 )
             kwargs[target] = self
             return func(*args, **kwargs)
@@ -3577,7 +3581,7 @@ class DataFrame(FrameBase):
             raise NotImplementedError(
                 "Dataframes only support sorting by named columns which must be passed as a "
                 "string or a list of strings.\n"
-                "You passed %s" % str(by)
+                f"You passed {by}"
             )
 
         if not isinstance(ascending, bool) and not len(ascending) == len(by):
@@ -3986,10 +3990,8 @@ class DataFrame(FrameBase):
                 .format(column="Column", underl="------")
             )
             column_template = textwrap.dedent(
-                """\
-            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}""".format(
-                    column_width=column_width
-                )
+                f"""\
+            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}"""
             )
             column_info = [
                 column_template.format(
@@ -4009,7 +4011,8 @@ class DataFrame(FrameBase):
 
         lines.extend(column_info)
         dtype_counts = [
-            "%s(%d)" % k for k in sorted(self.dtypes.value_counts().items(), key=str)
+            f"{value}({count})"
+            for value, count in sorted(self.dtypes.value_counts().items(), key=str)
         ]
         lines.append("dtypes: {}".format(", ".join(dtype_counts)))
 
@@ -4760,7 +4763,7 @@ class Index(Series):
     def count(self, split_every=False):
         return new_collection(IndexCount(self, split_every))
 
-    @property  # type: ignore
+    @property  # type: ignore[misc]
     def index(self):
         raise AttributeError("'Index' object has no attribute 'index'")
 
@@ -6409,14 +6412,14 @@ def handle_out(out, result):
     if out is not None and out.__class__ != result.__class__:
         raise TypeError(
             "Mismatched types between result and out parameter. "
-            "out=%s, result=%s" % (str(type(out)), str(type(result)))
+            f"out={type(out)}, result={type(result)}"
         )
 
     if isinstance(out, DataFrame):
         if len(out.columns) != len(result.columns):
             raise ValueError(
                 "Mismatched columns count between result and out parameter. "
-                "out=%s, result=%s" % (str(len(out.columns)), str(len(result.columns)))
+                f"out={len(out.columns)}, result={len(result.columns)}"
             )
 
     if isinstance(out, (Series, DataFrame, Scalar)):
@@ -6424,11 +6427,7 @@ def handle_out(out, result):
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
-            " Received type %s, expected %s "
-            % (
-                typename(type(out)),
-                typename(type(result)),
-            )
+            f" Received type {typename(type(out))}, expected {typename(type(result))} "
         )
         raise NotImplementedError(msg)
     else:

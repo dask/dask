@@ -1,20 +1,15 @@
 numpydoc
-sphinx>=4.0.0
-dask-sphinx-theme>=3.0.0
+sphinx>=8.0.0
+dask-sphinx-theme>=4.0.0
 sphinx-click
 sphinx-copybutton
 sphinx-remove-toctrees
 sphinx_autosummary_accessors
 sphinx-tabs
 sphinx-design
+sphinx-llm
 jupyter_sphinx
-# FIXME: `sphinxcontrib-*` pins are a workaround until we have sphinx>=5.
-#        See https://github.com/dask/dask-sphinx-theme/issues/68.
-sphinxcontrib-applehelp>=1.0.0,<1.0.7
-sphinxcontrib-devhelp>=1.0.0,<1.0.6
-sphinxcontrib-htmlhelp>=2.0.0,<2.0.5
-sphinxcontrib-serializinghtml>=1.1.0,<1.1.10
-sphinxcontrib-qthelp>=1.0.0,<1.0.7
+nbconvert
 toolz
 cloudpickle>=1.5.0
 pandas>=2.0.0

@@ -21,7 +21,7 @@ jobs:
       run:
         shell: bash -l {0}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           repository: dask/distributed
 
@@ -41,7 +41,7 @@ jobs:
       - name: mamba list
         run: mamba list
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: cache
         with:
           # Suffix is depending on the backend / OS. Let's be agnostic here
@@ -60,7 +60,7 @@ jobs:
           mv test_report.html test_short_report.html deploy/
 
       - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@v4.7.3
+        uses: JamesIves/github-pages-deploy-action@v4.7.6
         with:
           branch: gh-pages
           folder: deploy

@@ -10,6 +10,7 @@ import pytest
 np = pytest.importorskip("numpy")
 
 import dask.array as da
+from dask.array.numpy_compat import NUMPY_GE_240
 from dask.array.ufunc import da_frompyfunc
 from dask.array.utils import assert_eq
 from dask.base import tokenize
@@ -21,18 +22,30 @@ Some inconsistencies with the Dask version may exist.
 """
 
 
-@pytest.mark.parametrize("name", ["log", "modf", "frexp"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "log",
+        "modf",
+        "frexp",
+    ],
+)
 def test_ufunc_meta(name):
+
     disclaimer = DISCLAIMER.format(name=name)
     skip_test = "  # doctest: +SKIP"
     ufunc = getattr(da, name)
     assert ufunc.__name__ == name
     assert disclaimer in ufunc.__doc__
 
-    assert (
-        ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
-        == getattr(np, name).__doc__
-    )
+    if not NUMPY_GE_240:
+        # https://github.com/numpy/numpy/issues/30095
+        # ufunc inspection doesn't provide argument names, which
+        # breaks our docstring rewriting
+        assert (
+            ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
+            == getattr(np, name).__doc__
+        )
 
 
 def test_ufunc():
@@ -557,7 +570,7 @@ def test_ufunc_where_no_out():
     d_left = da.from_array(left, chunks=2)
     d_right = da.from_array(right, chunks=2)
 
-    expected = np.add(left, right, where=where)
+    expected = np.add(left, right, where=where, out=None)
     result = da.add(d_left, d_right, where=d_where)
 
     # If no `out` is provided, numpy leaves elements that don't match `where`

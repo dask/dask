@@ -33,6 +33,15 @@ These more general Dask functions are described below:
    persist
    visualize
 
+.. currentmodule:: dask.tokenize
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   tokenize
+   TokenizationError
+
 These functions work with any scheduler.  More advanced operations are
 available when using the newer scheduler and starting a
 :obj:`dask.distributed.Client` (which, despite its name, runs nicely on a
@@ -43,6 +52,8 @@ real-time or advanced operation.
 
 This more advanced API is available in the `Dask distributed documentation
 <https://distributed.dask.org/en/latest/api.html>`_
+
+.. currentmodule:: dask
 
 .. autofunction:: annotate
 .. autofunction:: get_annotations

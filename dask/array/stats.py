@@ -242,7 +242,7 @@ def skew(a, axis=0, bias=True, nan_policy="propagate"):
             "`nan_policy` other than 'propagate' have not been implemented."
         )
 
-    n = a.shape[axis]  # noqa; for bias
+    n = a.shape[axis]  # noqa: F841  # for bias
     m2 = moment(a, 2, axis)
     m3 = moment(a, 3, axis)
     zero = m2 == 0
@@ -272,8 +272,7 @@ def skewtest(a, axis=0, nan_policy="propagate"):
     n = float(a.shape[axis])
     if n < 8:
         raise ValueError(
-            "skewtest is not valid with less than 8 samples; %i samples"
-            " were given." % int(n)
+            f"skewtest is not valid with less than 8 samples; {int(n)} samples were given."
         )
     y = b2 * math.sqrt(((n + 1) * (n + 3)) / (6.0 * (n - 2)))
     beta2 = (
@@ -298,7 +297,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
         raise NotImplementedError(
             "`nan_policy` other than 'propagate' have not been implemented."
         )
-    n = a.shape[axis]  # noqa; for bias
+    n = a.shape[axis]  # noqa: F841  # for bias
     m2 = moment(a, 2, axis)
     m4 = moment(a, 4, axis)
     zero = m2 == 0

@@ -43,10 +43,12 @@ def _calc_maybe_new_divisions(df, periods, freq):
 
     is_offset = isinstance(freq, pd.DateOffset)
     if is_offset:
-        if not isinstance(freq, pd.offsets.Tick):
+        if not isinstance(freq, (pd.offsets.Tick, pd.offsets.Day)):
             # Can't infer divisions on relative or anchored offsets, as
             # divisions may now split identical index value.
             # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
+            # As of https://github.com/pandas-dev/pandas/pull/61985
+            # Day doesn't subclass Tick.
             return None  # Would need to clear divisions
     if df.known_divisions:
         divs = pd.Series(range(len(df.divisions)), index=df.divisions)
@@ -179,9 +181,9 @@ def _raise_if_object_series(x, funcname):
     """
     if x.ndim == 1 and hasattr(x, "dtype"):
         if x.dtype == object:
-            raise ValueError("`%s` not supported with object series" % funcname)
+            raise ValueError(f"`{funcname}` not supported with object series")
         elif is_string_dtype(x):
-            raise ValueError("`%s` not supported with string series" % funcname)
+            raise ValueError(f"`{funcname}` not supported with string series")
 
 
 def _is_any_real_numeric_dtype(arr_or_dtype):

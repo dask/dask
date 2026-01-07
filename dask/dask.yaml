@@ -34,6 +34,8 @@ array:
 optimization:
   annotations:
     fuse: true  # Automatically fuse compatible annotations on layers
+  tune:
+    active: true  # Turn partition tuning optimization on/off
   fuse:
     active: null  # Treat as false for dask.dataframe, true for everything else
     ave-width: 1

@@ -221,7 +221,7 @@ _BLOCKWISE_DEFAULT_PREFIX = "__dask_blockwise__"
 
 
 def blockwise_token(i, prefix=_BLOCKWISE_DEFAULT_PREFIX):
-    return prefix + "%d" % i
+    return f"{prefix}{int(i)}"
 
 
 def blockwise(
@@ -565,7 +565,7 @@ class Blockwise(Layer):
                     io_deps[name] = dep
                     numblocks[name] = dep.numblocks
                 else:
-                    name = dep  # type: ignore
+                    name = dep  # type: ignore[assignment]
                 _tmp_indices.append((name, tuple(ind) if ind is not None else ind))
         self.numblocks = numblocks
         self.io_deps = io_deps or {}
@@ -772,7 +772,7 @@ class Blockwise(Layer):
 
             if ishashable(k) and k in names:
                 is_leaf = False
-                k = clone_key(k, seed)  # type: ignore
+                k = clone_key(k, seed)  # type: ignore[type-var]
             elif isinstance(k, TaskRef) and k.key in names:
                 is_leaf = False
                 k = TaskRef(clone_key(k.key, seed))
@@ -1496,7 +1496,7 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
         return toolz.valmap(consolidate, g2)
 
     if g2 and not set(map(len, g2.values())) == {1}:
-        raise ValueError("Shapes do not align %s" % g)
+        raise ValueError(f"Shapes do not align {g}")
 
     return toolz.valmap(toolz.first, g2)
 

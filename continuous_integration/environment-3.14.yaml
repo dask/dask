@@ -1,11 +1,9 @@
-# This job includes coverage
 name: test-environment
 channels:
   - conda-forge
-  - nodefaults
 dependencies:
   # required dependencies
-  - python=3.12
+  - python=3.14
   - packaging
   - pyyaml
   - click
@@ -26,7 +24,7 @@ dependencies:
   - numpy
   - pandas
   - pyarrow
-  - distributed  # Overridden by git tip below; used to pull in dependencies  
+  - distributed  # Overridden by git tip below; used to pull in dependencies
   # optional s3 I/O
   - boto3
   - botocore
@@ -35,7 +33,6 @@ dependencies:
   # other optional dependencies
   - mimesis
   - numba
-  - numbagg  # only here to test others with numpy
   - flask
   - h5py
   - pytables
@@ -47,10 +44,9 @@ dependencies:
   - sqlalchemy
   - jsonschema
   - bokeh
-  - bottleneck
   - httpretty
   - aiohttp
-  - crick
+  # - crick  # No Python 3.14 build yet
   - cytoolz
   - ipython
   - ipycytoscape
@@ -70,7 +66,6 @@ dependencies:
   - python-xxhash
   - mmh3
   - jinja2
-  - matplotlib  # visualize test
   - pip
   - pip:
     - git+https://github.com/dask/distributed

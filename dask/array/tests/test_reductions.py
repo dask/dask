@@ -12,7 +12,7 @@ np = pytest.importorskip("numpy")
 import itertools
 
 import dask.array as da
-import dask.config as config
+from dask import config
 from dask.array.numpy_compat import ComplexWarning
 from dask.array.utils import assert_eq, same_keys
 from dask.core import get_deps
@@ -144,6 +144,35 @@ def test_reductions_1D(dtype):
     reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
 
 
+def test_reductions_1D_datetime():
+    x = np.arange(5).astype("datetime64[ns]")
+    a = da.from_array(x, chunks=(2,))
+    reduction_1d_test(da.min, a, np.min, x, False)
+    reduction_1d_test(da.max, a, np.max, x, False)
+    reduction_1d_test(da.any, a, np.any, x, False)
+    reduction_1d_test(da.all, a, np.all, x, False)
+    reduction_1d_test(da.nanmin, a, np.nanmin, x, False)
+    reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
+
+
+@pytest.mark.parametrize("dtype", ["f4", "c8"])
+@pytest.mark.parametrize(
+    "x", [np.array([np.inf, np.nan, -np.inf, 2]), np.array([np.nan, np.nan, 3, 2])]
+)
+def test_reductions_1D_nans(x, dtype):
+    x = x.astype(dtype)
+    a = da.from_array(x, chunks=(1,))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        reduction_1d_test(da.nansum, a, np.nansum, x)
+        reduction_1d_test(da.nanprod, a, np.nanprod, x)
+        reduction_1d_test(da.nanmean, a, np.nanmean, x, False)
+        reduction_1d_test(da.nanvar, a, np.nanvar, x, False)
+        reduction_1d_test(da.nanstd, a, np.nanstd, x, False)
+        reduction_1d_test(da.nanmin, a, np.nanmin, x, False)
+        reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
+
+
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
     assert_eq(da_func(darr), np_func(narr))
     assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
@@ -237,6 +266,17 @@ def test_reductions_2D(dtype):
         warnings.simplefilter("ignore", RuntimeWarning)
         reduction_2d_test(da.prod, a, np.prod, x)
         reduction_2d_test(da.nanprod, a, np.nanprod, x)
+
+
+def test_reductions_2D_datetime():
+    x = np.arange(1, 122).reshape(11, 11).astype("datetime64[ns]")
+    a = da.from_array(x, chunks=(4, 4))
+    reduction_2d_test(da.min, a, np.min, x, False)
+    reduction_2d_test(da.max, a, np.max, x, False)
+    reduction_2d_test(da.any, a, np.any, x, False)
+    reduction_2d_test(da.all, a, np.all, x, False)
+    reduction_2d_test(da.nanmin, a, np.nanmin, x, False)
+    reduction_2d_test(da.nanmax, a, np.nanmax, x, False)
 
 
 @pytest.mark.parametrize(
@@ -383,8 +423,8 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.any, a, np.any, x, False, False)
     reduction_2d_test(da.all, a, np.all, x, False, False)
 
-    reduction_2d_test(da.nansum, a, np.nansum, x, False, False)
-    reduction_2d_test(da.nanprod, a, np.nanprod, x, False, False)
+    reduction_2d_test(da.nansum, a, np.nansum, x)
+    reduction_2d_test(da.nanprod, a, np.nanprod, x)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
@@ -626,6 +666,40 @@ def test_array_cumreduction_axis(func, use_nan, axis, method):
 
     a_r = np_func(a, axis=axis)
     d_r = da_func(d, axis=axis, method=method)
+
+    assert_eq(a_r, d_r)
+
+
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
+@pytest.mark.parametrize("method", ["sequential", "blelloch"])
+@pytest.mark.parametrize("target_dtype", [None, int, float])
+def test_array_cumreduction_dtype(func, method, target_dtype):
+    np_func = getattr(np, func)
+    da_func = getattr(da, func)
+
+    a = np.linspace(0, 1, num=10, dtype=float)
+    d = da.from_array(a)
+
+    a_r = np_func(a, axis=0, dtype=target_dtype)
+    d_r = da_func(d, method=method, axis=0, dtype=target_dtype)
+
+    assert_eq(a_r, d_r)
+
+
+@pytest.mark.parametrize("ufunc", ["add", "multiply", "maximum"])
+@pytest.mark.parametrize("target_dtype", [None, int, float])
+def test_array_cumreduction_ufunc(ufunc, target_dtype):
+    ufunc_obj = getattr(np, ufunc)
+    accumulate = ufunc_obj.accumulate
+    identity = ufunc_obj.identity
+
+    a = np.linspace(0, 1, num=10, dtype=float)
+    d = da.from_array(a)
+
+    cumreduction = da.reductions.cumreduction
+
+    a_r = accumulate(a, dtype=target_dtype)
+    d_r = cumreduction(accumulate, ufunc_obj, identity, d, dtype=target_dtype)
 
     assert_eq(a_r, d_r)
 
@@ -968,7 +1042,6 @@ def test_quantile(rechunk, q, axis):
 
 @pytest.mark.parametrize("func", [da.quantile, da.nanquantile, da.nanpercentile])
 def test_quantile_func_family_with_axis_none(func):
-
     # Check that these functions raise a NotImplementedError
     # when axis=None and more than one chunk is present
     # along at least one dimension

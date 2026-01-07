@@ -72,6 +72,7 @@ from dask.utils import (
     funcname,
     get_default_shuffle_method,
     insert,
+    is_empty,
     iter_chunks,
     key_split,
     parse_bytes,
@@ -265,7 +266,7 @@ def to_textfiles(
         **(storage_options or {}),
     )
 
-    name = "to-textfiles-" + uuid.uuid4().hex
+    name = f"to-textfiles-{uuid.uuid4().hex}"
     dsk = {
         (name, i): (_to_textfiles_chunk, (b.name, i), f, last_endline)
         for i, f in enumerate(files)
@@ -516,7 +517,7 @@ class Bag(DaskMethodsMixin):
         return type(self)(dsk, name, self.npartitions)
 
     def __str__(self):
-        return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
+        return f"dask.bag<{key_split(self.name)}, npartitions={self.npartitions}>"
 
     __repr__ = __str__
 
@@ -696,7 +697,7 @@ class Bag(DaskMethodsMixin):
         if not isinstance(random_state, Random):
             random_state = Random(random_state)
 
-        name = "random-sample-%s" % tokenize(self, prob, random_state.getstate())
+        name = f"random-sample-{tokenize(self, prob, random_state.getstate())}"
         state_data = random_state_data_python(self.npartitions, random_state)
         dsk = {
             (name, i): (reify, (random_sample, (self.name, i), state, prob))
@@ -1187,7 +1188,7 @@ class Bag(DaskMethodsMixin):
             if other.npartitions == 1:
                 dsk.update(other.dask)
                 other = other.__dask_keys__()[0]
-                dsk["join-%s-other" % name] = (list, other)
+                dsk[f"join-{name}-other"] = (list, other)
             else:
                 msg = (
                     "Multi-bag joins are not implemented. "
@@ -1200,7 +1201,7 @@ class Bag(DaskMethodsMixin):
         elif not isinstance(other, Iterable):
             msg = (
                 "Joined argument must be single-partition Bag, "
-                " delayed object, or Iterable, got %s" % type(other).__name
+                f" delayed object, or Iterable, got {type(other).__name}"
             )
             raise TypeError(msg)
 
@@ -1441,8 +1442,7 @@ class Bag(DaskMethodsMixin):
             npartitions = self.npartitions
         if npartitions > self.npartitions:
             raise ValueError(
-                "only {} partitions, take "
-                "received {}".format(self.npartitions, npartitions)
+                f"only {self.npartitions} partitions, take received {npartitions}"
             )
 
         token = tokenize(self, k, npartitions)
@@ -1655,7 +1655,7 @@ class Bag(DaskMethodsMixin):
         layer = self.name
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, keys)
-            layer = "delayed-" + layer
+            layer = f"delayed-{layer}"
             dsk = HighLevelGraph.from_collections(layer, dsk, dependencies=())
         return [Delayed(k, dsk, layer=layer) for k in keys]
 
@@ -1833,7 +1833,7 @@ def from_url(urls):
     """
     if isinstance(urls, str):
         urls = [urls]
-    name = "from_url-" + uuid.uuid4().hex
+    name = f"from_url-{uuid.uuid4().hex}"
     dsk = {}
     for i, u in enumerate(urls):
         dsk[(name, i)] = (list, (urlopen, u))
@@ -1870,7 +1870,11 @@ def concat(bags):
 def reify(seq):
     if isinstance(seq, Iterator):
         seq = list(seq)
-    if len(seq) and isinstance(seq[0], Iterator):
+    try:
+        first = next(iter(seq))
+    except StopIteration:
+        return seq  # empty iterator
+    if isinstance(first, Iterator):
         seq = list(map(list, seq))
     return seq
 
@@ -1964,7 +1968,7 @@ def bag_range(n, npartitions):
     [0, 1, 2, 3, 4]
     """
     size = n // npartitions
-    name = "range-%d-npartitions-%d" % (n, npartitions)
+    name = f"range-{n}-npartitions-{npartitions}"
     ijs = list(enumerate(take(npartitions, range(0, n, size))))
     dsk = {(name, i): (reify, (range, j, min(j + size, n))) for i, j in ijs}
 
@@ -2389,9 +2393,9 @@ def groupby_tasks(b, grouper, hash=lambda x: int(tokenize(x), 16), max_branch=32
 
     token = tokenize(b, grouper, hash, max_branch)
 
-    shuffle_join_name = "shuffle-join-" + token
-    shuffle_group_name = "shuffle-group-" + token
-    shuffle_split_name = "shuffle-split-" + token
+    shuffle_join_name = f"shuffle-join-{token}"
+    shuffle_group_name = f"shuffle-group-{token}"
+    shuffle_split_name = f"shuffle-split-{token}"
 
     start = {}
 
@@ -2444,7 +2448,7 @@ def groupby_tasks(b, grouper, hash=lambda x: int(tokenize(x), 16), max_branch=32
 
         joins.append(join)
 
-    name = "shuffle-" + token
+    name = f"shuffle-{token}"
 
     end = {
         (name, i): (list, (dict.items, (groupby, grouper, (pluck, 1, j))))
@@ -2466,7 +2470,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     import partd
 
-    p = ("partd-" + token,)
+    p = (f"partd-{token}",)
     dirname = config.get("temporary_directory", None)
     if dirname:
         file = (apply, partd.File, (), {"dir": dirname})
@@ -2485,12 +2489,12 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     }
 
     # Barrier
-    barrier_token = "groupby-barrier-" + token
+    barrier_token = f"groupby-barrier-{token}"
 
     dsk3 = {barrier_token: (chunk.barrier,) + tuple(dsk2)}
 
     # Collect groups
-    name = "groupby-collect-" + token
+    name = f"groupby-collect-{token}"
     dsk4 = {
         (name, i): (collect, grouper, i, p, barrier_token) for i in range(npartitions)
     }
@@ -2508,7 +2512,7 @@ def empty_safe_apply(func, part, is_last):
             if not is_last:
                 return no_result
         return func(part)
-    elif not is_last and len(part) == 0:
+    elif not is_last and is_empty(part):
         return no_result
     else:
         return func(part)
@@ -2576,7 +2580,7 @@ def random_state_data_python(
 
         random_data = np_rng.bytes(624 * n * 4)  # `n * 624` 32-bit integers
         arr = np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1))
-        return [(3, tuple(row) + (624,), None) for row in arr.tolist()]
+        return [(3, tuple(row) + (624,), None) for row in np.atleast_2d(arr).tolist()]
 
     except ImportError:
         # Pure python (much slower)
@@ -2631,7 +2635,7 @@ def repartition_npartitions(bag, npartitions):
     if npartitions == bag.npartitions:
         return bag
 
-    new_name = "repartition-%d-%s" % (npartitions, tokenize(bag, npartitions))
+    new_name = f"repartition-{npartitions}-{tokenize(bag, npartitions)}"
     if bag.npartitions > npartitions:
         ratio = bag.npartitions / npartitions
         new_partitions_boundaries = [
@@ -2647,12 +2651,10 @@ def repartition_npartitions(bag, npartitions):
 
 
 def total_mem_usage(partition):
-    from copy import deepcopy
-
-    # if repartition is called multiple times prior to calling compute(), the partitions
-    # will be an Iterable. Copy the object to avoid consuming the iterable.
+    # Reify iterables to measure actual memory size.
+    # Each compute creates a fresh iterator from the graph.
     if isinstance(partition, Iterable):
-        partition = reify(deepcopy(partition))
+        partition = reify(partition)
     return sizeof(partition)
 
 

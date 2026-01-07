@@ -10,10 +10,17 @@ import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
+if PANDAS_GE_300:
+    from pandas.errors import Pandas4Warning
+
 
 def resample(df, freq, how="mean", **kwargs):
     return getattr(df.resample(freq, **kwargs), how)()
 
+
+# XFAIL_PANDAS_3_RESAMPLE = pytest.mark.xfail(
+#     PANDAS_GE_300, reason="Pandas 3 resample is buggy"
+# )
 
 ME = "ME" if PANDAS_GE_220 else "M"
 
@@ -32,6 +39,10 @@ ME = "ME" if PANDAS_GE_220 else "M"
     ),
 )
 def test_series_resample(obj, method, npartitions, freq, closed, label):
+    if PANDAS_GE_300 and freq == "D" and closed == "right":
+        # Temporary xfail until the upstream issue is resolved
+        pytest.xfail("https://github.com/pandas-dev/pandas/issues/62200")
+
     index = pd.date_range("1-1-2000", "2-15-2000", freq="h")
     index = index.union(pd.date_range("4-15-2000", "5-15-2000", freq="h"))
     if obj == "series":
@@ -225,7 +236,7 @@ def test_rule_deprecated():
     ds = dd.from_pandas(s, npartitions=2)
 
     if PANDAS_GE_300:
-        ctx = pytest.warns(FutureWarning, match="'d' is deprecated")
+        ctx = pytest.warns(Pandas4Warning, match="'d' is deprecated")
     else:
         ctx = contextlib.nullcontext()
 

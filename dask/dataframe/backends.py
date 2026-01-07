@@ -5,8 +5,6 @@ from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
-import pyarrow.compute
 from pandas.api.types import is_scalar, union_categoricals
 
 from dask.array import Array
@@ -45,6 +43,18 @@ from dask.dataframe.utils import (
 )
 from dask.sizeof import SimpleSizeof, sizeof
 from dask.utils import is_arraylike, is_series_like, typename
+
+# https://github.com/dask/dask/issues/12072
+# pyarrow is a required dependency of dask.dataframe However, dask-array
+# workloads can hit this via optimize. So we need to be careful to
+# not import pyarrow unconditionally here.
+try:
+    import pyarrow as pa
+    import pyarrow.compute
+except ImportError:
+    HAS_PYARROW = False
+else:
+    HAS_PYARROW = True
 
 
 class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
@@ -227,16 +237,12 @@ except ImportError:
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))
 def get_pyarrow_schema_pandas(obj, preserve_index=None):
-    import pyarrow as pa
-
     return pa.Schema.from_pandas(obj, preserve_index=preserve_index)
 
 
 @to_pyarrow_table_dispatch.register((pd.DataFrame,))
 def get_pyarrow_table_from_pandas(obj, **kwargs):
     # `kwargs` must be supported by `pyarrow.Table.to_pandas`
-    import pyarrow as pa
-
     return pa.Table.from_pandas(obj, **kwargs)
 
 
@@ -297,7 +303,7 @@ def make_meta_object(x, index=None):
     >>> make_meta_object(('a', 'f8'))
     Series([], Name: a, dtype: float64)
     >>> make_meta_object('i8')
-    np.int64(1)
+    1
     """
 
     if is_arraylike(x) and x.shape:
@@ -403,7 +409,7 @@ def _nonempty_index(idx):
             start="1970-01-01", periods=2, freq=idx.freq, name=idx.name
         )
     elif typ is pd.TimedeltaIndex:
-        start = np.timedelta64(1, "D")
+        start = np.timedelta64(1, idx.unit)
         try:
             return pd.timedelta_range(
                 start=start, periods=2, freq=idx.freq, name=idx.name
@@ -459,12 +465,10 @@ def _nonempty_series(s, idx=None):
         data = pd.array([entry, entry], dtype=dtype)
     elif isinstance(dtype, pd.CategoricalDtype):
         if len(s.cat.categories):
-            data = [s.cat.categories[0]] * 2
-            cats = s.cat.categories
+            codes = [0, 0]
         else:
-            data = _nonempty_index(s.cat.categories)
-            cats = s.cat.categories[:0]
-        data = pd.Categorical(data, categories=cats, ordered=s.cat.ordered)
+            codes = [-1, -1]
+        data = pd.Categorical.from_codes(codes, dtype=s.dtype)
     elif is_integer_na_dtype(dtype):
         data = pd.array([1, None], dtype=dtype)
     elif is_float_na_dtype(dtype):

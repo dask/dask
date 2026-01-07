@@ -802,7 +802,7 @@ def blockwise(
 
     >>> z = blockwise(sequence_dot, '', a, 'i', b, 'i', dtype='f8')
     >>> z.compute()
-    np.int64(250)
+    250
 
     Add new single-chunk dimensions with the ``new_axes=`` keyword, including
     the length of the new dimension.  New dimensions will always be in a single
@@ -1563,11 +1563,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         if any(map(np.isnan, seq2[0].shape)):
             raise ValueError(
                 "Tried to concatenate arrays with unknown"
-                " shape %s.\n\nTwo solutions:\n"
+                f" shape {seq2[0].shape}.\n\nTwo solutions:\n"
                 "  1. Force concatenation pass"
                 " allow_unknown_chunksizes=True.\n"
                 "  2. Compute shapes with "
-                "[x.compute_chunk_sizes() for x in seq]" % str(seq2[0].shape)
+                "[x.compute_chunk_sizes() for x in seq]"
             )
         raise ValueError("Shapes do not align: %s", [x.shape for x in seq2])
 

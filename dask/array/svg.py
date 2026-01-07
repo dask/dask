@@ -55,9 +55,8 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200, sizes=None):
         x, y, offset=offset, skew=skew, size=size
     )
 
-    header = (
-        '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
-        % (max_x + 50, max_y + 50)
+    header = '<svg width="{}" height="{}" style="stroke:rgb(0,0,0);stroke-width:1" >\n'.format(
+        int(max_x + 50), int(max_y + 50)
     )
     footer = "\n</svg>"
 
@@ -69,10 +68,18 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200, sizes=None):
     text = [
         "",
         "  <!-- Text -->",
-        '  <text x="%f" y="%f" %s >%d</text>'
-        % (max_x / 2, max_y + 20, text_style, shape[1]),
-        '  <text x="%f" y="%f" %s transform="rotate(%d,%f,%f)">%d</text>'
-        % (max_x + 20, max_y / 2, text_style, rotate, max_x + 20, max_y / 2, shape[0]),
+        '  <text x="{}" y="{}" {} >{}</text>'.format(
+            max_x / 2, max_y + 20, text_style, shape[1]
+        ),
+        '  <text x="{}" y="{}" {} transform="rotate({},{},{})">{}</text>'.format(
+            max_x + 20,
+            max_y / 2,
+            text_style,
+            rotate,
+            max_x + 20,
+            max_y / 2,
+            shape[0],
+        ),
     ]
 
     return header + "\n".join(lines + text) + footer
@@ -95,9 +102,8 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
         z, y, offset=(ox + max_x + 10, oy + max_x), skew=(0, 0), size=size
     )
 
-    header = (
-        '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
-        % (max_z + 50, max_y + 50)
+    header = '<svg width="{}" height="{}" style="stroke:rgb(0,0,0);stroke-width:1" >\n'.format(
+        int(max_z + 50), int(max_y + 50)
     )
     footer = "\n</svg>"
 
@@ -109,10 +115,13 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
     text = [
         "",
         "  <!-- Text -->",
-        '  <text x="%f" y="%f" %s >%d</text>'
-        % ((min_z + max_z) / 2, max_y + 20, text_style, shape[2]),
-        '  <text x="%f" y="%f" %s transform="rotate(%d,%f,%f)">%d</text>'
-        % (
+        '  <text x="{}" y="{}" {} >{}</text>'.format(
+            (min_z + max_z) / 2,
+            max_y + 20,
+            text_style,
+            shape[2],
+        ),
+        '  <text x="{}" y="{}" {} transform="rotate({},{},{})">{}</text>'.format(
             max_z + 20,
             (min_y + max_y) / 2,
             text_style,
@@ -121,8 +130,7 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
             (min_y + max_y) / 2,
             shape[1],
         ),
-        '  <text x="%f" y="%f" %s transform="rotate(45,%f,%f)">%d</text>'
-        % (
+        '  <text x="{}" y="{}" {} transform="rotate(45,{},{})">{}</text>'.format(
             (mnx + mxx) / 2 - 10,
             mxy - (mxx - mnx) / 2 + 20,
             text_style,
@@ -162,9 +170,8 @@ def svg_nd(chunks, size=200):
 
         out.append(o)
 
-    header = (
-        '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
-        % (left, total_height)
+    header = '<svg width="{}" height="{}" style="stroke:rgb(0,0,0);stroke-width:1" >\n'.format(
+        int(left), int(total_height)
     )
     footer = "\n</svg>"
     return header + "\n\n".join(out) + footer
@@ -187,7 +194,9 @@ def svg_lines(x1, y1, x2, y2, max_n=20):
         indices = range(n)
 
     lines = [
-        '  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (x1[i], y1[i], x2[i], y2[i])
+        '  <line x1="{}" y1="{}" x2="{}" y2="{}" />'.format(
+            int(x1[i]), int(y1[i]), int(x2[i]), int(y2[i])
+        )
         for i in indices
     ]
 
