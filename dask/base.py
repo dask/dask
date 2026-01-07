@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import inspect
 import uuid
 import warnings
 from collections import OrderedDict
@@ -996,22 +995,13 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 
     schedule = get_scheduler(scheduler=scheduler, collections=collections)
 
-    if inspect.ismethod(schedule):
-        try:
-            from distributed.client import default_client
-        except ImportError:
-            pass
-        else:
-            try:
-                client = default_client()
-            except ValueError:
-                pass
-            else:
-                if client.get == schedule:
-                    results = client.persist(
-                        collections, optimize_graph=optimize_graph, **kwargs
-                    )
-                    return repack(results)
+    # Protocol: scheduler can provide its own persist method for async behavior.
+    # For Client-like objects, get_scheduler returns client.get (a bound method),
+    # so we check __self__ for the actual client instance.
+    client = getattr(schedule, "__self__", schedule)
+    if hasattr(client, "persist") and callable(client.persist):
+        results = client.persist(collections, optimize_graph=optimize_graph, **kwargs)
+        return repack(results)
 
     expr = collections_to_expr(collections, optimize_graph)
     expr = expr.optimize()
