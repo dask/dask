@@ -4052,9 +4052,9 @@ def to_zarr(
         }
         if io_store_related:
             warnings.warn(
-                "Passing opening/reading zarr store related arguments via **kwargs is deprecated. "
-                "Please use the 'zarr_read_kwargs' parameter instead. **kwargs will be "
-                "removed in a future version.",
+                "Passing opening/reading zarr store related arguments like 'mode' via **kwargs is deprecated. "
+                "Please use the 'mode' parameter instead. **kwargs / zarr_array_kwargs are only for array related"
+                "keyword arguments. See docstring of '**zarr_array_kwargs",
                 FutureWarning,
                 stacklevel=2,
             )
