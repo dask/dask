@@ -71,7 +71,7 @@ jobs:
           fetch-depth: 0  # Needed by codecov.io
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         if: ${{ matrix.os == 'ubuntu-latest' }}
         with:
           distribution: "zulu"
