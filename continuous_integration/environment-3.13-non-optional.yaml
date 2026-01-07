@@ -1,0 +1,21 @@
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - packaging
+  - python=3.13
+  - pyyaml
+  - click
+  - cloudpickle
+  - partd
+  - fsspec
+  - toolz
+  # test dependencies
+  - pre-commit
+  - pytest
+  - pytest-cov
+  - pytest-mock
+  - pytest-rerunfailures
+  - pytest-timeout
+  - pytest-xdist

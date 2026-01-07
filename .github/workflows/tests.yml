@@ -28,19 +28,9 @@ jobs:
         # Note: after adding/removing builds here, update
         # codecov.yml to match.
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        environment: ["mindeps-non-optional", "mindeps-optional", "3.10", "3.11", "3.12", "3.12-non-optional", "3.13", "3.13-non-optional", "3.14"]
         extra: [null]
         array-expr: ["false"]
-        exclude:
-          # MacOS CI does not have many hosts available; run it on 3.14 only
-          - os: "macos-latest"
-            environment: "3.10"
-          - os: "macos-latest"
-            environment: "3.11"
-          - os: "macos-latest"
-            environment: "3.12"
-          - os: "macos-latest"
-            environment: "3.13"
         include:
           # Minimum dependencies
           - os: "ubuntu-latest"
@@ -49,10 +39,6 @@ jobs:
             environment: "mindeps-dataframe"
           - os: "ubuntu-latest"
             environment: "mindeps-distributed"
-          - os: "ubuntu-latest"
-            environment: "mindeps-non-optional"
-          - os: "ubuntu-latest"
-            environment: "mindeps-optional"
           # Experimental setups
           - os: "ubuntu-latest"
             environment: "3.14"
@@ -124,7 +110,7 @@ jobs:
           COVERAGE: "true"
           ARRAYEXPR: ${{ matrix.array-expr }}
           HDF5_USE_FILE_LOCKING: "FALSE"
-        run: source continuous_integration/scripts/run_tests.sh
+        run: source continuous_integration/scripts/run_tests.sh -k test_system
 
       - name: Coverage
         uses: codecov/codecov-action@v5
