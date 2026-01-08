@@ -45,21 +45,21 @@ Highlights
   - Fix reify to handle sparse arrays and other objects without __len__ (:pr:`12103`) `Gautham Hullikunte`_
   - Ruff supersedes absolufy-imports (:pr:`12141`) `Dimitri Papadopoulos Orfanos`_
   - Enforce ruff/pyupgrade rule UP032 (:pr:`12136`) `Dimitri Papadopoulos Orfanos`_
-  - Typing fixes (:distributed-pr:`9159`) `Jacob Tomlinson`_
+  - Typing fixes (:pr-distributed:`9159`) `Jacob Tomlinson`_
 
-  - Explicit setuptools-scm minimum version (:distributed-pr:`9160`) `Jacob Tomlinson`_
-  - Enforce ruff rules (RUF) (:distributed-pr:`9153`) `Dimitri Papadopoulos Orfanos`_
-  - Clean up `MANIFEST.in` (:distributed-pr:`9149`) `Dimitri Papadopoulos Orfanos`_
-  - isort → ruff (:distributed-pr:`9152`) `Dimitri Papadopoulos Orfanos`_
-  - Ruff supersedes absolufy-imports (:distributed-pr:`9154`) `Dimitri Papadopoulos Orfanos`_
-  - Bump minimum supported ``toolz`` to 0.12.0 (:distributed-pr:`9151`) `James Bourbeau`_
-  - flake8, bugbear, pyupgrade → ruff (:distributed-pr:`9147`) `Dimitri Papadopoulos Orfanos`_
-  - Fix typos found by codespell (:distributed-pr:`9145`) `Dimitri Papadopoulos Orfanos`_
-  - Clean up setuptools-specific configuration (:distributed-pr:`9150`) `Dimitri Papadopoulos Orfanos`_
-  - PEP 639 compliance (:distributed-pr:`9146`) `Dimitri Papadopoulos Orfanos`_
-  - Update black (:distributed-pr:`9148`) `Dimitri Papadopoulos Orfanos`_
-  - Fix empty progress bar (:distributed-pr:`9144`) `Jacob Tomlinson`_
-  - Exclude broken `tblib` versions in CI (:distributed-pr:`9141`) `Jacob Tomlinson`_
+  - Explicit setuptools-scm minimum version (:pr-distributed:`9160`) `Jacob Tomlinson`_
+  - Enforce ruff rules (RUF) (:pr-distributed:`9153`) `Dimitri Papadopoulos Orfanos`_
+  - Clean up `MANIFEST.in` (:pr-distributed:`9149`) `Dimitri Papadopoulos Orfanos`_
+  - isort → ruff (:pr-distributed:`9152`) `Dimitri Papadopoulos Orfanos`_
+  - Ruff supersedes absolufy-imports (:pr-distributed:`9154`) `Dimitri Papadopoulos Orfanos`_
+  - Bump minimum supported ``toolz`` to 0.12.0 (:pr-distributed:`9151`) `James Bourbeau`_
+  - flake8, bugbear, pyupgrade → ruff (:pr-distributed:`9147`) `Dimitri Papadopoulos Orfanos`_
+  - Fix typos found by codespell (:pr-distributed:`9145`) `Dimitri Papadopoulos Orfanos`_
+  - Clean up setuptools-specific configuration (:pr-distributed:`9150`) `Dimitri Papadopoulos Orfanos`_
+  - PEP 639 compliance (:pr-distributed:`9146`) `Dimitri Papadopoulos Orfanos`_
+  - Update black (:pr-distributed:`9148`) `Dimitri Papadopoulos Orfanos`_
+  - Fix empty progress bar (:pr-distributed:`9144`) `Jacob Tomlinson`_
+  - Exclude broken `tblib` versions in CI (:pr-distributed:`9141`) `Jacob Tomlinson`_
 
 .. _v2025.11.0:
 
