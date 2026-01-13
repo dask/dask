@@ -5,6 +5,7 @@ on:
     # Run 2h after the daily tests.yaml
     - cron: "0 8,20 * * *"
   workflow_dispatch:
+  push:
 
 permissions:
   contents: write
@@ -12,8 +13,6 @@ permissions:
 jobs:
   test-report:
     name: Test Report
-    # Do not run the report job on forks
-    if: github.repository == 'dask/dask' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ github.token }}
@@ -24,6 +23,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: dask/distributed
+          ref: test_report
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v3.2.0
