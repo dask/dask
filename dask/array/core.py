@@ -4017,8 +4017,8 @@ def to_zarr(
         storage system (e.g., fsspec parameters for cloud storage).
     **kwargs:
         .. deprecated:: 2025.12.0
-            Passing storage-related arguments via **kwargs is deprecated.
-            Please use the ``zarr_read_kwargs`` parameter instead.
+            Passing array creation-related arguments via **kwargs is deprecated.
+            Please use the ``zarr_array_kwargs`` parameter instead.
 
     Raises
     ------
@@ -4049,16 +4049,16 @@ def to_zarr(
 
     if kwargs:
         warnings.warn(
-            "Passing storage-related arguments via **kwargs is deprecated. "
-            "Please use the 'zarr_store_kwargs' parameter instead. **kwargs will be "
+            "Passing array creation-related arguments via **kwargs is deprecated. "
+            "Please use the 'zarr_array_kwargs' parameter instead. **kwargs will be "
             "removed in a future version.",
             FutureWarning,
             stacklevel=2,
         )
-        if zarr_read_kwargs is None:
-            zarr_read_kwargs = kwargs
+        if zarr_array_kwargs is None:
+            zarr_array_kwargs = kwargs
         else:
-            zarr_read_kwargs = {**kwargs, **zarr_read_kwargs}
+            zarr_array_kwargs = {**kwargs, **zarr_array_kwargs}
 
     if _zarr_v3():
         zarr_mem_store_types = (zarr.storage.MemoryStore,)
