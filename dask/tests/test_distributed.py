@@ -38,7 +38,6 @@ if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
     cluster = partial(cluster, should_check_state=False)
 
-
 # TODO: the fixture teardown for `cluster_fixture` is failing periodically with
 # a PermissionError on windows only (in CI). Since this fixture lives in the
 # distributed codebase and is nested within other fixtures we use, it's hard to
@@ -361,6 +360,15 @@ def test_zarr_distributed_roundtrip(c, zarr):
         a2 = da.from_zarr(d)
         da.assert_eq(a, a2, scheduler=c)
         assert a2.chunks == a.chunks
+
+
+def test_zarr_kwargs(zarr):
+    pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+    with tmpdir() as d:
+        with pytest.warns(FutureWarning):
+            da.to_zarr(da.zeros((3, 3), chunks=(1, 1)), d, fill_value=10)
+        assert zarr.open(d).fill_value == 10
 
 
 def test_zarr_distributed_with_explicit_directory_store(c, zarr):
