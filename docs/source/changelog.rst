@@ -5,9 +5,9 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
-.. _v2026.1.0:
+.. _v2026.1.1:
 
-2026.1.0
+2026.1.1
 --------
 
 Highlights
@@ -39,6 +39,13 @@ Highlights
   - Clean up obsolete pins in CI (:pr-distributed:`9172`) `Guido Imperiale`_
   - Fix incompatibility of pyparsing vs. packaging in mindeps CI (:pr-distributed:`9170`) `Guido Imperiale`_
   - Bump mypy; fix mypy failure (:pr-distributed:`9171`) `Guido Imperiale`_
+
+.. _v2026.1.0:
+
+2026.1.0
+--------
+
+Broken yanked release, please ignore.
 
 .. _v2025.12.0:
 
