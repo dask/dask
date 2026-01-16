@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import contextvars
 import signal
 import sys
 import threading
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.pool import ThreadPool
 from time import sleep, time
@@ -187,3 +189,69 @@ def test_interrupt():
             get(dsk, "x", pool=pool)
         clog_event.set()
     interrupter.join()
+
+
+def warm_up_thread_pool(num_workers: int | None) -> None:
+    """Ensure that there is a warm thread pool.
+
+    With num_workers=None on the default thread, this function warms up the default
+    thread pool. With num_workers set or from a different thread, this function spawns
+    and warms up a non-default thread pool.
+
+    When this function is called after another test that called get() or compute(), the
+    thread pool will be already warm, at least partially (not all threads will
+    necessarily be already running).
+    """
+    parties = num_workers or CPU_COUNT
+    barrier = threading.Barrier(parties)
+    dsk = {("x", i): (barrier.wait,) for i in range(parties)}
+    get(dsk, list(dsk), num_workers=num_workers)
+
+
+test_ctxvar = contextvars.ContextVar("test_ctxvar", default=42)
+
+
+@pytest.mark.parametrize("num_workers", [None, 1])
+def test_contextvars(num_workers):
+    """When the thread pool is cold, contextvars area automatically propagated from the
+    caller thread to **new** threads on Python 3.14t by default, as well as on 3.14 with
+    the opt-in flag `python -X thread_inherit_context=1`.
+
+    Test that contextvars are always propagated to the tasks, even in absence of the above
+    flag and even when the threads were already warm when the context was set.
+    """
+    warm_up_thread_pool(num_workers)
+
+    dsk = {"x": (test_ctxvar.get,)}
+    # Reuse thread pool started by warm_up_thread_pool
+    assert get(dsk, "x", num_workers=num_workers) == 42
+    tok = test_ctxvar.set(43)
+    try:
+        assert get(dsk, "x", num_workers=num_workers) == 43
+    finally:
+        test_ctxvar.reset(tok)
+
+
+@pytest.mark.parametrize("num_workers", [None, 1])
+def test_context_aware_warnings(num_workers):
+    """Test that warnings issued from a thread pool can be caught by the main thread,
+    even when the thread pool was already warm when entering `warnings.catch_warnings`.
+    This also affects `@pytest.mark.filterwarnings` and similar mechanisms.
+
+    This needs special handling on Python 3.14t, which uses context-aware warnings.
+    The system is also available opt-in on 3.14 (GIL-enabled) with
+       python -X context_aware_warnings=1
+    """
+    warm_up_thread_pool(num_workers)
+
+    def warn():
+        warnings.warn("Hello world", RuntimeWarning, stacklevel=2)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        # Reuse thread pool started by warm_up_thread_pool
+        get({"x": (warn,)}, "x", num_workers=num_workers)
+
+    assert len(w) == 1
+    assert isinstance(w[0].message, RuntimeWarning)
+    assert str(w[0].message) == "Hello world"
