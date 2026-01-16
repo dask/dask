@@ -7,6 +7,7 @@ See local.py
 from __future__ import annotations
 
 import atexit
+import contextvars
 import multiprocessing.pool
 import sys
 import threading
@@ -33,6 +34,29 @@ pools_lock = Lock()
 
 def pack_exception(e, dumps):
     return e, sys.exc_info()[2]
+
+
+class ContextAwareThreadPoolExecutor(ThreadPoolExecutor):
+    """Variant ThreadPoolExecutor that propagates contextvars
+    from the submitting thread to the worker threads.
+
+    With a vanilla ThreadPoolExecutor, contextvars are automatically propagated on
+    CPython 3.14t (noGIL) if and only if they are set before the worker threads are
+    started.
+    This variant propagates contextvars on all Python interpreters and also when the
+    worker threads are already warm when the variables are set in the submitting thread.
+
+    This also affects catching warnings, which on 3.14t use contextvars.
+
+    See Also
+    --------
+    https://docs.python.org/3/using/cmdline.html#envvar-PYTHON_THREAD_INHERIT_CONTEXT
+    https://docs.python.org/3/using/cmdline.html#envvar-PYTHON_CONTEXT_AWARE_WARNINGS
+    """
+
+    def submit(self, fn, /, *args, **kwargs):
+        ctx = contextvars.copy_context()
+        return super().submit(ctx.run, fn, *args, **kwargs)
 
 
 def get(
@@ -76,13 +100,13 @@ def get(
         if pool is None:
             if num_workers is None and thread is main_thread:
                 if default_pool is None:
-                    default_pool = ThreadPoolExecutor(CPU_COUNT)
+                    default_pool = ContextAwareThreadPoolExecutor(CPU_COUNT)
                     atexit.register(default_pool.shutdown)
                 pool = default_pool
             elif thread in pools and num_workers in pools[thread]:
                 pool = pools[thread][num_workers]
             else:
-                pool = ThreadPoolExecutor(num_workers)
+                pool = ContextAwareThreadPoolExecutor(num_workers)
                 atexit.register(pool.shutdown)
                 pools[thread][num_workers] = pool
         elif isinstance(pool, multiprocessing.pool.Pool):
