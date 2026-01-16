@@ -5,7 +5,42 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
-.. _v5025.12.0:
+.. _v2026.1.0:
+
+2026.1.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+- Fix XSS vulnerability `CVE-2026-23528 <https://github.com/dask/distributed/security/advisories/GHSA-c336-7962-wfj2>`_ `Jacob Tomlinson`_
+- Support duck-typed Futures in task graph processing (:pr:`12213`) `Matthew Rocklin`_
+
+.. dropdown:: Additional changes
+
+  - Remove the Python 2 Comment (:pr:`12229`) `Vipin Kataria`_
+  - Fix changelog: distributed-pr -> pr-distributed (:pr:`12227`) `Matthew Plough`_
+  - Support duck-typed Futures in task graph processing (:pr:`12213`) `Matthew Rocklin`_
+  - Relax `test_serialization` (:pr:`12226`) `Guido Imperiale`_
+  - [cosmetic] Reorganise dependency groups in CI environment files (:pr:`12222`) `Guido Imperiale`_
+  - Review `_array_expr_enabled()` (:pr:`12217`) `Guido Imperiale`_
+  - Increase coverage; lower codecov threshold to pass (:pr:`12214`) `Guido Imperiale`_
+  - Test array expr on mindeps (:pr:`12216`) `Guido Imperiale`_
+  - Disable some Mac builds (:pr:`12218`) `Guido Imperiale`_
+  - Typing tweaks (:pr:`12215`) `Guido Imperiale`_
+  - [CI] unbreak codecov (:pr:`12211`) `Guido Imperiale`_
+  - Test array expr on Python 3.14 (:pr:`12212`) `Guido Imperiale`_
+  - Fix pickle compatibility for Python 3.14 (:pr:`12206`) `Matthew Rocklin`_
+  - Remove deprecated `dask._compatibility.entry_points` (:pr:`12202`) `Guido Imperiale`_
+  - Tweak MacOS CI (:pr:`12200`) `Guido Imperiale`_
+  - Remove obsolete CI pins (:pr:`12199`) `Guido Imperiale`_
+
+  - Fix XSS vulnerability `CVE-2026-23528 <https://github.com/dask/distributed/security/advisories/GHSA-c336-7962-wfj2>`_ `Jacob Tomlinson`_
+  - Clean up obsolete pins in CI (:pr-distributed:`9172`) `Guido Imperiale`_
+  - Fix incompatibility of pyparsing vs. packaging in mindeps CI (:pr-distributed:`9170`) `Guido Imperiale`_
+  - Bump mypy; fix mypy failure (:pr-distributed:`9171`) `Guido Imperiale`_
+
+.. _v2025.12.0:
 
 2025.12.0
 ---------
@@ -9796,3 +9831,5 @@ Other
 .. _`Wouter-Michiel Vierdag`: https://github.com/melonora
 .. _`Clément Robert`: https://github.com/neutrinoceros
 .. _`Gautham Hullikunte`: https://github.com/batcity
+.. _`Vipin Kataria`: https://github.com/vipinkataria2209
+.. _`Matthew Plough`: https://github.com/mplough-kobold
