@@ -3996,7 +3996,7 @@ def to_zarr(
             **kwargs with the `mode` keys and corresponding values. `read_only` is not allowed anymore
             and will not have an effect.
 
-        Keyword arguments passed to :func:`zarr.create_array` (for zarr v3) or
+        Keyword arguments passed to :func:`Group.create_array` (for zarr v3, where Group is a zarr group) or
         :func:`zarr.create` (for zarr v2). This function automatically sets
         ``shape``, ``chunks``, and ``dtype`` based on the dask array, but these
         can be overridden.
@@ -4011,7 +4011,7 @@ def to_zarr(
 
         For the complete list of available arguments, see the zarr documentation:
 
-        - zarr v3: https://zarr.readthedocs.io/en/stable/api/zarr/index.html#zarr.create_array
+        - zarr v3: https://zarr.readthedocs.io/en/latest/api/zarr/group/#zarr.Group.create_array
         - zarr v2: https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create
 
     Raises
