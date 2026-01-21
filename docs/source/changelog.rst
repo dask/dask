@@ -13,8 +13,6 @@ Changelog
 Highlights
 ^^^^^^^^^^
 
-.. _v5025.12.0:
-
 - Have `**kwargs` in `to_zarr` follow zarr-python API and add `mode` argument (:pr:`12205`) `Wouter-Michiel Vierdag`_
 
 .. note::
@@ -31,6 +29,8 @@ Highlights
     when `zarr>v3.0.0` and `zarr.create` for `zarr<v3.0.0`. Please see the corresponding
     docstrings of which the links can be found in the docstring of `**zarr_array_kwargs`
     in `to_zarr`.
+
+.. _v5025.12.0:
 
 2025.12.0
 ---------
