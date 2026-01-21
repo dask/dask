@@ -1,36 +1,44 @@
 from __future__ import annotations
 
+import builtins
 import importlib
 import warnings
 
 # The "array.query-planning" config can only be processed once
-ARRAY_EXPR_ENABLED: bool | None = None
+ARRAY_EXPR_ENABLED: builtins.bool | None = None
 
 
-def _array_expr_enabled() -> bool:
+def _array_expr_enabled() -> builtins.bool:
     import dask
 
     global ARRAY_EXPR_ENABLED
 
-    use_array_expr = dask.config.get("array.query-planning")
+    use_array_expr: builtins.bool | None = dask.config.get("array.query-planning")
+    if use_array_expr is None:
+        use_array_expr = False  # Eventually, this default will flip to True
+    if not isinstance(use_array_expr, builtins.bool):
+        # Guard against "false" string in YAML config, which would evaluate to True
+        raise TypeError(  # pragma: no cover
+            "The 'array.query-planning' config must be True, False, or None"
+        )
 
-    if ARRAY_EXPR_ENABLED is not None:
-        if (use_array_expr is True and ARRAY_EXPR_ENABLED is False) or (
-            use_array_expr is False and ARRAY_EXPR_ENABLED is True
-        ):
-            warnings.warn(
-                "The 'array.query-planning' config is now set to "
-                f"{use_array_expr}, but query planning is already "
-                f"{'enabled' if ARRAY_EXPR_ENABLED else 'disabled'}. "
-                "The query-planning config can only be changed before "
-                "`dask.array` is first imported!"
-            )
-        return ARRAY_EXPR_ENABLED  # type: ignore[return-value]
+    if ARRAY_EXPR_ENABLED is None:
+        ARRAY_EXPR_ENABLED = use_array_expr
+        return use_array_expr
 
-    return bool(use_array_expr if use_array_expr is not None else False)
+    if use_array_expr != ARRAY_EXPR_ENABLED:
+        warnings.warn(
+            "The 'array.query-planning' config is now set to "
+            f"{use_array_expr}, but query planning is already "
+            f"{'enabled' if ARRAY_EXPR_ENABLED else 'disabled'}. "
+            "The query-planning config can only be changed before "
+            "`dask.array` is first imported!",
+            RuntimeWarning,
+        )
+    return ARRAY_EXPR_ENABLED
 
 
-def array_expr_enabled():
+def array_expr_enabled() -> builtins.bool:
     # Need a public variant for downstream libraries to check
     return _array_expr_enabled()
 
@@ -622,7 +630,7 @@ try:
 
         da = importlib.reload(da)
 
-except ImportError as e:
+except ImportError as e:  # pragma: no cover
     msg = (
         "Dask array requirements are not installed.\n\n"
         "Please either conda or pip install as follows:\n\n"
@@ -916,7 +924,8 @@ if _array_expr_enabled():
         from dask.array.utils import assert_eq
         from dask.base import compute
 
-    except ImportError:
+    # FIXME this should not ever happen
+    except ImportError:  # pragma: no cover
         import dask.array as da  # type: ignore[no-redef]
 
         da = importlib.reload(da)

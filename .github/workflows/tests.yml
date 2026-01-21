@@ -25,10 +25,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Note: after adding/removing builds here, update
+        # codecov.yml to match.
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.10", "3.11", "3.12", "3.13"]
+        environment: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         extra: [null]
         array-expr: ["false"]
+        exclude:
+          # MacOS CI does not have many hosts available; run it on 3.14 only
+          - os: "macos-latest"
+            environment: "3.10"
+          - os: "macos-latest"
+            environment: "3.11"
+          - os: "macos-latest"
+            environment: "3.12"
+          - os: "macos-latest"
+            environment: "3.13"
         include:
           # Minimum dependencies
           - os: "ubuntu-latest"
@@ -43,16 +55,14 @@ jobs:
             environment: "mindeps-optional"
           # Experimental setups
           - os: "ubuntu-latest"
-            environment: "3.12"
+            environment: "3.14"
             extra: "pandas-nightly"
           - os: "ubuntu-latest"
-            environment: "3.12"
+            environment: "3.14"
             array-expr: "true"
-
-    env:
-      PARALLEL: "true"
-      COVERAGE: "true"
-      HDF5_USE_FILE_LOCKING: "FALSE"
+          - os: "ubuntu-latest"
+            environment: "mindeps-array"
+            array-expr: "true"
 
     steps:
       - name: Checkout source
@@ -61,7 +71,7 @@ jobs:
           fetch-depth: 0  # Needed by codecov.io
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         if: ${{ matrix.os == 'ubuntu-latest' }}
         with:
           distribution: "zulu"
@@ -105,19 +115,21 @@ jobs:
           echo "DASK_ARRAY__QUERY_PLANNING=$DASK_ARRAY__QUERY_PLANNING" >> $GITHUB_ENV
 
       - name: Run import tests
-        id: import_tests
-        env:
-          ARRAYEXPR: ${{ matrix.array-expr }}
         run: pytest dask/tests/test_imports.py
 
       - name: Run tests
         id: run_tests
         env:
+          PARALLEL: "true"
+          COVERAGE: "true"
           ARRAYEXPR: ${{ matrix.array-expr }}
+          HDF5_USE_FILE_LOCKING: "FALSE"
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
         uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       # The environment file is created in continuous_integration/scripts/install.sh
       # and can be useful when debugging locally
