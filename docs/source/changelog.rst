@@ -17,18 +17,17 @@ Highlights
 
 .. note::
 
-    Passing on io-related arguments in `**kwargs` in `to_zarr` will be deprecated
-    and `read_kwargs` argument as well as `zarr_array_kwargs` (dict) introduced in 2025.12.0
+    Passing on io-related arguments in ``**kwargs`` in ``to_zarr`` will be deprecated
+    and ``read_kwargs`` argument as well as ``zarr_array_kwargs`` (dict) introduced in 2025.12.0
     has been removed.
-    If you passed on either `mode` or `read_only` as `**kwargs` or `read_kwargs` in
-    `to_zarr`, please use the new `mode` argument. The `read_only` argument can still
-    be passed on, but it will give a warning and have no effect (given that `to_zarr`
+    If you passed on either ``mode`` or `read_only` as ``**kwargs`` or ``read_kwargs`` in
+    ``to_zarr``, please use the new ``mode`` argument. The ``read_only`` argument can still
+    be passed on, but it will give a warning and have no effect (given that ``to_zarr``
     is meant to write this should not be an issue). For now no error will be thrown.
-    `**kwargs` in `to_zarr` has been renamed as `**zarr_array_kwargs` to indicate
-    that this  directly follows the `zarr-python` API of `Group.create_array`
-    when `zarr>v3.0.0` and `zarr.create` for `zarr<v3.0.0`. Please see the corresponding
-    docstrings of which the links can be found in the docstring of `**zarr_array_kwargs`
-    in `to_zarr`.
+    ``**kwargs`` in ``to_zarr`` has been renamed as ``**zarr_array_kwargs`` to indicate
+    that this  directly follows the ``zarr-python`` API of ``Group.create_array``
+    when ``zarr>v3.0.0`` and ``zarr.create`` for ``zarr<v3.0.0``. Please see
+    :func:`dask.array.to_zarr` for more.
     
 .. _v2026.1.1:
 
