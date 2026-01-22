@@ -4876,6 +4876,16 @@ def test_nunique(dropna, axis):
     )
 
 
+def test_nunique_axis_string():
+    """Test that nunique accepts string axis values ('index', 'columns')."""
+    pdf = pd.DataFrame({"x": [1, 2, 1], "y": [4, 4, 6]})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    
+    # Verify Dask matches Pandas for string axis values
+    assert_eq(ddf.nunique(axis="columns"), pdf.nunique(axis="columns"))
+    assert_eq(ddf.nunique(axis="index"), pdf.nunique(axis="index"))
+
+
 def test_iter():
     df = pd.DataFrame({"A": [1, 2, 3, 4], "B": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, 2)
