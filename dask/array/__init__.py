@@ -13,22 +13,29 @@ def _array_expr_enabled() -> builtins.bool:
 
     global ARRAY_EXPR_ENABLED
 
-    use_array_expr = dask.config.get("array.query-planning")
+    use_array_expr: builtins.bool | None = dask.config.get("array.query-planning")
+    if use_array_expr is None:
+        use_array_expr = False  # Eventually, this default will flip to True
+    if not isinstance(use_array_expr, builtins.bool):
+        # Guard against "false" string in YAML config, which would evaluate to True
+        raise TypeError(  # pragma: no cover
+            "The 'array.query-planning' config must be True, False, or None"
+        )
 
-    if ARRAY_EXPR_ENABLED is not None:
-        if (use_array_expr is True and ARRAY_EXPR_ENABLED is False) or (
-            use_array_expr is False and ARRAY_EXPR_ENABLED is True
-        ):
-            warnings.warn(
-                "The 'array.query-planning' config is now set to "
-                f"{use_array_expr}, but query planning is already "
-                f"{'enabled' if ARRAY_EXPR_ENABLED else 'disabled'}. "
-                "The query-planning config can only be changed before "
-                "`dask.array` is first imported!"
-            )
-        return ARRAY_EXPR_ENABLED
+    if ARRAY_EXPR_ENABLED is None:
+        ARRAY_EXPR_ENABLED = use_array_expr
+        return use_array_expr
 
-    return builtins.bool(use_array_expr if use_array_expr is not None else False)
+    if use_array_expr != ARRAY_EXPR_ENABLED:
+        warnings.warn(
+            "The 'array.query-planning' config is now set to "
+            f"{use_array_expr}, but query planning is already "
+            f"{'enabled' if ARRAY_EXPR_ENABLED else 'disabled'}. "
+            "The query-planning config can only be changed before "
+            "`dask.array` is first imported!",
+            RuntimeWarning,
+        )
+    return ARRAY_EXPR_ENABLED
 
 
 def array_expr_enabled() -> builtins.bool:
