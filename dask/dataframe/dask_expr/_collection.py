@@ -2211,7 +2211,7 @@ Expr={expr}"""
         >>> res = ddf.x.reduction(count_greater, aggregate=lambda x: x.sum(),
         ...                       chunk_kwargs={'value': 25})
         >>> res.compute()
-        25
+        np.int64(25)
 
         Aggregate both the sum and count of a Series at the same time:
 
@@ -3438,7 +3438,7 @@ class DataFrame(FrameBase):
         >>> divisions
         DatetimeIndex(['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04',
                        '2021-01-05', '2021-01-06', '2021-01-07'],
-                      dtype='datetime64[ns]', freq='D')
+                      dtype='datetime64[us]', freq='D')
 
         Note that ``len(divisions)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
@@ -5502,7 +5502,7 @@ def concat(
     ...     dd.from_pandas(pd.Series(['a', 'b'], dtype='category'), 1),
     ...     dd.from_pandas(pd.Series(['a', 'c'], dtype='category'), 1),
     ... ], interleave_partitions=True).dtype
-    CategoricalDtype(categories=['a', 'b', 'c'], ordered=False, categories_dtype=object)
+    CategoricalDtype(categories=['a', 'b', 'c'], ordered=False, categories_dtype=str)
     """
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
