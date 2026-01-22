@@ -954,6 +954,7 @@ def test_map_meta(pdf, df):
 
     pdf.index.name = "a"
     df = from_pandas(pdf, npartitions=10)
+    expected = pdf.x.map(lambda x: x + 1)
     result = df.x.map(lambda x: x + 1, meta=("x", "int64"))
     assert_eq(result, expected)
 
