@@ -5,15 +5,15 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
-.. _v2026.2.0:
+.. _v2026.1.0:
 
-2026.2.0
+2026.1.0
 ---------
 
 Highlights
 ^^^^^^^^^^
 
-- Have `**kwargs` in `to_zarr` follow zarr-python API and add `mode` argument (:pr:`12205`) `Wouter-Michiel Vierdag`_
+- Have ``**kwargs`` in ``to_zarr`` follow zarr-python API and add ``mode`` argument (:pr:`12205`) `Wouter-Michiel Vierdag`_
 
 .. note::
 
