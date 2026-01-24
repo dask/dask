@@ -2595,6 +2595,7 @@ def test_astype_gh9316():
     assert result_a.flags.f_contiguous == result_b.flags.f_contiguous
 
 
+@pytest.mark.filterwarnings("ignore:numpy.fix")
 def test_arithmetic():
     x = np.arange(5).astype("f4") + 2
     y = np.arange(5).astype("i8") + 2
