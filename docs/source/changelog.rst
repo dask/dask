@@ -5,10 +5,10 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
-.. _v2026.1.0:
+.. _v2026.1.2:
 
-2026.1.0
----------
+2026.1.2
+--------
 
 Highlights
 ^^^^^^^^^^
