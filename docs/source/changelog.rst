@@ -203,6 +203,14 @@ Highlights
   - Fix macOS CI failure during job startup (:pr-distributed:`9113`) `Jacob Tomlinson`_
   - Prevent task stream dashboard showing 1970 date (:pr-distributed:`9109`) `Guillaume Eynard-Bontemps`_
 
+.. _v2025.9.2:
+
+2025.9.2
+--------
+
+This is a backport security release only. 
+
+See `CVE-2026-23528 <https://github.com/dask/distributed/security/advisories/GHSA-c336-7962-wfj2>`_ for more details.
 
 .. _v2025.9.1:
 
