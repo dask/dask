@@ -91,6 +91,8 @@ def test_positional_indexer_multiple_variables():
 
 @pytest.mark.parametrize("compute", [True, False])
 def test_xarray_blockwise_fusion_store(compute):
+    pytest.importorskip("zarr")
+
     def custom_scheduler_get(dsk, keys, expected, **kwargs):
         dsk = dsk.__dask_graph__()
         assert (
