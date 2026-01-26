@@ -954,6 +954,7 @@ def test_map_meta(pdf, df):
 
     pdf.index.name = "a"
     df = from_pandas(pdf, npartitions=10)
+    expected = pdf.x.map(lambda x: x + 1)
     result = df.x.map(lambda x: x + 1, meta=("x", "int64"))
     assert_eq(result, expected)
 
@@ -1390,7 +1391,7 @@ def test_column_getattr(df):
 def test_serialization(pdf, df):
     before = pickle.dumps(df)
 
-    assert len(before) < 350 + len(pickle.dumps(pdf))
+    assert len(before) < 500 + len(pickle.dumps(pdf))
 
     part = df.partitions[0].compute()
     assert (

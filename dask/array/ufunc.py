@@ -23,7 +23,6 @@ def wrap_elemwise(numpy_ufunc, source=np):
         else:
             return numpy_ufunc(*args, **kwargs)
 
-    # functools.wraps cannot wrap ufunc in Python 2.x
     wrapped.__name__ = numpy_ufunc.__name__
     return derived_from(source)(wrapped)
 

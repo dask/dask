@@ -1,5 +1,7 @@
 numpydoc
-sphinx>=8.0.0
+# Pin to sphinx<9 until it's supported in sphinx-autosummary-accessors
+# https://github.com/xarray-contrib/sphinx-autosummary-accessors/issues/165
+sphinx>=8.0.0,<9.0.0 
 dask-sphinx-theme>=4.0.0
 sphinx-click
 sphinx-copybutton
