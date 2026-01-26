@@ -29,7 +29,7 @@ jobs:
         # Note: after adding/removing builds here, update
         # codecov.yml to match.
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+        environment: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         extra: [null]
         array-expr: ["false"]
         exclude:
@@ -42,8 +42,6 @@ jobs:
             environment: "3.12"
           - os: "macos-latest"
             environment: "3.13"
-          - os: "macos-latest"
-            environment: "3.14t"
         include:
           # Minimum dependencies
           - os: "ubuntu-latest"
@@ -66,6 +64,14 @@ jobs:
           - os: "ubuntu-latest"
             environment: "mindeps-array"
             array-expr: "true"
+          # Free-threading. Move to general environments after pandas 3.0.1 is released.
+          - os: "ubuntu-latest"
+            environment: "3.14t"
+            extra: "pandas-nightly"
+          - os: "windows-latest"
+            environment: "3.14t"
+            extra: "pandas-nightly"
+
 
     steps:
       - name: Checkout source
@@ -102,8 +108,12 @@ jobs:
           echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
           echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
 
-      # FIXME https://github.com/msgpack/msgpack-python/issues/613
       - name: Disable msgpack C extension on free-threading
+        # FIXME https://github.com/msgpack/msgpack-python/issues/613
+        # The msgpack C module does not contain any race conditions in free-threading,
+        # but does not release the GIL. So we need to either install the (slower)
+        # pure-python variant or we need to run the test suite with PYTHON_GIL=0.
+        # The former approach has the benefit of proving that msgpack is the only offender.
         if: ${{ matrix.environment == '3.14t' }}
         run: |
           conda uninstall -y -v --force msgpack-python

@@ -22,8 +22,11 @@ dependencies:
   - coverage
   # key optional dependencies
   - numpy
-  # - pandas >=3  # Needed for free-threading  # FIXME race conditions in 3.0.0rc1
-  # - pyarrow
+  - pandas>=3  # Actually need >=3.0.1 due to severe race conditions in 3.0
+               # (https://github.com/pandas-dev/pandas/pull/63783)
+               # Until 3.0.1 is released, this is temporarily overridden
+               # by pandas-nightly in tests.yaml.
+  - pyarrow
   # conda variant of distributed depends on cytoolz, which is not available
   # on conda yet.
   # Manually install distributed dependencies from conda below.
@@ -43,10 +46,10 @@ dependencies:
   # - pyspark  # Huge package; limit where it is tested
   # - tiledb-py  # Not available for 3.14t
   # - tiledb  # Not available for 3.14t
-  # - xarray  # Requires pandas
+  - xarray
   # - sqlalchemy  # Not available for 3.14t
   - jsonschema
-  # - bokeh  # Requires pandas
+  - bokeh
   - httpretty
   - aiohttp
   # - crick  # No Python 3.14 build yet
@@ -70,7 +73,8 @@ dependencies:
   - mmh3
   - jinja2
 
-  # FIXME pull in distributed dependencies from conda (see above)
+  ##### 3.14t temporary hacks
+  # packages normally pulled in by the `distributed` conda package
   - locket
   # FIXME https://github.com/msgpack/msgpack-python/issues/613
   # Install placeholder to prevent distributed below from compiling the C extension from
@@ -81,6 +85,7 @@ dependencies:
   - tornado
   - urllib3
   - zict
+  ##### end 3.14t hacks
 
   - pip
   - pip:
