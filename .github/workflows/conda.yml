@@ -32,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: conda-incubator/setup-miniconda@v3.2.0
+        uses: conda-incubator/setup-miniconda@v3.3.0
         with:
           miniforge-version: latest
           use-mamba: true
