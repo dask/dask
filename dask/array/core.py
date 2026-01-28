@@ -3945,9 +3945,8 @@ def to_zarr(
     region=None,
     compute=True,
     return_stored=False,
-    zarr_array_kwargs=None,
-    zarr_read_kwargs=None,
-    **kwargs,
+    mode="a",
+    **zarr_array_kwargs,
 ):
     """Save array to the zarr storage format
 
@@ -3980,8 +3979,24 @@ def to_zarr(
         See :func:`~dask.array.store` for more details.
     return_stored: bool
         See :func:`~dask.array.store` for more details.
-    zarr_array_kwargs: dict or None
-        Keyword arguments passed to :func:`zarr.create_array` (for zarr v3) or
+    mode: Literal["r+", "a", "w", "w-"]
+        Keyword argument `mode` passed to the storage backend when creating a zarr
+        store from a URL string. Only used when ``url`` is a string (not when
+        ``url`` is already a zarr.Array or MutableMapping instance).
+
+        Common options include:
+            - ``'r+'``: Read/write, must exist
+            - ``'a'``: Read/write, create if doesn't exist (default)
+            - ``'w'``: Create, remove existing data if present
+            - ``'w-'``: Create, fail if exists
+    **zarr_array_kwargs:
+        .. deprecated:: 2025.12.0
+            Passing storage io-related arguments via **kwargs is deprecated.
+            Please use the ``mode`` parameter instead when using
+            **kwargs with the `mode` keys and corresponding values. `read_only` is not allowed anymore
+            and will not have an effect.
+
+        Keyword arguments passed to :func:`Group.create_array` (for zarr v3, where Group is a zarr group) or
         :func:`zarr.create` (for zarr v2). This function automatically sets
         ``shape``, ``chunks``, and ``dtype`` based on the dask array, but these
         can be overridden.
@@ -3996,35 +4011,15 @@ def to_zarr(
 
         For the complete list of available arguments, see the zarr documentation:
 
-        - zarr v3: https://zarr.readthedocs.io/en/stable/api/zarr/index.html#zarr.create_array
-        - zarr v2: https://zarr.readthedocs.io/en/stable/api/core.html#zarr.create
-    zarr_read_kwargs: dict or None
-        Keyword arguments passed to the storage backend when creating a zarr
-        store from a URL string. Only used when ``url`` is a string (not when
-        ``url`` is already a zarr.Array or MutableMapping instance).
-
-        Common options include:
-
-        - ``mode``: File access mode. Options include:
-            - ``'r'``: Read-only, must exist
-            - ``'r+'``: Read/write, must exist
-            - ``'a'``: Read/write, create if doesn't exist (default)
-            - ``'w'``: Create, remove existing data if present
-            - ``'w-'``: Create, fail if exists
-        - ``read_only``: If True, open the store in read-only mode (alternative to ``mode='r'``)
-
-        Additional backend-specific options may be available depending on the
-        storage system (e.g., fsspec parameters for cloud storage).
-    **kwargs:
-        .. deprecated:: 2025.12.0
-            Passing storage-related arguments via **kwargs is deprecated.
-            Please use the ``zarr_read_kwargs`` parameter instead.
+        - zarr v3: https://zarr.readthedocs.io/en/latest/api/zarr/group/#zarr.Group.create_array
+        - zarr v2: https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create
 
     Raises
     ------
     ValueError
         If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
         If ``region`` is specified and ``url`` is not a zarr.Array
+        If ``mode`` is specified as `r`.
 
     See Also
     --------
@@ -4047,18 +4042,25 @@ def to_zarr(
             "zarr_array_kwargs"
         )
 
-    if kwargs:
-        warnings.warn(
-            "Passing storage-related arguments via **kwargs is deprecated. "
-            "Please use the 'zarr_store_kwargs' parameter instead. **kwargs will be "
-            "removed in a future version.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        if zarr_read_kwargs is None:
-            zarr_read_kwargs = kwargs
-        else:
-            zarr_read_kwargs = {**kwargs, **zarr_read_kwargs}
+    if zarr_array_kwargs:
+        io_store_args = {"mode", "readonly"}
+        io_store_related = {
+            k: v for k, v in zarr_array_kwargs.items() if k in io_store_args
+        }
+        array_creation_args = {
+            k: v for k, v in zarr_array_kwargs.items() if k not in io_store_args
+        }
+        if io_store_related:
+            warnings.warn(
+                "Passing opening/reading zarr store related arguments like 'mode' via **kwargs is deprecated. "
+                "Please use the 'mode' parameter instead. **kwargs / zarr_array_kwargs are only for array related"
+                "keyword arguments. See docstring of '**zarr_array_kwargs",
+                FutureWarning,
+                stacklevel=2,
+            )
+
+        mode = mode if not io_store_related.get("mode") else io_store_related["mode"]
+        zarr_array_kwargs = array_creation_args
 
     if _zarr_v3():
         zarr_mem_store_types = (zarr.storage.MemoryStore,)
@@ -4086,17 +4088,22 @@ def to_zarr(
 
     if region is not None:
         raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")
-
-    zarr_read_kwargs = {} if zarr_read_kwargs is None else dict(zarr_read_kwargs)
-    zarr_store = _setup_zarr_store(url, storage_options, **zarr_read_kwargs)
+    if mode == "r":
+        raise ValueError("Cannot use mode `r` (read-only) when writing to zarr.")
+    zarr_store = _setup_zarr_store(url, storage_options, mode=mode)
 
     zarr_array_kwargs.setdefault("shape", arr.shape)
     zarr_array_kwargs.setdefault("chunks", tuple(c[0] for c in arr.chunks))
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     array_name = component or zarr_array_kwargs.pop("name", None)
+    lock = False
+    if mode == "w":
+        lock = True
+        zarr_array_kwargs["overwrite"] = True
+
     if _zarr_v3():
-        root = zarr.open_group(store=zarr_store, mode="a") if array_name else None
+        root = zarr.open_group(store=zarr_store, mode=mode) if array_name else None
         if array_name:
             z = root.create_array(name=array_name, **zarr_array_kwargs)
         else:
@@ -4111,7 +4118,9 @@ def to_zarr(
             **zarr_array_kwargs,
         )
 
-    return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
+    # TODO discuss problem with lock is False when overwriting. We get a checksum error in that case. This is fixed
+    # by setting it to True. Bug in zarr?
+    return arr.store(z, lock=lock, compute=compute, return_stored=return_stored)
 
 
 def _get_zarr_write_chunks(zarr_array) -> tuple[int, ...]:

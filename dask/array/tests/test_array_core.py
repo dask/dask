@@ -2595,6 +2595,7 @@ def test_astype_gh9316():
     assert result_a.flags.f_contiguous == result_b.flags.f_contiguous
 
 
+@pytest.mark.filterwarnings("ignore:numpy.fix")
 def test_arithmetic():
     x = np.arange(5).astype("f4") + 2
     y = np.arange(5).astype("i8") + 2
@@ -4974,7 +4975,7 @@ def test_zarr_sharding_roundtrip(tmp_path, chunks, shards):
     a = da.zeros((60, 60), chunks=chunks)
     zarr_array_kwargs = {"shards": shards}
 
-    a.to_zarr(tmp_path, zarr_array_kwargs=zarr_array_kwargs)
+    a.to_zarr(tmp_path, **zarr_array_kwargs)
 
     store = zarr.storage.FsspecStore.from_url(tmp_path)
     z = zarr.open_array(store)
@@ -4984,6 +4985,16 @@ def test_zarr_sharding_roundtrip(tmp_path, chunks, shards):
     a2 = da.from_zarr(tmp_path)
     assert_eq(a, a2)
     assert a2.chunks == a.chunks
+
+    b = da.ones((60, 60), chunks=chunks)
+    with pytest.raises(ValueError, match="Cannot use"):
+        b.to_zarr(tmp_path, mode="r")
+
+    b.to_zarr(tmp_path, mode="w", **zarr_array_kwargs)
+
+    b2 = da.from_zarr(tmp_path)
+    assert_eq(b, b2)
+    assert b2.chunks == b.chunks
 
 
 def test_zarr_roundtrip_with_path_like():
@@ -5073,12 +5084,12 @@ def test_zarr_group():
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d, component="test")
         with pytest.raises((OSError, ValueError)):
-            a.to_zarr(d, component="test", zarr_array_kwargs={"overwrite": False})
-        a.to_zarr(d, component="test", zarr_array_kwargs={"overwrite": True})
+            a.to_zarr(d, component="test", **{"overwrite": False})
+        a.to_zarr(d, component="test", **{"overwrite": True})
 
         # second time is fine, group exists
-        a.to_zarr(d, component="test2", zarr_array_kwargs={"overwrite": False})
-        a.to_zarr(d, component="nested/test", zarr_array_kwargs={"overwrite": False})
+        a.to_zarr(d, component="test2", **{"overwrite": False})
+        a.to_zarr(d, component="nested/test", **{"overwrite": False})
 
         group = zarr.open_group(store=d, mode="r")
         assert set(group) == {"nested", "test", "test2"}
