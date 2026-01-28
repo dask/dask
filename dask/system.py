@@ -9,6 +9,8 @@ try:
 except ImportError:
     psutil = None  # type: ignore[assignment]
 
+from dask._compatibility import LINUX
+
 __all__ = ("cpu_count", "CPU_COUNT")
 
 
@@ -41,7 +43,7 @@ def _try_extract_cgroup_cpu_quota():
     return None, None
 
 
-def cpu_count():
+def cpu_count() -> int:
     """Get the available CPU count for this system.
 
     Takes the minimum value from the following locations:
@@ -50,19 +52,33 @@ def cpu_count():
     - CPU Affinity (if set)
     - Cgroups limit (if set)
     """
-    count = os.cpu_count()
+    if sys.version_info >= (3, 13):
+        # Embeds CPU affinity checks
+        count = os.process_cpu_count()
+    elif hasattr(os, "sched_getaffinity"):
+        # https://docs.python.org/3/library/os.html#interface-to-the-scheduler
+        # "only available on some Unix platforms"; neither MacOS nor Windows
+        count = len(os.sched_getaffinity(0))
+    else:
+        # Does not account for CPU affinity.
+        # On exotic alternative Python implementations, it may return None.
+        count = os.cpu_count() or 1
+    assert count
 
-    # Check CPU affinity if available
+    # Additional CPU affinity check with psutil.
+    # NOTE: do not limit this to Python <3.13: on Windows,
+    # `psutil.Process().cpu_affinity(value)` does not change the reading of
+    # os.process_cpu_count().
     if psutil is not None:
-        try:
-            affinity_count = len(psutil.Process().cpu_affinity())
-            if affinity_count > 0:
-                count = min(count, affinity_count)
-        except Exception:
-            pass
+        proc = psutil.Process()
+        if hasattr(proc, "cpu_affinity"):
+            affinity = proc.cpu_affinity()
+            if affinity is not None:
+                assert affinity
+                count = min(count, len(affinity))
 
     # Check cgroups if available
-    if sys.platform == "linux":
+    if LINUX:
         quota, period = _try_extract_cgroup_cpu_quota()
         if quota is not None and period is not None:
             # We round up on fractional CPUs
