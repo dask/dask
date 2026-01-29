@@ -13,7 +13,7 @@ dependencies:
   - importlib-metadata=4.13.0
   - toolz=0.12.0
   # optional dependencies pulled in by pip install dask[array,dataframe]
-  - numpy=1.24
+  - numpy=1.26  # pyarrow 16 requires numpy >=1.26; see mindeps-array for 1.24
   - pandas=2.0
   # optional dependencies pulled in by pip install dask[diagnostics]
   - bokeh=3.1.0
