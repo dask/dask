@@ -59,7 +59,7 @@ bag = []
 dataframe = [
     "dask[array]",
     "pandas >= 2.0",
-    "pyarrow >= 14.0.1",
+    "pyarrow >= 16.0",
 ]
 distributed = ["distributed >= 2026.1.1,<2026.1.2"]
 diagnostics = [
@@ -70,7 +70,7 @@ diagnostics = [
 delayed = []
 complete = [
     "dask[array,dataframe,distributed,diagnostics]",
-    "pyarrow >= 14.0.1",
+    "pyarrow >= 16.0",
     "lz4 >= 4.3.2",
 ]
 test = [

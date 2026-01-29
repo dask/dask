@@ -10,7 +10,6 @@ from pyarrow import fs
 
 import dask
 from dask._compatibility import WINDOWS
-from dask.dataframe._compat import PYARROW_GE_1500
 from dask.dataframe.dask_expr import from_array, from_graph, from_pandas, read_parquet
 from dask.dataframe.dask_expr._expr import Filter, Lengths, Literal
 from dask.dataframe.dask_expr._reductions import Len
@@ -37,15 +36,7 @@ def parquet_file(tmpdir):
     return _make_file(tmpdir)
 
 
-@pytest.fixture(
-    params=[
-        pytest.param(
-            "arrow",
-            marks=pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0"),
-        ),
-        "fsspec",
-    ]
-)
+@pytest.fixture(params=["arrow", "fsspec"])
 def filesystem(request):
     return request.param
 
@@ -120,7 +111,6 @@ def test_to_parquet(tmpdir, write_metadata_file):
         df2.to_parquet(tmpdir, overwrite=True)
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_pyarrow_filesystem(parquet_file):
     filesystem = fs.LocalFileSystem()
 
@@ -131,7 +121,6 @@ def test_pyarrow_filesystem(parquet_file):
     assert all(tsk.data_producer for tsk in df.optimize().dask.values())
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 @pytest.mark.parametrize("dtype_backend", ["pyarrow", "numpy_nullable", None])
 def test_pyarrow_filesystem_dtype_backend(parquet_file, dtype_backend):
     filesystem = fs.LocalFileSystem()
@@ -143,7 +132,6 @@ def test_pyarrow_filesystem_dtype_backend(parquet_file, dtype_backend):
     assert assert_eq(df, df_pa)
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 @pytest.mark.parametrize("types_mapper", [None, lambda x: None])
 def test_pyarrow_filesystem_types_mapper(parquet_file, types_mapper):
     # This test isn't doing much other than ensuring the stuff is not raising
@@ -159,7 +147,6 @@ def test_pyarrow_filesystem_types_mapper(parquet_file, types_mapper):
     assert assert_eq(df, df_pa)
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_pyarrow_filesystem_serialize(parquet_file):
     filesystem = fs.LocalFileSystem()
 
@@ -176,7 +163,6 @@ def test_pyarrow_filesystem_serialize(parquet_file):
     assert assert_eq(df_pa, roundtripped_df)
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_pyarrow_filesystem_filters(parquet_file):
     filesystem = fs.LocalFileSystem()
 
@@ -192,7 +178,6 @@ def test_pyarrow_filesystem_filters(parquet_file):
 second_parquet_file = parquet_file
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_pyarrow_filesystem_list_of_files(parquet_file, second_parquet_file):
     filesystem = fs.LocalFileSystem()
 
@@ -201,7 +186,6 @@ def test_pyarrow_filesystem_list_of_files(parquet_file, second_parquet_file):
     assert_eq(result, expected, check_index=False)
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_partition_pruning(tmpdir):
     with dask.config.set({"dataframe.parquet.minimum-partition-size": 1}):
         filesystem = fs.LocalFileSystem()
@@ -232,7 +216,6 @@ def test_partition_pruning(tmpdir):
         )
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_predicate_pushdown(tmpdir):
     original = pd.DataFrame(
         {
@@ -266,7 +249,6 @@ def test_predicate_pushdown(tmpdir):
     assert len(y.compute()) == 0
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_predicate_pushdown_compound(tmpdir):
     pdf = pd.DataFrame(
         {
@@ -323,7 +305,6 @@ def test_predicate_pushdown_compound(tmpdir):
     assert_eq(y, z)
 
 
-@pytest.mark.xfail(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_aggregate_rg_stats_to_file(tmpdir):
     filesystem = fs.LocalFileSystem()
     fn = str(tmpdir)
