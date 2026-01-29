@@ -13,6 +13,7 @@ Changelog
 Highlights
 ^^^^^^^^^^
 
+- dask.dataframe now requires PyArrow 16 or greater (was 14)
 - Have ``**kwargs`` in ``to_zarr`` follow zarr-python API and add ``mode`` argument (:pr:`12205`) `Wouter-Michiel Vierdag`_
 
 .. note::
@@ -28,7 +29,14 @@ Highlights
     that this  directly follows the ``zarr-python`` API of ``Group.create_array``
     when ``zarr>v3.0.0`` and ``zarr.create`` for ``zarr<v3.0.0``. Please see
     :func:`dask.array.to_zarr` for more.
-    
+
+
+.. dropdown:: Additional changes
+
+- Minimum version of optional dependency `h5py` bumped to 3.7.0 (was 3.4.0)
+- Minimum version of optional dependency `python-snappy` bumped to 0.7.1 (was 0.6.0)
+- Minimum version of optional dependency `tiledb` bumped to 0.27.0 (was 0.12.0)
+
 .. _v2026.1.1:
 
 2026.1.1

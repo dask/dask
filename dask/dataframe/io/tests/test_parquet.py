@@ -12,11 +12,9 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
-import dask.multiprocessing
 from dask.dataframe._compat import PANDAS_GE_202, PANDAS_GE_300
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
@@ -24,11 +22,8 @@ from dask.utils import natural_sort_key
 
 try:
     import pyarrow as pa
-
-    pyarrow_version = Version(pa.__version__)
 except ImportError:
     pa = False
-    pyarrow_version = Version("0")
 
 try:
     import pyarrow.parquet as pq
@@ -1679,81 +1674,6 @@ def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, 
         write_metadata_file=True,
     )
     check_compression(engine, fn, compression)
-
-
-@pytest.fixture(
-    params=[
-        {
-            "columns": [
-                {
-                    "metadata": None,
-                    "name": "idx",
-                    "numpy_type": "int64",
-                    "pandas_type": "int64",
-                },
-                {
-                    "metadata": None,
-                    "name": "A",
-                    "numpy_type": "int64",
-                    "pandas_type": "int64",
-                },
-            ],
-            "index_columns": ["idx"],
-            "pandas_version": "0.21.0",
-        },
-        # pyarrow 0.7.1
-        {
-            "columns": [
-                {
-                    "metadata": None,
-                    "name": "A",
-                    "numpy_type": "int64",
-                    "pandas_type": "int64",
-                },
-                {
-                    "metadata": None,
-                    "name": "idx",
-                    "numpy_type": "int64",
-                    "pandas_type": "int64",
-                },
-            ],
-            "index_columns": ["idx"],
-            "pandas_version": "0.21.0",
-        },
-        # pyarrow 0.8.0
-        {
-            "column_indexes": [
-                {
-                    "field_name": None,
-                    "metadata": {"encoding": "UTF-8"},
-                    "name": None,
-                    "numpy_type": "object",
-                    "pandas_type": "unicode",
-                }
-            ],
-            "columns": [
-                {
-                    "field_name": "A",
-                    "metadata": None,
-                    "name": "A",
-                    "numpy_type": "int64",
-                    "pandas_type": "int64",
-                },
-                {
-                    "field_name": "__index_level_0__",
-                    "metadata": None,
-                    "name": "idx",
-                    "numpy_type": "int64",
-                    "pandas_type": "int64",
-                },
-            ],
-            "index_columns": ["__index_level_0__"],
-            "pandas_version": "0.21.0",
-        },
-    ]
-)
-def pandas_metadata(request):
-    return request.param
 
 
 @PYARROW_MARK
@@ -3836,7 +3756,6 @@ def test_gpu_write_parquet_simple(tmpdir):
 @PYARROW_MARK
 @pytest.mark.network
 @pytest.mark.slow
-@pytest.mark.skipif(pyarrow_version.major < 15, reason="Requires arrow 15")
 def test_pyarrow_filesystem_option_real_data():
     # See: https://github.com/dask/dask/pull/10590
     dd.read_parquet(

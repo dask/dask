@@ -10,7 +10,6 @@ from distributed.utils_test import *  # noqa: F403
 from distributed.utils_test import gen_cluster
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PYARROW_GE_1500
 from dask.dataframe.dask_expr import read_parquet
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
 
@@ -48,7 +47,6 @@ async def test_io_fusion_merge(c, s, a, b, tmpdir):
     )
 
 
-@pytest.mark.skipif(not PYARROW_GE_1500, reason="requires 15.0.0")
 @pytest.mark.filterwarnings("error")
 def test_parquet_distributed(c, tmpdir, filesystem):
     pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
@@ -56,7 +54,6 @@ def test_parquet_distributed(c, tmpdir, filesystem):
     assert_eq(c.gather(c.compute(df)), pdf)
 
 
-@pytest.mark.skipif(not PYARROW_GE_1500, reason="requires 15.0.0")
 def test_pickle_size(tmpdir, filesystem):
     pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
     [_make_file(tmpdir, df=pdf, filename=f"{x}.parquet") for x in range(10)]
