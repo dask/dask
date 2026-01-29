@@ -238,8 +238,6 @@ def register_pyarrow():
 
     def _get_col_size(data):
         p = 0
-        if not isinstance(data, pa.ChunkedArray):
-            data = data.data  # pyarrow <0.15.0
         for chunk in data.iterchunks():
             for buffer in chunk.buffers():
                 if buffer:

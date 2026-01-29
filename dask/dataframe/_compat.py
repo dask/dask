@@ -51,11 +51,9 @@ else:
 if HAS_PYARROW:
     PYARROW_VERSION: Version | None = Version(pa.__version__)
     # we know that Version should be non-None when PYARROW_VERSION is True.
-    PYARROW_GE_1500: bool | None = PYARROW_VERSION.release >= (15, 0, 0)  # type: ignore[union-attr]
     PYARROW_GE_2101: bool | None = PYARROW_VERSION.release >= (21, 0, 1)  # type: ignore[union-attr]
 else:
     PYARROW_VERSION = None
-    PYARROW_GE_1500 = None
     PYARROW_GE_2101 = None
 
 
@@ -87,7 +85,6 @@ __all__ = [
     "IndexingError",
     "HAS_PYARROW",
     "PYARROW_VERSION",
-    "PYARROW_GE_1500",
     "PYARROW_GE_2101",
     "tm",
 ]

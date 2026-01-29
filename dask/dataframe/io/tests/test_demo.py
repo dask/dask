@@ -216,7 +216,7 @@ def test_with_spec_non_default(seed):
 
 
 def test_with_spec_pyarrow():
-    pytest.importorskip("pyarrow", "1.0.0", reason="pyarrow is required")
+    pytest.importorskip("pyarrow", reason="pyarrow is required")
     from dask.dataframe.io.demo import ColumnSpec, DatasetSpec, with_spec
 
     spec = DatasetSpec(

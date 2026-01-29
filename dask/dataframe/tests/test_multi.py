@@ -19,11 +19,6 @@ from dask.dataframe.utils import (
     has_known_categories,
 )
 
-try:
-    import pyarrow as pa
-except ImportError:
-    pa = None
-
 
 def test_merge_indexed_dataframe_to_indexed_dataframe():
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 6, 7])
@@ -1517,10 +1512,8 @@ def test_melt(kwargs):
             "int": np.random.randn(20),
         }
     )
-    if pa:
-        # If pyarrow is installed, test that `string[pyarrow]` dtypes
-        # give the same result with `pandas` and `dask`
-        pdf = pdf.astype({"s1": "string[pyarrow]", "s2": "string[pyarrow]"})
+    # Test that `string[pyarrow]` dtypes give the same result with `pandas` and `dask`
+    pdf = pdf.astype({"s1": "string[pyarrow]", "s2": "string[pyarrow]"})
 
     ddf = dd.from_pandas(pdf, 4)
 
@@ -2200,20 +2193,8 @@ def test_concat_ignore_order(ordered):
     [
         "Int64",
         "Float64",
-        pytest.param(
-            "int64[pyarrow]",
-            marks=pytest.mark.skipif(
-                pa is None,
-                reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
-            ),
-        ),
-        pytest.param(
-            "float64[pyarrow]",
-            marks=pytest.mark.skipif(
-                pa is None,
-                reason="Support for ArrowDtypes requires pyarrow and pandas>=1.5.0",
-            ),
-        ),
+        "int64[pyarrow]",
+        "float64[pyarrow]",
     ],
 )
 def test_nullable_types_merge(dtype):

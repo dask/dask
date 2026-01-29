@@ -146,7 +146,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `psutil`_        | ``>=5.8.0``     | Factor CPU affinity into CPU count, intelligently infer blocksize when reading CSV files                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `pyarrow`_       | ``>=14.0.1``    | Support for Apache Arrow datatypes & engine when storing/reading Apache ORC or Parquet files            |
+| `pyarrow`_       | ``>=16.0``      | Support for Apache Arrow datatypes & engine when storing/reading Apache ORC or Parquet files            |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `python-snappy`_ | ``>=0.6.0``     | Snappy compression to bs used when storing/reading Avro or Parquet files                                |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+

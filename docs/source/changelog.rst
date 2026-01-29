@@ -13,6 +13,7 @@ Changelog
 Highlights
 ^^^^^^^^^^
 
+- dask.dataframe now requires PyArrow >=16 (was >=14)
 - Have ``**kwargs`` in ``to_zarr`` follow zarr-python API and add ``mode`` argument (:pr:`12205`) `Wouter-Michiel Vierdag`_
 
 .. note::
