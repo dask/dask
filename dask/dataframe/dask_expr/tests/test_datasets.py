@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from dask.dataframe._compat import PANDAS_GE_220
 from dask.dataframe.dask_expr import new_collection
 from dask.dataframe.dask_expr._expr import Lengths
 from dask.dataframe.dask_expr.datasets import Timeseries, timeseries
@@ -78,6 +79,7 @@ def test_timeseries_empty_projection():
     assert len(ts) == len(expected)
 
 
+@pytest.mark.skipif(not PANDAS_GE_220, reason="arrow kernel doesn't work")
 def test_combine_similar(tmpdir):
     df = timeseries(end="2000-01-02")
     pdf = df.compute()
