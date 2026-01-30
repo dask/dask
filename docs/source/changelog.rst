@@ -33,9 +33,9 @@ Highlights
 
 .. dropdown:: Additional changes
 
-- Minimum version of optional dependency `h5py` bumped to 3.7.0 (was 3.4.0)
-- Minimum version of optional dependency `python-snappy` bumped to 0.7.1 (was 0.6.0)
-- Minimum version of optional dependency `tiledb` bumped to 0.27.0 (was 0.12.0)
+  - Minimum version of optional dependency `h5py` bumped to 3.7.0 (was 3.4.0)
+  - Minimum version of optional dependency `python-snappy` bumped to 0.7.1 (was 0.6.0)
+  - Minimum version of optional dependency `tiledb` bumped to 0.27.0 (was 0.12.0)
 
 .. _v2026.1.1:
 
