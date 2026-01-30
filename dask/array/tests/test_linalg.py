@@ -993,7 +993,9 @@ def test_svd_incompatible_dimensions(ndim):
 def test_svd_full_matrices_not_supported():
     """Test that full_matrices=True raises NotImplementedError."""
     x = da.random.default_rng().random((10, 5), chunks=(5, 5))
-    with pytest.raises(NotImplementedError, match="full_matrices=True is not supported"):
+    with pytest.raises(
+        NotImplementedError, match="full_matrices=True is not supported"
+    ):
         da.linalg.svd(x, full_matrices=True)
     # full_matrices=False should work
     u, s, v = da.linalg.svd(x, full_matrices=False)
