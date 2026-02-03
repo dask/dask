@@ -5,7 +5,7 @@ set -e
 CMD="python -m pytest dask --runslow"
 
 if [[ $COVERAGE == 'true' ]]; then
-    CMD="$CMD --cov --cov-report=xml"
+    CMD="$CMD --cov --cov-report=xml --junit-xml=pytest.xml"
 fi
 
 if [[ $ARRAYEXPR == 'true' ]]; then
