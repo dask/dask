@@ -5,11 +5,6 @@ import pytest
 import dask
 
 
-def test1():
-    import random
-    assert random.random() > 0.5
-
-
 @pytest.mark.gpu
 @pytest.mark.parametrize("backend", ["pandas", "cudf"])
 def test_CreationDispatch_error_informative_message(backend):
