@@ -20,6 +20,7 @@ defaults:
 
 jobs:
   test:
+    name: ${{ matrix.os }}-${{ matrix.environment }}${{ matrix.array-expr == 'true' && '-expr' || matrix.extra && format('-{0}', matrix.extra) || '' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -137,11 +138,10 @@ jobs:
         # ensure this runs even if pytest fails
         if: >
           always() &&
-          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure') &&
-          matrix.array-expr == 'false'
+          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.os }}-${{ matrix.environment }}-${{ matrix.extra }}
+          name: ${{ matrix.os }}-${{ matrix.environment }}${{ matrix.array-expr == 'true' && '-expr' || matrix.extra && format('-{0}', matrix.extra) || '' }}
           path: |
             pytest.xml
             env.yaml
