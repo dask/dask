@@ -20,7 +20,7 @@ defaults:
 
 jobs:
   test:
-    name: ${{ matrix.os }}-${{ matrix.environment }}${{ matrix.array-expr == 'true' && '-expr' || matrix.extra && format('-{0}', matrix.extra) || '' }}
+    name: ${{ matrix.os }}-${{ matrix.environment }}${{ matrix.array-expr == 'true' && '-array-expr' || matrix.extra && format('-{0}', matrix.extra) || '' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -141,7 +141,7 @@ jobs:
           (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.os }}-${{ matrix.environment }}${{ matrix.array-expr == 'true' && '-expr' || matrix.extra && format('-{0}', matrix.extra) || '' }}
+          name: ${{ matrix.os }}-${{ matrix.environment }}${{ matrix.array-expr == 'true' && '-array-expr' || matrix.extra && format('-{0}', matrix.extra) || '' }}
           path: |
             pytest.xml
             env.yaml
