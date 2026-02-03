@@ -458,6 +458,29 @@ or your own custom zarr Array:
    >>> z = zarr.create((10,), dtype=float, store=zarr.ZipStore("output.zarr"))
    >>> arr.to_zarr(z)
 
+Compression options
+-------------------
+
+Zarr supports a variety of compression algorithms and compression levels.
+When writing Dask arrays to Zarr, compression can be configured by passing
+a Zarr-compatible compressor via ``storage_options``.
+
+For example, using ``numcodecs`` to configure Blosc compression:
+
+.. code-block:: Python
+
+   >>> from numcodecs import Blosc
+   >>> import dask.array as da
+   >>> arr = da.ones((10, 10), chunks=(5, 5))
+   >>> compressor = Blosc(cname="zstd", clevel=1)
+   >>> arr.to_zarr(
+   ...     "output.zarr",
+   ...     storage_options={"compressor": compressor},
+   ... )
+
+The available compressors and compression settings depend on the Zarr
+backend being used. Check out the Zarr documentation for details.
+
 To retrieve those data, you would do ``da.from_zarr`` with exactly the same arguments. The
 chunking of the resultant Dask array is defined by how the files were saved, unless
 otherwise specified.
