@@ -61,7 +61,7 @@ dependencies:
   - scikit-image
   - scikit-learn
   - scipy
-  - python-snappy
+  # - python-snappy  # dependency cramjam does not release the GIL
   # - sparse  # Not available for 3.14t
   - cachey
   - python-graphviz
