@@ -458,6 +458,10 @@ or your own custom zarr Array:
    >>> z = zarr.create((10,), dtype=float, store=zarr.ZipStore("output.zarr"))
    >>> arr.to_zarr(z)
 
+To retrieve those data, you would do ``da.from_zarr`` with exactly the same arguments. The
+chunking of the resultant Dask array is defined by how the files were saved, unless
+otherwise specified.
+
 Compression options
 -------------------
 
@@ -479,11 +483,11 @@ For example, using ``numcodecs`` to configure Blosc compression:
    ... )
 
 The available compressors and compression settings depend on the Zarr
-backend being used. Check out the Zarr documentation for details.
+backend being used. See the Zarr documentation on compressors for details:
 
-To retrieve those data, you would do ``da.from_zarr`` with exactly the same arguments. The
-chunking of the resultant Dask array is defined by how the files were saved, unless
-otherwise specified.
+https://zarr.readthedocs.io/en/stable/user-guide/arrays.html#compressors
+
+
 
 
 TileDB
