@@ -1955,6 +1955,7 @@ def test_concat_categorical(known, cat_index, divisions):
             }
         ),
     ]
+
     for df in frames:
         df.w = df.w.astype("category")
         df.y = df.y.astype("category")
@@ -1968,6 +1969,54 @@ def test_concat_categorical(known, cat_index, divisions):
         dframes[0]["y"] = dframes[0]["y"].cat.as_unknown()
         if cat_index:
             dframes[0].index = dframes[0].index.cat.as_unknown()
+
+    def check_and_return(ddfs, dfs, join):
+        sol = concat(dfs, join=join)
+        res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
+
+        # Pandas does not guarantee stable ordering of categorical values
+        # during concat on minimal dependency versions.
+        if isinstance(res, dd.Series) and res.dtype.name == "category":
+            assert_eq(
+                res.compute().sort_values().reset_index(drop=True),
+                sol.sort_values().reset_index(drop=True),
+            )
+        else:
+            assert_eq(res, sol)
+
+        if known:
+            parts = compute_as_if_collection(
+                dd.DataFrame, res.dask, res.__dask_keys__()
+            )
+            for p in [i.iloc[:0] for i in parts]:
+                check_meta(res._meta, p)  # will error if schemas don't align
+
+        assert not cat_index or has_known_categories(res.index) == known
+        return res
+
+    for join in ["inner", "outer"]:
+        # Frame
+        res = check_and_return(dframes, frames, join)
+        assert has_known_categories(res.w)
+        assert has_known_categories(res.y) == known
+
+        # Series
+        res = check_and_return([i.y for i in dframes], [i.y for i in frames], join)
+        assert has_known_categories(res) == known
+
+        # Non-cat series with cat index
+        if cat_index:
+            res = check_and_return([i.x for i in dframes], [i.x for i in frames], join)
+
+        # Partition missing columns
+        res = check_and_return(
+            [dframes[0][["x", "y"]]] + dframes[1:],
+            [frames[0][["x", "y"]]] + frames[1:],
+            join,
+        )
+        assert not hasattr(res, "w") or has_known_categories(res.w)
+        assert has_known_categories(res.y) == known
+
 
     def check_and_return(ddfs, dfs, join):
         sol = concat(dfs, join=join)
