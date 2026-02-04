@@ -483,9 +483,7 @@ For example, using ``numcodecs`` to configure Blosc compression:
    ... )
 
 The available compressors and compression settings depend on the Zarr
-backend being used. See the Zarr documentation on compressors for details:
-
-https://zarr.readthedocs.io/en/stable/user-guide/arrays.html#compressors
+backend being used. See the [Zarr documentation on compressors](https://zarr.readthedocs.io/en/stable/user-guide/arrays.html#compressors) for details:
 
 
 
