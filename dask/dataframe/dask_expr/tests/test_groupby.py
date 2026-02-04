@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict
+from contextlib import nullcontext
 from functools import partial
 
 import numpy as np
 import pytest
 
 import dask
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.dask_expr import from_pandas
 from dask.dataframe.dask_expr._groupby import Aggregation, GroupByUDFBlockwise
 from dask.dataframe.dask_expr._reductions import TreeReduce
@@ -527,10 +529,21 @@ def test_groupby_single_agg_split_out(pdf, df, api, sort, split_out):
     ],
 )
 def test_apply_or_transform_shuffle_multilevel(pdf, df, func, cow):
-    with pd.option_context("mode.copy_on_write", cow):
+    if PANDAS_GE_300:
+        # Pandas4Warning: The 'mode.copy_on_write' option is deprecated. Copy-on-Write
+        # can no longer be disabled (it is always enabled with pandas >= 3.0), and
+        # setting the option has no impact. This option will be removed in pandas 4.0.
+        if cow:
+            ctx = nullcontext()
+        else:
+            pytest.skip("Copy-on-Write is always enabled with pandas >= 3.0")
+    else:
+        ctx = pd.option_context("mode.copy_on_write", cow)
+
+    with ctx:
         grouper = lambda df: [df["x"] + 1, df["y"] + 1]
 
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning, match="`meta` is not specified"):
             # DataFrameGroupBy
             assert_eq(func(df.groupby(grouper(df))), func(pdf.groupby(grouper(pdf))))
 
