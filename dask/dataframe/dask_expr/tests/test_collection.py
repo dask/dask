@@ -1715,7 +1715,7 @@ def test_len(df, pdf):
     assert len(df[df.x > 5]) == len(pdf[pdf.x > 5])
 
     first = df2.partitions[0].compute()
-    assert len(df2.partitions[0]) == len(first)
+    assert len(df2.partitions[0].compute()) == len(first)
 
     assert isinstance(Len(df2.expr).optimize(), expr.Literal)
     assert isinstance(expr.Lengths(df2.expr).optimize(), expr.Literal)
