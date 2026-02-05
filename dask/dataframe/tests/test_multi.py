@@ -1928,7 +1928,8 @@ def test_concat5():
         (False, False, False),
     ],
 )
-def test_concat_categorical(known, cat_index, divisions):
+@pytest.mark.parametrize("repeat", range(100))
+def test_concat_categorical(known, cat_index, divisions, repeat):
     frames = [
         pd.DataFrame(
             {
