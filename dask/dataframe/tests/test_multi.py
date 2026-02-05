@@ -1970,6 +1970,7 @@ def test_concat_categorical(known, cat_index, divisions):
         if cat_index:
             dframes[0].index = dframes[0].index.cat.as_unknown()
 
+    
     def check_and_return(ddfs, dfs, join):
         sol = concat(dfs, join=join)
         res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
