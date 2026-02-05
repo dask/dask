@@ -382,5 +382,5 @@ able to help you have fun with your work.
 .. _`xarray`: https://xarray.pydata.org/en/stable/
 .. _`scikit-image`: https://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
-.. _`pandas`: https://pandas.pydata.org/pandas-docs/version/0.17.0/
+.. _`pandas`: https://pandas.pydata.org/
 .. _`distributed scheduler`: https://distributed.dask.org/en/latest/
