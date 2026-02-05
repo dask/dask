@@ -22,7 +22,9 @@ dependencies:
   - coverage
   # key optional dependencies
   - numpy
-  - pandas>=3
+  - pandas>=3  # This is a placeholder, replaced below. 
+               # Need >=3.1 due to race conditions
+               # https://github.com/pandas-dev/pandas/pull/63783
   # - pyarrow  # conda package for 3.14t not yet available; installed via pip below
   # conda variant of distributed depends on cytoolz, which is not available
   # on conda yet.
@@ -86,4 +88,6 @@ dependencies:
   - pip:
     - cytoolz  # conda package for 3.14t not yet available
     - pyarrow  # conda package for 3.14t not yet available
+    # https://github.com/pandas-dev/pandas/pull/63783
+    - git+https://github.com/crusaderky/pandas.git@727c73034f9d2c63d7e0164a10c2f5e367b017c6
     - git+https://github.com/dask/distributed
