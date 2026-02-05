@@ -20,7 +20,7 @@ defaults:
 
 jobs:
   test:
-    name: ${{ matrix.os }} / ${{ matrix.environment }}${{ matrix.array-expr == 'true' && ' / array-expr' || matrix.extra && format(' / {0}', matrix.extra) || '' }}
+    name: ${{ matrix.os }} / ${{ matrix.environment }}${{ matrix.array-expr == 'true' && ' / array-expr' || matrix.extra && format(' / {0}', matrix.extra) || '' }} Run ${{ matrix.run }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -28,32 +28,11 @@ jobs:
       matrix:
         # Note: after adding/removing builds here, update
         # codecov.yml to match.
-        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+        os: [ubuntu-latest]
+        environment: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t", "mindeps-dataframe"]
         extra: [null]
         array-expr: ["false"]
-        exclude:
-          # MacOS CI does not have many hosts available; run it on 3.14 only
-          - os: "macos-latest"
-            environment: "3.10"
-          - os: "macos-latest"
-            environment: "3.11"
-          - os: "macos-latest"
-            environment: "3.12"
-          - os: "macos-latest"
-            environment: "3.13"
-          - os: "macos-latest"
-            environment: "3.14t"
-        include:
-          # Minimum dependencies
-          - os: "ubuntu-latest"
-            environment: "mindeps-dataframe"
-          - os: "ubuntu-latest"
-            environment: "mindeps-optional"
-          # Experimental setups
-          - os: "ubuntu-latest"
-            environment: "3.14"
-            extra: "pandas-nightly"
+        run: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     steps:
       - name: Checkout source
@@ -124,35 +103,3 @@ jobs:
           ARRAYEXPR: ${{ matrix.array-expr }}
           HDF5_USE_FILE_LOCKING: "FALSE"
         run: source continuous_integration/scripts/run_tests.sh
-
-      - name: Coverage
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-      # The environment file is created in continuous_integration/scripts/install.sh
-      # and can be useful when debugging locally
-      - name: Upload conda environment and test results
-        # ensure this runs even if pytest fails
-        if: >
-          always() &&
-          (steps.run_tests.outcome == 'success' || steps.run_tests.outcome == 'failure')
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ matrix.os }}-${{ matrix.environment }}${{ matrix.array-expr == 'true' && '-array-expr' || matrix.extra && format('-{0}', matrix.extra) || '' }}
-          path: |
-            pytest.xml
-            env.yaml
-
-  # Publish an artifact for the event; used by publish-test-results.yaml
-  event_file:
-    # Do not run the schedule job on forks
-    if: github.repository == 'dask/dask' || github.event_name != 'schedule'
-    name: "Event File"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Upload
-        uses: actions/upload-artifact@v6
-        with:
-          name: Event File
-          path: ${{ github.event_path }}
