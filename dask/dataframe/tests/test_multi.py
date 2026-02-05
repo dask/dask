@@ -5,10 +5,8 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 
 import dask.dataframe as dd
-from dask._compatibility import PY_VERSION
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, tm
 from dask.dataframe.methods import concat
