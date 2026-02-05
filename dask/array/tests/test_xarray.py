@@ -89,6 +89,10 @@ def test_positional_indexer_multiple_variables():
     assert len({k for k in graph if "shuffle-sorter" in k}) == 2
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Consolidated metadata is currently not part in the "
+    "Zarr format 3 specification"
+)
 @pytest.mark.parametrize("compute", [True, False])
 def test_xarray_blockwise_fusion_store(compute):
     pytest.importorskip("zarr")
