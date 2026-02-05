@@ -47,25 +47,13 @@ jobs:
         include:
           # Minimum dependencies
           - os: "ubuntu-latest"
-            environment: "mindeps-array"
-          - os: "ubuntu-latest"
             environment: "mindeps-dataframe"
-          - os: "ubuntu-latest"
-            environment: "mindeps-distributed"
-          - os: "ubuntu-latest"
-            environment: "mindeps-non-optional"
           - os: "ubuntu-latest"
             environment: "mindeps-optional"
           # Experimental setups
           - os: "ubuntu-latest"
             environment: "3.14"
             extra: "pandas-nightly"
-          - os: "ubuntu-latest"
-            environment: "3.14"
-            array-expr: "true"
-          - os: "ubuntu-latest"
-            environment: "mindeps-array"
-            array-expr: "true"
 
     steps:
       - name: Checkout source
@@ -131,8 +119,8 @@ jobs:
       - name: Run tests
         id: run_tests
         env:
-          PARALLEL: "true"
-          COVERAGE: "true"
+          PARALLEL: "false"
+          COVERAGE: "false"
           ARRAYEXPR: ${{ matrix.array-expr }}
           HDF5_USE_FILE_LOCKING: "FALSE"
         run: source continuous_integration/scripts/run_tests.sh

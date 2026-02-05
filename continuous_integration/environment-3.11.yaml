@@ -19,13 +19,14 @@ dependencies:
   - pytest
   - pytest-cov
   - pytest-mock
+  - pytest-repeat
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
   - coverage
   # key optional dependencies
   - numpy
-  - pandas
+  - pandas=2.2
   - pyarrow
   - distributed  # Overridden by git tip below; used to pull in dependencies  
   # optional s3 I/O
