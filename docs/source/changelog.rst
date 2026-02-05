@@ -5,6 +5,18 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2026.2.0:
+
+2026.2.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+.. dropdown:: Additional changes
+
+  - Minimum version of optional dependency `scipy` bumped to 1.10.0 (was 1.7.2)
+
 .. _v2026.1.2:
 
 2026.1.2
