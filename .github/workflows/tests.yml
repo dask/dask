@@ -29,7 +29,7 @@ jobs:
         # Note: after adding/removing builds here, update
         # codecov.yml to match.
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        environment: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
         extra: [null]
         array-expr: ["false"]
         exclude:
@@ -42,6 +42,8 @@ jobs:
             environment: "3.12"
           - os: "macos-latest"
             environment: "3.13"
+          - os: "macos-latest"
+            environment: "3.14t"
         include:
           # Minimum dependencies
           - os: "ubuntu-latest"
@@ -99,6 +101,14 @@ jobs:
           export DASK_DATAFRAME__CONVERT_STRING="False"
           echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
           echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
+
+      # FIXME https://github.com/msgpack/msgpack-python/issues/613
+      - name: Disable msgpack C extension on free-threading
+        if: ${{ matrix.environment == '3.14t' }}
+        run: |
+          conda uninstall -y -v --force msgpack-python
+          MSGPACK_PUREPYTHON=1 pip install msgpack --no-binary msgpack --no-cache --force-reinstall -v
+          python -Werror -c 'import msgpack'
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
