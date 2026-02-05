@@ -4120,7 +4120,7 @@ else:
 
     # TODO discuss problem with lock is False when overwriting. We get a checksum error in that case. This is fixed
     # by setting it to True. Bug in zarr?
-    return arr.store(z, lock=lock, compute=compute, return_stored=return_stored)
+return arr.store(z, lock=lock, compute=compute, return_stored=return_stored)
 
 
 def _get_zarr_write_chunks(zarr_array) -> tuple[int, ...]:
