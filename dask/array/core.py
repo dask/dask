@@ -4097,31 +4097,31 @@ def to_zarr(
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     array_name = component or zarr_array_kwargs.pop("name", None)
-lock = False
-if mode == "w":
-    lock = True
-    zarr_array_kwargs["overwrite"] = True
+    lock = False
+    if mode == "w":
+        lock = True
+        zarr_array_kwargs["overwrite"] = True
 
-if _zarr_v3():
-    # zarr v3 does NOT accept zarr_format
-    zarr_array_kwargs.pop("zarr_format", None)
+    if _zarr_v3():
+        # zarr v3 does NOT accept zarr_format
+        zarr_array_kwargs.pop("zarr_format", None)
 
-    root = zarr.open_group(store=zarr_store, mode=mode) if array_name else None
-    if array_name:
-        z = root.create_array(name=array_name, **zarr_array_kwargs)
+        root = zarr.open_group(store=zarr_store, mode=mode) if array_name else None
+        if array_name:
+            z = root.create_array(name=array_name, **zarr_array_kwargs)
+        else:
+            zarr_array_kwargs["store"] = zarr_store
+            z = zarr.create_array(**zarr_array_kwargs)
     else:
-        zarr_array_kwargs["store"] = zarr_store
-        z = zarr.create_array(**zarr_array_kwargs)
+        # zarr v2 path (zarr_format is valid here)
+        z = zarr.create(
+            store=zarr_store,
+            path=array_name,
+            **zarr_array_kwargs,
+        )
 
-else:
-    # zarr v2 path (zarr_format is valid here)
-    z = zarr.create(
-        store=zarr_store,
-        path=array_name,
-        **zarr_array_kwargs,
-    )
+    return arr.store(z, lock=lock, compute=compute, return_stored=return_stored)
 
-return arr.store(z, lock=lock, compute=compute, return_stored=return_stored)
 
 
 def _get_zarr_write_chunks(zarr_array) -> tuple[int, ...]:
