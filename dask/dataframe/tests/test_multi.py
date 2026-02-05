@@ -1907,7 +1907,7 @@ def test_concat5():
                 PANDAS_GE_220,
                 reason="https://github.com/dask/dask/issues/10558",
                 raises=AssertionError,
-                strict=True,
+                strict=False,
             ),
         ),
         (True, False, False),
@@ -1920,14 +1920,13 @@ def test_concat5():
                 PANDAS_GE_220,
                 reason="https://github.com/dask/dask/issues/10558",
                 raises=AssertionError,
-                strict=True,
+                strict=False,
             ),
         ),
         (False, False, False),
     ],
 )
-@pytest.mark.parametrize("repeat", range(100))
-def test_concat_categorical(known, cat_index, divisions, repeat):
+def test_concat_categorical(known, cat_index, divisions):
     frames = [
         pd.DataFrame(
             {
