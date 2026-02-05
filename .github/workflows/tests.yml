@@ -106,8 +106,9 @@ jobs:
       - name: Disable msgpack C extension on free-threading
         if: ${{ matrix.environment == '3.14t' }}
         run: |
-          mamba uninstall -y msgpack-python
-          MSGPACK_PUREPYTHON=1 pip install msgpack --no-binary msgpack --no-cache -v
+          conda uninstall -y -v --force msgpack-python
+          MSGPACK_PUREPYTHON=1 pip install msgpack --no-binary msgpack --no-cache --force-reinstall -v
+          python -Werror -c 'import msgpack'
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
