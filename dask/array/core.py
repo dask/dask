@@ -4097,6 +4097,7 @@ def to_zarr(
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     array_name = component or zarr_array_kwargs.pop("name", None)
+    zarr_format = zarr_array_kwargs.pop("zarr_format", None)
     lock = False
     if mode == "w":
         lock = True
