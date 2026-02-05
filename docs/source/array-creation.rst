@@ -462,6 +462,31 @@ To retrieve those data, you would do ``da.from_zarr`` with exactly the same argu
 chunking of the resultant Dask array is defined by how the files were saved, unless
 otherwise specified.
 
+Compression options
+-------------------
+
+Zarr supports a variety of compression algorithms and compression levels.
+When writing Dask arrays to Zarr, compression can be configured by passing
+a Zarr-compatible compressor via ``storage_options``.
+
+For example, using ``numcodecs`` to configure Blosc compression:
+
+.. code-block:: Python
+
+   >>> from numcodecs import Blosc
+   >>> import dask.array as da
+   >>> arr = da.ones((10, 10), chunks=(5, 5))
+   >>> compressor = Blosc(cname="zstd", clevel=1)
+   >>> arr.to_zarr(
+   ...     "output.zarr",
+   ...     storage_options={"compressor": compressor},
+   ... )
+
+The available compressors and compression settings depend on the Zarr
+backend being used. See the [Zarr documentation on compressors](https://zarr.readthedocs.io/en/stable/user-guide/arrays.html#compressors) for details:
+
+
+
 
 TileDB
 ------
