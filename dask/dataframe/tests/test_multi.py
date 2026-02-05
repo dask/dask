@@ -1974,9 +1974,13 @@ def test_concat_categorical(known, cat_index, divisions):
         sol = concat(dfs, join=join)
         res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
 
-        # Pandas does not guarantee stable ordering of categorical values
-        # during concat on minimal dependency versions.
-        if isinstance(res, dd.Series) and res.dtype.name == "category":
+        # Pandas 2.0 does not guarantee stable ordering of categorical values
+        # during concat
+        if (
+            not PANDAS_GE_210
+            and isinstance(res, dd.Series)
+            and res.dtype.name == "category"
+        ):
             assert_eq(
                 res.compute().sort_values().reset_index(drop=True),
                 sol.sort_values().reset_index(drop=True),
