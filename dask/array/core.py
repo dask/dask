@@ -4097,19 +4097,20 @@ def to_zarr(
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     array_name = component or zarr_array_kwargs.pop("name", None)
-    zarr_format = zarr_array_kwargs.pop("zarr_format", None)
+
     lock = False
     if mode == "w":
         lock = True
         zarr_array_kwargs["overwrite"] = True
 
-    if _zarr_v3():
-        root = zarr.open_group(store=zarr_store, mode=mode) if array_name else None
-        if array_name:
-            z = root.create_array(name=array_name, **zarr_array_kwargs)
-        else:
-            zarr_array_kwargs["store"] = zarr_store
-            z = zarr.create_array(**zarr_array_kwargs)
+   if _zarr_v3():
+    root = zarr.open_group(store=zarr_store, mode=mode) if array_name else None
+    if array_name:
+        z = root.create_array(name=array_name, **zarr_array_kwargs)
+    else:
+        zarr_array_kwargs["store"] = zarr_store
+        z = zarr.create_array(**zarr_array_kwargs)
+
     else:
         # TODO: drop this as soon as zarr v2 gets dropped.
         # https://github.com/dask/dask/issues/12188
