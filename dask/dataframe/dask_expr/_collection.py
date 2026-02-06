@@ -3904,7 +3904,6 @@ class DataFrame(FrameBase):
             axis=axis, method=method, numeric_only=numeric_only
         ).rename(None)
 
-    @derived_from(pd.DataFrame)
     def describe(
         self,
         split_every=False,
@@ -3913,6 +3912,48 @@ class DataFrame(FrameBase):
         include=None,
         exclude=None,
     ):
+        """Generate descriptive statistics using approximate quantiles.
+
+        Descriptive statistics include those that summarize the central
+        tendency, dispersion and shape of a dataset's distribution,
+        excluding ``NaN`` values.
+
+        .. note::
+            This method uses approximate algorithms for computing quantiles
+            (the 25%, 50%, and 75% values). For more information on the
+            approximation methods available, see the ``percentiles_method``
+            parameter below and :meth:`~dask.dataframe.DataFrame.quantile`.
+
+        Parameters
+        ----------
+        split_every : int, optional
+            How to group intermediate values during the computation.
+        percentiles : list/array of floats, optional
+            The percentiles to include in the output. By default, this is
+            ``[0.25, 0.5, 0.75]``.
+        percentiles_method : {'default', 'tdigest', 'dask'}, optional
+            What method to use for computing percentiles. By default will
+            use dask's internal custom algorithm (``'dask'``). If set to
+            ``'tdigest'`` will use tdigest for floats and ints and fallback
+            to the ``'dask'`` otherwise. See :meth:`quantile` for more
+            information.
+        include : 'all', list-like of dtypes or None (default), optional
+            A white list of data types to include in the result. Ignored
+            for ``Series``.
+        exclude : list-like of dtypes or None (default), optional
+            A black list of data types to omit from the result. Ignored
+            for ``Series``.
+
+        Returns
+        -------
+        Series or DataFrame
+            Summary statistics of the Series or Dataframe provided.
+
+        See Also
+        --------
+        pandas.DataFrame.describe
+        dask.dataframe.DataFrame.quantile
+        """
         # TODO: duplicated columns
         if include is None and exclude is None:
             _include = [np.number, np.timedelta64, np.datetime64]
@@ -4558,7 +4599,6 @@ class Series(FrameBase):
             raise TypeError("lag must be an integer")
         return self.corr(self if lag == 0 else self.shift(lag), split_every=split_every)
 
-    @derived_from(pd.Series)
     def describe(
         self,
         split_every=False,
@@ -4567,6 +4607,48 @@ class Series(FrameBase):
         include=None,
         exclude=None,
     ):
+        """Generate descriptive statistics using approximate quantiles.
+
+        Descriptive statistics include those that summarize the central
+        tendency, dispersion and shape of a dataset's distribution,
+        excluding ``NaN`` values.
+
+        .. note::
+            This method uses approximate algorithms for computing quantiles
+            (the 25%, 50%, and 75% values). For more information on the
+            approximation methods available, see the ``percentiles_method``
+            parameter below and :meth:`~dask.dataframe.Series.quantile`.
+
+        Parameters
+        ----------
+        split_every : int, optional
+            How to group intermediate values during the computation.
+        percentiles : list/array of floats, optional
+            The percentiles to include in the output. By default, this is
+            ``[0.25, 0.5, 0.75]``.
+        percentiles_method : {'default', 'tdigest', 'dask'}, optional
+            What method to use for computing percentiles. By default will
+            use dask's internal custom algorithm (``'dask'``). If set to
+            ``'tdigest'`` will use tdigest for floats and ints and fallback
+            to the ``'dask'`` otherwise. See :meth:`quantile` for more
+            information.
+        include : 'all', list-like of dtypes or None (default), optional
+            A white list of data types to include in the result. Ignored
+            for ``Series``.
+        exclude : list-like of dtypes or None (default), optional
+            A black list of data types to omit from the result. Ignored
+            for ``Series``.
+
+        Returns
+        -------
+        Series
+            Summary statistics of the Series provided.
+
+        See Also
+        --------
+        pandas.Series.describe
+        dask.dataframe.Series.quantile
+        """
         if (
             is_numeric_dtype(self.dtype)
             and not is_bool_dtype(self.dtype)
