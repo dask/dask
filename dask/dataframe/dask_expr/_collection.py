@@ -3913,6 +3913,33 @@ class DataFrame(FrameBase):
         include=None,
         exclude=None,
     ):
+        """Generate descriptive statistics.
+
+        .. note::
+
+            Since calculating quantiles is difficult and expensive,
+            percentile calculations (e.g., the 25th, 50th, and 75th percentiles)
+            use approximate algorithms. The default method uses t-digest for
+            numerical data, which provides a good balance between accuracy and
+            performance. Results may differ from pandas, especially for small
+            datasets.
+
+        Parameters
+        ----------
+        split_every : int, optional
+            How to group intermediate values during tree reduction.
+        percentiles : list-like, optional
+            The percentiles to include in the output. All values should
+            fall between 0 and 1. Defaults to [0.25, 0.5, 0.75].
+        percentiles_method : {'default', 'tdigest', 'dask'}, optional
+            Method to use for percentile computation. 'tdigest' uses the
+            t-digest algorithm (default for numeric data), 'dask' uses a
+            simpler but faster algorithm. See :meth:`DataFrame.quantile`.
+        include : 'all', list-like of dtypes or None (default), optional
+            A white list of data types to include in the result.
+        exclude : list-like of dtypes or None (default), optional
+            A black list of data types to omit from the result.
+        """
         # TODO: duplicated columns
         if include is None and exclude is None:
             _include = [np.number, np.timedelta64, np.datetime64]
@@ -4567,6 +4594,29 @@ class Series(FrameBase):
         include=None,
         exclude=None,
     ):
+        """Generate descriptive statistics.
+
+        .. note::
+
+            Since calculating quantiles is difficult and expensive,
+            percentile calculations (e.g., the 25th, 50th, and 75th percentiles)
+            use approximate algorithms. The default method uses t-digest for
+            numerical data, which provides a good balance between accuracy and
+            performance. Results may differ from pandas, especially for small
+            datasets.
+
+        Parameters
+        ----------
+        split_every : int, optional
+            How to group intermediate values during tree reduction.
+        percentiles : list-like, optional
+            The percentiles to include in the output. All values should
+            fall between 0 and 1. Defaults to [0.25, 0.5, 0.75].
+        percentiles_method : {'default', 'tdigest', 'dask'}, optional
+            Method to use for percentile computation. 'tdigest' uses the
+            t-digest algorithm (default for numeric data), 'dask' uses a
+            simpler but faster algorithm. See :meth:`Series.quantile`.
+        """
         if (
             is_numeric_dtype(self.dtype)
             and not is_bool_dtype(self.dtype)
