@@ -2005,7 +2005,6 @@ def test_concat_categorical(known, cat_index, divisions):
         )
         assert not hasattr(res, "w") or has_known_categories(res.w)
         assert has_known_categories(res.y) == known
-        
 
 def test_concat_categorical_mixed_simple():
     a = pd.Series(["a", "b", "c"], dtype="category")
