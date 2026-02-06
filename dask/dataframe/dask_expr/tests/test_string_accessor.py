@@ -140,6 +140,21 @@ def test_str_split_(index):
     assert_eq(dd_a, pd_a)
 
 
+def test_str_split_preserves_dtype():
+    # GH#11884 - str.split with expand=True should preserve string dtype
+    pytest.importorskip("pyarrow")
+    df = pd.DataFrame({"c": ["a,b,c", "d,e,f", "g,h,i"]}, dtype="string[pyarrow]")
+    ddf = from_pandas(df, npartitions=2)
+
+    pd_result = df["c"].str.split(",", n=1, expand=True)
+    dd_result = ddf["c"].str.split(",", n=1, expand=True)
+
+    assert_eq(dd_result, pd_result)
+    # Check that dtypes are preserved (not coerced to object)
+    for col in pd_result.columns:
+        assert dd_result.dtypes[col] == pd_result.dtypes[col]
+
+
 def test_str_accessor_not_available():
     pdf = pd.DataFrame({"a": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=2)

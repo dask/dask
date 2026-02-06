@@ -186,6 +186,7 @@ class SplitMap(FunctionMap):
         meta = self.frame._meta._constructor(
             [delimiter.join(["a"] * (self.n + 1))],
             index=meta.iloc[:1].index,
+            dtype=meta.dtype,
         )
         return make_meta(
             getattr(meta.str, self.attr)(n=self.n, expand=self.expand, pat=self.pat)
