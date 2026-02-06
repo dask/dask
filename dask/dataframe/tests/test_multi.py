@@ -1928,6 +1928,8 @@ def test_concat5():
         (False, False, False),
     ],
 )
+
+
 def test_concat_categorical(known, cat_index, divisions):
     frames = [
         pd.DataFrame(
