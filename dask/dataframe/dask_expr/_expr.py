@@ -3014,14 +3014,8 @@ class Partitions(Expr):
         divisions.append(self.frame.divisions[part + 1])
         return tuple(divisions)
 
-    def _length(self):
-        # Partition slicing cannot safely infer concrete length
-        return np.nan
-
     def _task(self, name: Key, index: int) -> Task:
-        return Alias(
-            name, (self.frame._name, self.partitions[index])
-        )  # type: ignore[return-value]
+        return Alias(name, (self.frame._name, self.partitions[index]))  # type: ignore[return-value]
 
     def _simplify_down(self):
         from dask.dataframe.dask_expr import SetIndexBlockwise
@@ -3044,11 +3038,13 @@ class Partitions(Expr):
                 partitions = [self.frame._partitions[p] for p in self.partitions]
             else:
                 partitions = self.partitions
+            # We assume that expressions defining a special "_partitions"
+            # parameter can internally capture the same logic as `Partitions`
             return self.frame.substitute_parameters({"_partitions": partitions})
 
     def _node_label_args(self):
         return [self.frame, self.partitions]
-
+        
 
 class PartitionsFiltered(Expr):
     """Mixin class for partition filtering
