@@ -3048,7 +3048,7 @@ class Partitions(Expr):
 
     def _node_label_args(self):
         return [self.frame, self.partitions]
-        
+
 
 class PartitionsFiltered(Expr):
     """Mixin class for partition filtering
