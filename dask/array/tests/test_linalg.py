@@ -425,6 +425,24 @@ def test_qr(m, n, chunks, error_type):
             q, r = qr(data)
 
 
+def test_qr_mode_complete_raises_not_implemented_error():
+    m, n, chunks = 20, 20, 10
+    mat = np.random.default_rng().random((m, n))
+    data = da.from_array(mat, chunks=chunks, name="A")
+
+    with pytest.raises(NotImplementedError):
+        da.linalg.qr(data, mode="complete")
+
+
+def test_qr_mode_unknown_raises_value_error():
+    m, n, chunks = 20, 20, 10
+    mat = np.random.default_rng().random((m, n))
+    data = da.from_array(mat, chunks=chunks, name="A")
+
+    with pytest.raises(ValueError):
+        da.linalg.qr(data, mode="foo")
+
+
 def test_linalg_consistent_names():
     m, n = 20, 10
     mat = np.random.default_rng().random((m, n))
