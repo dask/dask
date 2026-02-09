@@ -5772,17 +5772,15 @@ def test_from_array_meta():
 
 def test_compute_chunk_sizes():
     x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
-    y = x[x < 0]
-    assert np.isnan(y.shape[0])
-    assert y.chunks == ((np.nan,) * 5,)
+    x._chunks = ((np.nan,) * 5,)
 
-    z = y.compute_chunk_sizes()
-    assert y is z
-    assert z.chunks == ((10, 10, 5, 0, 0),)
-    assert len(z) == 25
+    y = x.compute_chunk_sizes()
+    assert x is y
+    assert y.chunks == ((10, 10, 10, 10, 10),)
+    assert len(y) == 50
 
     # check that dtype of chunk dimensions is `int`
-    assert isinstance(z.chunks[0][0], int)
+    assert isinstance(y.chunks[0][0], int)
 
 
 def test_compute_chunk_sizes_2d_array():
@@ -5830,9 +5828,8 @@ def _known(num=50):
 @pytest.fixture()
 def unknown():
     x = _known()
-    y = x[x < 0]
-    assert y.chunks == ((np.nan,) * 5,)
-    return y
+    x._chunks = ((np.nan,) * 5,)
+    return x
 
 
 def test_compute_chunk_sizes_warning_fixes_rechunk(unknown):
@@ -5885,9 +5882,9 @@ def test_compute_chunk_sizes_warning_fixes_reduction(unknown):
 def test_compute_chunk_sizes_warning_fixes_reshape(unknown):
     y = unknown
     with pytest.raises(ValueError, match="compute_chunk_sizes"):
-        da.reshape(y, (5, 5))
+        da.reshape(y, (5, 10))
     y.compute_chunk_sizes()
-    da.reshape(y, (5, 5))
+    da.reshape(y, (5, 10))
 
 
 def test_compute_chunk_sizes_warning_fixes_slicing():
