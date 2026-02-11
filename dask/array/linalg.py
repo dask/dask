@@ -885,7 +885,7 @@ def svd(a, coerce_signs=True, full_matrices=False):
         If True, raises ``NotImplementedError``. Only ``full_matrices=False``
         (reduced SVD) is currently supported. Default is ``False``.
 
-        .. versionadded:: 2024.1.0
+        .. versionadded:: 2026.2.0
 
     Examples
     --------
