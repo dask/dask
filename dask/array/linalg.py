@@ -871,7 +871,7 @@ def qr(a):
         )
 
 
-def svd(a, coerce_signs=True):
+def svd(a, coerce_signs=True, full_matrices=False):
     """
     Compute the singular value decomposition of a matrix.
 
@@ -881,6 +881,11 @@ def svd(a, coerce_signs=True):
     coerce_signs : bool
         Whether or not to apply sign coercion to singular vectors in
         order to maintain deterministic results, by default True.
+    full_matrices : bool, optional
+        If True, raises ``NotImplementedError``. Only ``full_matrices=False``
+        (reduced SVD) is currently supported. Default is ``False``.
+
+        .. versionadded:: 2024.1.0
 
     Examples
     --------
@@ -915,6 +920,11 @@ def svd(a, coerce_signs=True):
     dask.array.linalg.tsqr : QR factorization for tall-and-skinny arrays
     dask.array.utils.svd_flip : Sign normalization for singular vectors
     """
+    if full_matrices:
+        raise NotImplementedError(
+            "full_matrices=True is not implemented for dask arrays. "
+            "Use full_matrices=False to compute the reduced SVD."
+        )
     nb = a.numblocks
     if a.ndim != 2:
         raise ValueError(
