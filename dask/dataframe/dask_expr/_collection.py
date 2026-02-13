@@ -3816,6 +3816,7 @@ class DataFrame(FrameBase):
 
     @derived_from(pd.DataFrame)
     def nunique(self, axis=0, dropna=True, split_every=False):
+        axis = self._validate_axis(axis)
         if axis == 1:
             return new_collection(expr.NUniqueColumns(self, axis=axis, dropna=dropna))
         else:
