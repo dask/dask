@@ -250,6 +250,10 @@ class Concat(Expr):
 
             columns = determine_column_projection(self, parent, dependents)
             columns = _convert_to_list(columns)
+
+            if len(columns) == 0:
+                return
+
             columns_frame = [
                 [col for col in get_columns_or_name(frame) if col in columns]
                 for frame in self._frames
