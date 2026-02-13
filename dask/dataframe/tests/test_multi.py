@@ -1929,7 +1929,6 @@ def test_concat5():
     ],
 )
 
-
 def test_concat_categorical(known, cat_index, divisions):
     frames = [
         pd.DataFrame(
