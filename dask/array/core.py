@@ -3852,31 +3852,46 @@ def _write_dask_to_existing_zarr(
             for s, c, r in zip(z.shape, dask_write_chunks, index)
         )
 
-    for ax, (dw, zw) in enumerate(
-        zip(dask_write_chunks, zarr_write_chunks, strict=True)
+    for ax, (dw, zw, shape_ax) in enumerate(
+        zip(dask_write_chunks, zarr_write_chunks, z.shape, strict=True)
     ):
         if len(dw) >= 1:
             nominal_dask_chunk_size = dw[0]
             if not nominal_dask_chunk_size % zw == 0:
-                safe_chunk_size = np.prod(zarr_write_chunks) * max(1, z.dtype.itemsize)
-                msg = (
-                    f"The input Dask array will be rechunked along axis {ax} with chunk size "
-                    f"{nominal_dask_chunk_size}, but a chunk size divisible by {zw} is "
-                    f"required for Dask to write safely to the Zarr array {z}. "
-                    "To avoid risk of data loss when writing to this Zarr array, set the "
-                    '"array.chunk-size" configuration parameter to at least the size in'
-                    " bytes of a single on-disk "
-                    f"chunk (or shard) of the Zarr array, which in this case is "
-                    f"{safe_chunk_size} bytes. "
-                    f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
-                )
+                write_size = sum(dw)
+                has_misaligned_chunks = False
+                if len(dw) > 1:
+                    for chunk_size in dw[:-1]:
+                        if chunk_size < zw or (
+                            chunk_size > zw and chunk_size % zw != 0
+                        ):
+                            has_misaligned_chunks = True
+                            break
+                elif (
+                    len(dw) == 1
+                    and nominal_dask_chunk_size > zw
+                    and write_size < shape_ax
+                ):
+                    has_misaligned_chunks = True
 
-                warnings.warn(
-                    msg,
-                    PerformanceWarning,
-                    stacklevel=3,
-                )
-                break
+                if has_misaligned_chunks:
+                    safe_chunk_size = np.prod(zarr_write_chunks) * max(
+                        1, z.dtype.itemsize
+                    )
+                    msg = (
+                        f"The input Dask array has been rechunked along axis {ax} with chunk size {nominal_dask_chunk_size}, "
+                        f"which does not align with the Zarr array's chunk size of {zw}. This can cause race conditions or data loss. "
+                        "To avoid this issue, increase the 'array.chunk-size' configuration to at least "
+                        f"{safe_chunk_size} bytes (the size of one Zarr chunk), "
+                        f"and/or manually rechunk the array to align with boundaries of size {zarr_write_chunks}."
+                    )
+
+                    warnings.warn(
+                        msg,
+                        PerformanceWarning,
+                        stacklevel=3,
+                    )
+                    break
 
     arr = arr.rechunk(dask_write_chunks)
 
