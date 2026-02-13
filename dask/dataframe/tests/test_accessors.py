@@ -310,6 +310,17 @@ def test_str_accessor_split_expand(method):
         )
 
 
+def test_str_accessor_split_expand_preserves_pyarrow_string_dtype():
+    pytest.importorskip("pyarrow")
+    s = pd.Series(["a,b", "c,d"], dtype="string[pyarrow]")
+    ds = dd.from_pandas(s, npartitions=1)
+
+    result = ds.str.split(",", n=1, expand=True)
+    expected = s.str.split(",", n=1, expand=True)
+
+    assert result.dtypes.equals(expected.dtypes)
+
+
 @pytest.mark.xfail(reason="Need to pad columns")
 def test_str_accessor_split_expand_more_columns():
     s = pd.Series(["a b c d", "aa", "aaa bbb ccc dddd"])
