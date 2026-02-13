@@ -1721,6 +1721,23 @@ def test_len(df, pdf):
     assert isinstance(expr.Lengths(df2.expr).optimize(), expr.Literal)
 
 
+def test_partitions_len_matches_computed():
+    import dask.dataframe as dd
+
+    pdf = pd.DataFrame({"x": np.arange(100)})
+    df = dd.from_pandas(pdf, npartitions=10)
+
+    df2 = df[["x"]] + 1
+    part = df2.partitions[0]
+
+    meta_len = len(part)
+    real_len = len(part.compute())
+
+    # If metadata reports a concrete length, it must be correct
+    if not np.isnan(meta_len):
+        assert meta_len == real_len
+
+
 def test_astype_simplify(df, pdf):
     q = df.astype({"x": "float64", "y": "float64"})["x"]
     result = q.simplify()
