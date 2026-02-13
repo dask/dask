@@ -5166,7 +5166,9 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         # to match.
         vals = [
             (
-                np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
+                np.zeros_like(
+                    meta_from_array(a), shape=(1,) * max(1, a.ndim), dtype=a.dtype
+                )
                 if not is_scalar_for_elemwise(a)
                 else a
             )
