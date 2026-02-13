@@ -12,6 +12,7 @@ from pandas.core.apply import reconstruct_func, validate_func_kwargs
 from dask import is_dask_collection
 from dask._task_spec import Task
 from dask.core import flatten
+from dask.dataframe._compat import PANDAS_GE_300
 from dask.dataframe.core import (
     _concat,
     apply_and_enforce,
@@ -41,11 +42,7 @@ from dask.dataframe.dask_expr._expr import (
 )
 from dask.dataframe.dask_expr._reductions import ApplyConcatApply, Chunk, Reduction
 from dask.dataframe.dask_expr._shuffle import RearrangeByColumn
-from dask.dataframe.dask_expr._util import (
-    PANDAS_GE_300,
-    _convert_to_list,
-    get_specified_shuffle,
-)
+from dask.dataframe.dask_expr._util import _convert_to_list, get_specified_shuffle
 from dask.dataframe.dispatch import concat, make_meta, meta_nonempty
 from dask.dataframe.groupby import (
     GROUP_KEYS_DEFAULT,
@@ -1553,9 +1550,7 @@ class GroupBy:
 
         self.obj = obj[projection] if projection is not None else obj
         self.sort = sort
-        self.observed = (
-            observed if observed is not None else False if not PANDAS_GE_300 else True
-        )
+        self.observed = observed if observed is not None else PANDAS_GE_300
         self.dropna = dropna
         self.group_keys = group_keys
         self.by = (
