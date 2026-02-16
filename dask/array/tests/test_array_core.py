@@ -4997,12 +4997,13 @@ def test_zarr_sharding_roundtrip(tmp_path, chunks, shards):
     assert b2.chunks == b.chunks
 
 
-def test_zarr_roundtrip_with_path_like():
+@pytest.mark.parametrize("zarr_format", [2, 3])
+def test_zarr_roundtrip_with_path_like(zarr_format):
     pytest.importorskip("zarr")
     with tmpdir() as d:
         path = pathlib.Path(d)
         a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(path)
+        a.to_zarr(path, zarr_format=zarr_format)
         a2 = da.from_zarr(path)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
