@@ -5,10 +5,8 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 
 import dask.dataframe as dd
-from dask._compatibility import PY_VERSION
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, tm
 from dask.dataframe.methods import concat
@@ -1906,8 +1904,8 @@ def test_concat5():
             False,
             True,
             marks=pytest.mark.xfail(
-                PANDAS_GE_220 or PY_VERSION >= Version("3.12.0"),
-                reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
+                PANDAS_GE_220,
+                reason="https://github.com/dask/dask/issues/10558",
                 raises=AssertionError,
                 strict=False,
             ),
@@ -1919,8 +1917,8 @@ def test_concat5():
             False,
             True,
             marks=pytest.mark.xfail(
-                PANDAS_GE_220 or PY_VERSION >= Version("3.12.0"),
-                reason="fails on pandas dev: https://github.com/dask/dask/issues/10558",
+                PANDAS_GE_220,
+                reason="https://github.com/dask/dask/issues/10558",
                 raises=AssertionError,
                 strict=False,
             ),
@@ -1973,13 +1971,28 @@ def test_concat_categorical(known, cat_index, divisions):
     def check_and_return(ddfs, dfs, join):
         sol = concat(dfs, join=join)
         res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
-        assert_eq(res, sol)
+
+        # Pandas 2.0 does not guarantee stable ordering of categorical values
+        # during concat
+        if (
+            not PANDAS_GE_210
+            and isinstance(res, dd.Series)
+            and res.dtype.name == "category"
+        ):
+            assert_eq(
+                res.compute().sort_values().reset_index(drop=True),
+                sol.sort_values().reset_index(drop=True),
+            )
+        else:
+            assert_eq(res, sol)
+
         if known:
             parts = compute_as_if_collection(
                 dd.DataFrame, res.dask, res.__dask_keys__()
             )
             for p in [i.iloc[:0] for i in parts]:
                 check_meta(res._meta, p)  # will error if schemas don't align
+
         assert not cat_index or has_known_categories(res.index) == known
         return res
 

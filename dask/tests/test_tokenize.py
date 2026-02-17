@@ -1513,7 +1513,6 @@ def test_tokenize_nested_sequence_thread_safe():
 
 
 def test_tokenize_range_index():
-    np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
     a = pd.RangeIndex(0, 10)
     b = pd.RangeIndex(0, 10)
@@ -1525,18 +1524,6 @@ def test_tokenize_range_index():
     e = pd.RangeIndex(0, 10, step=3)
     assert check_tokenize(d) != check_tokenize(e)
 
-    large = pd.RangeIndex(0, 1000000)
-    array_token = normalize_token(np.zeros(10))
-    assert isinstance(array_token[0], str)
-    # hex_buffer_output_len
-    # It's difficult to assert what actually goes into the tokens
-    # Therefore we just check if there is a string of the appropriate length in
-    # the tokens below This check is to verify the assumption and to avoid hard
-    # coding a length. This seems to not be stable across python versions or
-    # platforms but there is a minimal length
-    hex_hash_len = len(array_token[0])
-    assert hex_hash_len >= 32
-
     def assert_no_hashes(tokens):
         if isinstance(tokens, (list, tuple)):
             for token in tokens:
@@ -1546,7 +1533,10 @@ def test_tokenize_range_index():
                 assert_no_hashes(key)
                 assert_no_hashes(value)
         elif isinstance(tokens, str):
-            if len(tokens) == hex_hash_len:
-                raise AssertionError("found a hash")
+            with pytest.raises(ValueError):
+                bytes.fromhex(tokens)
 
+    # Test that the RangeIndex is not unrolled into a
+    # potentially huge arange buffer
+    large = pd.RangeIndex(0, 1000000)
     assert_no_hashes(normalize_token(large))

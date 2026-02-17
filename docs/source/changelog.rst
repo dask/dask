@@ -5,6 +5,18 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2026.2.0:
+
+2026.2.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+.. dropdown:: Additional changes
+
+  - Minimum version of optional dependency `scipy` bumped to 1.10.0 (was 1.7.2)
+
 .. _v2026.1.2:
 
 2026.1.2
@@ -8918,7 +8930,7 @@ DataFrame
   (:pr:`1495`)
 - Add ``dataframe.reduction`` and ``series.reduction`` methods to apply generic
   row-wise reduction to dataframes and series (:pr:`1483`)
-- Add ``dataframe.select_dtypes``, which mirrors the `pandas method <https://pandas.pydata.org/pandas-docs/version/0.18.1/generated/pandas.DataFrame.select_dtypes.html>`_ (:pr:`1556`)
+- Add ``dataframe.select_dtypes``, which mirrors the `pandas method <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.select_dtypes.html>`_ (:pr:`1556`)
 - ``dataframe.read_hdf`` now supports reading ``Series`` (:pr:`1564`)
 - Support Pandas 0.19.0 (:pr:`1540`)
 - Implement ``select_dtypes`` (:pr:`1556`)
