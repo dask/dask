@@ -402,6 +402,8 @@ class FrameBase(DaskMethodsMixin):
         return new_collection, (self._expr,)
 
     def __getitem__(self, other):
+        #if is_series_like(other) and getattr(other, "dtype", None) == "bool":
+            #return self.map_partitions(lambda df, mask: df.loc[mask], other)
         if isinstance(other, FrameBase):
             if not expr.are_co_aligned(self.expr, other.expr):
                 return new_collection(expr.FilterAlign(self, other))
