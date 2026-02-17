@@ -46,12 +46,12 @@ Handling Ports
 
 The scheduler and workers both need to accept TCP connections on an open port.
 By default, the scheduler binds to port ``8786`` and the worker binds to a
-random open port.  If you are behind a firewall then you may have to open
-particular ports or tell Dask to listen on particular ports with the ``--port``
-and ``--worker-port`` keywords.::
+random open port.  If you are behind a firewall, then you may have to open
+particular ports or tell Dask to listen on particular ports with the ``--port``,
+``--worker-port`` and ``--nanny-port`` keywords.::
 
    dask scheduler --port 8000
-   dask worker --dashboard-address 8000 --nanny-port 8001
+   dask worker --dashboard-address 8000 --worker-port 8001 --nanny-port 8002
 
 
 Nanny Processes
