@@ -227,6 +227,7 @@ def test_env():
         "DASK_E__Y": "456",
         "DASK_F": '[1, 2, "3"]',
         "DASK_G": "/not/parsable/as/literal",
+        "DASK_G--A": "any",
         "FOO": "not included",
     }
 
@@ -237,6 +238,7 @@ def test_env():
         "e": {"x": 123, "y": 456},
         "f": [1, 2, "3"],
         "g": "/not/parsable/as/literal",
+        "g.a": "any",
     }
 
     res = collect_env(env)
@@ -333,8 +335,8 @@ def test_set():
         assert config["abc"] == 123
     assert "abc" not in config
 
-    with dask.config.set({"abc.x": 1, "abc.y": 2, "abc.z.a": 3}):
-        assert config["abc"] == {"x": 1, "y": 2, "z": {"a": 3}}
+    with dask.config.set({"abc.x": 1, "abc.y": 2, "abc.z.a": 3, "abc.z.a__a": 4}):
+        assert config["abc"] == {"x": 1, "y": 2, "z": {"a": 3, "a.a": 4}}
     assert "abc" not in config
 
     d = {}
