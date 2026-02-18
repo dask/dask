@@ -516,7 +516,7 @@ def reshape_blockwise(
             )
         }
 
-        graph = HighLevelGraph.from_collections(outname, dsk, dependencies=[x])  # type: ignore[arg-type]
+        graph = HighLevelGraph.from_collections(outname, dsk, dependencies=[x])  # type: ignore[arg-type, list-item]
         return Array(graph, outname, chunks, meta=x._meta)
 
     if chunks is not None:
@@ -565,7 +565,7 @@ def reshape_blockwise(
         output_chunks.append(tuple(dimension_chunks))
         ctr *= nr_chunks_dim
 
-    graph = HighLevelGraph.from_collections(outname, dsk, dependencies=[x])  # type: ignore[arg-type]
+    graph = HighLevelGraph.from_collections(outname, dsk, dependencies=[x])  # type: ignore[arg-type, list-item]
     return Array(graph, outname, tuple(reversed(output_chunks)), meta=x._meta)
 
 
