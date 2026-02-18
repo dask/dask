@@ -87,12 +87,34 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
 
     Parameters
     ----------
-    reduction: function
-        Function like np.sum, np.mean, etc...
-    x: np.ndarray
+    reduction : callable
+        A function that reduces an array over specified axes. The function must:
+
+        - Accept an array as the first positional argument. The array type
+          will match the type of the input array chunks (e.g., numpy.ndarray,
+          cupy.ndarray, etc.).
+        - Accept an ``axis`` keyword argument with a tuple of integer axes
+          to reduce over.
+        - Return an array of the same type as the input.
+
+        Common examples include ``np.sum``, ``np.mean``, ``np.min``, ``np.max``,
+        and similar reduction functions from array libraries.
+    x : array_like
         Array to be coarsened
-    axes: dict
+    axes : dict
         Mapping of axis to coarsening factor
+    trim_excess : bool, optional
+        Whether to trim elements that don't fit evenly into the coarsening
+        factor. Default is False.
+    **kwargs
+        Additional keyword arguments passed to the reduction function
+        (e.g., ``keepdims``, ``dtype``).
+
+    Returns
+    -------
+    array_like
+        Coarsened array with each dimension reduced by the corresponding
+        coarsening factor.
 
     Examples
     --------
