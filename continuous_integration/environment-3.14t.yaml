@@ -22,10 +22,7 @@ dependencies:
   - coverage
   # key optional dependencies
   - numpy
-  - pandas>=3  # Actually need >=3.0.1 due to severe race conditions in 3.0
-               # (https://github.com/pandas-dev/pandas/pull/63783)
-               # Until 3.0.1 is released, this is temporarily overridden
-               # by pandas-nightly in tests.yaml.
+  - pandas>=3.0.1  # 3.0.0 has major race conditions
   - pyarrow
   # conda variant of distributed depends on cytoolz, which is not available
   # on conda yet.
