@@ -5177,9 +5177,12 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         except ValueError as e:
             # If dtype inference failed due to a scalar overflow (e.g. int8 * 128),
             # returning NotImplemented causes Python to fall back to the scalar
-            # reverse-op and raises a misleading TypeError.
-            if isinstance(e.__cause__, OverflowError):
-                raise e.__cause__
+            # reverse-op and raises a misleading TypeError instead.
+            # apply_infer_dtype wraps the original exception via `raise ValueError(...) from err`,
+            # so the OverflowError appears as either __cause__ or __context__.
+            original = e.__cause__ or e.__context__
+            if isinstance(original, OverflowError):
+                raise original from e
             return NotImplemented
         need_enforce_dtype = any(
             not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
