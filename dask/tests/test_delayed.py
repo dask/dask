@@ -962,3 +962,23 @@ def test_p2p_as_delayed():
         )
 
     _test()
+
+def test_nout_mismatch_error():
+    # regression test for https://github.com/dask/dask/issues/12295
+    # nout=2 but function returns a single int
+    @delayed(nout=2)
+    def returns_one():
+        return 1
+
+    val1, val2 = returns_one()
+    with pytest.raises(TypeError, match="nout mismatch"):
+        compute(val1, val2)
+
+    # nout=3 but function returns a tuple of 2
+    @delayed(nout=3)
+    def returns_two():
+        return 1, 2
+
+    val1, val2, val3 = returns_two()
+    with pytest.raises(TypeError, match="nout mismatch"):
+        compute(val1, val2, val3)
