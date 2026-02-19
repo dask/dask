@@ -770,9 +770,10 @@ class Task(GraphNode):
             return self.func(*new_argspec)
         except (TypeError, IndexError):
             if self.func is operator.getitem:
+                offending_func = ", ".join(str(d) for d in self.dependencies)
                 obj, idx = new_argspec
                 raise TypeError(
-                    f"A delayed function was expected to return at least "
+                    f"A delayed function '{offending_func}' was expected to return at least "
                     f"{idx + 1} output(s), but got a {type(obj).__name__!r}. "
                     f"Check your function returns the correct number of outputs "
                     f"(nout mismatch)."
