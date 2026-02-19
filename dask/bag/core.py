@@ -279,15 +279,18 @@ def to_textfiles(
         return [f.path for f in files]
     else:
         return out.to_delayed()
-
+    
+def _flatten_results(results):
+    if isinstance(results[0], Iterable) and not isinstance(results[0], str):
+        return toolz.concat(results)
+    return results
 
 def finalize(results):
     if not results:
         return results
     if isinstance(results, Iterator):
         results = list(results)
-    if isinstance(results[0], Iterable) and not isinstance(results[0], str):
-        results = toolz.concat(results)
+    results = _flatten_results(results)
     if isinstance(results, Iterator):
         results = list(results)
     return results
@@ -295,6 +298,15 @@ def finalize(results):
 
 def finalize_item(results):
     return results[0]
+
+class StringMethodDispatcher:
+    """Handles dispatching of string methods for Bag string operations."""
+
+    def __init__(self, bag):
+        self._bag = bag
+
+    def dispatch(self, key, *args, **kwargs):
+        return self._bag.map_string_method(key, *args, **kwargs)
 
 
 class StringAccessor:
@@ -317,12 +329,14 @@ class StringAccessor:
 
     def __init__(self, bag):
         self._bag = bag
+        self._dispatcher = StringMethodDispatcher(bag)
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + dir(str)))
 
     def _strmap(self, key, *args, **kwargs):
-        return self._bag.map(operator.methodcaller(key, *args, **kwargs))
+         return self._dispatcher.dispatch(key, *args, **kwargs)
+
 
     def __getattr__(self, key):
         try:
@@ -522,6 +536,12 @@ class Bag(DaskMethodsMixin):
     __repr__ = __str__
 
     str = property(fget=StringAccessor)
+
+    def map_string_method(self, method, *args, **kwargs):
+        """Apply a string method across all elements in the bag."""
+        import operator
+        return self.map(operator.methodcaller(method, *args, **kwargs))
+
 
     def map(self, func, *args, **kwargs):
         """Apply a function elementwise across one or more bags.
@@ -1455,7 +1475,9 @@ class Bag(DaskMethodsMixin):
             for i in range(npartitions):
                 dsk[(name_p, i)] = (list, (take, k, (self.name, i)))
 
-            concat = (toolz.concat, ([(name_p, i) for i in range(npartitions)]))
+            partition_keys = [(name_p, i) for i in range(npartitions)]
+            concat = (toolz.concat, partition_keys)
+
             dsk[(name, 0)] = (safe_take, k, concat, warn)
         else:
             dsk = {(name, 0): (safe_take, k, (self.name, 0), warn)}
@@ -1954,6 +1976,24 @@ def merge_frequencies(seqs):
         for k, v in d.items():
             out[k] += v
     return out
+
+def empty_safe_apply(func, part, is_last):
+    if isinstance(part, Iterator):
+        try:
+            _, part = peek(part)
+        except StopIteration:
+            if not is_last:
+                return no_result
+        return func(part)
+    elif not is_last and is_empty(part):
+        return no_result
+    else:
+        return func(part)
+
+
+def empty_safe_aggregate(func, parts, is_last):
+    parts2 = (p for p in parts if p is not no_result)
+    return empty_safe_apply(func, parts2, is_last)
 
 
 def bag_range(n, npartitions):
@@ -2504,33 +2544,14 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     return type(b)(graph, name, npartitions)
 
 
-def empty_safe_apply(func, part, is_last):
-    if isinstance(part, Iterator):
-        try:
-            _, part = peek(part)
-        except StopIteration:
-            if not is_last:
-                return no_result
-        return func(part)
-    elif not is_last and is_empty(part):
-        return no_result
-    else:
-        return func(part)
-
-
-def empty_safe_aggregate(func, parts, is_last):
-    parts2 = (p for p in parts if p is not no_result)
-    return empty_safe_apply(func, parts2, is_last)
-
-
 def safe_take(n, b, warn=True):
-    r = list(take(n, b))
-    if len(r) != n and warn:
+    results = list(take(n, b))
+    if len(results) != n and warn:
         warnings.warn(
-            f"Insufficient elements for `take`. {n} elements requested, only {len(r)} "
+            f"Insufficient elements for `take`. {n} elements requested, only {len(results)} "
             "elements available. Try passing larger `npartitions` to `take`."
         )
-    return r
+    return results
 
 
 def random_sample(x, state_data, prob):
