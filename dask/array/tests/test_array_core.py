@@ -5251,9 +5251,51 @@ def test_zarr_risky_shards_warns():
     with dask.config.set({"array.chunk-size": 1}):
         with pytest.raises(
             PerformanceWarning,
-            match="The input Dask array will be rechunked along axis",
+            match="The Dask array will be rechunked along axis",
         ):
             arr.to_zarr(z)
+
+
+def test_zarr_valid_shard_without_evenly_dividing_array():
+    """
+    Test that we don't warn when shard shape doesn't evenly divide array shape.
+    """
+    zarr = pytest.importorskip("zarr", minversion="3.0.0")
+
+    shape = (65, 65, 65)
+    zarr_chunk_shape = (16, 16, 16)
+    zarr_shard_shape = (32, 32, 32)
+
+    arr = da.ones(shape, chunks=(32, 32, 32))
+
+    z = zarr.create_array(
+        store={},
+        shape=shape,
+        chunks=zarr_chunk_shape,
+        shards=zarr_shard_shape,
+        dtype=arr.dtype,
+    )
+
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", PerformanceWarning)
+        result = arr.to_zarr(z, compute=False)
+        result.compute()
+
+    assert_eq(z[...], arr.compute())
+
+
+def test_zarr_multiple_writes_to_one_chunk():
+    """
+    Test that we warn when multiple writes would be made similtaneously to a single zarr chunk.
+    """
+    zarr = pytest.importorskip("zarr")
+    b = da.arange(4).rechunk(1)
+    z_small = zarr.zeros(4, chunks=2)
+    with dask.config.set({"array.chunk-size": 1}):
+        with pytest.warns(PerformanceWarning, match="do not align"):
+            b.to_zarr(z_small)
 
 
 def test_zarr_nocompute():
@@ -5288,8 +5330,7 @@ def test_zarr_regions():
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    with pytest.warns(PerformanceWarning):
-        a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
+    a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
 
     a2 = da.from_zarr(z)
     expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 15, 7, 0], [0, 0, 11, 0]]
