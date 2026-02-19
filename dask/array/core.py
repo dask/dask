@@ -506,10 +506,12 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
             "---------\n"
             f"{tb}"
         )
+        err = e
     else:
         msg = None
+        err = None
     if msg is not None:
-        raise ValueError(msg)
+        raise ValueError(msg) from err
     return getattr(o, "dtype", type(o)) if nout is None else tuple(e.dtype for e in o)
 
 
@@ -5172,7 +5174,12 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         ]
         try:
             dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
-        except Exception:
+        except ValueError as e:
+            # If dtype inference failed due to a scalar overflow (e.g. int8 * 128),
+            # returning NotImplemented causes Python to fall back to the scalar
+            # reverse-op and raises a misleading TypeError.
+            if isinstance(e.__cause__, OverflowError):
+                raise e.__cause__
             return NotImplemented
         need_enforce_dtype = any(
             not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
