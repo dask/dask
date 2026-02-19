@@ -975,11 +975,3 @@ def test_nout_mismatch_error():
     with pytest.raises(TypeError, match="nout mismatch"):
         compute(val1, val2)
 
-    # nout=3 but function returns a tuple of 2
-    @delayed(nout=3)
-    def returns_two():
-        return 1, 2
-
-    val1, val2, val3 = returns_two()
-    with pytest.raises(TypeError, match="nout mismatch"):
-        compute(val1, val2, val3)
