@@ -963,6 +963,7 @@ def test_p2p_as_delayed():
 
     _test()
 
+
 def test_nout_mismatch_error():
     # regression test for https://github.com/dask/dask/issues/12295
     # nout=2 but function returns a single int

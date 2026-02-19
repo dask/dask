@@ -56,8 +56,8 @@ should contain the dependencies of the task.
 """
 import functools
 import itertools
-import sys
 import operator
+import sys
 from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
 from functools import lru_cache, partial
@@ -768,7 +768,7 @@ class Task(GraphNode):
             return self.func(*new_argspec, **kwargs)
         try:
             return self.func(*new_argspec)
-        except (TypeError, IndexError) as e:
+        except (TypeError, IndexError):
             if self.func is operator.getitem:
                 obj, idx = new_argspec
                 raise TypeError(
