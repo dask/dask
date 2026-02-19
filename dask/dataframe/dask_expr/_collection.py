@@ -3913,6 +3913,30 @@ class DataFrame(FrameBase):
         include=None,
         exclude=None,
     ):
+        """Generate descriptive statistics.
+
+        .. note::
+
+            Dask computes percentiles (used for the ``25%``, ``50%``, and
+            ``75%`` statistics) using an **approximate algorithm** by default.
+            Results may therefore differ slightly from pandas.  Use
+            ``percentiles_method='dask'`` for the built-in Dask algorithm or
+            ``percentiles_method='tdigest'`` for the t-digest algorithm.
+            See :meth:`dask.dataframe.DataFrame.quantile` for details.
+
+        Parameters
+        ----------
+        split_every : int or False, optional
+            Number of partitions to aggregate at once. Defaults to ``False``
+            which uses a single-pass reduction over all partitions.
+        percentiles : list-like of numbers, optional
+            The percentiles to include in the output. All should fall
+            between 0 and 1. By default, ``[0.25, 0.5, 0.75]`` is used.
+        percentiles_method : {'default', 'tdigest', 'dask'}, optional
+            Method for computing percentiles. ``'default'`` uses the internal
+            Dask algorithm. ``'tdigest'`` uses the t-digest algorithm for
+            floats and ints and falls back to ``'dask'`` otherwise.
+        """
         # TODO: duplicated columns
         if include is None and exclude is None:
             _include = [np.number, np.timedelta64, np.datetime64]
@@ -4567,6 +4591,30 @@ class Series(FrameBase):
         include=None,
         exclude=None,
     ):
+        """Generate descriptive statistics.
+
+        .. note::
+
+            Dask computes percentiles (used for the ``25%``, ``50%``, and
+            ``75%`` statistics) using an **approximate algorithm** by default.
+            Results may therefore differ slightly from pandas.  Use
+            ``percentiles_method='dask'`` for the built-in Dask algorithm or
+            ``percentiles_method='tdigest'`` for the t-digest algorithm.
+            See :meth:`dask.dataframe.Series.quantile` for details.
+
+        Parameters
+        ----------
+        split_every : int or False, optional
+            Number of partitions to aggregate at once. Defaults to ``False``
+            which uses a single-pass reduction over all partitions.
+        percentiles : list-like of numbers, optional
+            The percentiles to include in the output. All should fall
+            between 0 and 1. By default, ``[0.25, 0.5, 0.75]`` is used.
+        percentiles_method : {'default', 'tdigest', 'dask'}, optional
+            Method for computing percentiles. ``'default'`` uses the internal
+            Dask algorithm. ``'tdigest'`` uses the t-digest algorithm for
+            floats and ints and falls back to ``'dask'`` otherwise.
+        """
         if (
             is_numeric_dtype(self.dtype)
             and not is_bool_dtype(self.dtype)
