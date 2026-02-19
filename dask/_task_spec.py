@@ -792,7 +792,8 @@ class Task(GraphNode):
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
     ) -> Task:
         subs_filtered = {
-            k: v for k, v in subs.items() if k in self.dependencies and k != v
+            # subs can be as large as the whole graph; do not iterate over it!
+            k: v for k in (self.dependencies & subs.keys()) if (v := subs[k]) != k
         }
         extras = _extra_args(type(self))  # type: ignore[arg-type]
         extra_kwargs = {
@@ -880,7 +881,8 @@ class NestedContainer(Task, Iterable):
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
     ) -> NestedContainer:
         subs_filtered = {
-            k: v for k, v in subs.items() if k in self.dependencies and k != v
+            # subs can be as large as the whole graph; do not iterate over it!
+            k: v for k in (self.dependencies & subs.keys()) if (v := subs[k]) != k
         }
         if not subs_filtered:
             return self
@@ -962,7 +964,8 @@ class Dict(NestedContainer, Mapping):
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None
     ) -> Dict:
         subs_filtered = {
-            k: v for k, v in subs.items() if k in self.dependencies and k != v
+            # subs can be as large as the whole graph; do not iterate over it!
+            k: v for k in (self.dependencies & subs.keys()) if (v := subs[k]) != k
         }
         if not subs_filtered:
             return self
