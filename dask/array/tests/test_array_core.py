@@ -6160,3 +6160,26 @@ def test_blockwise_fusion():
 
     a = ((da.ones(10, chunks=5) + 1) + 2).sum()
     dask.compute(a, scheduler=custom_scheduler_get)
+
+
+def test_mul_scalar_overflow():
+    # Regression test for https://github.com/dask/dask/issues/12296
+    # Dask should raise OverflowError (like NumPy) instead of TypeError
+    # when multiplying an integer array by an out-of-bounds Python integer
+    x = da.ones(2, dtype=np.int8)
+
+    with pytest.raises(OverflowError, match="out of bounds for int8"):
+        x * 128
+    with pytest.raises(OverflowError, match="out of bounds for int8"):
+        128 * x  # tests __rmul__
+    with pytest.raises(OverflowError, match="out of bounds for int8"):
+        x * -129
+
+    # in bounds — should work fine
+    result = (x * 127).compute()
+    assert result.dtype == np.int8
+    assert (result == 127).all()
+
+    # larger dtype — 128 fits in int32, should work fine
+    y = da.ones(2, dtype=np.int32)
+    assert (y * 128).compute().dtype == np.int32

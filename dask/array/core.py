@@ -2406,10 +2406,22 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __mul__(self, other):
+        if isinstance(other, int) and np.issubdtype(self.dtype, np.integer):
+            info = np.iinfo(self.dtype)
+            if not (info.min <= other <= info.max):
+                raise OverflowError(
+                    f"Python integer {other} out of bounds for {self.dtype}"
+                )
         return elemwise(operator.mul, self, other)
 
     @check_if_handled_given_other
     def __rmul__(self, other):
+        if isinstance(other, int) and np.issubdtype(self.dtype, np.integer):
+            info = np.iinfo(self.dtype)
+            if not (info.min <= other <= info.max):
+                raise OverflowError(
+                    f"Python integer {other} out of bounds for {self.dtype}"
+                )
         return elemwise(operator.mul, other, self)
 
     @check_if_handled_given_other
