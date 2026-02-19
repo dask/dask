@@ -793,7 +793,9 @@ class Task(GraphNode):
     ) -> Task:
         subs_filtered = {
             # subs can be as large as the whole graph; do not iterate over it!
-            k: v for k in (self.dependencies & subs.keys()) if (v := subs[k]) != k
+            k: v
+            for k in (self.dependencies & subs.keys())
+            if (v := subs[k]) != k
         }
         extras = _extra_args(type(self))  # type: ignore[arg-type]
         extra_kwargs = {
@@ -882,7 +884,9 @@ class NestedContainer(Task, Iterable):
     ) -> NestedContainer:
         subs_filtered = {
             # subs can be as large as the whole graph; do not iterate over it!
-            k: v for k in (self.dependencies & subs.keys()) if (v := subs[k]) != k
+            k: v
+            for k in (self.dependencies & subs.keys())
+            if (v := subs[k]) != k
         }
         if not subs_filtered:
             return self
@@ -965,7 +969,9 @@ class Dict(NestedContainer, Mapping):
     ) -> Dict:
         subs_filtered = {
             # subs can be as large as the whole graph; do not iterate over it!
-            k: v for k in (self.dependencies & subs.keys()) if (v := subs[k]) != k
+            k: v
+            for k in (self.dependencies & subs.keys())
+            if (v := subs[k]) != k
         }
         if not subs_filtered:
             return self
