@@ -20,10 +20,8 @@ import pandas as pd
 import pandas.testing as tm
 
 PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GE_201 = PANDAS_VERSION.release >= (2, 0, 1)
 PANDAS_GE_202 = PANDAS_VERSION.release >= (2, 0, 2)
 PANDAS_GE_210 = PANDAS_VERSION.release >= (2, 1, 0)
-PANDAS_GE_211 = PANDAS_VERSION.release >= (2, 1, 1)
 PANDAS_GE_220 = PANDAS_VERSION.release >= (2, 2, 0)
 PANDAS_GE_230 = PANDAS_VERSION.release >= (2, 3, 0)
 PANDAS_GE_300 = PANDAS_VERSION.major >= 3
@@ -142,20 +140,6 @@ def check_apply_dataframe_deprecation():
                 "ignore",
                 message="Returning a DataFrame",
                 category=FutureWarning,
-            )
-            yield
-    else:
-        yield
-
-
-@contextlib.contextmanager
-def check_reductions_runtime_warning():
-    if not PANDAS_GE_201:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="invalid value encountered in double_scalars|Degrees of freedom <= 0 for slice",
-                category=RuntimeWarning,
             )
             yield
     else:

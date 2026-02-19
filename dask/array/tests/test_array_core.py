@@ -5516,6 +5516,9 @@ def test_dask_array_holds_scipy_sparse_containers(container):
 
 
 @pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
+@pytest.mark.filterwarnings(
+    r"ignore:Changing the sparsity structure of a .* is expensive"
+)
 @pytest.mark.parametrize(
     "container", [pytest.param("array", marks=skip_if_no_sparray()), "matrix"]
 )

@@ -170,22 +170,18 @@ addopts = [
     "--cov-config=pyproject.toml",
 ]
 filterwarnings = [
-    "error:::dask[.*]",
-    "error:::pandas[.*]",
-    "error:::numpy[.*]",
-    "error:::distributed[.*]",
-    # From https://github.com/numpy/numpy/issues/20225
-    'ignore:The distutils\.sysconfig module is deprecated, use sysconfig instead:DeprecationWarning:numpy',
+    "error",
     # With no network access, distributed raises a warning when detecting local IP address
     "ignore:Couldn't detect a suitable IP address:RuntimeWarning:distributed",
-    # Ignore FutureWarning for change in group_keys behavior: no changes required on the dask side.
-    # https://pandas.pydata.org/docs/dev/whatsnew/v1.5.0.html#using-group-keys-with-transformers-in-groupby-apply
-    "ignore:Not prepending group keys:FutureWarning",
-    "ignore:.*:dask.tests.warning_aliases.RemovedIn20Warning",
-    "ignore:When grouping with a length-1 list-like, you will need to pass a length-1 tuple to get_group in a future version of pandas:FutureWarning",
-    'ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead:DeprecationWarning',  # https://github.com/apache/arrow/issues/35081
-    'ignore:The previous implementation of stack is deprecated and will be removed in a future version of pandas\.:FutureWarning',
-    "ignore:distutils Version classes are deprecated. Use packaging.version instead.:DeprecationWarning",
+    # FIXME spurious shutdown of distributed workers and/or sqlite3
+    "module:Exception ignored:pytest.PytestUnraisableExceptionWarning::",
+    "module:unclosed database in <sqlite3.Connection:ResourceWarning::",
+    # Additional ignores only needed in the mindeps environments
+    "ignore:distutils Version classes are deprecated. Use packaging.version instead.:DeprecationWarning:",
+    "ignore:_SixMetaPathImporter.find_spec:ImportWarning:",
+    "ignore:`product` is deprecated as of NumPy 1.25.0:DeprecationWarning:",
+    "ignore:Starting with ImageIO v3:DeprecationWarning:skimage",
+    "ignore:TileDB is a multithreading library and deadlocks are likely if fork\\(\\) is called after a TileDB context has been created:UserWarning:",
 ]
 log_cli_level = "INFO"
 xfail_strict = true
