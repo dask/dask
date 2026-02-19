@@ -6160,3 +6160,9 @@ def test_blockwise_fusion():
 
     a = ((da.ones(10, chunks=5) + 1) + 2).sum()
     dask.compute(a, scheduler=custom_scheduler_get)
+
+
+def test_elemwise_scalar_overflow_raises_overflowerror():
+    x = da.ones(2, dtype=np.int8)
+    with pytest.raises(OverflowError, match=r"out of bounds for int8"):
+        x * 128
