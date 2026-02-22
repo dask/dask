@@ -102,8 +102,12 @@ jobs:
           echo "DASK_DATAFRAME__CONVERT_STRING: $DASK_DATAFRAME__CONVERT_STRING"
           echo "DASK_DATAFRAME__CONVERT_STRING=$DASK_DATAFRAME__CONVERT_STRING" >> $GITHUB_ENV
 
-      # FIXME https://github.com/msgpack/msgpack-python/issues/613
       - name: Disable msgpack C extension on free-threading
+        # FIXME https://github.com/msgpack/msgpack-python/issues/613
+        # The msgpack C module does not contain any race conditions in free-threading,
+        # but does not release the GIL. So we need to either install the (slower)
+        # pure-python variant or we need to run the test suite with PYTHON_GIL=0.
+        # The former approach has the benefit of proving that msgpack is the only offender.
         if: ${{ matrix.environment == '3.14t' }}
         run: |
           conda uninstall -y -v --force msgpack-python
