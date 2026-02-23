@@ -2877,7 +2877,7 @@ class DataFrame(FrameBase):
         Parameters
         ----------
         right: dask.dataframe.DataFrame
-        how : {'left', 'right', 'outer', 'inner', 'leftsemi'}, default: 'inner'
+        how : {'left', 'right', 'outer', 'inner', 'cross', 'leftsemi'}, default: 'inner'
             How to handle the operation of the two objects:
 
             - left: use calling frame's index (or column if on is specified)
@@ -2888,6 +2888,8 @@ class DataFrame(FrameBase):
             - inner: form intersection of calling frame's index (or column if
               on is specified) with other frame's index, preserving the order
               of the calling's one
+            - cross: creates the cartesian product from both frames, preserves
+              the order of the left keys.
             - leftsemi: Choose all rows in left where the join keys can be found
               in right. Won't duplicate rows if the keys are duplicated in right.
               Drops all columns from right.
@@ -5573,6 +5575,36 @@ def merge(
     for o in [on, left_on, right_on]:
         if isinstance(o, FrameBase):
             raise NotImplementedError()
+
+    if how == "cross":
+        if on is not None or left_on is not None or right_on is not None:
+            raise ValueError(
+                "Can not pass on, left_on, or right_on to merge with how='cross'."
+            )
+        if left_index or right_index:
+            raise ValueError(
+                "Can not pass left_index=True or right_index=True "
+                "to merge with how='cross'."
+            )
+        # Implement cross join by adding a temporary constant column to both
+        # sides and performing an inner join on it, mirroring what pandas does
+        # internally.
+        cross_col = "__dask_cross_col__"
+        left = left.assign(**{cross_col: 1})
+        right = right.assign(**{cross_col: 1})
+        result = merge(
+            left,
+            right,
+            how="inner",
+            on=cross_col,
+            suffixes=suffixes,
+            indicator=indicator,
+            shuffle_method=shuffle_method,
+            npartitions=npartitions,
+            broadcast=broadcast,
+        )
+        return result.drop(columns=[cross_col])
+
     if not on and not left_on and not right_on and not left_index and not right_index:
         on = [c for c in left.columns if c in right.columns]
         if not on:
