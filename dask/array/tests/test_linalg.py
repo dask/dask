@@ -990,6 +990,25 @@ def test_svd_incompatible_dimensions(ndim):
         da.linalg.svd(x)
 
 
+def test_svd_full_matrices_raises():
+    x = da.random.default_rng().random((10, 10), chunks=(-1, -1))
+    with pytest.raises(NotImplementedError, match="full_matrices"):
+        da.linalg.svd(x, full_matrices=True)
+
+
+@pytest.mark.parametrize("shape", [(10, 20), (20, 10), (10, 10)])
+def test_svd_full_matrices_false(shape):
+    x = np.random.default_rng().random(shape)
+    dx = da.from_array(x, chunks=(-1, -1))
+    du, ds, dv = da.linalg.svd(dx, full_matrices=False)
+    nu, ns, nv = np.linalg.svd(x, full_matrices=False)
+    du, dv = svd_flip(du, dv)
+    nu, nv = svd_flip(nu, nv)
+    assert_eq(du, nu)
+    assert_eq(ds, ns)
+    assert_eq(dv, nv)
+
+
 @pytest.mark.xfail(
     sys.platform == "darwin" and _np_version < Version("1.22"),
     reason="https://github.com/dask/dask/issues/7189",
