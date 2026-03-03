@@ -487,6 +487,8 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
         with np.errstate(all="ignore"):
             o = func(*args, **kwargs)
     except Exception as e:
+        if isinstance(e, OverflowError):
+            raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = "".join(traceback.format_tb(exc_traceback))
         suggest = (
@@ -506,12 +508,10 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
             "---------\n"
             f"{tb}"
         )
-        err = e
     else:
         msg = None
-        err = None
     if msg is not None:
-        raise ValueError(msg) from err
+        raise ValueError(msg)
     return getattr(o, "dtype", type(o)) if nout is None else tuple(e.dtype for e in o)
 
 
@@ -5174,15 +5174,9 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         ]
         try:
             dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
-        except ValueError as e:
-            # If dtype inference failed due to a scalar overflow (e.g. int8 * 128),
-            # returning NotImplemented causes Python to fall back to the scalar
-            # reverse-op and raises a misleading TypeError instead.
-            # apply_infer_dtype wraps the original exception via `raise ValueError(...) from err`,
-            # so the OverflowError appears as either __cause__ or __context__.
-            original = e.__cause__ or e.__context__
-            if isinstance(original, OverflowError):
-                raise original from e
+        except OverflowError:
+            raise
+        except Exception:
             return NotImplemented
         need_enforce_dtype = any(
             not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
