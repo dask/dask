@@ -36,7 +36,12 @@ from dask.array import Array
 from dask.base import DaskMethodsMixin, is_dask_collection, named_schedulers
 from dask.core import flatten
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
+from dask.dataframe._compat import (
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+    PANDAS_GE_300,
+    PANDAS_VERSION,
+)
 from dask.dataframe.accessor import CachedAccessor
 from dask.dataframe.core import (
     _concat,
@@ -103,7 +108,6 @@ from dask.dataframe.dask_expr._shuffle import (
 )
 from dask.dataframe.dask_expr._str_accessor import StringAccessor
 from dask.dataframe.dask_expr._util import (
-    PANDAS_GE_300,
     _BackendData,
     _convert_to_list,
     _get_shuffle_preferring_order,
