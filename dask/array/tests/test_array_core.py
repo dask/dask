@@ -5571,10 +5571,20 @@ def test_scipy_sparse_indexing(index, sparse_module_path, container):
         x[x < 0.9] = 0
         y = x.map_blocks(getattr(sp, container))
 
-    assert not (
-        x[index, :].compute(scheduler="single-threaded")
-        != y[index, :].compute(scheduler="single-threaded")
-    ).sum()
+    try:
+        assert not (
+            x[index, :].compute(scheduler="single-threaded")
+            != y[index, :].compute(scheduler="single-threaded")
+        ).sum()
+    except NotImplementedError as e:
+        if sparse_module_path == "scipy.sparse" and container == "csr_array":
+            import scipy
+            # scipy < 1.15 has not implement 1D sparse slices
+            # https://github.com/dask/dask/pull/11892
+            if Version(scipy.__version__) < Version("1.15"):
+                pytest.xfail(f"Needs scipy>=1.15: {e}")
+        else:
+            raise
 
 
 @pytest.mark.parametrize("axis", [0, 1])
