@@ -2252,6 +2252,12 @@ def test_groupby_shift_with_freq(shuffle_method):
     )
 
 
+@pytest.mark.filterwarnings("ignore:`meta` is not specified")
+# These warnings appear only on pandas >=2.1,<3.0
+@pytest.mark.filterwarnings(r"ignore:.*(DataFrame|Series)GroupBy\.sum:FutureWarning")
+@pytest.mark.filterwarnings(r"ignore:.*DataFrame\.sum with axis=None:FutureWarning")
+@pytest.mark.filterwarnings(r"ignore:.*DataFrameGroupBy\.apply:DeprecationWarning")
+@pytest.mark.filterwarnings(r"ignore:.*DataFrameGroupBy\.apply:FutureWarning")
 @pytest.mark.parametrize(
     "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank]
 )
@@ -2266,18 +2272,17 @@ def test_groupby_transform_funcs(transformation):
     )
     ddf = dd.from_pandas(pdf, 3)
 
-    with pytest.warns(UserWarning):
-        # DataFrame
-        assert_eq(
-            pdf.groupby("A").transform(transformation),
-            ddf.groupby("A").transform(transformation),
-        )
+    # DataFrame
+    assert_eq(
+        pdf.groupby("A").transform(transformation),
+        ddf.groupby("A").transform(transformation),
+    )
 
-        # Series
-        assert_eq(
-            pdf.groupby("A")["B"].transform(transformation),
-            ddf.groupby("A")["B"].transform(transformation),
-        )
+    # Series
+    assert_eq(
+        pdf.groupby("A")["B"].transform(transformation),
+        ddf.groupby("A")["B"].transform(transformation),
+    )
 
 
 @pytest.mark.parametrize("npartitions", list(range(1, 10)))

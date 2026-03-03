@@ -9,10 +9,8 @@ import_optional_dependency("numpy")
 from packaging.version import Version
 
 from dask._pandas_compat import (
-    PANDAS_GE_201,
     PANDAS_GE_202,
     PANDAS_GE_210,
-    PANDAS_GE_211,
     PANDAS_GE_220,
     PANDAS_GE_230,
     PANDAS_GE_300,
@@ -24,7 +22,6 @@ from dask._pandas_compat import (
     check_convert_dtype_deprecation,
     check_groupby_axis_deprecation,
     check_observed_deprecation,
-    check_reductions_runtime_warning,
     is_any_real_numeric_dtype,
     is_string_dtype,
     makeDataFrame,
@@ -59,10 +56,8 @@ else:
 
 __all__ = [
     "PANDAS_VERSION",
-    "PANDAS_GE_201",
     "PANDAS_GE_202",
     "PANDAS_GE_210",
-    "PANDAS_GE_211",
     "PANDAS_GE_220",
     "PANDAS_GE_230",
     "PANDAS_GE_300",
@@ -79,7 +74,6 @@ __all__ = [
     "check_observed_deprecation",
     "check_convert_dtype_deprecation",
     "check_apply_dataframe_deprecation",
-    "check_reductions_runtime_warning",
     "is_any_real_numeric_dtype",
     "is_string_dtype",
     "IndexingError",

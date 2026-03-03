@@ -6,7 +6,6 @@ from collections.abc import Hashable
 from typing import Any, Literal, TypeVar, cast
 
 import pandas as pd
-from packaging.version import Version
 
 from dask import config, is_dask_collection
 from dask.dataframe._compat import is_string_dtype
@@ -16,9 +15,6 @@ from dask.utils import get_default_shuffle_method
 
 K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")
-
-PANDAS_VERSION = Version(pd.__version__)
-PANDAS_GE_300 = PANDAS_VERSION.major >= 3
 
 
 def _calc_maybe_new_divisions(df, periods, freq):
