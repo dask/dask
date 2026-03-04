@@ -6162,6 +6162,10 @@ def test_blockwise_fusion():
     dask.compute(a, scheduler=custom_scheduler_get)
 
 
+@pytest.mark.skipif(
+    not NUMPY_GE_200,
+    reason="NumPy < 2.0 silently upcasts instead of raising OverflowError",
+)
 def test_elemwise_scalar_overflow_raises_overflowerror():
     x = da.ones(2, dtype=np.int8)
     with pytest.raises(OverflowError, match=r"out of bounds for int8"):
