@@ -542,7 +542,6 @@ def map_overlap(
         or any constant value like 0 or np.nan.
         If a list then each element must be a str, tuple or dict defining the
         boundary for the corresponding array in `args`.
-        The default value is 'reflect'.
     trim: bool, keyword only
         Whether or not to trim ``depth`` elements from each block after
         calling the map function.
