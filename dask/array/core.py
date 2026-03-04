@@ -487,6 +487,8 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
         with np.errstate(all="ignore"):
             o = func(*args, **kwargs)
     except Exception as e:
+        if isinstance(e, OverflowError):
+            raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = "".join(traceback.format_tb(exc_traceback))
         suggest = (
@@ -5172,6 +5174,8 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         ]
         try:
             dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
+        except OverflowError:
+            raise
         except Exception:
             return NotImplemented
         need_enforce_dtype = any(
