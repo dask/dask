@@ -4,6 +4,13 @@ __pycache__/
 *.egg-info
 .mypy_cache
 dask-worker-space/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env/
 docs/build
 docs/source/generated
 build/
