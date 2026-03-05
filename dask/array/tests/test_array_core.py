@@ -2453,7 +2453,6 @@ def test_to_hdf5():
         x.to_hdf5(fn, "/x")
         with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
-
             assert_eq(d[:], x)
             assert d.chunks == (2, 2)
 
@@ -2481,6 +2480,28 @@ def test_to_hdf5():
             assert f["/x"].chunks == (2, 2)
             assert_eq(f["/y"][:], y)
             assert f["/y"].chunks == (2,)
+
+
+def test_to_hdf5_dist():
+    h5py = pytest.importorskip("h5py")
+    x = da.ones((4, 4), chunks=(2, 2))
+    y = da.ones(4, chunks=2, dtype="i4")
+
+    with tmpfile(".hdf5") as fn:
+        x.to_hdf5(fn, "x", distributed=True)
+        with h5py.File(fn, mode="r+") as f:
+            d = f["x"]
+            assert_eq(d[:], x)
+            assert tuple(d.attrs["chunks"]) == (2, 2)
+
+    with tmpfile(".hdf5") as fn:
+        da.to_hdf5(fn, {"x": x, "y": y}, distributed=True)
+
+        with h5py.File(fn, mode="r+") as f:
+            assert_eq(f["x"][:], x)
+            assert tuple(f["x"].attrs["chunks"]) == (2, 2)
+            assert_eq(f["y"][:], y)
+            assert tuple(f["y"].attrs["chunks"]) == (2,)
 
 
 def test_to_dask_dataframe():
