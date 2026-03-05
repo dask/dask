@@ -88,7 +88,16 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     Parameters
     ----------
     reduction: function
-        Function like np.sum, np.mean, etc...
+        Reduction function (for example ``np.sum`` or ``np.mean``).
+
+        The function must accept:
+
+        - an ``array_like`` positional input,
+        - an ``axis=`` keyword containing a tuple of axes,
+        - and any extra ``**kwargs`` forwarded by ``coarsen``.
+
+        In practice, NumPy-style reductions and Array-API-compatible
+        reductions work well.
     x: np.ndarray
         Array to be coarsened
     axes: dict
