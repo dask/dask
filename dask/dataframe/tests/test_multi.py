@@ -828,9 +828,53 @@ def test_merge_how_raises():
     )
 
     with pytest.raises(
-        ValueError, match="dask.dataframe.merge does not support how='cross'"
+        ValueError, match="dask.dataframe.merge does not support how='invalid'"
     ):
-        dd.merge(left, right, how="cross")
+        dd.merge(left, right, how="invalid")
+
+
+@pytest.mark.parametrize("npartitions_left", [1, 2, 5])
+@pytest.mark.parametrize("npartitions_right", [1, 2, 5])
+def test_merge_cross(npartitions_left, npartitions_right):
+    left = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+    right = pd.DataFrame({"c": [10, 20], "d": ["p", "q"]})
+
+    ddf_left = dd.from_pandas(left, npartitions=npartitions_left)
+    ddf_right = dd.from_pandas(right, npartitions=npartitions_right)
+
+    expected = pd.merge(left, right, how="cross")
+    result = dd.merge(ddf_left, ddf_right, how="cross")
+
+    assert_eq(result, expected, check_index=False)
+
+
+def test_merge_cross_with_suffixes():
+    left = pd.DataFrame({"a": [1, 2], "val": [10, 20]})
+    right = pd.DataFrame({"b": [3, 4], "val": [30, 40]})
+
+    ddf_left = dd.from_pandas(left, npartitions=1)
+    ddf_right = dd.from_pandas(right, npartitions=1)
+
+    expected = pd.merge(left, right, how="cross", suffixes=("_l", "_r"))
+    result = dd.merge(ddf_left, ddf_right, how="cross", suffixes=("_l", "_r"))
+
+    assert_eq(result, expected, check_index=False)
+
+
+def test_merge_cross_rejects_on():
+    left = pd.DataFrame({"a": [1, 2]})
+    right = pd.DataFrame({"a": [3, 4]})
+    ddf_left = dd.from_pandas(left, npartitions=1)
+    ddf_right = dd.from_pandas(right, npartitions=1)
+
+    with pytest.raises(ValueError, match="Can not pass on"):
+        dd.merge(ddf_left, ddf_right, how="cross", on="a")
+
+    with pytest.raises(ValueError, match="Can not pass on"):
+        dd.merge(ddf_left, ddf_right, how="cross", left_on="a", right_on="a")
+
+    with pytest.raises(ValueError, match="Can not pass left_index"):
+        dd.merge(ddf_left, ddf_right, how="cross", left_index=True)
 
 
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
