@@ -520,11 +520,52 @@ def collect(paths: list[str] = paths, env: Mapping[str, str] | None = None) -> d
         env = os.environ
 
     configs = [*collect_yaml(paths=paths), collect_env(env=env)]
-    return merge(*configs)
+    result: dict[str, Any] = {}
+
+    # In case there is deprecated key in a lower-priority config (e.g. deployed by the
+    # root user for an old version of Dask), suppress the warning if the key is
+    # explicitly overridden in a higher-priority config (e.g. the user's venv for a
+    # newer version of Dask).
+
+    # Only warn once per deprecated key across all configs
+    seen_deprecations = builtins.set()
+
+    for config in configs[::-1]:
+        for depr_key, new_key in rename(config=config).items():
+            if depr_key in seen_deprecations:
+                continue
+            seen_deprecations.add(depr_key)
+            try:
+                get(new_key or f"ignore-deprecated.{depr_key}", config=result)
+                # Updated key is present in a higher-priority config;
+                # suppress the warning
+            except KeyError:
+                if new_key:
+                    warnings.warn(
+                        f"Dask configuration key {depr_key!r} has been deprecated; "
+                        f"please use {new_key!r} instead",
+                        FutureWarning,
+                    )
+                else:
+                    warnings.warn(
+                        f"Dask configuration key {depr_key!r} has been removed; you "
+                        f"may suppress this warning by setting "
+                        f"'ignore-deprecated.{depr_key}' in a higher-priority "
+                        "configuration file or in the environment variables",
+                        FutureWarning,
+                    )
+
+        # We're going in reverse order; config is older than the running result
+        result = update(result, config, priority="old")
+
+    return result
 
 
 def refresh(
-    config: dict | None = None, defaults: list[Mapping] = defaults, **kwargs
+    config: dict | None = None,
+    defaults: list[Mapping] = defaults,
+    paths: list[str] = paths,
+    env: Mapping[str, str] | None = None,
 ) -> None:
     """
     Update configuration by re-reading yaml files and env variables
@@ -557,9 +598,7 @@ def refresh(
 
     for d in defaults:
         update(config, d, priority="old")
-
-    update(config, collect(**kwargs))
-    rename(deprecations, config)
+    update(config, collect(paths=paths, env=env))
 
 
 def get(
@@ -723,24 +762,34 @@ deprecations: dict[str, str | None] = {
 
 def rename(
     deprecations: Mapping[str, str | None] = deprecations, config: dict = config
-) -> None:
-    """Rename old keys to new keys
+) -> dict[str, str | None]:
+    """Rename deprecated keys to new keys
 
     This helps migrate older configuration versions over time
+
+    Returns
+    -------
+    Applied deprecations
 
     See Also
     --------
     check_deprecations
     """
+    found = {}
     for key in deprecations:
         try:
             value = pop(key, config=config)
         except (TypeError, IndexError, KeyError):
             continue
         key = canonical_name(key, config=config)
-        new = check_deprecations(key, deprecations)
+        try:
+            new = deprecations[key]
+        except KeyError:
+            continue
+        found[key] = new
         if new:
             set({new: value}, config=config)
+    return found
 
 
 def check_deprecations(

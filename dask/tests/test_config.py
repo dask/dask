@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import random
 import site
 import stat
 import sys
@@ -554,14 +555,9 @@ def test_rename():
         "a": {"b": None},
         "super": {"old": 4},
     }
-    with pytest.warns(FutureWarning) as w:
-        rename(aliases, config=config)
-    assert [str(wi.message) for wi in w.list] == [
-        "Dask configuration key 'foo-bar' has been deprecated; please use 'foo.bar' instead",
-        "Dask configuration key 'x.y' has been deprecated; please use 'foo.y' instead",
-        "Dask configuration key 'a.b' has been deprecated; please use 'ab' instead",
-        "Dask configuration key 'super.old' has been deprecated; please use 'super' instead",
-    ]
+    expect = {"a.b": "ab", "foo-bar": "foo.bar", "super.old": "super", "x.y": "foo.y"}
+    actual = rename(aliases, config=config)
+    assert actual == expect
     assert config == {
         "foo": {"bar": 1, "y": 2},
         "x": {"z": 3},
@@ -580,18 +576,16 @@ def test_rename():
     ],
 )
 def test_deprecations_on_set(args, kwargs):
-    with pytest.warns(FutureWarning) as info:
+    with pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width"):
         with dask.config.set(*args, **kwargs):
             assert dask.config.get("optimization.fuse.ave-width") == 123
-    assert "optimization.fuse.ave-width" in str(info[0].message)
 
 
 def test_deprecations_on_env_variables(monkeypatch):
     d = {}
     monkeypatch.setenv("DASK_FUSE_AVE_WIDTH", "123")
-    with pytest.warns(FutureWarning) as info:
+    with pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width"):
         dask.config.refresh(config=d)
-    assert "optimization.fuse.ave-width" in str(info[0].message)
     assert get("optimization.fuse.ave-width", config=d) == 123
 
 
@@ -600,10 +594,84 @@ def test_deprecations_on_yaml(tmp_path, key):
     d = {}
     (tmp_path / "dask.yaml").write_text(yaml.dump({key: 123}))
 
-    with pytest.warns(FutureWarning) as info:
-        dask.config.refresh(config=d, paths=[tmp_path])
-    assert "optimization.fuse.ave-width" in str(info[0].message)
+    with pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width"):
+        dask.config.refresh(config=d, paths=[tmp_path], env={})
     assert get("optimization.fuse.ave-width", config=d) == 123
+
+
+def test_deprecations_warn_once(tmp_path):
+    """When aggregating multiple YAML files, only warn once per deprecated key"""
+    d = {}
+    (tmp_path / "1.yaml").write_text(yaml.dump({"fuse-ave-width": 123}))
+    (tmp_path / "2.yaml").write_text(yaml.dump({"fuse-ave-width": 123}))
+    with pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width") as info:
+        dask.config.refresh(config=d, paths=[tmp_path], env={})
+    assert len(info) == 1
+
+
+def test_deprecations_suppressed_by_newer_yaml(tmp_path):
+    """When a deprecated key is present in a config file, suppress the warning
+    if the key is explicitly overridden in a higher-priority config file. This supports
+    deployments where the root user installed an older version of Dask and the local
+    user wants to use a newer one in a local environment.
+    """
+    d = {}
+    # Note: within the same directory config files are always read in alphabetical order
+    (tmp_path / "1.yaml").write_text(
+        yaml.dump({"fuse-ave-width": 123, "fuse-max-width": 456})
+    )
+    (tmp_path / "2.yaml").write_text(
+        # Suppress warning for fuse-ave-width in lower-priority config file
+        yaml.dump({"optimization": {"fuse": {"ave-width": 789}}})
+    )
+    with pytest.warns(FutureWarning, match=r"optimization\.fuse\.max-width"):
+        dask.config.refresh(config=d, defaults=[], paths=[tmp_path], env={})
+    assert d == {
+        "optimization": {
+            "fuse": {
+                "ave-width": 789,
+                "max-width": 456,
+            }
+        }
+    }
+
+
+def test_deprecations_deleted_keys(tmp_path, monkeypatch):
+    """When the user sets a deleted deprecated key with dask.config.key, raise
+    ValueError. When the key is present in a config file, emit a warning and remove it
+    from the config. However, if the key is explicitly overridden with a
+    `ignore-deprecated` prefix in a higher-priority config, suppress the warning.
+    """
+    # At the moment of writing there are no deleted keys
+    monkeypatch.setitem(dask.config.deprecations, "optimization.deleted-key", None)
+
+    d = {}
+    with pytest.raises(ValueError, match=r"optimization\.deleted-key"):
+        dask.config.set({"optimization.deleted-key": 123}, config=d)
+    assert not d
+
+    (tmp_path / "1.yaml").write_text(
+        yaml.dump(
+            {"optimization": {"fuse": {"ave-width": 123}, "deleted-key": 456}},
+        )
+    )
+    with pytest.warns(
+        FutureWarning, match=r"ignore-deprecated\.optimization\.deleted-key"
+    ):
+        dask.config.refresh(config=d, defaults=[], paths=[tmp_path], env={})
+    assert d == {"optimization": {"fuse": {"ave-width": 123}}}
+
+    (tmp_path / "2.yaml").write_text(
+        yaml.dump(
+            {"ignore-deprecated": {"optimization": {"deleted-key": 456}}},
+        )
+    )
+    d = {}
+    dask.config.refresh(config=d, defaults=[], paths=[tmp_path], env={})
+    assert d == {
+        "ignore-deprecated": {"optimization": {"deleted-key": 456}},
+        "optimization": {"fuse": {"ave-width": 123}},
+    }
 
 
 def test_get_override_with():
@@ -681,3 +749,35 @@ def test__get_paths(monkeypatch):
 def test_default_search_paths():
     # Ensure _get_paths() is used for default paths
     assert dask.config.paths == _get_paths()
+
+
+def test_config_files_order(tmp_path, monkeypatch):
+    """Test that config files in different directories are read in priority order, while
+    within the the same directory are read in alphabetical order, regardless of what
+    order the syscalls return them in. os.listdir _typically_ returns results in
+    alphabetical order but there is no guarantee in POSIX for it.
+    """
+    for i in range(9):
+        (tmp_path / f"{i}.yaml").write_text(yaml.dump({"k": i}))
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "b.yaml").write_text(yaml.dump({"k": 10}))
+
+    listdir_orig = os.listdir
+    # Test that we're monkey-patching the right function
+    monkeypatch.setattr(os, "listdir", lambda _: [])
+    assert list(collect_yaml([tmp_path])) == []
+
+    def shuffled_listdir(path):
+        res = listdir_orig(path)
+        random.shuffle(res)
+        return res
+
+    monkeypatch.setattr(os, "listdir", shuffled_listdir)
+
+    actual = list(collect_yaml([tmp_path, tmp_path / "a"]))
+    expect = [{"k": i} for i in range(9)] + [{"k": 10}]
+    assert actual == expect
+
+    actual = list(collect_yaml([tmp_path / "a", tmp_path]))
+    expect = [{"k": 10}] + [{"k": i} for i in range(9)]
+    assert actual == expect
