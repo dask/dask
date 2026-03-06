@@ -562,7 +562,10 @@ def collect(paths: list[str] = paths, env: Mapping[str, str] | None = None) -> d
 
 
 def refresh(
-    config: dict | None = None, defaults: list[Mapping] = defaults, **kwargs
+    config: dict | None = None,
+    defaults: list[Mapping] = defaults,
+    paths: list[str] = paths,
+    env: Mapping[str, str] | None = None,
 ) -> None:
     """
     Update configuration by re-reading yaml files and env variables
@@ -595,7 +598,7 @@ def refresh(
 
     for d in defaults:
         update(config, d, priority="old")
-    update(config, collect(**kwargs))
+    update(config, collect(paths=paths, env=env))
 
 
 def get(

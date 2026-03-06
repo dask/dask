@@ -595,7 +595,7 @@ def test_deprecations_on_yaml(tmp_path, key):
     (tmp_path / "dask.yaml").write_text(yaml.dump({key: 123}))
 
     with pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width"):
-        dask.config.refresh(config=d, paths=[tmp_path])
+        dask.config.refresh(config=d, paths=[tmp_path], env={})
     assert get("optimization.fuse.ave-width", config=d) == 123
 
 
@@ -605,7 +605,7 @@ def test_deprecations_warn_once(tmp_path):
     (tmp_path / "1.yaml").write_text(yaml.dump({"fuse-ave-width": 123}))
     (tmp_path / "2.yaml").write_text(yaml.dump({"fuse-ave-width": 123}))
     with pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width") as info:
-        dask.config.refresh(config=d, paths=[tmp_path])
+        dask.config.refresh(config=d, paths=[tmp_path], env={})
     assert len(info) == 1
 
 
@@ -625,7 +625,7 @@ def test_deprecations_suppressed_by_newer_yaml(tmp_path):
         yaml.dump({"optimization": {"fuse": {"ave-width": 789}}})
     )
     with pytest.warns(FutureWarning, match=r"optimization\.fuse\.max-width"):
-        dask.config.refresh(config=d, defaults=[], paths=[tmp_path])
+        dask.config.refresh(config=d, defaults=[], paths=[tmp_path], env={})
     assert d == {
         "optimization": {
             "fuse": {
@@ -658,7 +658,7 @@ def test_deprecations_deleted_keys(tmp_path, monkeypatch):
     with pytest.warns(
         FutureWarning, match=r"ignore-deprecated\.optimization\.deleted-key"
     ):
-        dask.config.refresh(config=d, defaults=[], paths=[tmp_path])
+        dask.config.refresh(config=d, defaults=[], paths=[tmp_path], env={})
     assert d == {"optimization": {"fuse": {"ave-width": 123}}}
 
     (tmp_path / "2.yaml").write_text(
@@ -667,7 +667,7 @@ def test_deprecations_deleted_keys(tmp_path, monkeypatch):
         )
     )
     d = {}
-    dask.config.refresh(config=d, defaults=[], paths=[tmp_path])
+    dask.config.refresh(config=d, defaults=[], paths=[tmp_path], env={})
     assert d == {
         "ignore-deprecated": {"optimization": {"deleted-key": 456}},
         "optimization": {"fuse": {"ave-width": 123}},
