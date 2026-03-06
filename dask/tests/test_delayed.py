@@ -974,4 +974,3 @@ def test_nout_mismatch_error():
     val1, val2 = returns_one()
     with pytest.raises(TypeError, match="nout mismatch"):
         compute(val1, val2)
-
