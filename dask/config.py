@@ -521,13 +521,15 @@ def collect(paths: list[str] = paths, env: Mapping[str, str] | None = None) -> d
 
     configs = [*collect_yaml(paths=paths), collect_env(env=env)]
     result: dict[str, Any] = {}
+
     # In case there is deprecated key in a lower-priority config (e.g. deployed by the
     # root user for an old version of Dask), suppress the warning if the key is
     # explicitly overridden in a higher-priority config (e.g. the user's venv for a
     # newer version of Dask).
-    seen_deprecations = (
-        builtins.set()
-    )  # Only warn once per deprecated key across all configs
+
+    # Only warn once per deprecated key across all configs
+    seen_deprecations = builtins.set()
+
     for config in configs[::-1]:
         for depr_key, new_key in rename(config=config).items():
             if depr_key in seen_deprecations:
