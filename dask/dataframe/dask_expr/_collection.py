@@ -4591,14 +4591,12 @@ class Series(FrameBase):
     ):
         """Generate descriptive statistics.
 
-        .. note::
-
-            Dask computes percentiles (used for the ``25%``, ``50%``, and
-            ``75%`` statistics) using an **approximate algorithm** by default.
-            Results may therefore differ slightly from pandas.  Use
-            ``percentiles_method='dask'`` for the built-in Dask algorithm or
-            ``percentiles_method='tdigest'`` for the t-digest algorithm.
-            See :meth:`dask.dataframe.Series.quantile` for details.
+        Dask computes percentiles (used for the ``25%``, ``50%``, and
+        ``75%`` statistics) using an **approximate algorithm** by default.
+        Results may therefore differ slightly from pandas.  Use
+        ``percentiles_method="dask"`` for the built-in Dask algorithm or
+        ``percentiles_method="tdigest"`` for the t-digest algorithm.
+        See :meth:`dask.dataframe.Series.quantile` for details.
 
         Parameters
         ----------
@@ -4608,10 +4606,10 @@ class Series(FrameBase):
         percentiles : list-like of numbers, optional
             The percentiles to include in the output. All should fall
             between 0 and 1. By default, ``[0.25, 0.5, 0.75]`` is used.
-        percentiles_method : {'default', 'tdigest', 'dask'}, optional
-            Method for computing percentiles. ``'default'`` uses the internal
-            Dask algorithm. ``'tdigest'`` uses the t-digest algorithm for
-            floats and ints and falls back to ``'dask'`` otherwise.
+        percentiles_method : {"default", "tdigest", "dask"}, optional
+            Method for computing percentiles. ``"default"`` uses the internal
+            Dask algorithm. ``"tdigest"`` uses the t-digest algorithm for
+            floats and ints and falls back to ``"dask"`` otherwise.
         """
         if (
             is_numeric_dtype(self.dtype)
