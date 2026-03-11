@@ -366,7 +366,7 @@ Please do not propose code that you are not willing to stand behind and discuss.
 Be prepared to respond to review feedback, apply critical thinking and iterate on your contributions.
 
 We ask that you fill out all sections of PR templates and provide reasoning behind your changes,
-ideally with a linked issue that has clear feedback from maintainers that it should be implemented.
+ideally with a linked issue that has been discussed by the community.
 
 Automated Contributions and AI Policy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
