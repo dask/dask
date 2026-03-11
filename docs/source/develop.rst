@@ -73,6 +73,11 @@ that you do not solve these with automated tools.
 
 .. _`"good first issue" label`: https://github.com/dask/dask/labels/good%20first%20issue
 
+We strongly encourage discussion of issues before work is done on them. We generally follow
+lazy consensus when implementing issues to avoid bottlenecks, but gathering some feedback and 
+giving opportunity for discussion is important. Iterating on a design before beginning 
+implementation can help save time when it comes to code review and make it more likely a 
+Pull Request will be accepted.
 
 Development Environment
 -----------------------
@@ -366,11 +371,10 @@ ideally with a linked issue that has clear feedback from maintainers that it sho
 Automated Contributions and AI Policy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We encourage the use of automation and AI tools to assist in code development, documentation, and testing.
-However, we ask that contributors disclose these tools, use them responsibly and avoid antisocial behaviour. 
-
-In particular do not use tools to speak for you in discussions, code reviews, or any other interactions within the Dask 
-community except for simple proof reading and translation.
+We encourage the use of AI and automated tools to assist in code development, documentation, and testing.
+However, we ask that contributors disclose these tools and use them in a way that aligns with Dask's 
+community guidelines. In particular do not use tools to think or speak for you in discussions, 
+code reviews, or any other interactions within the Dask community.
 
 
 .. _Sphinx: https://www.sphinx-doc.org/
