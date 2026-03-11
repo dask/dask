@@ -73,6 +73,7 @@ that you do not solve these with automated tools.
 
 .. _`"good first issue" label`: https://github.com/dask/dask/labels/good%20first%20issue
 
+
 Development Environment
 -----------------------
 
@@ -124,6 +125,7 @@ as follows::
    py.test dask --verbose --doctest-modules
 
 .. _py.test: https://docs.pytest.org/en/latest/
+
 
 Contributing to Code
 --------------------
@@ -345,8 +347,6 @@ with additional scripts and metadata located in `continuous_integration
 <https://github.com/dask/dask/tree/main/continuous_integration>`_
 
 
-.. _Sphinx: https://www.sphinx-doc.org/
-
 Making Pull Requests
 --------------------
 
@@ -371,3 +371,6 @@ However, we ask that contributors disclose these tools, use them responsibly and
 
 In particular do not use tools to speak for you in discussions, code reviews, or any other interactions within the Dask 
 community except for simple proof reading and translation.
+
+
+.. _Sphinx: https://www.sphinx-doc.org/
