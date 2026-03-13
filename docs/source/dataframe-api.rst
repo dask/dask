@@ -142,6 +142,13 @@ DataFrame
     DataFrame.visualize
     DataFrame.where
 
+	.. note::
+
+   The ``describe()`` method in Dask uses **approximate algorithms**
+   to speed up computations on large datasets.
+   Therefore, results may slightly differ from exact pandas outputs.
+
+	
 Series
 ~~~~~~
 
