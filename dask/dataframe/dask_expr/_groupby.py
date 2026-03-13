@@ -1701,7 +1701,10 @@ class GroupBy:
         post_group_columns = self._meta.count().columns
         return len(set(post_group_columns) - set(numerics.columns)) == 0
 
-    @derived_from(pd.core.groupby.GroupBy)
+    @derived_from(
+        pd.core.groupby.GroupBy,
+        inconsistencies="numeric_only=False is not implemented in Dask when non-numeric columns are present.",
+    )
     def mean(self, numeric_only=False, split_out=None, **kwargs):
         if not numeric_only and not self._all_numeric():
             raise NotImplementedError(
@@ -1735,7 +1738,10 @@ class GroupBy:
         numeric_kwargs = self._numeric_only_kwargs(numeric_only)
         return self._single_agg(Max, **kwargs, **numeric_kwargs)
 
-    @derived_from(pd.core.groupby.GroupBy)
+    @derived_from(
+        pd.core.groupby.GroupBy,
+        inconsistencies="The sort parameter is not supported and will raise NotImplementedError.",
+    )
     def first(self, numeric_only=False, sort=None, **kwargs):
         if sort:
             raise NotImplementedError()
@@ -1773,7 +1779,10 @@ class GroupBy:
             aggregate_kwargs={"ddof": 1},
         )
 
-    @derived_from(pd.core.groupby.GroupBy)
+    @derived_from(
+        pd.core.groupby.GroupBy,
+        inconsistencies="The sort parameter is not supported and will raise NotImplementedError.",
+    )
     def last(self, numeric_only=False, sort=None, **kwargs):
         if sort:
             raise NotImplementedError()
@@ -1864,7 +1873,10 @@ class GroupBy:
             aggregate_kwargs=aggregate_kwargs,
         )
 
-    @derived_from(pd.core.groupby.GroupBy)
+    @derived_from(
+        pd.core.groupby.GroupBy,
+        inconsistencies="numeric_only=False is not implemented in Dask when non-numeric columns are present.",
+    )
     def var(
         self,
         ddof=1,
@@ -1893,7 +1905,10 @@ class GroupBy:
         )
         return self._postprocess_series_squeeze(result)
 
-    @derived_from(pd.core.groupby.GroupBy)
+    @derived_from(
+        pd.core.groupby.GroupBy,
+        inconsistencies="numeric_only=False is not implemented in Dask when non-numeric columns are present.",
+    )
     def std(
         self,
         ddof=1,
