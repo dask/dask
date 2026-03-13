@@ -503,6 +503,9 @@ class Expr(core.SingletonExpr):
     def _filter_simplification(self, parent, predicate=None):
         if predicate is None:
             predicate = parent.predicate.substitute(self, self.frame)
+        if hasattr(predicate, '_meta') and hasattr(predicate._meta, 'dtype'):
+            if not pd.api.types.is_bool_dtype(predicate._meta.dtype):
+                return None
         if are_co_aligned(self.frame, predicate):
             # Only do this if we are aligned
             return type(self)(self.frame[predicate], *self.operands[1:])
