@@ -846,6 +846,13 @@ class Expr:
                 idx = _parameters.index(key)
                 return self.operands[idx]
 
+            # Check if key is a parameter with default value in superclasses
+            for cls in type(self).__mro__[1:]:
+                if not issubclass(cls, Expr):
+                    break
+                if hasattr(cls, "_defaults") and key in cls._defaults:
+                    return cls._defaults[key]
+
             raise AttributeError(
                 f"{err}\n\n"
                 "This often means that you are attempting to use an unsupported "
