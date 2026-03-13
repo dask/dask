@@ -2625,6 +2625,19 @@ def test_astype_filter_pushdown(df, pdf):
     assert_eq(result, expected)
 
 
+def test_bool_indexing_with_astype(df, pdf):
+    # https://github.com/dask/dask/issues/12172
+    # Filter with astype(bool) should match pandas behavior
+    result = df[df.x.astype(bool)]
+    expected = pdf[pdf.x.astype(bool)]
+    assert_eq(result, expected)
+
+    # Also test str -> bool conversion
+    result = df[df.x.astype(str).astype(bool)]
+    expected = pdf[pdf.x.astype(str).astype(bool)]
+    assert_eq(result, expected)
+
+
 @pytest.mark.filterwarnings("error")
 def test_warn_annotations():
     from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
