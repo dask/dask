@@ -157,3 +157,16 @@ def test_partition():
     result = df[1]
     expected = pd.DataFrame.from_dict({"A": ["A|B", "C|D"]})["A"].str.partition("|")[1]
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("method", ["split", "rsplit"])
+def test_str_split_preserves_dtype(method):
+    # GH#11884: str.split and str.rsplit were coercing dtype to object
+    # when the original series had a non-object dtype like string[pyarrow].
+    pytest.importorskip("pyarrow")
+    df = pd.DataFrame({"c": ["a,b,c", "d,e,f", "g,h,i"]}, dtype="string[pyarrow]")
+    ddf = from_pandas(df, npartitions=2)
+    result = getattr(ddf["c"].str, method)(",", n=1, expand=True)
+    expected = getattr(df["c"].str, method)(",", n=1, expand=True)
+    assert list(result.dtypes) == list(expected.dtypes)
+    assert_eq(result, expected)
