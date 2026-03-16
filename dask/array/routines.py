@@ -1569,7 +1569,7 @@ def cov(
     # Unlike NumPy, these checks don't include:
     #    - if fweights are all integers
     #    - if either fweights or aweights are all non-negative
-    # These checks potientially expensive for distributed arrays.
+    # These checks potentially expensive for distributed arrays.
     w = None
     if fweights is not None:
         fweights = asarray(fweights, dtype=float)

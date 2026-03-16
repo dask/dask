@@ -81,7 +81,7 @@ class Concat(Expr):
         dfs = self._frames
 
         if self.axis == 1:
-            if self._are_co_alinged_or_single_partition:
+            if self._are_co_aligned_or_single_partition:
                 if {df.npartitions for df in self._frames} == {1}:
                     divisions = set(
                         flatten([e.divisions for e in dfs], container=tuple)
@@ -133,7 +133,7 @@ class Concat(Expr):
         return False
 
     @functools.cached_property
-    def _are_co_alinged_or_single_partition(self):
+    def _are_co_aligned_or_single_partition(self):
         return are_co_aligned(*self._frames) or {
             df.npartitions for df in self._frames
         } == {1}
@@ -141,7 +141,7 @@ class Concat(Expr):
     def _lower(self):
         dfs = self._frames
         if self.axis == 1:
-            if self._are_co_alinged_or_single_partition:
+            if self._are_co_aligned_or_single_partition:
                 return ConcatIndexed(
                     self.ignore_order, self._kwargs, self.axis, self.join, *dfs
                 )

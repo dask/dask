@@ -513,7 +513,7 @@ Expr={expr}"""
               be computed
             - simplified-physical: runs another simplification after the physical
               plan is generated
-            - fused: fuses the physical expression to reduce the nodes in thr graph.
+            - fused: fuses the physical expression to reduce the nodes in the graph.
 
             .. warning::
                 The optimizer stages are subject to change.
@@ -2937,7 +2937,7 @@ class DataFrame(FrameBase):
             used to select the underlying algorithm. If a floating-point value
             is specified, that number will be used as the ``broadcast_bias``
             within the simple heuristic (a large number makes Dask more likely
-            to choose the ``broacast_join`` code path). See ``broadcast_join``
+            to choose the ``broadcast_join`` code path). See ``broadcast_join``
             for more information.
 
         Notes

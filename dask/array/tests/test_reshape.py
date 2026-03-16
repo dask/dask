@@ -430,7 +430,7 @@ def test_reshape_blockwise_identity():
     assert_eq(result, x)
 
 
-def test_argwhere_reshaping_not_concating_chunks():
+def test_argwhere_reshaping_not_concatenating_chunks():
     # GH#10080
     arr = da.random.random((500, 500, 500), chunks=(100, 100, 100)) < 0
     result = da.argwhere(arr)

@@ -326,7 +326,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         The name of the function in which the metadata was specified. If
         provided, the function name will be included in the error message to be
         more helpful to users.
-    numeric_equal : bool, optionl
+    numeric_equal : bool, optional
         If True, integer and floating dtypes compare equal. This is useful due
         to panda's implicit conversion of integer to floating upon encountering
         missingness, which is hard to infer statically.

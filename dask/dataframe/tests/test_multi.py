@@ -1573,7 +1573,7 @@ def test_cheap_single_partition_merge_divisions():
 
 @pytest.mark.parametrize("how", ["left", "right"])
 @pytest.mark.parametrize("flip", [False, True])
-def test_cheap_single_parition_merge_left_right(how, flip):
+def test_cheap_single_partition_merge_left_right(how, flip):
     a = pd.DataFrame({"x": range(8), "z": list("ababbdda")}, index=range(8))
     aa = dd.from_pandas(a, npartitions=1)
 

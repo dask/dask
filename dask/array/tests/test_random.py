@@ -65,7 +65,7 @@ def test_serializability(generator_class):
     assert_eq(x, y)
 
 
-def test_determinisim_through_dask_values(generator_class):
+def test_determinism_through_dask_values(generator_class):
     samples_1 = generator_class(42).normal(size=1000, chunks=10)
     samples_2 = generator_class(42).normal(size=1000, chunks=10)
 

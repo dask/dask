@@ -2187,8 +2187,8 @@ def test_columns_setter(df, pdf):
     df.columns = ["a", "b"]
     result = df[["a"]]
     pdf.columns = ["a", "b"]
-    expecetd = pdf[["a"]]
-    assert_eq(result, expecetd)
+    expected = pdf[["a"]]
+    assert_eq(result, expected)
 
     with pytest.raises(ValueError, match="Length mismatch"):
         df.columns = [1, 2, 3]
