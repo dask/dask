@@ -1768,7 +1768,7 @@ def setitem_array(out_name, array, indices, value):
     #                           the assignment value.
     #
     # Note that array_common_shape and value_common_shape may be
-    # different if there are any size 1 dimensions being brodacast.
+    # different if there are any size 1 dimensions being broadcast.
     offset = len(implied_shape) - value_ndim
     if offset >= 0:
         # The array has the same number or more dimensions than the

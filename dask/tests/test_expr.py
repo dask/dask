@@ -108,7 +108,7 @@ class MySingletonInheritsCustomInitAsMixin(MySingleton, Mixin): ...
 def test_singleton_expr():
     assert MySingleton(1, 2) is MySingleton(1, 2)
     # We don't want to deduplicate if there is an __init__ since that may
-    # mutatate our singleton reference and we have no way to know
+    # mutate our singleton reference and we have no way to know
     assert MySingletonWithCustomInit(1, 2) is not MySingletonWithCustomInit(1, 2)
     assert MySingletonInheritsCustomInit(1, 2) is not MySingletonInheritsCustomInit(
         1, 2

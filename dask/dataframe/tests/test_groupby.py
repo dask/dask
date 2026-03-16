@@ -2803,7 +2803,7 @@ def test_groupby_sort_true_split_out():
 
 
 @pytest.mark.parametrize("known_cats", [True, False], ids=["known", "unknown"])
-@pytest.mark.parametrize("ordered_cats", [True, False], ids=["ordered", "unordererd"])
+@pytest.mark.parametrize("ordered_cats", [True, False], ids=["ordered", "unordered"])
 @pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])
 @pytest.mark.parametrize("observed", [True, False], ids=["observed", "unobserved"])
 def test_groupby_aggregate_categorical_observed(
