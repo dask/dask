@@ -5,6 +5,55 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2026.3.0:
+
+2026.3.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+- Preliminary Python 3.14t support (:pr:`12223`) `Guido Imperiale`_
+- Bokeh 3.9.0 compatibility (:pr-distributed:`9205`) `Dimitri Papadopoulos Orfanos`_
+
+.. dropdown:: Additional changes
+
+  - docs: document approximate algorithm and Dask-specific params in describe() (:pr:`12300`) `Maxime Grenu`_
+  - docs: clarify coarsen reduction function contract (:pr:`12314`) `monkeyjack123`_
+  - Fix misleading TypeError for scalar overflow in dask.array elemwise (:pr:`12301`) `Maxime Grenu`_
+  - Stricter warnings filter (:pr:`12274`) `Guido Imperiale`_
+  - Clean up obsolete PANDAS_GE markers (:pr:`12279`) `Guido Imperiale`_
+  - Bump actions/upload-artifact from 6 to 7 (:pr:`12311`) `dependabot[bot]`_
+  - Remove mention of obsolete default value for 'boundary' parameter. (:pr:`12304`) `Marianne Corvellec`_
+  - Pandas in 3.14t CI (:pr:`12284`) `Guido Imperiale`_
+  - Quadratic definition time in xarray.DataArray.to_zarr(compute=False) (:pr:`12299`) `Guido Imperiale`_
+  - Bump scientific-python/issue-from-pytest-log-action from 1.4.0 to 1.5.0 (:pr:`12294`) `dependabot[bot]`_
+  - ``test_tokenize_range_index`` fails if cityhash is not installed (:pr:`12286`) `Guido Imperiale`_
+  - Bump minimum version of scipy (:pr:`12271`) `Guido Imperiale`_
+  - Fix flaky categorical concat test (:pr:`12276`) `Harshith J`_
+  - Doc: document Zarr compression options for to_zarr (:pr:`12269`) `Harshith J`_
+  - Disable the GIL on 3.14t Windows CI (:pr:`12280`) `Guido Imperiale`_
+  - Update obsolete pandas URLs (:pr:`12278`) `Guido Imperiale`_
+  - Suppress warning: Consolidated metadata is not part of Zarr 3 (:pr:`12273`) `Guido Imperiale`_
+  - Pandas4Warning: Copy-on-Write is always enabled with pandas >= 3.0 (:pr:`12272`) `Guido Imperiale`_
+  - Disable the GIL in 3.14t CI (:pr:`12270`) `Guido Imperiale`_
+  - Propagate contextvars to worker threads; catch warnings in 3.14t (:pr:`12224`) `Guido Imperiale`_
+  - Fix bugs in env.yaml / pytest.xml upload (:pr:`12266`) `Guido Imperiale`_
+  - Added ``full_matrices`` parameter to ``dask.array.linalg.svd`` (:pr:`12292`) `Ayan Bag`_
+  - fix: ``zarr.create_array`` for better backward compatibility (:pr:`12291`) `Wouter-Michiel Vierdag`_
+  - Silence deprecations in global config if local config overrides them (:pr:`12315`) `Guido Imperiale`_
+  - Fix Total CPU % on /workers tab to normalize by total nthreads (:pr-distributed:`9195`) `Ernest Provo`_
+
+  - setproctitle: avoid being caught by dask.config; add to test envs (:pr-distributed:`9202`) `Guido Imperiale`_
+  - Add return type annotation for Client._register_plugin (:pr-distributed:`9201`) `Simon-Martin Schröder`_
+  - Bump actions/upload-artifact from 6 to 7 (:pr-distributed:`9199`) `dependabot[bot]`_
+  - docs: fix Scheduler.close docstring (:pr-distributed:`9198`) `Chase Naples`_
+  - Fix Total CPU % on /workers tab to normalize by total nthreads (:pr-distributed:`9195`) `Ernest Provo`_
+  - XFAIL test_handle_null_partitions_2 (:pr-distributed:`9191`) `Guido Imperiale`_
+  - Type hints for Future.status (:pr-distributed:`9188`) `Navid`_
+  - Pin sphinx=8 (:pr-distributed:`9190`) `Guido Imperiale`_
+
+
 .. _v2026.2.0:
 
 2026.2.0
@@ -228,7 +277,7 @@ Highlights
 2025.9.2
 --------
 
-This is a backport security release only. 
+This is a backport security release only.
 
 See `CVE-2026-23528 <https://github.com/dask/distributed/security/advisories/GHSA-c336-7962-wfj2>`_ for more details.
 
