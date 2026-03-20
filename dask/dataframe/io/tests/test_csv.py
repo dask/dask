@@ -25,6 +25,7 @@ from dask.core import flatten
 from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300, tm
 from dask.dataframe.io.csv import (
     _infer_block_size,
+    _write_csv,
     auto_blocksize,
     block_mask,
     pandas_read_text,
@@ -1552,6 +1553,25 @@ def test_to_csv_nodir():
         assert os.listdir(dir0)
         result = dd.read_csv(os.path.join(dir0, "*")).compute()
     assert (result.x.values == df0.x.values).all()
+
+
+def test_write_csv_file_not_found_has_hint():
+    df = pd.DataFrame({"x": [1], "y": [2]})
+
+    class MissingOpenFile:
+        path = "/does/not/exist/part.0.csv"
+
+        def __enter__(self):
+            raise FileNotFoundError("No such file or directory")
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    with pytest.raises(
+        FileNotFoundError,
+        match="accessible from all workers when writing CSV from a distributed scheduler",
+    ):
+        _write_csv(df, MissingOpenFile(), index=False)
 
 
 def test_to_csv_simple():

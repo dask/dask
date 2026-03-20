@@ -756,8 +756,14 @@ read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 
 
 def _write_csv(df, fil, *, depend_on=None, **kwargs):
-    with fil as f:
-        df.to_csv(f, **kwargs)
+    try:
+        with fil as f:
+            df.to_csv(f, **kwargs)
+    except FileNotFoundError as err:
+        raise FileNotFoundError(
+            f"{err}. Ensure the output path exists and is accessible from all workers "
+            "when writing CSV from a distributed scheduler."
+        ) from err
     return os.path.normpath(fil.path)
 
 
