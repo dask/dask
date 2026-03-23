@@ -1569,7 +1569,7 @@ def test_write_csv_file_not_found_has_hint():
 
     with pytest.raises(
         FileNotFoundError,
-        match="accessible from all workers when writing CSV from a distributed scheduler",
+        match="accessible from where this task runs",
     ):
         _write_csv(df, MissingOpenFile(), index=False)
 

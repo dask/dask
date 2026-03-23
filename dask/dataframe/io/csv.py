@@ -761,8 +761,8 @@ def _write_csv(df, fil, *, depend_on=None, **kwargs):
             df.to_csv(f, **kwargs)
     except FileNotFoundError as err:
         raise FileNotFoundError(
-            f"{err}. Ensure the output path exists and is accessible from all workers "
-            "when writing CSV from a distributed scheduler."
+            f"{err}. Check that the output path exists and is accessible from where "
+            "this task runs (for distributed execution, from all workers)."
         ) from err
     return os.path.normpath(fil.path)
 
