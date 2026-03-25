@@ -835,7 +835,7 @@ def test_merge_how_raises():
 
 @pytest.mark.parametrize("npartitions_left", [1, 2, 5])
 @pytest.mark.parametrize("npartitions_right", [1, 2, 5])
-def test_merge_cross(npartitions_left, npartitions_right):
+def test_merge_cross(npartitions_left, npartitions_right, shuffle_method):
     left = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
     right = pd.DataFrame({"c": [10, 20], "d": ["p", "q"]})
 
@@ -848,7 +848,7 @@ def test_merge_cross(npartitions_left, npartitions_right):
     assert_eq(result, expected, check_index=False)
 
 
-def test_merge_cross_with_suffixes():
+def test_merge_cross_with_suffixes(shuffle_method):
     left = pd.DataFrame({"a": [1, 2], "val": [10, 20]})
     right = pd.DataFrame({"b": [3, 4], "val": [30, 40]})
 
@@ -875,6 +875,9 @@ def test_merge_cross_rejects_on():
 
     with pytest.raises(ValueError, match="Can not pass left_index"):
         dd.merge(ddf_left, ddf_right, how="cross", left_index=True)
+
+    with pytest.raises(ValueError, match="Can not pass left_index"):
+        dd.merge(ddf_left, ddf_right, how="cross", right_index=True)
 
 
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
