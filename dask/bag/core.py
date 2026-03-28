@@ -7,7 +7,7 @@ import operator
 import uuid
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
@@ -1536,6 +1536,10 @@ class Bag(DaskMethodsMixin):
         if method is not None:
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
+            if not isinstance(grouper, Callable):
+                # tasks doesn't work with non-callables (which shouldn't be supported
+                # but some tests are using this pattern)
+                return "disk"
             try:
                 shuffle = get_default_shuffle_method()
             except ImportError:
