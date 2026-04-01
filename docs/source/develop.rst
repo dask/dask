@@ -104,7 +104,8 @@ pip or conda_
 
 ``pip``::
 
-  python -m pip install -e ".[complete,test]"
+  python -m pip install git+https://github.com/dask/distributed
+  python -m pip install -e ".[array,dataframe,diagnostics,test]"
 
 ``conda``::
 
