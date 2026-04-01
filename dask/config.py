@@ -32,9 +32,28 @@ def _get_paths():
     ]
     if "DASK_CONFIG" in os.environ:
         paths.append(os.environ["DASK_CONFIG"])
+    dot_file_paths = _get_dot_file_paths()
+    if dot_file_paths:
+        paths.append(*dot_file_paths)
 
     # Remove duplicate paths while preserving ordering
     paths = list(reversed(list(dict.fromkeys(reversed(paths)))))
+
+    return paths
+
+
+def _get_dot_file_paths():
+    """Get locations of existing `.dask` configuration files from current directory to root."""
+
+    current_path = os.getcwd()
+    paths = []
+    while True:
+        config_file = os.path.join(current_path, ".dask")
+        if os.path.isfile(config_file):
+            paths.insert(0, config_file)
+        if current_path == "/":
+            break
+        current_path = os.path.dirname(current_path)
 
     return paths
 
