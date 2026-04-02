@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from dask._pandas_compat import PANDAS_GE_300
 from dask.dataframe.dask_expr._collection import from_pandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
 
@@ -63,7 +64,25 @@ def test_datetime_accessor_methods(ser, dser, func, args):
         "day",
         "day_of_week",
         "day_of_year",
+        pytest.param(
+            "dayofweek",
+            marks=pytest.mark.skipif(
+                PANDAS_GE_300, reason="Deprecated in pandas>=3.0"
+            ),
+        ),
+        pytest.param(
+            "dayofyear",
+            marks=pytest.mark.skipif(
+                PANDAS_GE_300, reason="Deprecated in pandas>=3.0"
+            ),
+        ),
         "days_in_month",
+        pytest.param(
+            "daysinmonth",
+            marks=pytest.mark.skipif(
+                PANDAS_GE_300, reason="Deprecated in pandas>=3.0"
+            ),
+        ),
         "hour",
         "is_leap_year",
         "is_month_end",

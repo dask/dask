@@ -5,7 +5,6 @@ import re
 import sys
 import textwrap
 import traceback
-import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from numbers import Number
@@ -16,9 +15,9 @@ import pandas as pd
 from pandas.api.types import is_dtype_equal
 
 import dask
+from dask.dataframe._compat import PANDAS_GE_300, tm
 from dask.base import is_dask_collection
 from dask.core import get_deps
-from dask.dataframe._compat import PANDAS_GE_300, tm
 from dask.dataframe.dispatch import (  # noqa: F401
     is_categorical_dtype_dispatch,
     make_meta,
@@ -566,23 +565,18 @@ def assert_eq(
         a = a.reset_index(drop=True)
         b = b.reset_index(drop=True)
     if isinstance(a, pd.DataFrame):
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                "The default value of 'equiv'",
-            )
-            tm.assert_frame_equal(
-                a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
-            )
+        if PANDAS_GE_300:
+            kwargs.setdefault("check_index_type", "equiv")
+            kwargs.setdefault("check_column_type", "equiv")
+        tm.assert_frame_equal(
+            a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
+        )
     elif isinstance(a, pd.Series):
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                "The default value of 'equiv'",
-            )
-            tm.assert_series_equal(
-                a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
-            )
+        if PANDAS_GE_300:
+            kwargs.setdefault("check_index_type", "equiv")
+        tm.assert_series_equal(
+            a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
+        )
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b, exact=check_dtype, **kwargs)
     elif a == b:
