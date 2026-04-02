@@ -62,7 +62,7 @@ dataframe = [
     "pandas >= 2.0",
     "pyarrow >= 16.0",
 ]
-distributed = ["distributed >= 2026.1.2,<2026.1.3"]
+distributed = ["distributed >= 2026.3.0,<2026.3.1"]
 diagnostics = [
     "bokeh >= 3.1.0",
     "jinja2 >= 2.10.3",
@@ -103,7 +103,7 @@ line-length = 120
 [tool.ruff.lint]
 # By default, Ruff enables Flake8's F rules, along with a subset of the
 # E rules, omitting any stylistic rules that overlap with the use of a
-# formatter, like ruff format or Black. 
+# formatter, like ruff format or Black.
 # We specify additional rules with extend-select.
 extend-select = [
     "B",
