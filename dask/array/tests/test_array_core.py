@@ -410,7 +410,7 @@ def test_uneven_chunks():
     assert a.chunks == ((3, 3, 3, 1), (3, 3, 3, 1))
 
 
-def test_numblocks_suppoorts_singleton_block_dims():
+def test_numblocks_supports_singleton_block_dims():
     arr = object()  # arraylike is unimportant since we never compute
     shape = (100, 10)
     chunks = (10, 10)
@@ -2773,7 +2773,7 @@ def test_slicing_with_non_ndarrays():
         def __array__(self):
             return np.arange(self.start, self.stop)
 
-    class ARangeSlicable:
+    class ARangeSliceable:
         dtype = np.dtype("i8")
         ndim = 1
 
@@ -2787,7 +2787,7 @@ def test_slicing_with_non_ndarrays():
         def __getitem__(self, key):
             return ARangeSlice(key[0].start, key[0].stop)
 
-    x = da.from_array(ARangeSlicable(10), chunks=(4,))
+    x = da.from_array(ARangeSliceable(10), chunks=(4,))
 
     assert_eq((x + 1).sum(), (np.arange(10, dtype=x.dtype) + 1).sum())
 
@@ -4819,7 +4819,7 @@ def test_no_warnings_on_metadata():
     assert not record
 
 
-def test_delayed_array_key_hygeine():
+def test_delayed_array_key_hygiene():
     a = da.zeros((1,), chunks=(1,))
     d = delayed(identity)(a)
     b = da.from_delayed(d, shape=a.shape, dtype=a.dtype)

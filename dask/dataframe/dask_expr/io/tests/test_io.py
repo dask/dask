@@ -418,7 +418,7 @@ def test_from_array():
 
 
 @pytest.mark.parametrize("dtype", [object, str])
-def test_from_array_string_conersion(dtype):
+def test_from_array_string_conversion(dtype):
     arr = np.array(["a", "b", "c", "d"], dtype=dtype)
     result = from_array(arr, chunksize=2)
     dtype = "string" if pyarrow_strings_enabled() else "object"

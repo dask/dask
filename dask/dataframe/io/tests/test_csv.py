@@ -1495,7 +1495,7 @@ def test_to_csv_with_single_file_and_exclusive_mode():
     assert_eq(result, df0, check_index=False)
 
 
-def test_to_csv_single_file_exlusive_mode_no_overwrite():
+def test_to_csv_single_file_exclusive_mode_no_overwrite():
     df0 = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
     df = dd.from_pandas(df0, npartitions=2)
     with tmpdir() as directory:

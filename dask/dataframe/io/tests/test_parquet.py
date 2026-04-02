@@ -802,7 +802,7 @@ def test_append_wo_index(tmpdir, engine, metadata_file):
     ("index", "offset"),
     [
         (
-            # There is some odd behavior with date ranges and pyarrow in some cirucmstances!
+            # There is some odd behavior with date ranges and pyarrow in some circumstances!
             # https://github.com/pandas-dev/pandas/issues/48573
             pd.date_range("2022-01-01", "2022-01-31", freq="D"),
             pd.Timedelta("1D"),
