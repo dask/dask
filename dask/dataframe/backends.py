@@ -547,6 +547,10 @@ def get_parallel_type_object(_):
 def hash_object_pandas(
     obj, index=True, encoding="utf8", hash_key=None, categorize=True
 ):
+    if hash_key is None:
+        from dask import config
+
+        hash_key = config.get("dataframe.shuffle.hash-key", None)
     return pd.util.hash_pandas_object(
         obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize
     )
