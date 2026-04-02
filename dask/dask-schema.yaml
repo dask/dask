@@ -66,6 +66,16 @@ properties:
               Compression algorithm used for on disk-shuffling. Partd, the library used
               for compression supports ZLib, BZ2, and SNAPPY
 
+          hash-key:
+            type:
+            - string
+            - "null"
+            description: |
+              Hash key for shuffle partitioning. When set to a 16-character string,
+              this key is passed to pd.util.hash_pandas_object to change hash output
+              for string/object columns. Set to a random value to mitigate
+              HashDoS-style partition hotspotting in adversarial environments.
+
 
       parquet:
         type: object
