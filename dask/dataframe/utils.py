@@ -5,6 +5,7 @@ import re
 import sys
 import textwrap
 import traceback
+import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from numbers import Number
@@ -565,13 +566,23 @@ def assert_eq(
         a = a.reset_index(drop=True)
         b = b.reset_index(drop=True)
     if isinstance(a, pd.DataFrame):
-        tm.assert_frame_equal(
-            a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                "The default value of 'equiv'",
+            )
+            tm.assert_frame_equal(
+                a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
+            )
     elif isinstance(a, pd.Series):
-        tm.assert_series_equal(
-            a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                "The default value of 'equiv'",
+            )
+            tm.assert_series_equal(
+                a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
+            )
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b, exact=check_dtype, **kwargs)
     elif a == b:
