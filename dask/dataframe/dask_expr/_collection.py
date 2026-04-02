@@ -1647,7 +1647,15 @@ Expr={expr}"""
             raise ValueError("No known divisions to enforce!")
         return new_collection(expr.EnforceRuntimeDivisions(self))
 
-    @derived_from(pd.DataFrame)
+    @derived_from(
+        pd.DataFrame,
+        inconsistencies=(
+            "Dask uses the scipy.stats definition of skewness without "
+            "a bias correction term, so values differ from pandas by a factor of "
+            "(n * (n - 1)) ** 0.5 / (n - 2). bias=False and nan_policy other than "
+            "'propagate' are not implemented."
+        ),
+    )
     def skew(
         self,
         axis=0,
@@ -1706,7 +1714,14 @@ Expr={expr}"""
             result = result.fillna(0.0)
         return result
 
-    @derived_from(pd.DataFrame)
+    @derived_from(
+        pd.DataFrame,
+        inconsistencies=(
+            "Dask uses the scipy.stats definition of kurtosis without "
+            "a bias correction term, so values differ from pandas. "
+            "bias=False and nan_policy other than 'propagate' are not implemented."
+        ),
+    )
     def kurtosis(
         self,
         axis=0,
