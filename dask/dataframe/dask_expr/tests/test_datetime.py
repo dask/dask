@@ -87,6 +87,7 @@ def test_datetime_accessor_methods(ser, dser, func, args):
         "year",
     ],
 )
+@pytest.mark.filterwarnings("ignore::pandas.errors.Pandas4Warning")
 def test_datetime_accessor_properties(ser, dser, func):
     assert_eq(getattr(ser.dt, func), getattr(dser.dt, func))
 
