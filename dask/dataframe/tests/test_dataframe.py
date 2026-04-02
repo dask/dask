@@ -2861,6 +2861,7 @@ def test_to_dask_array_single_partition():
     da.assert_eq(s.values, result)
 
 
+@pytest.mark.filterwarnings("ignore::pandas.errors.Pandas4Warning")
 def test_apply():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)

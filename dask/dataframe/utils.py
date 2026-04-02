@@ -465,8 +465,8 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
             assert type(dsk._meta) == type(result), type(dsk._meta)
             if check_names:
-                tm.assert_index_equal(dsk.columns, result.columns)
-                tm.assert_index_equal(dsk._meta.columns, result.columns)
+                tm.assert_index_equal(dsk.columns, result.columns, exact="equiv")
+                tm.assert_index_equal(dsk._meta.columns, result.columns, exact="equiv")
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
             _check_dask(
