@@ -287,7 +287,7 @@ def test_array_broadcasting(generator_class):
         a = generator_class().normal(1000 * o, 0.01, chunks=(50,))
         assert 800 < a.mean().compute() < 1200
 
-    # ensure that mis-matched chunks align well
+    # ensure that mismatched chunks align well
     x = np.arange(10) ** 3
     y = da.from_array(x, chunks=(1,))
     z = generator_class().normal(y, 0.01, chunks=(10,))

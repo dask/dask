@@ -6100,7 +6100,7 @@ def test_load_store_chunk():
 
 def test_scalar_setitem():
     """After a da.Array.__getitem__ call that returns a scalar, the chunk contains a
-    read-only np.generic instead of a writeable np.ndarray. This is a specific quirk of
+    read-only np.generic instead of a writable np.ndarray. This is a specific quirk of
     numpy; cupy and other backends always return a 0-dimensional array.
     Make sure that __setitem__ still works.
     """
