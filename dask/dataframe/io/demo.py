@@ -165,7 +165,7 @@ def make_int(
         handler_args, handler_kwargs = default_int_args.get(_method, ((), {}))
         handler_kwargs = handler_kwargs.copy()
         handler_kwargs.update(**kwargs)
-        handler_args = args if args else handler_args
+        handler_args = args or handler_args
         return handler_args, handler_kwargs
 
     if random:

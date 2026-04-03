@@ -2242,7 +2242,7 @@ def test_split_adaptive_files(tmpdir, blocksize, partition_on, metadata):
         write_index=False,
     )
 
-    aggregate_files = partition_on if partition_on else True
+    aggregate_files = partition_on or True
     ddf2 = dd.read_parquet(
         str(tmpdir),
         engine="pyarrow",
