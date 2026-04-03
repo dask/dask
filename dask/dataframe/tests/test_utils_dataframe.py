@@ -458,8 +458,7 @@ def test_check_meta():
     else:
         string_type = "object"
 
-    exp = textwrap.dedent(
-        f"""\
+    exp = textwrap.dedent(f"""\
         Metadata mismatch found in `from_delayed`.
 
         Partition type: `{frame}`
@@ -469,8 +468,7 @@ def test_check_meta():
         | 'a'    | {string_type}   | category |
         | 'c'    | -        | float64  |
         | 'e'    | category | -        |
-        +--------+----------+----------+"""
-    )
+        +--------+----------+----------+""")
 
     assert str(err.value) == exp
 
@@ -478,8 +476,7 @@ def test_check_meta():
     with pytest.raises(ValueError) as err:
         check_meta(df.a, pd.Series([], dtype="string"), numeric_equal=False)
 
-    expected = textwrap.dedent(
-        f"""\
+    expected = textwrap.dedent(f"""\
         Metadata mismatch found.
 
         Partition type: `{series}`
@@ -488,8 +485,7 @@ def test_check_meta():
         +----------+--------+
         | Found    | {string_type} |
         | Expected | string |
-        +----------+--------+"""
-    )
+        +----------+--------+""")
 
     assert str(err.value) == expected
 

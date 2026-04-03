@@ -138,8 +138,7 @@ def save_config(
     try:
         config_file.write_text(yaml.dump(config))
     except OSError as e:
-        raise RuntimeError(
-            f"""
+        raise RuntimeError(f"""
 
 For some reason we couldn't write config to {config_file}.
 Perhaps you don't have permissions here?
@@ -150,8 +149,7 @@ to somewhere else using the DASK_CONFIG environment variable.
 For example, you could set the following:
 
     export DASK_CONFIG=~/.dask
-"""
-        ) from e
+""") from e
 
     return config, config_file
 

@@ -559,7 +559,7 @@ class ArrowDatasetEngine(Engine):
                 partition_keys = None
             else:
                 # `piece` contains (path, row_group, partition_keys)
-                (path_or_frag, row_group, partition_keys) = piece
+                path_or_frag, row_group, partition_keys = piece
 
             # Convert row_group to a list and be sure to
             # check if msgpack converted it to a tuple
