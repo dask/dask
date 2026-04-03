@@ -112,8 +112,8 @@ class Node(tuple):
     __slots__ = ()
 
     def __new__(cls, edges=None, patterns=None):
-        edges = edges if edges else {}
-        patterns = patterns if patterns else []
+        edges = edges or {}
+        patterns = patterns or []
         return tuple.__new__(cls, (edges, patterns))
 
     @property
