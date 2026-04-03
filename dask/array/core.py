@@ -1311,8 +1311,6 @@ class Array(DaskMethodsMixin):
         Task dependency graph
     name : string
         Name of array in dask
-    shape : tuple of ints
-        Shape of the entire array
     chunks: iterable of tuples
         block sizes along each dimension
     dtype : str or dtype
@@ -1320,6 +1318,8 @@ class Array(DaskMethodsMixin):
     meta : empty ndarray
         empty ndarray created with same NumPy backend, ndim and dtype as the
         Dask Array being created (overrides dtype)
+    shape : tuple of ints
+        Shape of the entire array
 
     See Also
     --------
