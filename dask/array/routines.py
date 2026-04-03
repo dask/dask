@@ -260,7 +260,7 @@ def rot90(m, k=1, axes=(0, 1)):
         return flip(flip(m, axes[0]), axes[1])
 
     axes_list = list(range(0, m.ndim))
-    (axes_list[axes[0]], axes_list[axes[1]]) = (axes_list[axes[1]], axes_list[axes[0]])
+    axes_list[axes[0]], axes_list[axes[1]] = (axes_list[axes[1]], axes_list[axes[0]])
 
     if k == 1:
         return transpose(flip(m, axes[1]), axes_list)

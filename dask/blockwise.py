@@ -666,7 +666,7 @@ class Blockwise(Layer):
             from dask.array.core import concatenate_axes as concatenate
 
         # Generate coordinate map
-        (coord_maps, concat_axes, dummies) = _get_coord_mapping(
+        coord_maps, concat_axes, dummies = _get_coord_mapping(
             self.dims,
             self.output_indices,
             self.numblocks,
@@ -938,7 +938,7 @@ def _make_blockwise_graph(
 
     # Generate the abstract "plan" before constructing
     # the actual graph
-    (coord_maps, concat_axes, dummies) = _get_coord_mapping(
+    coord_maps, concat_axes, dummies = _get_coord_mapping(
         dims,
         out_indices,
         numblocks,

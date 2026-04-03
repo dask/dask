@@ -81,7 +81,7 @@ def _sample_reduce(reduce_iter, k, replace):
     n = 0
     # unfolding reduce outputs
     for i in reduce_iter:
-        (s_i, n_i) = i
+        s_i, n_i = i
         s.extend(s_i)
         n += n_i
         k_i = len(s_i)

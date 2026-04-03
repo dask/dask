@@ -572,8 +572,7 @@ def test_string_blocksize():
 
 
 def test_skipinitialspace():
-    text = normalize_text(
-        """
+    text = normalize_text("""
     name, amount
     Alice,100
     Bob,-200
@@ -581,8 +580,7 @@ def test_skipinitialspace():
     Dennis,400
     Edith,-500
     Frank,600
-    """
-    )
+    """)
 
     with filetext(text) as fn:
         df = dd.read_csv(fn, skipinitialspace=True, blocksize=20)
@@ -592,8 +590,7 @@ def test_skipinitialspace():
 
 
 def test_consistent_dtypes():
-    text = normalize_text(
-        """
+    text = normalize_text("""
     name,amount
     Alice,100.5
     Bob,-200.5
@@ -601,8 +598,7 @@ def test_consistent_dtypes():
     Dennis,400
     Edith,-500
     Frank,600
-    """
-    )
+    """)
 
     with filetext(text) as fn:
         df = dd.read_csv(fn, blocksize=30)
@@ -610,23 +606,19 @@ def test_consistent_dtypes():
 
 
 def test_consistent_dtypes_2():
-    text1 = normalize_text(
-        """
+    text1 = normalize_text("""
     name,amount
     Alice,100
     Bob,-200
     Charlie,300
-    """
-    )
+    """)
 
-    text2 = normalize_text(
-        """
+    text2 = normalize_text("""
     name,amount
     1,400
     2,-500
     Frank,600
-    """
-    )
+    """)
     string_dtype = get_string_dtype()
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         df = dd.read_csv("foo.*.csv", blocksize=25)
@@ -635,25 +627,21 @@ def test_consistent_dtypes_2():
 
 
 def test_categorical_dtypes():
-    text1 = normalize_text(
-        """
+    text1 = normalize_text("""
     fruit,count
     apple,10
     apple,25
     pear,100
     orange,15
-    """
-    )
+    """)
 
-    text2 = normalize_text(
-        """
+    text2 = normalize_text("""
     fruit,count
     apple,200
     banana,300
     orange,400
     banana,10
-    """
-    )
+    """)
 
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         df = dd.read_csv("foo.*.csv", dtype={"fruit": "category"}, blocksize=25)
@@ -665,22 +653,18 @@ def test_categorical_dtypes():
 
 
 def test_categorical_known():
-    text1 = normalize_text(
-        """
+    text1 = normalize_text("""
     A,B
     a,a
     b,b
     a,a
-    """
-    )
-    text2 = normalize_text(
-        """
+    """)
+    text2 = normalize_text("""
     A,B
     a,a
     b,b
     c,c
-    """
-    )
+    """)
     dtype = pd.api.types.CategoricalDtype(["a", "b", "c"], ordered=False)
     with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
         result = dd.read_csv("foo.*.csv", dtype={"A": "category", "B": "category"})
@@ -1193,8 +1177,7 @@ def test_none_usecols():
 
 
 def test_parse_dates_multi_column():
-    pdmc_text = normalize_text(
-        """
+    pdmc_text = normalize_text("""
     ID,date,time
     10,2003-11-04,180036
     11,2003-11-05,125640
@@ -1209,8 +1192,7 @@ def test_parse_dates_multi_column():
     20,2003-10-25,192207
     21,2003-11-13,180156
     22,2003-11-15,131037
-    """
-    )
+    """)
 
     ctx = contextlib.nullcontext()
     if PANDAS_GE_300:
@@ -1230,13 +1212,11 @@ def test_parse_dates_multi_column():
 
 
 def test_read_csv_sep():
-    sep_text = normalize_text(
-        """
+    sep_text = normalize_text("""
     name###amount
     alice###100
     bob###200
-    charlie###300"""
-    )
+    charlie###300""")
 
     with filetext(sep_text) as fn:
         ddf = dd.read_csv(fn, sep="###", engine="python")
@@ -1267,12 +1247,10 @@ def test_read_csv_singleton_dtype():
 
 def test_read_csv_arrow_engine():
     pytest.importorskip("pyarrow")
-    sep_text = normalize_text(
-        """
+    sep_text = normalize_text("""
     a,b
     1,2
-    """
-    )
+    """)
 
     with filetext(sep_text) as fn:
         assert_eq(pd.read_csv(fn, engine="pyarrow"), dd.read_csv(fn, engine="pyarrow"))
@@ -1893,16 +1871,14 @@ def test_names_with_header_0(tmpdir, use_names):
     # behavior when `names` is also specified.
     # See: https://github.com/dask/dask/issues/9610
 
-    csv = StringIO(
-        """\
+    csv = StringIO("""\
     city1,1992-09-13,10
     city2,1992-09-13,14
     city3,1992-09-13,98
     city4,1992-09-13,13
     city5,1992-09-13,45
     city6,1992-09-13,64
-    """
-    )
+    """)
 
     if use_names:
         names = ["city", "date", "sales"]

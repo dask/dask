@@ -144,8 +144,7 @@ def test_deprecated_config(tmp_path):
 
     d = {}
     with open(tmp_path / "dask.yaml", "w") as fh:
-        fh.write(
-            """
+        fh.write("""
             admin:
               traceback:
                 shorten:
@@ -153,8 +152,7 @@ def test_deprecated_config(tmp_path):
                     - dask/base.py
                   what:
                     - dask/core.py
-            """
-        )
+            """)
 
     with pytest.warns(FutureWarning):
         dask.config.refresh(config=d, paths=[tmp_path])
