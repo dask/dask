@@ -137,11 +137,9 @@ def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_cored
 
     # Treat outputs
     output_axes = axes[nin:]
-    output_axes = (
-        output_axes
-        if output_axes
-        else [tuple(range(-len(ocd), 0)) for ocd in output_coredimss]
-    )
+    output_axes = output_axes or [
+        tuple(range(-len(ocd), 0)) for ocd in output_coredimss
+    ]
     input_axes = axes[:nin]
 
     # Assert we have as many axes as output core dimensions

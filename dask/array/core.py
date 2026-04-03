@@ -3402,7 +3402,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     multiplier_remaining = True
 
         for k, v in result.items():
-            chunks[k] = v if v else 0
+            chunks[k] = v or 0
         return tuple(chunks)
 
     else:
@@ -5449,7 +5449,7 @@ def chunks_from_arrays(arrays):
 
     def shape(x):
         try:
-            return x.shape if x.shape else (1,)
+            return x.shape or (1,)
         except AttributeError:
             return (1,)
 
