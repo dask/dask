@@ -312,6 +312,7 @@ def test_set_index_simplify(df, pdf):
     assert q._name == expected._name
 
 
+@pytest.mark.filterwarnings("ignore::pandas.errors.Pandas4Warning")
 def test_set_index_numeric_columns():
     pdf = pd.DataFrame(
         {
