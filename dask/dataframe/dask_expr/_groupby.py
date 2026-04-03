@@ -647,7 +647,7 @@ class Unique(SingleAggregation):
 
 class Cov(SingleAggregation):
     chunk = staticmethod(_cov_chunk)
-    std = False
+    std: Callable[..., bool] = lambda _: False
 
     @classmethod
     def combine(cls, g, levels):
@@ -675,7 +675,7 @@ class Cov(SingleAggregation):
 
 
 class Corr(Cov):
-    std = True
+    std: Callable[..., bool] = lambda _: True
 
 
 class GroupByReduction(Reduction, GroupByBase):

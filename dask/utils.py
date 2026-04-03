@@ -41,7 +41,7 @@ F = TypeVar("F", bound=FuncType)
 
 system_encoding = sys.getdefaultencoding()
 if system_encoding == "ascii":
-    system_encoding = "utf-8"
+    system_encoding = "utf-8"  # type: ignore[unreachable]
 
 
 def apply(func, args, kwargs=None):

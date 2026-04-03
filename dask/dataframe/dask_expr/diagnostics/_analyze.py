@@ -141,7 +141,7 @@ _FORMAT_FNS = {"nbytes": format_bytes, "nrows": "{:,.0f}".format}
 def _metric_to_graphviz(metric: str, statistics: dict[str, Any]):
     format_fn = _FORMAT_FNS[metric]
     quantiles = (
-        "[" + ", ".join([format_fn(pctl) for pctl in statistics.pop("quantiles")]) + "]"  # type: ignore[operator]
+        "[" + ", ".join([format_fn(pctl) for pctl in statistics.pop("quantiles")]) + "]"
     )
     count = statistics["count"]
     total = statistics["total"]
@@ -149,7 +149,7 @@ def _metric_to_graphviz(metric: str, statistics: dict[str, Any]):
     return "<BR />".join(
         [
             f"<B>{metric}:</B>",
-            f"{format_fn(total / count)} ({format_fn(total)} / {count:,})",  # type: ignore[operator]
+            f"{format_fn(total / count)} ({format_fn(total)} / {count:,})",
             f"{quantiles}",
         ]
     )

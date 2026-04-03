@@ -182,7 +182,7 @@ def test_isinstance_custom() -> None:
     nhlgc = NotHLGCollection(a)
 
     assert isinstance(hlgc, DaskCollection)
-    assert isinstance(nhlgc, DaskCollection)
+    assert isinstance(nhlgc, DaskCollection)  # type: ignore[unreachable]
 
     assert isinstance(nhlgc, DaskCollection)
     assert not isinstance(nhlgc, HLGDaskCollection)
