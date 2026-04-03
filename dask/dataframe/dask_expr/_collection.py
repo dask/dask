@@ -4007,18 +4007,14 @@ class DataFrame(FrameBase):
             column_width = max(space, 7)
 
             header = (
-                textwrap.dedent(
-                    """\
+                textwrap.dedent("""\
              #   {{column:<{column_width}}} Non-Null Count  Dtype
-            ---  {{underl:<{column_width}}} --------------  -----"""
-                )
+            ---  {{underl:<{column_width}}} --------------  -----""")
                 .format(column_width=column_width)
                 .format(column="Column", underl="------")
             )
-            column_template = textwrap.dedent(
-                f"""\
-            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}"""
-            )
+            column_template = textwrap.dedent(f"""\
+            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}""")
             column_info = [
                 column_template.format(
                     i=pprint_thing(i),

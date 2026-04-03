@@ -403,7 +403,7 @@ def _match(S, N):
             continue
         try:
             # Backtrack here
-            (S, N, matches) = stack.pop()
+            S, N, matches = stack.pop()
             restore_state_flag = True
         except Exception:
             return

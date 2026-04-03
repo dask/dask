@@ -179,8 +179,7 @@ def test_tokenize_without_pyarrow() -> None:
     import subprocess
     import textwrap
 
-    code = textwrap.dedent(
-        """\
+    code = textwrap.dedent("""\
         import sys
         sys.modules["pyarrow"] = None
         import xarray as xr
@@ -196,7 +195,6 @@ def test_tokenize_without_pyarrow() -> None:
         ).to_dataset()
         y['foo'] = y.foo.dims, y.foo.data + 1
         dask.optimize(y)
-        """
-    )
+        """)
     out = subprocess.run([sys.executable, "-c", code], capture_output=True)
     assert out.stderr == b""
