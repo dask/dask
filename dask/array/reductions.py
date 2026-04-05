@@ -1615,12 +1615,23 @@ def quantile(
     else:
         kwargs = {}
 
+    # When weights are provided, specify dtype explicitly to avoid
+    # dtype inference failure (weights shape won't match the tiny fake
+    # arrays that map_blocks creates for inference)
+    if kwargs.get("weights") is not None:
+        _dtype = a.dtype
+        if np.issubdtype(_dtype, np.integer):
+            _dtype = np.result_type(_dtype, np.float64)
+    else:
+        _dtype = None
+
     result = a.map_blocks(
         np.quantile,
         q=q,
         method=method,
         axis=axis,
         keepdims=keepdims,
+        dtype=_dtype,
         drop_axis=axis if not keepdims else None,
         new_axis=0 if isinstance(q, Iterable) else None,
         chunks=_get_quantile_chunks(a, q, axis, keepdims),
@@ -1790,9 +1801,20 @@ def nanquantile(
         if NUMPY_GE_200:
             kwargs.update({"weights": weights})
 
+    # When weights are provided, specify dtype explicitly to avoid
+    # dtype inference failure (weights shape won't match the tiny fake
+    # arrays that map_blocks creates for inference)
+    if kwargs.get("weights") is not None:
+        _dtype = a.dtype
+        if np.issubdtype(_dtype, np.integer):
+            _dtype = np.result_type(_dtype, np.float64)
+    else:
+        _dtype = None
+
     result = a.map_blocks(
         func,
         axis=axis,
+        dtype=_dtype,
         drop_axis=axis if not keepdims else None,
         new_axis=0 if isinstance(q, Iterable) else None,
         chunks=_get_quantile_chunks(a, q, axis, keepdims),

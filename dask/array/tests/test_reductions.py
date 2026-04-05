@@ -1099,3 +1099,26 @@ def test_nanquantile_two_dims():
     assert_eq(
         da.nanpercentile(darr, 0.75, axis=-1), np.nanpercentile(arr, 0.75, axis=-1)
     )
+
+
+def test_quantile_with_weights():
+    x = np.random.random((10, 4))
+    weights = np.ones(10)
+    darr = da.from_array(x, chunks=(5, 4))
+    result = da.quantile(darr, 0.5, axis=0, method="inverted_cdf", weights=weights)
+    expected = np.quantile(x, 0.5, axis=0, method="inverted_cdf", weights=weights)
+    assert_eq(result, expected)
+
+    # Test with non-uniform weights
+    weights2 = np.random.random(10)
+    result2 = da.quantile(darr, 0.5, axis=0, method="inverted_cdf", weights=weights2)
+    expected2 = np.quantile(x, 0.5, axis=0, method="inverted_cdf", weights=weights2)
+    assert_eq(result2, expected2)
+
+    # Test nanquantile with weights
+    x_nan = x.copy()
+    x_nan[0, 0] = np.nan
+    darr_nan = da.from_array(x_nan, chunks=(5, 4))
+    result3 = da.nanquantile(darr_nan, 0.5, axis=0, method="inverted_cdf", weights=weights)
+    expected3 = np.nanquantile(x_nan, 0.5, axis=0, method="inverted_cdf", weights=weights)
+    assert_eq(result3, expected3)
