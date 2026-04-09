@@ -371,6 +371,16 @@ def test_non_ufunc_others(func):
     assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
 
 
+def test_non_ufunc_kwargs():
+    arr = np.array([np.nan, np.inf, -np.inf, 1.5])
+    darr = da.from_array(arr, chunks=2)
+
+    assert_eq(
+        np.nan_to_num(darr, nan=-1.0, posinf=7.5, neginf=-8.5),
+        np.nan_to_num(arr, nan=-1.0, posinf=7.5, neginf=-8.5),
+    )
+
+
 def test_frompyfunc():
     myadd = da.frompyfunc(add, 2, 1)
     np_myadd = np.frompyfunc(add, 2, 1)
