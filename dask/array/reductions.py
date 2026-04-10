@@ -1610,22 +1610,43 @@ def quantile(
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
-    if NUMPY_GE_200:
-        kwargs = {"weights": weights}
-    else:
-        kwargs = {}
+    if NUMPY_GE_200 and weights is not None:
+        # weights must have the same shape as a; chunk them together so that
+        # each block receives only the matching slice of weights.
+        if not isinstance(weights, da.Array):
+            weights_da = da.from_array(weights, chunks=a.chunks)
+        else:
+            weights_da = weights.rechunk(a.chunks)
 
-    result = a.map_blocks(
-        np.quantile,
-        q=q,
-        method=method,
-        axis=axis,
-        keepdims=keepdims,
-        drop_axis=axis if not keepdims else None,
-        new_axis=0 if isinstance(q, Iterable) else None,
-        chunks=_get_quantile_chunks(a, q, axis, keepdims),
-        **kwargs,
-    )
+        def _quantile_with_weights(a_block, w_block, q, method, axis, keepdims):
+            return np.quantile(
+                a_block, q, axis=axis, method=method, keepdims=keepdims, weights=w_block
+            )
+
+        result = da.map_blocks(
+            _quantile_with_weights,
+            a,
+            weights_da,
+            q=q,
+            method=method,
+            axis=axis,
+            keepdims=keepdims,
+            dtype=np.result_type(a, np.float64),
+            drop_axis=axis if not keepdims else None,
+            new_axis=0 if isinstance(q, Iterable) else None,
+            chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        )
+    else:
+        result = a.map_blocks(
+            np.quantile,
+            q=q,
+            method=method,
+            axis=axis,
+            keepdims=keepdims,
+            drop_axis=axis if not keepdims else None,
+            new_axis=0 if isinstance(q, Iterable) else None,
+            chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        )
 
     result = handle_out(out, result)
     return result
