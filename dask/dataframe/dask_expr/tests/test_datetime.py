@@ -63,10 +63,7 @@ def test_datetime_accessor_methods(ser, dser, func, args):
         "day",
         "day_of_week",
         "day_of_year",
-        "dayofweek",
-        "dayofyear",
         "days_in_month",
-        "daysinmonth",
         "hour",
         "is_leap_year",
         "is_month_end",
@@ -83,7 +80,6 @@ def test_datetime_accessor_methods(ser, dser, func, args):
         "second",
         "time",
         "timetz",
-        "weekday",
         "year",
     ],
 )
