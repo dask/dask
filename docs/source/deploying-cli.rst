@@ -83,6 +83,25 @@ the same commands to many machines.  We recommend searching online for "cluster
 ssh" or "cssh".
 
 
+.. _deploying-cli.spec:
+
+Dask Spec
+---------
+
+The ``dask spec`` command allows you to launch a Dask cluster using a 
+declarative YAML specification. This is useful for defining complex 
+cluster setups that involve multiple services.
+
+To launch a cluster from a specification file:
+
+.. code-block:: bash
+
+   dask spec --spec-file my-cluster.yaml
+
+The YAML file should follow the standard Dask cluster specification format, 
+defining the scheduler and worker configurations.
+
+
 .. _worker-scheduler-cli-options:
 
 CLI Options
@@ -91,8 +110,8 @@ CLI Options
 .. note::
 
    The command line documentation here may differ depending on your installed
-   version. We recommend referring to the output of ``dask scheduler --help``
-   and ``dask worker --help``.
+   version. We recommend referring to the output of ``dask scheduler --help``,
+   ``dask worker --help`` and ``dask spec --help``.
 
 .. click:: distributed.cli.dask_scheduler:main
    :prog: dask scheduler
@@ -100,4 +119,8 @@ CLI Options
 
 .. click:: distributed.cli.dask_worker:main
    :prog: dask worker
+   :show-nested:
+
+.. click:: distributed.cli.dask_spec:main
+   :prog: dask spec
    :show-nested:
