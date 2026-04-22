@@ -32,7 +32,7 @@ dependencies:
   # - s3fs>=2026.3.0  # Pins obsolete boto3/botocore that don't release the GIL
   # other optional dependencies
   - mimesis
-  # - numba  # conda package for 3.14t not yet available
+  - numba
   - flask
   - h5py
   # - pytables  # Not available for 3.14t
@@ -59,7 +59,7 @@ dependencies:
   - scikit-learn
   - scipy
   # - python-snappy  # dependency cramjam does not release the GIL
-  # - sparse  # conda package for numba 3.14t not yet available
+  - sparse
   - cachey
   - python-graphviz
   # - python-cityhash  # Not available for 3.14t
@@ -74,6 +74,4 @@ dependencies:
 
   - pip
   - pip:
-    - numba  # conda package for 3.14t not yet available
-    - sparse  # conda package for numba 3.14t not yet available
     - git+https://github.com/dask/distributed
