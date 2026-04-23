@@ -6,12 +6,13 @@ import re
 import numpy as np
 from tlz import concat, merge, unique
 
+from dask import config
 from dask.array._shuffle import _calculate_new_chunksizes
 from dask.array.core import Array, apply_infer_dtype, asarray, blockwise, getitem
 from dask.array.utils import meta_from_array
 from dask.core import flatten
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import cached_max
+from dask.utils import cached_max, parse_bytes
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
@@ -455,13 +456,26 @@ def apply_gufunc(
                     # Dimensions that we can reduce to compensate for the increase
                     changeable_dimensions.add(i)
             if factor > 1 and len(changeable_dimensions) > 0:
-                result = _calculate_new_chunksizes(
-                    a.chunks,
-                    list(a.chunks),
-                    changeable_dimensions,
-                    math.prod(map(cached_max, a.chunks)) / factor,
-                )
-                new_args.append(a.rechunk(result))
+                # Only compensate if the post-rechunk block would exceed the
+                # configured chunk-size target. Otherwise shrinking loop dims
+                # just over-splits already-small blocks and blows up the task
+                # graph (see the follow-up to #11683 / pydata/xarray#9907).
+                itemsize = a.dtype.itemsize if hasattr(a, "dtype") else 8
+                original_elements = math.prod(map(cached_max, a.chunks))
+                post_bytes = original_elements * factor * itemsize
+                limit = config.get("array.chunk-size")
+                if isinstance(limit, str):
+                    limit = parse_bytes(limit)
+                if post_bytes <= limit:
+                    new_args.append(a)
+                else:
+                    result = _calculate_new_chunksizes(
+                        a.chunks,
+                        list(a.chunks),
+                        changeable_dimensions,
+                        original_elements / factor,
+                    )
+                    new_args.append(a.rechunk(result))
             else:
                 new_args.append(a)
         args = new_args

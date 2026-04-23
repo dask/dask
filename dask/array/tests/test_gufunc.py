@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_equal
 
+import dask
 import dask.array as da
 from dask.array import Array, apply_gufunc, as_gufunc, gufunc
 from dask.array.gufunc import _parse_gufunc_signature, _validate_normalize_axes
@@ -703,9 +704,12 @@ def test_as_gufunc_with_meta():
     assert_eq(np.array([expected[1].compute()]), result[1].compute())
 
 
-def test_gufunc_chunksizes_adjustment():
+def test_gufunc_chunksizes_adjustment_below_limit():
+    # When the post-rechunk block size stays under array.chunk-size, we
+    # do NOT shrink loop dims — shrinking already-small blocks blows up the
+    # task graph without any memory benefit. See follow-up to #11683 /
+    # pydata/xarray#9907.
     def foo(x, *args):
-        # simulating xarray interpolate (kind off)
         return x
 
     arr = da.random.random((1, 459, 750), chunks=(1, -1, 250))
@@ -721,5 +725,35 @@ def test_gufunc_chunksizes_adjustment():
         vectorize=False,
         allow_rechunk=True,
     )
+    # Post-rechunk per-block ≈ 2.6 MiB, well under the 128 MiB default, so
+    # the loop dim of length 459 stays as one chunk.
+    assert result.chunks == ((1,), (459,), (750,))
+    assert_eq(result, arr.compute())
+
+
+def test_gufunc_chunksizes_adjustment_above_limit():
+    # When the post-rechunk block size would exceed array.chunk-size, loop
+    # dims DO get shrunk to keep per-task memory in check. We force this
+    # here by dropping the chunk-size target to 1 MiB so the 2.6 MiB
+    # post-rechunk block crosses it.
+    def foo(x, *args):
+        return x
+
+    arr = da.random.random((1, 459, 750), chunks=(1, -1, 250))
+    arr2 = da.random.random((750,), chunks=(-1,))
+
+    with dask.config.set({"array.chunk-size": "1 MiB"}):
+        result = apply_gufunc(
+            foo,
+            "(dim0_0),(dim0_1),(dim0_2)->(dim0)",
+            *[arr, arr2, arr2.copy()],
+            keepdims=False,
+            output_dtypes=["float64"],
+            output_sizes={"dim0": 750},
+            vectorize=False,
+            allow_rechunk=True,
+        )
+    # Compensation splits axis 1 to keep per-block under the lowered limit.
+    assert len(result.chunks[1]) > 1
     assert result.chunks == ((1,), (153, 153, 153), (750,))
     assert_eq(result, arr.compute())
