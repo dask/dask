@@ -12,14 +12,14 @@ LICENSE
 
 New BSD. See `License File <https://github.com/dask/dask/blob/main/LICENSE.txt>`__.
 
-.. _documentation: https://dask.org
+.. _documentation: https://docs.dask.org/en/stable/
 .. |Build Status| image:: https://github.com/dask/dask/actions/workflows/tests.yml/badge.svg
    :target: https://github.com/dask/dask/actions/workflows/tests.yml
 .. |Coverage| image:: https://codecov.io/gh/dask/dask/branch/main/graph/badge.svg
    :target: https://codecov.io/gh/dask/dask/branch/main
    :alt: Coverage status
 .. |Doc Status| image:: https://readthedocs.org/projects/dask/badge/?version=latest
-   :target: https://dask.org
+   :target: https://docs.dask.org/en/stable/
    :alt: Documentation Status
 .. |Discourse| image:: https://img.shields.io/discourse/users?logo=discourse&server=https%3A%2F%2Fdask.discourse.group
    :alt: Discuss Dask-related things and ask for help
