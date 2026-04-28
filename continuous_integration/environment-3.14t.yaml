@@ -51,7 +51,7 @@ dependencies:
   - ipython
   - ipycytoscape
   - ipywidgets
-  - ipykernel
+  # - ipykernel  # No 3.14t build for Windows yet
   - lz4
   - psutil
   - requests
