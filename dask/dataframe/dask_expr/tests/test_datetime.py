@@ -66,22 +66,16 @@ def test_datetime_accessor_methods(ser, dser, func, args):
         "day_of_year",
         pytest.param(
             "dayofweek",
-            marks=pytest.mark.skipif(
-                PANDAS_GE_300, reason="Deprecated in pandas>=3.0"
-            ),
+            marks=pytest.mark.skipif(PANDAS_GE_300, reason="Deprecated in pandas>=3.0"),
         ),
         pytest.param(
             "dayofyear",
-            marks=pytest.mark.skipif(
-                PANDAS_GE_300, reason="Deprecated in pandas>=3.0"
-            ),
+            marks=pytest.mark.skipif(PANDAS_GE_300, reason="Deprecated in pandas>=3.0"),
         ),
         "days_in_month",
         pytest.param(
             "daysinmonth",
-            marks=pytest.mark.skipif(
-                PANDAS_GE_300, reason="Deprecated in pandas>=3.0"
-            ),
+            marks=pytest.mark.skipif(PANDAS_GE_300, reason="Deprecated in pandas>=3.0"),
         ),
         "hour",
         "is_leap_year",
@@ -99,7 +93,10 @@ def test_datetime_accessor_methods(ser, dser, func, args):
         "second",
         "time",
         "timetz",
-        "weekday",
+        pytest.param(
+            "weekday",
+            marks=pytest.mark.skipif(PANDAS_GE_300, reason="Deprecated in pandas>=3.0"),
+        ),
         "year",
     ],
 )

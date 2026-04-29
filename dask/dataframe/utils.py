@@ -566,14 +566,14 @@ def assert_eq(
         b = b.reset_index(drop=True)
     if isinstance(a, pd.DataFrame):
         if PANDAS_GE_300:
-            kwargs.setdefault("check_index_type", "equiv")
-            kwargs.setdefault("check_column_type", "equiv")
+            kwargs.setdefault("check_index_type", True)
+            kwargs.setdefault("check_column_type", True)
         tm.assert_frame_equal(
             a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
         )
     elif isinstance(a, pd.Series):
         if PANDAS_GE_300:
-            kwargs.setdefault("check_index_type", "equiv")
+            kwargs.setdefault("check_index_type", True)
         tm.assert_series_equal(
             a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
         )
