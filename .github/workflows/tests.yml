@@ -66,7 +66,7 @@ jobs:
             array-expr: "true"
           - os: "ubuntu-latest"
             environment: "3.14t"
-            array-expr: "true"
+            array-expr: "false"
 
     steps:
       - name: Checkout source
