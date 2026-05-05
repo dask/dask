@@ -24,7 +24,8 @@ PANDAS_GE_202 = PANDAS_VERSION.release >= (2, 0, 2)
 PANDAS_GE_210 = PANDAS_VERSION.release >= (2, 1, 0)
 PANDAS_GE_220 = PANDAS_VERSION.release >= (2, 2, 0)
 PANDAS_GE_230 = PANDAS_VERSION.release >= (2, 3, 0)
-PANDAS_GE_300 = PANDAS_VERSION.major >= 3
+PANDAS_GE_300 = PANDAS_VERSION.release >= (3, 0, 0)
+PANDAS_GE_310 = PANDAS_VERSION.release >= (3, 1, 0)
 
 
 def assert_categorical_equal(left, right, *args, **kwargs):
@@ -139,26 +140,6 @@ def check_apply_dataframe_deprecation():
             warnings.filterwarnings(
                 "ignore",
                 message="Returning a DataFrame",
-                category=FutureWarning,
-            )
-            yield
-    else:
-        yield
-
-
-@contextlib.contextmanager
-def check_pandas4_equiv_deprecation():
-    # Suppress the pandas 4 deprecation about the 'equiv' default for the
-    # `exact` parameter in test utilities. The warning fires from nested
-    # calls inside pandas's own assert_frame_equal/assert_series_equal that
-    # do not honor the user-facing check_index_type/check_column_type kwargs,
-    # so per-call kwarg overrides cannot suppress it. Pandas4Warning subclasses
-    # FutureWarning, so the FutureWarning category catches both pandas 3 and 4.
-    if PANDAS_GE_300:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="The default value of 'equiv'",
                 category=FutureWarning,
             )
             yield

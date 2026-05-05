@@ -17,7 +17,7 @@ from pandas.api.types import is_dtype_equal
 import dask
 from dask.base import is_dask_collection
 from dask.core import get_deps
-from dask.dataframe._compat import PANDAS_GE_300, check_pandas4_equiv_deprecation, tm
+from dask.dataframe._compat import PANDAS_GE_300, tm
 from dask.dataframe.dispatch import (  # noqa: F401
     is_categorical_dtype_dispatch,
     make_meta,
@@ -465,8 +465,12 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
             assert type(dsk._meta) == type(result), type(dsk._meta)
             if check_names:
-                tm.assert_index_equal(dsk.columns, result.columns)
-                tm.assert_index_equal(dsk._meta.columns, result.columns)
+                # Treat RangeIndex and Index as equivalent as long as they express the
+                # same values and have the same dtype
+                tm.assert_index_equal(dsk.columns, result.columns, exact=False)
+                tm.assert_index_equal(dsk._meta.columns, result.columns, exact=False)
+                assert dsk.columns.dtype == result.columns.dtype
+                assert dsk._meta.columns.dtype == result.columns.dtype
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
             _check_dask(
@@ -565,15 +569,13 @@ def assert_eq(
         a = a.reset_index(drop=True)
         b = b.reset_index(drop=True)
     if isinstance(a, pd.DataFrame):
-        with check_pandas4_equiv_deprecation():
-            tm.assert_frame_equal(
-                a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
-            )
+        tm.assert_frame_equal(
+            a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
+        )
     elif isinstance(a, pd.Series):
-        with check_pandas4_equiv_deprecation():
-            tm.assert_series_equal(
-                a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
-            )
+        tm.assert_series_equal(
+            a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
+        )
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b, exact=check_dtype, **kwargs)
     elif a == b:
