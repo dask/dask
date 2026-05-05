@@ -22,7 +22,13 @@ from dask import delayed
 from dask._compatibility import WINDOWS
 from dask.base import collections_to_expr
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300, tm
+from dask.dataframe._compat import (
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+    PANDAS_GE_300,
+    PANDAS_GE_310,
+    tm,
+)
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     _concat,
@@ -655,7 +661,8 @@ def test_cumulative_with_duplicate_columns():
             M.cummin,
             marks=[
                 pytest.mark.xfail(
-                    reason="ValueError: Can only compare identically-labeled Series objects"
+                    not PANDAS_GE_310,
+                    reason="ValueError: Can only compare identically-labeled Series objects",
                 )
             ],
         ),
@@ -663,7 +670,8 @@ def test_cumulative_with_duplicate_columns():
             M.cummax,
             marks=[
                 pytest.mark.xfail(
-                    reason="ValueError: Can only compare identically-labeled Series objects"
+                    not PANDAS_GE_310,
+                    reason="ValueError: Can only compare identically-labeled Series objects",
                 )
             ],
         ),

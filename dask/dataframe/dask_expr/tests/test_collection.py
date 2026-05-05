@@ -14,6 +14,7 @@ import pytest
 import dask
 import dask.array as da
 from dask._compatibility import WINDOWS
+from dask._pandas_compat import PANDAS_GE_310
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.dask_expr import (
@@ -644,9 +645,15 @@ def test_method_operators(pdf, df, axis, level, fill_value, op, series, other):
         with pytest.raises(ValueError, match=f"Unable to {op} dd.Series with axis=1"):
             getattr(df, op)(other=other, **kwargs)
 
-    elif isinstance(other, Series) and axis in (0, "index") and fill_value:
-        msg = f"fill_value {fill_value} not supported"
-        with pytest.raises(NotImplementedError, match=msg):
+    elif (
+        not PANDAS_GE_310
+        and isinstance(other, Series)
+        and axis in (0, "index")
+        and fill_value
+    ):
+        with pytest.raises(
+            NotImplementedError, match=f"fill_value {fill_value} not supported"
+        ):
             getattr(df, op)(other=other, **kwargs)
 
     else:
