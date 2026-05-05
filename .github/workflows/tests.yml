@@ -111,7 +111,7 @@ jobs:
         if: ${{ matrix.environment == '3.14t' }}
         run: |
           conda uninstall -y -v --force msgpack-python
-          MSGPACK_PUREPYTHON=1 pip install msgpack --no-binary msgpack --no-cache --force-reinstall -v
+          MSGPACK_PUREPYTHON=1 python -m pip install msgpack --no-binary msgpack --no-cache --force-reinstall -v
           python -Werror -c 'import msgpack'
 
       - name: Reconfigure pytest-timeout

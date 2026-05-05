@@ -216,7 +216,7 @@ Learn more at :bdg-link-primary:`Install Documentation <install.html>`
 
        .. code-block::
 
-          pip install "dask[complete]"
+          python -m pip install "dask[complete]"
 
     .. tab-item:: conda
 

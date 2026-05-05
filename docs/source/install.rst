@@ -179,7 +179,7 @@ Installing Dask naively may not install all requirements by default (see the ``p
 You may choose to install the ``dask[complete]`` version which includes
 all dependencies for all collections::
 
-    pip install "dask[complete]"
+    python -m pip install "dask[complete]"
 
 Alternatively, you may choose to test
 only certain submodules depending on the libraries within your environment.
