@@ -321,14 +321,16 @@ def cumprod_aggregate(x, y):
 
 def cummin_aggregate(x, y):
     if is_series_like(x) or is_dataframe_like(x):
-        return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
+        axis = x.ndim - 1 if is_series_like(y) or is_dataframe_like(y) else None
+        return x.where((x < y) | x.isnull(), y, axis=axis)
     else:  # scalar
         return min(x, y)
 
 
 def cummax_aggregate(x, y):
     if is_series_like(x) or is_dataframe_like(x):
-        return x.where((x > y) | x.isnull(), y, axis=x.ndim - 1)
+        axis = x.ndim - 1 if is_series_like(y) or is_dataframe_like(y) else None
+        return x.where((x > y) | x.isnull(), y, axis=axis)
     else:  # scalar
         return max(x, y)
 

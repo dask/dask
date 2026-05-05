@@ -20,3 +20,5 @@ def test_cumulative_empty_partitions():
 
     assert_eq(df2.cumprod(), pdf2.cumprod())
     assert_eq(df2.cumsum(), pdf2.cumsum())
+    assert_eq(df2.cummin(), pdf2.cummin())
+    assert_eq(df2.cummax(), pdf2.cummax())
