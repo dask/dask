@@ -14,9 +14,13 @@ import pytest
 import dask
 import dask.array as da
 from dask._compatibility import WINDOWS
-from dask._pandas_compat import PANDAS_GE_310
 from dask.array.numpy_compat import NUMPY_GE_200
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300
+from dask.dataframe._compat import (
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+    PANDAS_GE_300,
+    PANDAS_GE_310,
+)
 from dask.dataframe.dask_expr import (
     DataFrame,
     Series,
