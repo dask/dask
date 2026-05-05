@@ -273,7 +273,7 @@ class Merge(Expr):
             self.right_index or _contains_index_name(self.right, self.right_on)
         ) and self.right.known_divisions
 
-    def _on_condition_alread_partitioned(self, expr, on):
+    def _on_condition_already_partitioned(self, expr, on):
         if not isinstance(on, list):
             result = (
                 on in expr.unique_partition_mapping_columns_from_shuffle
@@ -294,8 +294,8 @@ class Merge(Expr):
         shuffle_method = self.shuffle_method
 
         # TODO: capture index-merge as well
-        left_already_partitioned = self._on_condition_alread_partitioned(left, left_on)
-        right_already_partitioned = self._on_condition_alread_partitioned(
+        left_already_partitioned = self._on_condition_already_partitioned(left, left_on)
+        right_already_partitioned = self._on_condition_already_partitioned(
             right, right_on
         )
 

@@ -112,7 +112,7 @@ See :doc:`how-to/connect-to-remote-data` for more information.
 
     .. code-block:: bash
 
-        pip install s3fs
+        python -m pip install s3fs
 
    .. tab-item:: GCP
 
@@ -120,7 +120,7 @@ See :doc:`how-to/connect-to-remote-data` for more information.
 
     .. code-block:: bash
 
-        pip install gcsfs
+        python -m pip install gcsfs
 
    .. tab-item:: Azure
 
@@ -128,4 +128,4 @@ See :doc:`how-to/connect-to-remote-data` for more information.
 
     .. code-block:: bash
 
-        pip install adlfs
+        python -m pip install adlfs

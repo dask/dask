@@ -137,7 +137,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     dependencies = data.__dask_graph__().dependencies.copy()
 
     # Block qr
-    name_qr_st1 = "qr" + token
+    name_qr_st1 = f"qr{token}"
     dsk_qr_st1 = blockwise(
         _wrapped_qr,
         name_qr_st1,
@@ -1011,18 +1011,18 @@ def lu(a):
     hdim = len(a.chunks[1])
 
     token = tokenize(a)
-    name_lu = "lu-lu-" + token
+    name_lu = f"lu-lu-{token}"
 
-    name_p = "lu-p-" + token
-    name_l = "lu-l-" + token
-    name_u = "lu-u-" + token
+    name_p = f"lu-p-{token}"
+    name_l = f"lu-l-{token}"
+    name_u = f"lu-u-{token}"
 
     # for internal calculation
-    name_p_inv = "lu-p-inv-" + token
-    name_l_permuted = "lu-l-permute-" + token
-    name_u_transposed = "lu-u-transpose-" + token
-    name_plu_dot = "lu-plu-dot-" + token
-    name_lu_dot = "lu-lu-dot-" + token
+    name_p_inv = f"lu-p-inv-{token}"
+    name_l_permuted = f"lu-l-permute-{token}"
+    name_u_transposed = f"lu-u-transpose-{token}"
+    name_plu_dot = f"lu-plu-dot-{token}"
+    name_lu_dot = f"lu-lu-dot-{token}"
 
     dsk = {}
     for i in range(min(vdim, hdim)):
@@ -1149,11 +1149,11 @@ def solve_triangular(a, b, lower=False):
     vchunks = len(a.chunks[1])
     hchunks = 1 if b.ndim == 1 else len(b.chunks[1])
     token = tokenize(a, b, lower)
-    name = "solve-triangular-" + token
+    name = f"solve-triangular-{token}"
 
     # for internal calculation
     # (name, i, j, k, l) corresponds to a_ij.dot(b_kl)
-    name_mdot = "solve-tri-dot-" + token
+    name_mdot = f"solve-tri-dot-{token}"
 
     def _b_init(i, j):
         if b.ndim == 1:
@@ -1343,13 +1343,13 @@ def _cholesky(a):
     hdim = len(a.chunks[1])
 
     token = tokenize(a)
-    name = "cholesky-" + token
+    name = f"cholesky-{token}"
 
     # (name_lt_dot, i, j, k, l) corresponds to l_ij.dot(l_kl.T)
-    name_lt_dot = "cholesky-lt-dot-" + token
+    name_lt_dot = f"cholesky-lt-dot-{token}"
     # because transposed results are needed for calculation,
     # we can build graph for upper triangular simultaneously
-    name_upper = "cholesky-upper-" + token
+    name_upper = f"cholesky-upper-{token}"
 
     # calculates lower triangulars because subscriptions get simpler
     dsk = {}
@@ -1450,14 +1450,14 @@ def lstsq(a, b):
     # r must be a triangular with single block
 
     # rank
-    rname = "lstsq-rank-" + token
+    rname = f"lstsq-rank-{token}"
     rdsk = {(rname,): (np.linalg.matrix_rank, (r.name, 0, 0))}
     graph = HighLevelGraph.from_collections(rname, rdsk, dependencies=[r])
     # rank must be an integer
     rank = Array(graph, rname, shape=(), chunks=(), dtype=int)
 
     # singular
-    sname = "lstsq-singular-" + token
+    sname = f"lstsq-singular-{token}"
     rt = r.T.conj()
     sdsk = {
         (sname, 0): (

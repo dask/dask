@@ -162,13 +162,13 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
                 "crick", "crick is a required dependency for using the t-digest method."
             )
 
-            name = "percentile_tdigest_chunk-" + token
+            name = f"percentile_tdigest_chunk-{token}"
             dsk = {
                 (name, i): (_tdigest_chunk, key)
                 for i, key in enumerate(a.__dask_keys__())
             }
 
-            name2 = "percentile_tdigest-" + token
+            name2 = f"percentile_tdigest-{token}"
 
             dsk2 = {(name2, 0): (_percentiles_from_tdigest, q, sorted(dsk))}
 
@@ -182,13 +182,13 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
             hundred[:] = 100
 
             calc_q = np.concatenate((zero, q, hundred))
-            name = "percentile_chunk-" + token
+            name = f"percentile_chunk-{token}"
             dsk = {
                 (name, i): (percentile_lookup, key, calc_q, method)
                 for i, key in enumerate(a.__dask_keys__())
             }
 
-            name2 = "percentile-" + token
+            name2 = f"percentile-{token}"
             dsk2 = {
                 (name2, 0): (
                     merge_percentiles,

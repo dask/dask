@@ -623,7 +623,7 @@ def _normalize_spec(spec, non_group_columns):
     The non-group columns are a list of all column names that are not used in
     the groupby operation.
 
-    Usually, the result columns are mutli-level names, returned as tuples.
+    Usually, the result columns are multi-level names, returned as tuples.
     If only a single function is supplied or dictionary mapping columns
     to single functions, simple names are returned as strings (see the first
     two examples below).
@@ -970,7 +970,7 @@ def _groupby_apply_funcs(df, *by, **kwargs):
     by: list of groupers
         If given, they are added to the keyword arguments as the ``by``
         argument.
-    funcs: list of result-colum, function, keywordargument triples
+    funcs: list of result-column, function, keywordargument triples
         The list of functions that are applied on the grouped data frame.
         Has to be passed as a keyword argument.
     kwargs:

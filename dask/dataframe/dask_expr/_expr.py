@@ -895,7 +895,7 @@ class MapOverlapAlign(Expr):
     ]
     _defaults = {
         "meta": None,
-        "enfore_metadata": True,
+        "enforce_metadata": True,
         "transform_divisions": True,
         "kwargs": None,
         "clear_divisions": False,
@@ -958,7 +958,7 @@ class MapOverlap(MapPartitions):
     ]
     _defaults: dict = {
         "meta": None,
-        "enfore_metadata": True,
+        "enforce_metadata": True,
         "transform_divisions": True,
         "kwargs": None,
         "clear_divisions": False,

@@ -51,7 +51,7 @@ def read_sql_query(
         override ``npartitions`` and ``bytes_per_chunk``. The divisions are the value
         boundaries of the index column used to define the partitions. For
         example, ``divisions=list('acegikmoqsuwz')`` could be used to partition
-        a string column lexographically into 12 partitions, with the implicit
+        a string column lexicographically into 12 partitions, with the implicit
         assumption that each partition contains similar numbers of records.
     npartitions : int
         Number of partitions, if ``divisions`` is not given. Will split the values
@@ -236,7 +236,7 @@ def read_sql_table(
         override ``npartitions`` and ``bytes_per_chunk``. The divisions are the value
         boundaries of the index column used to define the partitions. For
         example, ``divisions=list('acegikmoqsuwz')`` could be used to partition
-        a string column lexographically into 12 partitions, with the implicit
+        a string column lexicographically into 12 partitions, with the implicit
         assumption that each partition contains similar numbers of records.
     npartitions : int
         Number of partitions, if ``divisions`` is not given. Will split the values

@@ -693,8 +693,8 @@ def _compute_rechunk(x, chunks):
     x2 = dict()
     intermediates = dict()
     token = tokenize(x, chunks)
-    merge_name = "rechunk-merge-" + token
-    split_name = "rechunk-split-" + token
+    merge_name = f"rechunk-merge-{token}"
+    split_name = f"rechunk-split-{token}"
     split_name_suffixes = count()
 
     # Pre-allocate old block references, to allow reuse and reduce the

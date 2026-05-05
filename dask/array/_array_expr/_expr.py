@@ -203,7 +203,7 @@ class Stack(ArrayExpr):
 
     @functools.cached_property
     def _name(self):
-        return "stack-" + self.deterministic_token
+        return f"stack-{self.deterministic_token}"
 
     def _layer(self) -> dict:
         keys = list(product([self._name], *[range(len(bd)) for bd in self.chunks]))
@@ -252,7 +252,7 @@ class Concatenate(ArrayExpr):
 
     @functools.cached_property
     def _name(self):
-        return "stack-" + self.deterministic_token
+        return f"stack-{self.deterministic_token}"
 
     def _layer(self) -> dict:
         axis = self.axis

@@ -62,7 +62,7 @@ def overlap_internal(x, axes):
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
     token = tokenize(x, axes)
-    name = "overlap-" + token
+    name = f"overlap-{token}"
 
     graph = ArrayOverlapLayer(
         name=x.name,

@@ -25,15 +25,13 @@ def test_to_string():
     )
     ddf = from_pandas(df, 3)
 
-    exp = dedent(
-        f"""\
+    exp = dedent(f"""\
                            A       B                C
         npartitions=3                                
         0              int64  {dtype}  category[known]
         3                ...     ...              ...
         6                ...     ...              ...
-        7                ...     ...              ..."""
-    )
+        7                ...     ...              ...""")
     assert ddf.to_string() == exp
 
     exp_table = f"""<table border="1" class="dataframe">
@@ -89,14 +87,12 @@ def test_series_format():
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=list("ABCDEFGH"))
     ds = from_pandas(s, 3)
 
-    exp = dedent(
-        """\
+    exp = dedent("""\
     npartitions=3
     A    int64
     D      ...
     G      ...
-    H      ..."""
-    )
+    H      ...""")
     assert ds.to_string() == exp
 
 
@@ -105,8 +101,7 @@ def test_series_repr():
     dtype = "string" if pyarrow_strings_enabled() else "object"
     ds = from_pandas(s, 3)
 
-    exp = dedent(
-        """\
+    exp = dedent("""\
         Dask Series Structure:
         npartitions=3
         A    int64
@@ -114,8 +109,7 @@ def test_series_repr():
         G      ...
         H      ...
         Dask Name: frompandas, 1 expression
-        Expr=df"""
-    )
+        Expr=df""")
     assert repr(ds) == exp
 
     # Not a cheap way to determine if series is empty
@@ -123,8 +117,7 @@ def test_series_repr():
     s = pd.Series([])
     ds = from_pandas(s, 3)
 
-    exp = dedent(
-        f"""\
+    exp = dedent(f"""\
         Dask Series Structure:
         npartitions=3
             {dtype}
@@ -132,8 +125,7 @@ def test_series_repr():
                ...
                ...
         Dask Name: frompandas, 1 expression
-        Expr=df"""
-    )
+        Expr=df""")
     assert repr(ds) == exp
 
 
@@ -141,8 +133,7 @@ def test_df_repr():
     df = pd.DataFrame({"col1": range(10), "col2": map(float, range(10))})
     ddf = from_pandas(df, 3)
 
-    exp = dedent(
-        """\
+    exp = dedent("""\
         Dask DataFrame Structure:
                         col1     col2
         npartitions=3                
@@ -151,15 +142,13 @@ def test_df_repr():
         7                ...      ...
         9                ...      ...
         Dask Name: frompandas, 1 expression
-        Expr=df"""
-    )
+        Expr=df""")
     assert repr(ddf) == exp
 
     df = pd.DataFrame()
     ddf = from_pandas(df, 3)
 
-    exp = dedent(
-        """\
+    exp = dedent("""\
         Empty Dask DataFrame Structure:
         npartitions=3
         0              int64  float64
@@ -167,8 +156,7 @@ def test_df_repr():
         7                ...      ...
         9                ...      ...
         Dask Name: frompandas, 1 expression
-        Expr=df"""
-    )
+        Expr=df""")
 
 
 def test_df_to_html():
@@ -176,8 +164,7 @@ def test_df_to_html():
     df = pd.DataFrame({"col1": range(10), "col2": map(float, range(10))})
     ddf = from_pandas(df, 3)
 
-    exp = dedent(
-        """\
+    exp = dedent("""\
         <div><strong>Dask DataFrame Structure:</strong></div>
         <table border="1" class="dataframe">
           <thead>
@@ -215,7 +202,6 @@ def test_df_to_html():
             </tr>
           </tbody>
         </table>
-        <div>Dask Name: frompandas, 1 expression</div>"""
-    )
+        <div>Dask Name: frompandas, 1 expression</div>""")
     assert ddf.to_html() == exp
     assert ddf._repr_html_() == exp  # for jupyter

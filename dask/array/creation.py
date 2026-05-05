@@ -603,7 +603,7 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
     chunks = vchunks[0]
 
     token = tokenize(N, chunks, M, k, dtype)
-    name_eye = "eye-" + token
+    name_eye = f"eye-{token}"
 
     dsk = {}
     for i, vchunk in enumerate(vchunks):

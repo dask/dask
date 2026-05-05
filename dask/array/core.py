@@ -1311,8 +1311,6 @@ class Array(DaskMethodsMixin):
         Task dependency graph
     name : string
         Name of array in dask
-    shape : tuple of ints
-        Shape of the entire array
     chunks: iterable of tuples
         block sizes along each dimension
     dtype : str or dtype
@@ -1320,6 +1318,8 @@ class Array(DaskMethodsMixin):
     meta : empty ndarray
         empty ndarray created with same NumPy backend, ndim and dtype as the
         Dask Array being created (overrides dtype)
+    shape : tuple of ints
+        Shape of the entire array
 
     See Also
     --------
@@ -3402,7 +3402,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     multiplier_remaining = True
 
         for k, v in result.items():
-            chunks[k] = v if v else 0
+            chunks[k] = v or 0
         return tuple(chunks)
 
     else:
@@ -4095,7 +4095,8 @@ def to_zarr(
     zarr_store = _setup_zarr_store(url, storage_options, mode=mode)
 
     zarr_array_kwargs.setdefault("shape", arr.shape)
-    zarr_array_kwargs.setdefault("chunks", tuple(c[0] for c in arr.chunks))
+    # Empty Dask arrays have chunk size 0, which zarr does not accept
+    zarr_array_kwargs.setdefault("chunks", tuple(max(c[0], 1) for c in arr.chunks))
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     array_name = component or zarr_array_kwargs.pop("name", None)
@@ -5449,7 +5450,7 @@ def chunks_from_arrays(arrays):
 
     def shape(x):
         try:
-            return x.shape if x.shape else (1,)
+            return x.shape or (1,)
         except AttributeError:
             return (1,)
 
@@ -5878,7 +5879,7 @@ def _vindex_array(x, dict_indexes):
         for c in _subset_to_indexed_axes(x.chunks)
     )
     axis = _get_axis(tuple(i if i in axes else None for i in range(x.ndim)))
-    out_name = "vindex-merge-" + token
+    out_name = f"vindex-merge-{token}"
 
     # Now compute indices of each output element within each input block
     # The index is relative to the block, not the array.
@@ -5955,8 +5956,8 @@ def _vindex_array(x, dict_indexes):
         flag = np.concatenate([[True], sorted_keys[1:] != sorted_keys[:-1], [True]])
         (key_bounds,) = flag.nonzero()
 
-        name = "vindex-slice-" + token
-        vindex_merge_name = "vindex-merge-" + token
+        name = f"vindex-slice-{token}"
+        vindex_merge_name = f"vindex-merge-{token}"
         dsk = {}
         for okey in other_blocks:
             merge_inputs = defaultdict(list)

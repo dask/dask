@@ -354,7 +354,7 @@ def ensure_file(
 
             if comment:
                 lines = [
-                    "# " + line if line.strip() and not line.startswith("#") else line
+                    f"# {line}" if line.strip() and not line.startswith("#") else line
                     for line in lines
                 ]
 

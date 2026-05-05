@@ -513,7 +513,7 @@ Expr={expr}"""
               be computed
             - simplified-physical: runs another simplification after the physical
               plan is generated
-            - fused: fuses the physical expression to reduce the nodes in thr graph.
+            - fused: fuses the physical expression to reduce the nodes in the graph.
 
             .. warning::
                 The optimizer stages are subject to change.
@@ -779,7 +779,7 @@ Expr={expr}"""
             expr.Isin(
                 self,
                 values=expr._DelayedExpr(
-                    delayed(values, name="delayed-" + _tokenize_deterministic(values))
+                    delayed(values, name=f"delayed-{_tokenize_deterministic(values)}")
                 ),
             )
         )
@@ -2937,7 +2937,7 @@ class DataFrame(FrameBase):
             used to select the underlying algorithm. If a floating-point value
             is specified, that number will be used as the ``broadcast_bias``
             within the simple heuristic (a large number makes Dask more likely
-            to choose the ``broacast_join`` code path). See ``broadcast_join``
+            to choose the ``broadcast_join`` code path). See ``broadcast_join``
             for more information.
 
         Notes
@@ -4007,18 +4007,14 @@ class DataFrame(FrameBase):
             column_width = max(space, 7)
 
             header = (
-                textwrap.dedent(
-                    """\
+                textwrap.dedent("""\
              #   {{column:<{column_width}}} Non-Null Count  Dtype
-            ---  {{underl:<{column_width}}} --------------  -----"""
-                )
+            ---  {{underl:<{column_width}}} --------------  -----""")
                 .format(column_width=column_width)
                 .format(column="Column", underl="------")
             )
-            column_template = textwrap.dedent(
-                f"""\
-            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}"""
-            )
+            column_template = textwrap.dedent(f"""\
+            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}""")
             column_info = [
                 column_template.format(
                     i=pprint_thing(i),
@@ -4698,10 +4694,12 @@ class Index(Series):
         "nanosecond",
         "microsecond",
         "millisecond",
+        "day_of_year",
         "dayofyear",
         "minute",
         "hour",
         "day",
+        "day_of_week",
         "dayofweek",
         "second",
         "week",

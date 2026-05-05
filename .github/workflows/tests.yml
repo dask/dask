@@ -29,7 +29,7 @@ jobs:
         # Note: after adding/removing builds here, update
         # codecov.yml to match.
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        environment: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+        environment: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         extra: [null]
         array-expr: ["false"]
         exclude:
@@ -42,8 +42,6 @@ jobs:
             environment: "3.12"
           - os: "macos-latest"
             environment: "3.13"
-          - os: "macos-latest"
-            environment: "3.14t"
         include:
           # Minimum dependencies
           - os: "ubuntu-latest"
@@ -66,6 +64,9 @@ jobs:
           - os: "ubuntu-latest"
             environment: "mindeps-array"
             array-expr: "true"
+          - os: "ubuntu-latest"
+            environment: "3.14t"
+            array-expr: "false"
 
     steps:
       - name: Checkout source
@@ -81,10 +82,9 @@ jobs:
           java-version: "11"
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.3.0
+        uses: conda-incubator/setup-miniconda@v4.0.1
         with:
           miniforge-version: latest
-          use-mamba: true
           channel-priority: strict
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
@@ -111,7 +111,7 @@ jobs:
         if: ${{ matrix.environment == '3.14t' }}
         run: |
           conda uninstall -y -v --force msgpack-python
-          MSGPACK_PUREPYTHON=1 pip install msgpack --no-binary msgpack --no-cache --force-reinstall -v
+          MSGPACK_PUREPYTHON=1 python -m pip install msgpack --no-binary msgpack --no-cache --force-reinstall -v
           python -Werror -c 'import msgpack'
 
       - name: Reconfigure pytest-timeout

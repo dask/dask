@@ -410,7 +410,7 @@ def test_uneven_chunks():
     assert a.chunks == ((3, 3, 3, 1), (3, 3, 3, 1))
 
 
-def test_numblocks_suppoorts_singleton_block_dims():
+def test_numblocks_supports_singleton_block_dims():
     arr = object()  # arraylike is unimportant since we never compute
     shape = (100, 10)
     chunks = (10, 10)
@@ -2773,7 +2773,7 @@ def test_slicing_with_non_ndarrays():
         def __array__(self):
             return np.arange(self.start, self.stop)
 
-    class ARangeSlicable:
+    class ARangeSliceable:
         dtype = np.dtype("i8")
         ndim = 1
 
@@ -2787,7 +2787,7 @@ def test_slicing_with_non_ndarrays():
         def __getitem__(self, key):
             return ARangeSlice(key[0].start, key[0].stop)
 
-    x = da.from_array(ARangeSlicable(10), chunks=(4,))
+    x = da.from_array(ARangeSliceable(10), chunks=(4,))
 
     assert_eq((x + 1).sum(), (np.arange(10, dtype=x.dtype) + 1).sum())
 
@@ -3814,9 +3814,9 @@ def test_to_delayed_optimize_graph():
     d = y.to_delayed().flatten().tolist()[0]
     assert len([k for k in d.dask if k[0].startswith("getitem")]) == 1
     assert d.key == (y.name, 0, 0)
-    assert d.dask.layers.keys() == {"delayed-" + y.name}
-    assert d.dask.dependencies == {"delayed-" + y.name: set()}
-    assert d.__dask_layers__() == ("delayed-" + y.name,)
+    assert d.dask.layers.keys() == {f"delayed-{y.name}"}
+    assert d.dask.dependencies == {f"delayed-{y.name}": set()}
+    assert d.__dask_layers__() == (f"delayed-{y.name}",)
 
     # no optimizations
     d2 = y.to_delayed(optimize_graph=False).flatten().tolist()[0]
@@ -4819,7 +4819,7 @@ def test_no_warnings_on_metadata():
     assert not record
 
 
-def test_delayed_array_key_hygeine():
+def test_delayed_array_key_hygiene():
     a = da.zeros((1,), chunks=(1,))
     d = delayed(identity)(a)
     b = da.from_delayed(d, shape=a.shape, dtype=a.dtype)
@@ -5014,11 +5014,20 @@ def test_zarr_roundtrip_with_path_like(tmp_path, zarr_format):
     assert a2.chunks == a.chunks
 
 
-def test_to_zarr_accepts_empty_array_without_exception_raised():
+@pytest.mark.parametrize(
+    "a",
+    [
+        da.arange(0),  # shape=(0,); chunks=((0,),)
+        da.array([[1]])[:0],  # shape=(0, 1); chunks=((0,), (1,))
+        da.array([[1]])[:, :0],  # shape=(1, 0); chunks=((1,), (0,))
+    ],
+)
+def test_zarr_empty_array(tmp_path, a):
     pytest.importorskip("zarr")
-    with tmpdir() as d:
-        a = da.from_array(np.arange(0))
-        a.to_zarr(d)
+    fname = tmp_path / "x.zarr"
+    a.to_zarr(fname)
+    b = da.from_zarr(fname)
+    assert_eq(a, b)
 
 
 @pytest.mark.parametrize("compute", [False, True])
@@ -6100,7 +6109,7 @@ def test_load_store_chunk():
 
 def test_scalar_setitem():
     """After a da.Array.__getitem__ call that returns a scalar, the chunk contains a
-    read-only np.generic instead of a writeable np.ndarray. This is a specific quirk of
+    read-only np.generic instead of a writable np.ndarray. This is a specific quirk of
     numpy; cupy and other backends always return a 0-dimensional array.
     Make sure that __setitem__ still works.
     """

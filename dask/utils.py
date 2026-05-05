@@ -885,7 +885,7 @@ def unsupported_arguments(doc, args):
         subset = [
             (i, line)
             for i, line in enumerate(lines)
-            if re.match(r"^\s*" + arg + " ?:", line)
+            if re.match(rf"^\s*{arg} ?:", line)
         ]
         if len(subset) == 1:
             [(i, line)] = subset

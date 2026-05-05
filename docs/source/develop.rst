@@ -66,10 +66,18 @@ you should raise it there to start public discussion.
 If you are looking for an introductory issue to get started with development,
 then check out the `"good first issue" label`_, which contains issues that are good
 for starting developers.  Generally, familiarity with Python, NumPy, pandas, and
-some parallel computing are assumed.
+some parallel computing are assumed. These issues often spell out exactly what needs
+to be done and are a great way to start to get familiar with the codebase and 
+contribution process. As these issues are intended to be learning oriented we ask
+that you do not solve these with automated tools.
 
 .. _`"good first issue" label`: https://github.com/dask/dask/labels/good%20first%20issue
 
+We strongly encourage discussion of issues before work is done on them. We generally follow
+lazy consensus when implementing issues to avoid bottlenecks, but gathering some feedback and 
+giving opportunity for discussion is important. Iterating on a design before beginning 
+implementation can help save time when it comes to code review and make it more likely a 
+Pull Request will be accepted.
 
 Development Environment
 -----------------------
@@ -342,6 +350,31 @@ The CI workflows for Github Actions are defined in
 `.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
 with additional scripts and metadata located in `continuous_integration
 <https://github.com/dask/dask/tree/main/continuous_integration>`_
+
+
+Making Pull Requests
+--------------------
+
+Pull Request Etiquette
+~~~~~~~~~~~~~~~~~~~~~~
+
+When opening a Pull Request you are beginning a dialog with maintainers. This is a bidirectional
+relationship where you are asking for the reviewer's time to look at your contribution, and 
+the reviewer will likely ask for your input and engage you in discussion around the changes.
+
+Please do not propose code that you are not willing to stand behind and discuss.
+Be prepared to respond to review feedback, apply critical thinking and iterate on your contributions.
+
+We ask that you fill out all sections of PR templates and provide reasoning behind your changes,
+ideally with a linked issue that has been discussed by the community.
+
+Automated Contributions and AI Policy
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We encourage the use of AI and automated tools to assist in code development, documentation, and testing.
+However, we ask that contributors disclose these tools and use them in a way that aligns with Dask's 
+community guidelines. In particular do not use tools to think or speak for you in discussions, 
+code reviews, or any other interactions within the Dask community.
 
 
 .. _Sphinx: https://www.sphinx-doc.org/

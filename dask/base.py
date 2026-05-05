@@ -233,7 +233,7 @@ def is_dask_collection(x) -> bool:
         return False
 
     pkg_name = getattr(type(x), "__module__", "")
-    if pkg_name.split(".")[0] in ("dask_cudf",):
+    if pkg_name.split(".")[0] == "dask_cudf":
         # Temporary hack to avoid graph materialization. Note that this won't work with
         # dask_expr.array objects wrapped by xarray or pint. By the time dask_expr.array
         # is published, we hope to be able to rewrite this method completely.
@@ -1301,5 +1301,6 @@ def clone_key(key: KeyOrStrT, seed: Hashable) -> KeyOrStrT:
         return (clone_key(key[0], seed),) + key[1:]
     if isinstance(key, str):
         prefix = key_split(key)
-        return prefix + "-" + tokenize(key, seed)
+        token = tokenize(key, seed)
+        return f"{prefix}-{token}"
     raise TypeError(f"Expected str or a tuple starting with str; got {key!r}")

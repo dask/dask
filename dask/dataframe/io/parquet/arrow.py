@@ -559,7 +559,7 @@ class ArrowDatasetEngine(Engine):
                 partition_keys = None
             else:
                 # `piece` contains (path, row_group, partition_keys)
-                (path_or_frag, row_group, partition_keys) = piece
+                path_or_frag, row_group, partition_keys = piece
 
             # Convert row_group to a list and be sure to
             # check if msgpack converted it to a tuple
@@ -1399,7 +1399,8 @@ class ArrowDatasetEngine(Engine):
             if all_files:
                 # Build and compute a task graph to construct stats/parts
                 gather_parts_dsk = {}
-                name = "gather-pq-parts-" + tokenize(all_files, dataset_info_kwargs)
+                token = tokenize(all_files, dataset_info_kwargs)
+                name = f"gather-pq-parts-{token}"
                 finalize_list = []
                 for task_i, file_i in enumerate(
                     range(0, len(all_files), metadata_task_size)

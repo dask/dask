@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import contextlib
+
 import pytest
 
+from dask._pandas_compat import PANDAS_GE_310
 from dask.dataframe.dask_expr._collection import from_pandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
 
@@ -63,10 +66,7 @@ def test_datetime_accessor_methods(ser, dser, func, args):
         "day",
         "day_of_week",
         "day_of_year",
-        "dayofweek",
-        "dayofyear",
         "days_in_month",
-        "daysinmonth",
         "hour",
         "is_leap_year",
         "is_month_end",
@@ -83,12 +83,32 @@ def test_datetime_accessor_methods(ser, dser, func, args):
         "second",
         "time",
         "timetz",
-        "weekday",
         "year",
     ],
 )
 def test_datetime_accessor_properties(ser, dser, func):
     assert_eq(getattr(ser.dt, func), getattr(dser.dt, func))
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        "dayofweek",
+        "dayofyear",
+        "daysinmonth",
+        "weekday",
+    ],
+)
+def test_datetime_accessor_properties_deprecated(ser, dser, func):
+    if PANDAS_GE_310:
+        from pandas.errors import Pandas4Warning
+
+        ctx = pytest.warns(Pandas4Warning)
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        assert_eq(getattr(ser.dt, func), getattr(dser.dt, func))
 
 
 @pytest.mark.parametrize(
