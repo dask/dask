@@ -30,7 +30,6 @@ jobs:
         with:
           miniforge-version: latest
           condarc-file: continuous_integration/condarc
-          use-mamba: true
           # Note: this file is in the dask/distributed repo
           environment-file: continuous_integration/scripts/test-report-environment.yml
           activate-environment: dask
@@ -38,8 +37,8 @@ jobs:
       - name: Show conda options
         run: conda config --show
 
-      - name: mamba list
-        run: mamba list
+      - name: conda list
+        run: conda list
 
       - uses: actions/cache@v5
         id: cache

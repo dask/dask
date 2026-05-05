@@ -19,7 +19,6 @@ jobs:
         uses: conda-incubator/setup-miniconda@v4.0.1
         with:
           miniforge-version: latest
-          use-mamba: true
           channel-priority: strict
           environment-file: continuous_integration/environment-3.12.yaml
           activate-environment: test-environment
