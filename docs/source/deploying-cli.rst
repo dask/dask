@@ -98,7 +98,8 @@ To launch a cluster from a specification file:
 
    dask spec --spec-file my-cluster.yaml
 
-The YAML file should follow the standard Dask cluster specification format, 
+The YAML file should follow the standard Dask
+:class:`cluster specification <distributed.SpecCluster>` format,
 defining the scheduler and worker configurations.
 
 
