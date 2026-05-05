@@ -5014,11 +5014,20 @@ def test_zarr_roundtrip_with_path_like(tmp_path, zarr_format):
     assert a2.chunks == a.chunks
 
 
-def test_to_zarr_accepts_empty_array_without_exception_raised():
+@pytest.mark.parametrize(
+    "a",
+    [
+        da.arange(0),  # shape=(0,); chunks=((0,),)
+        da.array([[1]])[:0],  # shape=(0, 1); chunks=((0,), (1,))
+        da.array([[1]])[:, :0],  # shape=(1, 0); chunks=((1,), (0,))
+    ],
+)
+def test_zarr_empty_array(tmp_path, a):
     pytest.importorskip("zarr")
-    with tmpdir() as d:
-        a = da.from_array(np.arange(0))
-        a.to_zarr(d)
+    fname = tmp_path / "x.zarr"
+    a.to_zarr(fname)
+    b = da.from_zarr(fname)
+    assert_eq(a, b)
 
 
 @pytest.mark.parametrize("compute", [False, True])
