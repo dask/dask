@@ -4095,7 +4095,8 @@ def to_zarr(
     zarr_store = _setup_zarr_store(url, storage_options, mode=mode)
 
     zarr_array_kwargs.setdefault("shape", arr.shape)
-    zarr_array_kwargs.setdefault("chunks", tuple(c[0] for c in arr.chunks))
+    # Empty Dask arrays have chunk size 0, which zarr does not accept
+    zarr_array_kwargs.setdefault("chunks", tuple(max(c[0], 1) for c in arr.chunks))
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     array_name = component or zarr_array_kwargs.pop("name", None)
