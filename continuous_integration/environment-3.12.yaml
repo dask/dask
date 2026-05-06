@@ -23,9 +23,9 @@ dependencies:
   - pytest-xdist
   - coverage
   # key optional dependencies
-  - numpy
-  - pandas
-  - pyarrow
+  - numpy=2.2
+  - pandas=2.3
+  - pyarrow=22.0
   - distributed  # Overridden by git tip below; used to pull in dependencies  
   # optional s3 I/O
   - boto3

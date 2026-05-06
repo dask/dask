@@ -175,7 +175,7 @@ def test_parquet():
     pytest.importorskip("requests", minversion="2.21.0")
     pytest.importorskip(
         "pyarrow",
-        minversion="22.0.0",
+        minversion="23.0.0",
         reason="https://github.com/apache/arrow/issues/47981",
     )
     dd = pytest.importorskip("dask.dataframe")

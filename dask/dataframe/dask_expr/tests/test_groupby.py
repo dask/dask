@@ -9,13 +9,22 @@ import numpy as np
 import pytest
 
 import dask
-from dask.dataframe._compat import PANDAS_GE_300
+from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.dask_expr import from_pandas
 from dask.dataframe.dask_expr._groupby import Aggregation, GroupByUDFBlockwise
 from dask.dataframe.dask_expr._reductions import TreeReduce
 from dask.dataframe.dask_expr._shuffle import Shuffle, TaskShuffle, divisions_lru
 from dask.dataframe.dask_expr.io import FromPandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
+
+if PANDAS_GE_220 and not PANDAS_GE_300:
+    pytestmark = [
+        pytest.mark.filterwarnings(
+            r"ignore:.*DataFrameGroupBy\.apply:DeprecationWarning"
+        ),
+        pytest.mark.filterwarnings(r"ignore:.*DataFrameGroupBy\.apply:FutureWarning"),
+    ]
+
 
 # Set DataFrame backend for this module
 pd = _backend_library()
@@ -395,7 +404,6 @@ def test_groupby_repartition_to_one(pdf, df):
     assert_eq(result, expected)
 
 
-@pytest.mark.filterwarnings("ignore:DataFrameGroupBy.apply operated ")
 def test_groupby_apply(df, pdf):
     def test(x):
         x["new"] = x.sum().sum()
@@ -432,7 +440,6 @@ def test_groupby_apply(df, pdf):
     assert_eq(query, pdf.groupby("x")[["y"]].apply(test))
 
 
-@pytest.mark.filterwarnings("ignore:DataFrameGroupBy.apply operated ")
 def test_groupby_transform(df, pdf):
     def test(x):
         return x
@@ -598,7 +605,6 @@ def test_groupby_projection_split_out(df, pdf):
     assert_eq(result, pdf_result)
 
 
-@pytest.mark.filterwarnings("ignore:DataFrameGroupBy.apply operated ")
 def test_numeric_column_names():
     df = pd.DataFrame({0: [0, 1, 0, 1], 1: [1, 2, 3, 4], 2: [0, 1, 0, 1]})
     ddf = from_pandas(df, npartitions=2)
@@ -611,7 +617,6 @@ def test_numeric_column_names():
     )
 
 
-@pytest.mark.filterwarnings("ignore:DataFrameGroupBy.apply operated ")
 def test_apply_divisions(pdf):
     pdf = pdf.set_index("x")
     df = from_pandas(pdf, npartitions=10)
@@ -669,7 +674,6 @@ def test_groupby_apply_args(df, pdf):
         )
 
 
-@pytest.mark.filterwarnings("ignore:DataFrameGroupBy.apply operated ")
 def test_groupby_ffill_bfill(pdf):
     pdf["y"] = pdf["y"].astype("float64")
 
@@ -806,7 +810,6 @@ def test_groupby_dir(df):
     assert "y" in dir(df.groupby("x"))
 
 
-@pytest.mark.filterwarnings("ignore:DataFrameGroupBy.apply operated ")
 def test_groupby_udf_user_warning(df, pdf):
     def func(df):
         return df + 1
