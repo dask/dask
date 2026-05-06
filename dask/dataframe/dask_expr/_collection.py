@@ -11,9 +11,7 @@ from typing import Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 from fsspec.utils import stringify_path
-from packaging.version import parse as parse_version
 from pandas import CategoricalDtype
 from pandas.api.types import (
     is_bool_dtype,
@@ -5379,10 +5377,6 @@ def read_parquet(
         or isinstance(filesystem, str)
         and filesystem.lower() in ("arrow", "pyarrow")
     ):
-        if parse_version(pa.__version__) < parse_version("15.0.0"):
-            raise ValueError(
-                "pyarrow>=15.0.0 is required to use the pyarrow filesystem."
-            )
         if metadata_task_size is not None:
             raise NotImplementedError(
                 "metadata_task_size is not supported when using the pyarrow filesystem."

@@ -171,16 +171,14 @@ def test_open_glob(dir_server):
 
 
 @pytest.mark.network
-@pytest.mark.parametrize(
-    "engine",
-    ["pyarrow"],
-)
-def test_parquet(engine):
+def test_parquet():
     pytest.importorskip("requests", minversion="2.21.0")
+    pytest.importorskip(
+        "pyarrow",
+        minversion="22.0.0",
+        reason="https://github.com/apache/arrow/issues/47981",
+    )
     dd = pytest.importorskip("dask.dataframe")
-    pa = pytest.importorskip(engine)
-    if Version(pa.__version__) >= Version("22.0.0"):
-        pytest.skip(reason="https://github.com/apache/arrow/issues/47981")
 
     df = dd.read_parquet(
         [
@@ -188,7 +186,7 @@ def test_parquet(engine):
             "master/parquet-testdata/impala/1.1.1-NONE/"
             "nation.impala.parquet"
         ],
-        engine=engine,
+        engine="pyarrow",
     ).compute()
     assert df.n_nationkey.tolist() == list(range(25))
     assert df.columns.tolist() == ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
