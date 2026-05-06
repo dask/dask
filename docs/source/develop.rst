@@ -116,7 +116,7 @@ pip or conda_
 
 ``conda``::
 
-  conda env create -n dask-dev -f continuous_integration/environment-3.12.yaml
+  conda env create -n dask-dev -f continuous_integration/environment-3.14.yaml
   conda activate dask-dev
   python -m pip install --no-deps -e .
 
@@ -141,7 +141,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.9 to 3.12.
+Dask supports Python versions 3.10 to 3.14.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 .. _develop-test:
@@ -262,7 +262,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are tested under Python 3.12 on GitHub Actions. You can test
+Docstrings are tested under Python 3.14 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
