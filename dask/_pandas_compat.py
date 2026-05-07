@@ -49,7 +49,8 @@ def assert_numpy_array_equal(left, right):
 
 
 def makeDataFrame():
-    data = np.random.randn(30, 4)
+    rng = np.random.Generator(0)
+    data = rng.standard_normal((30, 4))
     index = list(string.ascii_letters)[:30]
     return pd.DataFrame(data, index=index, columns=list("ABCD"))
 
