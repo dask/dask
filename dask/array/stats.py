@@ -42,7 +42,7 @@ from dask.utils import derived_from
 try:
     import scipy.stats
 except ImportError as e:
-    raise ImportError("`dask.array.stats` requires `scipy` to be installed.") from e
+    raise type(e)("`dask.array.stats` requires `scipy` to be installed.") from e
 from scipy import special
 from scipy.stats import distributions
 

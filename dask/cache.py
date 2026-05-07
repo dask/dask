@@ -34,9 +34,7 @@ class Cache(Callback):
         try:
             import cachey
         except ImportError as ex:
-            raise ImportError(
-                f'Cache requires cachey, "{ex}" problem importing'
-            ) from ex
+            raise type(ex)(f'Cache requires cachey, "{ex}" problem importing') from ex
         self._nbytes = cachey.nbytes
         if isinstance(cache, Number):
             cache = cachey.Cache(cache, *args, **kwargs)

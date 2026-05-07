@@ -10,9 +10,9 @@ from dask.array.dispatch import to_cupy_dispatch
 def _cupy(strict=True):
     try:
         import cupy
-    except ImportError:
+    except ImportError as e:
         if strict:
-            raise ImportError("Please install `cupy` to use `CupyBackendEntrypoint`")
+            raise type(e)("Please install `cupy` to use `CupyBackendEntrypoint`") from e
         return None
     return cupy
 

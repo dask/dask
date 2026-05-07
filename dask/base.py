@@ -381,7 +381,7 @@ class DaskMethodsMixin:
         try:
             from distributed import futures_of, wait
         except ImportError as e:
-            raise ImportError(
+            raise type(e)(
                 "Using async/await with dask requires the `distributed` package"
             ) from e
 

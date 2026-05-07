@@ -2233,7 +2233,7 @@ def get_default_shuffle_method() -> str:
         from dask.dataframe._compat import HAS_PYARROW
 
         return "p2p" if HAS_PYARROW else "tasks"
-    except ModuleNotFoundError:
+    except ImportError:
         return "tasks"
 
 
