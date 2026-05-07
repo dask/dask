@@ -73,9 +73,9 @@ def reduction(
         intermediate ``combine`` function will be used, so that any one
         ``combine`` or ``aggregate`` function has no more than ``split_every``
         inputs. The depth of the aggregation graph will be
-        :math:`log_{split_every}(input chunks along reduced axes)`. Setting to
-        a low value can reduce cache size and network transfers, at the cost of
-        more CPU and a larger dask graph.
+        :math:`log_\text{split\_every}(\text{input chunks along reduced axes})`.
+        Setting to a low value can reduce cache size and network transfers, at
+        the cost of more CPU and a larger dask graph.
 
         Omit to let dask heuristically decide a good default. A default can
         also be set globally with the ``split_every`` key in
