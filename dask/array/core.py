@@ -3993,9 +3993,9 @@ def to_zarr(
             - ``'w-'``: Create, fail if exists
     **zarr_array_kwargs:
         .. deprecated:: 2025.12.0
-            Passing storage io-related arguments via **kwargs is deprecated.
-            Please use the ``mode`` parameter instead when using
-            **kwargs with the `mode` keys and corresponding values. `read_only` is not allowed anymore
+            Passing storage io-related arguments via ``**kwargs`` is deprecated.
+            Please use the ``mode`` parameter instead when using ``**kwargs`` with the
+            ``mode`` keys and corresponding values. ``read_only`` is not allowed anymore
             and will not have an effect.
 
         Keyword arguments passed to :func:`Group.create_array` (for zarr v3, where Group is a zarr group) or
