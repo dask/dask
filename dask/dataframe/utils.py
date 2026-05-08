@@ -271,7 +271,7 @@ _simple_fake_mapping: dict[str, Any] = {
     "b": np.bool_(True),
     "V": np.void(b" "),
     "M": np.datetime64("1970-01-01"),
-    "m": np.timedelta64(1),
+    "m": np.timedelta64(1, "us"),
     "S": np.str_("foo"),
     "a": np.str_("foo"),
     "U": np.str_("foo"),
