@@ -40,7 +40,7 @@ dependencies = [
     "fsspec >= 2021.09.0",
     "packaging >= 20.0",
     "partd >= 1.4.0",
-    "pyyaml >= 5.3.1",
+    "pyyaml >= 5.4.1",
     "toolz >= 0.12.0",
     # importlib.metadata has the following bugs fixed in 3.10.9 and 3.11.1
     # https://github.com/python/cpython/issues/99130
@@ -71,7 +71,6 @@ diagnostics = [
 delayed = []
 complete = [
     "dask[array,dataframe,distributed,diagnostics]",
-    "pyarrow >= 16.0",
     "lz4 >= 4.3.2",
 ]
 test = [
