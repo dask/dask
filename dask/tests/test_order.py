@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 from collections import defaultdict
 
 import pytest
@@ -258,10 +259,11 @@ def _rechunk_merge_graph():
 
 
 @pytest.mark.skipif(WINDOWS, reason="Broken pipe on Windows")
-def test_visualize_int_overflow():
+def test_visualize_int_overflow(tmp_path):
+    # regression test for https://github.com/dask/dask/pull/11440
     pytest.importorskip("graphviz")
     pytest.importorskip("matplotlib")
-    # regression test for https://github.com/dask/dask/pull/11440
+    os.chdir(tmp_path)
     visualize(_rechunk_merge_graph())
 
 
