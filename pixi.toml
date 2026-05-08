@@ -1,6 +1,6 @@
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 preview = ["pixi-build"]
 
 [package]
@@ -53,6 +53,9 @@ numpy = "=1.24.4"
 numpy = "=1.24.4"
 pandas = "=2.0"
 pyarrow = "=16.0"
+
+[feature.mindeps-optional]
+platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [feature.mindeps-optional.dependencies]
 numpy = "=1.24.4"
@@ -158,9 +161,22 @@ python-snappy = "*"  # dependency cramjam does not release the GIL
 sqlalchemy = "*"  # Not available for 3.14t
 zarr = "*"  # Dependency numcodecs not available for 3.14t
 
-[feature.optional-problematic.dependencies]
-python-cityhash = "*"  # Not available for 3.14t
-crick = "*"  # Not available for 3.14, 3.14t
+[feature.optional-problematic.target.linux-64.dependencies]
+python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
+crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
+tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
+
+[feature.optional-problematic.target.linux-aarch64.dependencies]
+tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
+
+[feature.optional-problematic.target.win-64.dependencies]
+python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
+crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
+tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
+
+[feature.optional-problematic.target.osx-arm64.dependencies]
+python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
+crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
 tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
 
 [feature.py310.dependencies]
