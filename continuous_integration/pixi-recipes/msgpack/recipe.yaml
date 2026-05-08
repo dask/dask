@@ -1,0 +1,24 @@
+package:
+  name: msgpack-python
+  version: "1.1.2"
+
+source:
+  url: https://files.pythonhosted.org/packages/4d/f2/bfb55a6236ed8725a96b0aa3acbd0ec17588e6a2c3b62a93eb513ed8783f/msgpack-1.1.2.tar.gz
+  sha256: 3b60763c1373dd60f398488069bcdc703cd08a711477b5d480eecc9f9626f47e
+
+build:
+  noarch: python
+  script: MSGPACK_PUREPYTHON=1 python -m pip install . -vv --no-deps --no-build-isolation
+  number: 0
+
+requirements:
+  host:
+    - python
+    - pip
+    - setuptools
+  run:
+    - python
+
+tests:
+  - python:
+      imports: [msgpack]

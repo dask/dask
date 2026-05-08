@@ -1,0 +1,280 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+preview = ["pixi-build"]
+
+[package]
+# This creates a conda package, which satisfies the dependencies of
+# conda packages such as tiledb-py
+name = "dask-core"
+# FIXME work around poor pixi-build support for SCM versioning
+version = "2099.0.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
+source = { path = "." }
+
+[package.host-dependencies]
+setuptools = "*"
+setuptools-scm = "*"
+
+[package.run-dependencies]
+click = ">=8.1"
+cloudpickle = ">=3.0.0"
+fsspec = ">=2021.9.0"
+packaging = ">=20.0"
+partd = ">=1.4.0"
+pyyaml = ">=5.4.1"
+toolz = ">=0.12.0"
+
+[dependencies]
+dask-core = { path = "." }
+
+[feature.distributed.dependencies]
+# DNM
+# distributed = { git = "https://github.com/dask/distributed" }
+distributed = { git = "https://github.com/crusaderky/distributed", rev = "pixi" }
+
+[feature.mindeps-non-optional.dependencies]
+# NOTE: These must match the versions listed in `pyproject.toml`
+# and in `docs/source/install.rst`
+python = "=3.10"
+click = "=8.1"
+cloudpickle = "=3.0.0"
+fsspec = "=2021.9.0"
+packaging = "=20.0"
+partd = "=1.4.0"
+pyyaml = "=5.4.1"
+toolz = "=0.12.0"
+importlib-metadata = "=4.13.0"
+
+[feature.mindeps-array.dependencies]
+numpy = "=1.24.4"
+
+[feature.mindeps-dataframe.dependencies]
+numpy = "=1.24.4"
+pandas = "=2.0"
+pyarrow = "=16.0"
+
+[feature.mindeps-optional.dependencies]
+numpy = "=1.24.4"
+pandas = "=2.0"
+pyarrow = "=16.0"
+# optional dependencies pulled in by pip install dask[diagnostics]
+bokeh = "=3.1.0"
+jinja2 = "=2.10.3"
+# optional dependencies pulled in by pip install dask[complete]
+lz4 = "=4.3.2"
+# optional dependencies used by dask
+cachey = "=0.1.1"
+crick = "=0.0.5"
+cytoolz = "=0.11.2"
+# dask-ml = "=1.4.0"  # Pins obsolete version of dask
+fastavro = "=1.4.7"
+h5py = "=3.7.0"
+hdf5 = "=1.12.2"
+ipycytoscape = "=1.0.1"
+ipython = "=7.30.1"
+matplotlib = "=3.5.0"
+pyparsing = "=3.0.1"  # matplotlib dependency
+mimesis = "=5.3.0"
+mmh3 = "=3.0.0"
+numba = "=0.59.1"
+psutil = "=5.8.0"
+python-cityhash = "=0.4.6"
+python-graphviz = "=0.8.4"
+python-snappy = "=0.7.1"
+python-xxhash = "=2.0.2"
+s3fs = "=2021.9.0"
+scikit-image = "=0.19.0"
+scikit-learn = "=1.0.2"
+scipy = "=1.10.0"
+setuptools = "=60.10.0"
+sparse = "=0.13.0"
+sqlalchemy = "=1.4.26"
+tblib = "=1.6.0"
+tiledb-py = "=0.27.0"
+zarr = "=2.12.0"
+bottleneck = "=1.3.7"
+
+[feature.optional.dependencies]
+numpy = "*"
+pandas = "*"
+pyarrow = "*"
+
+# optional s3 I/O
+boto3 = "*"
+botocore = "*"
+# moto = "<5"  # Temporarily in feature.gil below
+s3fs = ">=2021.9.0"  # Don't remove lower pin - resolves to ancient version without
+
+# optional dependencies pulled in by pip install dask[diagnostics]
+bokeh = "*"
+jinja2 = "*"
+
+# Compression and hashing
+lz4 = "*"
+mmh3 = "*"
+# python-cityhash = "*"  # Temporarily in feature.gil below
+# python-snappy = "*"  # Temporarily in feature.gil below
+python-xxhash = "*"
+
+# Other optional dependencies
+bottleneck = "*"
+mimesis = "*"
+numba = "*"
+numbagg = "*"
+flask = "*"
+h5py = "*"
+# pytables = "*"  # Temporarily in feature.gil below
+# zarr = "*"  # Temporarily in feature.gil below
+# tiledb-py = "*"  # Not available in 3.14t; pins pandas<3
+xarray = "*"
+# sqlalchemy = "*"  # Temporarily in feature.gil below
+jsonschema = "*"
+httpretty = "*"
+aiohttp = "*"
+# - crick  # No Python 3.14 build yet
+cytoolz = "*"
+ipython = "*"
+ipycytoscape = "*"
+ipywidgets = "*"
+# ipykernel = "*"  # Temporarily in feature.gil below
+psutil = "*"
+requests = "*"
+scikit-image = "*"
+scikit-learn = "*"
+scipy = "*"
+sparse = "*"
+cachey = "*"
+python-graphviz = "*"
+# matplotlib = "*"  # Temporarily in feature.gil below
+
+# Optional dependencies that don't work yet in free-threading
+[feature.optional-gil.dependencies]
+ipykernel = "*"  # No 3.14t build for Windows yet
+matplotlib ="*"  # Not available for 3.14t
+moto = "<5"  # Not available for 3.14t on Windows
+pytables = "*"  # Not available for 3.14t
+python-cityhash = "*"  # Not available for 3.14t
+python-snappy = "*"  # dependency cramjam does not release the GIL
+sqlalchemy = "*"  # Not available for 3.14t
+zarr = "*"  # Dependency numcodecs not available for 3.14t
+
+[feature.py310.dependencies]
+python = "=3.10"
+importlib_metadata = "*"
+numpy = "=1.24"
+pandas = "=2.1"
+pyarrow = "=16.0"
+crick = "*"  # No Python 3.14 build yet
+tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
+
+[feature.py310.activation.env]
+DASK_DATAFRAME__CONVERT_STRING="False"  # Only teted here
+
+[feature.py311.dependencies]
+python = "=3.11"
+importlib_metadata = "*"
+numpy = "=2.0"
+pandas = "=2.2"
+pyarrow = "=20.0"
+crick = "*"  # No Python 3.14 build yet
+
+[feature.py312.dependencies]
+python = "=3.12"
+numpy = "=2.2"
+pandas = "=2.3"
+pyarrow = "=22.0"
+crick = "*"  # No Python 3.14 build yet
+
+[feature.py313.dependencies]
+python = "=3.13"
+numpy = "=2.4"
+pandas = "=3.0"
+pyarrow = "=24.0"
+crick = "*"  # No Python 3.14 build yet
+
+[feature.py314.dependencies]
+python = "=3.14"
+
+[feature.py314t.dependencies]
+python-freethreading = "=3.14"
+# see continuous_integration/pixi-recipes/README.md
+brotli-python = { path = "continuous_integration/pixi-recipes/brotli" }
+msgpack-python = { path = "continuous_integration/pixi-recipes/msgpack" }
+
+[feature.nightly]
+platforms = ["linux-64", "osx-arm64"]
+
+[feature.nightly.dependencies]
+python = "=3.14"
+# See continuous_integration/pixi-recipes/README.md
+fsspec = { path = "continuous_integration/pixi-recipes/fsspec" }
+s3fs = { path = "continuous_integration/pixi-recipes/s3fs" }
+
+[feature.nightly.pypi-dependencies]
+numpy = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
+pandas = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
+pyarrow = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
+scipy = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
+xarray = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
+h5py = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
+bokeh = { git = "https://github.com/bokeh/bokeh" }
+zarr = { git = "https://github.com/zarr-developers/zarr-python" }
+# FIXME can't override distributed's conda dependencies with pip dependencies
+# partd = { git = "https://github.com/dask/partd" }
+# zict = { git = "https://github.com/dask/zict" }
+
+[feature.test.dependencies]
+pytest = "*"
+pytest-cov = "*"
+pytest-mock = "*"
+pytest-rerunfailures = "*"
+pytest-timeout = "*"
+pytest-xdist = "*"
+pytest-reportlog = "*"  # Used when automatically opening an issue when CI fails
+
+[feature.test.tasks]
+test = "pytest"
+coverage = "coverage"
+coverage-clean = "rm -f .coverage* pytest.xml"
+test-ci = "pytest --cov --cov-report=xml --junit-xml=pytest.xml --dist loadgroup -n auto --runslow"
+doctest = "pytest --doctest-modules --ignore-glob='*/test_*.py' --ignore=dask/array/_array_expr/ dask"
+test-array-expr = { cmd = "pytest --cov --cov-report=xml --junit-xml=pytest.xml --dist loadgroup -n auto --runslow --runarrayexpr", env = { DASK_ARRAY__QUERY_PLANNING = "True" } }
+
+[feature.lint.dependencies]
+python = "=3.14"
+pre-commit = "*"
+
+[feature.lint.tasks]
+lint = "pre-commit run --all-files"
+
+[feature.build.dependencies]
+python = "=3.14"
+conda-build = "*"
+anaconda-client = "*"
+
+[feature.build.tasks]
+conda-build = "conda build continuous_integration/recipe --channel conda-forge --override-channels --output-folder dist/conda"
+[feature.build.tasks.conda-upload]
+cwd = "dist/conda"
+cmd = "anaconda upload --label dev noarch/*.tar.bz2"
+description = "Upload to anaconda.org. Requires ANACONDA_API_TOKEN env variable to be set."
+
+[environments]
+default = ["py314", "optional", "optional-gil", "test", "distributed"]  # Same as py314
+mindeps-non-optional = ["mindeps-non-optional", "test"]
+mindeps-array = ["mindeps-non-optional", "mindeps-array", "test"]
+mindeps-dataframe = ["mindeps-non-optional", "mindeps-dataframe", "test"]
+mindeps-distributed = ["mindeps-non-optional", "test", "distributed"]
+mindeps-optional = ["mindeps-non-optional", "mindeps-optional", "test", "distributed"]
+py310 = ["py310", "optional", "optional-gil", "test", "distributed"]
+py311 = ["py311", "optional", "optional-gil", "test", "distributed"]
+py312 = ["py312", "optional", "optional-gil", "test", "distributed"]
+py313 = ["py313", "optional", "optional-gil", "test", "distributed"]
+py314 = ["py314", "optional", "optional-gil", "test", "distributed"]
+py314t = ["py314t", "optional", "test", "distributed"]
+nightly = ["nightly", "test", "distributed"]
+lint = { features = ["lint"], no-default-feature = true }
+build = { features = ["build"], no-default-feature = true }

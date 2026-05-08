@@ -1,0 +1,19 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+preview = ["pixi-build"]
+
+[package]
+name = "fsspec"
+# FIXME work around poor pixi-build support for SCM versioning
+version = "2099.0.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
+source = { git = "https://github.com/fsspec/filesystem_spec" }
+
+[package.host-dependencies]
+hatchling = "*"
+hatch-vcs = "*"
+
+[package.run-dependencies]
+python = "*"
