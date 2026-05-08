@@ -44,7 +44,6 @@ dependencies:
   - tiledb-py
   - tiledb
   - xarray
-  - numexpr
   - sqlalchemy
   - jsonschema
   - bokeh

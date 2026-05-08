@@ -3620,18 +3620,6 @@ class DataFrame(FrameBase):
             Dask does not fully support referring to variables using the '@' character,
             use f-strings or the ``local_dict`` keyword argument instead.
 
-        Notes
-        -----
-        This is like the sequential version except that this will also happen
-        in many threads.  This may conflict with ``numexpr`` which will use
-        multiple threads itself.  We recommend that you set ``numexpr`` to use a
-        single thread:
-
-        .. code-block:: python
-
-            import numexpr
-            numexpr.set_num_threads(1)
-
         See also
         --------
         pandas.DataFrame.query

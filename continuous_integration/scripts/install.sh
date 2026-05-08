@@ -25,7 +25,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # `s3fs` to avoid dependency conflicts
     python -m pip install --upgrade git+https://github.com/fsspec/filesystem_spec
     # TODO: Add nightly `scikit-image` back once it's available
-    conda uninstall --force numpy pandas scipy numexpr numba sparse scikit-image numbagg
+    conda uninstall --force numpy pandas scipy numba sparse scikit-image numbagg
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple \
         numpy \
