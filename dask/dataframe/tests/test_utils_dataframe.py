@@ -232,10 +232,7 @@ def test_meta_nonempty():
     assert df3["E"][0].dtype == "i4"
     assert df3["F"][0] == pd.Timestamp("1970-01-01 00:00:00")
     assert df3["G"][0] == pd.Timestamp("1970-01-01 00:00:00", tz="America/New_York")
-    if PANDAS_GE_300:
-        assert df3["H"][0] == pd.Timedelta(1, unit="us")
-    else:
-        assert df3["H"][0] == pd.Timedelta(1, unit="ns")
+    assert df3["H"][0] == pd.Timedelta(1, unit="us")
     if PANDAS_GE_300:
         assert type(df3["I"][0]) is object
     else:
