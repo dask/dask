@@ -139,6 +139,126 @@ def max(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
+@derived_from(np)
+def trapz(y, x=None, dx=1.0, axis=-1):
+    y = da.asarray(y)
+    axis = validate_axis(axis, y.ndim)
+
+    if x is None:
+        sl0 = (slice(None),) * axis + (slice(None, -1),)
+        sl1 = (slice(None),) * axis + (slice(1, None),)
+        return (dx / 2.0) * da.add(y[sl0], y[sl1]).sum(axis=axis)
+
+    x = da.asarray(x)
+    if x.shape[axis] != y.shape[axis]:
+        raise ValueError("x and y must have same length along 'axis'")
+
+    dxs = da.diff(x, axis=axis)
+    sl0 = (slice(None),) * axis + (slice(None, -1),)
+    sl1 = (slice(None),) * axis + (slice(1, None),)
+    traps = 0.5 * dxs * (y[sl0] + y[sl1])
+    return traps.sum(axis=axis)
+
+
+def simpson(y, *, x=None, dx=1.0, axis=-1, even="avg"):
+    y = da.asarray(y)
+    axis = validate_axis(axis, y.ndim)
+    n = y.shape[axis]
+    if n < 3:
+        raise ValueError("Simpson's rule requires at least 3 samples")
+
+    uniform = x is None
+    if not uniform:
+        x = da.asarray(x)
+        if x.shape[axis] != n:
+            raise ValueError("x and y must have same length along 'axis'")
+    if uniform and n % 2 == 0 and even == "avg":
+        try:
+            from scipy.integrate import simpson as _sp_simpson
+        except ImportError:
+            pass  # fallback to legacy path if SciPy is missing
+        else:
+            from dask import delayed
+
+            return da.from_delayed(
+                delayed(_sp_simpson)(y, dx=dx, axis=axis),
+                shape=(),
+                dtype=y.dtype,
+            )
+
+    def _slice(arr, lo, hi):
+        if arr is None:
+            return None
+        ind = np.arange(lo, hi, dtype=int)
+        return da.take(arr, ind, axis=axis)
+
+    def _uniform_core(yy):
+        m = yy.shape[axis]
+        idx = da.arange(m, chunks=yy.chunks[axis])
+        w = da.where(
+            idx == 0, 1, da.where(idx == m - 1, 1, da.where(idx % 2, 4, 2))
+        ).reshape((1,) * axis + (m,) + (1,) * (yy.ndim - axis - 1))
+        return (dx / 3.0) * (w * yy).sum(axis=axis)
+
+    def _irregular_core(yy, xx):
+        sl0 = (slice(None),) * axis + (slice(None, -2, 2),)
+        sl1 = (slice(None),) * axis + (slice(1, -1, 2),)
+        sl2 = (slice(None),) * axis + (slice(2, None, 2),)
+
+        y0, y1, y2 = yy[sl0], yy[sl1], yy[sl2]
+        x0, x1, x2 = xx[sl0], xx[sl1], xx[sl2]
+
+        h0 = x1 - x0
+        h1 = x2 - x1
+
+        w0 = h0 / 3 + h1 / 6 - (h1**2) / (6 * h0)
+        w2 = h0 / 6 + h1 / 3 - (h0**2) / (6 * h1)
+        w1 = (h0 + h1) - w0 - w2
+        return (w0 * y0 + w1 * y1 + w2 * y2).sum(axis=axis)
+
+    if n % 2 == 0:
+        if even not in {"avg", "first", "last"}:
+            raise ValueError("even must be 'avg', 'first', or 'last'")
+
+        if even == "avg":
+            if uniform:
+                core = simpson(_slice(y, 0, n - 3), dx=dx, axis=axis)
+                f0, f1, f2, f3 = _slice(y, n - 4, n)
+                tail = (3.0 * dx / 8.0) * (f0 + 3 * f1 + 3 * f2 + f3)
+                return core + tail
+
+            left = simpson(_slice(y, 0, n - 1), x=_slice(x, 0, n - 1), dx=dx, axis=axis)
+            right = simpson(_slice(y, 1, n), x=_slice(x, 1, n), dx=dx, axis=axis)
+            return 0.5 * (left + right)
+
+        if even == "first":
+            if uniform:
+                core = simpson(_slice(y, 0, n - 1), dx=dx, axis=axis)
+                tail = trapz(_slice(y, n - 2, n), dx=dx, axis=axis)
+                return core + tail
+
+            core = simpson(_slice(y, 0, n - 1), x=_slice(x, 0, n - 1), dx=dx, axis=axis)
+            tail = trapz(_slice(y, n - 2, n), x=_slice(x, n - 2, n), dx=dx, axis=axis)
+            return core + tail
+
+        if uniform:
+            head = trapz(_slice(y, 0, 2), dx=dx, axis=axis)
+            core = simpson(_slice(y, 1, n), dx=dx, axis=axis)
+            return head + core
+
+        head = trapz(_slice(y, 0, 2), x=_slice(x, 0, 2), dx=dx, axis=axis)
+        core = simpson(_slice(y, 1, n), x=_slice(x, 1, n), dx=dx, axis=axis)
+        return head + core
+    if uniform:
+        return _uniform_core(y)
+    return _irregular_core(y, x)
+
+
+def simps(*args, **kwargs):
+    # Simpson should be used since simps is now legacy
+    return simpson(*args, **kwargs)
+
+
 def chunk_max(x, axis=None, keepdims=None):
     """Version of np.max which ignores size 0 arrays"""
     if x.size == 0:
