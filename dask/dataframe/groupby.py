@@ -547,9 +547,12 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
     # stacking can lead to a sorted index
     if PANDAS_GE_300:
-        s_result = result.stack()
+        kwargs = {}
+    elif PANDAS_GE_220:
+        kwargs = {"future_stack": True}
     else:
-        s_result = result.stack(dropna=False)
+        kwargs = {"dropna": False}
+    s_result = result.stack(**kwargs)
     assert is_dataframe_like(s_result)
     return s_result
 

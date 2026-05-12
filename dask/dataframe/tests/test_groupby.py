@@ -29,6 +29,15 @@ from dask.dataframe.groupby import NUMERIC_ONLY_NOT_IMPLEMENTED
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 from dask.utils import M
 
+if PANDAS_GE_220 and not PANDAS_GE_300:
+    pytestmark = [
+        pytest.mark.filterwarnings(
+            r"ignore:.*DataFrameGroupBy\.apply:DeprecationWarning"
+        ),
+        pytest.mark.filterwarnings(r"ignore:.*DataFrameGroupBy\.apply:FutureWarning"),
+    ]
+
+
 AGG_FUNCS = [
     "sum",
     pytest.param(
@@ -2256,8 +2265,6 @@ def test_groupby_shift_with_freq(shuffle_method):
 # These warnings appear only on pandas >=2.1,<3.0
 @pytest.mark.filterwarnings(r"ignore:.*(DataFrame|Series)GroupBy\.sum:FutureWarning")
 @pytest.mark.filterwarnings(r"ignore:.*DataFrame\.sum with axis=None:FutureWarning")
-@pytest.mark.filterwarnings(r"ignore:.*DataFrameGroupBy\.apply:DeprecationWarning")
-@pytest.mark.filterwarnings(r"ignore:.*DataFrameGroupBy\.apply:FutureWarning")
 @pytest.mark.parametrize(
     "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank]
 )
