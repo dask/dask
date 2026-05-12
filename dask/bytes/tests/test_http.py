@@ -18,7 +18,7 @@ requests = pytest.importorskip("requests")
 
 files = ["a", "b"]
 
-errs: tuple[type[Exception], ...] = (
+errs = (
     requests.exceptions.RequestException,
     FileNotFoundError,
     aiohttp.client_exceptions.ClientResponseError,
