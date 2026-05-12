@@ -13,16 +13,16 @@ from packaging.version import Version
 import dask.bag as db
 from dask.utils import tmpdir
 
-files = ["a", "b"]
+aiohttp = pytest.importorskip("aiohttp")
 requests = pytest.importorskip("requests")
+
+files = ["a", "b"]
 
 errs: tuple[type[Exception], ...] = (
     requests.exceptions.RequestException,
     FileNotFoundError,
+    aiohttp.client_exceptions.ClientResponseError,
 )
-if Version(fsspec.__version__) > Version("0.7.4"):
-    aiohttp = pytest.importorskip("aiohttp")
-    errs = errs + (aiohttp.client_exceptions.ClientResponseError,)
 
 
 @pytest.fixture(scope="module")
