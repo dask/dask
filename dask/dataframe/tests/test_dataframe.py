@@ -2544,8 +2544,6 @@ def test_sample_raises():
 
 
 def test_query():
-    pytest.importorskip("numexpr")
-
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.query("x**2 > y"), df.query("x**2 > y"))
