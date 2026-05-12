@@ -44,9 +44,9 @@ def checkpoint(
     split_every: int >= 2 or False, optional
         Determines the depth of the recursive aggregation. If greater than the number of
         input keys, the aggregation will be performed in multiple steps; the depth of
-        the aggregation graph will be :math:`log_{split_every}(input keys)`. Setting to
-        a low value can reduce cache size and network transfers, at the cost of more CPU
-        and a larger dask graph.
+        the aggregation graph will be :math:`\\log_\\text{split_every}(\\text{input keys})`.
+        Setting to a low value can reduce cache size and network transfers, at the cost
+        of more CPU and a larger dask graph.
 
         Set to False to disable. Defaults to 8.
 
