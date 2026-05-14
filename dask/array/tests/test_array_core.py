@@ -5934,10 +5934,9 @@ def test_chunk_assignment_invalidates_cached_properties():
 
 
 def test_map_blocks_series():
-    pd = pytest.importorskip("pandas")
-    import dask.dataframe as dd
+    dd = pytest.importorskip("dask.dataframe")
+    import pandas as pd
 
-    pytest.skip("array roundtrips don't work yet")
     from dask.dataframe.utils import assert_eq as dd_assert_eq
 
     x = da.ones(10, chunks=(5,))
@@ -5950,8 +5949,9 @@ def test_map_blocks_series():
 
 @pytest.mark.xfail(reason="need to remove singleton index dimension")
 def test_map_blocks_dataframe():
-    pd = pytest.importorskip("pandas")
-    import dask.dataframe as dd
+    dd = pytest.importorskip("dask.dataframe")
+    import pandas as pd
+
     from dask.dataframe.utils import assert_eq as dd_assert_eq
 
     x = da.ones((10, 2), chunks=(5, 2))
