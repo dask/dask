@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 from functools import partial
 
 import numpy as np
@@ -136,11 +137,13 @@ def test_xarray_blockwise_fusion_store(compute):
 
 @pytest.mark.parametrize("wrap_xarray", [False, True])
 def test_shared_tasks(wrap_xarray):
+    lock = threading.Lock()
     total_calls = 0
 
     def my_func(a: np.ndarray) -> np.ndarray:
         nonlocal total_calls
-        total_calls += 1
+        with lock:
+            total_calls += 1
         return a
 
     in1 = da.zeros((5, 5), chunks=2)
