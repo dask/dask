@@ -2301,11 +2301,13 @@ class ThreadSafetyError(Exception):
 class NonthreadSafeStore:
     def __init__(self):
         self.in_use = False
+        self._lock = Lock()
 
     def __setitem__(self, key, value):
-        if self.in_use:
-            raise ThreadSafetyError()
-        self.in_use = True
+        with self._lock:
+            if self.in_use:
+                raise ThreadSafetyError()
+            self.in_use = True
         time.sleep(0.001)
         self.in_use = False
 
@@ -2314,12 +2316,19 @@ class ThreadSafeStore:
     def __init__(self):
         self.concurrent_uses = 0
         self.max_concurrent_uses = 0
+        self._lock = Lock()
 
     def __setitem__(self, key, value):
-        self.concurrent_uses += 1
-        self.max_concurrent_uses = max(self.concurrent_uses, self.max_concurrent_uses)
+        with self._lock:
+            self.concurrent_uses += 1
+            self.max_concurrent_uses = max(
+                self.concurrent_uses, self.max_concurrent_uses
+            )
         time.sleep(0.01)
-        self.concurrent_uses -= 1
+        with self._lock:
+            # int.__iadd__ is atomic on GIL-enabld interpreters; when the GIL is
+            # disabled things are nuanced and hardware-dependent. Don't risk it.
+            self.concurrent_uses -= 1
 
 
 class BrokenStore:
@@ -2328,103 +2337,105 @@ class BrokenStore:
 
 
 class CounterLock:
-    def __init__(self, *args, **kwargs):
-        self.lock = Lock(*args, **kwargs)
-
+    def __init__(self):
+        self.lock = Lock()
         self.acquire_count = 0
         self.release_count = 0
 
-    def acquire(self, *args, **kwargs):
-        self.acquire_count += 1
-        return self.lock.acquire(*args, **kwargs)
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        acquired = self.lock.acquire(blocking=blocking, timeout=timeout)
+        if acquired:
+            # int.__iadd__ is atomic on GIL-enabld interpreters; when the GIL is
+            # disabled things are nuanced and hardware-dependent. Don't risk it.
+            self.acquire_count += 1
+        return acquired
 
-    def release(self, *args, **kwargs):
-        self.release_count += 1
-        return self.lock.release(*args, **kwargs)
+    def release(self) -> None:
+        if self.lock.locked():
+            self.release_count += 1
+        self.lock.release()
 
 
 def test_store_locks_failure_lock_released():
-    d = da.ones((10, 10), chunks=(2, 2))
+    a = da.ones((10, 10), chunks=(2, 2))
 
     lock = CounterLock()
     # Ensure same lock applies over multiple stores
     with pytest.raises(RuntimeError):
-        store(d, BrokenStore(), lock=lock, scheduler="threads")
+        store(a, BrokenStore(), lock=lock, scheduler="threads")
     assert lock.acquire_count == lock.release_count > 0
 
 
-def test_store_locks():
-    d = da.ones((10, 10), chunks=(2, 2))
-    a, b = d + 1, d + 2
-
-    at = np.zeros(shape=(10, 10))
-    bt = np.zeros(shape=(10, 10))
-
+def test_store_locks_one_lock_two_stores():
+    """Ensure same lock applies over multiple stores"""
+    a = da.ones((10, 10), chunks=(2, 2))
+    b = da.zeros((10, 10), chunks=(2, 2))
     lock = CounterLock()
-    # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
     v = store([a, b], [at, at], lock=lock, scheduler="threads", num_workers=10)
     assert lock.acquire_count == lock.release_count == a.npartitions + b.npartitions
     assert v is None
 
-    # Don't assume thread safety by default
+
+def test_store_locks_dont_assume_threadsafe():
+    """Don't assume thread safety by default"""
+    a = da.ones((10, 10), chunks=(2, 2))
     at = NonthreadSafeStore()
     assert store(a, at, scheduler="threads", num_workers=10) is None
     assert a.store(at, scheduler="threads", num_workers=10) is None
 
-    # Ensure locks can be removed
+
+def test_store_locks_no_lock():
+    """Ensure locks can be removed"""
+    a = da.ones((10, 10), chunks=(2, 2))
     at = ThreadSafeStore()
-    for i in range(10):
+    for _ in range(50):
         st = a.store(at, lock=False, scheduler="threads", num_workers=10)
         assert st is None
         if at.max_concurrent_uses > 1:
             break
-        if i == 9:
-            assert False
+    else:
+        assert False, "Concurrent use not observed"
 
-    # Verify number of lock calls
+
+@pytest.mark.parametrize("compute", [False, True])
+def test_store_locks_count_calls(compute):
+    """Verify number of lock calls"""
+    a = da.ones((10, 10), chunks=(2, 2))
+    b = da.zeros((10, 10), chunks=(2, 2))
     nchunks = sum(math.prod(map(len, e.chunks)) for e in (a, b))
-    for c in (False, True):
-        at = np.zeros(shape=(10, 10))
-        bt = np.zeros(shape=(10, 10))
-        lock = CounterLock()
+    at = np.zeros(shape=(10, 10))
+    bt = np.zeros(shape=(10, 10))
+    lock = CounterLock()
 
-        v = store([a, b], [at, bt], lock=lock, compute=c, return_stored=True)
-        assert all(isinstance(e, Array) for e in v)
+    v = store([a, b], [at, bt], lock=lock, compute=compute, return_stored=True)
+    assert all(isinstance(e, Array) for e in v)
 
-        da.compute(v)
+    da.compute(v)
 
-        # When `return_stored=True` and `compute=False`,
-        # the lock should be acquired only once for store and load steps
-        # as they are fused together into one step.
-        assert lock.acquire_count == lock.release_count
-        if c:
-            assert lock.acquire_count == 2 * nchunks
-        else:
-            assert lock.acquire_count == nchunks
+    # When `return_stored=True` and `compute=False`,
+    # the lock should be acquired only once for store and load steps
+    # as they are fused together into one step.
+    expect_count = 2 * nchunks if compute else nchunks
+    assert lock.acquire_count == lock.release_count == expect_count
 
 
-def test_store_method_return():
-    d = da.ones((10, 10), chunks=(2, 2))
-    a = d + 1
+@pytest.mark.parametrize("compute", [False, True])
+@pytest.mark.parametrize("return_stored", [False, True])
+def test_store_method_return(compute, return_stored):
+    a = da.ones((10, 10), chunks=(2, 2))
+    at = np.zeros(shape=(10, 10))
+    r = a.store(at, scheduler="threads", compute=compute, return_stored=return_stored)
 
-    for compute in [False, True]:
-        for return_stored in [False, True]:
-            at = np.zeros(shape=(10, 10))
-            r = a.store(
-                at, scheduler="threads", compute=compute, return_stored=return_stored
-            )
-
-            if compute and not return_stored:
-                assert r is None
-            else:
-                assert isinstance(r, Array)
+    if compute and not return_stored:
+        assert r is None
+    else:
+        assert isinstance(r, Array)
 
 
+@pytest.mark.slow
 def test_store_multiprocessing_lock():
-    d = da.ones((10, 10), chunks=(2, 2))
-    a = d + 1
-
+    a = da.ones((10, 10), chunks=(2, 2))
     at = np.zeros(shape=(10, 10))
     st = a.store(at, scheduler="processes", num_workers=10)
     assert st is None
