@@ -104,39 +104,71 @@ Contributions to Dask can then be made by submitting pull requests on GitHub.
 Install
 ~~~~~~~
 
-From the top level of your cloned Dask repository you can install a
+From the top level of your cloned Dask repository you can deploy and test a
 local version of Dask, along with all necessary dependencies, using
-pip or conda_
+pixi_.
 
-.. _conda: https://conda.io/
+Pixi uses lockfiles to freeze the installed version of all dependencies.
+To update the lockfile::
 
-``pip``::
+   pixi update
 
-  python -m pip install -e ".[complete,test]"
-
-``conda``::
-
-  conda env create -n dask-dev -f continuous_integration/environment-3.14.yaml
-  conda activate dask-dev
-  python -m pip install --no-deps -e .
+.. _pixi: https://pixi.prefix.dev/
 
 
 Run Tests
 ~~~~~~~~~
 
-Dask uses py.test_ for testing.  You can run tests from the main dask directory
+Dask uses pytest_ for testing. You can run tests from the main dask directory
 as follows::
 
-   py.test dask --verbose --doctest-modules
+   pixi run test
 
-.. _py.test: https://docs.pytest.org/en/latest/
+You can pass arbitrary pytest parameters to the command; e.g.::
+
+   pixi run test dask/tests/test_base.py -k persist
+
+pytest-xdist is supported to run tests in parallel::
+
+   pixi run test -n auto
+
+Test in parallel, with coverage, and including slow tests::
+
+   pixi run test-ci
+
+Generate a local coverage report after running ``test-ci`::
+
+   pixi run coverage html
+
+Run doctests::
+   
+   pixi run doctest
+
+There are several variant environments for testing, against obsolete but
+still supported versions of dependencies, as well as against variant and
+experimental configurations::
+
+   pixi run -e mindeps-non-optional test-ci
+   pixi run -e mindeps-optional test-ci
+   pixi run -e mindeps-array test-ci
+   pixi run -e mindeps-dataframe test-ci
+   pixi run -e mindeps-distributed test-ci
+   pixi run -e py310 test-ci
+   pixi run -e py311 test-ci
+   pixi run -e py312 test-ci
+   pixi run -e py313 test-ci
+   pixi run -e py314 test-ci
+   pixi run -e py314t test-ci
+   pixi run -e nightly test-ci
+
+.. _pytest: https://docs.pytest.org/en/latest/
 
 
 Contributing to Code
 --------------------
 
-Dask maintains development standards that are similar to most PyData projects.  These standards include
-language support, testing, documentation, and style.
+Dask maintains development standards that are similar to most PyData projects. These
+standards include language support, testing, documentation, and style.
 
 Python Versions
 ~~~~~~~~~~~~~~~
@@ -168,21 +200,6 @@ Tests are written in a py.test style with bare functions:
 
 These tests should compromise well between covering all branches and fail cases
 and running quickly (slow test suites get run less often).
-
-You can run tests locally by running ``py.test`` in the local dask directory::
-
-   py.test dask
-
-You can also test certain modules or individual tests for faster response::
-
-   py.test dask/dataframe
-
-   py.test dask/dataframe/tests/test_dataframe.py::test_rename_index
-
-If you want the tests to run faster, you can run them in parallel using
-``pytest-xdist``::
-
-   py.test dask -n auto
 
 Tests run automatically on GitHub Actions on every push to every pull
 request on GitHub.
@@ -275,15 +292,17 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses several code linters (flake8, black, isort, pyupgrade, mypy), which are
-enforced by CI. Developers should run them locally before they submit a PR, through the
-single command ``pre-commit run --all-files``. This makes sure that linter versions and
-options are aligned for all developers.
+Dask uses several code linters (ruff, black, mypy), which are enforced by CI. Developers
+should run them locally before they submit a PR, through the single command::
+
+   pixi run lint
+
+This makes sure that linter versions and options are aligned for all developers.
 
 Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
 run automatically when you make a git commit. This can be done by running::
 
-   pre-commit install
+   pixi run pre-commit install
 
 from the root of the Dask repository. Now the code linters will be run each time you
 commit changes. You can skip these checks with ``git commit --no-verify`` or with the
@@ -316,7 +335,7 @@ Install the packages in ``requirements-docs.txt``.
 
 Optionally create and activate a ``conda`` environment first::
 
-  conda create -n daskdocs -c conda-forge python=3.8
+  conda create -n daskdocs -c conda-forge python=3.14
   conda activate daskdocs
 
 Install the dependencies with ``pip``::
@@ -341,16 +360,14 @@ Github Actions
 
 Dask uses Github Actions for Continuous Integration (CI) testing for each PR.
 These CI builds will run the test suite across a variety of Python versions, operating
-systems, and package dependency versions.  Additionally, if a commit message
-includes the phrase ``test-upstream``, then an additional CI build will be
-triggered which uses the development versions of several dependencies
-including: NumPy, pandas, fsspec, etc.
+systems, and package dependency versions.
 
 The CI workflows for Github Actions are defined in
 `.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
 with additional scripts and metadata located in `continuous_integration
-<https://github.com/dask/dask/tree/main/continuous_integration>`_
-
+<https://github.com/dask/dask/tree/main/continuous_integration>`_.
+CI is heavily driven by pixi, which is configured by
+`pixi.toml <https://github.com/dask/dask/blob/main/pixi.toml>`_.
 
 Making Pull Requests
 --------------------
@@ -371,10 +388,11 @@ ideally with a linked issue that has been discussed by the community.
 Automated Contributions and AI Policy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We encourage the use of AI and automated tools to assist in code development, documentation, and testing.
-However, we ask that contributors disclose these tools and use them in a way that aligns with Dask's 
-community guidelines. In particular do not use tools to think or speak for you in discussions, 
-code reviews, or any other interactions within the Dask community.
+We encourage the use of AI and automated tools to assist in code development,
+documentation, and testing. However, we ask that contributors disclose these tools and
+use them in a way that aligns with Dask's community guidelines. In particular do not use
+tools to think or speak for you in discussions, code reviews, or any other interactions
+within the Dask community.
 
 
 .. _Sphinx: https://www.sphinx-doc.org/

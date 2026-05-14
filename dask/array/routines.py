@@ -1319,7 +1319,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     >>> w = da.random.uniform(0, 1, size=(1000,), chunks=x.chunksize[0])
     >>> h, edges = da.histogramdd(x, bins=bins, range=ranges, weights=w)
     >>> np.isclose(h.sum().compute(), w.sum().compute())
-    True
+    np.True_
 
     Using a sequence of 1D arrays as the input:
 
@@ -2356,7 +2356,7 @@ def aligned_coarsen_chunks(chunks: list[int], multiple: int) -> tuple[int, ...]:
     new_chunks = np.array([*new_chunks, *remainder])
     # remove 0-sized chunks
     new_chunks = new_chunks[new_chunks > 0]
-    return tuple(new_chunks)
+    return tuple(new_chunks.tolist())
 
 
 @wraps(chunk.coarsen)

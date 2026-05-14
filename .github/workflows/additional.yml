@@ -1,11 +1,17 @@
 name: Additional
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  pull_request:
+  workflow_dispatch:
 
-# Required shell entrypoint to have properly activated conda environments
-defaults:
-  run:
-    shell: bash -l {0}
+# When this workflow is queued, automatically cancel any previous running
+# or pending jobs from the same branch
+concurrency:
+  group: additional-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   doctest:
@@ -15,17 +21,12 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6
 
-      - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v4.0.1
+      - uses: prefix-dev/setup-pixi@v0
         with:
-          miniforge-version: latest
-          channel-priority: strict
-          environment-file: continuous_integration/environment-3.14.yaml
-          activate-environment: test-environment
-          auto-activate-base: false
-
-      - name: Install
-        run: source continuous_integration/scripts/install.sh
+          pixi-version: v0.68.1
+          environments: default
+          cache: true
+          locked: true
 
       - name: Run tests
-        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' --ignore='dask/array/_array_expr/' dask
+        run: pixi r doctest

@@ -33,8 +33,8 @@ readme = "README.rst"
 urls = {Homepage = "https://github.com/dask/dask/"}
 requires-python = ">=3.10"
 dependencies = [
-    # NOTE: These are tested in `continuous_integration/test_imports.sh` If
-    # you modify these, make sure to change the corresponding line there.
+    # NOTE: These must match the versions listed in `pixi.toml`
+    # and in `docs/source/install.rst`
     "click >= 8.1",
     "cloudpickle >= 3.0.0",
     "fsspec >= 2021.09.0",
@@ -52,8 +52,6 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-# NOTE: These are tested in `continuous_integration/test_imports.sh` If
-# you modify these, make sure to change the corresponding line there.
 array = ["numpy >= 1.24"]
 # keeping for backwards compatibility
 bag = []
@@ -177,6 +175,7 @@ filterwarnings = [
     "module:unclosed database in <sqlite3.Connection:ResourceWarning::",
     # Additional ignores only needed in the mindeps environments
     "ignore:distutils Version classes are deprecated. Use packaging.version instead.:DeprecationWarning:",
+    "ignore:The distutils package is deprecated:DeprecationWarning:",
     "ignore:_SixMetaPathImporter.find_spec:ImportWarning:",
     "ignore:`product` is deprecated as of NumPy 1.25.0:DeprecationWarning:",
     "ignore:Starting with ImageIO v3:DeprecationWarning:skimage",

@@ -15,6 +15,7 @@ log
 .coverage
 .coverage.*
 coverage.xml
+pytest.xml
 .DS_Store
 *.sqlite
 *.swp
@@ -29,3 +30,6 @@ env.yaml
 uv.lock
 dask/_version.py
 dev
+# pixi environments
+.pixi/*
+!.pixi/config.toml
