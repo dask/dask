@@ -10,11 +10,13 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
+from dask.dataframe._compat import PYARROW_VERSION
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 pytest.importorskip("pyarrow.orc")
 pa = pytest.importorskip("pyarrow")
 
+pytestmark = pytest.mark.skipif(PYARROW_VERSION.major < 17, reason="segfault")
 
 url = (
     "https://www.googleapis.com/download/storage/v1/b/anaconda-public-data/o"
