@@ -35,6 +35,7 @@ dependencies:
   - mimesis=5.3.0
   - mmh3=3.0.0
   - numba=0.59.1
+  - numbagg=0.8.0
   - psutil=5.8.0
   - python-cityhash=0.4.6
   - python-graphviz=0.8.4

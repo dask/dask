@@ -13,7 +13,7 @@ import itertools
 
 import dask.array as da
 from dask import config
-from dask.array.numpy_compat import ComplexWarning
+from dask.array.numpy_compat import NUMPY_GE_200, ComplexWarning
 from dask.array.utils import assert_eq, same_keys
 from dask.core import get_deps
 
@@ -1040,6 +1040,166 @@ def test_quantile(rechunk, q, axis):
     )
 
 
+quantile_nanquantile = pytest.mark.parametrize(
+    "np_func,da_func",
+    [
+        pytest.param(np.quantile, da.quantile, id="quantile"),
+        pytest.param(np.nanquantile, da.nanquantile, id="nanquantile"),
+    ],
+)
+
+
+@pytest.mark.skipif(not NUMPY_GE_200, reason="weights requires numpy>=2.0")
+@pytest.mark.parametrize("q", [0.75, [0.75, 0.4]])
+@pytest.mark.parametrize("rechunk", [True, False])
+@pytest.mark.parametrize("keepdims", [True, False])
+@pytest.mark.parametrize("dask_weights", [True, False])
+@quantile_nanquantile
+def test_quantile_weights(np_func, da_func, rechunk, q, keepdims, dask_weights):
+    shape = 10, 15, 20, 15
+    chunks = (2, 3, 4, (5 if rechunk else -1))
+    arr = np.random.randn(*shape)
+    # 1-D weights whose length matches the reduction axis size
+    weights = np.random.uniform(0.5, 2.0, size=shape[-1])
+    if dask_weights:
+        dweights = da.from_array(weights, chunks=(chunks[-1],))
+    else:
+        dweights = weights
+    # np.nanquantile has a bug with 1-D weights on multi-D arrays
+    if np_func is np.nanquantile:
+        weights = np.broadcast_to(weights, arr.shape)
+
+    darr = da.from_array(arr, chunks=chunks)
+
+    assert_eq(
+        da_func(
+            darr,
+            q,
+            axis=-1,
+            weights=dweights,
+            method="inverted_cdf",
+            keepdims=keepdims,
+        ),
+        np_func(
+            arr,
+            q,
+            axis=-1,
+            weights=weights,
+            method="inverted_cdf",
+            keepdims=keepdims,
+        ),
+    )
+
+
+@pytest.mark.skipif(not NUMPY_GE_200, reason="weights requires numpy>=2.0")
+@pytest.mark.parametrize("axis", [0, 1, 2])
+@pytest.mark.parametrize("q", [0.75, [0.75, 0.4]])
+@pytest.mark.parametrize("rechunk", [True, False])
+@pytest.mark.parametrize("keepdims", [True, False])
+@pytest.mark.parametrize("dask_weights", [True, False])
+@quantile_nanquantile
+def test_quantile_weights_non_last_axis(
+    np_func, da_func, axis, rechunk, q, keepdims, dask_weights
+):
+    shape = 10, 15, 20, 15
+    chunks = (2, 3, 4, (5 if rechunk else -1))
+    arr = np.random.randn(*shape)
+    weights = np.random.uniform(0.5, 2.0, size=shape[axis])
+    if dask_weights:
+        dweights = da.from_array(weights, chunks=(chunks[axis],))
+    else:
+        dweights = weights
+    # np.nanquantile has a bug with 1-D weights on multi-D arrays
+    if np_func is np.nanquantile:
+        weights_shape = [1, 1, 1, 1]
+        weights_shape[axis] = -1
+        weights = np.broadcast_to(weights.reshape(tuple(weights_shape)), arr.shape)
+
+    darr = da.from_array(arr, chunks=chunks)
+
+    assert_eq(
+        da_func(
+            darr,
+            q,
+            axis=axis,
+            weights=dweights,
+            method="inverted_cdf",
+            keepdims=keepdims,
+        ),
+        np_func(
+            arr,
+            q,
+            axis=axis,
+            weights=weights,
+            method="inverted_cdf",
+            keepdims=keepdims,
+        ),
+    )
+
+
+@quantile_nanquantile
+def test_quantile_dask_q(np_func, da_func):
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    darr = da.from_array(arr, chunks=(2, 3, 4, -1))
+    q = np.array([0.25, 0.5, 0.75])
+    dq = da.from_array(q)
+
+    assert_eq(da_func(darr, dq, axis=-1), np_func(arr, q, axis=-1))
+    assert_eq(da_func(darr, dq, axis=0), np_func(arr, q, axis=0))
+
+
+@pytest.mark.parametrize("axis", [-1, 0])
+@pytest.mark.parametrize("rechunk", [True, False])
+@quantile_nanquantile
+def test_quantile_nd_q(np_func, da_func, axis, rechunk):
+    if not NUMPY_GE_200 and np_func is np.nanquantile and axis == -1:
+        pytest.xfail("Incorrect outputs on numpy<2")
+
+    shape = 10, 15, 20, 15
+    arr = np.random.randn(*shape)
+    darr = da.from_array(arr, chunks=(2, 3, 4, (5 if rechunk else -1)))
+    q = np.array([[0.1, 0.5], [0.9, 0.95]])  # shape (2, 2)
+
+    assert_eq(da_func(darr, q, axis=axis), np_func(arr, q, axis=axis))
+    assert_eq(
+        da_func(darr, q, axis=axis, keepdims=True),
+        np_func(arr, q, axis=axis, keepdims=True),
+    )
+
+
+@pytest.mark.parametrize(
+    "a_dtype", [np.float32, np.float64, np.int16, np.int32, np.uint16, np.uint32]
+)
+@pytest.mark.parametrize("q_dtype", [np.float32, np.float64])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        pytest.param({}, id="no_weights"),
+        pytest.param(
+            {
+                "weights": np.asarray([0.4, 0.6, 1.0], dtype=np.float32),
+                "method": "inverted_cdf",
+            },
+            marks=pytest.mark.skipif(
+                not NUMPY_GE_200, reason="weights requires numpy>=2.0"
+            ),
+            id="weights",
+        ),
+    ],
+)
+@quantile_nanquantile
+def test_quantile_dtype(np_func, da_func, kwargs, a_dtype, q_dtype):
+    arr = np.asarray([100, 200, 300], dtype=a_dtype)
+    darr = da.from_array(arr)
+    q = np.asarray([0.5], dtype=q_dtype)
+
+    assert_eq(
+        da_func(darr, q, **kwargs),
+        np_func(arr, q, **kwargs),
+    )
+
+
 @pytest.mark.parametrize("func", [da.quantile, da.nanquantile, da.nanpercentile])
 def test_quantile_func_family_with_axis_none(func):
     # Check that these functions raise a NotImplementedError
@@ -1054,7 +1214,8 @@ def test_quantile_func_family_with_axis_none(func):
     # Check that the functions behave as expected
     # when axis=None and the array is a single chunk
     darr = da.from_array([-1, 0, 1])
-    assert_eq(func(darr, 0.0, axis=None), -1.0)
+    out = func(darr, 0.0, axis=None)
+    assert_eq(out, -1.0)
 
 
 def test_nanquantile_all_nan():
