@@ -1721,6 +1721,7 @@ def test_repartition_partition_size(df):
     assert all(div is not None for div in df2.divisions)
 
 
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/12275", strict=False)
 def test_len(df, pdf):
     df2 = df[["x"]] + 1
     assert len(df2) == len(pdf)
