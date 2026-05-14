@@ -1514,7 +1514,7 @@ def setitem_array(out_name, array, indices, value):
 
         The second case occurs when the block represented by key does
         overlap the indices. setitem is the chunk assignment function;
-        v_key is the dask key of the the part of the assignment value
+        v_key is the dask key of the part of the assignment value
         that corresponds to the block; and block_indices are the
         assignment indices that apply to the block.
 
