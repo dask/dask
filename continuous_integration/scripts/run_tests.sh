@@ -13,7 +13,7 @@ if [[ $ARRAYEXPR == 'true' ]]; then
 fi
 
 if [[ $PARALLEL == 'true' ]]; then
-    CMD="$CMD -n4"
+    CMD="$CMD --dist loadgroup -n auto"
 fi
 
 CMD="$CMD $@"

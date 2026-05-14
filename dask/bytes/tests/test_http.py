@@ -16,6 +16,10 @@ from dask.utils import tmpdir
 aiohttp = pytest.importorskip("aiohttp")
 requests = pytest.importorskip("requests")
 
+# Tests in this module are not concurrent-safe.
+# Force them to run sequentially in pytest-xdist.
+pytestmark = pytest.mark.xdist_group(name="http")
+
 files = ["a", "b"]
 
 errs = (
