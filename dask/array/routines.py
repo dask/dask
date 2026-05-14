@@ -1267,7 +1267,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         have an entry for each dimension. Unlike
         :func:`numpy.histogramdd`, if `bins` does not define bin
         edges, this argument is required (this function will not
-        automatically use the min and max of of the value in a given
+        automatically use the min and max of the value in a given
         dimension because the input data may be lazy in dask).
     normed : bool, optional
         An alias for the density argument that behaves identically. To
