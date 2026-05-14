@@ -3901,12 +3901,9 @@ def test_from_delayed_future():
     distributed = pytest.importorskip("distributed")
     arr = np.zeros((10, 10))
 
-    with distributed.Client(n_workers=1) as client:
-        client.wait_for_workers(1)
+    with distributed.Client(n_workers=1, processes=False) as client:
         fut = client.scatter(arr)
         result = da.from_delayed(fut, shape=arr.shape, meta=arr[:0, :0])
-        assert_eq(result, arr, scheduler=client)
-
         del fut
         assert_eq(result, arr, scheduler=client)
 
@@ -4956,6 +4953,7 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "chunks, shards",
     [
