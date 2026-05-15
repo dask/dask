@@ -157,3 +157,19 @@ def test_partition():
     result = df[1]
     expected = pd.DataFrame.from_dict({"A": ["A|B", "C|D"]})["A"].str.partition("|")[1]
     assert_eq(result, expected)
+
+
+def test_str_split_preserves_pyarrow_dtype():
+    import pandas as pd
+
+    import dask.dataframe as dd
+
+    df = pd.DataFrame({"col": ["a,b", "c,d"]}, dtype="string[pyarrow]")
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    result = ddf["col"].str.split(",", expand=True, n=1)
+
+    assert all(dtype == "string[pyarrow]" for dtype in result.dtypes)
+
+    computed = result.compute()
+    assert all(dtype == "string[pyarrow]" for dtype in computed.dtypes)
