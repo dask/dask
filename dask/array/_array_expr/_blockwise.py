@@ -212,11 +212,12 @@ class Blockwise(ArrayExpr):
 
 
 class Elemwise(Blockwise):
-    _parameters = ["op", "dtype", "name", "where"]
+    _parameters = ["op", "dtype", "name", "where", "kwargs"]
     _defaults = {
         "dtype": None,
         "name": None,
         "where": True,
+        "kwargs": None,
     }
     align_arrays = True
     new_axes: dict = {}
@@ -253,6 +254,7 @@ class Elemwise(Blockwise):
 
     @cached_property
     def _info(self):
+        kwargs = self.operand("kwargs") or {}
         if self.operand("dtype") is not None:
             need_enforce_dtype = True
             dtype = self.operand("dtype")
@@ -275,7 +277,7 @@ class Elemwise(Blockwise):
             ]
             try:
                 dtype = apply_infer_dtype(
-                    self.op, vals, {}, "elemwise", suggest_dtype=False
+                    self.op, vals, kwargs, "elemwise", suggest_dtype=False
                 )
             except Exception:
                 raise NotImplementedError
@@ -284,7 +286,7 @@ class Elemwise(Blockwise):
                 for a in self.elemwise_args
             )
 
-        blockwise_kwargs = {}
+        blockwise_kwargs = dict(kwargs)
         op = self.op
         if self.where is not True:
             blockwise_kwargs["elemwise_where_function"] = op
