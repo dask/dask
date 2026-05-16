@@ -20,9 +20,9 @@ from pandas.util import hash_pandas_object
 def compute_first_bit(a):
     "Compute the position of the first nonzero bit for each int in an array."
     # TODO: consider making this less memory-hungry
-    bits = np.bitwise_and.outer(a, 1 << np.arange(32))
+    bits = np.bitwise_and.outer(a, np.uint64(1) << np.arange(64, dtype=np.uint64))
     bits = bits.cumsum(axis=1).astype(bool)
-    return 33 - bits.sum(axis=1)
+    return 65 - bits.sum(axis=1)
 
 
 def compute_hll_array(obj, b):
@@ -30,14 +30,14 @@ def compute_hll_array(obj, b):
 
     if not 8 <= b <= 16:
         raise ValueError("b should be between 8 and 16")
-    num_bits_discarded = 32 - b
+    num_bits_discarded = 64 - b
     m = 1 << b
 
     # Get an array of the hashes
     hashes = hash_pandas_object(obj, index=False)
     if isinstance(hashes, pd.Series):
         hashes = hashes._values
-    hashes = hashes.astype(np.uint32)
+    hashes = hashes.astype(np.uint64)
 
     # Of the first b bits, which is the first nonzero?
     j = hashes >> num_bits_discarded
@@ -78,6 +78,6 @@ def estimate_count(Ms, b):
         V = (M == 0).sum()
         if V:
             return m * np.log(m / V)
-    if E > 2**32 / 30.0:
-        return -(2**32) * np.log1p(-E / 2**32)
+    if E > 2**64 / 30.0:
+        return -(2**64) * np.log1p(-E / 2**64)
     return E
