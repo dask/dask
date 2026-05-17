@@ -1288,6 +1288,10 @@ def inv(a):
     return solve(a, eye(a.shape[0], chunks=a.chunks[0][0]))
 
 
+def _conj_transpose(a):
+    return np.transpose(a).conj()
+
+
 def _cholesky_lower(a):
     return np.linalg.cholesky(a)
 
@@ -1371,7 +1375,7 @@ def _cholesky(a):
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
                 dsk[name, i, i] = (_cholesky_lower, target)
-                dsk[name_upper, i, i] = (np.transpose, (name, i, i))
+                dsk[name_upper, i, i] = (_conj_transpose, (name, i, i))
             else:
                 # solving x.dot(L11.T) = (A21 - L20.dot(L10.T)) is equal to
                 # L11.dot(x.T) = A21.T - L10.dot(L20.T)
@@ -1385,7 +1389,7 @@ def _cholesky(a):
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
                 dsk[name_upper, j, i] = (_solve_triangular_lower, (name, j, j), target)
-                dsk[name, i, j] = (np.transpose, (name_upper, j, i))
+                dsk[name, i, j] = (_conj_transpose, (name_upper, j, i))
 
     graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
     graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
