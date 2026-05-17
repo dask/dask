@@ -96,7 +96,7 @@ plt.savefig("images/scaling-nodes.png")
 
 x = np.linspace(1, 100, 10)
 crosstalk_results = dict()
-for get in [threaded.get, local.get_sync]:  # type: ignore[assignment]
+for get in [threaded.get, local.get_sync]:
     y = list()
     for n in x:
         dsk, keys = crosstalk(1000, 5, int(n))
