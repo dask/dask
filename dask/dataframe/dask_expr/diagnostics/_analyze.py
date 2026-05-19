@@ -200,4 +200,4 @@ class Analyze(Blockwise):
 
     @functools.cached_property
     def _name(self):
-        return "analyze-" + self.deterministic_token
+        return f"analyze-{self.deterministic_token}"

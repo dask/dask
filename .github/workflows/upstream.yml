@@ -45,12 +45,11 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v3.3.0
+        uses: conda-incubator/setup-miniconda@v4.0.1
         with:
           miniforge-version: latest
-          use-mamba: true
           channel-priority: strict
-          environment-file: continuous_integration/environment-3.12.yaml
+          environment-file: continuous_integration/environment-3.14.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
@@ -84,4 +83,4 @@ jobs:
           issue-label: upstream
 
       - name: Coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6

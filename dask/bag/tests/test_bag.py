@@ -1671,9 +1671,9 @@ def test_dask_layers_to_delayed(optimize):
     i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
     name = i.key[0]
     assert i.key[1:] == (0,)
-    assert i.dask.layers.keys() == {"delayed-" + name}
-    assert i.dask.dependencies == {"delayed-" + name: set()}
-    assert i.__dask_layers__() == ("delayed-" + name,)
+    assert i.dask.layers.keys() == {f"delayed-{name}"}
+    assert i.dask.dependencies == {f"delayed-{name}": set()}
+    assert i.__dask_layers__() == (f"delayed-{name}",)
 
     arr = da.ones(1) + 1
     delayed = arr.to_delayed(optimize_graph=optimize)[0]

@@ -410,7 +410,7 @@ def test_uneven_chunks():
     assert a.chunks == ((3, 3, 3, 1), (3, 3, 3, 1))
 
 
-def test_numblocks_suppoorts_singleton_block_dims():
+def test_numblocks_supports_singleton_block_dims():
     arr = object()  # arraylike is unimportant since we never compute
     shape = (100, 10)
     chunks = (10, 10)
@@ -2301,11 +2301,13 @@ class ThreadSafetyError(Exception):
 class NonthreadSafeStore:
     def __init__(self):
         self.in_use = False
+        self._lock = Lock()
 
     def __setitem__(self, key, value):
-        if self.in_use:
-            raise ThreadSafetyError()
-        self.in_use = True
+        with self._lock:
+            if self.in_use:
+                raise ThreadSafetyError()
+            self.in_use = True
         time.sleep(0.001)
         self.in_use = False
 
@@ -2314,12 +2316,19 @@ class ThreadSafeStore:
     def __init__(self):
         self.concurrent_uses = 0
         self.max_concurrent_uses = 0
+        self._lock = Lock()
 
     def __setitem__(self, key, value):
-        self.concurrent_uses += 1
-        self.max_concurrent_uses = max(self.concurrent_uses, self.max_concurrent_uses)
+        with self._lock:
+            self.concurrent_uses += 1
+            self.max_concurrent_uses = max(
+                self.concurrent_uses, self.max_concurrent_uses
+            )
         time.sleep(0.01)
-        self.concurrent_uses -= 1
+        with self._lock:
+            # int.__iadd__ is atomic on GIL-enabld interpreters; when the GIL is
+            # disabled things are nuanced and hardware-dependent. Don't risk it.
+            self.concurrent_uses -= 1
 
 
 class BrokenStore:
@@ -2328,103 +2337,105 @@ class BrokenStore:
 
 
 class CounterLock:
-    def __init__(self, *args, **kwargs):
-        self.lock = Lock(*args, **kwargs)
-
+    def __init__(self):
+        self.lock = Lock()
         self.acquire_count = 0
         self.release_count = 0
 
-    def acquire(self, *args, **kwargs):
-        self.acquire_count += 1
-        return self.lock.acquire(*args, **kwargs)
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        acquired = self.lock.acquire(blocking=blocking, timeout=timeout)
+        if acquired:
+            # int.__iadd__ is atomic on GIL-enabld interpreters; when the GIL is
+            # disabled things are nuanced and hardware-dependent. Don't risk it.
+            self.acquire_count += 1
+        return acquired
 
-    def release(self, *args, **kwargs):
-        self.release_count += 1
-        return self.lock.release(*args, **kwargs)
+    def release(self) -> None:
+        if self.lock.locked():
+            self.release_count += 1
+        self.lock.release()
 
 
 def test_store_locks_failure_lock_released():
-    d = da.ones((10, 10), chunks=(2, 2))
+    a = da.ones((10, 10), chunks=(2, 2))
 
     lock = CounterLock()
     # Ensure same lock applies over multiple stores
     with pytest.raises(RuntimeError):
-        store(d, BrokenStore(), lock=lock, scheduler="threads")
+        store(a, BrokenStore(), lock=lock, scheduler="threads")
     assert lock.acquire_count == lock.release_count > 0
 
 
-def test_store_locks():
-    d = da.ones((10, 10), chunks=(2, 2))
-    a, b = d + 1, d + 2
-
-    at = np.zeros(shape=(10, 10))
-    bt = np.zeros(shape=(10, 10))
-
+def test_store_locks_one_lock_two_stores():
+    """Ensure same lock applies over multiple stores"""
+    a = da.ones((10, 10), chunks=(2, 2))
+    b = da.zeros((10, 10), chunks=(2, 2))
     lock = CounterLock()
-    # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
     v = store([a, b], [at, at], lock=lock, scheduler="threads", num_workers=10)
     assert lock.acquire_count == lock.release_count == a.npartitions + b.npartitions
     assert v is None
 
-    # Don't assume thread safety by default
+
+def test_store_locks_dont_assume_threadsafe():
+    """Don't assume thread safety by default"""
+    a = da.ones((10, 10), chunks=(2, 2))
     at = NonthreadSafeStore()
     assert store(a, at, scheduler="threads", num_workers=10) is None
     assert a.store(at, scheduler="threads", num_workers=10) is None
 
-    # Ensure locks can be removed
+
+def test_store_locks_no_lock():
+    """Ensure locks can be removed"""
+    a = da.ones((10, 10), chunks=(2, 2))
     at = ThreadSafeStore()
-    for i in range(10):
+    for _ in range(50):
         st = a.store(at, lock=False, scheduler="threads", num_workers=10)
         assert st is None
         if at.max_concurrent_uses > 1:
             break
-        if i == 9:
-            assert False
+    else:
+        assert False, "Concurrent use not observed"
 
-    # Verify number of lock calls
+
+@pytest.mark.parametrize("compute", [False, True])
+def test_store_locks_count_calls(compute):
+    """Verify number of lock calls"""
+    a = da.ones((10, 10), chunks=(2, 2))
+    b = da.zeros((10, 10), chunks=(2, 2))
     nchunks = sum(math.prod(map(len, e.chunks)) for e in (a, b))
-    for c in (False, True):
-        at = np.zeros(shape=(10, 10))
-        bt = np.zeros(shape=(10, 10))
-        lock = CounterLock()
+    at = np.zeros(shape=(10, 10))
+    bt = np.zeros(shape=(10, 10))
+    lock = CounterLock()
 
-        v = store([a, b], [at, bt], lock=lock, compute=c, return_stored=True)
-        assert all(isinstance(e, Array) for e in v)
+    v = store([a, b], [at, bt], lock=lock, compute=compute, return_stored=True)
+    assert all(isinstance(e, Array) for e in v)
 
-        da.compute(v)
+    da.compute(v)
 
-        # When `return_stored=True` and `compute=False`,
-        # the lock should be acquired only once for store and load steps
-        # as they are fused together into one step.
-        assert lock.acquire_count == lock.release_count
-        if c:
-            assert lock.acquire_count == 2 * nchunks
-        else:
-            assert lock.acquire_count == nchunks
+    # When `return_stored=True` and `compute=False`,
+    # the lock should be acquired only once for store and load steps
+    # as they are fused together into one step.
+    expect_count = 2 * nchunks if compute else nchunks
+    assert lock.acquire_count == lock.release_count == expect_count
 
 
-def test_store_method_return():
-    d = da.ones((10, 10), chunks=(2, 2))
-    a = d + 1
+@pytest.mark.parametrize("compute", [False, True])
+@pytest.mark.parametrize("return_stored", [False, True])
+def test_store_method_return(compute, return_stored):
+    a = da.ones((10, 10), chunks=(2, 2))
+    at = np.zeros(shape=(10, 10))
+    r = a.store(at, scheduler="threads", compute=compute, return_stored=return_stored)
 
-    for compute in [False, True]:
-        for return_stored in [False, True]:
-            at = np.zeros(shape=(10, 10))
-            r = a.store(
-                at, scheduler="threads", compute=compute, return_stored=return_stored
-            )
-
-            if compute and not return_stored:
-                assert r is None
-            else:
-                assert isinstance(r, Array)
+    if compute and not return_stored:
+        assert r is None
+    else:
+        assert isinstance(r, Array)
 
 
+@pytest.mark.slow
 def test_store_multiprocessing_lock():
-    d = da.ones((10, 10), chunks=(2, 2))
-    a = d + 1
-
+    a = da.ones((10, 10), chunks=(2, 2))
     at = np.zeros(shape=(10, 10))
     st = a.store(at, scheduler="processes", num_workers=10)
     assert st is None
@@ -2773,7 +2784,7 @@ def test_slicing_with_non_ndarrays():
         def __array__(self):
             return np.arange(self.start, self.stop)
 
-    class ARangeSlicable:
+    class ARangeSliceable:
         dtype = np.dtype("i8")
         ndim = 1
 
@@ -2787,7 +2798,7 @@ def test_slicing_with_non_ndarrays():
         def __getitem__(self, key):
             return ARangeSlice(key[0].start, key[0].stop)
 
-    x = da.from_array(ARangeSlicable(10), chunks=(4,))
+    x = da.from_array(ARangeSliceable(10), chunks=(4,))
 
     assert_eq((x + 1).sum(), (np.arange(10, dtype=x.dtype) + 1).sum())
 
@@ -2923,16 +2934,13 @@ def test_from_array_list(x):
     assert dx.dask[dx.name, 0][0] == x[0]
 
 
-# On MacOS Python 3.9, the order of the np.ScalarType tuple randomly changes across
-# interpreter restarts, thus causing pytest-xdist failures; setting PYTHONHASHSEED does
-# not help
-@pytest.mark.parametrize(
-    "type_", sorted((t for t in np.ScalarType if t is not memoryview), key=str)
-)
+@pytest.mark.parametrize("type_", [t for t in np.ScalarType if t is not memoryview])
 def test_from_array_scalar(type_):
     """Python and numpy scalars are automatically converted to ndarray"""
-    if type_ == np.datetime64:
+    if type_ is np.datetime64:
         x = np.datetime64("2000-01-01")
+    elif type_ is np.timedelta64:
+        x = np.timedelta64(1, "s")
     else:
         x = type_(1)
 
@@ -3814,9 +3822,9 @@ def test_to_delayed_optimize_graph():
     d = y.to_delayed().flatten().tolist()[0]
     assert len([k for k in d.dask if k[0].startswith("getitem")]) == 1
     assert d.key == (y.name, 0, 0)
-    assert d.dask.layers.keys() == {"delayed-" + y.name}
-    assert d.dask.dependencies == {"delayed-" + y.name: set()}
-    assert d.__dask_layers__() == ("delayed-" + y.name,)
+    assert d.dask.layers.keys() == {f"delayed-{y.name}"}
+    assert d.dask.dependencies == {f"delayed-{y.name}": set()}
+    assert d.__dask_layers__() == (f"delayed-{y.name}",)
 
     # no optimizations
     d2 = y.to_delayed(optimize_graph=False).flatten().tolist()[0]
@@ -3904,12 +3912,9 @@ def test_from_delayed_future():
     distributed = pytest.importorskip("distributed")
     arr = np.zeros((10, 10))
 
-    with distributed.Client(n_workers=1) as client:
-        client.wait_for_workers(1)
+    with distributed.Client(n_workers=1, processes=False) as client:
         fut = client.scatter(arr)
         result = da.from_delayed(fut, shape=arr.shape, meta=arr[:0, :0])
-        assert_eq(result, arr, scheduler=client)
-
         del fut
         assert_eq(result, arr, scheduler=client)
 
@@ -4819,7 +4824,7 @@ def test_no_warnings_on_metadata():
     assert not record
 
 
-def test_delayed_array_key_hygeine():
+def test_delayed_array_key_hygiene():
     a = da.zeros((1,), chunks=(1,))
     d = delayed(identity)(a)
     b = da.from_delayed(d, shape=a.shape, dtype=a.dtype)
@@ -4959,6 +4964,7 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "chunks, shards",
     [
@@ -5014,11 +5020,20 @@ def test_zarr_roundtrip_with_path_like(tmp_path, zarr_format):
     assert a2.chunks == a.chunks
 
 
-def test_to_zarr_accepts_empty_array_without_exception_raised():
+@pytest.mark.parametrize(
+    "a",
+    [
+        da.arange(0),  # shape=(0,); chunks=((0,),)
+        da.array([[1]])[:0],  # shape=(0, 1); chunks=((0,), (1,))
+        da.array([[1]])[:, :0],  # shape=(1, 0); chunks=((1,), (0,))
+    ],
+)
+def test_zarr_empty_array(tmp_path, a):
     pytest.importorskip("zarr")
-    with tmpdir() as d:
-        a = da.from_array(np.arange(0))
-        a.to_zarr(d)
+    fname = tmp_path / "x.zarr"
+    a.to_zarr(fname)
+    b = da.from_zarr(fname)
+    assert_eq(a, b)
 
 
 @pytest.mark.parametrize("compute", [False, True])
@@ -5930,10 +5945,9 @@ def test_chunk_assignment_invalidates_cached_properties():
 
 
 def test_map_blocks_series():
-    pd = pytest.importorskip("pandas")
-    import dask.dataframe as dd
+    dd = pytest.importorskip("dask.dataframe")
+    import pandas as pd
 
-    pytest.skip("array roundtrips don't work yet")
     from dask.dataframe.utils import assert_eq as dd_assert_eq
 
     x = da.ones(10, chunks=(5,))
@@ -5946,8 +5960,9 @@ def test_map_blocks_series():
 
 @pytest.mark.xfail(reason="need to remove singleton index dimension")
 def test_map_blocks_dataframe():
-    pd = pytest.importorskip("pandas")
-    import dask.dataframe as dd
+    dd = pytest.importorskip("dask.dataframe")
+    import pandas as pd
+
     from dask.dataframe.utils import assert_eq as dd_assert_eq
 
     x = da.ones((10, 2), chunks=(5, 2))
@@ -6100,7 +6115,7 @@ def test_load_store_chunk():
 
 def test_scalar_setitem():
     """After a da.Array.__getitem__ call that returns a scalar, the chunk contains a
-    read-only np.generic instead of a writeable np.ndarray. This is a specific quirk of
+    read-only np.generic instead of a writable np.ndarray. This is a specific quirk of
     numpy; cupy and other backends always return a 0-dimensional array.
     Make sure that __setitem__ still works.
     """

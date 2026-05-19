@@ -50,7 +50,7 @@ For performance, a good choice of ``chunks`` follows the following rules:
 5.  Chunks should align with your storage, if applicable.
 
     Array data formats are often chunked as well.  When loading or saving data,
-    if is useful to have Dask array chunks that are aligned with the chunking
+    it is useful to have Dask array chunks that are aligned with the chunking
     of your storage, often an even multiple times larger in each direction
 
 Learn more in `Choosing good chunk sizes in Dask`_ by Genevieve Buckley.

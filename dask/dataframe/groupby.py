@@ -547,9 +547,12 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
     # stacking can lead to a sorted index
     if PANDAS_GE_300:
-        s_result = result.stack()
+        kwargs = {}
+    elif PANDAS_GE_220:
+        kwargs = {"future_stack": True}
     else:
-        s_result = result.stack(dropna=False)
+        kwargs = {"dropna": False}
+    s_result = result.stack(**kwargs)
     assert is_dataframe_like(s_result)
     return s_result
 
@@ -623,7 +626,7 @@ def _normalize_spec(spec, non_group_columns):
     The non-group columns are a list of all column names that are not used in
     the groupby operation.
 
-    Usually, the result columns are mutli-level names, returned as tuples.
+    Usually, the result columns are multi-level names, returned as tuples.
     If only a single function is supplied or dictionary mapping columns
     to single functions, simple names are returned as strings (see the first
     two examples below).
@@ -970,7 +973,7 @@ def _groupby_apply_funcs(df, *by, **kwargs):
     by: list of groupers
         If given, they are added to the keyword arguments as the ``by``
         argument.
-    funcs: list of result-colum, function, keywordargument triples
+    funcs: list of result-column, function, keywordargument triples
         The list of functions that are applied on the grouped data frame.
         Has to be passed as a keyword argument.
     kwargs:
@@ -1181,9 +1184,9 @@ def _aggregate_docstring(based_on=None):
             intermediate ``combine`` function will be used, so that any one 
             ``combine`` or ``aggregate`` function has no more than ``split_every`` 
             inputs. The depth of the aggregation graph will be 
-            :math:``log_`split_every`(input chunks along reduced axes)``. Setting to 
-            a low value can reduce cache size and network transfers, at the cost of 
-            more CPU and a larger dask graph.
+            :math:`\\log_\\text{{split_every}}(\\text{{input chunks along reduced axes}})`.
+            Setting to a low value can reduce cache size and network transfers, at
+            the cost of more CPU and a larger dask graph.
         split_out : int, optional
             Number of output results in group-by like aggregations (defaults to 1)
         shuffle : bool or str, optional

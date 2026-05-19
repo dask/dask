@@ -973,7 +973,7 @@ class ReadParquetPyarrowFS(ReadParquet):
 
     @cached_property
     def raw_statistics(self):
-        """Parquet statstics for every file in the dataset.
+        """Parquet statistics for every file in the dataset.
         The statistics do not include all the metadata that is stored in the
         file but only a subset. See also `_extract_stats`.
         """

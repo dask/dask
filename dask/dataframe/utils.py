@@ -271,7 +271,7 @@ _simple_fake_mapping: dict[str, Any] = {
     "b": np.bool_(True),
     "V": np.void(b" "),
     "M": np.datetime64("1970-01-01"),
-    "m": np.timedelta64(1),
+    "m": np.timedelta64(1, "us"),
     "S": np.str_("foo"),
     "a": np.str_("foo"),
     "U": np.str_("foo"),
@@ -326,7 +326,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         The name of the function in which the metadata was specified. If
         provided, the function name will be included in the error message to be
         more helpful to users.
-    numeric_equal : bool, optionl
+    numeric_equal : bool, optional
         If True, integer and floating dtypes compare equal. This is useful due
         to panda's implicit conversion of integer to floating upon encountering
         missingness, which is hard to infer statically.
@@ -465,8 +465,12 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
             assert type(dsk._meta) == type(result), type(dsk._meta)
             if check_names:
-                tm.assert_index_equal(dsk.columns, result.columns)
-                tm.assert_index_equal(dsk._meta.columns, result.columns)
+                # Treat RangeIndex and Index as equivalent as long as they express the
+                # same values and have the same dtype
+                tm.assert_index_equal(dsk.columns, result.columns, exact=False)
+                tm.assert_index_equal(dsk._meta.columns, result.columns, exact=False)
+                assert dsk.columns.dtype == result.columns.dtype
+                assert dsk._meta.columns.dtype == result.columns.dtype
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
             _check_dask(

@@ -30,7 +30,8 @@ def to_bag(df, index=False, format="tuple"):
 
     if not isinstance(df, FrameBase):
         raise TypeError("df must be either DataFrame or Series")
-    name = "to_bag-" + tokenize(df._name, index, format)
+    token = tokenize(df._name, index, format)
+    name = f"to_bag-{token}"
     if format == "frame":
         dsk = df.dask
         name = df._name

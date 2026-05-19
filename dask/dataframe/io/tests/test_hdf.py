@@ -816,11 +816,11 @@ def test_hdf_filenames():
 def test_hdf_path_exceptions():
     # single file doesn't exist
     with pytest.raises(IOError):
-        dd.read_hdf("nonexistant_store_X34HJK", "/tmp")
+        dd.read_hdf("nonexistent_store_X34HJK", "/tmp")
 
     # a file from a list of files doesn't exist
     with pytest.raises(IOError):
-        dd.read_hdf(["nonexistant_store_X34HJK", "nonexistant_store_UY56YH"], "/tmp")
+        dd.read_hdf(["nonexistent_store_X34HJK", "nonexistent_store_UY56YH"], "/tmp")
 
     # list of files is empty
     with pytest.raises(ValueError):

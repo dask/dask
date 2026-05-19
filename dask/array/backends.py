@@ -171,7 +171,7 @@ def register_cupyx():
     try:
         from cupyx.scipy.sparse import hstack, vstack
     except ImportError as e:
-        raise ImportError(
+        raise type(e)(
             "Stacking of sparse arrays requires at least CuPy version 8.0.0"
         ) from e
 

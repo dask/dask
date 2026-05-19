@@ -199,7 +199,7 @@ class Shuffle(ShuffleBase):
 
     def _lower(self):
         # Use `method` to decide how to compose a
-        # shuffle operation from concerete expressions
+        # shuffle operation from concrete expressions
 
         # Reduce partition count if necessary
         frame = self.frame

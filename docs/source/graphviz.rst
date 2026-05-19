@@ -117,7 +117,7 @@ to install than graphviz in some deployment settings.
 
 Visualize the high level graph
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The low level Dask task graph can be overwhelimg, especially for large computations.
+The low level Dask task graph can be overwhelming, especially for large computations.
 A more concise alternative is to look at the Dask high level graph instead.
 The high level graph can be visualized using ``.dask.visualize()``.
 

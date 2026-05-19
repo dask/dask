@@ -637,7 +637,8 @@ except ImportError as e:  # pragma: no cover
         "  conda install dask                 # either conda install\n"
         '  python -m pip install "dask[array]" --upgrade  # or python -m pip install'
     )
-    raise ImportError(f"{e}\n\n{msg}") from e
+    # Typically raise ModuleNotFoundError
+    raise type(e)(f"{e}\n\n{msg}") from e
 
 
 if _array_expr_enabled():

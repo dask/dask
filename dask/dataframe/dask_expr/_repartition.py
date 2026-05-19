@@ -257,7 +257,7 @@ class RepartitionDivisions(Repartition):
         a = self.frame.divisions
         b = self.new_divisions
         name = self.frame._name
-        out1 = "repartition-split-" + token
+        out1 = f"repartition-split-{token}"
         out2 = self._name
         force = self.force
 

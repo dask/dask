@@ -1,5 +1,5 @@
 # This job includes coverage
-name: test-environment-310
+name: test-environment
 channels:
   - conda-forge
   - nodefaults
@@ -44,7 +44,6 @@ dependencies:
   - tiledb-py
   - tiledb
   - xarray
-  - numexpr
   - sqlalchemy
   - jsonschema
   - bokeh

@@ -12,7 +12,7 @@ from pandas.core.apply import reconstruct_func, validate_func_kwargs
 from dask import is_dask_collection
 from dask._task_spec import Task
 from dask.core import flatten
-from dask.dataframe._compat import PANDAS_GE_300
+from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.core import (
     _concat,
     apply_and_enforce,
@@ -795,7 +795,7 @@ def _mean_chunk(df, *by, observed=None, dropna=None):
 
     g = _groupby_raise_unaligned(df, by=by, observed=observed, dropna=dropna)
     x = g.sum(numeric_only=True)
-    n = g[x.columns].count().rename(columns=lambda c: c + "-count")
+    n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return concat([x, n], axis=1)
 
 
@@ -1093,7 +1093,7 @@ class Median(GroupByShift):
 
 
 def groupby_get_group(df, *by_key, get_key=None, columns=None):
-    if PANDAS_GE_300 and is_scalar(get_key):
+    if PANDAS_GE_220 and is_scalar(get_key):
         get_key = (get_key,)
     return _groupby_get_group(df, list(by_key), get_key, columns)
 

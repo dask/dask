@@ -295,7 +295,8 @@ def create_metadata_file(
 
     # Start constructing a raw graph
     dsk = {}
-    name = "gen-metadata-" + tokenize(paths, fs)
+    token = tokenize(paths, fs)
+    name = f"gen-metadata-{token}"
     collect_name = f"collect-{name}"
     agg_name = f"agg-{name}"
 

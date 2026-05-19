@@ -52,9 +52,7 @@ try:
     import pyarrow as pa
     import pyarrow.compute
 except ImportError:
-    HAS_PYARROW = False
-else:
-    HAS_PYARROW = True
+    pass
 
 
 class DataFrameBackendEntrypoint(DaskBackendEntrypoint):

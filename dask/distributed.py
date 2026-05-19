@@ -11,7 +11,7 @@ try:
     from distributed import *  # noqa: F403
 except ImportError as e:
     if e.msg == "No module named 'distributed'":
-        raise ImportError(_import_error_message) from e
+        raise type(e)(_import_error_message) from e
     else:
         raise
 
@@ -20,5 +20,5 @@ def __getattr__(value):
     try:
         import distributed
     except ImportError as e:
-        raise ImportError(_import_error_message) from e
+        raise type(e)(_import_error_message) from e
     return getattr(distributed, value)

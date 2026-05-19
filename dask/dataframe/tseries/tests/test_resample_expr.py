@@ -57,7 +57,7 @@ def test_resample_apis(df, pdf, api, kwargs):
     assert_eq(result, expected)
 
     # No column output
-    if api not in ("size",):
+    if api != "size":
         result = getattr(df.resample("2min"), api)()["foo"]
         expected = getattr(pdf.resample("2min"), api)()["foo"]
         assert_eq(result, expected)

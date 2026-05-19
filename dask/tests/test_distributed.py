@@ -291,6 +291,10 @@ def test_to_hdf_distributed(c):
 def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
+    from dask._pandas_compat import PANDAS_GE_220, PANDAS_GE_230
+
+    if PANDAS_GE_220 and not PANDAS_GE_230:
+        pytest.xfail(reason="Poor support for StringDtype")
 
     from dask.dataframe.io.tests.test_hdf import test_to_hdf_schedulers
 
@@ -865,7 +869,7 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     assert (await c.compute(result)).val == 170
 
 
-def test_set_index_no_resursion_error(c):
+def test_set_index_no_recursion_error(c):
     # see: https://github.com/dask/dask/issues/8955
     pytest.importorskip("pandas")
     pytest.importorskip("dask.dataframe")

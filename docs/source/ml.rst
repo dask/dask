@@ -42,13 +42,16 @@ values from the distribution it suggests based on the scores it has received.
 
 Dask and Optuna are often used together by running many objective functions in
 parallel and synchronizing the scores and parameter selection on the Dask
-scheduler.  To do this, we use the ``DaskStore`` object found in Optuna.
+scheduler.  To do this, we use the ``DaskStorage`` object provided by the
+`optuna-integration <https://optuna-integration.readthedocs.io/>`_ package
+(install it alongside Optuna with ``pip install optuna optuna-integration``).
 
 .. code-block:: python
 
    import optuna
+   from optuna_integration import DaskStorage
 
-   storage = optuna.integration.DaskStorage()
+   storage = DaskStorage()
 
    study = optuna.create_study(
        direction="maximize",

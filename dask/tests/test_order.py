@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 from collections import defaultdict
 
 import pytest
@@ -258,10 +259,11 @@ def _rechunk_merge_graph():
 
 
 @pytest.mark.skipif(WINDOWS, reason="Broken pipe on Windows")
-def test_visualize_int_overflow():
+def test_visualize_int_overflow(tmp_path):
+    # regression test for https://github.com/dask/dask/pull/11440
     pytest.importorskip("graphviz")
     pytest.importorskip("matplotlib")
-    # regression test for https://github.com/dask/dask/pull/11440
+    os.chdir(tmp_path)
     visualize(_rechunk_merge_graph())
 
 
@@ -510,7 +512,7 @@ def test_gh_3055():
     assert sorted(L) == L  # operate in order
 
 
-def test_type_comparisions_ok(abcde):
+def test_type_comparisons_ok(abcde):
     a, b, c, d, e = abcde
     dsk = {a: 1, (a, 1): 2, (a, b, 1): 3}
     order(dsk)  # this doesn't err
@@ -1483,11 +1485,11 @@ def test_anom_mean():
     ages_mean_chunks = {k: v.age for k, v in diags.items() if "mean_chunk" in k[0]}
     avg_age_mean_chunks = sum(ages_mean_chunks.values()) / len(ages_mean_chunks)
     max_age_mean_chunks = max(ages_mean_chunks.values())
-    ages_tranpose = {k: v.age for k, v in transpose_metrics.items()}
+    ages_transpose = {k: v.age for k, v in transpose_metrics.items()}
     assert max_age_mean_chunks > 900
     assert avg_age_mean_chunks > 100
-    avg_age_transpose = sum(ages_tranpose.values()) / len(ages_tranpose)
-    max_age_transpose = max(ages_tranpose.values())
+    avg_age_transpose = sum(ages_transpose.values()) / len(ages_transpose)
+    max_age_transpose = max(ages_transpose.values())
     assert max_age_transpose < 150
     assert avg_age_transpose < 100
     assert sum(pressure) / len(pressure) < 101

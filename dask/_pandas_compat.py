@@ -24,7 +24,8 @@ PANDAS_GE_202 = PANDAS_VERSION.release >= (2, 0, 2)
 PANDAS_GE_210 = PANDAS_VERSION.release >= (2, 1, 0)
 PANDAS_GE_220 = PANDAS_VERSION.release >= (2, 2, 0)
 PANDAS_GE_230 = PANDAS_VERSION.release >= (2, 3, 0)
-PANDAS_GE_300 = PANDAS_VERSION.major >= 3
+PANDAS_GE_300 = PANDAS_VERSION.release >= (3, 0, 0)
+PANDAS_GE_310 = PANDAS_VERSION.release >= (3, 1, 0)
 
 
 def assert_categorical_equal(left, right, *args, **kwargs):
@@ -48,7 +49,8 @@ def assert_numpy_array_equal(left, right):
 
 
 def makeDataFrame():
-    data = np.random.randn(30, 4)
+    rng = np.random.default_rng(0)
+    data = rng.standard_normal((30, 4))
     index = list(string.ascii_letters)[:30]
     return pd.DataFrame(data, index=index, columns=list("ABCD"))
 

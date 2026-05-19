@@ -260,7 +260,7 @@ def rot90(m, k=1, axes=(0, 1)):
         return flip(flip(m, axes[0]), axes[1])
 
     axes_list = list(range(0, m.ndim))
-    (axes_list[axes[0]], axes_list[axes[1]]) = (axes_list[axes[1]], axes_list[axes[0]])
+    axes_list[axes[0]], axes_list[axes[1]] = (axes_list[axes[1]], axes_list[axes[0]])
 
     if k == 1:
         return transpose(flip(m, axes[1]), axes_list)
@@ -1267,7 +1267,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         have an entry for each dimension. Unlike
         :func:`numpy.histogramdd`, if `bins` does not define bin
         edges, this argument is required (this function will not
-        automatically use the min and max of of the value in a given
+        automatically use the min and max of the value in a given
         dimension because the input data may be lazy in dask).
     normed : bool, optional
         An alias for the density argument that behaves identically. To
@@ -1569,7 +1569,7 @@ def cov(
     # Unlike NumPy, these checks don't include:
     #    - if fweights are all integers
     #    - if either fweights or aweights are all non-negative
-    # These checks potientially expensive for distributed arrays.
+    # These checks potentially expensive for distributed arrays.
     w = None
     if fweights is not None:
         fweights = asarray(fweights, dtype=float)

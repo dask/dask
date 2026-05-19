@@ -206,8 +206,8 @@ class ArrayOverlapLayer(Layer):
         name = self.name
         dask_keys = self._dask_keys()
 
-        getitem_name = "getitem-" + self.token
-        overlap_name = "overlap-" + self.token
+        getitem_name = f"getitem-{self.token}"
+        overlap_name = f"overlap-{self.token}"
 
         if deserializing:
             # Use CallableLazyImport objects to avoid importing dataframe

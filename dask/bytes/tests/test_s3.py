@@ -11,6 +11,10 @@ from functools import partial
 
 import pytest
 
+# Tests in this module are not concurrent-safe.
+# Force them to run sequentially in pytest-xdist.
+pytestmark = pytest.mark.xdist_group(name="s3")
+
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
 moto = pytest.importorskip("moto", minversion="1.3.14")

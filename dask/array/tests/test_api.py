@@ -21,7 +21,7 @@ def test_api():
         m
         for m, mod in member_dict.items()
         if m not in DA_EXPORTED_SUBMODULES
-        if isinstance(mod, ModuleType) and mod.__package__ == "dask.array"
+        if isinstance(mod, ModuleType) and mod.__spec__.parent == "dask.array"
     }
     # imported utility modules
     members -= {"annotations", "builtins", "importlib", "warnings"}

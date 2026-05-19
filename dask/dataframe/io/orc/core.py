@@ -186,7 +186,7 @@ def to_orc(
 
     # Construct IO graph
     dsk = {}
-    name = "to-orc-" + tokenize(
+    token = tokenize(
         df,
         fs,
         path,
@@ -194,6 +194,7 @@ def to_orc(
         write_index,
         storage_options,
     )
+    name = f"to-orc-{token}"
     final_name = f"{name}-final"
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (

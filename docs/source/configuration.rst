@@ -93,6 +93,16 @@ The contents of these YAML files are merged together, allowing different
 Dask subprojects like ``dask-kubernetes`` or ``dask-ml`` to manage configuration
 files separately, but have them merge into the same global configuration.
 
+Dealing with obsolete configuration files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You may have old configuration files with deprecated keys in your file system. Ideally,
+you should update them to match the current configuration schema. If that's not possible
+e.g. because you don't have enough privileges, you can override obsolete keys with the
+updated keys in a higher-priority configuration file (as explained in the previous
+paragraph). This will silence warnings about deprecated keys. If a key has been outright
+removed from the latest schema, you can suppress the warnings by adding it under a
+special ``deprecated-keys`` section of your higher-priority configuration file.
 
 Environment Variables
 ~~~~~~~~~~~~~~~~~~~~~

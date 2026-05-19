@@ -779,7 +779,8 @@ class Bag(DaskMethodsMixin):
         >>> list(b.pluck('credits').pluck(0))
         [1, 10]
         """
-        name = "pluck-" + tokenize(self, key, default)
+        token = tokenize(self, key, default)
+        name = f"pluck-{token}"
         key = quote(key)
         if default is no_default:
             dsk = {
@@ -1182,7 +1183,8 @@ class Bag(DaskMethodsMixin):
         >>> list(people.join(fruit, lambda x: x[0]))
         [('Apple', 'Alice'), ('Apricot', 'Alice'), ('Banana', 'Bob')]
         """
-        name = "join-" + tokenize(self, other, on_self, on_other)
+        token = tokenize(self, other, on_self, on_other)
+        name = f"join-{token}"
         dsk = {}
         if isinstance(other, Bag):
             if other.npartitions == 1:
@@ -1217,7 +1219,8 @@ class Bag(DaskMethodsMixin):
     def product(self, other):
         """Cartesian product between two bags."""
         assert isinstance(other, Bag)
-        name = "product-" + tokenize(self, other)
+        token = tokenize(self, other)
+        name = f"product-{token}"
         n, m = self.npartitions, other.npartitions
         dsk = {
             (name, i * m + j): (
@@ -1352,7 +1355,7 @@ class Bag(DaskMethodsMixin):
             split_every = self.npartitions
 
         token = tokenize(self, key, binop, initial, combine, combine_initial)
-        a = "foldby-a-" + token
+        a = f"foldby-a-{token}"
         if combine is None:
             combine = binop
         if initial is not no_default:
@@ -1393,7 +1396,7 @@ class Bag(DaskMethodsMixin):
             b = c
             depth += 1
 
-        e = "foldby-b-" + token
+        e = f"foldby-b-{token}"
         if combine_initial is not no_default:
             dsk[(e, 0)] = (
                 dictitems,
@@ -1446,10 +1449,10 @@ class Bag(DaskMethodsMixin):
             )
 
         token = tokenize(self, k, npartitions)
-        name = "take-" + token
+        name = f"take-{token}"
 
         if npartitions > 1:
-            name_p = "take-partial-" + token
+            name_p = f"take-partial-{token}"
 
             dsk = {}
             for i in range(npartitions):
@@ -1479,7 +1482,8 @@ class Bag(DaskMethodsMixin):
         >>> list(b.flatten())
         [1, 2, 3]
         """
-        name = "flatten-" + tokenize(self)
+        token = tokenize(self)
+        name = f"flatten-{token}"
         dsk = {
             (name, i): (list, (toolz.concat, (self.name, i)))
             for i in range(self.npartitions)
@@ -1799,7 +1803,8 @@ def from_sequence(seq, partition_size=None, npartitions=None):
             partition_size = max(1, math.ceil(math.sqrt(len(seq)) / math.sqrt(100)))
 
     parts = list(partition_all(partition_size, seq))
-    name = "from_sequence-" + tokenize(seq, partition_size)
+    token = tokenize(seq, partition_size)
+    name = f"from_sequence-{token}"
     if len(parts) > 0:
         d = {(name, i): list(part) for i, part in enumerate(parts)}
     else:
@@ -1860,7 +1865,8 @@ def concat(bags):
     >>> list(c)
     [1, 2, 3, 4, 5, 6]
     """
-    name = "concat-" + tokenize(*bags)
+    token = tokenize(*bags)
+    name = f"concat-{token}"
     counter = itertools.count(0)
     dsk = {(name, next(counter)): key for bag in bags for key in bag.__dask_keys__()}
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=bags)
@@ -1920,7 +1926,8 @@ def from_delayed(values):
             for v in values
         ]
 
-    name = "bag-from-delayed-" + tokenize(*values)
+    token = tokenize(*values)
+    name = f"bag-from-delayed-{token}"
     tasks = [Task((name, i), reify, TaskRef(v.key)) for i, v in enumerate(values)]
     dsk = {t.key: t for t in tasks}
 
@@ -2021,7 +2028,8 @@ def bag_zip(*bags):
     assert all(bag.npartitions == npartitions for bag in bags)
     # TODO: do more checks
 
-    name = "zip-" + tokenize(*bags)
+    token = tokenize(*bags)
+    name = f"zip-{token}"
     dsk = {
         (name, i): (reify, (zip,) + tuple((bag.name, i) for bag in bags))
         for i in range(npartitions)
@@ -2614,14 +2622,15 @@ def split(seq, n):
 
 def to_dataframe(seq, columns, dtypes):
     import pandas as pd
-    from packaging.version import Version
+
+    from dask._pandas_compat import PANDAS_GE_300
 
     seq = reify(seq)
     # pd.DataFrame expects lists, only copy if necessary
     if not isinstance(seq, list):
         seq = list(seq)
 
-    kwargs = {} if Version(pd.__version__).major >= 3 else {"copy": False}
+    kwargs = {} if PANDAS_GE_300 else {"copy": False}
     res = pd.DataFrame(seq, columns=list(columns))
     return res.astype(dtypes, **kwargs)
 

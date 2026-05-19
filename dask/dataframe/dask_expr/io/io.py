@@ -54,7 +54,8 @@ class FromGraph(IO):
 
     @functools.cached_property
     def _name(self):
-        return self.operand("name_prefix") + "-" + self.deterministic_token
+        prefix = self.operand("name_prefix")
+        return f"{prefix}-{self.deterministic_token}"
 
     def _layer(self):
         dsk = dict(self.operand("layer"))
@@ -115,7 +116,8 @@ class FusedIO(BlockwiseIO):
 
     @functools.cached_property
     def _name(self):
-        return self.operand("_expr")._funcname + "-fused-" + self.deterministic_token
+        prefix = self.operand("_expr")._funcname
+        return f"{prefix}-fused-{self.deterministic_token}"
 
     @functools.cached_property
     def _meta(self):
@@ -178,11 +180,8 @@ class FusedParquetIO(FusedIO):
 
     @functools.cached_property
     def _name(self):
-        return (
-            funcname(type(self.operand("_expr"))).lower()
-            + "-fused-parq-"
-            + self.deterministic_token
-        )
+        prefix = funcname(type(self.operand("_expr"))).lower()
+        return f"{prefix}-fused-parq-{self.deterministic_token}"
 
     @staticmethod
     def _load_multiple_files(
@@ -259,9 +258,10 @@ class FromMap(PartitionsFiltered, BlockwiseIO):
     @functools.cached_property
     def _name(self):
         if self.label is None:
-            return funcname(self.func).lower() + "-" + self.deterministic_token
+            label = funcname(self.func).lower()
+            return f"{label}-{self.deterministic_token}"
         else:
-            return self.label + "-" + self.deterministic_token
+            return f"{self.label}-{self.deterministic_token}"
 
     @functools.cached_property
     def _meta(self):
@@ -570,7 +570,7 @@ class FromPandasDivisions(FromPandas):
 
     @functools.cached_property
     def _name(self):
-        return "from_pd_divs" + "-" + self.deterministic_token
+        return f"from_pd_divs-{self.deterministic_token}"
 
     @property
     def _divisions_and_locations(self):

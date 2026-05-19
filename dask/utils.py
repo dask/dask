@@ -885,7 +885,7 @@ def unsupported_arguments(doc, args):
         subset = [
             (i, line)
             for i, line in enumerate(lines)
-            if re.match(r"^\s*" + arg + " ?:", line)
+            if re.match(rf"^\s*{arg} ?:", line)
         ]
         if len(subset) == 1:
             [(i, line)] = subset
@@ -2230,12 +2230,11 @@ def get_default_shuffle_method() -> str:
         return "disk"
 
     try:
-        from distributed.shuffle import check_minimal_arrow_version
+        from dask.dataframe._compat import HAS_PYARROW
 
-        check_minimal_arrow_version()
-    except ModuleNotFoundError:
+        return "p2p" if HAS_PYARROW else "tasks"
+    except ImportError:
         return "tasks"
-    return "p2p"
 
 
 def get_meta_library(like):

@@ -22,8 +22,8 @@ def test_api():
         for m, mod in member_dict.items()
         if m not in DA_EXPORTED_SUBMODULES
         if isinstance(mod, ModuleType)
-        and mod.__package__
-        and mod.__package__.startswith("dask.dataframe")
+        and mod.__spec__.parent
+        and mod.__spec__.parent.startswith("dask.dataframe")
     }
     # imported utility modules
     members -= {"annotations"}

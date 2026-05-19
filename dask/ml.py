@@ -11,5 +11,5 @@ def __getattr__(value):
             "  conda install dask-ml                      # either conda install\n"
             "  python -m pip install dask-ml --upgrade    # or pip install"
         )
-        raise ImportError(msg) from e
+        raise type(e)(msg) from e
     return getattr(dask_ml, value)

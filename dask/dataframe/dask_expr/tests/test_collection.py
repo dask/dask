@@ -15,7 +15,12 @@ import dask
 import dask.array as da
 from dask._compatibility import WINDOWS
 from dask.array.numpy_compat import NUMPY_GE_200
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300
+from dask.dataframe._compat import (
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+    PANDAS_GE_300,
+    PANDAS_GE_310,
+)
 from dask.dataframe.dask_expr import (
     DataFrame,
     Series,
@@ -644,9 +649,15 @@ def test_method_operators(pdf, df, axis, level, fill_value, op, series, other):
         with pytest.raises(ValueError, match=f"Unable to {op} dd.Series with axis=1"):
             getattr(df, op)(other=other, **kwargs)
 
-    elif isinstance(other, Series) and axis in (0, "index") and fill_value:
-        msg = f"fill_value {fill_value} not supported"
-        with pytest.raises(NotImplementedError, match=msg):
+    elif (
+        not PANDAS_GE_310
+        and isinstance(other, Series)
+        and axis in (0, "index")
+        and fill_value
+    ):
+        with pytest.raises(
+            NotImplementedError, match=f"fill_value {fill_value} not supported"
+        ):
             getattr(df, op)(other=other, **kwargs)
 
     else:
@@ -1710,6 +1721,7 @@ def test_repartition_partition_size(df):
     assert all(div is not None for div in df2.divisions)
 
 
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/12275", strict=False)
 def test_len(df, pdf):
     df2 = df[["x"]] + 1
     assert len(df2) == len(pdf)
@@ -2187,8 +2199,8 @@ def test_columns_setter(df, pdf):
     df.columns = ["a", "b"]
     result = df[["a"]]
     pdf.columns = ["a", "b"]
-    expecetd = pdf[["a"]]
-    assert_eq(result, expecetd)
+    expected = pdf[["a"]]
+    assert_eq(result, expected)
 
     with pytest.raises(ValueError, match="Length mismatch"):
         df.columns = [1, 2, 3]

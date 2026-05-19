@@ -15,11 +15,11 @@ dependencies:
   # optional dependencies pulled in by pip install dask[array,dataframe]
   - numpy=1.26  # pyarrow 16 requires numpy >=1.26; see mindeps-array for 1.24
   - pandas=2.0
+  - pyarrow=16.0
   # optional dependencies pulled in by pip install dask[diagnostics]
   - bokeh=3.1.0
   - jinja2=2.10.3
   # optional dependencies pulled in by pip install dask[complete]
-  - pyarrow=16.0
   - lz4=4.3.2
   # optional dependencies used by dask
   - cachey=0.1.1

@@ -1514,7 +1514,7 @@ def setitem_array(out_name, array, indices, value):
 
         The second case occurs when the block represented by key does
         overlap the indices. setitem is the chunk assignment function;
-        v_key is the dask key of the the part of the assignment value
+        v_key is the dask key of the part of the assignment value
         that corresponds to the block; and block_indices are the
         assignment indices that apply to the block.
 
@@ -1768,7 +1768,7 @@ def setitem_array(out_name, array, indices, value):
     #                           the assignment value.
     #
     # Note that array_common_shape and value_common_shape may be
-    # different if there are any size 1 dimensions being brodacast.
+    # different if there are any size 1 dimensions being broadcast.
     offset = len(implied_shape) - value_ndim
     if offset >= 0:
         # The array has the same number or more dimensions than the
@@ -2102,7 +2102,7 @@ def setitem(x, v, indices):
 
     # Copy the array to guarantee no other objects are corrupted.
     # When x is the output of a scalar __getitem__ call, it is a
-    # np.generic, which is read-only. Convert it to a (writeable)
+    # np.generic, which is read-only. Convert it to a (writable)
     # 0-d array. x could also be a cupy array etc.
     x = np.asarray(x) if isinstance(x, np.generic) else x.copy()
 

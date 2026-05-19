@@ -11,9 +11,7 @@ from typing import Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 from fsspec.utils import stringify_path
-from packaging.version import parse as parse_version
 from pandas import CategoricalDtype
 from pandas.api.types import (
     is_bool_dtype,
@@ -513,7 +511,7 @@ Expr={expr}"""
               be computed
             - simplified-physical: runs another simplification after the physical
               plan is generated
-            - fused: fuses the physical expression to reduce the nodes in thr graph.
+            - fused: fuses the physical expression to reduce the nodes in the graph.
 
             .. warning::
                 The optimizer stages are subject to change.
@@ -779,7 +777,7 @@ Expr={expr}"""
             expr.Isin(
                 self,
                 values=expr._DelayedExpr(
-                    delayed(values, name="delayed-" + _tokenize_deterministic(values))
+                    delayed(values, name=f"delayed-{_tokenize_deterministic(values)}")
                 ),
             )
         )
@@ -2937,7 +2935,7 @@ class DataFrame(FrameBase):
             used to select the underlying algorithm. If a floating-point value
             is specified, that number will be used as the ``broadcast_bias``
             within the simple heuristic (a large number makes Dask more likely
-            to choose the ``broacast_join`` code path). See ``broadcast_join``
+            to choose the ``broadcast_join`` code path). See ``broadcast_join``
             for more information.
 
         Notes
@@ -3622,18 +3620,6 @@ class DataFrame(FrameBase):
             Dask does not fully support referring to variables using the '@' character,
             use f-strings or the ``local_dict`` keyword argument instead.
 
-        Notes
-        -----
-        This is like the sequential version except that this will also happen
-        in many threads.  This may conflict with ``numexpr`` which will use
-        multiple threads itself.  We recommend that you set ``numexpr`` to use a
-        single thread:
-
-        .. code-block:: python
-
-            import numexpr
-            numexpr.set_num_threads(1)
-
         See also
         --------
         pandas.DataFrame.query
@@ -3917,6 +3903,28 @@ class DataFrame(FrameBase):
         include=None,
         exclude=None,
     ):
+        """Generate descriptive statistics.
+
+        Dask computes percentiles (used for the ``25%``, ``50%``, and
+        ``75%`` statistics) using an **approximate algorithm** by default.
+        Results may therefore differ slightly from pandas.  Use
+        ``percentiles_method="dask"`` for the built-in Dask algorithm or
+        ``percentiles_method="tdigest"`` for the t-digest algorithm.
+        See :meth:`dask.dataframe.DataFrame.quantile` for details.
+
+        Parameters
+        ----------
+        split_every : int or False, optional
+            Number of partitions to aggregate at once. Defaults to ``False``
+            which uses a single-pass reduction over all partitions.
+        percentiles : list-like of numbers, optional
+            The percentiles to include in the output. All should fall
+            between 0 and 1. By default, ``[0.25, 0.5, 0.75]`` is used.
+        percentiles_method : {"default", "tdigest", "dask"}, optional
+            Method for computing percentiles. ``"default"`` uses the internal
+            Dask algorithm. ``"tdigest"`` uses the t-digest algorithm for
+            floats and ints and falls back to ``"dask"`` otherwise.
+        """
         # TODO: duplicated columns
         if include is None and exclude is None:
             _include = [np.number, np.timedelta64, np.datetime64]
@@ -3985,18 +3993,14 @@ class DataFrame(FrameBase):
             column_width = max(space, 7)
 
             header = (
-                textwrap.dedent(
-                    """\
+                textwrap.dedent("""\
              #   {{column:<{column_width}}} Non-Null Count  Dtype
-            ---  {{underl:<{column_width}}} --------------  -----"""
-                )
+            ---  {{underl:<{column_width}}} --------------  -----""")
                 .format(column_width=column_width)
                 .format(column="Column", underl="------")
             )
-            column_template = textwrap.dedent(
-                f"""\
-            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}"""
-            )
+            column_template = textwrap.dedent(f"""\
+            {{i:^3}}  {{name:<{column_width}}} {{count}} non-null      {{dtype}}""")
             column_info = [
                 column_template.format(
                     i=pprint_thing(i),
@@ -4571,6 +4575,28 @@ class Series(FrameBase):
         include=None,
         exclude=None,
     ):
+        """Generate descriptive statistics.
+
+        Dask computes percentiles (used for the ``25%``, ``50%``, and
+        ``75%`` statistics) using an **approximate algorithm** by default.
+        Results may therefore differ slightly from pandas.  Use
+        ``percentiles_method="dask"`` for the built-in Dask algorithm or
+        ``percentiles_method="tdigest"`` for the t-digest algorithm.
+        See :meth:`dask.dataframe.Series.quantile` for details.
+
+        Parameters
+        ----------
+        split_every : int or False, optional
+            Number of partitions to aggregate at once. Defaults to ``False``
+            which uses a single-pass reduction over all partitions.
+        percentiles : list-like of numbers, optional
+            The percentiles to include in the output. All should fall
+            between 0 and 1. By default, ``[0.25, 0.5, 0.75]`` is used.
+        percentiles_method : {"default", "tdigest", "dask"}, optional
+            Method for computing percentiles. ``"default"`` uses the internal
+            Dask algorithm. ``"tdigest"`` uses the t-digest algorithm for
+            floats and ints and falls back to ``"dask"`` otherwise.
+        """
         if (
             is_numeric_dtype(self.dtype)
             and not is_bool_dtype(self.dtype)
@@ -4654,10 +4680,12 @@ class Index(Series):
         "nanosecond",
         "microsecond",
         "millisecond",
+        "day_of_year",
         "dayofyear",
         "minute",
         "hour",
         "day",
+        "day_of_week",
         "dayofweek",
         "second",
         "week",
@@ -5337,10 +5365,6 @@ def read_parquet(
         or isinstance(filesystem, str)
         and filesystem.lower() in ("arrow", "pyarrow")
     ):
-        if parse_version(pa.__version__) < parse_version("15.0.0"):
-            raise ValueError(
-                "pyarrow>=15.0.0 is required to use the pyarrow filesystem."
-            )
         if metadata_task_size is not None:
             raise NotImplementedError(
                 "metadata_task_size is not supported when using the pyarrow filesystem."

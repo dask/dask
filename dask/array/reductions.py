@@ -1614,6 +1614,8 @@ def quantile(
         kwargs = {"weights": weights}
     else:
         kwargs = {}
+        if weights is not None:
+            raise NotImplementedError("da.quantile with weights requires NumPy >= 2.0")
 
     result = a.map_blocks(
         np.quantile,

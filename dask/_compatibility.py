@@ -104,6 +104,8 @@ def import_optional_dependency(
         module = importlib.import_module(name)
     except (importlib_metadata.PackageNotFoundError, ImportError) as err:
         if errors == "raise":
+            if isinstance(err, ImportError):
+                raise type(err)(msg) from err  # Typically ModuleNotFoundError
             raise ImportError(msg) from err
         return None
 

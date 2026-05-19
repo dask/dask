@@ -53,7 +53,7 @@ def test_choices_k_equal_bag_size_with_unbalanced_partitions():
     assert all(i in seq for i in li)
 
 
-def test_choices_with_more_bag_partitons():
+def test_choices_with_more_bag_partitions():
     # test with npartitions > split_every
     seq = range(100)
     sut = db.from_sequence(seq, npartitions=10)
@@ -63,7 +63,7 @@ def test_choices_with_more_bag_partitons():
     assert all(i in seq for i in li)
 
 
-def test_sample_with_more_bag_partitons():
+def test_sample_with_more_bag_partitions():
     # test with npartitions > split_every
     seq = range(100)
     sut = db.from_sequence(seq, npartitions=10)

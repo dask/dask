@@ -23,7 +23,7 @@ def test_read_json_with_path_column(orient):
         df.to_json(f, orient=orient, lines=False)
         actual = dd.read_json(f, orient=orient, lines=False, include_path_column=True)
         actual_pd = pd.read_json(f, orient=orient, lines=False)
-        # The default column name when include_path_colum is True is "path"
+        # The default column name when include_path_column is True is "path"
         # The paths on Windows are converted to forward slash somewhere in the file
         # reading chain in Dask, so we have to do the same here.
         actual_pd["path"] = pd.Series(
@@ -114,7 +114,7 @@ def test_read_json_basic(orient):
 def test_read_json_fkeyword(fkeyword):
     def _my_json_reader(*args, **kwargs):
         if fkeyword == "json":
-            return pd.DataFrame.from_dict(json.load(*args))
+            return pd.DataFrame(json.load(*args))
         return pd.read_json(*args)
 
     with tmpfile("json") as f:

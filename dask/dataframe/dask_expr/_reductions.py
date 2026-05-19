@@ -855,7 +855,7 @@ class CustomReduction(Reduction):
     @functools.cached_property
     def _name(self):
         name = self.operand("token") or funcname(type(self)).lower()
-        return name + "-" + self.deterministic_token
+        return f"{name}-{self.deterministic_token}"
 
     @classmethod
     def chunk(cls, df, **kwargs):

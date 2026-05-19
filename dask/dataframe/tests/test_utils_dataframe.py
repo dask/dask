@@ -8,7 +8,6 @@ from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 import pytest
-from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
@@ -233,10 +232,7 @@ def test_meta_nonempty():
     assert df3["E"][0].dtype == "i4"
     assert df3["F"][0] == pd.Timestamp("1970-01-01 00:00:00")
     assert df3["G"][0] == pd.Timestamp("1970-01-01 00:00:00", tz="America/New_York")
-    if PANDAS_GE_300:
-        assert df3["H"][0] == pd.Timedelta(1, unit="us")
-    else:
-        assert df3["H"][0] == pd.Timedelta(1, unit="ns")
+    assert df3["H"][0] == pd.Timedelta(1, unit="us")
     if PANDAS_GE_300:
         assert type(df3["I"][0]) is object
     else:
@@ -458,8 +454,7 @@ def test_check_meta():
     else:
         string_type = "object"
 
-    exp = textwrap.dedent(
-        f"""\
+    exp = textwrap.dedent(f"""\
         Metadata mismatch found in `from_delayed`.
 
         Partition type: `{frame}`
@@ -469,8 +464,7 @@ def test_check_meta():
         | 'a'    | {string_type}   | category |
         | 'c'    | -        | float64  |
         | 'e'    | category | -        |
-        +--------+----------+----------+"""
-    )
+        +--------+----------+----------+""")
 
     assert str(err.value) == exp
 
@@ -478,8 +472,7 @@ def test_check_meta():
     with pytest.raises(ValueError) as err:
         check_meta(df.a, pd.Series([], dtype="string"), numeric_equal=False)
 
-    expected = textwrap.dedent(
-        f"""\
+    expected = textwrap.dedent(f"""\
         Metadata mismatch found.
 
         Partition type: `{series}`
@@ -488,8 +481,7 @@ def test_check_meta():
         +----------+--------+
         | Found    | {string_type} |
         | Expected | string |
-        +----------+--------+"""
-    )
+        +----------+--------+""")
 
     assert str(err.value) == expected
 
@@ -713,25 +705,11 @@ def test_valid_divisions(divisions, valid):
 
 
 def test_pyarrow_strings_enabled():
-    try:
-        import pyarrow as pa
-    except ImportError:
-        pa = None
-
-    # If `pyarrow>=12` are installed, then default to using pyarrow strings
-    if (
-        dask.config.get("dataframe.convert-string") in (True, None)
-        and pa is not None
-        and Version(pa.__version__) >= Version("12.0.0")
-    ):
-        assert pyarrow_strings_enabled() is True
-    else:
-        assert pyarrow_strings_enabled() is False
-
-    # Regardless of dependencies that are installed, always obey
-    # the `dataframe.convert-string` config value if it's specified
     with dask.config.set({"dataframe.convert-string": False}):
         assert pyarrow_strings_enabled() is False
+
+    with dask.config.set({"dataframe.convert-string": None}):
+        assert pyarrow_strings_enabled() is True
 
     with dask.config.set({"dataframe.convert-string": True}):
         assert pyarrow_strings_enabled() is True

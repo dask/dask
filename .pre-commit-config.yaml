@@ -4,13 +4,15 @@ repos:
     hooks:
       - id: end-of-file-fixer
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.2
+    rev: v0.15.10
     hooks:
       - id: ruff-check
+        # args: [--fix]
   - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 25.11.0
+    rev: 26.3.1
     hooks:
       - id: black
+        args: [--target-version=py310]
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
