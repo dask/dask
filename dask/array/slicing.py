@@ -1713,8 +1713,9 @@ def setitem_array(out_name, array, indices, value):
         indices, array_shape
     )
 
-    # Empty slices can only be assigned size 1 values
-    if 0 in implied_shape and value_shape and max(value_shape) > 1:
+    # Empty slices can only be assigned size-1 (scalar-broadcast) values.
+    # If the value is itself size-0 (0 in value_shape) the assignment is a no-op and always valid.
+    if 0 in implied_shape and value_shape and 0 not in value_shape and max(value_shape) > 1:
         raise ValueError(
             f"shape mismatch: value array of shape {value_shape} "
             "could not be broadcast to indexing result "

@@ -636,40 +636,41 @@ def moment(
 
 @derived_from(np)
 def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None):
-    if dtype is not None:
-        dt = dtype
-    else:
-        dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+    # Always compute in the natural float dtype to match NumPy semantics;
+    # the user-supplied dtype is only applied to the final output.
+    compute_dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
 
     implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
 
-    return reduction(
+    result = reduction(
         a,
         partial(moment_chunk, implicit_complex_dtype=implicit_complex_dtype),
         partial(moment_agg, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
-        dtype=dt,
+        dtype=compute_dt,
         split_every=split_every,
         combine=moment_combine,
         name="var",
         out=out,
         concatenate=False,
     )
+    if dtype is not None and np.dtype(dtype) != compute_dt:
+        result = result.astype(dtype)
+    return result
 
 
 @derived_from(np)
 def nanvar(
     a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None
 ):
-    if dtype is not None:
-        dt = dtype
-    else:
-        dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+    # Always compute in the natural float dtype to match NumPy semantics;
+    # the user-supplied dtype is only applied to the final output.
+    compute_dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
 
     implicit_complex_dtype = dtype is None and np.iscomplexobj(a)
 
-    return reduction(
+    result = reduction(
         a,
         partial(
             moment_chunk,
@@ -680,12 +681,15 @@ def nanvar(
         partial(moment_agg, sum=np.sum, ddof=ddof),
         axis=axis,
         keepdims=keepdims,
-        dtype=dt,
+        dtype=compute_dt,
         split_every=split_every,
         combine=partial(moment_combine, sum=np.nansum),
         out=out,
         concatenate=False,
     )
+    if dtype is not None and np.dtype(dtype) != compute_dt:
+        result = result.astype(dtype)
+    return result
 
 
 def _sqrt(a):
