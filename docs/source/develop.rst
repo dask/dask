@@ -128,7 +128,7 @@ You can pass arbitrary pytest parameters to the command; e.g.::
 
    pixi run test dask/tests/test_base.py -k persist
 
-pytest-xdist is supported to run tests in parallel::
+pytest-xdist can be used to run tests in parallel::
 
    pixi run test -n auto
 

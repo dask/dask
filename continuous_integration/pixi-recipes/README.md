@@ -23,7 +23,7 @@ We can't just use::
     [pypi-dependencies]
     s3fs = { git = "https://github.com/fsspec/s3fs" }
 
-again due to lack of pixi-build support for SCM versioning in fsspec; the s3fs project
+again, due to lack of pixi-build support for SCM versioning in fsspec; the s3fs project
 pins the fsspec version which fails to match the current fsspec recipe. This s3fs recipe
 works around the problem by removing the fsspec pin.
 
@@ -39,6 +39,6 @@ This causes `import urllib3` or `import requests` to lock the GIL.
 Pure-python variant of conda package `msgpack-python=1.1.2`, which in conda-forge
 is compiled with the C extensions enabled and does not release the GIL.
 
-**Note:** this is expected to substantially degraded dask.distributed performance. For
+**Note:** this is expected to substantially degrade dask.distributed performance. For
 benchmarks you should use the conda-forge version with the `PYTHON_GIL=0` environment
 variable set.
