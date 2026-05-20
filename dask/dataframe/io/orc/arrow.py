@@ -114,7 +114,7 @@ class ArrowORCEngine:
 
 def _read_orc_stripes(fs, path, stripes, schema, columns):
     # Construct a list of RecordBatch objects.
-    # Each ORC stripe will corresonpond to a single RecordBatch.
+    # Each ORC stripe will correspond to a single RecordBatch.
     if columns is None:
         columns = list(schema)
 

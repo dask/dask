@@ -120,7 +120,7 @@ divided.  In this case ``.divisions`` will be all ``None``:
    [None, None, None, None, None]
 
 In these cases, any operation that requires a cleanly partitioned DataFrame with
-known divisions will have to perform a sort.  This can generally achieved by
+known divisions will have to perform a sort.  This can generally be achieved by
 calling ``df.set_index(...)``.
 
 

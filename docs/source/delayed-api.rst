@@ -26,7 +26,7 @@ another ``Delayed`` representing the result:
 Operations that aren't supported include:
 
 - Mutating operators (``a += 1``)
-- Mutating magics such as ``__setitem__``/``__setattr__`` (``a[0] = 1``, ``a.foo = 1``)
+- Mutating magic methods such as ``__setitem__``/``__setattr__`` (``a[0] = 1``, ``a.foo = 1``)
 - Iteration. (``for i in a: ...``)
 - Use as a predicate (``if a: ...``)
 

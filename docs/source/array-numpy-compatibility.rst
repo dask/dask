@@ -9,7 +9,7 @@ This table has been compiled manually and may not reflect the current Dask state
 Update contributions are welcome. 
 
 * A blank entry indicates that the function is not implemented in Dask.
-* Direct implementation are direct calls to numpy functions.
+* Direct implementations are direct calls to numpy functions.
 * Element-wise implementations are derived from numpy but applied element-wise: the
   argument should be a dask array.
 * Dask equivalent are Dask implementations, which may lack or add parameters with respect

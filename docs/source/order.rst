@@ -9,7 +9,7 @@ Ordering
 
 When Dask is given a task graph to compute, it needs to choose an order to
 execute the tasks in. We have some constraints: dependencies must be executed
-before their dependants. But beyond that there's a large space of options. We
+before their dependents. But beyond that there's a large space of options. We
 want Dask to choose an ordering that maximizes parallelism while minimizing
 the footprint necessary to run a computation.
 

@@ -24,7 +24,7 @@ simply shared rather than serialised and deserialised.
 
 Similarly, if you use the multiprocessing scheduler, new processes
 will be copied from, or launched in the same way as the original process,
-so you only need make sure that you have not changed environment variables
+so you only need to make sure that you have not changed environment variables
 related to starting up python and importing
 code (such as PATH, PYTHONPATH, ``sys.path``).
 

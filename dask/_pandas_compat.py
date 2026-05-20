@@ -73,7 +73,7 @@ def makeTimedeltaIndex(k=30, freq="D"):
     return pd.timedelta_range("1 day", periods=k, freq=freq)
 
 
-def makeMissingDataframe():
+def makeMissingDataFrame():
     df = makeDataFrame()
     data = df.values
     data = np.where(data > 1, np.nan, data)

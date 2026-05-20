@@ -2366,7 +2366,7 @@ def test_embarrassingly_parallel_operations():
 
 
 def test_fillna():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.fillna(100), df.fillna(100))
@@ -2378,7 +2378,7 @@ def test_fillna():
 
 
 def test_ffill():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.ffill(), df.ffill())
@@ -2388,7 +2388,7 @@ def test_ffill():
     assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
     assert_eq(ddf.ffill(limit=2, axis=1), df.ffill(limit=2, axis=1))
 
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     df.iloc[:15, 0] = np.nan  # all NaN partition
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
     pytest.raises(ValueError, lambda: ddf.ffill().compute())
@@ -2396,7 +2396,7 @@ def test_ffill():
 
 
 def test_bfill():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.bfill(), df.bfill())
@@ -2405,7 +2405,7 @@ def test_bfill():
     assert_eq(ddf.bfill(limit=2), df.bfill(limit=2))
     assert_eq(ddf.A.bfill(limit=2), df.A.bfill(limit=2))
 
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     df.iloc[:15, 0] = np.nan  # all NaN partition
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
     pytest.raises(ValueError, lambda: ddf.bfill().compute())
@@ -2455,7 +2455,7 @@ def test_fillna_duplicate_index():
 
 
 def test_fillna_multi_dataframe():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.A.fillna(ddf.B), df.A.fillna(df.B))
@@ -2463,8 +2463,8 @@ def test_fillna_multi_dataframe():
 
 
 def test_fillna_dask_dataframe_input():
-    df = _compat.makeMissingDataframe()
-    df1 = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
+    df1 = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5)
     ddf1 = dd.from_pandas(df1, npartitions=3)
 
@@ -2475,7 +2475,7 @@ def test_fillna_dask_dataframe_input():
 
 
 def test_ffill_bfill():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.ffill(), df.ffill())
@@ -3002,7 +3002,7 @@ def test_round():
     ],
 )
 def test_cov_dataframe(numeric_only):
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=6)
 
     numeric_only_kwarg = {}
@@ -3026,7 +3026,7 @@ def test_cov_dataframe(numeric_only):
 
 
 def test_cov_series():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     a = df.A
     b = df.B
     da = dd.from_pandas(a, npartitions=6)
@@ -3076,7 +3076,7 @@ def test_cov_gpu(numeric_only):
 
 def test_corr():
     # DataFrame
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=6)
 
     res = ddf.corr()
@@ -3142,7 +3142,7 @@ def test_corr_gpu():
 def test_corr_same_name():
     # Series with same names (see https://github.com/dask/dask/issues/4906)
 
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=6)
 
     result = ddf.A.corr(ddf.B.rename("A"))

@@ -163,7 +163,7 @@ def test_array_function_cupy_svd(chunks):
     ],
 )
 def test_unregistered_func(func):
-    # Wrap a procol-based encapsulated ndarray
+    # Wrap a protocol-based encapsulated ndarray
     x = EncapsulateNDArray(np.random.default_rng().random((100, 100)))
 
     # See if Dask holds the array fine

@@ -20,7 +20,7 @@ ties in an intelligent way
 For example after we finish ``a`` we can choose to run either ``b`` or ``c``
 next.  Making small decisions like this can greatly affect our performance,
 especially because the order in which we run tasks affects the order in which
-we can release memory, which operationally we find to have a large affect on
+we can release memory, which operationally we find to have a large effect on
 many computation.  We want to run tasks in such a way that we keep only a small
 amount of data in memory at any given time.
 
