@@ -1311,7 +1311,7 @@ Expr={expr}"""
             For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
             where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
             See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
-        npartitions : int, Callable, optional
+        npartitions : int | Callable, optional
             Approximate number of partitions of output. The number of
             partitions used may be slightly lower than npartitions depending
             on data distribution, but will never be higher.

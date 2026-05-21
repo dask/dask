@@ -187,7 +187,7 @@ example S3_ or GCS_) by prepending the path with a protocol.
 
 Note that for remote filesystems you may need to configure credentials. When
 possible we recommend handling these external to Dask through
-filesystem-specific configuration files/environment variables For example, you
+filesystem-specific configuration files/environment variables. For example, you
 may wish to store S3 credentials using the `AWS credentials file`_.
 Alternatively, you can pass configuration on to the fsspec_ backend through the
 ``storage_options`` keyword argument:

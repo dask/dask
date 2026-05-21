@@ -9,7 +9,7 @@ from dask.array.svg import draw_sizes
 
 
 def parses(text):
-    cleaned = text.replace("&rarr;", "")  # xml doesn't like righarrow character
+    cleaned = text.replace("&rarr;", "")  # xml doesn't like right arrow character
     assert xml.etree.ElementTree.fromstring(cleaned) is not None  # parses cleanly
 
 

@@ -57,7 +57,7 @@ Machine Learning
   scikit-learn algorithms with dask as the processor.
 - `xgboost <https://xgboost.readthedocs.io>`_: Powerful and popular library for gradient boosted trees;
   includes native support for distributed training using dask.
-- `lightgbm <https://lightgbm.readthedocs.io>`_: Similar to XGBoost; lightgmb also natively supplies native
+- `lightgbm <https://lightgbm.readthedocs.io>`_: Similar to XGBoost; lightgbm also natively supplies native
   distributed training for decision trees.
 
 Deploying Dask

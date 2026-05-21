@@ -20,7 +20,7 @@ def chunk_einsum(*operands, **kwargs):
     einsum = einsum_lookup.dispatch(type(operands[0]))
     chunk = einsum(subscripts, *operands, dtype=dtype, **kwargs)
 
-    # Avoid concatenate=True in blockwise by adding 1's
+    # Avoid concatenate=True in blockwise by padding with 1's
     # for the contracted dimensions
     return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
 

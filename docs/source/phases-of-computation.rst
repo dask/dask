@@ -66,7 +66,7 @@ returns immediately after, not waiting for the computation to actually finish.
 Most often the cause of long serialization times is placing large objects
 like NumPy arrays or Pandas dataframes into your graph repeatedly.  Dask will
 usually raise a warning when it notices this.  Often the best solution is to
-read your data in as a task instead of include it directly, pre-scatter large
+read your data in as a task instead of including it directly, pre-scatter large
 data, or wrap them in ``dask.delayed``.  Sometimes serialization is caused by
 other issues with complex objects.  These tend to be very library specific, and
 so it is hard to provide general guidelines for them.

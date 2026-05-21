@@ -105,7 +105,7 @@ Deploying on commercial cloud like AWS, GCP, or Azure is convenient because you 
 
 - `Dask Cloud Provider <https://cloudprovider.dask.org/en/latest/>`_: a pure and simple OSS solution that sets up Dask workers on cloud VMs, supporting AWS, GCP, Azure, and also other commercial clouds like Hetzner, Digital Ocean and Nebius.
 
-- `Dask-Yarn <https://yarn.dask.org>`_: deploys Dask on legacy YARN clusters, such as can be set up with AWS EMR or Google Cloud Dataproc.
+- `Dask-Yarn <https://yarn.dask.org>`_: deploys Dask on legacy YARN clusters, such as those that can be set up with AWS EMR or Google Cloud Dataproc.
 
 See :doc:`deploying-cloud` for more details.
 

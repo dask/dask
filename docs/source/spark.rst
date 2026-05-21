@@ -201,8 +201,8 @@ Developer-Facing Differences
 Graph Granularity
 ~~~~~~~~~~~~~~~~~
 
-Both Spark and Dask represent computations with directed acyclic graphs.  These
-graphs however represent computations at very different granularities.
+Both Spark and Dask represent computations with directed acyclic graphs. These
+graphs, however, represent computations at very different granularities.
 
 One operation on a Spark RDD might add a node like ``Map`` and ``Filter`` to
 the graph.  These are high-level operations that convey meaning and will

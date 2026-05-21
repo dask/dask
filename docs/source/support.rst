@@ -52,7 +52,7 @@ Conversation happens in the following places:
     tracker`_
 #.  **Real-time chat** occurs on
     `https://dask.slack.com/ <https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g>`_.
-    Note that Slack chat not easily searchable and indexed by search engines, so
+    Note that Slack chat is not easily searchable and indexed by search engines, so
     detailed discussion topics around bug reports or usage should go to GitHub issues or
     the Dask Discourse forum, respectively.
 

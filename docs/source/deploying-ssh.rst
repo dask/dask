@@ -3,7 +3,7 @@ SSH
 
 It is easy to set up Dask on informally managed networks of machines using SSH.
 This can be done manually using SSH and the
-Dask :doc:`command line interface <deploying-cli>`,
+Dask :doc:`command-line interface <deploying-cli>`,
 or automatically using either the :class:`dask.distributed.SSHCluster` Python *cluster manager* or the
 ``dask-ssh`` command line tool. This document describes both of these options.
 

@@ -1,4 +1,4 @@
-Generalized Ufuncs
+Generalized UFuncs
 ==================
 
 `NumPy <https://www.numpy.org>`_ provides the concept of `generalized ufuncs <https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html>`_. Generalized ufuncs are functions
@@ -17,7 +17,7 @@ NumPy Generalized UFuncs
 .. note::
 
     `NumPy <https://www.numpy.org>`_ generalized ufuncs are currently (v1.14.3 and below) stored in
-    inside ``np.linalg._umath_linalg`` and might change in the future.
+    ``np.linalg._umath_linalg`` and might change in the future.
 
 
 .. code-block:: python

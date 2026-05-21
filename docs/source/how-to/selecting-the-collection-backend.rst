@@ -2,7 +2,7 @@ Selecting the collection backend
 ================================
 
 
-**Warning**: Backend-library disptaching at the collection level is still an experimental feature. Both the ``DaskBackendEntrypoint`` API and the set of "dispatchable" functions are expected to change.
+**Warning**: Backend-library dispatching at the collection level is still an experimental feature. Both the ``DaskBackendEntrypoint`` API and the set of "dispatchable" functions are expected to change.
 
 
 Changing the default backend library
@@ -36,7 +36,7 @@ The current set of dispatchable creation functions for Dask-Dataframe is:
 - ``read_csv``
 - ``read_hdf``
 
-As the backend-library disptaching system becomes more mature, this set of dispatchable creation functions is likely to grow.
+As the backend-library dispatching system becomes more mature, this set of dispatchable creation functions is likely to grow.
 
 For an existing collection, the underlying data can be forcibly moved to a desired backend using the ``to_backend`` method:
 

@@ -16,7 +16,7 @@ and you want to join them both along a column that may not be sorted.
 This can be slow.  In this case Dask DataFrame will need to move all of your
 data around so that rows with matching values in the joining columns are in the
 same partition.  This large-scale movement can create communication costs, and
-can require a large amount of memory.  If enough memory can not be found then
+can require a large amount of memory.  If enough memory cannot be found then
 Dask will have to read and write data to disk, which may cause other
 performance costs.
 
