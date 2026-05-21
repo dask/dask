@@ -28,6 +28,10 @@ def test_config_get_no_key():
     assert result.output == expected
 
 
+@pytest.mark.xfail(
+    importlib_metadata.version("click") == "8.4.0",
+    reason="https://github.com/pallets/click/issues/3449",
+)
 def test_config_get_value():
     runner = CliRunner()
     result = runner.invoke(dask.cli.config_get, ["array"])
@@ -145,6 +149,10 @@ def test_config_find(tmp_conf_dir):
     assert result.output == expected
 
 
+@pytest.mark.xfail(
+    importlib_metadata.version("click") == "8.4.0",
+    reason="https://github.com/pallets/click/issues/3449",
+)
 def test_config_list():
     runner = CliRunner()
     result = runner.invoke(dask.cli.config_list)
