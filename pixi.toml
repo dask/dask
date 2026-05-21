@@ -171,7 +171,7 @@ crick = "*"  # No Python 3.14 build yet
 tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
 
 [feature.py310.activation.env]
-DASK_DATAFRAME__CONVERT_STRING="False"  # Only teted here
+DASK_DATAFRAME__CONVERT_STRING="False"  # Only tested here
 
 [feature.py311.dependencies]
 python = "=3.11"
