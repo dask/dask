@@ -65,7 +65,7 @@ def config_get(key=None):
         sys.exit(1)
 
     if isinstance(data, (list, dict)):
-        click.echo_via_pager(yaml.dump(data))
+        _echo_yaml(data)
     elif data is None:
         click.echo("None")
     else:
@@ -157,7 +157,15 @@ For example, you could set the following:
 @config.command(name="list")
 def config_list():
     """Print the whole config."""
-    click.echo_via_pager(yaml.dump(dask.config.config))
+    _echo_yaml(dask.config.config)
+
+
+def _echo_yaml(data):
+    output = yaml.dump(data)
+    if sys.stdout.isatty():
+        click.echo_via_pager(output)
+    else:
+        click.echo(output, nl=False)
 
 
 def _register_command_ep(interface, entry_point):
