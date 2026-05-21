@@ -124,13 +124,13 @@ def parse_input(obj: Any) -> object:
 
     Parameters
     ----------
-    obj : _type_
-        _description_
+    obj : object
+        The input object to tokenize
 
     Returns
     -------
-    _type_
-        _description_
+    GraphNode or the original object
+        The tokenized object or the original input if no tokenization is needed
     """
     if isinstance(obj, GraphNode):
         return obj

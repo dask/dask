@@ -127,7 +127,7 @@ The operation of ``compute`` can be broken into three stages:
    The combined graph is _finalized_ with a ``FinalizeCompute`` expression
    which instructs the expression / graph to reduce to a single partition,
    suitable to be returned to the user after compute. This is either done by
-   implemengint the ``__dask_postcompute__`` method of the collection or by
+   implementing the ``__dask_postcompute__`` method of the collection or by
    implementing an optimization path of the expression.
 
    For the example of a DataFrame, the ``FinalizeCompute`` simplifies to a ``RepartitionToFewer(..., npartition=1)`` which simply concatenates all results to one ordinary DataFrame.

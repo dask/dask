@@ -68,7 +68,7 @@ Instantiating a cluster manager class like ``LocalCluster`` and then passing it 
 ``Client`` is a common pattern. Cluster managers also provide useful utilities to help
 you understand what is going on.
 
-For example you can retrieve the Dashboard URL.
+For example, you can retrieve the Dashboard URL.
 
 .. code-block:: python
 

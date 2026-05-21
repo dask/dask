@@ -823,7 +823,7 @@ class Expr:
             isinstance(operation, tuple)
             and all(issubclass(e, Expr) for e in operation)
             or issubclass(operation, Expr)  # type: ignore[arg-type]
-        ), "`operation` must be`Expr` subclass)"
+        ), "`operation` must be an `Expr` subclass)"
         return (expr for expr in self.walk() if isinstance(expr, operation))
 
     def __getattr__(self, key):
@@ -1313,11 +1313,11 @@ class HLGFinalizeCompute(HLGExpr):
         return f"finalize-{super()._name}"
 
     def __dask_graph__(self):
-        # The baseclass __dask_graph__ will not just materialize this layer but
+        # The base class __dask_graph__ will not just materialize this layer but
         # also that of its dependencies, i.e. it will render the finalized and
         # the non-finalized graph and combine them. We only want the finalized
         # so we're overriding this.
-        # This is an artifact generated since the wrapped expression is
+        # This is an artifact generated because the wrapped expression is
         # identified automatically as a dependency but HLG expressions are not
         # working in this layered way.
         return self._layer()

@@ -167,7 +167,7 @@ Use :meth:`DataFrame.get_partition` to select a single partition by position.
    2021-01-02        ...    ...      ...      ...
    Dask Name: get-partition, 2 graph layers
 
-Note that the result is also a Dask DatFrame.
+Note that the result is also a Dask DataFrame.
 
 Index into :attr:`DataFrame.partitions` to select one or more partitions. For
 example, you can select every other partition with a slice:

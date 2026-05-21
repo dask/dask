@@ -146,7 +146,7 @@ def _rename(columns, df):
         ):
             # if target is identical, rename is not necessary
             return df
-        # deep=False doesn't doesn't copy any data/indices, so this is cheap
+        # deep=False doesn't copy any data/indices, so this is cheap
         df = df.copy(deep=False)
         df.columns = columns
         return df

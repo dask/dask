@@ -311,7 +311,7 @@ Learn more at :bdg-link-primary:`Deploy Documentation <deploying.html>`
 Learn with Examples
 -------------------
 
-Dask use is widespread, across all industries and scales.  Dask is used
+Dask is used widely across all industries and scales.  Dask is used
 anywhere Python is used and people experience pain due to large scale data, or
 intense computing.
 

@@ -35,14 +35,14 @@ def test_endless_simplify():
         expr.simplify()
 
 
-class NondeterminisitcToken:
+class NondeterministicToken:
     def __dask_tokenize__(self):
         return uuid.uuid4()
 
 
 def test_expr_nondeterministic_token_pickle_roundtrip():
 
-    foo = NondeterminisitcToken()
+    foo = NondeterministicToken()
     assert tokenize(foo) != tokenize(foo)
     assert tokenize(Expr(foo)) != tokenize(Expr(foo))
 

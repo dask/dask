@@ -105,7 +105,7 @@ def test_xarray_blockwise_fusion_store(compute):
         ), f"False number of tasks got {len(dsk)} but expected {expected}"
         return [42 for _ in keys]
 
-    # First test that this mocking stuff works as expecged
+    # First test that this mocking stuff works as expected
     with pytest.raises(AssertionError, match="False number of tasks"):
         scheduler = partial(custom_scheduler_get, expected=42)
         dask.compute(da.ones(10), scheduler=scheduler)

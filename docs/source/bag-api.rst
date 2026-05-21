@@ -16,7 +16,7 @@ Create Bags
    read_text
    read_avro
 
-From dataframe
+From DataFrame
 ~~~~~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe

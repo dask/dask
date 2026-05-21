@@ -56,7 +56,7 @@ def shuffle(x, indexer: list[list[int]], axis: int, chunks: Literal["auto"] = "a
 
     >>> y = x.shuffle([[6, 5, 2], [4, 1], [3, 0, 7]], axis=1)
 
-    The shuffle algorihthm will combine the first 2 groups into a single chunk to keep
+    The shuffle algorithm will combine the first 2 groups into a single chunk to keep
     the number of chunks small.
 
     The tolerance of increasing the chunk size is controlled by the configuration

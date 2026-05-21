@@ -22,7 +22,7 @@ from dask.dataframe.utils import assert_eq
         pd.Index([1, 2, 3]),
         pd.Index([True, False, True]),
         pd.DataFrame({"x": ["a", "b", "c"], "y": [1, 2, 3]}),
-        _compat.makeMissingDataframe(),
+        _compat.makeMissingDataFrame(),
         _compat.makeMixedDataFrame(),
         _compat.makeTimeDataFrame(),
         _compat.makeTimeSeries(),

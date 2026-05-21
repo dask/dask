@@ -108,7 +108,7 @@ def make_meta(x, index=None, parent_meta=None):
         If ``x`` is of arbitrary types and thus Dask cannot determine
         which back-end to be used to generate the meta-data for this
         object type, in which case ``parent_meta`` will be used to
-        determine which back-end to select and dispatch to. To use
+        determine which back-end to select and dispatch to. To
         utilize this parameter ``make_meta_obj`` has be dispatched.
         If ``parent_meta`` is ``None``, a pandas DataFrame is used for
         ``parent_meta`` that chooses pandas as the backend.
