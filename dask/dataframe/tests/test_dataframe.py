@@ -456,13 +456,21 @@ def test_describe(include, exclude, percentiles, subset):
 
     assert_eq(actual, expected)
 
+    if PANDAS_GE_310:
+        # The 'include' and 'exclude' arguments are deprecated for Series.describe and
+        # will be removed in a future version. These arguments have no effect on Series
+        # and will be removed.
+        series_kwargs = {}
+    else:
+        series_kwargs = {"include": include, "exclude": exclude}
+
     # Check series
     if subset is None:
         for col in ["a", "c", "e", "g"]:
-            expected = df[col].describe(include=include, exclude=exclude)
+            expected = df[col].describe(**series_kwargs)
             if col == "e":
                 expected = _drop_mean(expected)
-            actual = ddf[col].describe(include=include, exclude=exclude)
+            actual = ddf[col].describe(**series_kwargs)
             assert_eq(expected, actual)
 
 
