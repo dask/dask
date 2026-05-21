@@ -1181,7 +1181,6 @@ def test_merge_by_index_patterns(how, shuffle_method):
             )
 
 
-@pytest.mark.skipif(PANDAS_GE_210, reason="breaks with pandas=2.1.0+")
 @pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_join_by_index_patterns(how, shuffle_method):

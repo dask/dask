@@ -1,0 +1,1 @@
+run-post-link-scripts = "insecure"  # Needed by librsvg

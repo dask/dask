@@ -4,71 +4,51 @@ on:
   schedule:
     - cron: "0 1 * * *"
   push:
+    branches: [main]
+    tags: ["*"]
   pull_request:
   workflow_dispatch:
 
-# Required shell entrypoint to have properly activated conda environments
-defaults:
-  run:
-    shell: bash -l {0}
+# When this workflow is queued, automatically cancel any previous running
+# or pending jobs from the same branch
+concurrency:
+  group: upstream-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-
-  check:
+  test:
+    name: ${{ matrix.environment }}
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    outputs:
-      test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-      - uses: xarray-contrib/ci-trigger@v1
-        id: detect-trigger
-        with:
-          keyword: "test-upstream"
-
-  build:
-    needs: check
-    runs-on: ubuntu-latest
-    if: |
-      always()
-      && (
-          needs.check.outputs.test-upstream == 'true'
-          || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upstream'))
-          || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
-      )
     timeout-minutes: 90
 
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [py314, nightly]
+    
     steps:
       - name: Checkout source
         uses: actions/checkout@v6
-
-      - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v4.0.1
         with:
-          miniforge-version: latest
-          channel-priority: strict
-          environment-file: continuous_integration/environment-3.14.yaml
-          activate-environment: test-environment
-          auto-activate-base: false
+          fetch-depth: 0
+
+      - name: Invalidate pixi lock
+        run: rm -f pixi.lock
+
+      - uses: prefix-dev/setup-pixi@v0
+        with:
+          pixi-version: v0.68.1
+          environments: ${{ matrix.environment }}
+          cache: false
+          locked: false
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
-        if: ${{ matrix.os != 'windows-latest' }}
         run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
-
-      - name: Install
-        env:
-          UPSTREAM_DEV: 1
-        run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
         id: run_tests
-        env:
-          COVERAGE: "true"
-          PARALLEL: "true"
-        run: continuous_integration/scripts/run_tests.sh --report-log output-log.jsonl
+        run: pixi run -e ${{ matrix.environment }} test-ci --report-log output-log.jsonl
 
       - name: Open or update issue on failure
         if: |

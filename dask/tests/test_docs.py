@@ -1,25 +1,31 @@
-from __future__ import annotations
-
+import sys
 from pathlib import Path
 
 import pytest
 
+ROOT_DIR = Path(__file__).parent.parent.parent
 
-@pytest.mark.parametrize(
-    "filename",
-    [
-        "docs/source/develop.rst",
-        ".github/workflows/additional.yml",
-        ".github/workflows/upstream.yml",
-    ],
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 11), reason="Requires Python 3.11+ for tomllib"
 )
-def test_development_guidelines_matches_ci(filename):
-    """When the environment.yaml changes in CI, make sure to change it in the docs as well"""
-    root_dir = Path(__file__).parent.parent.parent
+@pytest.mark.skipif(
+    not (ROOT_DIR / "pixi.toml").exists(),
+    reason="Test can only be run while the project is deployed from git",
+)
+def test_development_guidelines_matches_ci():
+    """When pixi environments change, make sure to update the docs as well."""
+    import tomllib
 
-    if not (root_dir / ".github" / "workflows").exists():
-        pytest.skip("Test can only be run on an editable install")
+    with open(ROOT_DIR / "pixi.toml", "rb") as f:
+        pixi_toml = tomllib.load(f)
+    environments = set(pixi_toml["environments"])
 
-    latest_env = "environment-3.14.yaml"
-    with open(root_dir / filename, encoding="utf8") as f:
-        assert latest_env in f.read()
+    with open(ROOT_DIR / "docs/source/develop.rst", encoding="utf8") as f:
+        docs = f.read()
+
+    missing = environments - {"default", "build"} - set(docs.split())
+    assert not missing, (
+        "The following pixi environments are not listed in docs/source/develop.rst: "
+        f"{missing}"
+    )
