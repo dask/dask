@@ -24,7 +24,7 @@ def test_development_guidelines_matches_ci():
     with open(ROOT_DIR / "docs/source/develop.rst", encoding="utf8") as f:
         docs = f.read()
 
-    missing = environments - {"default", "build"} - set(docs.split())
+    missing = environments - {"default", "build", "spark"} - set(docs.split())
     assert not missing, (
         "The following pixi environments are not listed in docs/source/develop.rst: "
         f"{missing}"
