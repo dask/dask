@@ -37,7 +37,7 @@ from dask.array.utils import (
 from dask.array.wrap import ones, zeros
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import apply, deepmap, derived_from
+from dask.utils import deepmap, derived_from
 
 try:
     import numbagg
@@ -1032,6 +1032,30 @@ def _prefixscan_first(func, x, axis, dtype):
     return func(x, axis=axis, dtype=dtype)
 
 
+def _cumreduction_apply(func, x, axis, dtype, use_dtype):
+    if use_dtype:
+        return func(x, axis=axis, dtype=dtype)
+    return func(x, axis=axis)
+
+
+def _cumreduction_merge(func, previous, x, axis, dtype, use_dtype):
+    if isinstance(previous, np.ma.masked_array) or isinstance(x, np.ma.masked_array):
+        previous = np.ma.array(
+            np.ma.getdata(previous),
+            mask=np.zeros_like(np.ma.getmaskarray(previous), dtype=bool),
+        )
+        x = np.ma.concatenate([previous, x], axis=axis)
+    else:
+        x = np.concatenate([previous, x], axis=axis)
+    result = _cumreduction_apply(func, x, axis, dtype, use_dtype)
+    slc = (
+        (slice(None),) * axis
+        + (slice(1, None),)
+        + (slice(None),) * (x.ndim - axis - 1)
+    )
+    return result[slc]
+
+
 def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
     """Generic function to perform parallel cumulative scan (a.k.a prefix scan)
 
@@ -1231,11 +1255,6 @@ def cumreduction(
         except AttributeError:
             pass
 
-    if use_dtype:
-        m = x.map_blocks(partial(func, dtype=dtype), axis=axis, dtype=dtype)
-    else:
-        m = x.map_blocks(func, axis=axis, dtype=dtype)
-
     name = f"{func.__name__}-{tokenize(func, axis, binop, ident, x, dtype)}"
     n = x.numblocks[axis]
     full = slice(None, None, None)
@@ -1246,14 +1265,14 @@ def cumreduction(
     )
     dsk = dict()
     for ind in indices:
-        shape = tuple(x.chunks[i][ii] if i != axis else 1 for i, ii in enumerate(ind))
-        dsk[(name, "extra") + ind] = (
-            apply,
-            np.full_like,
-            (x._meta, ident, m.dtype),
-            {"shape": shape},
+        dsk[(name,) + ind] = (
+            _cumreduction_apply,
+            func,
+            (x.name,) + ind,
+            axis,
+            dtype,
+            use_dtype,
         )
-        dsk[(name,) + ind] = (m.name,) + ind
 
     for i in range(1, n):
         last_indices = indices
@@ -1263,16 +1282,19 @@ def cumreduction(
             )
         )
         for old, ind in zip(last_indices, indices):
-            this_slice = (name, "extra") + ind
-            dsk[this_slice] = (
-                binop,
-                (name, "extra") + old,
-                (operator.getitem, (m.name,) + old, slc),
+            previous = (operator.getitem, (name,) + old, slc)
+            dsk[(name,) + ind] = (
+                _cumreduction_merge,
+                func,
+                previous,
+                (x.name,) + ind,
+                axis,
+                dtype,
+                use_dtype,
             )
-            dsk[(name,) + ind] = (binop, this_slice, (m.name,) + ind)
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    result = Array(graph, name, x.chunks, m.dtype, meta=x._meta)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+    result = Array(graph, name, x.chunks, dtype, meta=x._meta)
     return handle_out(out, result)
 
 
