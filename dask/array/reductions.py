@@ -1049,9 +1049,7 @@ def _cumreduction_merge(func, previous, x, axis, dtype, use_dtype):
         x = np.concatenate([previous, x], axis=axis)
     result = _cumreduction_apply(func, x, axis, dtype, use_dtype)
     slc = (
-        (slice(None),) * axis
-        + (slice(1, None),)
-        + (slice(None),) * (x.ndim - axis - 1)
+        (slice(None),) * axis + (slice(1, None),) + (slice(None),) * (x.ndim - axis - 1)
     )
     return result[slc]
 
