@@ -28,7 +28,7 @@ jobs:
       matrix:
         # Note: after adding/removing builds here, update
         # codecov.yml to match.
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
         environment: [py310, py311, py312, py313, py314]
         task: [test-ci]
         include:

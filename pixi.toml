@@ -1,6 +1,6 @@
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 preview = ["pixi-build"]
 
 [package]
@@ -53,6 +53,9 @@ numpy = "=1.24.4"
 numpy = "=1.24.4"
 pandas = "=2.0"
 pyarrow = "=16.0"
+
+[feature.mindeps-optional]
+platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [feature.mindeps-optional.dependencies]
 numpy = "=1.24.4"
@@ -113,7 +116,7 @@ jinja2 = "*"
 # Compression and hashing
 lz4 = "*"
 mmh3 = "*"
-# python-cityhash = "*"  # Temporarily in feature.gil below
+# python-cityhash = "*"  # Temporarily in feature.optional-problematic below
 # python-snappy = "*"  # Temporarily in feature.gil below
 python-xxhash = "*"
 
@@ -126,13 +129,13 @@ flask = "*"
 h5py = "*"
 # pytables = "*"  # Temporarily in feature.gil below
 # zarr = "*"  # Temporarily in feature.gil below
-# tiledb-py = "*"  # Not available in 3.14t; pins pandas<3
+# tiledb-py = "*"  # Temporarily in feature.optional-problematic below
 xarray = "*"
 # sqlalchemy = "*"  # Temporarily in feature.gil below
 jsonschema = "*"
 httpretty = "*"
 aiohttp = "*"
-# - crick  # No Python 3.14 build yet
+# - crick  # Temporarily in feature.optional-problematic below
 cytoolz = "*"
 ipython = "*"
 ipycytoscape = "*"
@@ -154,10 +157,27 @@ ipykernel = "*"  # No 3.14t build for Windows yet
 matplotlib ="*"  # Not available for 3.14t
 moto = "<5"  # Not available for 3.14t on Windows
 pytables = "*"  # Not available for 3.14t
-python-cityhash = "*"  # Not available for 3.14t
 python-snappy = "*"  # dependency cramjam does not release the GIL
 sqlalchemy = "*"  # Not available for 3.14t
 zarr = "*"  # Dependency numcodecs not available for 3.14t
+
+[feature.optional-problematic.target.linux-64.dependencies]
+python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
+crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
+tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
+
+[feature.optional-problematic.target.linux-aarch64.dependencies]
+tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
+
+[feature.optional-problematic.target.win-64.dependencies]
+python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
+crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
+tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
+
+[feature.optional-problematic.target.osx-arm64.dependencies]
+python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
+crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
+tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
 
 [feature.py310.dependencies]
 python = "=3.10"
@@ -165,8 +185,6 @@ importlib_metadata = "*"
 numpy = "=1.24"
 pandas = "=2.1"
 pyarrow = "=16.0"
-crick = "*"  # No Python 3.14 build yet
-tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
 
 [feature.py310.activation.env]
 DASK_DATAFRAME__CONVERT_STRING="False"  # Only tested here
@@ -177,21 +195,18 @@ importlib_metadata = "*"
 numpy = "=2.0"
 pandas = "=2.2"
 pyarrow = "=20.0"
-crick = "*"  # No Python 3.14 build yet
 
 [feature.py312.dependencies]
 python = "=3.12"
 numpy = "=2.2"
 pandas = "=2.3"
 pyarrow = "=22.0"
-crick = "*"  # No Python 3.14 build yet
 
 [feature.py313.dependencies]
 python = "=3.13"
 numpy = "=2.4"
 pandas = "=3.0"
 pyarrow = "=24.0"
-crick = "*"  # No Python 3.14 build yet
 
 [feature.py314.dependencies]
 python = "=3.14"
@@ -267,11 +282,11 @@ mindeps-array = ["mindeps-non-optional", "mindeps-array", "test"]
 mindeps-dataframe = ["mindeps-non-optional", "mindeps-dataframe", "test"]
 mindeps-distributed = ["mindeps-non-optional", "test", "distributed"]
 mindeps-optional = ["mindeps-non-optional", "mindeps-optional", "test", "distributed"]
-py310 = ["py310", "optional", "optional-gil", "test", "distributed"]
-py311 = ["py311", "optional", "optional-gil", "test", "distributed"]
-py312 = ["py312", "optional", "optional-gil", "test", "distributed"]
-py313 = ["py313", "optional", "optional-gil", "test", "distributed"]
-py314 = ["py314", "optional", "optional-gil", "test", "distributed"]
+py310 = ["py310", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
+py311 = ["py311", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
+py312 = ["py312", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
+py313 = ["py313", "optional", "test", "distributed", "optional-gil"]
+py314 = ["py314", "optional", "test", "distributed", "optional-gil"]
 py314t = ["py314t", "optional", "test", "distributed"]
 nightly = ["nightly", "test", "distributed"]
 lint = { features = ["lint"], no-default-feature = true }
