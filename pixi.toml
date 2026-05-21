@@ -31,9 +31,7 @@ toolz = ">=0.12.0"
 dask-core = { path = "." }
 
 [feature.distributed.dependencies]
-# DNM
-# distributed = { git = "https://github.com/dask/distributed" }
-distributed = { git = "https://github.com/crusaderky/distributed", rev = "pixi" }
+distributed = { git = "https://github.com/dask/distributed" }
 
 [feature.mindeps-non-optional.dependencies]
 # NOTE: These must match the versions listed in `pyproject.toml`
