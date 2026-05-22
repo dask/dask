@@ -239,6 +239,24 @@ zarr = { git = "https://github.com/zarr-developers/zarr-python" }
 # partd = { git = "https://github.com/dask/partd" }
 # zict = { git = "https://github.com/dask/zict" }
 
+[feature.spark.dependencies]
+python = "=3.12"
+numpy = "*"
+pandas = "=2.3"
+pyarrow = "*"
+# https://spark.apache.org/docs/latest/
+# https://issues.apache.org/jira/browse/ARTEMIS-5374
+# https://stackoverflow.com/questions/79016199/
+openjdk = "=21"  
+pyspark = "*"
+
+[feature.spark.activation.env]
+# Disable auto pyarrow strings. This is a prerequisite for pyspark support.
+DASK_DATAFRAME__CONVERT_STRING="False"
+
+[feature.spark.tasks]
+test-spark = "pytest --cov --cov-report=xml --junit-xml=pytest.xml --runslow dask/tests/test_spark_compat.py"
+
 [feature.test.dependencies]
 pytest = "*"
 pytest-cov = "*"
@@ -289,5 +307,6 @@ py313 = ["py313", "optional", "test", "distributed", "optional-gil"]
 py314 = ["py314", "optional", "test", "distributed", "optional-gil"]
 py314t = ["py314t", "optional", "test", "distributed"]
 nightly = ["nightly", "test", "distributed"]
+spark = ["spark", "test"]
 lint = { features = ["lint"], no-default-feature = true }
 build = { features = ["build"], no-default-feature = true }

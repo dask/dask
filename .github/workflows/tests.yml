@@ -62,6 +62,9 @@ jobs:
           - os: ubuntu-latest
             environment: py314t
             task: test-ci
+          - os: ubuntu-latest
+            environment: spark
+            task: test-spark
 
     steps:
       - name: Checkout source

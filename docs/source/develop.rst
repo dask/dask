@@ -161,6 +161,11 @@ experimental configurations::
    pixi run -e py314t test-ci
    pixi run -e nightly test-ci
 
+There are also specialty test tasks::
+
+   pixi run test-spark
+   pixi run -e <any environment with NumPy> test-array-expr
+
 .. _pytest: https://docs.pytest.org/en/latest/
 
 
