@@ -671,13 +671,10 @@ def test_array_cumreduction_axis(func, use_nan, axis, method):
 
 
 def test_array_sequential_cumsum_matches_numpy_order():
-    rng = np.random.default_rng(0)
-    a = 1000 * rng.random((2, 15))
-    d = da.from_array(a, chunks=(2, 5))
+    a = np.array([[1.0, 0.0, 0.0, 1e16, -1e16, 2.0]])
+    d = da.from_array(a, chunks=(1, 3))
 
-    result = d.cumsum(axis=-1).compute()
-
-    np.testing.assert_array_equal(result, np.cumsum(a, axis=-1))
+    assert_eq(d.cumsum(axis=-1), np.cumsum(a, axis=-1))
 
 
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
