@@ -4,7 +4,6 @@ from dask._compatibility import import_optional_dependency
 
 import_optional_dependency("pandas")
 import_optional_dependency("numpy")
-# import_optional_dependency("pyarrow")
 
 from packaging.version import Version
 

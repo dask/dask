@@ -7,13 +7,12 @@ import pandas as pd
 from dask._compatibility import import_optional_dependency
 from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
-pa = import_optional_dependency("pyarrow")
+import_optional_dependency("pyarrow")
+import pyarrow as pa
 
 
 def is_pyarrow_string_dtype(dtype):
     """Is the input dtype a pyarrow string?"""
-    if pa is None:
-        return False
     return dtype in (pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string()))
 
 
