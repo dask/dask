@@ -19,10 +19,7 @@ def is_pyarrow_string_dtype(dtype) -> bool:
 
 def is_object_string_dtype(dtype) -> bool:
     """Determine if input is a non-pyarrow string dtype"""
-    return (
-        pd.api.types.is_string_dtype(dtype)
-        and not is_pyarrow_string_dtype(dtype)
-    )
+    return pd.api.types.is_string_dtype(dtype) and not is_pyarrow_string_dtype(dtype)
 
 
 def is_pyarrow_string_index(x) -> bool:
