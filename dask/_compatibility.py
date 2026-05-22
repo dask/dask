@@ -4,7 +4,7 @@ import importlib
 import sys
 import types
 import warnings
-from typing import Literal
+from typing import Literal, overload
 
 if sys.version_info >= (3, 12):
     import importlib.metadata as importlib_metadata
@@ -46,6 +46,26 @@ def get_version(module: types.ModuleType) -> str:
         raise ImportError(f"Can't determine version for {module.__name__}") from e
 
 
+@overload
+def import_optional_dependency(
+    name: str,
+    extra: str = "",
+    min_version: str | None = None,
+    *,
+    errors: Literal["raise"] = "raise",
+) -> types.ModuleType: ...
+
+
+@overload
+def import_optional_dependency(
+    name: str,
+    extra: str = "",
+    min_version: str | None = None,
+    *,
+    errors: Literal["warn", "ignore"],
+) -> types.ModuleType | None: ...
+
+
 def import_optional_dependency(
     name: str,
     extra: str = "",
@@ -77,15 +97,14 @@ def import_optional_dependency(
           It's expected that users validate the version locally when
           using ``errors="ignore"`` (see ``io/html.py``)
     min_version : str, default None
-        Specify a minimum version that is different from the global pandas
+        Specify a minimum version that is different from the global
         minimum version required.
     Returns
     -------
-    maybe_module : Optional[ModuleType]
+    maybe_module : ModuleType | None
         The imported module, when found and the version is correct.
-        None is returned when the package is not found and `errors`
-        is False, or when the package's version is too old and `errors`
-        is ``'warn'`` or ``'ignore'``.
+        None can be returned when `errors` is ``'warn'`` or ``'ignore'``
+        and the package is not found or the package's version is too old.
     """
     assert errors in {"warn", "raise", "ignore"}
 
