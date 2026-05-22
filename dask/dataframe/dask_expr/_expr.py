@@ -2450,17 +2450,20 @@ class AddPrefixSeries(Elemwise):
     _filter_passthrough = True
     _preserves_partitioning_information = True
 
+    @functools.cached_property
+    def _meta(self):
+        return super()._meta.set_axis(pd.Index([], dtype="str"))
+
     def _divisions(self):
-        return tuple(self.prefix + str(division) for division in self.frame.divisions)
+        return tuple(f"{self.prefix}{division}" for division in self.frame.divisions)
 
 
 class AddSuffixSeries(AddPrefixSeries):
     _parameters = ["frame", "suffix"]
     operation = M.add_suffix
-    _preserves_partitioning_information = True
 
     def _divisions(self):
-        return tuple(str(division) + self.suffix for division in self.frame.divisions)
+        return tuple(f"{division}{self.suffix}" for division in self.frame.divisions)
 
 
 class AddPrefix(Elemwise):

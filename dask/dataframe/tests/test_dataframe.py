@@ -2962,18 +2962,52 @@ def test_dataframe_map_raises():
         ddf.map(lambda x: x + 1)
 
 
-def test_add_prefix():
-    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
+@pytest.mark.parametrize(
+    "index",
+    [
+        ["foo", "bar"],
+        [1, 2],
+        [1.1, 2.2],
+        pd.RangeIndex(2),
+        pd.DatetimeIndex(["2020-01-01", "2020-01-02"]),
+    ],
+)
+def test_add_prefix_add_suffix(index):
+    df = pd.DataFrame([[1, 2], [3, 4]], index=index, columns=index)
     ddf = dd.from_pandas(df, npartitions=2)
+
     assert_eq(ddf.add_prefix("abc"), df.add_prefix("abc"))
-    assert_eq(ddf.x.add_prefix("abc"), df.x.add_prefix("abc"))
-
-
-def test_add_suffix():
-    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
-    ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.add_suffix("abc"), df.add_suffix("abc"))
-    assert_eq(ddf.x.add_suffix("abc"), df.x.add_suffix("abc"))
+    assert_eq(ddf[index[0]].add_prefix("abc"), df[index[0]].add_prefix("abc"))
+    assert_eq(ddf[index[0]].add_suffix("abc"), df[index[0]].add_suffix("abc"))
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        ["foo", "bar"],
+        [1, 2],
+        [1.1, 2.2],
+        pd.RangeIndex(2),
+        pd.DatetimeIndex(["2020-01-01", "2020-01-02"]),
+    ],
+)
+@pytest.mark.parametrize(
+    "axis",
+    [
+        None,
+        1,
+        "columns",
+        pytest.param(0, marks=pytest.mark.xfail(reason="Not implemented")),
+        pytest.param("index", marks=pytest.mark.xfail(reason="Not implemented")),
+    ],
+)
+def test_add_prefix_add_suffix_axis(index, axis):
+    df = pd.DataFrame([[1, 2], [3, 4]], index=index, columns=index)
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(ddf.add_prefix("abc", axis=axis), df.add_prefix("abc", axis=axis))
+    assert_eq(ddf.add_suffix("abc", axis=axis), df.add_suffix("abc", axis=axis))
 
 
 def test_abs():
