@@ -11,40 +11,35 @@ import_optional_dependency("pyarrow")
 import pyarrow as pa
 
 
-def is_pyarrow_string_dtype(dtype):
+def is_pyarrow_string_dtype(dtype) -> bool:
     """Is the input dtype a pyarrow string?"""
     return dtype in (pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string()))
 
 
-def is_object_string_dtype(dtype):
+def is_object_string_dtype(dtype) -> bool:
     """Determine if input is a non-pyarrow string dtype"""
-    # in pandas < 2.0, is_string_dtype(DecimalDtype()) returns True
-    return (
-        pd.api.types.is_string_dtype(dtype)
-        and not is_pyarrow_string_dtype(dtype)
-        and not pd.api.types.is_dtype_equal(dtype, "decimal")
-    )
+    return pd.api.types.is_string_dtype(dtype) and not is_pyarrow_string_dtype(dtype)
 
 
-def is_pyarrow_string_index(x):
+def is_pyarrow_string_index(x) -> bool:
     if isinstance(x, pd.MultiIndex):
         return any(is_pyarrow_string_index(level) for level in x.levels)
     return isinstance(x, pd.Index) and is_pyarrow_string_dtype(x.dtype)
 
 
-def is_object_string_index(x):
+def is_object_string_index(x) -> bool:
     if isinstance(x, pd.MultiIndex):
         return any(is_object_string_index(level) for level in x.levels)
     return isinstance(x, pd.Index) and is_object_string_dtype(x.dtype)
 
 
-def is_object_string_series(x):
+def is_object_string_series(x) -> bool:
     return isinstance(x, pd.Series) and (
         is_object_string_dtype(x.dtype) or is_object_string_index(x.index)
     )
 
 
-def is_object_string_dataframe(x):
+def is_object_string_dataframe(x) -> bool:
     return isinstance(x, pd.DataFrame) and (
         any(is_object_string_series(s) for _, s in x.items())
         or is_object_string_index(x.index)
