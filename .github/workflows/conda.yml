@@ -33,7 +33,7 @@ jobs:
         shell: bash -l {0}
         run: |
           # suffix for nightly package versions
-          export VERSION_SUFFIX=a`date +%y%m%d`
+          export VERSION_SUFFIX=`date +%y%m%d`
 
           pixi r conda-build
 
