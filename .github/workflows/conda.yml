@@ -30,12 +30,7 @@ jobs:
           locked: true
       
       - name: Build conda package
-        shell: bash -l {0}
-        run: |
-          # suffix for nightly package versions
-          export VERSION_SUFFIX=a`date +%y%m%d`
-
-          pixi r conda-build
+        run: pixi r conda-build
 
       - name: Upload conda build artifact
         uses: actions/upload-artifact@v7
