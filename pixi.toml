@@ -286,8 +286,10 @@ python = "=3.14"
 conda-build = "*"
 anaconda-client = "*"
 
-[feature.build.tasks]
-conda-build = "VERSION_SUFFIX=a`date +%y%m%d` conda build continuous_integration/recipe --channel conda-forge --override-channels --output-folder dist/conda"
+[feature.build.tasks.conda-build]
+env = { VERSION_SUFFIX = "a`date +%y%m%d`" }
+cmd = "conda build continuous_integration/recipe --channel conda-forge --override-channels --output-folder dist/conda"
+
 [feature.build.tasks.conda-upload]
 cwd = "dist/conda"
 cmd = "anaconda upload --label dev noarch/*.conda"
