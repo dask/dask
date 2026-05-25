@@ -922,8 +922,7 @@ def svd(a, coerce_signs=True, full_matrices=False):
     """
     if full_matrices:
         raise NotImplementedError(
-            "full_matrices=True is not implemented for dask arrays. "
-            "Use full_matrices=False to compute the reduced SVD."
+            "full_matrices=True is not implemented for dask arrays. Use full_matrices=False to compute the reduced SVD."
         )
     nb = a.numblocks
     if a.ndim != 2:
@@ -1138,10 +1137,7 @@ def solve_triangular(a, b, lower=False):
         if a.shape[1] != b.shape[0]:
             raise ValueError("a.shape[1] and b.shape[0] must be equal")
         if a.chunks[1] != b.chunks[0]:
-            msg = (
-                "a.chunks[1] and b.chunks[0] must be equal. "
-                "Use .rechunk method to change the size of chunks."
-            )
+            msg = "a.chunks[1] and b.chunks[0] must be equal. Use .rechunk method to change the size of chunks."
             raise ValueError(msg)
     else:
         raise ValueError("b must be 1 or 2 dimensional")
@@ -1262,8 +1258,7 @@ def solve(a, b, sym_pos=None, assume_a="gen"):
         b = p.T.dot(b)
     else:
         raise ValueError(
-            f"{assume_a = } is not a recognized matrix structure, "
-            "valid structures in Dask are 'pos' and 'gen'."
+            f"{assume_a = } is not a recognized matrix structure, valid structures in Dask are 'pos' and 'gen'."
         )
 
     uy = solve_triangular(l, b, lower=True)
@@ -1286,6 +1281,10 @@ def inv(a):
         Inverse of the matrix `a`.
     """
     return solve(a, eye(a.shape[0], chunks=a.chunks[0][0]))
+
+
+def _conj_transpose(a):
+    return np.transpose(a).conj()
 
 
 def _cholesky_lower(a):
@@ -1371,7 +1370,7 @@ def _cholesky(a):
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
                 dsk[name, i, i] = (_cholesky_lower, target)
-                dsk[name_upper, i, i] = (np.transpose, (name, i, i))
+                dsk[name_upper, i, i] = (_conj_transpose, (name, i, i))
             else:
                 # solving x.dot(L11.T) = (A21 - L20.dot(L10.T)) is equal to
                 # L11.dot(x.T) = A21.T - L10.dot(L20.T)
@@ -1385,7 +1384,7 @@ def _cholesky(a):
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
                 dsk[name_upper, j, i] = (_solve_triangular_lower, (name, j, j), target)
-                dsk[name, i, j] = (np.transpose, (name_upper, j, i))
+                dsk[name, i, j] = (_conj_transpose, (name_upper, j, i))
 
     graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
     graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
