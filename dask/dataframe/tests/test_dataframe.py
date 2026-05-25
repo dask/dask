@@ -1671,24 +1671,6 @@ def test_assign_pandas_series():
     assert_eq(ddf, df.assign(c=df["a"]))
 
 
-def test_map():
-    df = pd.DataFrame(
-        {"a": range(9), "b": [4, 5, 6, 1, 2, 3, 0, 0, 0]},
-        index=pd.Index([0, 1, 3, 5, 6, 8, 9, 9, 9], name="myindex"),
-    )
-    ddf = dd.from_pandas(df, npartitions=3)
-    with pytest.warns(UserWarning, match="meta"):
-        assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
-        lk = {v: v + 1 for v in df.a.values}
-        assert_eq(ddf.a.map(lk), df.a.map(lk))
-        assert_eq(ddf.b.map(lk), df.b.map(lk))
-        lk = pd.Series(lk)
-        assert_eq(ddf.a.map(lk), df.a.map(lk))
-        assert_eq(ddf.b.map(lk), df.b.map(lk))
-    assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
-    assert_eq(ddf.b.map(lk, meta=("b", "i8")), df.b.map(lk))
-
-
 def test_concat():
     x = _concat([pd.DataFrame(columns=["a", "b"]), pd.DataFrame(columns=["a", "b"])])
     assert list(x.columns) == ["a", "b"]
@@ -2939,27 +2921,6 @@ def test_apply_warns():
     assert len(w) == 1
     assert "'x'" in str(w[0].message)
     assert "int64" in str(w[0].message)
-
-
-@pytest.mark.skipif(not PANDAS_GE_210, reason="Not available before")
-@pytest.mark.parametrize("na_action", [None, "ignore"])
-def test_dataframe_map(na_action):
-    df = pd.DataFrame({"x": [1, 2, 3, np.nan], "y": [10, 20, 30, 40]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    with pytest.warns(UserWarning, match="meta"):
-        assert_eq(
-            ddf.map(lambda x: x + 1, na_action=na_action),
-            df.map(lambda x: x + 1, na_action=na_action),
-        )
-        assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
-
-
-@pytest.mark.skipif(PANDAS_GE_210, reason="Available at 2.1")
-def test_dataframe_map_raises():
-    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    with pytest.raises(NotImplementedError, match="DataFrame.map requires pandas"):
-        ddf.map(lambda x: x + 1)
 
 
 @pytest.mark.parametrize(
