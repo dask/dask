@@ -136,7 +136,7 @@ Test in parallel, with coverage, and including slow tests::
 
    pixi run test-ci
 
-Generate a local coverage report after running ``test-ci`::
+Generate a local coverage report after running ``test-ci``::
 
    pixi run coverage html
 
