@@ -1284,6 +1284,7 @@ def inv(a):
 
 
 def _conj_transpose(a):
+    # Note: conj() is a no-op for real dtypes
     return np.transpose(a).conj()
 
 
