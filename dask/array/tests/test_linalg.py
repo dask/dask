@@ -843,10 +843,10 @@ def test_cholesky_complex(shape, chunk):
     dA = da.from_array(A, (chunk, chunk))
 
     L = da.linalg.cholesky(dA, lower=True)
-    assert_eq(L, np.linalg.cholesky(A), check_graph=False, check_chunks=False)
+    assert_eq(L, scipy.linalg.cholesky(A, lower=True), check_graph=False, check_chunks=False)
 
     U = da.linalg.cholesky(dA, lower=False)
-    assert_eq(U, np.linalg.cholesky(A).conj().T, check_graph=False, check_chunks=False)
+    assert_eq(U, scipy.linalg.cholesky(A, lower=False), check_graph=False, check_chunks=False)
 
 
 @pytest.mark.parametrize("iscomplex", [False, True])
