@@ -30,10 +30,10 @@ works around the problem by removing the fsspec pin.
 ## Recipes used by the `py314t` environment
 ### brotli
 Creates non-importable conda-package `brotli-python=1.2.0`.
-brotli is an optional dependency of urllib3, which is in turn a dependency of
-distributed and requests.
+brotli is an optional dependency of urllib3, which is in turn a dependency of requests,
+which is in turn an optional dependency of fsspec.
 As of 1.2.0, brotli does not release the GIL on import in Python 3.14t.
-This causes `import urllib3` or `import requests` to lock the GIL.
+This causes `import requests` to lock the GIL.
 
 ### msgpack
 Pure-python variant of conda package `msgpack-python=1.1.2`, which in conda-forge

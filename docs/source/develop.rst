@@ -136,7 +136,7 @@ Test in parallel, with coverage, and including slow tests::
 
    pixi run test-ci
 
-Generate a local coverage report after running ``test-ci`::
+Generate a local coverage report after running ``test-ci``::
 
    pixi run coverage html
 
@@ -307,7 +307,7 @@ This makes sure that linter versions and options are aligned for all developers.
 Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
 run automatically when you make a git commit. This can be done by running::
 
-   pixi run pre-commit install
+   pixi run -e lint pre-commit install
 
 from the root of the Dask repository. Now the code linters will be run each time you
 commit changes. You can skip these checks with ``git commit --no-verify`` or with the
