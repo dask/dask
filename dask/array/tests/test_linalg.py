@@ -835,6 +835,28 @@ def test_cholesky(shape, chunk):
     )
 
 
+@pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (12, 3), (30, 6)])
+def test_cholesky_complex(shape, chunk):
+    rng = np.random.default_rng(42)
+    A = rng.standard_normal((shape, shape)) + 1j * rng.standard_normal((shape, shape))
+    A = A @ A.conj().T + shape * np.eye(shape)
+    dA = da.from_array(A, (chunk, chunk))
+
+    assert_eq(
+        da.linalg.cholesky(dA, lower=True),
+        scipy.linalg.cholesky(A, lower=True),
+        check_graph=False,
+        check_chunks=False,
+    )
+
+    assert_eq(
+        da.linalg.cholesky(dA, lower=False),
+        scipy.linalg.cholesky(A, lower=False),
+        check_graph=False,
+        check_chunks=False,
+    )
+
+
 @pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
 def test_lstsq(nrow, ncol, chunk, iscomplex):
