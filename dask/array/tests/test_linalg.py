@@ -842,14 +842,18 @@ def test_cholesky_complex(shape, chunk):
     A = A @ A.conj().T + shape * np.eye(shape)
     dA = da.from_array(A, (chunk, chunk))
 
-    L = da.linalg.cholesky(dA, lower=True)
     assert_eq(
-        L, scipy.linalg.cholesky(A, lower=True), check_graph=False, check_chunks=False
+        da.linalg.cholesky(dA, lower=True),
+        scipy.linalg.cholesky(A, lower=True),
+        check_graph=False,
+        check_chunks=False,
     )
 
-    U = da.linalg.cholesky(dA, lower=False)
     assert_eq(
-        U, scipy.linalg.cholesky(A, lower=False), check_graph=False, check_chunks=False
+        da.linalg.cholesky(dA, lower=False),
+        scipy.linalg.cholesky(A, lower=False),
+        check_graph=False,
+        check_chunks=False,
     )
 
 
