@@ -123,45 +123,36 @@ The project uses **pixi** for dependency management. Install it from https://git
 
 ```bash
 # Default environment (Python 3.14 + all optional deps)
-pixi run --environment py314 test
+pixi run test
 
 # Minimum dependency tests
-pixi run --environment mindeps-array test
-pixi run --environment mindeps-dataframe test
 pixi run --environment mindeps-optional test
 
 # Array-expr (experimental)
 pixi run --environment py314 test-array-expr
 
+# Run arbitrary Python commands
+pixi run -- python -c 'print("Hello world!")'
+
 # Linting
-pixi run --environment lint lint
+pixi run lint lint
 
 # Doctests
-pixi run --environment py314 doctest
-```
-
-### Test Runner (pytest)
-
-```bash
-# Full test suite
-pytest
+pixi run doctest
 
 # Specific module
-pytest dask/tests/test_base.py
-pytest dask/array/tests/test_array_core.py
-pytest dask/dataframe/tests/test_dataframe.py
-
-# Run with xdist parallelism
-pytest -n auto
-
-# Array-expr tests (requires config)
-DASK_ARRAY__QUERY_PLANNING=True pytest dask/array/_array_expr/tests/ --runarrayexpr
-
-# Slow tests
-pytest --runslow
+pixi run test dask/tests/test_base.py
+pixi run test dask/array/tests/test_array_core.py
+pixi run test dask/dataframe/tests/test_dataframe.py
 
 # Single test
-pytest dask/tests/test_base.py::test_compute_depth
+pixi run test dask/tests/test_base.py::test_compute_depth
+
+# Slow tests
+pixi run test --runslow
+
+# Full test suite
+pixi run test-ci
 ```
 
 ### pytest Configuration (from `pyproject.toml`)
@@ -228,9 +219,9 @@ xfail_with_pyarrow_strings  # Xfail when pyarrow string conversion enabled
 
 - All new code should be fully typed
 - `from __future__ import annotations` at the top of every file
-- Use `TYPE_CHECKING` blocks for heavy imports
+- Use `TYPE_CHECKING` blocks for circular imports
 - `typing.TypeAlias` for common aliases
-- `typing_extensions.ParamSpec` for decorators
+- `typing_extensions` for features not in Python 3.10
 
 ### Docstrings
 
@@ -262,7 +253,7 @@ from dask.typing import Key     # local submodules
 
 ### Key design patterns
 
-- IMPORTANT: never call .compute() or .persist() in the middle of graph definition
+- **IMPORTANT**: never call .compute() or .persist() in the middle of graph definition
   (e.g. in all methods of Array, Series, DataFrame, Bag, Delayed).
   The only place when the graph is materialized should be where the end user
   explicitly calls .compute() or .persist().
