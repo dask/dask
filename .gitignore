@@ -16,6 +16,7 @@ log
 .coverage.*
 coverage.xml
 pytest.xml
+coverage_html_report/
 .DS_Store
 *.sqlite
 *.swp

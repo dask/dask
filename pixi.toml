@@ -269,7 +269,7 @@ pytest-reportlog = "*"  # Used when automatically opening an issue when CI fails
 [feature.test.tasks]
 test = "pytest"
 coverage = "coverage"
-coverage-clean = "rm -f .coverage* pytest.xml"
+coverage-clean = "rm -rf .coverage* coverage.xml pytest.xml coverage_html_report"
 test-ci = "pytest --cov --cov-report=xml --junit-xml=pytest.xml --dist loadgroup -n auto --runslow"
 doctest = "pytest --doctest-modules --ignore-glob='*/test_*.py' --ignore=dask/array/_array_expr/ dask"
 test-array-expr = { cmd = "pytest --cov --cov-report=xml --junit-xml=pytest.xml --dist loadgroup -n auto --runslow --runarrayexpr", env = { DASK_ARRAY__QUERY_PLANNING = "True" } }
