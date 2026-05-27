@@ -260,6 +260,15 @@ from dask.typing import Key     # local submodules
 
 ## Key Patterns for Contributors
 
+### Key design patterns
+
+- IMPORTANT: never call .compute() or .persist() in the middle of graph definition
+  (e.g. in all methods of Array, Series, DataFrame, Bag, Delayed).
+  The only place when the graph is materialized should be where the end user
+  explicitly calls .compute() or .persist().
+  When you are defining the graph, you must work with available metadata to infer
+  the outputs.
+
 ### Adding a New Backend
 
 1. Create entry point in `dask/<module>/backends.py` or `backends.py`
