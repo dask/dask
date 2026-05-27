@@ -349,7 +349,7 @@ See `docs/release-procedure.md` for full details. Key steps:
 | Adding dataframe functionality | `dask/dataframe/core.py` → `dask/dataframe/groupby.py` → `dask/dataframe/shuffle.py` |
 | Query planning (dask-expr) | `dask/_expr.py` → `dask/dataframe/dask_expr/_collection.py` → `dask/dataframe/dask_expr/_expr.py` |
 | Configuration | `dask/config.py` → `dask/dask.yaml` → `dask/dask-schema.yaml` |
-| Testing | `dask/utils_test.py` → `conftest.py` → `pytest.ini` in `pyproject.toml` |
+| Testing | `dask/utils_test.py` → `conftest.py` → `pyproject.toml` |
 | CI/CD | `continuous_integration/` → `.github/workflows/tests.yml` |
 
 ---
@@ -433,16 +433,10 @@ size = dask.config.get("array.chunk-size")
 
 ```bash
 # Run tests for the module you edited
-pixi run -e py314 pytest dask/array/tests/test_array_core.py::test_slicing -v
-
-# Run with coverage
-pixi run -e py314 pytest --cov=dask.array --cov-report=html
-
-# Run doctests
-pixi run -e py314 pytest --doctest-modules dask/array/core.py
+pixi run test dask/array/tests/test_array_core.py::test_slicing
 
 # Run all tests (full suite)
-pixi run -e py314 test-ci
+pixi run test-ci
 ```
 
 ## Contributing
