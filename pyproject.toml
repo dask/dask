@@ -235,3 +235,6 @@ exclude_lines = [
     "raise NotImplementedError",
 ]
 ignore_errors = true
+
+[tool.coverage.html]
+directory = "coverage_html_report"
