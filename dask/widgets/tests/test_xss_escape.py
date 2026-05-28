@@ -1,4 +1,5 @@
 """Tests for XSS prevention via Jinja2 autoescape."""
+
 from __future__ import annotations
 
 import pytest
@@ -35,4 +36,4 @@ def test_dataframe_escapes_name():
         layers="1 expression",
     )
     assert payload not in rendered
-    assert "&lt;script&gt;" in rendered
+    assert "script&gt;alert(1)&lt;/script" in rendered

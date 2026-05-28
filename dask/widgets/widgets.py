@@ -4,7 +4,7 @@ import datetime
 import html
 import os.path
 
-from jinja2 import Environment, FileSystemLoader, Markup, Template
+from jinja2 import Environment, FileSystemLoader, Template
 from jinja2.exceptions import TemplateNotFound
 
 from dask.utils import format_bytes, format_time, format_time_ago, key_split, typename
