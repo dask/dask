@@ -4,7 +4,7 @@ import datetime
 import html
 import os.path
 
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader, Markup, Template
 from jinja2.exceptions import TemplateNotFound
 
 from dask.utils import format_bytes, format_time, format_time_ago, key_split, typename
@@ -25,7 +25,7 @@ TEMPLATE_PATHS = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp
 
 def get_environment() -> Environment:
     loader = FileSystemLoader(TEMPLATE_PATHS)
-    environment = Environment(loader=loader)
+    environment = Environment(loader=loader, autoescape=True)
     environment.filters.update(FILTERS)
 
     return environment
