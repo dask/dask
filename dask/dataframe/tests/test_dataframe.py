@@ -5489,3 +5489,5 @@ def test_loc_partitions_are_plain_scalars():
 
     result = ddf.loc[indexer.tolist()]
     assert type(result.divisions[0]) is int
+
+
