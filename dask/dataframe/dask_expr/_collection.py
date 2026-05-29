@@ -3253,7 +3253,7 @@ class DataFrame(FrameBase):
             meta = expr.emulate(
                 M.apply, self, function, args=args, udf=True, axis=axis, **kwargs
             )
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="apply"))
         return new_collection(
             self.expr.apply(function, *args, meta=meta, axis=axis, **kwargs)
         )
@@ -3676,12 +3676,20 @@ class DataFrame(FrameBase):
         return concat(modes, axis=1)
 
     @derived_from(pd.DataFrame)
-    def add_prefix(self, prefix):
-        return new_collection(expr.AddPrefix(self, prefix))
+    def add_prefix(self, prefix, axis=None):
+        if axis in (None, 1, "columns"):
+            return new_collection(expr.AddPrefix(self, prefix))
+        if axis in (0, "index"):
+            raise NotImplementedError(f"add_prefix({axis=}) is not implemented in Dask")
+        raise ValueError("axis must be either 0, 1, 'index', 'columns', or None")
 
     @derived_from(pd.DataFrame)
-    def add_suffix(self, suffix):
-        return new_collection(expr.AddSuffix(self, suffix))
+    def add_suffix(self, suffix, axis=None):
+        if axis in (None, 1, "columns"):
+            return new_collection(expr.AddSuffix(self, suffix))
+        if axis in (0, "index"):
+            raise NotImplementedError(f"add_suffix({axis=}) is not implemented in Dask")
+        raise ValueError("axis must be either 0, 1, 'index', 'columns', or None")
 
     def pivot_table(self, index, columns, values, aggfunc="mean"):
         """
@@ -4407,7 +4415,7 @@ class Series(FrameBase):
         self._validate_axis(axis)
         if meta is no_default:
             meta = expr.emulate(M.apply, self, function, args=args, udf=True, **kwargs)
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="apply"))
         return new_collection(self.expr.apply(function, *args, meta=meta, **kwargs))
 
     @classmethod

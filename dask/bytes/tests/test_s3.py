@@ -6,6 +6,7 @@ import shlex
 import subprocess
 import sys
 import time
+import urllib.request
 from contextlib import contextmanager
 from functools import partial
 
@@ -19,7 +20,6 @@ s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
 moto = pytest.importorskip("moto", minversion="1.3.14")
 pytest.importorskip("flask")  # server mode needs flask too
-requests = pytest.importorskip("requests")
 
 from fsspec.compression import compr
 from fsspec.core import get_fs_token_paths, open_files
@@ -92,18 +92,17 @@ def s3_base():
             shlex.split("moto_server s3 -p 5555"), stdout=subprocess.DEVNULL
         )
 
-        timeout = 8
+        timeout = time.perf_counter() + 8
         while True:
             try:
                 # OK to go once server is accepting connections
-                r = requests.get(endpoint_uri)
-                if r.ok:
+                r = urllib.request.urlopen(endpoint_uri)
+                if r.status == 200:
                     break
-            except Exception:
+            except urllib.request.URLError:
                 pass
-            timeout -= 0.1
             time.sleep(0.1)
-            assert timeout > 0, "Timed out waiting for moto server"
+            assert time.perf_counter() < timeout, "Timed out waiting for moto server"
         yield
 
         # shut down external process

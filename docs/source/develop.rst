@@ -136,7 +136,7 @@ Test in parallel, with coverage, and including slow tests::
 
    pixi run test-ci
 
-Generate a local coverage report after running ``test-ci`::
+Generate a local coverage report after running ``test-ci``::
 
    pixi run coverage html
 
@@ -160,6 +160,11 @@ experimental configurations::
    pixi run -e py314 test-ci
    pixi run -e py314t test-ci
    pixi run -e nightly test-ci
+
+There are also specialty test tasks::
+
+   pixi run test-spark
+   pixi run -e <any environment with NumPy> test-array-expr
 
 .. _pytest: https://docs.pytest.org/en/latest/
 
@@ -302,7 +307,7 @@ This makes sure that linter versions and options are aligned for all developers.
 Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
 run automatically when you make a git commit. This can be done by running::
 
-   pixi run pre-commit install
+   pixi run -e lint pre-commit install
 
 from the root of the Dask repository. Now the code linters will be run each time you
 commit changes. You can skip these checks with ``git commit --no-verify`` or with the
@@ -390,9 +395,12 @@ Automated Contributions and AI Policy
 
 We encourage the use of AI and automated tools to assist in code development,
 documentation, and testing. However, we ask that contributors disclose these tools and
-use them in a way that aligns with Dask's community guidelines. In particular do not use
-tools to think or speak for you in discussions, code reviews, or any other interactions
-within the Dask community.
+use them in a way that aligns with Dask's community guidelines. In particular:
+
+- do not use tools to think or speak for you in discussions, code reviews, or any other 
+  interactions within the Dask community.
+- Before you open a PR, you (the human) must fully review, understand, and approve
+  everything that the AI agent wrote.
 
 
 .. _Sphinx: https://www.sphinx-doc.org/

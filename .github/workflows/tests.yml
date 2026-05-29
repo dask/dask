@@ -20,6 +20,11 @@ concurrency:
 
 jobs:
   test:
+    # Do not run the schedule job on forks
+    if: github.repository == 'dask/dask' || github.event_name != 'schedule'
+
+    # If you change the pattern of this name, please adjust
+    # ../distributed/continuous_integration/scripts/test_report.py accordingly
     name: ${{ matrix.os }} ${{ matrix.environment }} ${{ matrix.task }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -28,7 +33,7 @@ jobs:
       matrix:
         # Note: after adding/removing builds here, update
         # codecov.yml to match.
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
         environment: [py310, py311, py312, py313, py314]
         task: [test-ci]
         include:
@@ -62,6 +67,9 @@ jobs:
           - os: ubuntu-latest
             environment: py314t
             task: test-ci
+          - os: ubuntu-latest
+            environment: spark
+            task: test-spark
 
     steps:
       - name: Checkout source

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterator
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -406,12 +407,12 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def meta_warning(df, method="apply"):
+def meta_warning(df: Any, method: str) -> str:
     """
     Provide an informative message when the user is asked to provide metadata
     """
     if is_dataframe_like(df):
-        meta_str = {k: str(v) for k, v in df.dtypes.to_dict().items()}
+        meta_str: object = {k: str(v) for k, v in df.dtypes.to_dict().items()}
     elif is_series_like(df):
         meta_str = (df.name, str(df.dtype))
     else:
@@ -428,7 +429,7 @@ def meta_warning(df, method="apply"):
         msg += (
             "\n"
             f"  Before: .{method}(func)\n"
-            f"  After:  .{method}(func, meta=%s)\n" % str(meta_str)
+            f"  After:  .{method}(func, meta={meta_str}\n"
         )
     return msg
 

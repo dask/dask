@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import glob
 import os
-import shutil
-import tempfile
+import urllib.request
 
 import numpy as np
 import pandas as pd
@@ -28,25 +27,24 @@ columns = ["time", "date"]
 
 @pytest.mark.network
 def test_orc_with_backend():
-    pytest.importorskip("requests")
     d = dd.read_orc(url)
     assert set(d.columns) == {"time", "date"}  # order is not guaranteed
     assert len(d) == 70000
 
 
 @pytest.fixture(scope="module")
-def orc_files():
-    requests = pytest.importorskip("requests")
-    data = requests.get(url).content
-    d = tempfile.mkdtemp()
-    files = [os.path.join(d, fn) for fn in ["test1.orc", "test2.orc"]]
+def orc_data():
+    with urllib.request.urlopen(url) as f:
+        return f.read()
+
+
+@pytest.fixture
+def orc_files(tmp_path, orc_data):
+    files = [str(tmp_path / fn) for fn in ["test1.orc", "test2.orc"]]
     for fn in files:
         with open(fn, "wb") as f:
-            f.write(data)
-    try:
-        yield files
-    finally:
-        shutil.rmtree(d, ignore_errors=True)
+            f.write(orc_data)
+    return files
 
 
 @pytest.mark.parametrize("split_stripes", [1, 2])
