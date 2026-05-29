@@ -1618,7 +1618,9 @@ def quantile(
     # weights break meta inference (dummy-array shape mismatches weights length).
     # There are also issues on NumPy 1.x.
     dtype = np.quantile(
-        np.zeros(1, dtype=a.dtype), np.asarray(0.5, dtype=q_arr), method=method
+        np.zeros(1, dtype=a.dtype),
+        np.asarray(0.5, dtype=q_arr.dtype), 
+        method=method,
     ).dtype
 
     result = a.map_blocks(
@@ -1817,7 +1819,9 @@ def nanquantile(
     # weights break meta inference (dummy-array shape mismatches weights length).
     # There are also issues on NumPy 1.x.
     dtype = np.nanquantile(
-        np.zeros(1, dtype=a.dtype), np.asarray(0.5, dtype=q_arr), method=method
+        np.zeros(1, dtype=a.dtype),
+        np.asarray(0.5, dtype=q_arr.dtype),
+        method=method,
     ).dtype
 
     result = a.map_blocks(
