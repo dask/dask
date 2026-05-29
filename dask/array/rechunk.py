@@ -13,8 +13,8 @@ import math
 from functools import reduce
 from itertools import chain, count, product
 from operator import add, itemgetter, mul
-from warnings import warn
 from typing import Any
+from warnings import warn
 
 import numpy as np
 import tlz as toolz

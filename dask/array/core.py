@@ -3675,7 +3675,7 @@ def from_array(
         token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
         name = name or f"array-{token}"
     elif name is False:
-        name = f"array-{uuid.uuid1()}"# type: ignore[unreachable]
+        name = f"array-{uuid.uuid1()}"  # type: ignore[unreachable]
 
     if lock is True:
         lock = SerializableLock()
@@ -3702,7 +3702,7 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
-        dsk = graph_from_arraylike( # type: ignore[unreachable]
+        dsk = graph_from_arraylike(  # type: ignore[unreachable]
             x,
             chunks,
             x.shape,
