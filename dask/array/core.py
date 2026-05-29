@@ -3701,7 +3701,7 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
-        dsk = graph_from_arraylike(
+        dsk = graph_from_arraylike( # type: ignore[unreachable]
             x,
             chunks,
             x.shape,
