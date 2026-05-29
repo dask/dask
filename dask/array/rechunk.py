@@ -14,6 +14,7 @@ from functools import reduce
 from itertools import chain, count, product
 from operator import add, itemgetter, mul
 from warnings import warn
+from typing import Any
 
 import numpy as np
 import tlz as toolz
