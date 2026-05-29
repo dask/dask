@@ -92,7 +92,14 @@ def partitioning_index(df, npartitions, cast_dtype=None):
     res = hash_object_dispatch(df, index=False) % int(npartitions)
     # Note: Use a signed integer since pandas is more efficient at handling
     # this since there is not always a fastpath for uints
-    return res.astype(np.min_scalar_type(-(npartitions - 1)))
+    max_partition = npartitions - 1
+    if max_partition <= np.iinfo(np.int8).max:
+        dtype = np.int8
+    elif max_partition <= np.iinfo(np.int16).max:
+        dtype = np.int16
+    else:
+        dtype = np.int32
+    return res.astype(dtype)
 
 
 def barrier(args):

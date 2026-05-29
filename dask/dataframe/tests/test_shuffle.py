@@ -1288,3 +1288,14 @@ def test_shuffle_nulls_introduced():
         .apply(lambda df: len(df), **include_groups)
     )
     assert_eq(result, expected, check_names=False)
+
+@pytest.mark.parametrize("npartitions", [64, 128, 129, 130])
+def test_partitioning_index_dtype_for_large_npartitions(npartitions):
+    s = pd.Series(["F905535765", "abc", "xyz"])
+    res = partitioning_index(s, npartitions)
+    assert res.dtype.kind == "i"  # signed integer
+    assert ((res >= 0) & (res < npartitions)).all()
+    if npartitions == 129:
+        # bucket 128 must not be stored as int8 -128
+        assert res.dtype != np.int8
+        assert res.max() <= npartitions - 1
