@@ -1619,7 +1619,7 @@ def quantile(
     # There are also issues on NumPy 1.x.
     dtype = np.quantile(
         np.zeros(1, dtype=a.dtype),
-        np.asarray(0.5, dtype=q_arr.dtype), 
+        np.asarray(0.5, dtype=q_arr.dtype),
         method=method,
     ).dtype
 
