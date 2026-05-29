@@ -93,13 +93,10 @@ def partitioning_index(df, npartitions, cast_dtype=None):
     # Note: Use a signed integer since pandas is more efficient at handling
     # this since there is not always a fastpath for uints
     max_partition = npartitions - 1
-    if max_partition <= np.iinfo(np.int8).max:
-        dtype = np.int8
-    elif max_partition <= np.iinfo(np.int16).max:
-        dtype = np.int16
-    else:
-        dtype = np.int32
-    return res.astype(dtype)
+    for dtype in (np.int8, np.int16, np.int32, np.int64):
+        if max_partition <= np.iinfo(dtype).max:
+            return res.astype(dtype)
+    raise ValueError(f"npartitions={npartitions} is too large for partitioning_index")
 
 
 def barrier(args):
