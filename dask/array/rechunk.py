@@ -269,7 +269,7 @@ def _validate_rechunk(old_chunks, new_chunks):
 
 def rechunk(
     x,
-    chunks: str | tuple[int, ...] | list[int] = "auto",
+    chunks: str | tuple[int, ...] | list[int] | dict[Any, Any] | int = "auto",
     threshold=None,
     block_size_limit=None,
     balance=False,
