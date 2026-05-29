@@ -1682,7 +1682,7 @@ def _custom_nanquantile(
             # unlike np.quantile which broadcasts 1-D weights automatically.
             expand_at = [i for i in range(a.ndim) if i not in axis]
             weights = np.broadcast_to(np.expand_dims(weights, axis=expand_at), a.shape)
-            # NumPy <2.0 doesn't support weights
+            # NumPy <2.0 doesn't support the weights parameter
             kwargs["weights"] = weights
 
         return np.nanquantile(
