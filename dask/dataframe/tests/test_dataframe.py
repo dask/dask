@@ -4589,16 +4589,6 @@ def test_mixed_dask_array_multi_dimensional():
     assert_eq(ddf[["y", "x"]] + dx + 1, df[["y", "x"]] + x + 1)
 
 
-def test_meta_raises():
-    # Raise when we use a user defined function
-    s = pd.Series(["abcd", "abcd"])
-    ds = dd.from_pandas(s, npartitions=2)
-    try:
-        ds.map(lambda x: x[3])
-    except ValueError as e:
-        assert "meta=" in str(e)
-
-
 @pytest.mark.skip_with_pyarrow_strings  # DateOffset has to be an object
 def test_meta_nonempty_uses_meta_value_if_provided():
     # https://github.com/dask/dask/issues/6958
@@ -4725,20 +4715,6 @@ def test_has_parallel_type():
     assert not has_parallel_type(123)
 
 
-def test_map_index():
-    df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    assert ddf.known_divisions is True
-    with pytest.warns(UserWarning, match="meta"):
-        cleared = ddf.index.map(lambda x: x * 10)
-    assert cleared.known_divisions is False
-
-    with pytest.warns(UserWarning, match="meta"):
-        applied = ddf.index.map(lambda x: x * 10, is_monotonic=True)
-    assert applied.known_divisions is True
-    assert applied.divisions == tuple(x * 10 for x in ddf.divisions)
-
-
 def test_assign_index():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -4809,34 +4785,6 @@ def test_dtype_cast():
     assert ddf.B.dtype == np.int64
     # fails
     assert ddf.A.dtype == np.int32
-
-
-@pytest.mark.parametrize("base_npart", [1, 4])
-@pytest.mark.parametrize("map_npart", [1, 3])
-@pytest.mark.parametrize("sorted_index", [False, True])
-@pytest.mark.parametrize("sorted_map_index", [False, True])
-def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
-    if map_npart != base_npart:
-        pytest.xfail(reason="not yet implemented")
-    base = pd.Series(
-        ["".join(np.random.choice(["a", "b", "c"], size=3)) for x in range(100)]
-    )
-    if not sorted_index:
-        index = np.arange(100)
-        np.random.shuffle(index)
-        base.index = index
-    map_index = ["".join(x) for x in product("abc", repeat=3)]
-    mapper = pd.Series(np.random.randint(50, size=len(map_index)), index=map_index)
-    if not sorted_map_index:
-        map_index = np.array(map_index)
-        np.random.shuffle(map_index)
-        mapper.index = map_index
-    expected = base.map(mapper)
-    dask_base = dd.from_pandas(base, npartitions=base_npart, sort=False)
-    dask_map = dd.from_pandas(mapper, npartitions=map_npart, sort=False)
-    with pytest.warns(UserWarning, match="meta"):
-        result = dask_base.map(dask_map)
-    assert_eq(expected, result)
 
 
 @pytest.mark.skip_with_pyarrow_strings  # has to be array to explode

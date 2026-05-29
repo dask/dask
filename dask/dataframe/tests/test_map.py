@@ -9,7 +9,33 @@ from dask.dataframe._compat import PANDAS_GE_210
 from dask.dataframe.utils import assert_eq
 
 
-def test_series_map():
+@pytest.mark.parametrize("base_npart", [1, 4])
+@pytest.mark.parametrize("map_npart", [1, 3])
+@pytest.mark.parametrize("sorted_index", [False, True])
+@pytest.mark.parametrize("sorted_map_index", [False, True])
+def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
+    if map_npart != base_npart:
+        pytest.xfail(reason="not yet implemented")
+    base = pd.Series(np.arange(100, dtype="i2"))
+    if not sorted_index:
+        index = np.arange(100)
+        np.random.shuffle(index)
+        base.index = index
+    map_index = np.arange(0, 1000, 10, dtype="i2")
+    mapper = pd.Series(np.random.randint(50, size=len(map_index)), index=map_index)
+    if not sorted_map_index:
+        map_index = np.array(map_index)
+        np.random.shuffle(map_index)
+        mapper.index = map_index
+    expected = base.map(mapper)
+    dask_base = dd.from_pandas(base, npartitions=base_npart, sort=False)
+    dask_map = dd.from_pandas(mapper, npartitions=map_npart, sort=False)
+    with pytest.warns(UserWarning, match="meta"):
+        result = dask_base.map(dask_map)
+    assert_eq(expected, result)
+
+
+def test_series_map2():
     df = pd.DataFrame(
         {"a": range(9), "b": [4, 5, 6, 1, 2, 3, 0, 0, 0]},
         index=pd.Index([0, 1, 3, 5, 6, 8, 9, 9, 9], name="myindex"),
@@ -90,12 +116,36 @@ def test_dataframe_map(na_action):
         assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
 
 
+def test_series_meta_raises():
+    # Raise when we use a user defined function
+    s = pd.Series(["abcd", "abcd"])
+    ds = dd.from_pandas(s, npartitions=2)
+    try:
+        ds.map(lambda x: x[3])
+    except ValueError as e:
+        assert "meta=" in str(e)
+
+
 @pytest.mark.skipif(PANDAS_GE_210, reason="Added in pandas 2.1.0")
 def test_dataframe_map_raises():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="DataFrame.map requires pandas"):
         ddf.map(lambda x: x + 1)
+
+
+def test_map_index():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.known_divisions is True
+    with pytest.warns(UserWarning, match="meta"):
+        cleared = ddf.index.map(lambda x: x * 10)
+    assert cleared.known_divisions is False
+
+    with pytest.warns(UserWarning, match="meta"):
+        applied = ddf.index.map(lambda x: x * 10, is_monotonic=True)
+    assert applied.known_divisions is True
+    assert applied.divisions == tuple(x * 10 for x in ddf.divisions)
 
 
 def assert_series_map_dtype(base: pd.Series | pd.Index, func: pd.Series) -> None:
