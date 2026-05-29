@@ -3674,7 +3674,7 @@ def from_array(
         token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
         name = name or f"array-{token}"
     elif name is False:
-        name = f"array-{uuid.uuid1()}"
+        name = f"array-{uuid.uuid1()}"# type: ignore[unreachable]
 
     if lock is True:
         lock = SerializableLock()
