@@ -1289,6 +1289,7 @@ def test_shuffle_nulls_introduced():
     )
     assert_eq(result, expected, check_names=False)
 
+
 @pytest.mark.parametrize("npartitions", [64, 128, 129, 130])
 def test_partitioning_index_dtype_for_large_npartitions(npartitions):
     s = pd.Series(["F905535765", "abc", "xyz"])
