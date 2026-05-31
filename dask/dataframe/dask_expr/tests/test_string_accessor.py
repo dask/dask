@@ -150,9 +150,9 @@ def test_str_split_preserves_dtype():
     pd_result = df["c"].str.split(",", n=1, expand=True)
     dd_result = ddf["c"].str.split(",", n=1, expand=True)
 
-    assert list(dd_result.dtypes) == list(pd_result.dtypes), (
-        f"dask dtypes {list(dd_result.dtypes)} != pandas dtypes {list(pd_result.dtypes)}"
-    )
+    assert list(dd_result.dtypes) == list(
+        pd_result.dtypes
+    ), f"dask dtypes {list(dd_result.dtypes)} != pandas dtypes {list(pd_result.dtypes)}"
     assert_eq(dd_result, pd_result)
 
 
