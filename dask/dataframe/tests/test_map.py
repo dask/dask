@@ -148,6 +148,18 @@ def test_map_index():
     assert applied.divisions == tuple(x * 10 for x in ddf.divisions)
 
 
+@pytest.mark.xfail(
+    reason="Co-aligned Series.map(Series) lookup semantics: each partition "
+    "only sees its mapper slice, not the full lookup table",
+)
+def test_series_map_co_aligned_lookup():
+    base = pd.Series([1, 2])
+    dbase = dd.from_pandas(base, npartitions=2)
+    expected = base.map(base)
+    result = dbase.map(dbase, meta=expected)
+    assert_eq(result, expected)
+
+
 def assert_series_map_dtype(base: pd.Series | pd.Index, func: pd.Series) -> None:
     """Test that Series.map() behaves identically in Pandas and Dask
     when `func` is a Series, and that Dask's behaviour is coherent in the edge cases
@@ -193,16 +205,7 @@ series_map_dtypes = pytest.mark.parametrize(
 
 
 @series_map_dtypes
-@pytest.mark.parametrize(
-    "base_cls",
-    [
-        pytest.param(
-            pd.Series,
-            marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/12426"),
-        ),
-        pd.Index,
-    ],
-)
+@pytest.mark.parametrize("base_cls", [pd.Series, pd.Index])
 def test_series_map_dtype_all_mapped(base_cls, values, dtype):
     """When all keys mapped, the result dtype is equal to the mapper.dtype
     (basic use case).
@@ -212,7 +215,6 @@ def test_series_map_dtype_all_mapped(base_cls, values, dtype):
     assert_series_map_dtype(base, mapper)
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/12426")
 @series_map_dtypes
 @pytest.mark.parametrize("base_cls", [pd.Series, pd.Index])
 def test_series_map_dtype_unmapped(base_cls, values, dtype):
@@ -228,7 +230,6 @@ def test_series_map_dtype_unmapped(base_cls, values, dtype):
     assert_series_map_dtype(base, mapper)
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/12426")
 @series_map_dtypes
 @pytest.mark.parametrize("base_dtype", [np.float32, pd.Int16Dtype(), "int16[pyarrow]"])
 @pytest.mark.parametrize("base_cls", [pd.Series, pd.Index])
@@ -238,6 +239,17 @@ def test_series_map_dtype_null_base(base_cls, base_dtype, values, dtype):
 
     Note: Pandas' behaviour changed in version 3.1
     """
+    if base_cls is pd.Index and (
+        isinstance(base_dtype, pd.Int16Dtype)
+        or base_dtype == "int16[pyarrow]"
+    ):
+        pytest.xfail("Index with nullable base dtype: NA in divisions")
+    if (
+        base_cls is pd.Index
+        and base_dtype is np.float32
+        and dtype in (object, "str")
+    ):
+        pytest.xfail("Index.map dtype mismatch: float32 NaN base with object/str mapper")
     base = base_cls([1, None], dtype=base_dtype)
     mapper_idx = pd.Index([2, 3], dtype=base_dtype)
     mapper = pd.Series(values, index=mapper_idx, dtype=dtype)
