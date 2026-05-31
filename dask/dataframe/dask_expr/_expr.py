@@ -1895,7 +1895,10 @@ class Map(Elemwise):
                 pd.Series(self.frame.divisions).map(self.arg, na_action=self.na_action)
             )
         elif isinstance(self.arg, Expr):
-            if self._broadcast_dep(self.arg) or self.arg.divisions == self.frame.divisions:
+            if (
+                self._broadcast_dep(self.arg)
+                or self.arg.divisions == self.frame.divisions
+            ):
                 return self.frame.divisions
             else:
                 # We only get here when we have only one partition
