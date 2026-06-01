@@ -35,15 +35,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Invalidate pixi lock
-        run: rm -f pixi.lock
-
-      - uses: prefix-dev/setup-pixi@v0
+      - uses: prefix-dev/setup-pixi@v0.9.6
         with:
           pixi-version: v0.69.0
-          environments: ${{ matrix.environment }}
-          cache: false
+          run-install: false
+          cache: true
           locked: false
+
+      - name: pixi update
+        run: pixi update -e ${{ matrix.environment }}
+
+      - name: pixi install
+        run: pixi install -e ${{ matrix.environment }}
 
       - name: Reconfigure pytest-timeout
         # No SIGALRM available on Windows
