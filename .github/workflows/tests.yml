@@ -79,7 +79,7 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@v0
         with:
-          pixi-version: v0.68.1
+          pixi-version: v0.69.0
           environments: ${{ matrix.environment }}
           cache: true
           locked: true
