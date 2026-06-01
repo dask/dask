@@ -46,7 +46,9 @@ def test_default_fused_keys_renamer_uses_stable_digest_suffix():
     full_name = "-".join(sorted(keys[:-1]) + [keys[-1]])
     result = default_fused_keys_renamer(keys, max_fused_key_length=40)
 
-    assert result == f"{full_name[:31]}-{hashlib.sha1(full_name.encode()).hexdigest()[:8]}"
+    assert (
+        result == f"{full_name[:31]}-{hashlib.sha1(full_name.encode()).hexdigest()[:8]}"
+    )
     assert len(result) == 40
 
 

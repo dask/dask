@@ -925,7 +925,10 @@ def test_block_simple_column_wise():
 def test_block_delayed_collection_args_with_long_fused_names():
     tile_size = 4
     tile_dtype = np.dtype(
-        [("A", "float32", (tile_size, tile_size)), ("B", "float32", (tile_size, tile_size))]
+        [
+            ("A", "float32", (tile_size, tile_size)),
+            ("B", "float32", (tile_size, tile_size)),
+        ]
     )
 
     @delayed
