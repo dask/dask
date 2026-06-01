@@ -10,7 +10,7 @@ import numpy as np
 
 import dask.array as da
 import dask.dataframe as dd
-from dask._pandas_compat import PANDAS_GE_300
+from dask._pandas_compat import PANDAS_GE_230, PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
 if da._array_expr_enabled():
@@ -524,13 +524,13 @@ def test_ufunc_with_reduction(xfail, redfunc, ufunc, pandas):
     np_redfunc = getattr(np, redfunc)
     np_ufunc = getattr(np, ufunc)
 
-    if (
-        redfunc == "prod"
-        and ufunc in ["conj", "square", "negative", "absolute"]
-        and isinstance(pandas, pd.DataFrame)
-        and not PANDAS_GE_300
-    ):
-        xfail("'prod' overflowing with integer columns")
+    if redfunc == "prod" and isinstance(pandas, pd.DataFrame):
+        if not PANDAS_GE_300 and ufunc in ("conj", "square", "negative", "absolute"):
+            xfail("'prod' overflowing with integer columns")
+        elif (
+            PANDAS_GE_230 and not PANDAS_GE_300 and ufunc in ("ceil", "floor", "trunc")
+        ):
+            xfail("?")
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 import warnings
 
 import numpy as np
@@ -16,6 +17,8 @@ from dask.dataframe.utils import (
     check_meta,
     has_known_categories,
 )
+
+X86 = platform.machine().lower() in ("x86_64", "amd64")
 
 
 def test_merge_indexed_dataframe_to_indexed_dataframe():
@@ -1894,28 +1897,21 @@ def test_concat5():
         )
 
 
+xfail_10558 = pytest.mark.xfail(
+    PANDAS_GE_220 and X86,
+    reason="https://github.com/dask/dask/issues/10558",
+)
+
+
+@pytest.mark.repeat(100)
 @pytest.mark.parametrize(
     "known, cat_index, divisions",
     [
         (True, True, False),
-        pytest.param(
-            True,
-            False,
-            True,
-            marks=pytest.mark.xfail(
-                PANDAS_GE_220, reason="https://github.com/dask/dask/issues/10558"
-            ),
-        ),
+        pytest.param(True, False, True, marks=xfail_10558),
         (True, False, False),
         (False, True, False),
-        pytest.param(
-            False,
-            False,
-            True,
-            marks=pytest.mark.xfail(
-                PANDAS_GE_220, reason="https://github.com/dask/dask/issues/10558"
-            ),
-        ),
+        pytest.param(False, False, True, marks=xfail_10558),
         (False, False, False),
     ],
 )

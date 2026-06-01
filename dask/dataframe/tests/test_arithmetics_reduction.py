@@ -11,7 +11,12 @@ from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
 from dask.array.numpy_compat import NUMPY_GE_125, NUMPY_GE_200
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300
+from dask.dataframe._compat import (
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+    PANDAS_GE_230,
+    PANDAS_GE_300,
+)
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 try:
@@ -866,7 +871,12 @@ def test_reductions_frame(split_every):
 )
 @pytest.mark.parametrize("numeric_only", [None, True, False])
 def test_reductions_frame_dtypes(xfail, func, kwargs, numeric_only):
-    if func == "sum" and not numeric_only and not PANDAS_GE_210:
+    if (
+        func == "sum"
+        and not numeric_only
+        # Fails on Pandas 2.0 and 2.2, but not 2.1 for some reason
+        and (not PANDAS_GE_210 or (PANDAS_GE_220 and not PANDAS_GE_230))
+    ):
         xfail("Known failure")
 
     df = pd.DataFrame(

@@ -2790,17 +2790,17 @@ def test_groupby_sort_true_split_out():
 def test_groupby_aggregate_categorical_observed(
     xfail, agg_func, known_cats, ordered_cats, groupby, observed
 ):
-    if agg_func in ["cov", "corr", "nunique"]:
+    if agg_func in ("cov", "corr", "nunique"):
         xfail("Not implemented for DataFrameGroupBy yet.")
     elif (
-        agg_func in ["mean", "median", "std", "sum", "var", "prod"]
+        agg_func in ("mean", "median", "std", "sum", "var", "prod")
         and groupby == "cat_1"
     ):
         xfail("Can't calculate over categorical")
     elif agg_func == "median" and not observed:
         xfail("Unknown issue")
-    elif agg_func == "prod" and not observed and not PANDAS_GE_220:
-        xfail("Fixed in later versions of Pandas")
+    elif agg_func == "prod" and not observed and not PANDAS_GE_300:
+        xfail("Fixed in Pandas 3")
 
     pdf = pd.DataFrame(
         {
