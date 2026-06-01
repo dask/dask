@@ -1,6 +1,7 @@
 package:
   name: s3fs
-  version: dynamic
+  # FIXME work around poor pixi-build support for SCM versioning
+  version: "9999"
 
 source:
   git: https://github.com/fsspec/s3fs
