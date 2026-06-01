@@ -18,8 +18,6 @@ from dask.dataframe.utils import (
     has_known_categories,
 )
 
-X86 = platform.machine().lower() in ("x86_64", "amd64")
-
 
 def test_merge_indexed_dataframe_to_indexed_dataframe():
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 6, 7])
@@ -1898,7 +1896,7 @@ def test_concat5():
 
 
 xfail_10558 = pytest.mark.xfail(
-    PANDAS_GE_220 and X86,
+    PANDAS_GE_220 and platform.machine().lower() in ("x86_64", "amd64"),
     reason="https://github.com/dask/dask/issues/10558",
 )
 

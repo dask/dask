@@ -1082,7 +1082,7 @@ def test_bfill(group_keys, limit):
     )
 
 
-# @pytest.mark.flaky(reruns=5)  # See https://github.com/dask/dask/issues/9793
+@pytest.mark.flaky(reruns=5)  # See https://github.com/dask/dask/issues/9793
 @pytest.mark.parametrize(
     "grouper_id,grouper",
     [

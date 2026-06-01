@@ -58,7 +58,7 @@ def xfail(request: pytest.FixtureRequest):
         def test1(xfail):
             if param1 == 2 and param2 == 6:
                 xfail("This combination of parameters is known to fail")
-            # Test continues, inncluding in the XFAIL'ed condition
+            # Test continues, including in the XFAIL'ed use case
 
     Parameters
     ----------
