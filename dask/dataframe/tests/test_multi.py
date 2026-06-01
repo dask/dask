@@ -1903,10 +1903,7 @@ def test_concat5():
             False,
             True,
             marks=pytest.mark.xfail(
-                PANDAS_GE_220,
-                reason="https://github.com/dask/dask/issues/10558",
-                raises=AssertionError,
-                strict=False,
+                PANDAS_GE_220, reason="https://github.com/dask/dask/issues/10558"
             ),
         ),
         (True, False, False),
@@ -1916,10 +1913,7 @@ def test_concat5():
             False,
             True,
             marks=pytest.mark.xfail(
-                PANDAS_GE_220,
-                reason="https://github.com/dask/dask/issues/10558",
-                raises=AssertionError,
-                strict=False,
+                PANDAS_GE_220, reason="https://github.com/dask/dask/issues/10558"
             ),
         ),
         (False, False, False),
