@@ -1086,9 +1086,10 @@ def test_nan_empty_like(shape_chunks, dtype):
 @pytest.mark.parametrize("val", [0, 0.0, 99, -1])
 @pytest.mark.parametrize("shape_chunks", [((50, 4), (10, 2)), ((50,), (10,))])
 @pytest.mark.parametrize("dtype", ["u4", np.float32, None, np.int64])
-def test_nan_full_like(val, shape_chunks, dtype):
+def test_nan_full_like(xfail, val, shape_chunks, dtype):
     if NUMPY_GE_210 and val == -1 and dtype == "u4":
-        pytest.xfail("can't insert negative numbers into unsigned integer")
+        xfail("can't insert negative numbers into unsigned integer")
+
     shape, chunks = shape_chunks
     x1 = da.random.standard_normal(size=shape, chunks=chunks)
     y1 = x1[x1 < 0.5]
