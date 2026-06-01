@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GE_210
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
 
@@ -215,7 +215,7 @@ def test_series_map_dtype_all_mapped(base_cls, values, dtype):
 
 @series_map_dtypes
 @pytest.mark.parametrize("base_cls", [pd.Series, pd.Index])
-def test_series_map_dtype_unmapped(base_cls, values, dtype):
+def test_series_map_dtype_unmapped(xfail, base_cls, values, dtype):
     """When some keys fail to map, the output dtype can change dynamically;
     in Dask, this can't be reflected in the meta dtype.
 
@@ -223,11 +223,9 @@ def test_series_map_dtype_unmapped(base_cls, values, dtype):
     finalize() will need to deal with mismatched dtypes in the final concatenation
     step.
     """
-    if base_cls is pd.Index and dtype is np.bool_:
-        pytest.xfail(
-            "Index.map dtype mismatch: all-NaN partition is float64 "
-            "but overall result is object"
-        )
+    if base_cls is pd.Index and dtype is np.bool_ and not PANDAS_GE_300:
+        xfail("Index.map dtype mismatch")
+
     base = base_cls([1, 2])
     mapper = pd.Series(values, index=[2, 3], dtype=dtype)
     assert_series_map_dtype(base, mapper)
@@ -236,7 +234,7 @@ def test_series_map_dtype_unmapped(base_cls, values, dtype):
 @series_map_dtypes
 @pytest.mark.parametrize("base_dtype", [np.float32, pd.Int16Dtype(), "int16[pyarrow]"])
 @pytest.mark.parametrize("base_cls", [pd.Series, pd.Index])
-def test_series_map_dtype_null_base(base_cls, base_dtype, values, dtype):
+def test_series_map_dtype_null_base(xfail, base_cls, base_dtype, values, dtype):
     """A NULL in the base triggers dynamic dtype changes
     when the mapper's dtype is not nullable.
 
@@ -245,11 +243,10 @@ def test_series_map_dtype_null_base(base_cls, base_dtype, values, dtype):
     if base_cls is pd.Index and (
         isinstance(base_dtype, pd.Int16Dtype) or base_dtype == "int16[pyarrow]"
     ):
-        pytest.xfail("Index with nullable base dtype: NA in divisions")
+        xfail("Index with nullable base dtype: NA in divisions")
     if base_cls is pd.Index and base_dtype is np.float32 and dtype in (object, "str"):
-        pytest.xfail(
-            "Index.map dtype mismatch: float32 NaN base with object/str mapper"
-        )
+        xfail("Index.map dtype mismatch: float32 NaN base with object/str mapper")
+
     base = base_cls([1, None], dtype=base_dtype)
     mapper_idx = pd.Index([2, 3], dtype=base_dtype)
     mapper = pd.Series(values, index=mapper_idx, dtype=dtype)

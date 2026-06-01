@@ -3696,8 +3696,13 @@ class MapAlign(MaybeAlignPartitions):
         kwargs = {}
         if "is_monotonic" in self._parameters:
             kwargs["is_monotonic"] = self.operand("is_monotonic")
-        return Map(self.frame, arg=mapper, na_action=self.operand("na_action"),
-            meta=self.operand("meta"),**kwargs)
+        return Map(
+            self.frame,
+            arg=mapper,
+            na_action=self.operand("na_action"),
+            meta=self.operand("meta"),
+            **kwargs,
+        )
 
 
 class MapIndexAlign(MapAlign):
