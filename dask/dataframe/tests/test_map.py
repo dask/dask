@@ -5,7 +5,12 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300
+from dask.dataframe._compat import (
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+    PANDAS_GE_300,
+    PANDAS_GE_310,
+)
 from dask.dataframe.utils import assert_eq
 
 
@@ -250,6 +255,10 @@ def test_series_map_dtype_null_base(xfail, base_cls, base_dtype, values, dtype):
         and (PANDAS_GE_220 or not PANDAS_GE_210)
     ):
         xfail("Index.map dtype mismatch: float32 NaN base with object/str mapper")
+    elif (
+        base_dtype in ("Int16", "int16[pyarrow]") and dtype is object and PANDAS_GE_310
+    ):
+        xfail("https://github.com/pandas-dev/pandas/issues/65735")
 
     base = base_cls([1, None], dtype=base_dtype)
     mapper_idx = pd.Index([2, 3], dtype=base_dtype)
