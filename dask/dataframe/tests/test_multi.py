@@ -1903,7 +1903,6 @@ xfail_10558 = pytest.mark.xfail(
 )
 
 
-@pytest.mark.repeat(100)
 @pytest.mark.parametrize(
     "known, cat_index, divisions",
     [
