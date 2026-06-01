@@ -41,6 +41,7 @@ jobs:
           run-install: false
           cache: false
           locked: false
+          activate-environment: true
 
       - name: pixi update
         run: pixi update -e ${{ matrix.environment }}

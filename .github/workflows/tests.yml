@@ -83,6 +83,7 @@ jobs:
           environments: ${{ matrix.environment }}
           cache: true
           locked: true
+          activate-environment: true
           # post-cleanup fails on Windows:
           # EPERM: operation not permitted, unlink 'D:\a\dask\dask\.pixi\envs\py310\python.exe'
           post-cleanup: ${{ matrix.os != 'windows-latest' }}

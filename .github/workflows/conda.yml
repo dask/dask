@@ -28,6 +28,7 @@ jobs:
           environments: build
           cache: true
           locked: true
+          activate-environment: true
       
       - name: Build conda package
         run: pixi r conda-build
