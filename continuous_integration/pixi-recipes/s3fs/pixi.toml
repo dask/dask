@@ -3,4 +3,5 @@ channels = ["https://prefix.dev/conda-forge"]
 preview = ["pixi-build"]
 
 [package.build]
+# Can't use pixi-build-python because the project has no pyproject.toml
 backend = { name = "pixi-build-rattler-build", version = "*" }
