@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_300
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
 
@@ -240,11 +240,15 @@ def test_series_map_dtype_null_base(xfail, base_cls, base_dtype, values, dtype):
 
     Note: Pandas' behaviour changed in version 3.1
     """
-    if base_cls is pd.Index and (
-        isinstance(base_dtype, pd.Int16Dtype) or base_dtype == "int16[pyarrow]"
-    ):
+    if base_cls is pd.Index and base_dtype in ("Int16", "int16[pyarrow]"):
         xfail("Index with nullable base dtype: NA in divisions")
-    if base_cls is pd.Index and base_dtype is np.float32 and dtype in (object, "str"):
+    elif (
+        base_cls is pd.Index
+        and base_dtype is np.float32
+        and dtype in (object, "str")
+        # Test passes with Pandas 2.1 but not 2.0 or 2.2+ for some reason
+        and (PANDAS_GE_220 or not PANDAS_GE_210)
+    ):
         xfail("Index.map dtype mismatch: float32 NaN base with object/str mapper")
 
     base = base_cls([1, None], dtype=base_dtype)
