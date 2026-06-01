@@ -39,7 +39,7 @@ jobs:
         with:
           pixi-version: v0.69.0
           run-install: false
-          cache: true
+          cache: false
           locked: false
 
       - name: pixi update
