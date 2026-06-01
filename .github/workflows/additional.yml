@@ -27,7 +27,6 @@ jobs:
           environments: default
           cache: true
           locked: true
-          activate-environment: true
 
       - name: Run tests
         run: pixi r doctest
