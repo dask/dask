@@ -11,7 +11,7 @@ from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
 from dask.array.numpy_compat import NUMPY_GE_125, NUMPY_GE_200
-from dask.dataframe._compat import PANDAS_GE_300
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_230
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 try:
@@ -707,11 +707,11 @@ def test_reduction_series_invalid_axis():
             pytest.raises(ValueError, lambda s=s, axis=axis: s.mean(axis=axis))
 
 
+@pytest.mark.xfail(
+    pyarrow_strings_enabled() and not PANDAS_GE_230,
+    reason="known failure with arrow strings",
+)
 def test_reductions_non_numeric_dtypes():
-    # test non-numric blocks
-    if pyarrow_strings_enabled() and not PANDAS_GE_300:
-        pytest.xfail(reason="known failure with arrow strings")
-
     def check_raises(d, p, func):
         pytest.raises((TypeError, ValueError), lambda: getattr(d, func)().compute())
         pytest.raises((TypeError, ValueError), lambda: getattr(p, func)())
@@ -864,22 +864,16 @@ def test_reductions_frame(split_every):
         ("var", {"ddof": 0, "skipna": False}),
     ],
 )
-@pytest.mark.parametrize(
-    "numeric_only",
-    [
-        None,
-        True,
-        pytest.param(
-            False,
-            marks=pytest.mark.xfail(
-                True, reason="numeric_only=False not implemented", strict=False
-            ),
-        ),
-    ],
-)
-def test_reductions_frame_dtypes(func, kwargs, numeric_only):
-    if pyarrow_strings_enabled() and func == "sum" and numeric_only is None:
-        pytest.xfail("Known failure with pyarrow strings")
+@pytest.mark.parametrize("numeric_only", [None, True, False])
+def test_reductions_frame_dtypes(xfail, func, kwargs, numeric_only):
+    if (
+        func == "sum"
+        and not numeric_only
+        # Fails on Pandas 2.0 and 2.2, but not 2.1 for some reason
+        and (not PANDAS_GE_210 or (PANDAS_GE_220 and not PANDAS_GE_230))
+    ):
+        xfail("Known failure")
+
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -1467,11 +1461,13 @@ def test_std_raises_with_arrow_string_ea():
     ],
 )
 @pytest.mark.parametrize("func", ["std", "var", "skew", "kurtosis"])
-def test_reductions_with_pandas_and_arrow_ea(dtype, func):
-    if func in ["skew", "kurtosis"]:
+def test_reductions_with_pandas_and_arrow_ea(xfail, dtype, func):
+    if func in ("skew", "kurtosis"):
         pytest.importorskip("scipy")
-        if "pyarrow" in dtype:
-            pytest.xfail("skew/kurtosis not implemented for arrow dtypes")
+        if "pyarrow" in dtype and func == "skew" and not PANDAS_GE_220:
+            xfail("skew not implemented for arrow dtypes")
+        if "pyarrow" in dtype and func == "kurtosis":
+            xfail("kurtosis not implemented for arrow dtypes")
 
     ser = pd.Series([1, 2, 3, 4], dtype=dtype)
     ds = dd.from_pandas(ser, npartitions=2)

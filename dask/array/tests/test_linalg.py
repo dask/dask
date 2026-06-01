@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import sys
-
 import pytest
 
 pytest.importorskip("numpy")
@@ -13,7 +11,6 @@ from packaging.version import Version
 
 import dask.array as da
 from dask.array.linalg import qr, sfqr, svd, svd_compressed, tsqr
-from dask.array.numpy_compat import _np_version
 from dask.array.utils import assert_eq, same_keys, svd_flip
 
 
@@ -1031,11 +1028,6 @@ def test_svd_full_matrices_false(shape):
     assert_eq(dv, nv)
 
 
-@pytest.mark.xfail(
-    sys.platform == "darwin" and _np_version < Version("1.22"),
-    reason="https://github.com/dask/dask/issues/7189",
-    strict=False,
-)
 @pytest.mark.parametrize(
     "shape, chunks, axis",
     [[(5,), (2,), None], [(5,), (2,), 0], [(5,), (2,), (0,)], [(5, 6), (2, 2), None]],
@@ -1052,11 +1044,6 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
     assert_eq(a_r, d_r)
 
 
-@pytest.mark.xfail(
-    _np_version < Version("1.23"),
-    reason="https://github.com/numpy/numpy/pull/17709",
-    strict=False,
-)
 @pytest.mark.parametrize("precision", ["single", "double"])
 @pytest.mark.parametrize("isreal", [True, False])
 @pytest.mark.parametrize("keepdims", [False, True])
@@ -1078,12 +1065,6 @@ def test_norm_any_prec(norm, keepdims, precision, isreal):
     assert d_r.dtype == d_a.dtype
 
 
-@pytest.mark.slow
-@pytest.mark.xfail(
-    sys.platform == "darwin" and _np_version < Version("1.22"),
-    reason="https://github.com/dask/dask/issues/7189",
-    strict=False,
-)
 @pytest.mark.parametrize(
     "shape, chunks",
     [

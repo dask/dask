@@ -624,8 +624,6 @@ def test_merge_pandas_object():
 def test_pairwise_merge_results_in_identical_output_df(
     how, npartitions_base, npartitions_other, clear_divisions
 ):
-    if clear_divisions and (npartitions_other != 3 or npartitions_base != 1):
-        pytest.skip(reason="Runtime still slower than I would like, so save some time")
     dfs_to_merge = []
     for i in range(10):
         df = pd.DataFrame(

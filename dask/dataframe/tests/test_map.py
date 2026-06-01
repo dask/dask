@@ -13,9 +13,10 @@ from dask.dataframe.utils import assert_eq
 @pytest.mark.parametrize("map_npart", [1, 3])
 @pytest.mark.parametrize("sorted_index", [False, True])
 @pytest.mark.parametrize("sorted_map_index", [False, True])
-def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
-    if map_npart != base_npart:
-        pytest.xfail(reason="not yet implemented")
+def test_series_map(xfail, base_npart, map_npart, sorted_index, sorted_map_index):
+    if (not sorted_index or not sorted_map_index) and map_npart != base_npart:
+        xfail(reason="not yet implemented")
+
     base = pd.Series(np.arange(100, dtype="i2"))
     if not sorted_index:
         index = np.arange(100)
