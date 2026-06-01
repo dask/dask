@@ -922,6 +922,56 @@ def test_block_simple_column_wise():
     assert_eq(expected, result)
 
 
+def test_block_delayed_collection_args_with_long_fused_names():
+    tile_size = 4
+    tile_dtype = np.dtype(
+        [("A", "float32", (tile_size, tile_size)), ("B", "float32", (tile_size, tile_size))]
+    )
+
+    @delayed
+    def make_tile(shape, value):
+        return np.array(
+            tuple(np.full(shape, value, dtype="float32") for _ in tile_dtype.descr),
+            dtype=tile_dtype,
+        )
+
+    def a_long_function_name(array):
+        return array
+
+    def nest_array_in_delays(array):
+        array = da.from_delayed(
+            delayed(a_long_function_name)(array), shape=array.shape, dtype=np.float32
+        )
+        return da.from_delayed(
+            delayed(a_long_function_name)(array), shape=array.shape, dtype=np.float32
+        )
+
+    shape = (10, 10)
+
+    for _ in range(5):
+        mosaic = np.empty(shape, dtype=object)
+        value = 0
+        for x in range(shape[0]):
+            for y in range(shape[1]):
+                array = da.from_delayed(
+                    make_tile((tile_size, tile_size), value),
+                    shape=tuple(),
+                    dtype=tile_dtype,
+                )
+                array = da.stack(
+                    [nest_array_in_delays(array[field]) for field in ["A", "B"]],
+                    axis=0,
+                )
+                mosaic[x, y] = array.rechunk((-1,) + array.chunks[1:])
+                value += 1
+
+        result = da.block(mosaic.tolist()).compute(scheduler="single-threaded")
+        np.testing.assert_array_equal(
+            result[0, ::tile_size, ::tile_size],
+            np.arange(shape[0] * shape[1], dtype="float32").reshape(shape),
+        )
+
+
 def test_block_with_1d_arrays_row_wise():
     # # # 1-D vectors are treated as row arrays
     a1 = np.array([1, 2, 3])
