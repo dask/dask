@@ -713,7 +713,7 @@ def test_reduction_series_invalid_axis():
 
 
 @pytest.mark.xfail(
-    pyarrow_strings_enabled() and not PANDAS_GE_300,
+    pyarrow_strings_enabled() and not PANDAS_GE_230,
     reason="known failure with arrow strings",
 )
 def test_reductions_non_numeric_dtypes():
