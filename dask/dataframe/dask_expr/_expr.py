@@ -3693,13 +3693,11 @@ class MapAlign(MaybeAlignPartitions):
         from dask.dataframe.dask_expr._repartition import Repartition
 
         mapper = Repartition(self.other, new_partitions=1)
-        kwargs = dict(
-            na_action=self.operand("na_action"),
-            meta=self.operand("meta"),
-        )
+        kwargs = {}
         if "is_monotonic" in self._parameters:
             kwargs["is_monotonic"] = self.operand("is_monotonic")
-        return Map(self.frame, arg=mapper, **kwargs)
+        return Map(self.frame, arg=mapper, na_action=self.operand("na_action"),
+            meta=self.operand("meta"),**kwargs)
 
 
 class MapIndexAlign(MapAlign):
