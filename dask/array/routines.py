@@ -238,7 +238,13 @@ def fliplr(m):
     return flip(m, 1)
 
 
-@derived_from(np)
+@derived_from(
+    np,
+    inconsistencies=(
+        "NumPy describes the result as a view. Dask arrays are lazy, so this "
+        "function returns a new Dask Array graph instead of an in-memory view."
+    ),
+)
 def rot90(m, k=1, axes=(0, 1)):
     axes = tuple(axes)
     if len(axes) != 2:
