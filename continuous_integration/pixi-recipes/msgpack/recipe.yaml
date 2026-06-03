@@ -20,7 +20,7 @@ requirements:
   # host:
   #   - python
   # run:
-  #   - python-freethreading
+  #   - python
 
 tests:
   - python:
