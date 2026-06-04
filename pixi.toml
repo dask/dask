@@ -222,6 +222,11 @@ platforms = ["linux-64", "osx-arm64"]
 
 [feature.nightly.dependencies]
 python = "=3.14"
+# Need nodejs to build bokeh from sources.
+# Can't use bokeh nightlies from the bokeh/label/dev channel because
+# it would downgrade NumPy to the latest release (and building
+# NumPy from sources takes longer than building Bokeh).
+nodejs = "*"
 # See continuous_integration/pixi-recipes/README.md
 fsspec = { path = "continuous_integration/pixi-recipes/fsspec" }
 s3fs = { path = "continuous_integration/pixi-recipes/s3fs" }

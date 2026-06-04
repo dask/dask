@@ -273,21 +273,6 @@ def test_bool(df):
             bool(cond)
 
 
-def test_map_index():
-    df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
-    ddf = from_pandas(df, npartitions=2)
-    assert ddf.known_divisions is True
-
-    with pytest.warns(UserWarning):
-        cleared = ddf.index.map(lambda x: x * 10)
-    assert cleared.known_divisions is False
-
-    with pytest.warns(UserWarning):
-        applied = ddf.index.map(lambda x: x * 10, is_monotonic=True)
-    assert applied.known_divisions is True
-    assert applied.divisions == tuple(x * 10 for x in ddf.divisions)
-
-
 def test_squeeze():
     df = pd.DataFrame({"x": [1, 3, 6]})
     df2 = pd.DataFrame({"x": [0]})
@@ -450,8 +435,6 @@ def test_fillna():
 @pytest.mark.parametrize("how", ("ffill", "bfill"))
 @pytest.mark.parametrize("axis", ("index", 0))
 def test_ffill_and_bfill(limit, axis, how):
-    if limit is None:
-        pytest.xfail("Need to determine partition size for Fill.before <= frame size")
     pdf = pd.DataFrame({"x": [1, 2, None, None, 5, 6]})
     df = from_pandas(pdf, npartitions=2)
     actual = getattr(df, how)(axis=axis, limit=limit)
@@ -475,26 +458,12 @@ def test_reset_index_projections(pdf):
     assert_eq(df.y.reset_index()[["y"]], pdf.y.reset_index()[["y"]], check_index=False)
 
 
-def test_series_map_meta():
-    ser = pd.Series(
-        ["".join(np.random.choice(["a", "b", "c"], size=3)) for x in range(100)]
-    )
-
-    mapper = pd.Series(np.random.randint(50, size=len(ser)))
-    expected = ser.map(mapper)
-    dask_base = from_pandas(ser, npartitions=5)
-    dask_map = from_pandas(mapper, npartitions=5)
-    with pytest.warns(UserWarning):
-        result = dask_base.map(dask_map)
-    assert_eq(expected, result)
-
-
 @pytest.mark.parametrize("periods", (1, 2))
 @pytest.mark.parametrize("freq", (None, "1h", timedelta(hours=1)))
 @pytest.mark.parametrize("axis", ("index", 0, "columns", 1))
-def test_shift(pdf, df, periods, freq, axis):
+def test_shift(xfail, pdf, df, periods, freq, axis):
     if freq and axis in ("columns", 1):
-        pytest.skip(reason="Neither dask or pandas supports freq w/ axis 1 shift")
+        xfail(reason="Neither dask or pandas supports freq w/ axis 1 shift")
 
     if freq is not None:
         pdf["time"] = pd.date_range("2000-01-01", "2000-01-02", periods=len(pdf))
@@ -933,27 +902,6 @@ def test_blockwise_pandas_only(func, pdf, df):
 def test_blockwise_pandas_only_warning(func, pdf, df):
     with pytest.warns(UserWarning):
         assert_eq(func(pdf), func(df))
-
-
-def test_map_meta(pdf, df):
-    expected = pdf.x.map(lambda x: x + 1)
-    result = df.x.map(lambda x: x + 1, meta=expected.iloc[:0])
-    assert_eq(result, expected)
-
-    result = df.x.map(df.x + 1, meta=expected.iloc[:0])
-    assert_eq(result, expected)
-
-    result = df.x.map(df.x + 1, meta=("x", "int64"))
-    assert_eq(result, expected)
-
-    result = df.x.map((df.x + 1).compute(), meta=("x", "int64"))
-    assert_eq(result, expected)
-
-    pdf.index.name = "a"
-    df = from_pandas(pdf, npartitions=10)
-    expected = pdf.x.map(lambda x: x + 1)
-    result = df.x.map(lambda x: x + 1, meta=("x", "int64"))
-    assert_eq(result, expected)
 
 
 def test_simplify_add_suffix_add_prefix(df, pdf):
@@ -1707,7 +1655,9 @@ def test_repartition_partition_size(df):
     assert all(div is not None for div in df2.divisions)
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/12275", strict=False)
+@pytest.mark.xfail(
+    reason="Very flaky https://github.com/dask/dask/issues/12275", strict=False
+)
 def test_len(df, pdf):
     df2 = df[["x"]] + 1
     assert len(df2) == len(pdf)

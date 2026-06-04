@@ -22,9 +22,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: prefix-dev/setup-pixi@v0
+      - uses: prefix-dev/setup-pixi@v0.9.6
         with:
-          pixi-version: v0.68.1
+          pixi-version: v0.69.0
           environments: build
           cache: true
           locked: true

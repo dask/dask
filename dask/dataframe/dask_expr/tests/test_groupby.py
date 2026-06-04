@@ -58,8 +58,6 @@ def test_groupby_unsupported_by(pdf, df):
     ],
 )
 def test_groupby_numeric(pdf, df, api, numeric_only, split_every):
-    if not numeric_only and api in {"var", "std"}:
-        pytest.xfail("not implemented")
     g = df.groupby("x")
     agg = getattr(g, api)(numeric_only=numeric_only, split_every=split_every)
 

@@ -1874,17 +1874,31 @@ class Map(Elemwise):
     def _kwargs(self) -> dict:
         return {}
 
+    def _broadcast_dep(self, dep: Expr):
+        if (
+            dep.npartitions == 1
+            and isinstance(self.operand("arg"), Expr)
+            and dep is self.operand("arg")
+        ):
+            return True
+        return super()._broadcast_dep(dep)
+
     def _divisions(self):
         if not self.is_monotonic:
             # Implement this consistently with dask.dataframe, e.g. add option to
             # control monotonic map func
             return (None,) * len(self.frame.divisions)
         elif is_index_like(self.frame._meta):
+            if isinstance(self.arg, Expr):
+                return (None,) * len(self.frame.divisions)
             return tuple(
                 pd.Series(self.frame.divisions).map(self.arg, na_action=self.na_action)
             )
         elif isinstance(self.arg, Expr):
-            if self.arg.divisions == self.frame.divisions:
+            if (
+                self._broadcast_dep(self.arg)
+                or self.arg.divisions == self.frame.divisions
+            ):
                 return self.frame.divisions
             else:
                 # We only get here when we have only one partition
@@ -3668,13 +3682,34 @@ class WhereAlign(MaskAlign):
 
 
 class MapAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "other", "op", "na_action", "meta"]
+    _parameters = ["frame", "other", "na_action", "meta"]
     _projection_passthrough = False
     _expr_cls = Map
 
+    def _divisions(self):
+        return self.frame.divisions
+
+    def _lower(self):
+        from dask.dataframe.dask_expr._repartition import Repartition
+
+        mapper = Repartition(self.other, new_partitions=1)
+        kwargs = {}
+        if "is_monotonic" in self._parameters:
+            kwargs["is_monotonic"] = self.operand("is_monotonic")
+        return Map(
+            self.frame,
+            arg=mapper,
+            na_action=self.operand("na_action"),
+            meta=self.operand("meta"),
+            **kwargs,
+        )
+
 
 class MapIndexAlign(MapAlign):
-    _parameters = MaskAlign._parameters + ["is_monotonic"]
+    _parameters = ["frame", "other", "na_action", "meta", "is_monotonic"]
+
+    def _divisions(self):
+        return (None,) * len(self.frame.divisions)
 
 
 class OpAlignPartitions(MaybeAlignPartitions):

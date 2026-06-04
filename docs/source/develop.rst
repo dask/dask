@@ -395,9 +395,12 @@ Automated Contributions and AI Policy
 
 We encourage the use of AI and automated tools to assist in code development,
 documentation, and testing. However, we ask that contributors disclose these tools and
-use them in a way that aligns with Dask's community guidelines. In particular do not use
-tools to think or speak for you in discussions, code reviews, or any other interactions
-within the Dask community.
+use them in a way that aligns with Dask's community guidelines. In particular:
+
+- do not use tools to think or speak for you in discussions, code reviews, or any other 
+  interactions within the Dask community.
+- Before you open a PR, you (the human) must fully review, understand, and approve
+  everything that the AI agent wrote.
 
 
 .. _Sphinx: https://www.sphinx-doc.org/
