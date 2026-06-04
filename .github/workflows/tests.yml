@@ -77,9 +77,9 @@ jobs:
         with:
           fetch-depth: 0  # Needed by codecov.io
 
-      - uses: prefix-dev/setup-pixi@v0
+      - uses: prefix-dev/setup-pixi@v0.9.6
         with:
-          pixi-version: v0.68.1
+          pixi-version: v0.69.0
           environments: ${{ matrix.environment }}
           cache: true
           locked: true

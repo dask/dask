@@ -3253,7 +3253,7 @@ class DataFrame(FrameBase):
             meta = expr.emulate(
                 M.apply, self, function, args=args, udf=True, axis=axis, **kwargs
             )
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="apply"))
         return new_collection(
             self.expr.apply(function, *args, meta=meta, axis=axis, **kwargs)
         )
@@ -4227,7 +4227,7 @@ class Series(FrameBase):
                 if meta is None:
                     warnings.warn(meta_warning(meta, method="map"))
                 return new_collection(
-                    expr.MapAlign(self, arg, op=None, na_action=na_action, meta=meta)
+                    expr.MapAlign(self, arg, na_action=na_action, meta=meta)
                 )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
@@ -4415,7 +4415,7 @@ class Series(FrameBase):
         self._validate_axis(axis)
         if meta is no_default:
             meta = expr.emulate(M.apply, self, function, args=args, udf=True, **kwargs)
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="apply"))
         return new_collection(self.expr.apply(function, *args, meta=meta, **kwargs))
 
     @classmethod
