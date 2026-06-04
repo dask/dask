@@ -75,7 +75,7 @@ but now you want to arrange it by time, all of your partitions will have to talk
 to each other to exchange shards of data.  This can be an intensive process,
 particularly on a cluster.
 
-So, definitely set the index but try do so infrequently.
+So, definitely set the index but try doing so infrequently.
 
 .. code-block:: python
 

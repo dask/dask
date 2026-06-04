@@ -47,7 +47,7 @@ Python objects.
 Execution
 ---------
 
-Execution on bags provide two benefits:
+Execution on bags provides two benefits:
 
 1.  Parallel: data is split up, allowing multiple cores or machines to execute
     in parallel

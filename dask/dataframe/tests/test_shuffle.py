@@ -225,9 +225,9 @@ def test_set_index_self_index(shuffle_method):
     assert_eq(b, df.set_index(df.index))
 
 
-def test_set_index_names(shuffle_method):
+def test_set_index_names(xfail, shuffle_method):
     if shuffle_method == "disk":
-        pytest.xfail("dsk names in disk shuffle are not deterministic")
+        xfail("dsk names in disk shuffle are not deterministic")
 
     df = pd.DataFrame(
         {"x": np.random.random(100), "y": np.random.random(100) // 0.2},

@@ -25,7 +25,7 @@ def _partition_of_index_value(divisions, val):
     1
     """
     if divisions[0] is None:
-        msg = "Can not use loc on DataFrame without known divisions"
+        msg = "Cannot use loc on DataFrame without known divisions"
         raise ValueError(msg)
     val = _coerce_loc_index(divisions, val)
     i = bisect.bisect_right(divisions, val)
@@ -43,7 +43,7 @@ def _partitions_of_index_values(divisions, values):
     [(0, [3]), (1, [8, 5])]
     """
     if divisions[0] is None:
-        msg = "Can not use loc on DataFrame without known divisions"
+        msg = "Cannot use loc on DataFrame without known divisions"
         raise ValueError(msg)
 
     results = defaultdict(list)

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import sys
-
 import pytest
 
 pytest.importorskip("numpy")
@@ -13,7 +11,6 @@ from packaging.version import Version
 
 import dask.array as da
 from dask.array.linalg import qr, sfqr, svd, svd_compressed, tsqr
-from dask.array.numpy_compat import _np_version
 from dask.array.utils import assert_eq, same_keys, svd_flip
 
 
@@ -835,6 +832,28 @@ def test_cholesky(shape, chunk):
     )
 
 
+@pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (12, 3), (30, 6)])
+def test_cholesky_complex(shape, chunk):
+    rng = np.random.default_rng(42)
+    A = rng.standard_normal((shape, shape)) + 1j * rng.standard_normal((shape, shape))
+    A = A @ A.conj().T + shape * np.eye(shape)
+    dA = da.from_array(A, (chunk, chunk))
+
+    assert_eq(
+        da.linalg.cholesky(dA, lower=True),
+        scipy.linalg.cholesky(A, lower=True),
+        check_graph=False,
+        check_chunks=False,
+    )
+
+    assert_eq(
+        da.linalg.cholesky(dA, lower=False),
+        scipy.linalg.cholesky(A, lower=False),
+        check_graph=False,
+        check_chunks=False,
+    )
+
+
 @pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
 def test_lstsq(nrow, ncol, chunk, iscomplex):
@@ -1009,11 +1028,6 @@ def test_svd_full_matrices_false(shape):
     assert_eq(dv, nv)
 
 
-@pytest.mark.xfail(
-    sys.platform == "darwin" and _np_version < Version("1.22"),
-    reason="https://github.com/dask/dask/issues/7189",
-    strict=False,
-)
 @pytest.mark.parametrize(
     "shape, chunks, axis",
     [[(5,), (2,), None], [(5,), (2,), 0], [(5,), (2,), (0,)], [(5, 6), (2, 2), None]],
@@ -1030,11 +1044,6 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
     assert_eq(a_r, d_r)
 
 
-@pytest.mark.xfail(
-    _np_version < Version("1.23"),
-    reason="https://github.com/numpy/numpy/pull/17709",
-    strict=False,
-)
 @pytest.mark.parametrize("precision", ["single", "double"])
 @pytest.mark.parametrize("isreal", [True, False])
 @pytest.mark.parametrize("keepdims", [False, True])
@@ -1056,12 +1065,6 @@ def test_norm_any_prec(norm, keepdims, precision, isreal):
     assert d_r.dtype == d_a.dtype
 
 
-@pytest.mark.slow
-@pytest.mark.xfail(
-    sys.platform == "darwin" and _np_version < Version("1.22"),
-    reason="https://github.com/dask/dask/issues/7189",
-    strict=False,
-)
 @pytest.mark.parametrize(
     "shape, chunks",
     [

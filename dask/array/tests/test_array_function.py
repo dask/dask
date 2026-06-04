@@ -98,18 +98,15 @@ def test_array_notimpl_function_dask(func):
         func(y)
 
 
-@pytest.mark.parametrize(
-    "func", [lambda x: np.real(x), lambda x: np.imag(x), lambda x: np.transpose(x)]
-)
-def test_array_function_sparse(func):
+@pytest.mark.parametrize("func", [np.real, np.imag, np.transpose])
+def test_array_function_sparse(xfail, func):
     sparse = pytest.importorskip("sparse")
-    if Version(sparse.__version__) == Version("0.15.2"):
-        pytest.skip(reason="https://github.com/pydata/sparse/issues/682")
+    if Version(sparse.__version__) == Version("0.15.2") and func in (np.real, np.imag):
+        xfail(reason="https://github.com/pydata/sparse/issues/682")
+
     x = da.random.default_rng().random((500, 500), chunks=(100, 100))
     x[x < 0.9] = 0
-
     y = x.map_blocks(sparse.COO)
-
     assert_eq(func(x), func(y))
 
 
@@ -163,7 +160,7 @@ def test_array_function_cupy_svd(chunks):
     ],
 )
 def test_unregistered_func(func):
-    # Wrap a procol-based encapsulated ndarray
+    # Wrap a protocol-based encapsulated ndarray
     x = EncapsulateNDArray(np.random.default_rng().random((100, 100)))
 
     # See if Dask holds the array fine

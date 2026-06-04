@@ -39,7 +39,7 @@ Examples
 --------
 
 Dask Array is used across a wide variety of applications — anywhere where working
-with large array dataset.
+with large array datasets.
 
 This
 `Analyzing the National Water Model with Xarray, Dask, and Coiled <https://docs.coiled.io/user_guide/xarray.html?utm_source=dask-docs&utm_medium=array>`_

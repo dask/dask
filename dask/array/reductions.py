@@ -41,8 +41,10 @@ from dask.utils import apply, deepmap, derived_from
 
 try:
     import numbagg
+
+    HAS_NUMBAGG = Version(numbagg.__version__) >= Version("0.8.0")
 except ImportError:
-    numbagg = None
+    HAS_NUMBAGG = False
 
 if da._array_expr_enabled():
     from dask.array._array_expr import _tree_reduce, reduction
@@ -1536,12 +1538,7 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
-    if (
-        numbagg is not None
-        and Version(numbagg.__version__).release >= (0, 7, 0)
-        and a.dtype.kind in "uif"
-        and not keepdims
-    ):
+    if HAS_NUMBAGG and a.dtype.kind in "uif" and not keepdims:
         func = numbagg.nanmedian
         kwargs = {}
     else:
@@ -1592,40 +1589,50 @@ def quantile(
             raise TypeError("Cannot pass interpolation and method keywords!")
 
         method = interpolation
+
     if axis is None:
         if builtins.any(n_blocks > 1 for n_blocks in a.numblocks):
             raise NotImplementedError(
                 "The da.quantile function only works along an axis.  "
                 "The full algorithm is difficult to do in parallel"
             )
-        else:
-            axis = tuple(range(len(a.shape)))
-
-    if not isinstance(axis, Iterable):
+        axis = tuple(range(len(a.shape)))
+    elif not isinstance(axis, Iterable):
         axis = (axis,)
-
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
+
+    if overwrite_input:
+        raise NotImplementedError("da.quantile does not support overwrite_input=True")
 
     # rechunk if reduced axes are not contained in a single chunk
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
-    if NUMPY_GE_200:
-        kwargs = {"weights": weights}
-    else:
-        kwargs = {}
-        if weights is not None:
-            raise NotImplementedError("da.quantile with weights requires NumPy >= 2.0")
+    q_arr = asarray_safe(q, like=a)
+    kwargs = {}
+    if weights is not None:
+        if not NUMPY_GE_200:
+            raise NotImplementedError("da.quantile with weights requires NumPy >=2.0")
+        kwargs["weights"] = asarray_safe(weights, like=a)
+
+    # weights break meta inference (dummy-array shape mismatches weights length).
+    # There are also issues on NumPy 1.x.
+    dtype = np.quantile(
+        np.zeros(1, dtype=a.dtype),
+        np.asarray(0.5, dtype=q_arr.dtype),
+        method=method,
+    ).dtype
 
     result = a.map_blocks(
         np.quantile,
-        q=q,
+        q_arr,
         method=method,
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
-        new_axis=0 if isinstance(q, Iterable) else None,
-        chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        new_axis=list(range(q_arr.ndim)) if q_arr.ndim > 0 else None,
+        chunks=_get_quantile_chunks(a, q_arr, axis, keepdims),
+        dtype=dtype,
         **kwargs,
     )
 
@@ -1650,12 +1657,13 @@ def _span_indexers(a):
     return indexers
 
 
-def _custom_quantile(
+def _custom_nanquantile(
     a,
     q,
     axis=None,
     method="linear",
     keepdims=False,
+    weights=None,
     **kwargs,
 ):
     if (
@@ -1664,9 +1672,19 @@ def _custom_quantile(
         or axis[0] != len(a.shape) - 1
         or len(a.shape) == 1
         or a.shape[-1] > 1000
+        or q.ndim > 1
+        or weights is not None
     ):
         # bail to nanquantile. Assumptions are pretty strict for now but we
         # do cover the xarray.quantile case.
+        if weights is not None and weights.ndim != a.ndim:
+            # np.nanquantile requires weights to have the same shape as a,
+            # unlike np.quantile which broadcasts 1-D weights automatically.
+            expand_at = [i for i in range(a.ndim) if i not in axis]
+            weights = np.broadcast_to(np.expand_dims(weights, axis=expand_at), a.shape)
+            # NumPy <2.0 doesn't support the weights parameter
+            kwargs["weights"] = weights
+
         return np.nanquantile(
             a,
             q,
@@ -1692,10 +1710,9 @@ def _custom_quantile(
     indexers = _span_indexers(a)
     nr_quantiles = len(indexers[0])
 
-    is_scalar = False
-    if not isinstance(q, Iterable):
-        is_scalar = True
-        q = [q]
+    is_scalar = q.ndim == 0
+    if is_scalar:
+        q = q.reshape((1,))
 
     quantiles = []
     reshape_shapes = (1,) + tuple(sorted_arr.shape[:-1]) + ((1,) if keepdims else ())
@@ -1723,6 +1740,10 @@ def _custom_quantile(
         return quantiles[0].squeeze(axis=0)
     else:
         return np.concatenate(quantiles, axis=0)
+
+
+def _numbagg_nanquantile(a, q, **kwargs):
+    return numbagg.nanquantile(a, q.tolist(), **kwargs)
 
 
 @derived_from(np)
@@ -1760,44 +1781,57 @@ def nanquantile(
                 "The da.nanquantile function only works along an axis.  "
                 "The full algorithm is difficult to do in parallel"
             )
-        else:
-            axis = tuple(range(len(a.shape)))
-
-    if not isinstance(axis, Iterable):
+        axis = tuple(range(len(a.shape)))
+    elif not isinstance(axis, Iterable):
         axis = (axis,)
-
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
+
+    if overwrite_input:
+        raise NotImplementedError(
+            "da.nanquantile does not support overwrite_input=True"
+        )
 
     # rechunk if reduced axes are not contained in a single chunk
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
+    q_arr = asarray_safe(q, like=a)
     if (
-        numbagg is not None
-        and Version(numbagg.__version__).release >= (0, 8, 0)
-        and a.dtype.kind in "uif"
+        HAS_NUMBAGG
+        and (a.dtype.kind in "ui" or a.dtype == np.float64)
+        and q_arr.dtype == np.float64
         and weights is None
         and method == "linear"
         and not keepdims
+        and q_arr.ndim <= 1
     ):
-        func = numbagg.nanquantile
-        kwargs = {"quantiles": q}
+        func = _numbagg_nanquantile
+        kwargs = {}
     else:
-        func = _custom_quantile
-        kwargs = {
-            "q": q,
-            "method": method,
-            "keepdims": keepdims,
-        }
-        if NUMPY_GE_200:
-            kwargs.update({"weights": weights})
+        func = _custom_nanquantile
+        kwargs = {"method": method, "keepdims": keepdims}
+        if weights is not None:
+            if not NUMPY_GE_200:
+                raise NotImplementedError(
+                    "da.nanquantile with weights requires NumPy >=2.0"
+                )
+            kwargs["weights"] = asarray_safe(weights, like=a)
+    # weights break meta inference (dummy-array shape mismatches weights length).
+    # There are also issues on NumPy 1.x.
+    dtype = np.nanquantile(
+        np.zeros(1, dtype=a.dtype),
+        np.asarray(0.5, dtype=q_arr.dtype),
+        method=method,
+    ).dtype
 
     result = a.map_blocks(
         func,
+        q_arr,
         axis=axis,
         drop_axis=axis if not keepdims else None,
-        new_axis=0 if isinstance(q, Iterable) else None,
-        chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        new_axis=list(range(q_arr.ndim)) if q_arr.ndim > 0 else None,
+        chunks=_get_quantile_chunks(a, q_arr, axis, keepdims),
+        dtype=dtype,
         **kwargs,
     )
 
@@ -1806,10 +1840,8 @@ def nanquantile(
 
 
 def _get_quantile_chunks(a, q, axis, keepdims):
-    quantile_chunk = [len(q)] if isinstance(q, Iterable) else []
     if keepdims:
-        return quantile_chunk + [
-            1 if ax in axis else c for ax, c in enumerate(a.chunks)
-        ]
+        rest = (1 if ax in axis else c for ax, c in enumerate(a.chunks))
     else:
-        return quantile_chunk + [c for ax, c in enumerate(a.chunks) if ax not in axis]
+        rest = (c for ax, c in enumerate(a.chunks) if ax not in axis)
+    return [*q.shape, *rest]

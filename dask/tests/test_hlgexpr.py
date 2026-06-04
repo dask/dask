@@ -21,10 +21,10 @@ from dask.utils import ensure_dict
 
 
 def test_tokenize():
-    # Ensure tokens are different for different high-level graphs The current
+    # Ensure tokens are different for different high-level graphs. The current
     # implementation actually ensures that no HLGExpr are tokenizing equally.
-    # Technically, we do not need such a strong guarantee. but tokenizing a full
-    # HLG reliably is tricky and we do not require the reproducibility for
+    # Technically, we do not need such a strong guarantee, but tokenizing a full
+    # HLG reliably is tricky, and we do not require reproducibility for
     # HLGExpr since they do not undergo the same kind of optimization as the
     # rest of the graph.
     from dask.highlevelgraph import HighLevelGraph

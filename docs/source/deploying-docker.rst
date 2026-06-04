@@ -9,7 +9,7 @@ a Debian image.
 
 These images are large, around 1GB.
 
--   ``ghcr.io/dask/dask``: This a normal debian + miniconda image with the full Dask
+-   ``ghcr.io/dask/dask``: This is a normal debian + miniconda image with the full Dask
     conda package (including the distributed scheduler), Numpy, and Pandas.
     This image is about 1GB in size.
 

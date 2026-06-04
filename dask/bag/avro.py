@@ -187,7 +187,7 @@ def to_avro(
     The schema is a complex dictionary describing the data, see
     https://avro.apache.org/docs/1.8.2/gettingstartedpython.html#Defining+a+schema
     and https://fastavro.readthedocs.io/en/latest/writer.html .
-    It's structure is as follows::
+    Its structure is as follows::
 
         {'name': 'Test',
          'namespace': 'Test',

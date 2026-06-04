@@ -253,9 +253,7 @@ def _check_chunks(x, check_ndim=True, scheduler=None):
         assert_eq_shape(
             expected_shape, chunk.shape, check_ndim=check_ndim, check_nan=False
         )
-        assert (
-            chunk.dtype == x.dtype
-        ), "maybe you forgot to pass the scheduler to `assert_eq`?"
+        assert chunk.dtype == x.dtype
     return x
 
 

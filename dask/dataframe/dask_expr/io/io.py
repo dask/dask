@@ -582,7 +582,7 @@ class FromPandasDivisions(FromPandas):
             if data.index.is_unique:
                 indexer = data.index.get_indexer(key, method="bfill")
             else:
-                # get_indexer for doesn't support method
+                # get_indexer doesn't support method
                 indexer = np.searchsorted(data.index.values, key, side="left")
             indexer[-1] = len(data)
             _division_info_cache[key] = key, indexer

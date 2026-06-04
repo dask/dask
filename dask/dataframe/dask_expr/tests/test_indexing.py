@@ -187,11 +187,11 @@ def test_reverse_indexing(df, pdf):
         expr.frame.frame, FromPandas
     )
     with pytest.raises(
-        ValueError, match="Can not use loc on DataFrame without known divisions"
+        ValueError, match="Cannot use loc on DataFrame without known divisions"
     ):
         df.loc[1::-1].loc[5]
     with pytest.raises(
-        ValueError, match="Can not use loc on DataFrame without known divisions"
+        ValueError, match="Cannot use loc on DataFrame without known divisions"
     ):
         df.loc[:5:-1].loc[5]
 

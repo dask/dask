@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 import warnings
 
 import numpy as np
@@ -1181,7 +1182,6 @@ def test_merge_by_index_patterns(how, shuffle_method):
             )
 
 
-@pytest.mark.skipif(PANDAS_GE_210, reason="breaks with pandas=2.1.0+")
 @pytest.mark.slow
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 def test_join_by_index_patterns(how, shuffle_method):
@@ -1895,34 +1895,20 @@ def test_concat5():
         )
 
 
+xfail_10558 = pytest.mark.xfail(
+    PANDAS_GE_220 and platform.machine().lower() in ("x86_64", "amd64"),
+    reason="https://github.com/dask/dask/issues/10558",
+)
+
+
 @pytest.mark.parametrize(
     "known, cat_index, divisions",
     [
         (True, True, False),
-        pytest.param(
-            True,
-            False,
-            True,
-            marks=pytest.mark.xfail(
-                PANDAS_GE_220,
-                reason="https://github.com/dask/dask/issues/10558",
-                raises=AssertionError,
-                strict=False,
-            ),
-        ),
+        pytest.param(True, False, True, marks=xfail_10558),
         (True, False, False),
         (False, True, False),
-        pytest.param(
-            False,
-            False,
-            True,
-            marks=pytest.mark.xfail(
-                PANDAS_GE_220,
-                reason="https://github.com/dask/dask/issues/10558",
-                raises=AssertionError,
-                strict=False,
-            ),
-        ),
+        pytest.param(False, False, True, marks=xfail_10558),
         (False, False, False),
     ],
 )

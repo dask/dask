@@ -1,0 +1,28 @@
+package:
+  name: s3fs
+  # FIXME work around poor pixi-build support for SCM versioning
+  version: "9999"
+
+source:
+  git: https://github.com/fsspec/s3fs
+
+build:
+  noarch: python
+  script: python -m pip install . -vv --no-deps --no-build-isolation
+  number: 0
+
+requirements:
+  host:
+    - python
+    - pip
+    - hatchling
+    - hatch-vcs
+  run:
+    - python
+    - aiobotocore
+    - aiohttp
+    - fsspec
+
+tests:
+  - python:
+      imports: [s3fs]

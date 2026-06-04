@@ -1,0 +1,16 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+preview = ["pixi-build"]
+
+[package]
+name = "brotli-python"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
+source = { path = "." }
+
+[package.host-dependencies]
+setuptools = "*"
+
+[package.run-dependencies]
+python = "*"

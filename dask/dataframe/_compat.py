@@ -4,7 +4,6 @@ from dask._compatibility import import_optional_dependency
 
 import_optional_dependency("pandas")
 import_optional_dependency("numpy")
-# import_optional_dependency("pyarrow")
 
 from packaging.version import Version
 
@@ -27,7 +26,7 @@ from dask._pandas_compat import (
     is_string_dtype,
     makeDataFrame,
     makeDateIndex,
-    makeMissingDataframe,
+    makeMissingDataFrame,
     makeMixedDataFrame,
     makeTimeDataFrame,
     makeTimedeltaIndex,
@@ -63,7 +62,7 @@ __all__ = [
     "makeTimeSeries",
     "makeDateIndex",
     "makeTimedeltaIndex",
-    "makeMissingDataframe",
+    "makeMissingDataFrame",
     "makeMixedDataFrame",
     "check_groupby_axis_deprecation",
     "check_observed_deprecation",

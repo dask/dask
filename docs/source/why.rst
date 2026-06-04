@@ -1,6 +1,6 @@
 :orphan:
 
-.. this page is refernenced from dask.org. It might move to there some day.
+.. this page is referenced from dask.org. It might move there some day.
 
 Why Dask?
 =========
@@ -213,7 +213,7 @@ computation can drastically affect how quickly they are able to identify and
 resolve bugs and performance problems, which can drastically increase their
 time to solution.
 
-Dask keeps users informed and content with a suite of helpful diagnostic and
+Dask keeps users informed with a suite of helpful diagnostic and
 investigative tools including the following:
 
 1.  A :doc:`real-time and responsive dashboard <understanding-performance>`
@@ -225,7 +225,7 @@ investigative tools including the following:
 3.  An embedded IPython kernel in every worker and the scheduler, allowing
     users to directly investigate the state of their computation with a pop-up
     terminal
-4.  The ability to reraise errors locally, so that they can use the traditional
+4.  The ability to re-raise errors locally, so that they can use the traditional
     debugging tools to which they are accustomed, even when the error happens
     remotely
 

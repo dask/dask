@@ -456,13 +456,21 @@ def test_describe(include, exclude, percentiles, subset):
 
     assert_eq(actual, expected)
 
+    if PANDAS_GE_310:
+        # The 'include' and 'exclude' arguments are deprecated for Series.describe and
+        # will be removed in a future version. These arguments have no effect on Series
+        # and will be removed.
+        series_kwargs = {}
+    else:
+        series_kwargs = {"include": include, "exclude": exclude}
+
     # Check series
     if subset is None:
         for col in ["a", "c", "e", "g"]:
-            expected = df[col].describe(include=include, exclude=exclude)
+            expected = df[col].describe(**series_kwargs)
             if col == "e":
                 expected = _drop_mean(expected)
-            actual = ddf[col].describe(include=include, exclude=exclude)
+            actual = ddf[col].describe(**series_kwargs)
             assert_eq(expected, actual)
 
 
@@ -1663,24 +1671,6 @@ def test_assign_pandas_series():
     assert_eq(ddf, df.assign(c=df["a"]))
 
 
-def test_map():
-    df = pd.DataFrame(
-        {"a": range(9), "b": [4, 5, 6, 1, 2, 3, 0, 0, 0]},
-        index=pd.Index([0, 1, 3, 5, 6, 8, 9, 9, 9], name="myindex"),
-    )
-    ddf = dd.from_pandas(df, npartitions=3)
-    with pytest.warns(UserWarning, match="meta"):
-        assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
-        lk = {v: v + 1 for v in df.a.values}
-        assert_eq(ddf.a.map(lk), df.a.map(lk))
-        assert_eq(ddf.b.map(lk), df.b.map(lk))
-        lk = pd.Series(lk)
-        assert_eq(ddf.a.map(lk), df.a.map(lk))
-        assert_eq(ddf.b.map(lk), df.b.map(lk))
-    assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
-    assert_eq(ddf.b.map(lk, meta=("b", "i8")), df.b.map(lk))
-
-
 def test_concat():
     x = _concat([pd.DataFrame(columns=["a", "b"]), pd.DataFrame(columns=["a", "b"])])
     assert list(x.columns) == ["a", "b"]
@@ -2366,7 +2356,7 @@ def test_embarrassingly_parallel_operations():
 
 
 def test_fillna():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.fillna(100), df.fillna(100))
@@ -2378,7 +2368,7 @@ def test_fillna():
 
 
 def test_ffill():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.ffill(), df.ffill())
@@ -2388,7 +2378,7 @@ def test_ffill():
     assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
     assert_eq(ddf.ffill(limit=2, axis=1), df.ffill(limit=2, axis=1))
 
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     df.iloc[:15, 0] = np.nan  # all NaN partition
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
     pytest.raises(ValueError, lambda: ddf.ffill().compute())
@@ -2396,7 +2386,7 @@ def test_ffill():
 
 
 def test_bfill():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.bfill(), df.bfill())
@@ -2405,7 +2395,7 @@ def test_bfill():
     assert_eq(ddf.bfill(limit=2), df.bfill(limit=2))
     assert_eq(ddf.A.bfill(limit=2), df.A.bfill(limit=2))
 
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     df.iloc[:15, 0] = np.nan  # all NaN partition
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
     pytest.raises(ValueError, lambda: ddf.bfill().compute())
@@ -2455,7 +2445,7 @@ def test_fillna_duplicate_index():
 
 
 def test_fillna_multi_dataframe():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.A.fillna(ddf.B), df.A.fillna(df.B))
@@ -2463,8 +2453,8 @@ def test_fillna_multi_dataframe():
 
 
 def test_fillna_dask_dataframe_input():
-    df = _compat.makeMissingDataframe()
-    df1 = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
+    df1 = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5)
     ddf1 = dd.from_pandas(df1, npartitions=3)
 
@@ -2475,7 +2465,7 @@ def test_fillna_dask_dataframe_input():
 
 
 def test_ffill_bfill():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
     assert_eq(ddf.ffill(), df.ffill())
@@ -2933,39 +2923,52 @@ def test_apply_warns():
     assert "int64" in str(w[0].message)
 
 
-@pytest.mark.skipif(not PANDAS_GE_210, reason="Not available before")
-@pytest.mark.parametrize("na_action", [None, "ignore"])
-def test_dataframe_map(na_action):
-    df = pd.DataFrame({"x": [1, 2, 3, np.nan], "y": [10, 20, 30, 40]})
+@pytest.mark.parametrize(
+    "index",
+    [
+        ["foo", "bar"],
+        [1, 2],
+        [1.1, 2.2],
+        pd.RangeIndex(2),
+        pd.DatetimeIndex(["2020-01-01", "2020-01-02"]),
+    ],
+)
+def test_add_prefix_add_suffix(index):
+    df = pd.DataFrame([[1, 2], [3, 4]], index=index, columns=index)
     ddf = dd.from_pandas(df, npartitions=2)
-    with pytest.warns(UserWarning, match="meta"):
-        assert_eq(
-            ddf.map(lambda x: x + 1, na_action=na_action),
-            df.map(lambda x: x + 1, na_action=na_action),
-        )
-        assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
 
-
-@pytest.mark.skipif(PANDAS_GE_210, reason="Available at 2.1")
-def test_dataframe_map_raises():
-    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    with pytest.raises(NotImplementedError, match="DataFrame.map requires pandas"):
-        ddf.map(lambda x: x + 1)
-
-
-def test_add_prefix():
-    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
-    ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.add_prefix("abc"), df.add_prefix("abc"))
-    assert_eq(ddf.x.add_prefix("abc"), df.x.add_prefix("abc"))
-
-
-def test_add_suffix():
-    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
-    ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.add_suffix("abc"), df.add_suffix("abc"))
-    assert_eq(ddf.x.add_suffix("abc"), df.x.add_suffix("abc"))
+    assert_eq(ddf[index[0]].add_prefix("abc"), df[index[0]].add_prefix("abc"))
+    assert_eq(ddf[index[0]].add_suffix("abc"), df[index[0]].add_suffix("abc"))
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        ["foo", "bar"],
+        [1, 2],
+        [1.1, 2.2],
+        pd.RangeIndex(2),
+        pd.DatetimeIndex(["2020-01-01", "2020-01-02"]),
+    ],
+)
+@pytest.mark.parametrize(
+    "axis",
+    [
+        None,
+        1,
+        "columns",
+        pytest.param(0, marks=pytest.mark.xfail(reason="Not implemented")),
+        pytest.param("index", marks=pytest.mark.xfail(reason="Not implemented")),
+    ],
+)
+def test_add_prefix_add_suffix_axis(index, axis):
+    df = pd.DataFrame([[1, 2], [3, 4]], index=index, columns=index)
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(ddf.add_prefix("abc", axis=axis), df.add_prefix("abc", axis=axis))
+    assert_eq(ddf.add_suffix("abc", axis=axis), df.add_suffix("abc", axis=axis))
 
 
 def test_abs():
@@ -3002,7 +3005,7 @@ def test_round():
     ],
 )
 def test_cov_dataframe(numeric_only):
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=6)
 
     numeric_only_kwarg = {}
@@ -3026,7 +3029,7 @@ def test_cov_dataframe(numeric_only):
 
 
 def test_cov_series():
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     a = df.A
     b = df.B
     da = dd.from_pandas(a, npartitions=6)
@@ -3076,7 +3079,7 @@ def test_cov_gpu(numeric_only):
 
 def test_corr():
     # DataFrame
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=6)
 
     res = ddf.corr()
@@ -3142,7 +3145,7 @@ def test_corr_gpu():
 def test_corr_same_name():
     # Series with same names (see https://github.com/dask/dask/issues/4906)
 
-    df = _compat.makeMissingDataframe()
+    df = _compat.makeMissingDataFrame()
     ddf = dd.from_pandas(df, npartitions=6)
 
     result = ddf.A.corr(ddf.B.rename("A"))
@@ -4586,16 +4589,6 @@ def test_mixed_dask_array_multi_dimensional():
     assert_eq(ddf[["y", "x"]] + dx + 1, df[["y", "x"]] + x + 1)
 
 
-def test_meta_raises():
-    # Raise when we use a user defined function
-    s = pd.Series(["abcd", "abcd"])
-    ds = dd.from_pandas(s, npartitions=2)
-    try:
-        ds.map(lambda x: x[3])
-    except ValueError as e:
-        assert "meta=" in str(e)
-
-
 @pytest.mark.skip_with_pyarrow_strings  # DateOffset has to be an object
 def test_meta_nonempty_uses_meta_value_if_provided():
     # https://github.com/dask/dask/issues/6958
@@ -4722,20 +4715,6 @@ def test_has_parallel_type():
     assert not has_parallel_type(123)
 
 
-def test_map_index():
-    df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    assert ddf.known_divisions is True
-    with pytest.warns(UserWarning, match="meta"):
-        cleared = ddf.index.map(lambda x: x * 10)
-    assert cleared.known_divisions is False
-
-    with pytest.warns(UserWarning, match="meta"):
-        applied = ddf.index.map(lambda x: x * 10, is_monotonic=True)
-    assert applied.known_divisions is True
-    assert applied.divisions == tuple(x * 10 for x in ddf.divisions)
-
-
 def test_assign_index():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -4806,34 +4785,6 @@ def test_dtype_cast():
     assert ddf.B.dtype == np.int64
     # fails
     assert ddf.A.dtype == np.int32
-
-
-@pytest.mark.parametrize("base_npart", [1, 4])
-@pytest.mark.parametrize("map_npart", [1, 3])
-@pytest.mark.parametrize("sorted_index", [False, True])
-@pytest.mark.parametrize("sorted_map_index", [False, True])
-def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
-    if map_npart != base_npart:
-        pytest.xfail(reason="not yet implemented")
-    base = pd.Series(
-        ["".join(np.random.choice(["a", "b", "c"], size=3)) for x in range(100)]
-    )
-    if not sorted_index:
-        index = np.arange(100)
-        np.random.shuffle(index)
-        base.index = index
-    map_index = ["".join(x) for x in product("abc", repeat=3)]
-    mapper = pd.Series(np.random.randint(50, size=len(map_index)), index=map_index)
-    if not sorted_map_index:
-        map_index = np.array(map_index)
-        np.random.shuffle(map_index)
-        mapper.index = map_index
-    expected = base.map(mapper)
-    dask_base = dd.from_pandas(base, npartitions=base_npart, sort=False)
-    dask_map = dd.from_pandas(mapper, npartitions=map_npart, sort=False)
-    with pytest.warns(UserWarning, match="meta"):
-        result = dask_base.map(dask_map)
-    assert_eq(expected, result)
 
 
 @pytest.mark.skip_with_pyarrow_strings  # has to be array to explode

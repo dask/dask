@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import decimal
 import signal
-import sys
 import threading
 
 import pytest
 
 from dask.datasets import timeseries
 
-pytest.importorskip("pandas")
 pyspark = pytest.importorskip("pyspark")
 pa = pytest.importorskip("pyarrow")
 dd = pytest.importorskip("dask.dataframe")
@@ -17,29 +15,10 @@ dd = pytest.importorskip("dask.dataframe")
 import numpy as np
 import pandas as pd
 
+from dask._pandas_compat import PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
-pytestmark = [
-    pytest.mark.skipif(
-        sys.platform != "linux",
-        reason="Unnecessary, and hard to get spark working on non-linux platforms",
-    ),
-    pytest.mark.skip(
-        reason="pyspark doesn't yet have support for pandas 2.0",
-    ),
-    # we only test with pyarrow strings and pandas 2.0
-    pytest.mark.skip_with_pyarrow_strings,  # pyspark doesn't support pandas 2.0
-]
-
-
-@pytest.fixture(
-    params=[
-        "pyarrow",
-    ]
-)
-def engine(request):
-    pytest.importorskip(request.param)
-    return request.param
+pytestmark = pytest.mark.skip_with_pyarrow_strings
 
 
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
@@ -71,8 +50,9 @@ def spark_session():
         signal.signal(signal.SIGINT, prev)
 
 
+@pytest.mark.xfail(PANDAS_GE_300, reason="datetime64[ns] != datetime64[us] roundtrip")
 @pytest.mark.parametrize("npartitions", [1, 5, 10])
-def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, engine):
+def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir):
     tmpdir = str(tmpdir)
 
     sdf = spark_session.createDataFrame(pdf)
@@ -80,7 +60,7 @@ def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, eng
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    ddf = dd.read_parquet(tmpdir, engine=engine)
+    ddf = dd.read_parquet(tmpdir)
     # Papercut: pandas TZ localization doesn't survive roundtrip
     ddf = ddf.assign(timestamp=ddf.timestamp.dt.tz_localize("UTC"))
     assert ddf.npartitions == npartitions
@@ -88,7 +68,8 @@ def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, eng
     assert_eq(ddf, pdf, check_index=False)
 
 
-def test_roundtrip_hive_parquet_spark_to_dask(spark_session, tmpdir, engine):
+@pytest.mark.xfail(PANDAS_GE_300, reason="datetime64[ns] != datetime64[us] roundtrip")
+def test_roundtrip_hive_parquet_spark_to_dask(spark_session, tmpdir):
     tmpdir = str(tmpdir)
 
     sdf = spark_session.createDataFrame(pdf)
@@ -96,7 +77,7 @@ def test_roundtrip_hive_parquet_spark_to_dask(spark_session, tmpdir, engine):
     # already exists and we don't set overwrite
     sdf.write.parquet(tmpdir, mode="overwrite", partitionBy="name")
 
-    ddf = dd.read_parquet(tmpdir, engine=engine)
+    ddf = dd.read_parquet(tmpdir)
     # Papercut: pandas TZ localization doesn't survive roundtrip
     ddf = ddf.assign(timestamp=ddf.timestamp.dt.tz_localize("UTC"))
 
@@ -110,12 +91,13 @@ def test_roundtrip_hive_parquet_spark_to_dask(spark_session, tmpdir, engine):
     assert_eq(ddf, pdf.sort_index(axis=1), check_index=False)
 
 
+@pytest.mark.xfail(reason="Illegal Parquet type: INT64 (TIMESTAMP(NANOS,true))")
 @pytest.mark.parametrize("npartitions", [1, 5, 10])
-def test_roundtrip_parquet_dask_to_spark(spark_session, npartitions, tmpdir, engine):
+def test_roundtrip_parquet_dask_to_spark(spark_session, npartitions, tmpdir):
     tmpdir = str(tmpdir)
     ddf = dd.from_pandas(pdf, npartitions=npartitions)
 
-    ddf.to_parquet(tmpdir, engine=engine, write_index=False)
+    ddf.to_parquet(tmpdir, write_index=False)
 
     sdf = spark_session.read.parquet(tmpdir)
     sdf = sdf.toPandas()
@@ -159,7 +141,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    ddf = dd.read_parquet(tmpdir, engine="pyarrow", dtype_backend="numpy_nullable")
+    ddf = dd.read_parquet(tmpdir, dtype_backend="numpy_nullable")
     assert all(
         [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf.dtypes]
     ), ddf.dtypes
@@ -191,7 +173,7 @@ def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    ddf = dd.read_parquet(tmpdir, engine="pyarrow", dtype_backend="pyarrow")
+    ddf = dd.read_parquet(tmpdir, dtype_backend="pyarrow")
     assert ddf.b.dtype.pyarrow_dtype == pa.decimal128(7, 3)
     assert ddf.b.compute().dtype.pyarrow_dtype == pa.decimal128(7, 3)
     expected = pdf.astype(

@@ -98,7 +98,7 @@ configuration option:
        y.visualize()
 
 
-Note that the both visualization engines require optional dependencies to be installed.
+Note that both visualization engines require optional dependencies to be installed.
 The ``graphviz`` engine is powered by the `GraphViz <https://www.graphviz.org/>`_
 system library. This library has a few considerations:
 

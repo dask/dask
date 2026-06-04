@@ -1311,7 +1311,7 @@ Expr={expr}"""
             For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
             where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
             See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
-        npartitions : int, Callable, optional
+        npartitions : int | Callable, optional
             Approximate number of partitions of output. The number of
             partitions used may be slightly lower than npartitions depending
             on data distribution, but will never be higher.
@@ -2213,7 +2213,7 @@ Expr={expr}"""
         >>> res = ddf.x.reduction(count_greater, aggregate=lambda x: x.sum(),
         ...                       chunk_kwargs={'value': 25})
         >>> res.compute()
-        25
+        np.int64(25)
 
         Aggregate both the sum and count of a Series at the same time:
 
@@ -3253,7 +3253,7 @@ class DataFrame(FrameBase):
             meta = expr.emulate(
                 M.apply, self, function, args=args, udf=True, axis=axis, **kwargs
             )
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="apply"))
         return new_collection(
             self.expr.apply(function, *args, meta=meta, axis=axis, **kwargs)
         )
@@ -3676,12 +3676,20 @@ class DataFrame(FrameBase):
         return concat(modes, axis=1)
 
     @derived_from(pd.DataFrame)
-    def add_prefix(self, prefix):
-        return new_collection(expr.AddPrefix(self, prefix))
+    def add_prefix(self, prefix, axis=None):
+        if axis in (None, 1, "columns"):
+            return new_collection(expr.AddPrefix(self, prefix))
+        if axis in (0, "index"):
+            raise NotImplementedError(f"add_prefix({axis=}) is not implemented in Dask")
+        raise ValueError("axis must be either 0, 1, 'index', 'columns', or None")
 
     @derived_from(pd.DataFrame)
-    def add_suffix(self, suffix):
-        return new_collection(expr.AddSuffix(self, suffix))
+    def add_suffix(self, suffix, axis=None):
+        if axis in (None, 1, "columns"):
+            return new_collection(expr.AddSuffix(self, suffix))
+        if axis in (0, "index"):
+            raise NotImplementedError(f"add_suffix({axis=}) is not implemented in Dask")
+        raise ValueError("axis must be either 0, 1, 'index', 'columns', or None")
 
     def pivot_table(self, index, columns, values, aggfunc="mean"):
         """
@@ -4219,7 +4227,7 @@ class Series(FrameBase):
                 if meta is None:
                     warnings.warn(meta_warning(meta, method="map"))
                 return new_collection(
-                    expr.MapAlign(self, arg, op=None, na_action=na_action, meta=meta)
+                    expr.MapAlign(self, arg, na_action=na_action, meta=meta)
                 )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
@@ -4407,7 +4415,7 @@ class Series(FrameBase):
         self._validate_axis(axis)
         if meta is no_default:
             meta = expr.emulate(M.apply, self, function, args=args, udf=True, **kwargs)
-            warnings.warn(meta_warning(meta))
+            warnings.warn(meta_warning(meta, method="apply"))
         return new_collection(self.expr.apply(function, *args, meta=meta, **kwargs))
 
     @classmethod

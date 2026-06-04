@@ -4,7 +4,7 @@ Shared Memory
 The asynchronous scheduler accepts any ``concurrent.futures.Executor``
 instance. This includes instances of the ``ThreadPoolExecutor`` and
 ``ProcessPoolExecutor`` defined in the Python standard library as well as any
-other subclass from a 3rd party library. Dask also defines its own
+other subclass from a third party library. Dask also defines its own
 ``SynchronousExecutor`` for that simply runs functions on the main thread
 (useful for debugging).
 
