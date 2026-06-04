@@ -4227,7 +4227,7 @@ class Series(FrameBase):
                 if meta is None:
                     warnings.warn(meta_warning(meta, method="map"))
                 return new_collection(
-                    expr.MapAlign(self, arg, op=None, na_action=na_action, meta=meta)
+                    expr.MapAlign(self, arg, na_action=na_action, meta=meta)
                 )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
