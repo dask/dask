@@ -182,9 +182,9 @@ tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
 [feature.py310.dependencies]
 python = "=3.10"
 importlib_metadata = "*"
-numpy = "=1.24"
+numpy = "=1.26"
 pandas = "=2.1"
-pyarrow = "=16.0"
+pyarrow = "=18.0"
 
 [feature.py310.activation.env]
 DASK_DATAFRAME__CONVERT_STRING="False"  # Only tested here

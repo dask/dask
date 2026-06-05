@@ -153,6 +153,15 @@ pixi run test --runslow
 
 # Full test suite
 pixi run test-ci
+
+# Test against all supported versions of NumPy, Pandas, and PyArrow
+# This list may be fall out of sync; run `pixi ls -e <environment>` to double check
+pixi run -e mindeps-optional ...  # NumPy 1.24, Pandas 2.0, PyArrow 16
+pixi run -e py310 ...  # NumPy 1.24, Pandas 2.1, PyArrow 18
+pixi run -e py311 ...  # NumPy 2.0, Pandas 2.2, PyArrow 20
+pixi run -e py312 ...  # NumPy 2.2, Pandas 2.3, PyArrow 22
+pixi run -e py313 ...  # NumPy 2.4, Pandas 3.0, PyArrow 24
+pixi run -e nightly ...  # NumPy 2.6, Pandas 3.1, PyArrow 25
 ```
 
 ### pytest Configuration (from `pyproject.toml`)
