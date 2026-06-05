@@ -48,7 +48,6 @@ from dask.dataframe.rolling import CombinedOutput, _head_timedelta, overlap_chun
 from dask.dataframe.shuffle import drop_overlap, get_overlap
 from dask.dataframe.utils import (
     clear_known_categories,
-    drop_by_shallow_copy,
     is_scalar,
     raise_on_meta_error,
     valid_divisions,
@@ -1945,7 +1944,6 @@ class ExplodeFrame(ExplodeSeries):
 class Drop(Elemwise):
     _parameters = ["frame", "columns", "errors"]
     _defaults = {"errors": "raise"}
-    operation = staticmethod(drop_by_shallow_copy)
     _preserves_partitioning_information = True
 
     def _simplify_down(self):
@@ -1954,6 +1952,10 @@ class Drop(Elemwise):
             col_op = [col_op]
         columns = [col for col in self.frame.columns if col not in col_op]
         return Projection(self.frame, columns)
+
+    @staticmethod
+    def operation(df, columns, errors):
+        return df.drop(columns=columns, errors=errors)
 
 
 def assign(df, *pairs):
