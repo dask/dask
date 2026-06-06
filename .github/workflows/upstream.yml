@@ -35,9 +35,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Reconfigure pytest-timeout
+        # No SIGALRM available on Windows
+        # Note: all changes to the source code must happen before `pixi install`
+        # or we'll build the package twice
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
+
       - uses: prefix-dev/setup-pixi@v0.9.6
         with:
-          pixi-version: v0.69.0
+          pixi-version: v0.70.1
           run-install: false
           cache: false
           locked: false
@@ -47,10 +54,6 @@ jobs:
 
       - name: pixi install
         run: pixi install -e ${{ matrix.environment }}
-
-      - name: Reconfigure pytest-timeout
-        # No SIGALRM available on Windows
-        run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
 
       - name: Run tests
         id: run_tests

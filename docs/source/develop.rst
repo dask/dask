@@ -161,6 +161,10 @@ experimental configurations::
    pixi run -e py314t test-ci
    pixi run -e nightly test-ci
 
+Note that, besides Python versions, these variant environments also test a
+matrix of different versions of NumPy, Pandas, and PyArrow. See ``pixi.toml``
+for details.
+
 There are also specialty test tasks::
 
    pixi run test-spark
