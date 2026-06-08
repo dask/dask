@@ -2500,9 +2500,9 @@ def test_to_hdf5_compute_false():
 
     with tmpfile(".hdf5") as fn:
         result = x.to_hdf5(fn, "/x", compute=False)
-        assert isinstance(result, tuple)
+        assert hasattr(result, "compute")
 
-        result[0].compute()
+        result.compute()
 
         with h5py.File(fn, mode="r") as f:
             assert_eq(f["/x"][:], x)
