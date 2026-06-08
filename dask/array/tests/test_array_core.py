@@ -2494,6 +2494,20 @@ def test_to_hdf5():
             assert f["/y"].chunks == (2,)
 
 
+def test_to_hdf5_compute_false():
+    h5py = pytest.importorskip("h5py")
+    x = da.ones((4, 4), chunks=(2, 2))
+
+    with tmpfile(".hdf5") as fn:
+        result = x.to_hdf5(fn, "/x", compute=False)
+        assert isinstance(result, tuple)
+
+        result[0].compute()
+
+        with h5py.File(fn, mode="r") as f:
+            assert_eq(f["/x"][:], x)
+
+
 def test_to_dask_dataframe():
     pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
