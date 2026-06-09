@@ -30,15 +30,13 @@ def test_assert_eq_array():
         assert_eq(d, x + 1)
 
 
-@pytest.mark.skipif(bool(sys.flags.optimize), reason="Assertions disabled.")
 def test_assert_eq_checks_shape():
     a = da.ones(3, chunks=2)
     assert_eq(a, a)
     with pytest.raises(AssertionError):
-        assert_eq(da.ones(2, chunks=2), da.ones(3, chunks=2))
+        assert_eq(da.ones(2), da.ones(3))
 
 
-@pytest.mark.skipif(bool(sys.flags.optimize), reason="Assertions disabled.")
 def test_assert_eq_check_dtype():
     a = da.ones(3, chunks=2, dtype="i4")
     b = da.ones(3, chunks=2, dtype="f8")
@@ -48,7 +46,6 @@ def test_assert_eq_check_dtype():
     assert_eq(a, b, check_dtype=False)
 
 
-@pytest.mark.skipif(bool(sys.flags.optimize), reason="Assertions disabled.")
 def test_assert_eq_equal_nan():
     a = da.from_array(np.array([1.0, np.nan]), chunks=2)
     b = da.from_array(np.array([1.0, np.nan]), chunks=2)
