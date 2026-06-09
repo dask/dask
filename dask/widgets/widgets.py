@@ -25,7 +25,7 @@ TEMPLATE_PATHS = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp
 
 def get_environment() -> Environment:
     loader = FileSystemLoader(TEMPLATE_PATHS)
-    environment = Environment(loader=loader, autoescape=True)
+    environment = Environment(loader=loader)
     environment.filters.update(FILTERS)
 
     return environment
