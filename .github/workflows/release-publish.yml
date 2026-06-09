@@ -4,13 +4,183 @@ on:
   push:
     tags:
       - "*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to rehearse, in x.x.x form"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+env:
+  RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
+
 jobs:
+  build_pypi:
+    name: Build PyPI distributions
+    if: github.repository == 'dask/dask' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v8.2.0
+      - name: Check tag version
+        run: |
+          release_version="$RELEASE_VERSION"
+          if [[ ! "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Release versions must use x.x.x form, got $release_version"
+              exit 1
+          fi
+      - name: Build distributions
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+              export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DASK="$RELEASE_VERSION"
+          fi
+          uv build --sdist --wheel
+      - name: Check built versions
+        run: |
+          python - <<'PY'
+          import email
+          import glob
+          import os
+          import tarfile
+          import zipfile
+
+          release_version = os.environ["RELEASE_VERSION"]
+          major, minor, patch = release_version.split(".")
+          next_patch_version = f"{major}.{minor}.{int(patch) + 1}"
+
+          wheel_paths = glob.glob("dist/*.whl")
+          sdist_paths = glob.glob("dist/*.tar.gz")
+          if len(wheel_paths) != 1 or len(sdist_paths) != 1:
+              raise SystemExit("Expected exactly one wheel and one sdist")
+
+          with zipfile.ZipFile(wheel_paths[0]) as wheel:
+              metadata_path = next(name for name in wheel.namelist() if name.endswith(".dist-info/METADATA"))
+              wheel_metadata = email.message_from_bytes(wheel.read(metadata_path))
+              wheel_version = wheel_metadata["Version"]
+
+          with tarfile.open(sdist_paths[0], "r:gz") as sdist:
+              pkg_info_path = next(name for name in sdist.getnames() if name.endswith("/PKG-INFO"))
+              pkg_info = sdist.extractfile(pkg_info_path)
+              if pkg_info is None:
+                  raise SystemExit("Could not read sdist PKG-INFO")
+              sdist_metadata = email.message_from_binary_file(pkg_info)
+              sdist_version = sdist_metadata["Version"]
+
+          for artifact, version in {"wheel": wheel_version, "sdist": sdist_version}.items():
+              if version != release_version:
+                  raise SystemExit(f"{artifact} version {version} does not match release {release_version}")
+
+          for artifact, metadata in {"wheel": wheel_metadata, "sdist": sdist_metadata}.items():
+              requirements = metadata.get_all("Requires-Dist") or []
+              distributed_requirements = [
+                  requirement
+                  for requirement in requirements
+                  if requirement.startswith("distributed") and 'extra == "distributed"' in requirement
+              ]
+              if len(distributed_requirements) != 1:
+                  raise SystemExit(
+                      f"{artifact} should declare exactly one distributed extra requirement, "
+                      f"got {distributed_requirements}"
+                  )
+              requirement = distributed_requirements[0].replace(" ", "")
+              if f">={release_version}" not in requirement or f"<{next_patch_version}" not in requirement:
+                  raise SystemExit(
+                      f"{artifact} distributed extra should require distributed>={release_version},"
+                      f"<{next_patch_version}, got {distributed_requirements[0]}"
+                  )
+          PY
+      - run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  smoke_test_pypi:
+    name: Smoke-test distributions on Python ${{ matrix.python-version }}
+    needs: build_pypi
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: false
+          ignore-empty-workdir: true
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist
+      - run: uv venv --python ${{ matrix.python-version }} .venv
+      - run: uv pip install --python .venv/bin/python dist/*.whl
+      - run: |
+          .venv/bin/python - <<'PY'
+          from dask import delayed
+
+          result = delayed(lambda x: x + 1)(1).compute(scheduler="sync")
+          assert result == 2
+          PY
+      - run: uv venv --python ${{ matrix.python-version }} .venv-sdist
+      - run: uv pip install --python .venv-sdist/bin/python dist/*.tar.gz
+      - run: |
+          .venv-sdist/bin/python - <<'PY'
+          from dask import delayed
+
+          result = delayed(lambda x: x + 1)(1).compute(scheduler="sync")
+          assert result == 2
+          PY
+
+  dry_run_publish_pypi:
+    name: Dry-run PyPI publish
+    needs: smoke_test_pypi
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist
+      - name: Confirm publish skipped
+        run: |
+          ls -l dist
+          echo "Dry run only; not publishing dask==$RELEASE_VERSION to PyPI."
+
+  publish_pypi:
+    name: Publish PyPI distributions
+    needs: smoke_test_pypi
+    if: github.repository == 'dask/dask' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/dask/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
   publish_release:
-    if: github.repository == 'dask/dask'
+    needs: publish_pypi
+    if: github.repository == 'dask/dask' && github.event_name != 'workflow_dispatch'
     permissions:
       # Write permission is required to publish a GitHub release
       contents: write
