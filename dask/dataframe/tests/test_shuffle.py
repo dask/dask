@@ -1288,3 +1288,13 @@ def test_shuffle_nulls_introduced():
         .apply(lambda df: len(df), **include_groups)
     )
     assert_eq(result, expected, check_names=False)
+
+
+@pytest.mark.parametrize(
+    "npartitions,dtype", [(127, "i1"), (128, "i2"), (32767, "i2"), (32768, "i4")]
+)
+def test_partitioning_index_dtype_for_large_npartitions(npartitions, dtype):
+    s = pd.Series([1, 1, 2])
+    res = partitioning_index(s, npartitions)
+    assert res.dtype.kind == "i"  # signed integer
+    assert res.dtype == dtype
