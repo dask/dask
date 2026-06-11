@@ -8,8 +8,127 @@ on:
 permissions:
   contents: read
 
+env:
+  RELEASE_VERSION: ${{ github.ref_name }}
+
 jobs:
+  build_pypi:
+    name: Build PyPI distributions
+    if: github.repository == 'dask/dask'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v8.2.0
+      - name: Check release version and dependency bounds
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Release versions must use x.x.x form, got $RELEASE_VERSION"
+              exit 1
+          fi
+          major_minor="${RELEASE_VERSION%.*}"
+          patch="${RELEASE_VERSION##*.}"
+          next_patch_version="${major_minor}.$((10#$patch + 1))"
+          if ! grep -Eq "distributed[[:space:]]*>=[[:space:]]*${RELEASE_VERSION},[[:space:]]*<${next_patch_version}" pyproject.toml; then
+              echo "::error::pyproject.toml must pin distributed >=${RELEASE_VERSION},<${next_patch_version}"
+              exit 1
+          fi
+      - name: Build distributions
+        run: uv build --sdist --wheel
+      - run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  smoke_test_pypi:
+    name: Smoke-test distributions on Python ${{ matrix.python-version }}
+    needs: build_pypi
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: false
+          ignore-empty-workdir: true
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist
+      - run: uv venv --python ${{ matrix.python-version }} .venv
+      - run: uv pip install --python .venv/bin/python dist/*.whl
+      - run: |
+          .venv/bin/python - <<'PY'
+          import importlib.metadata
+          import os
+
+          import dask
+          from dask import delayed
+
+          expected_version = os.environ["RELEASE_VERSION"]
+          if dask.__version__ != expected_version:
+              raise SystemExit(f"Expected dask.__version__ {expected_version}, got {dask.__version__}")
+          installed_version = importlib.metadata.version("dask")
+          if installed_version != expected_version:
+              raise SystemExit(f"Expected installed dask {expected_version}, got {installed_version}")
+
+          result = delayed(lambda x: x + 1)(1).compute(scheduler="sync")
+          assert result == 2
+          PY
+      - run: uv venv --python ${{ matrix.python-version }} .venv-sdist
+      - run: uv pip install --python .venv-sdist/bin/python dist/*.tar.gz
+      - run: |
+          .venv-sdist/bin/python - <<'PY'
+          import importlib.metadata
+          import os
+
+          import dask
+          from dask import delayed
+
+          expected_version = os.environ["RELEASE_VERSION"]
+          if dask.__version__ != expected_version:
+              raise SystemExit(f"Expected dask.__version__ {expected_version}, got {dask.__version__}")
+          installed_version = importlib.metadata.version("dask")
+          if installed_version != expected_version:
+              raise SystemExit(f"Expected installed dask {expected_version}, got {installed_version}")
+
+          result = delayed(lambda x: x + 1)(1).compute(scheduler="sync")
+          assert result == 2
+          PY
+
+  publish_pypi:
+    name: Publish PyPI distributions
+    needs: smoke_test_pypi
+    if: github.repository == 'dask/dask'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/dask/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
   publish_release:
+    needs: publish_pypi
     if: github.repository == 'dask/dask'
     permissions:
       # Write permission is required to publish a GitHub release
