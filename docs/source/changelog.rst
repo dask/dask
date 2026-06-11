@@ -5,6 +5,171 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2026.6.0:
+
+2026.6.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+- Improve pandas 3.1 compatibility, including ``add_prefix``/``add_suffix`` and ``DataFrame.drop`` changes (:pr:`12414`, :pr:`12447`) `Guido Imperiale`_
+- Fix groupby compatibility with pandas 2.2 and 2.3 and test against intermediate NumPy and pandas versions (:pr:`12372`) `Guido Imperiale`_
+- Store empty arrays with Zarr 3.2.0 (:pr:`12366`) `Guido Imperiale`_
+- Fix quantile and nanquantile behavior (:pr:`12380`) `Guido Imperiale`_
+- Add support for Cholesky decomposition with complex dtypes (:pr:`12416`) `Niclas Rieger`_
+- Fix dataframe correctness issues in ``DataFrame.merge`` and ``Series.map`` (:pr:`12430`, :pr:`12432`) `nn`_, `Mike Evdokimov`_
+- Overhaul the ``publish_dataset`` extension (:pr-distributed:`9217`) `Guido Imperiale`_
+- Overhaul task stream handling (:pr-distributed:`9230`, :pr-distributed:`9282`, :pr-distributed:`9293`) `Guido Imperiale`_, `MohammadYusif`_
+- Fix a race condition in ``SubprocessCluster`` startup (:pr-distributed:`9292`) `Guido Imperiale`_
+- Clean up deprecated Distributed APIs across scheduler, worker, CLI, plugin, and progress handling (:pr-distributed:`9222`, :pr-distributed:`9225`, :pr-distributed:`9238`, :pr-distributed:`9240`, :pr-distributed:`9250`) `Guido Imperiale`_
+- Migrate CI and local workflows to Pixi (:pr:`12389`, :pr-distributed:`9276`) `Guido Imperiale`_
+- Add AI contribution guidance with AGENTS.md and CLAUDE.md (:pr:`12415`, :pr-distributed:`9279`) `Guido Imperiale`_
+- Add PyPI release workflows with GitHub Actions Trusted Publishing (:pr:`12452`, :pr-distributed:`9297`) `Matthew Rocklin`_
+
+.. dropdown:: Additional changes
+
+  - Pandas 3.1: The inplace keyword in DataFrame.drop is deprecated (:pr:`12447`) `Guido Imperiale`_
+  - ``test_concat_categorical`` is still flaky on Pandas 2.0 (:pr:`12454`) `Guido Imperiale`_
+  - Add tests for the array ``assert_eq`` helper (:pr:`12441`) `きょうすけ`_
+  - Revert security autoescape change in HTML reprs (:pr:`12451`) `Guido Imperiale`_
+  - Fix Dataframe.merge losing data when there are 128 or 129 partitions (:pr:`12430`) `nn`_
+  - Security: enable Jinja2 autoescape to prevent XSS in HTML reprs (:pr:`12423`) `dfgvaetyj3456356-hash`_
+  - Test vs. NumPy 1.26 and PyArrow 18 (:pr:`12445`) `Guido Imperiale`_
+  - Do not build the dask-core pixi package twice (:pr:`12443`) `Guido Imperiale`_
+  - Fix broken condition in ``test_cpu_affinity_taskset`` (:pr:`12399`) `Elliott Sales de Andrade`_
+  - Fix flaky ``test_interrupt`` (:pr:`12437`) `Guido Imperiale`_
+  - Free-threading: enable msgpack C extension (:pr:`12439`) `Guido Imperiale`_
+  - Fix ``Series.map(Series)`` producing wrong results for non-co-aligned inputs (:pr:`12432`) `Mike Evdokimov`_
+  - Repair Upstream CI (:pr:`12436`) `Guido Imperiale`_
+  - Strictly expect test failures (:pr:`12435`) `Guido Imperiale`_
+  - Update pixi lockfile (:pr:`12433`) `Guido Imperiale`_
+  - Add more thorough tests for ``Series.map`` and fix pandas nightly CI (:pr:`12425`) `Guido Imperiale`_
+  - Add AGENTS.md / CLAUDE.md and clarify guidelines for AI pull requests (:pr:`12415`) `Guido Imperiale`_
+  - Tweak local coverage HTML report (:pr:`12422`) `Guido Imperiale`_
+  - Make tests less dependent on urllib3 and requests (:pr:`12419`) `Guido Imperiale`_
+  - Fix trivial Sphinx warning `crusaderky`_
+  - Do not run scheduled tests on forks (:pr:`12418`) `Guido Imperiale`_
+  - Only upload conda packages from main branch `crusaderky`_
+  - Repair conda upload (:pr:`12417`) `Guido Imperiale`_
+  - Fix ``add_prefix``/``add_suffix`` in pandas nightly and support explicit axis (:pr:`12414`) `Guido Imperiale`_
+  - Remove legacy pandas dtype testing strings vs. decimals (:pr:`12413`) `Guido Imperiale`_
+  - Better type annotations for ``import_optional_dependency`` (:pr:`12412`) `Guido Imperiale`_
+  - Resurrect PySpark tests (:pr:`12410`) `Guido Imperiale`_
+  - Test on Linux ARM (:pr:`12408`) `Guido Imperiale`_
+  - Fix failures in ``test_describe`` vs. pandas nightly (:pr:`12409`) `Guido Imperiale`_
+  - Migrate CI to Pixi (:pr:`12389`) `Guido Imperiale`_
+  - Fix typos (:pr:`12405`) `Guido Imperiale`_
+  - XFAIL regression in click 8.4.0 (:pr:`12407`) `Guido Imperiale`_
+  - Fix flaky ``test_shared_tasks`` in free-threading (:pr:`12398`) `Guido Imperiale`_
+  - Enforce Python 3.10 compatibility in black (:pr:`12397`) `Guido Imperiale`_
+  - Update Optuna+Dask example to use optuna-integration (:pr:`12385`) `Mike Evdokimov`_
+  - Fix flaky ``test_store_locks`` (:pr:`12393`) `Guido Imperiale`_
+  - XFAIL flaky ``test_len`` (:pr:`12396`) `Guido Imperiale`_
+  - Run some tests serially in pytest-xdist (:pr:`12395`) `Guido Imperiale`_
+  - ``test_orc`` segfaults with PyArrow 16 (:pr:`12394`) `Guido Imperiale`_
+  - Unskip ``test_map_block_series`` (:pr:`12392`) `Guido Imperiale`_
+  - Speed up ``test_from_delayed_future`` (:pr:`12391`) `Guido Imperiale`_
+  - Fix duplicated words in dask.array routines and slicing docstrings (:pr:`12390`) `lphuc2250gma`_
+  - Simplify ``test_dot`` and suppress spurious test outputs (:pr:`12388`) `Guido Imperiale`_
+  - Test vs. intermediate versions of numpy and pandas (:pr:`12372`) `Guido Imperiale`_
+  - Clean up obsolete version check in ``test_http`` (:pr:`12387`) `Guido Imperiale`_
+  - Fix LaTeX formula for split_every in docstrings (:pr:`12379`) `stephenworsley`_
+  - Remove numexpr (:pr:`12384`) `Guido Imperiale`_
+  - Unit-less timedelta64 is deprecated in NumPy nightly (:pr:`12383`) `Guido Imperiale`_
+  - Require ``pyyaml >=5.4.1`` (:pr:`12382`) `Guido Imperiale`_
+  - Re-raise ModuleNotFoundError instead of ImportError (:pr:`12381`) `Guido Imperiale`_
+  - Fix flaky ``test_ffill_bfill`` (:pr:`12378`) `Guido Imperiale`_
+  - Raise NotImplementedError for ``da.quantile`` with weights on NumPy < 2.0 (:pr:`12370`) `Dr Alex Mitre`_
+  - Fix typo in array-chunks.rst (:pr:`12375`) `Henry`_
+  - Minor docs tweaks (:pr:`12377`) `Guido Imperiale`_
+  - Clean up minimum pyarrow version checks (:pr:`12376`) `Guido Imperiale`_
+  - Use Python 3.14 in additional and upstream envs and dev docs (:pr:`12373`) `Guido Imperiale`_
+  - More test fixes for pandas-nightly (:pr:`12369`) `Guido Imperiale`_
+  - Switch back to conda (:pr:`12368`) `Guido Imperiale`_
+  - Disable CI for Windows 3.14t (:pr:`12367`) `Guido Imperiale`_
+  - Use f-strings (:pr:`12362`) `Dimitri Papadopoulos Orfanos`_
+  - Store empty arrays with zarr 3.2.0 (:pr:`12366`) `Guido Imperiale`_
+  - Fix some pandas nightly deprecation warnings (:pr:`12341`) `Trevin Chow`_
+  - 3.14t CI: tweak notes (:pr:`12363`) `Guido Imperiale`_
+  - Use f-strings (:pr:`12354`) `Dimitri Papadopoulos Orfanos`_
+  - Docs: order array arguments in docstring (:pr:`12342`) `Peter A. Jonsson`_
+  - numba is now available on conda-forge for 3.14t (:pr:`12358`) `Guido Imperiale`_
+  - ``__package__`` to ``__spec__.parent`` (:pr:`12333`) `Dimitri Papadopoulos Orfanos`_
+  - Update pre-commit black hook (:pr:`12344`) `Dimitri Papadopoulos Orfanos`_
+  - Update pre-commit ruff hook (:pr:`12345`) `Dimitri Papadopoulos Orfanos`_
+  - Fix typos (:pr:`12339`) `Dimitri Papadopoulos Orfanos`_
+  - Add numba, sparse, and h5py to 3.14t CI (:pr:`12338`) `Guido Imperiale`_
+  - Improve Contribution Policy (:pr:`12320`) `Jacob Tomlinson`_
+  - Fix test failures caused by port 8787 already in use (:pr-distributed:`9296`) `Guido Imperiale`_
+  - Migrate from black to ``ruff format`` (:pr-distributed:`9295`) `Guido Imperiale`_
+  - Fix race condition in SubprocessCluster startup (:pr-distributed:`9292`) `Guido Imperiale`_
+  - Refactor ``get_task_stream`` (:pr-distributed:`9293`) `Guido Imperiale`_
+  - Do not build the distributed pixi package twice (:pr-distributed:`9289`) `Guido Imperiale`_
+  - Fix flaky ``test_steal_twice`` and ``test_steal_when_more_tasks`` (:pr-distributed:`9288`) `Guido Imperiale`_
+  - Clarify scheduler unpickling in protocol docs (:pr-distributed:`9286`) `Peter Chen J.`_
+  - Reinstate no-queue tests (:pr-distributed:`9287`) `Guido Imperiale`_
+  - Clarify unsatisfied resource restrictions in resource docs (:pr-distributed:`9269`) `Peter Chen J.`_
+  - Fix import-time coverage (:pr-distributed:`9284`) `Guido Imperiale`_
+  - Improve CLI error message for unknown options to dask worker (:pr-distributed:`9281`) `Zeus Almightee`_
+  - Run most CUDA tests in pixi (:pr-distributed:`9285`) `Guido Imperiale`_
+  - Migrate CI to pixi (:pr-distributed:`9276`) `Guido Imperiale`_
+  - Add AGENTS.md / CLAUDE.md and guidelines for AI pull requests (:pr-distributed:`9279`) `Guido Imperiale`_
+  - Fix tests vs. NumPy nightly builds (:pr-distributed:`9280`) `Guido Imperiale`_
+  - uvloop tests (:pr-distributed:`9278`) `Guido Imperiale`_
+  - Fix flaky ``test_call_stack_future`` (:pr-distributed:`9277`) `Guido Imperiale`_
+  - Drop dependency on urllib3 (:pr-distributed:`9273`) `James Lamb`_
+  - Remove ``avoid_ci`` mark (:pr-distributed:`9275`) `Guido Imperiale`_
+  - Print host_info in CI without needing NumPy (:pr-distributed:`9274`) `Guido Imperiale`_
+  - Fix typos (:pr-distributed:`9268`) `Guido Imperiale`_
+  - Support pixi in dask/dask CI (:pr-distributed:`9264`) `Guido Imperiale`_
+  - Truncate large coro repr in retry log output (:pr-distributed:`9197`) `Ernest Provo`_
+  - Add explicit check for name not None (:pr-distributed:`9265`) `Maneesh Sutar`_
+  - XFAIL ``test_scheduler_bokeh.py::test_simple`` in Windows (:pr-distributed:`9266`) `Guido Imperiale`_
+  - Clean up deprecated loop properties (:pr-distributed:`9231`) `Guido Imperiale`_
+  - Clean up deprecations in Scheduler, Worker, Nanny (:pr-distributed:`9238`) `Guido Imperiale`_
+  - Clean up deprecated client context in different tasks/threads (:pr-distributed:`9233`) `Guido Imperiale`_
+  - Clean up deprecated Prometheus metrics (:pr-distributed:`9249`) `Guido Imperiale`_
+  - Clean up deprecations in ``distributed.deploy`` (:pr-distributed:`9244`) `Guido Imperiale`_
+  - Clean up deprecated ``stream`` RPC handler argument (:pr-distributed:`9242`) `Guido Imperiale`_
+  - Deprecations in CLI (:pr-distributed:`9240`) `Guido Imperiale`_
+  - Clean up deprecations in ``security`` (:pr-distributed:`9239`) `Guido Imperiale`_
+  - Clean up deprecated rpc synchronous context manager (:pr-distributed:`9235`) `Guido Imperiale`_
+  - Clean up deprecated async ``listener.stop()`` (:pr-distributed:`9234`) `Guido Imperiale`_
+  - Clean up deprecations in ``register_plugin`` (:pr-distributed:`9225`) `Guido Imperiale`_
+  - Clean up deprecations in ``remove_worker`` (:pr-distributed:`9222`) `Guido Imperiale`_
+  - Clean up minimum pyarrow version checks (:pr-distributed:`9260`) `Guido Imperiale`_
+  - Partial review of task streams (:pr-distributed:`9230`) `Guido Imperiale`_
+  - Update outdated work stealing docs regarding worker restrictions (:pr-distributed:`9214`) `Kevin Ziroldi`_
+  - Fix memray CI; move back from mamba to conda (:pr-distributed:`9258`) `Guido Imperiale`_
+  - Install keras with conda (:pr-distributed:`9259`) `Guido Imperiale`_
+  - Clean up Cython (:pr-distributed:`9257`) `Guido Imperiale`_
+  - Use ``@dataclass(slots=True)`` with constraints from Python <3.14 (:pr-distributed:`9256`) `Guido Imperiale`_
+  - Type annotations for ``client.Future`` (:pr-distributed:`9255`) `Guido Imperiale`_
+  - Clean up deprecated Lock client parameter (:pr-distributed:`9237`) `Guido Imperiale`_
+  - Clean up deprecated nested_deserialize (:pr-distributed:`9243`) `Guido Imperiale`_
+  - Deprecations in ``distributed.compatibility`` (:pr-distributed:`9232`) `Guido Imperiale`_
+  - Clean up deprecations in ``utils_test`` (:pr-distributed:`9226`) `Guido Imperiale`_
+  - Clean up deprecations in ``distributed.utils`` (:pr-distributed:`9236`) `Guido Imperiale`_
+  - Clean up deprecations in ProgressBar (:pr-distributed:`9250`) `Guido Imperiale`_
+  - Run more tests when requests is not installed (:pr-distributed:`9251`) `Guido Imperiale`_
+  - Standardize and increase ``async_poll_for`` timeout (:pr-distributed:`9248`) `Guido Imperiale`_
+  - Relax unreasonably short test timeouts (:pr-distributed:`9247`) `Guido Imperiale`_
+  - Use f-strings (:pr-distributed:`9245`) `Dimitri Papadopoulos Orfanos`_
+  - Update link to bokeh sources in comment (:pr-distributed:`9241`) `Guido Imperiale`_
+  - Apply ruff/pyupgrade rule UP031 (:pr-distributed:`9204`) `Dimitri Papadopoulos Orfanos`_
+  - Homogeneous environment names (:pr-distributed:`9209`) `Dimitri Papadopoulos Orfanos`_
+  - Overhaul ``publish_dataset`` extension (:pr-distributed:`9217`) `Guido Imperiale`_
+  - Fix flaky ``test_mixing_clients_same_scheduler`` (:pr-distributed:`9229`) `Guido Imperiale`_
+  - Type hints: ``@contextmanager`` should return ``Generator[T]`` (:pr-distributed:`9228`) `Guido Imperiale`_
+  - Fix flaky ``test_actor.py::test_failed_worker`` (:pr-distributed:`9227`) `Guido Imperiale`_
+  - Clean up info parameters in transition to memory (:pr-distributed:`9221`) `Guido Imperiale`_
+  - Move state validation from Scheduler to SchedulerState (:pr-distributed:`9224`) `Guido Imperiale`_
+  - Bump to black 26.3.1 (:pr-distributed:`9223`) `Guido Imperiale`_
+  - Tweak scheduler annotations (:pr-distributed:`9220`) `Guido Imperiale`_
+  - Fix typos (:pr-distributed:`9203`) `Dimitri Papadopoulos Orfanos`_
+  - Bug: dashboard would not show no-worker tasks (:pr-distributed:`9215`) `Guido Imperiale`_
+
 .. _v2026.3.0:
 
 2026.3.0
@@ -9937,3 +10102,18 @@ Other
 .. _`Gautham Hullikunte`: https://github.com/batcity
 .. _`Vipin Kataria`: https://github.com/vipinkataria2209
 .. _`Matthew Plough`: https://github.com/mplough-kobold
+.. _`Niclas Rieger`: https://github.com/nicrie
+.. _`MohammadYusif`: https://github.com/MohammadYusif
+.. _`きょうすけ`: https://github.com/kyo5uke
+.. _`nn`: https://github.com/hebian1994
+.. _`dfgvaetyj3456356-hash`: https://github.com/dfgvaetyj3456356-hash
+.. _`Mike Evdokimov`: https://github.com/xronocode
+.. _`lphuc2250gma`: https://github.com/lphuc2250gma
+.. _`stephenworsley`: https://github.com/stephenworsley
+.. _`Dr Alex Mitre`: https://github.com/mitre88
+.. _`Henry`: https://github.com/HGWright
+.. _`Trevin Chow`: https://github.com/tmchow
+.. _`Peter Chen J.`: https://github.com/peter941221
+.. _`Zeus Almightee`: https://github.com/ernestprovo23
+.. _`Ernest Provo`: https://github.com/ernestprovo23
+.. _`Kevin Ziroldi`: https://github.com/kevinziroldi
