@@ -141,11 +141,11 @@ jobs:
         run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
       - uses: release-drafter/release-drafter@v7
         with:
-          disable-autolabeler: true
           # Override the Release name/tag/version with the actual tag name
           name: ${{ env.RELEASE_VERSION }}
           tag: ${{ env.RELEASE_VERSION }}
           version: ${{ env.RELEASE_VERSION }}
+          commitish: ${{ github.sha }}
           # Publish the Release
           publish: true
         env:
