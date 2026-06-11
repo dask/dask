@@ -140,6 +140,22 @@ def test_str_split_(index):
     assert_eq(dd_a, pd_a)
 
 
+def test_str_split_preserves_dtype():
+    # str.split on a PyArrow-backed string column should preserve the dtype,
+    # not coerce columns to object. Regression test for #11884.
+    pytest.importorskip("pyarrow")
+    df = pd.DataFrame({"c": ["a,b,c", "d,e,f", "g,h,i"]}, dtype="string[pyarrow]")
+    ddf = from_pandas(df, npartitions=1)
+
+    pd_result = df["c"].str.split(",", n=1, expand=True)
+    dd_result = ddf["c"].str.split(",", n=1, expand=True)
+
+    assert list(dd_result.dtypes) == list(
+        pd_result.dtypes
+    ), f"dask dtypes {list(dd_result.dtypes)} != pandas dtypes {list(pd_result.dtypes)}"
+    assert_eq(dd_result, pd_result)
+
+
 def test_str_accessor_not_available():
     pdf = pd.DataFrame({"a": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=2)
