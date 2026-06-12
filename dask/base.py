@@ -658,9 +658,7 @@ def optimize(*args, traverse=True, **kwargs):
     for a, aexpr in zip(collections, collection_exprs, strict=True):
         if isinstance(aexpr, CompositeExpr):
             postpersists.append(
-                _rebuild_composite_collection(
-                    a, aexpr, graph, cull_to_child_keys=False
-                )
+                _rebuild_composite_collection(a, aexpr, graph, cull_to_child_keys=False)
             )
         else:
             r, s = a.__dask_postpersist__()
