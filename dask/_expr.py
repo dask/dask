@@ -36,10 +36,15 @@ def _unpack_collections(o):
     if isinstance(o, Expr):
         return o
 
-    if hasattr(o, "expr") and not isinstance(o, Delayed):
-        return o.expr
-    else:
-        return o
+    if not isinstance(o, Delayed):
+        try:
+            expr = o.expr
+        except AttributeError:
+            pass
+        else:
+            if isinstance(expr, Expr):
+                return expr
+    return o
 
 
 class Expr:
@@ -1272,6 +1277,38 @@ class _ExprSequence(Expr):
         return _HLGExprSequence(*hlgs)
 
 
+class CompositeExpr(Expr):
+    """Private expression grouping many child expressions into one collection."""
+
+    _parameters = ["collection"]
+
+    @property
+    def collection(self):
+        return self.operand("collection")
+
+    @property
+    def exprs(self):
+        return tuple(self.operands[1:])
+
+    def dependencies(self):
+        return self.exprs
+
+    def _layer(self) -> dict:
+        return {}
+
+    def __dask_keys__(self) -> list:
+        return [expr.__dask_keys__() for expr in self.exprs]
+
+    def _operands_for_repr(self):
+        return [
+            f"collection={type(self.collection).__name__}",
+            f"nexprs={len(self.exprs)}",
+        ]
+
+    def finalize_compute(self):
+        return CompositeFinalizeCompute(self.collection, *self.exprs)
+
+
 class _AnnotationsTombstone: ...
 
 
@@ -1348,6 +1385,23 @@ class HLGFinalizeCompute(HLGExpr):
 
     def __dask_keys__(self):
         return [self._name]
+
+
+class CompositeFinalizeCompute(CompositeExpr):
+    def __dask_keys__(self):
+        return [self._name]
+
+    def _layer(self) -> dict:
+        func, extra_args = self.collection.__dask_postcompute__()
+        keys = [expr.__dask_keys__() for expr in self.exprs]
+        return {
+            self._name: Task(
+                self._name,
+                func,
+                _convert_dask_keys(keys),
+                *extra_args,
+            )
+        }
 
 
 class ProhibitReuse(Expr):
