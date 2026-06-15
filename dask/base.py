@@ -469,18 +469,12 @@ def collections_to_expr(
         return graphs[0]
 
 
-def _exprs_for_collections(expr: Expr, ncollections: int) -> list[Expr]:
+def _exprs_for_collections(expr: Expr) -> list[Expr]:
     from dask._expr import _ExprSequence
 
     if isinstance(expr, _ExprSequence):
-        exprs = list(expr.operands)
-    else:
-        exprs = [expr]
-    if len(exprs) != ncollections:
-        raise RuntimeError(
-            "Expression collection count does not match input collection count"
-        )
-    return exprs
+        return list(expr.operands)
+    return [expr]
 
 
 def _rebuild_composite_collection(
@@ -641,15 +635,20 @@ def optimize(*args, traverse=True, **kwargs):
         return args
 
     dsk = collections_to_expr(collections)
-    collection_exprs = _exprs_for_collections(dsk, len(collections))
+    collection_exprs = _exprs_for_collections(dsk)
+    if len(collection_exprs) != len(collections):
+        raise RuntimeError(
+            "Expression collection count does not match input collection count: "
+            f"got {len(collection_exprs)} expressions for {len(collections)} "
+            "collections"
+        )
 
     from dask._expr import CompositeExpr
 
     if any(isinstance(expr, CompositeExpr) for expr in collection_exprs):
         dsk = dsk.optimize()
-        try:
-            collection_exprs = _exprs_for_collections(dsk, len(collections))
-        except RuntimeError:
+        collection_exprs = _exprs_for_collections(dsk)
+        if len(collection_exprs) != len(collections):
             collection_exprs = [None] * len(collections)
 
     graph = dsk.__dask_graph__()
@@ -1075,13 +1074,18 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
     from dask._expr import CompositeExpr
 
     expr = collections_to_expr(collections, optimize_graph)
-    collection_exprs = _exprs_for_collections(expr, len(collections))
+    collection_exprs = _exprs_for_collections(expr)
+    if len(collection_exprs) != len(collections):
+        raise RuntimeError(
+            "Expression collection count does not match input collection count: "
+            f"got {len(collection_exprs)} expressions for {len(collections)} "
+            "collections"
+        )
     has_composite = any(isinstance(expr, CompositeExpr) for expr in collection_exprs)
     expr = expr.optimize()
     if has_composite:
-        try:
-            collection_exprs = _exprs_for_collections(expr, len(collections))
-        except RuntimeError:
+        collection_exprs = _exprs_for_collections(expr)
+        if len(collection_exprs) != len(collections):
             collection_exprs = [None] * len(collections)
     else:
         collection_exprs = [None] * len(collections)
