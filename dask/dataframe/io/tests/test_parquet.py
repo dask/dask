@@ -1636,7 +1636,7 @@ def check_compression(engine, filename, compression):
                 assert column.total_compressed_size != column.total_uncompressed_size
 
 
-@pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
+@pytest.mark.parametrize("compression", [None, "gzip", "snappy"])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
 
@@ -1650,7 +1650,7 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     check_compression(engine, fn, compression)
 
 
-@pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
+@pytest.mark.parametrize("compression", [None, "gzip", "snappy"])
 def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
 
