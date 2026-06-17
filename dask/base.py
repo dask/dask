@@ -474,17 +474,20 @@ def collections_to_expr(
         return graphs[0]
 
 
-def _exprs_for_collections(expr: Expr) -> list[Expr]:
-    from dask._expr import _ExprSequence
-
-    if isinstance(expr, _ExprSequence):
-        return list(expr.operands)
-    return [expr]
-
-
 def _rebuild_composite_collection(
     collection, expr: Expr, dsk: dict, *, cull_to_child_keys: bool
 ):
+    """Rebuild a collection that is represented by several child expressions.
+
+    Collections using ``__dask_exprs__`` expose their children separately so the
+    expression optimizer can still see and rewrite each child graph. After
+    optimization or persistence, rebuild each child collection from the new graph
+    and ask the original collection to assemble an equivalent composite object.
+
+    ``persist`` passes only computed key results and can select the child keys
+    directly. ``optimize`` passes a full optimized graph, so each child graph must
+    be culled from that graph before rebuilding the child collection.
+    """
     from dask._collections import new_collection
 
     rebuilt_exprs = []
@@ -639,8 +642,10 @@ def optimize(*args, traverse=True, **kwargs):
     if not collections:
         return args
 
+    from dask._expr import CompositeExpr, _ExprSequence
+
     dsk = collections_to_expr(collections)
-    collection_exprs = _exprs_for_collections(dsk)
+    collection_exprs = list(dsk.operands) if isinstance(dsk, _ExprSequence) else [dsk]
     if len(collection_exprs) != len(collections):
         raise RuntimeError(
             "Expression collection count does not match input collection count: "
@@ -648,11 +653,11 @@ def optimize(*args, traverse=True, **kwargs):
             "collections"
         )
 
-    from dask._expr import CompositeExpr
-
     if any(isinstance(expr, CompositeExpr) for expr in collection_exprs):
         dsk = dsk.optimize()
-        collection_exprs = _exprs_for_collections(dsk)
+        collection_exprs = (
+            list(dsk.operands) if isinstance(dsk, _ExprSequence) else [dsk]
+        )
         if len(collection_exprs) != len(collections):
             collection_exprs = [None] * len(collections)
 
@@ -1076,10 +1081,12 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
         results = client.persist(collections, optimize_graph=optimize_graph, **kwargs)
         return repack(results)
 
-    from dask._expr import CompositeExpr
+    from dask._expr import CompositeExpr, _ExprSequence
 
     expr = collections_to_expr(collections, optimize_graph)
-    collection_exprs = _exprs_for_collections(expr)
+    collection_exprs = (
+        list(expr.operands) if isinstance(expr, _ExprSequence) else [expr]
+    )
     if len(collection_exprs) != len(collections):
         raise RuntimeError(
             "Expression collection count does not match input collection count: "
@@ -1089,7 +1096,9 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
     has_composite = any(isinstance(expr, CompositeExpr) for expr in collection_exprs)
     expr = expr.optimize()
     if has_composite:
-        collection_exprs = _exprs_for_collections(expr)
+        collection_exprs = (
+            list(expr.operands) if isinstance(expr, _ExprSequence) else [expr]
+        )
         if len(collection_exprs) != len(collections):
             collection_exprs = [None] * len(collections)
     else:
