@@ -170,6 +170,8 @@ filterwarnings = [
     "error",
     # With no network access, distributed raises a warning when detecting local IP address
     "ignore:Couldn't detect a suitable IP address:RuntimeWarning:distributed",
+    # This distributed warning makes sense in production; much less so in GitHub actions
+    "ignore:Creating scratch directories is taking a surprisingly long time.*:UserWarning",
     # FIXME spurious shutdown of distributed workers and/or sqlite3
     "module:Exception ignored:pytest.PytestUnraisableExceptionWarning::",
     "module:unclosed database in <sqlite3.Connection:ResourceWarning::",
