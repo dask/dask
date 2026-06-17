@@ -6,7 +6,7 @@ from tlz import merge
 import dask
 from dask._dispatch import get_collection_type
 from dask._expr import CompositeExpr, Expr, HLGExpr
-from dask.base import DaskMethodsMixin, collections_to_expr
+from dask.base import DaskMethodsMixin, collections_to_expr, is_dask_collection
 
 
 class LegacyTuple(DaskMethodsMixin):
@@ -161,6 +161,16 @@ def test_collections_to_expr_uses_composite_protocol():
     assert isinstance(expr, CompositeExpr)
     assert expr.__dask_keys__() == [["a"], ["b"]]
     assert expr.__dask_graph__() == {"a": 1, "b": 2}
+
+
+def test_is_dask_collection_uses_expr_attribute_without_materializing():
+    class ExprBackedCollection(ExprScalar):
+        def __dask_graph__(self):
+            raise AssertionError("must not materialize")
+
+    coll = ExprBackedCollection(LiteralExpr("a", 1))
+
+    assert is_dask_collection(coll)
 
 
 def test_collections_to_expr_ignores_non_dask_expr_attribute():
