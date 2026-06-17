@@ -240,13 +240,16 @@ def is_dask_collection(x) -> bool:
         # Read: https://github.com/dask/dask/pull/10676
         return True
 
+    from dask._expr import Expr
+
+    if isinstance(x, Expr):
+        return True
+
     try:
         expr = x.expr
     except AttributeError:
         pass
     else:
-        from dask._expr import Expr
-
         if isinstance(expr, Expr):
             return True
 

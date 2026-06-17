@@ -173,6 +173,14 @@ def test_is_dask_collection_uses_expr_attribute_without_materializing():
     assert is_dask_collection(coll)
 
 
+def test_is_dask_collection_uses_expr_without_materializing():
+    class AbstractExpr(LiteralExpr):
+        def __dask_graph__(self):
+            raise AssertionError("must not materialize")
+
+    assert is_dask_collection(AbstractExpr("a", 1))
+
+
 def test_collections_to_expr_ignores_non_dask_expr_attribute():
     class ExprAttributeTuple(ExprTuple):
         @property
