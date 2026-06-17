@@ -1895,14 +1895,13 @@ def test_concat5():
         )
 
 
+X86 = platform.machine().lower() in ("x86_64", "amd64")
 xfail_10558 = pytest.mark.xfail(
-    # Always fails on Pandas >=2.2 x64 (not on ARM)
-    # Mildly flaky on Pandas 2.0
-    PANDAS_GE_220
-    and platform.machine().lower() in ("x86_64", "amd64")
-    or not PANDAS_GE_210,
+    # Always fails on Pandas >=2.2 x86 (not on ARM).
+    # Mildly flaky on Pandas 2.0 and 2.1.
+    (PANDAS_GE_220 and X86) or not PANDAS_GE_220,
     reason="https://github.com/dask/dask/issues/10558",
-    strict=PANDAS_GE_210,
+    strict=PANDAS_GE_220 and X86,
 )
 
 
