@@ -239,10 +239,19 @@ def is_dask_collection(x) -> bool:
         # is published, we hope to be able to rewrite this method completely.
         # Read: https://github.com/dask/dask/pull/10676
         return True
-    elif pkg_name.startswith("dask.dataframe.dask_expr"):
+
+    from dask._expr import Expr
+
+    if isinstance(x, Expr):
         return True
-    elif pkg_name.startswith("dask.array._array_expr"):
-        return True
+
+    try:
+        expr = x.expr
+    except AttributeError:
+        pass
+    else:
+        if isinstance(expr, Expr):
+            return True
 
     # xarray, pint, and possibly other wrappers always define a __dask_graph__ method,
     # but it may return None if they wrap around a non-dask object.
@@ -435,21 +444,66 @@ def collections_to_expr(
         collections = [collections]
     if not collections:
         raise ValueError("No collections provided")
-    from dask._expr import HLGExpr, _ExprSequence
+    from dask._expr import CompositeExpr, Expr, HLGExpr, _ExprSequence
 
     graphs = []
     for coll in collections:
         from dask.delayed import Delayed
 
-        if isinstance(coll, Delayed) or not hasattr(coll, "expr"):
+        if isinstance(coll, Delayed):
             graphs.append(HLGExpr.from_collection(coll, optimize_graph=optimize_graph))
         else:
-            graphs.append(coll.expr)
+            expr = getattr(coll, "expr", None)
+            if isinstance(expr, Expr):
+                graphs.append(expr)
+                continue
+
+            dask_exprs = getattr(coll, "__dask_exprs__", None)
+            if dask_exprs is not None:
+                exprs = dask_exprs()
+                if exprs is not None:
+                    exprs = tuple(exprs)
+                    if exprs:
+                        graphs.append(CompositeExpr(coll, *exprs))
+                        continue
+            graphs.append(HLGExpr.from_collection(coll, optimize_graph=optimize_graph))
 
     if len(graphs) > 1 or is_iterable:
         return _ExprSequence(*graphs)
     else:
         return graphs[0]
+
+
+def _rebuild_composite_collection(
+    collection, expr: Expr, dsk: dict, *, cull_to_child_keys: bool
+):
+    """Rebuild a collection that is represented by several child expressions.
+
+    Collections using ``__dask_exprs__`` expose their children separately so the
+    expression optimizer can still see and rewrite each child graph. After
+    optimization or persistence, rebuild each child collection from the new graph
+    and ask the original collection to assemble an equivalent composite object.
+
+    ``persist`` passes only computed key results and can select the child keys
+    directly. ``optimize`` passes a full optimized graph, so each child graph must
+    be culled from that graph before rebuilding the child collection.
+    """
+    from dask._collections import new_collection
+
+    rebuilt_exprs = []
+    for child_expr in expr.exprs:
+        child = new_collection(child_expr)
+        rebuild, state = child.__dask_postpersist__()
+        child_keys = list(flatten(child_expr.__dask_keys__()))
+        if cull_to_child_keys:
+            child_dsk = {key: dsk[key] for key in child_keys}
+        else:
+            from dask.optimization import cull
+
+            child_dsk, _ = cull(dsk, child_keys)
+        rebuilt = rebuild(child_dsk, *state)
+        rebuilt_exprs.append(rebuilt.expr)
+    return collection.__dask_rebuild_from_exprs__(rebuilt_exprs)
 
 
 def unpack_collections(*args, traverse=True):
@@ -588,12 +642,36 @@ def optimize(*args, traverse=True, **kwargs):
     if not collections:
         return args
 
+    from dask._expr import CompositeExpr, _ExprSequence
+
     dsk = collections_to_expr(collections)
+    collection_exprs = list(dsk.operands) if isinstance(dsk, _ExprSequence) else [dsk]
+    if len(collection_exprs) != len(collections):
+        raise RuntimeError(
+            "Expression collection count does not match input collection count: "
+            f"got {len(collection_exprs)} expressions for {len(collections)} "
+            "collections"
+        )
+
+    if any(isinstance(expr, CompositeExpr) for expr in collection_exprs):
+        dsk = dsk.optimize()
+        collection_exprs = (
+            list(dsk.operands) if isinstance(dsk, _ExprSequence) else [dsk]
+        )
+        if len(collection_exprs) != len(collections):
+            collection_exprs = [None] * len(collections)
+
+    graph = dsk.__dask_graph__()
 
     postpersists = []
-    for a in collections:
-        r, s = a.__dask_postpersist__()
-        postpersists.append(r(dsk.__dask_graph__(), *s))
+    for a, aexpr in zip(collections, collection_exprs, strict=True):
+        if isinstance(aexpr, CompositeExpr):
+            postpersists.append(
+                _rebuild_composite_collection(a, aexpr, graph, cull_to_child_keys=False)
+            )
+        else:
+            r, s = a.__dask_postpersist__()
+            postpersists.append(r(graph, *s))
 
     return repack(postpersists)
 
@@ -1003,20 +1081,55 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
         results = client.persist(collections, optimize_graph=optimize_graph, **kwargs)
         return repack(results)
 
+    from dask._expr import CompositeExpr, _ExprSequence
+
     expr = collections_to_expr(collections, optimize_graph)
+    collection_exprs = (
+        list(expr.operands) if isinstance(expr, _ExprSequence) else [expr]
+    )
+    if len(collection_exprs) != len(collections):
+        raise RuntimeError(
+            "Expression collection count does not match input collection count: "
+            f"got {len(collection_exprs)} expressions for {len(collections)} "
+            "collections"
+        )
+    has_composite = any(isinstance(expr, CompositeExpr) for expr in collection_exprs)
     expr = expr.optimize()
+    if has_composite:
+        collection_exprs = (
+            list(expr.operands) if isinstance(expr, _ExprSequence) else [expr]
+        )
+        if len(collection_exprs) != len(collections):
+            collection_exprs = [None] * len(collections)
+    else:
+        collection_exprs = [None] * len(collections)
+
     keys, postpersists = [], []
-    for a, akeys in zip(collections, expr.__dask_keys__(), strict=True):
+    for a, aexpr, akeys in zip(
+        collections, collection_exprs, expr.__dask_keys__(), strict=True
+    ):
         a_keys = list(flatten(akeys))
-        rebuild, state = a.__dask_postpersist__()
         keys.extend(a_keys)
-        postpersists.append((rebuild, a_keys, state))
+        if isinstance(aexpr, CompositeExpr):
+            postpersists.append((a, aexpr, None))
+        else:
+            rebuild, state = a.__dask_postpersist__()
+            postpersists.append((rebuild, a_keys, state))
 
     with shorten_traceback():
         results = schedule(expr, keys, **kwargs)
 
     d = dict(zip(keys, results))
-    results2 = [r({k: d[k] for k in ks}, *s) for r, ks, s in postpersists]
+    results2 = []
+    for rebuild, a_keys, state in postpersists:
+        if state is None:
+            results2.append(
+                _rebuild_composite_collection(
+                    rebuild, a_keys, d, cull_to_child_keys=True
+                )
+            )
+        else:
+            results2.append(rebuild({k: d[k] for k in a_keys}, *state))
     return repack(results2)
 
 
