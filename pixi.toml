@@ -232,7 +232,7 @@ s3fs = { path = "continuous_integration/pixi-recipes/s3fs" }
 
 [feature.nightly.pypi-dependencies]
 numpy = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
-pandas = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
+pandas = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple", version = ">=3.1.0dev0" }
 pyarrow = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
 scipy = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
 xarray = { index = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple" }
