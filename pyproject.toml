@@ -172,6 +172,9 @@ filterwarnings = [
     "ignore:Couldn't detect a suitable IP address:RuntimeWarning:distributed",
     # This distributed warning makes sense in production; much less so in GitHub actions
     "ignore:Creating scratch directories is taking a surprisingly long time.*:UserWarning",
+    # NumPy nightly (2.6.0.dev0+) deprecated the 'generic' unit for Timedelta.
+    # pandas internally triggers this warning when constructing Timedeltas.
+    "ignore:The 'generic' unit for NumPy timedelta is deprecated:DeprecationWarning:",
     # FIXME spurious shutdown of distributed workers and/or sqlite3
     "module:Exception ignored:pytest.PytestUnraisableExceptionWarning::",
     "module:unclosed database in <sqlite3.Connection:ResourceWarning::",
