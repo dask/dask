@@ -215,7 +215,6 @@ python = "=3.14"
 python-freethreading = "=3.14"
 # see continuous_integration/pixi-recipes/README.md
 brotli-python = { path = "continuous_integration/pixi-recipes/brotli" }
-msgpack-python = { path = "continuous_integration/pixi-recipes/msgpack" }
 
 [feature.nightly]
 platforms = ["linux-64", "osx-arm64"]
