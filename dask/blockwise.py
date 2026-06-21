@@ -1567,3 +1567,20 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
             dependencies[name] = set()
 
     return HighLevelGraph(layers, dependencies)
+
+
+def optimize_highlevel_graph(graph, keys):
+    """Run the high-level, collection-agnostic graph optimizations.
+
+    Fuses stacked ``Blockwise`` layers and root data-access layers. Both passes
+    only rewrite ``Blockwise`` layers and are no-ops on any other layer type, so
+    this is safe on the graph of any dask collection.
+
+    See Also
+    --------
+    optimize_blockwise
+    fuse_roots
+    """
+    graph = optimize_blockwise(graph, keys=keys)
+    graph = fuse_roots(graph, keys=keys)
+    return graph
