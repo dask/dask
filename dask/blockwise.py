@@ -1552,7 +1552,6 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
         if (
             isinstance(layer, Blockwise)
             and len(deps) > 1
-            and all(dep in graph.layers for dep in deps)
             and not any(dependencies[dep] for dep in deps)
             and all(len(dependents[dep]) == 1 for dep in deps)
             and all(layer.annotations == graph.layers[dep].annotations for dep in deps)
@@ -1577,11 +1576,23 @@ def optimize_highlevel_graph(graph, keys):
     only rewrite ``Blockwise`` layers and are no-ops on any other layer type, so
     this is safe on the graph of any dask collection.
 
+    Both passes rebuild the graph's dependency structure and assume every
+    dependency is itself a layer present in ``graph.layers``. A few collections
+    (notably ``checkpoint()`` / ``wait_on()`` in ``graph_manipulation``) build
+    graphs whose ``dependencies`` reference external layer names that are filled
+    in at merge time and are absent from ``graph.layers``. Skip the high-level
+    passes for such graphs, leaving them untouched.
+
     See Also
     --------
     optimize_blockwise
     fuse_roots
     """
+    layers = graph.layers
+    if any(
+        dep not in layers for deps in graph.dependencies.values() for dep in deps
+    ):
+        return graph
     graph = optimize_blockwise(graph, keys=keys)
     graph = fuse_roots(graph, keys=keys)
     return graph
