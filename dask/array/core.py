@@ -20,7 +20,6 @@ from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
 from typing import Any, Literal, TypeVar, cast
-from typing import Any, Optional, Union 
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -3468,13 +3467,13 @@ def _get_chunk_shape(a):
 
 def from_array(
     x: Any,
-    chunks: Union[str, tuple] = "auto",
-    name: Optional[str] = None,
+    chunks: str | tuple = "auto",
+    name: str | None = None,
     lock: bool = False,
-    asarray: Optional[bool] = None,
+    asarray: bool | None = None,
     fancy: bool = True,
-    getitem: Optional[Any] = None,
-    meta: Optional[Any] = None,
+    getitem: Any | None = None,
+    meta: Any | None = None,
     inline_array: bool = False,
 ) -> Array:
     """Create dask array from something that looks like an array.
