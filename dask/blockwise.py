@@ -1552,7 +1552,7 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
         if (
             isinstance(layer, Blockwise)
             and len(deps) > 1
-            and not any(dependencies[dep] for dep in deps)
+            and not any(dependencies[dep] for dep in deps)  # no need to fuse if 0 or 1
             and all(len(dependents[dep]) == 1 for dep in deps)
             and all(layer.annotations == graph.layers[dep].annotations for dep in deps)
         ):
