@@ -3469,7 +3469,7 @@ def from_array(
     x: Any,
     chunks: str | tuple = "auto",
     name: str | None = None,
-    lock: bool = False,
+    lock: bool | SerializableLock = False,
     asarray: bool | None = None,
     fancy: bool = True,
     getitem: Any | None = None,
