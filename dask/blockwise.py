@@ -1589,9 +1589,7 @@ def optimize_highlevel_graph(graph, keys):
     fuse_roots
     """
     layers = graph.layers
-    if any(
-        dep not in layers for deps in graph.dependencies.values() for dep in deps
-    ):
+    if any(dep not in layers for deps in graph.dependencies.values() for dep in deps):
         return graph
     graph = optimize_blockwise(graph, keys=keys)
     graph = fuse_roots(graph, keys=keys)
