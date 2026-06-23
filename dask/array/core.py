@@ -3466,16 +3466,16 @@ def _get_chunk_shape(a):
 
 
 def from_array(
-    x,
-    chunks="auto",
-    name=None,
-    lock=False,
-    asarray=None,
-    fancy=True,
-    getitem=None,
-    meta=None,
-    inline_array=False,
-):
+    x: Any,
+    chunks: str | tuple = "auto",
+    name: str | bool | None = None,
+    lock: bool | SerializableLock = False,
+    asarray: bool | None = None,
+    fancy: bool = True,
+    getitem: Any | None = None,
+    meta: Any | None = None,
+    inline_array: bool = False,
+) -> Array:
     """Create dask array from something that looks like an array.
 
     Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
@@ -3683,6 +3683,7 @@ def from_array(
     is_single_block = all(len(c) == 1 for c in chunks)
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
+    dsk: Any
     if is_ndarray and not is_single_block and not lock:
         # eagerly slice numpy arrays to prevent memory blowup
         # GH5367, GH5601
