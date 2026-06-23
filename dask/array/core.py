@@ -3473,7 +3473,7 @@ def from_array(
     asarray: bool | None = None,
     fancy: bool = True,
     getitem: Any | None = None,
-    meta: Any | None = None, 
+    meta: Any | None = None,
     inline_array: bool = False,
 ) -> Array:
     """Create dask array from something that looks like an array.
