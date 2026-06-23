@@ -4,7 +4,22 @@ package:
   version: "9999"
 
 source:
-  git: https://github.com/fsspec/s3fs
+  # NOTE: deliberately not using a git source. On GitHub Actions runners this
+  # recipe intermittently fails at the source-fetch step with:
+  #   "Error fetching Git repository: No such file or directory (os error 2)"
+  # That message is emitted by pixi's git source resolver
+  # (pixi/crates/pixi_git/src/resolver.rs) and by rattler-build's source cache
+  # (rattler-build/crates/rattler_build_source_cache/src/cache.rs), which both
+  # fetch git sources through libgit2 / the rattler_git crate. No dedicated
+  # upstream issue tracks this exact failure; the closest related precedent is
+  # libgit2/libgit2#6417 (intermittent git fetch failures on CI runners).
+  # The transient nature breaks the nightly CI at random with no code change.
+  #
+  # Workaround: fetch the GitHub codeload tarball over plain HTTPS, which is
+  # reliable. The package uses versioneer, which falls back to "0+unknown"
+  # without a .git directory; that's harmless here because the conda package
+  # version is forced to "9999" above.
+  url: https://github.com/fsspec/s3fs/archive/refs/heads/main.tar.gz
 
 build:
   noarch: python
@@ -15,8 +30,7 @@ requirements:
   host:
     - python
     - pip
-    - hatchling
-    - hatch-vcs
+    - setuptools
   run:
     - python
     - aiobotocore
