@@ -41,5 +41,5 @@ repos:
           - types-requests
           - types-setuptools
           # Typed libraries
-          - numpy<2.5
+          - numpy
           - pytest
