@@ -253,10 +253,16 @@ def is_dask_collection(x) -> bool:
         if isinstance(expr, Expr):
             return True
 
-    # xarray, pint, and possibly other wrappers always define a __dask_graph__ method,
-    # but it may return None if they wrap around a non-dask object.
-    # In all known dask collections other than dask-expr,
-    # calling __dask_graph__ is cheap.
+    # Wrappers like xarray expose their dask expressions via __dask_exprs__.
+    # When those are dask expressions we can answer cheaply without
+    # materializing. Otherwise (e.g. xarray wrapping a legacy HighLevelGraph
+    # array, whose children aren't Exprs) fall back to __dask_graph__.
+    dask_exprs = getattr(x, "__dask_exprs__", None)
+    if dask_exprs is not None:
+        exprs = dask_exprs()
+        if exprs is not None and any(isinstance(e, Expr) for e in exprs):
+            return True
+
     return x.__dask_graph__() is not None
 
 
