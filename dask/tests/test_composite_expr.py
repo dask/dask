@@ -181,6 +181,41 @@ def test_is_dask_collection_uses_expr_without_materializing():
     assert is_dask_collection(AbstractExpr("a", 1))
 
 
+def test_is_dask_collection_uses_dask_exprs_without_materializing():
+    class NoMaterialize(ExprTuple):
+        def __dask_graph__(self):
+            raise AssertionError("must not materialize")
+
+    coll = NoMaterialize(
+        ExprScalar(LiteralExpr("a", 1)), ExprScalar(LiteralExpr("b", 2))
+    )
+    assert is_dask_collection(coll)
+
+
+def test_is_dask_collection_falls_back_when_dask_exprs_not_exprs():
+    # A newer xarray defines __dask_exprs__ but, when wrapping a legacy
+    # HighLevelGraph-backed array, yields children that are not dask Exprs. We
+    # must fall back to __dask_graph__ rather than report "not a collection".
+    class LegacyWrapper(LegacyTuple):
+        def __dask_exprs__(self):
+            return ("not-an-expr",)
+
+    assert is_dask_collection(LegacyWrapper({"x": 1}, ["x"]))
+
+
+def test_is_dask_collection_false_when_no_dask_exprs_and_no_graph():
+    # A wrapper around non-dask data: __dask_exprs__ yields nothing and
+    # __dask_graph__ returns None (as xarray does with no dask variables).
+    class Empty(ExprTuple):
+        def __dask_exprs__(self):
+            return ()
+
+        def __dask_graph__(self):
+            return None
+
+    assert not is_dask_collection(Empty())
+
+
 def test_collections_to_expr_ignores_non_dask_expr_attribute():
     class ExprAttributeTuple(ExprTuple):
         @property
