@@ -5126,12 +5126,6 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     --------
     blockwise
     """
-    if kwargs:
-        raise TypeError(
-            f"{op.__name__} does not take the following keyword arguments "
-            f"{sorted(kwargs)}"
-        )
-
     out = _elemwise_normalize_out(out)
     where = _elemwise_normalize_where(where)
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
@@ -5174,7 +5168,7 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
             for a in args
         ]
         try:
-            dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
+            dtype = apply_infer_dtype(op, vals, kwargs, "elemwise", suggest_dtype=False)
         except OverflowError:
             raise
         except Exception:
@@ -5184,9 +5178,14 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
         )
 
     if not name:
-        name = f"{funcname(op)}-{tokenize(op, dtype, *args, where)}"
+        name = f"{funcname(op)}-{tokenize(op, dtype, *args, where, kwargs)}"
 
-    blockwise_kwargs = dict(dtype=dtype, name=name, token=funcname(op).strip("_"))
+    blockwise_kwargs = dict(
+        dtype=dtype,
+        name=name,
+        token=funcname(op).strip("_"),
+        **kwargs,
+    )
 
     if where is not True:
         blockwise_kwargs["elemwise_where_function"] = op
