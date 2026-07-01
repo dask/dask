@@ -3467,7 +3467,7 @@ def _get_chunk_shape(a):
 
 def from_array(
     x: Any,
-    chunks: str | tuple = "auto",
+    chunks: str | int | tuple[int, ...] | tuple[tuple[int, ...], ...] = "auto",
     name: str | bool | None = None,
     lock: bool | SerializableLock = False,
     asarray: bool | None = None,
