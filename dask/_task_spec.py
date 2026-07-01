@@ -1178,6 +1178,8 @@ def fuse_linear_task_spec(dsk, keys):
         else:
             # Renaming the keys is necessary to preserve the rootish detection for now
             renamed_key = default_fused_keys_renamer([tsk.key for tsk in linear_chain])
+            if renamed_key in result and renamed_key != top_key:
+                renamed_key = top_key
             result[renamed_key] = Task.fuse(*linear_chain, key=renamed_key)
             if renamed_key != top_key:
                 # Having the same prefixes can result in the same key, i.e. getitem-hash -> getitem-hash
