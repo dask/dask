@@ -84,15 +84,12 @@ jobs:
         if: ${{ matrix.os != 'windows-latest' }}
         run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
 
-      - uses: prefix-dev/setup-pixi@v0.9.6
+      - uses: prefix-dev/setup-pixi@v0.10.0
         with:
-          pixi-version: v0.70.2
+          pixi-version: v0.72.0
           environments: ${{ matrix.environment }}
           cache: true
           locked: true
-          # post-cleanup fails on Windows:
-          # EPERM: operation not permitted, unlink 'D:\a\dask\dask\.pixi\envs\py310\python.exe'
-          post-cleanup: ${{ matrix.os != 'windows-latest' }}
 
       - name: Run tests
         id: run_tests
