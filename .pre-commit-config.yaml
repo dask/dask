@@ -41,5 +41,5 @@ repos:
           - types-requests
           - types-setuptools
           # Typed libraries
-          - numpy
+          - numpy<2.5  # type stubs for NumPy 2.5 contain Python >=3.12 syntax
           - pytest
