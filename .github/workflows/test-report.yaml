@@ -22,8 +22,6 @@ jobs:
     permissions:
       # Read the artifacts of the tests.yml runs
       actions: read
-      # actions/checkout
-      contents: read
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
