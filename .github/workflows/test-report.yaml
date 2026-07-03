@@ -8,15 +8,9 @@ on:
   pull_request:
     types: [labeled, opened, reopened, synchronize]
 
-permissions:
-  # Read the artifacts of the tests.yml runs
-  actions: read
-  # Deploy to GitHub Pages
-  contents: write
-
 jobs:
-  test-report:
-    name: Test Report
+  generate:
+    name: Generate report
     # Do not run the report job on forks.
     # On PRs, run only if the `test-report` label is set.
     if: >
@@ -25,6 +19,11 @@ jobs:
       || (github.event_name != 'pull_request'
           && (github.repository == 'dask/dask' || github.event_name == 'workflow_dispatch'))
     runs-on: ubuntu-latest
+    permissions:
+      # Read the artifacts of the tests.yml runs
+      actions: read
+      # actions/checkout
+      contents: read
     env:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
@@ -60,20 +59,39 @@ jobs:
           mv test_report.html test_short_report.html deploy/
 
       - name: Upload report as workflow artifact
-        # For debugging purposes on PRs; scheduled runs deploy to GitHub Pages instead
-        if: github.event_name == 'pull_request'
+        # Downloaded by the deploy job; also for debugging purposes on PRs
         uses: actions/upload-artifact@v7
         with:
           name: test-report
-          path: |
-            deploy
-            test_report_*
+          path: deploy
+
+      - name: Upload databases as workflow artifact
+        # For debugging purposes on PRs; scheduled runs persist them through
+        # actions/cache above
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report-db
+          path: test_report_*
+
+  deploy:
+    name: Deploy report
+    needs: generate
+    # Never update GitHub Pages from PRs
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      # Push to the gh-pages branch
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: test-report
+          path: deploy
 
       - name: Deploy 🚀
-        # Never update GitHub Pages from PRs.
-        # Note: this deploys to the gh-pages branch of dask/dask (GITHUB_REPOSITORY),
-        # not of dask/distributed (the checkout).
-        if: github.event_name != 'pull_request'
         uses: JamesIves/github-pages-deploy-action@v4.8.0
         with:
           branch: gh-pages
