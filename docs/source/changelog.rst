@@ -5,6 +5,47 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2026.7.0:
+
+2026.7.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+- Support composite expressions with the ``__dask_exprs__`` protocol and avoid graph materialization when checking expr-wrapper Dask collections (:pr:`12457`, :pr:`12476`) `Matthew Rocklin`_
+- Update compatibility for NumPy 2.5 type stubs, pandas 3 nightlies, pytest 9.1, and free-threaded msgpack builds (:pr:`12483`, :pr:`12469`, :pr:`12465`, :pr:`12467`, :pr-distributed:`9312`, :pr-distributed:`9304`, :pr-distributed:`9303`, :pr-distributed:`9302`) `Guido Imperiale`_
+- Return all workers from ``scheduler_info()`` by default (:pr-distributed:`9308`) `Matthew Rocklin`_
+- Keep ``Client.scatter`` from unpacking custom containers (:pr-distributed:`9298`) `Adrin Jalali`_
+- Fix Distributed worker startup and aborted TCP communication races (:pr-distributed:`9313`, :pr-distributed:`9315`) `Guido Imperiale`_
+
+.. dropdown:: Additional changes
+
+  - Upgrade pixi (:pr:`12460`) `Matthew Rocklin`_
+  - Fix release publisher warnings (:pr:`12456`, :pr-distributed:`9299`) `Matthew Rocklin`_
+  - XFAIL ``test_concat_categorical`` (again) (:pr:`12463`) `Guido Imperiale`_
+  - CI: Suppress warning about slow disk (:pr:`12464`) `Guido Imperiale`_
+  - Support for pytest 9.1 (:pr:`12465`, :pr-distributed:`9303`) `Guido Imperiale`_
+  - Free-threading: use upstream msgpack (:pr:`12467`, :pr-distributed:`9302`) `Guido Imperiale`_
+  - CI: Suppress numpy ``generic`` timedelta deprecation from pandas (:pr:`12468`) `Guido Imperiale`_
+  - Pin pandas 3 nightlies (:pr:`12469`, :pr-distributed:`9304`) `Guido Imperiale`_
+  - Bump actions/checkout from 6 to 7 (:pr:`12473`, :pr-distributed:`9306`)
+  - Fix randomly failing s3fs checkouts in nightly CI (:pr:`12474`) `Guido Imperiale`_
+  - Avoid graph materialization in ``is_dask_collection`` for expr wrappers (:pr:`12476`) `Matthew Rocklin`_
+  - Bump prefix-dev/setup-pixi from 0.9.6 to 0.10.0 (:pr:`12478`, :pr-distributed:`9310`)
+  - Bump actions/cache from 5 to 6 (:pr:`12479`, :pr-distributed:`9309`)
+  - Avoid NumPy 2.5 type stubs (:pr:`12483`, :pr-distributed:`9312`) `Guido Imperiale`_
+  - Bump actions/download-artifact from 7 to 8 (:pr:`12461`, :pr-distributed:`9301`)
+  - Support composite expressions with ``__dask_exprs__`` protocol (:pr:`12457`) `Matthew Rocklin`_
+  - Return all workers from ``scheduler_info()`` by default (:pr-distributed:`9308`) `Matthew Rocklin`_
+  - ``Client.scatter`` should not unpack custom containers (:pr-distributed:`9298`) `Adrin Jalali`_
+  - Suppress mindeps warning when running a single test in CI `crusaderky`_
+  - AI agent skill to debug flaky tests (:pr-distributed:`9319`) `Guido Imperiale`_
+  - Fix Nanny race conditions when worker fails to start (:pr-distributed:`9313`) `Guido Imperiale`_
+  - Fix server hanging on aborted TCP comms (:pr-distributed:`9315`) `Guido Imperiale`_
+  - Fix conda build CI (:pr-distributed:`9314`) `Guido Imperiale`_
+  - Update deprecated CUDA system requirements in Pixi (:pr-distributed:`9311`) `Guido Imperiale`_
+
 .. _v2026.6.0:
 
 2026.6.0
@@ -10075,6 +10116,7 @@ Other
 .. _`Ilan Gold`: https://github.com/ilan-gold
 .. _`Jean-Baptiste Bayle`: https://github.com/j2bbayle
 .. _`dchudz`: https://github.com/dchudz
+.. _`Adrin Jalali`: https://github.com/adrinjalali
 .. _`Guido Imperiale`: https://github.com/crusaderky
 .. _`Alexander`: https://github.com/SalikovAlex
 .. _`Philipp A.`: https://github.com/flying-sheep
