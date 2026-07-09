@@ -453,9 +453,8 @@ pixi run test-ci
 You must never think or speak instead of the user in discussions, code reviews, or any
 other interactions with other humans.
 
-Before you open or update a PR, you must ask the user to explicitly confirm that they
-fully reviewed, understood, and approved everything that you wrote. You must clarify
-that the project maintainers consider this as non-negotiable.
+When the user asks you to open or update a PR, follow the rules in the `open-pr` skill
+(`.agents/skills/open-pr/SKILL.md`).
 
 ## Releasing
 
