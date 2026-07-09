@@ -175,6 +175,8 @@ filterwarnings = [
     # NumPy nightly (2.6.0.dev0+) deprecated the 'generic' unit for Timedelta.
     # pandas internally triggers this warning when constructing Timedeltas.
     "ignore:The 'generic' unit for NumPy timedelta is deprecated:DeprecationWarning:",
+    # PyArrow nightly triggers deprecation in Pandas 3.1 nightly
+    "ignore:Series.values returning an ndarray that drops timezone information:DeprecationWarning",
     # FIXME spurious shutdown of distributed workers and/or sqlite3
     "module:Exception ignored:pytest.PytestUnraisableExceptionWarning::",
     "module:unclosed database in <sqlite3.Connection:ResourceWarning::",
