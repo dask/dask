@@ -6122,6 +6122,25 @@ def to_npy_stack(dirname, x, axis=0):
     compute_as_if_collection(Array, graph, list(dsk))
 
 
+class _InfoUnpickler(pickle.Unpickler):
+    """Unpickler for the ``info`` metadata written by :func:`to_npy_stack`.
+
+    The metadata is only ``{"chunks": ..., "dtype": ..., "axis": ...}``, so the
+    single global it legitimately needs is ``numpy.dtype``. Restricting
+    ``find_class`` to that keeps a stack authored elsewhere from executing
+    arbitrary code while loading its ``info`` file.
+    """
+
+    _allowed = {("numpy", "dtype")}
+
+    def find_class(self, module, name):
+        if (module, name) in self._allowed:
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(
+            f"global '{module}.{name}' is not allowed in an npy-stack info file"
+        )
+
+
 def from_npy_stack(dirname, mmap_mode="r"):
     """Load dask array from stack of npy files
 
@@ -6137,7 +6156,7 @@ def from_npy_stack(dirname, mmap_mode="r"):
     to_npy_stack
     """
     with open(os.path.join(dirname, "info"), "rb") as f:
-        info = pickle.load(f)
+        info = _InfoUnpickler(f).load()
 
     dtype = info["dtype"]
     chunks = info["chunks"]
