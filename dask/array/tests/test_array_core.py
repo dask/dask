@@ -5090,7 +5090,9 @@ def test_zarr_existing_array_aligned_shards():
     # https://github.com/dask/dask/issues/12458
     # Chunks aligned with the shard grid must be written as-is too
     a = da.from_array(np.arange(1000, dtype="uint8"), chunks=400)
-    z = zarr.create_array({}, shape=a.shape, chunks=(100,), shards=(200,), dtype=a.dtype)
+    z = zarr.create_array(
+        {}, shape=a.shape, chunks=(100,), shards=(200,), dtype=a.dtype
+    )
     with warnings.catch_warnings():
         warnings.simplefilter("error", PerformanceWarning)
         store_delayed = a.to_zarr(z, compute=False)
