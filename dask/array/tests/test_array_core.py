@@ -5083,6 +5083,22 @@ def test_zarr_existing_array_aligned_chunks():
     assert_eq(a, a2)
 
 
+def test_zarr_existing_array_aligned_shards():
+    zarr = pytest.importorskip(
+        "zarr", minversion="3", reason="Zarr 3 or higher needed for sharding"
+    )
+    # https://github.com/dask/dask/issues/12458
+    # Chunks aligned with the shard grid must be written as-is too
+    a = da.from_array(np.arange(1000, dtype="uint8"), chunks=400)
+    z = zarr.create_array({}, shape=a.shape, chunks=(100,), shards=(200,), dtype=a.dtype)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", PerformanceWarning)
+        store_delayed = a.to_zarr(z, compute=False)
+    assert not any("rechunk" in key_split(k) for k in dict(store_delayed.dask))
+    store_delayed.compute()
+    assert_eq(a, da.from_zarr(z))
+
+
 @pytest.mark.parametrize(
     "dask_chunks,zarr_chunks,expected",
     [

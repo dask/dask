@@ -3838,7 +3838,11 @@ def _write_dask_to_existing_zarr(
                 "the distributed scheduler."
             )
     zarr_write_chunks = _get_zarr_write_chunks(z)
-    if region is None and _chunks_aligned_with_zarr(arr.chunks, zarr_write_chunks):
+    if (
+        region is None
+        and arr.shape == z.shape
+        and _chunks_aligned_with_zarr(arr.chunks, zarr_write_chunks)
+    ):
         # The input array's chunks are already safe to write, keep them
         # instead of rechunking to the "auto" heuristic
         # https://github.com/dask/dask/issues/12458
