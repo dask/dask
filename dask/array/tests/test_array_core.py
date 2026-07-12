@@ -5067,13 +5067,13 @@ def test_zarr_existing_array():
     assert a2.chunks == a.chunks
 
 
-def test_zarr_existing_array_aligned_chunks(tmp_path):
+def test_zarr_existing_array_aligned_chunks():
     zarr = pytest.importorskip("zarr")
     # https://github.com/dask/dask/issues/12458
     # Chunks aligned with the target array must be written as-is, without
     # warning or rechunking to the "auto" heuristic
     a = da.from_array(np.arange(50000), chunks=9999)
-    z = zarr.create_array(str(tmp_path), shape=a.shape, chunks=(9999,), dtype=a.dtype)
+    z = zarr.zeros_like(a, chunks=(9999,))
     with warnings.catch_warnings():
         warnings.simplefilter("error", PerformanceWarning)
         store_delayed = a.to_zarr(z, compute=False)
