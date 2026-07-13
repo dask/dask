@@ -78,6 +78,9 @@ from dask.dataframe.groupby import (
     _var_agg,
     _var_chunk,
 )
+from dask.dataframe.groupby import (
+    Aggregation as LegacyAggregation,
+)
 from dask.dataframe.utils import insert_meta_param_description, is_scalar
 from dask.typing import Key
 from dask.utils import M, derived_from, is_index_like
@@ -1931,7 +1934,16 @@ class GroupBy:
             if not isinstance(self, SeriesGroupBy):
                 relabeling, arg, columns, order = reconstruct_func(arg, **kwargs)
             elif isinstance(self, SeriesGroupBy):
-                columns, arg = validate_func_kwargs(kwargs)
+                if any(
+                    isinstance(val, (Aggregation, LegacyAggregation))
+                    for val in kwargs.values()
+                ):
+                    # pandas' ``validate_func_kwargs`` rejects dask
+                    # ``Aggregation`` objects, so build the named-aggregation
+                    # ``(columns, funcs)`` mapping ourselves (GH#10836).
+                    columns, arg = list(kwargs), list(kwargs.values())
+                else:
+                    columns, arg = validate_func_kwargs(kwargs)
                 relabeling = True
 
         if arg == "size":
