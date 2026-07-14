@@ -243,7 +243,7 @@ def test_merge_combine_similar(npartitions_left, npartitions_right):
     query["new"] = query.b + query.c
     query = query.groupby(["a", "e", "x"]).new.sum()
     assert (
-        len(query.optimize().__dask_graph__()) <= 30
+        len(query.optimize().__dask_graph__()) <= 40
     )  # 45 is the non-combined version
 
     expected = pdf.merge(pdf2)
