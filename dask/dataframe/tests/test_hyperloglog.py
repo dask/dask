@@ -94,3 +94,30 @@ def test_larger_data():
         seed=1,
     )
     assert df.nunique_approx().compute() > 1000
+
+
+def test_compute_first_bit_64bit():
+    from dask.dataframe.hyperloglog import compute_first_bit
+
+    arr = np.array([1 << 40, 0, 1], dtype=np.uint64)
+
+    result = compute_first_bit(arr)
+
+    np.testing.assert_array_equal(result, np.array([41, 65, 1]))
+
+
+def test_compute_hll_array_uses_high_uint64_bits(monkeypatch):
+    from dask.dataframe import hyperloglog
+
+    hashes = pd.Series(np.array([1 << 63, 1 << 62], dtype=np.uint64))
+
+    def hash_pandas_object(obj, index=False):
+        return hashes
+
+    monkeypatch.setattr(hyperloglog, "hash_pandas_object", hash_pandas_object)
+
+    state = hyperloglog.compute_hll_array(pd.Series([0, 1]), b=8)
+
+    assert state[128] == 64
+    assert state[64] == 63
+    assert state[0] == 0
