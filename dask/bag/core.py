@@ -57,7 +57,7 @@ from dask.base import (
     replace_name_in_key,
     tokenize,
 )
-from dask.blockwise import blockwise
+from dask.blockwise import blockwise, optimize_highlevel_graph
 from dask.context import globalmethod
 from dask.core import flatten, istask, quote
 from dask.delayed import Delayed, unpack_collections
@@ -161,8 +161,13 @@ def lazify(dsk):
 
 def optimize(dsk, keys, fuse_keys=None, **kwargs):
     """Optimize a dask from a dask Bag."""
-    dsk = convert_legacy_graph(dsk)
     keys = list(flatten(keys))
+    # Fuse any dask.array Blockwise layers carried inside the bag graph, before
+    # the graph is materialized.
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+    dsk = optimize_highlevel_graph(dsk, keys)
+    dsk = convert_legacy_graph(dsk)
     dsk2 = cull(dsk, keys)
     dsk3 = fuse_linear_task_spec(dsk2, keys + (fuse_keys or []))
     dsk4 = lazify(dsk3)
