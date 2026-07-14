@@ -1950,6 +1950,10 @@ class Drop(Elemwise):
         col_op = self.operand("columns")
         if is_scalar(col_op):
             col_op = [col_op]
+        # When col_op is a tuple (multi-index column name), wrap it in a list
+        # so that `col not in col_op` checks for the full tuple, not its elements
+        elif isinstance(col_op, tuple):
+            col_op = [col_op]
         columns = [col for col in self.frame.columns if col not in col_op]
         return Projection(self.frame, columns)
 

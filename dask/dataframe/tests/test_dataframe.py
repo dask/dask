@@ -2730,6 +2730,31 @@ def test_drop_columns(columns):
     assert_eq(df.drop(columns=columns), ddf2)
 
 
+def test_drop_tuple_column_names():
+    # Regression test: DataFrame.drop() should work with tuple column names
+    # https://github.com/dask/dask/pull/12499
+    df = pd.DataFrame([[1, 2], [3, 4]], columns=[("c0", "c1"), ("c2", "c3")])
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    result = ddf.drop(("c0", "c1"), axis=1).compute()
+    expected = df.drop(("c0", "c1"), axis=1)
+    assert_eq(result, expected)
+
+    # Drop both tuple columns
+    result = ddf.drop([("c0", "c1"), ("c2", "c3")], axis=1).compute()
+    expected = df.drop([("c0", "c1"), ("c2", "c3")], axis=1)
+    assert_eq(result, expected)
+
+    # Mix of tuple and string column names should raise
+    df_mixed = pd.DataFrame(
+        [[1, 2, 3]], columns=[("a", "b"), "c", ("d", "e")]
+    )
+    ddf_mixed = dd.from_pandas(df_mixed, npartitions=1)
+    result = ddf_mixed.drop(("a", "b"), axis=1).compute()
+    expected = df_mixed.drop(("a", "b"), axis=1)
+    assert_eq(result, expected)
+
+
 def test_gh580():
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
