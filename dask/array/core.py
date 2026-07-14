@@ -3838,6 +3838,17 @@ def _write_dask_to_existing_zarr(
                 "the distributed scheduler."
             )
     zarr_write_chunks = _get_zarr_write_chunks(z)
+    if (
+        region is None
+        and arr.shape == z.shape
+        and _chunks_aligned_with_zarr(arr.chunks, zarr_write_chunks)
+    ):
+        # The input array's chunks are already safe to write, keep them
+        # instead of rechunking to the "auto" heuristic
+        # https://github.com/dask/dask/issues/12458
+        return arr.store(
+            z, lock=False, regions=None, compute=compute, return_stored=return_stored
+        )
     dask_write_chunks = normalize_chunks(
         chunks="auto",
         shape=z.shape,
@@ -4146,6 +4157,30 @@ def _get_zarr_write_chunks(zarr_array) -> tuple[int, ...]:
         return zarr_array.shards
     # Zarr V3 array without shards, or Zarr V2 array
     return zarr_array.chunks
+
+
+def _chunks_aligned_with_zarr(dask_chunks, zarr_write_chunks):
+    """Check if dask chunks can be written to a zarr array without rechunking.
+
+    The chunks are safe to write when every chunk boundary lies on the zarr
+    chunk (or shard) grid, i.e. along every axis each chunk, except possibly
+    the last one, has a size divisible by the zarr chunk size.
+
+    Parameters
+    ----------
+    dask_chunks: tuple of tuples of ints
+        From the ``.chunks`` attribute of an ``Array``
+    zarr_write_chunks: tuple of ints
+        The chunk (or shard) shape of the target zarr array
+
+    Returns
+    -------
+    True if the dask chunks are aligned, else False
+    """
+    return all(
+        all(c % zw == 0 for c in dc[:-1])
+        for dc, zw in zip(dask_chunks, zarr_write_chunks, strict=True)
+    )
 
 
 def _check_regular_chunks(chunkset):

@@ -5067,6 +5067,58 @@ def test_zarr_existing_array():
     assert a2.chunks == a.chunks
 
 
+def test_zarr_existing_array_aligned_chunks():
+    zarr = pytest.importorskip("zarr")
+    # https://github.com/dask/dask/issues/12458
+    # Chunks aligned with the target array must be written as-is, without
+    # warning or rechunking to the "auto" heuristic
+    a = da.from_array(np.arange(50000), chunks=9999)
+    z = zarr.zeros_like(a, chunks=(9999,))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", PerformanceWarning)
+        store_delayed = a.to_zarr(z, compute=False)
+    assert not any("rechunk" in key_split(k) for k in dict(store_delayed.dask))
+    store_delayed.compute()
+    a2 = da.from_zarr(z)
+    assert_eq(a, a2)
+
+
+def test_zarr_existing_array_aligned_shards():
+    zarr = pytest.importorskip(
+        "zarr", minversion="3", reason="Zarr 3 or higher needed for sharding"
+    )
+    # https://github.com/dask/dask/issues/12458
+    # Chunks aligned with the shard grid must be written as-is too
+    a = da.from_array(np.arange(1000, dtype="uint8"), chunks=400)
+    z = zarr.create_array(
+        {}, shape=a.shape, chunks=(100,), shards=(200,), dtype=a.dtype
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", PerformanceWarning)
+        store_delayed = a.to_zarr(z, compute=False)
+    assert not any("rechunk" in key_split(k) for k in dict(store_delayed.dask))
+    store_delayed.compute()
+    assert_eq(a, da.from_zarr(z))
+
+
+@pytest.mark.parametrize(
+    "dask_chunks,zarr_chunks,expected",
+    [
+        (((9999, 9999, 9999, 9999, 9999, 5),), (9999,), True),
+        (((10, 5, 2),), (5,), True),
+        (((7, 3, 5),), (5,), False),
+        (((5, 5),), (10,), False),
+        (((3,),), (5,), True),
+        (((4, 4), (6, 3)), (2, 3), True),
+        (((4, 4), (5, 4)), (2, 3), False),
+    ],
+)
+def test_chunks_aligned_with_zarr(dask_chunks, zarr_chunks, expected):
+    from dask.array.core import _chunks_aligned_with_zarr
+
+    assert _chunks_aligned_with_zarr(dask_chunks, zarr_chunks) == expected
+
+
 def test_to_zarr_unknown_chunks_raises():
     pytest.importorskip("zarr")
     a = da.random.default_rng().random((10,), chunks=(3,))
