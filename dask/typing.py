@@ -248,11 +248,12 @@ class DaskCollection(Protocol):
 
     """
 
-    # FIXME: It is currently not possible to define a staticmethod from a callback protocol
-    # Also, the definition in `is_dask_collection` cannot be satisfied by a
-    # protocol / typing check
+    # FIXME: It is not possible to define a staticmethod from a callback
+    # protocol in MyPy 1.20.0.
+    # Also, the definition in `is_dask_collection` cannot be satisfied by
+    # a protocol / typing check
     # staticmethod[SchedulerGetCallable]
-    __dask_scheduler__: staticmethod
+    __dask_scheduler__: Any
     """The default scheduler ``get`` to use for this object.
 
     Usually attached to the class as a staticmethod, e.g.:
