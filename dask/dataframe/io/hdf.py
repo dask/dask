@@ -409,6 +409,13 @@ def read_hdf(
     # Build metadata
     with pd.HDFStore(paths[0], mode=mode) as hdf:
         meta_key = _expand_key(key, hdf)[0]
+        # Only 'table'-format datasets are partitionable, so reject anything
+        # else up front. pd.read_hdf deserializes 'fixed'-format data (which
+        # may contain arbitrary pickled objects) the moment it is called, so
+        # this check has to happen before the read below and not just in
+        # _get_keys_stops_divisions.
+        if hdf.get_storer(meta_key).format_type != "table":
+            raise TypeError(dont_use_fixed_error_message)
         try:
             meta = pd.read_hdf(hdf, meta_key, stop=0)
         except IndexError:  # if file is empty, don't set stop
