@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from pandas.tests.extension.decimal.array import DecimalDtype
 
+import dask.dataframe as dd
 from dask.dataframe._pyarrow import (
     is_object_string_dataframe,
     is_object_string_dtype,
@@ -12,6 +13,7 @@ from dask.dataframe._pyarrow import (
     is_object_string_series,
     is_pyarrow_string_dtype,
 )
+from dask.dataframe.utils import assert_eq
 
 pa = pytest.importorskip("pyarrow")
 
@@ -56,6 +58,52 @@ def test_is_object_string_dtype(dtype, expected):
     if isinstance(dtype, pa.DataType):
         dtype = pd.ArrowDtype(dtype)
     assert is_object_string_dtype(dtype) is expected
+
+
+@pytest.mark.parametrize(
+    "series,expected",
+    [
+        # Bare object dtype without values available: conservatively
+        # treated as string-like (matches pandas' `is_string_dtype(dtype)`)
+        (pd.Series(["a", "b"], dtype=object), True),
+        # Object column holding bools + NA (GH#12176): pandas' value-aware
+        # `is_string_dtype` says this is *not* a string column
+        (pd.Series([True, np.nan], dtype=object), False),
+        # Object column of mixed non-string objects
+        (pd.Series([1, "a"], dtype=object), False),
+        # Categorical dtype also reports dtype.kind == "O", but must never be
+        # treated as string-like just because its categories happen to be
+        # strings -- pandas' `is_string_dtype(series)` would otherwise
+        # inspect the categories and misclassify it.
+        (pd.Series(["x", "y", "z"], dtype="category"), False),
+    ],
+)
+def test_is_object_string_dtype_value_aware(series, expected):
+    # When the actual data (`obj`) is supplied, is_object_string_dtype should
+    # defer to pandas' value-aware classification instead of assuming any
+    # bare `object` dtype is string-like.
+    assert is_object_string_dtype(series.dtype, series) is expected
+
+
+def test_from_pandas_does_not_convert_non_string_object_column():
+    # Regression test for https://github.com/dask/dask/issues/12176
+    # An object column containing booleans (and NA) must not be coerced to
+    # a pyarrow string dtype -- pandas itself would never call this a
+    # string column. The conversion decision is made once from the full
+    # in-memory frame (see `FromPandas._pyarrow_string_dtypes`), so `_meta`
+    # and the computed result must agree.
+    pdf = pd.DataFrame(
+        {
+            "c0": [0.0, np.nan, 0.0, 1.0],
+            "c1": pd.array([True, True, None, None], dtype=object),
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    assert ddf._meta["c1"].dtype == object
+    result = ddf.compute()
+    assert result["c1"].dtype == object
+    assert_eq(ddf, pdf)
 
 
 @pytest.mark.parametrize(

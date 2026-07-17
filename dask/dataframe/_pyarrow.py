@@ -16,8 +16,31 @@ def is_pyarrow_string_dtype(dtype) -> bool:
     return dtype in (pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string()))
 
 
-def is_object_string_dtype(dtype) -> bool:
-    """Determine if input is a non-pyarrow string dtype"""
+def is_object_string_dtype(dtype, obj=None) -> bool:
+    """Determine if input is a non-pyarrow string dtype
+
+    If ``obj`` (the actual Series/Index/array the dtype was taken from) is
+    provided *and* ``dtype`` is a bare ``object`` dtype, pandas will inspect
+    the values to distinguish object columns that actually hold strings from
+    those that hold other Python objects (e.g. bools mixed with NA),
+    matching pandas' own ``is_string_dtype`` semantics (see GH#12176).
+
+    We only do this value-aware check for a bare ``object`` dtype: other
+    dtypes that also report ``kind == "O"`` (e.g. ``Categorical``) would
+    otherwise be misclassified, since ``is_string_dtype`` inspects the
+    *categories* of a categorical Series rather than treating it as
+    non-string.
+
+    Callers that reuse this classification across multiple slices of the
+    same logical column (e.g. dask's per-partition meta vs. actual data)
+    must ensure the *same* decision -- based on the complete data, not a
+    sample or a single partition -- is applied consistently everywhere, or
+    meta/partition dtypes can end up disagreeing. See
+    ``FromPandas._pyarrow_string_dtypes`` in
+    ``dask/dataframe/dask_expr/io/io.py`` for an example.
+    """
+    if obj is not None and dtype == object:
+        return pd.api.types.is_string_dtype(obj) and not is_pyarrow_string_dtype(dtype)
     return pd.api.types.is_string_dtype(dtype) and not is_pyarrow_string_dtype(dtype)
 
 

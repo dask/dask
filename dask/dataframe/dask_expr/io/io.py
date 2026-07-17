@@ -5,12 +5,17 @@ import math
 import operator
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 
 from dask import delayed
 from dask._task_spec import Alias, DataNode, List, Task
 from dask.dataframe import methods
-from dask.dataframe._pyarrow import to_pyarrow_string
+from dask.dataframe._pyarrow import (
+    _to_string_dtype,
+    is_object_string_dtype,
+    is_object_string_index,
+)
 from dask.dataframe.core import apply_and_enforce, is_dataframe_like
 from dask.dataframe.dask_expr._expr import (
     Blockwise,
@@ -440,9 +445,61 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         return self.operand("frame")
 
     @functools.cached_property
+    def _pyarrow_string_dtypes(self) -> dict:
+        """Object columns that should be converted to pyarrow strings.
+
+        This is decided *once*, from the complete in-memory frame -- not a
+        head-only sample or a per-partition slice -- so that `_meta` and
+        every partition apply the exact same conversion. Classifying object
+        columns independently per-slice (e.g. an all-NA sample disagreeing
+        with a partition that has real values) would corrupt meta/partition
+        dtype consistency. See https://github.com/dask/dask/issues/12176.
+        """
+        if not self.pyarrow_strings_enabled:
+            return {}
+        frame = self.frame._data
+        if is_series_like(frame):
+            if is_object_string_dtype(frame.dtype, frame):
+                return {frame.name: pd.StringDtype("pyarrow")}
+            return {}
+        return {
+            col: pd.StringDtype("pyarrow")
+            for col, dtype in frame.dtypes.items()
+            if is_object_string_dtype(dtype, frame[col])
+        }
+
+    def _to_pyarrow_string(self, df):
+        """Apply the frame-wide column conversion decided in
+        `_pyarrow_string_dtypes`, then fall back to the regular (dtype-only)
+        string-index conversion, which is unaffected by GH#12176.
+
+        Note: we deliberately do *not* delegate column conversion to the
+        generic `to_pyarrow_string` here -- its dtype-only check would just
+        re-convert any object column we intentionally left alone above.
+        """
+        if is_dataframe_like(df):
+            dtypes = {
+                c: dt
+                for c, dt in self._pyarrow_string_dtypes.items()
+                if c in df.columns
+            }
+            if dtypes:
+                df = df.astype(dtypes)
+        elif is_series_like(df):
+            dtype = self._pyarrow_string_dtypes.get(df.name)
+            if dtype is not None:
+                df = df.astype(dtype)
+        return _to_string_dtype(
+            df,
+            dtype_check=lambda dtype: False,
+            index_check=is_object_string_index,
+            string_dtype="pyarrow",
+        )
+
+    @functools.cached_property
     def _meta(self):
         if self.pyarrow_strings_enabled:
-            meta = make_meta(to_pyarrow_string(self.frame.head(1)))
+            meta = make_meta(self._to_pyarrow_string(self.frame.head(1)))
         else:
             meta = self.frame.head(0)
 
@@ -533,7 +590,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         start, stop = self._locations()[index : index + 2]
         part = self.frame.iloc[start:stop]
         if self.pyarrow_strings_enabled:
-            part = to_pyarrow_string(part)
+            part = self._to_pyarrow_string(part)
         if self.operand("columns") is not None:
             return DataNode(
                 name, part[self.columns[0]] if self._series else part[self.columns]
