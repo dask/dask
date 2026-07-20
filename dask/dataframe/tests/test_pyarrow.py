@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from pandas.tests.extension.decimal.array import DecimalDtype
 
+import dask.dataframe as dd
 from dask.dataframe._pyarrow import (
     is_object_string_dataframe,
     is_object_string_dtype,
@@ -12,6 +13,7 @@ from dask.dataframe._pyarrow import (
     is_object_string_series,
     is_pyarrow_string_dtype,
 )
+from dask.dataframe.utils import assert_eq
 
 pa = pytest.importorskip("pyarrow")
 
@@ -56,6 +58,83 @@ def test_is_object_string_dtype(dtype, expected):
     if isinstance(dtype, pa.DataType):
         dtype = pd.ArrowDtype(dtype)
     assert is_object_string_dtype(dtype) is expected
+
+
+@pytest.mark.parametrize(
+    "series,expected",
+    [
+        # Plain strings, no missing values.
+        (pd.Series(["a", "b"], dtype=object), True),
+        # String column with missing values (`None`/`nan`): this is the
+        # *primary* case `dataframe.convert-string` exists for, and it must
+        # keep converting -- pandas' own `is_string_dtype(series)` actually
+        # returns False here on pandas>=3 (it calls
+        # `is_string_array(..., skipna=False)` internally), which is
+        # exactly why dask uses its own value-aware classifier
+        # (`_is_object_string_like`) instead of pandas'.
+        (pd.Series(["a", None], dtype=object), True),
+        (pd.Series(["a", np.nan], dtype=object), True),
+        # All-NA / empty object columns: no values contradict a string
+        # classification, and dask's pre-GH#12176 dtype-only check always
+        # converted every `object` dtype regardless of content -- so these
+        # are treated as string-like too, preserving that prior behavior.
+        (pd.Series([None, None], dtype=object), True),
+        (pd.Series([], dtype=object), True),
+        # Object column holding bools + NA (GH#12176): must NOT convert --
+        # pandas itself would never call this a string column.
+        (pd.Series([True, np.nan], dtype=object), False),
+        # Object column of mixed non-string objects
+        (pd.Series([1, "a"], dtype=object), False),
+        # Categorical dtype also reports dtype.kind == "O", but must never be
+        # treated as string-like just because its categories happen to be
+        # strings -- inspecting values would otherwise look at the
+        # *categories* and misclassify it.
+        (pd.Series(["x", "y", "z"], dtype="category"), False),
+    ],
+)
+def test_is_object_string_dtype_value_aware(series, expected):
+    # When the actual data (`obj`) is supplied, is_object_string_dtype should
+    # defer to dask's own value-aware classification instead of assuming any
+    # bare `object` dtype is string-like.
+    assert is_object_string_dtype(series.dtype, series) is expected
+
+
+def test_from_pandas_does_not_convert_non_string_object_column():
+    # Regression test for https://github.com/dask/dask/issues/12176
+    # An object column containing booleans (and NA) must not be coerced to
+    # a pyarrow string dtype -- pandas itself would never call this a
+    # string column. The conversion decision is made once from the full
+    # in-memory frame (see `FromPandas._pyarrow_string_dtypes`), so `_meta`
+    # and the computed result must agree.
+    pdf = pd.DataFrame(
+        {
+            "c0": [0.0, np.nan, 0.0, 1.0],
+            "c1": pd.array([True, True, None, None], dtype=object),
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    assert ddf._meta["c1"].dtype == object
+    result = ddf.compute()
+    assert result["c1"].dtype == object
+    assert_eq(ddf, pdf)
+
+
+@pytest.mark.parametrize("missing", [None, np.nan])
+def test_from_pandas_still_converts_string_column_with_missing_values(missing):
+    # Regression test for the trap this fix could easily fall into: a
+    # string column with missing values is the *primary* case
+    # `dataframe.convert-string` is meant to handle, and it must keep
+    # converting to `string[pyarrow]` even though pandas' own
+    # `is_string_dtype(series)` returns False for it on pandas>=3 (see
+    # `_is_object_string_like`'s docstring). Both `_meta` and the computed
+    # partitions must agree it converted.
+    pdf = pd.DataFrame({"c0": ["a", "b", "c", missing]})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    assert is_pyarrow_string_dtype(ddf._meta["c0"].dtype)
+    result = ddf.compute()
+    assert is_pyarrow_string_dtype(result["c0"].dtype)
 
 
 @pytest.mark.parametrize(
