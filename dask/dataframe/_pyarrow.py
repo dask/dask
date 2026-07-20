@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 
+import numpy as np
 import pandas as pd
 
 from dask._compatibility import import_optional_dependency
@@ -16,20 +17,55 @@ def is_pyarrow_string_dtype(dtype) -> bool:
     return dtype in (pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string()))
 
 
+def _is_object_string_like(obj) -> bool:
+    """Determine if every non-null value in an ``object``-dtype array-like is a ``str``.
+
+    This is dask's own value-aware classifier for "should this ``object``
+    column become a pyarrow string column", used instead of pandas'
+    ``pd.api.types.is_string_dtype(series)`` (see GH#12176). On pandas>=3,
+    that function returns ``False`` for perfectly ordinary string columns
+    that merely contain missing values (e.g. ``pd.Series(['a', None])``),
+    because it internally calls ``is_string_array(..., skipna=False)``. That
+    makes it unusable here: `dataframe.convert-string`'s primary job is
+    converting exactly that string-plus-missing shape, so deferring to
+    pandas' stricter notion of "string dtype" would silently stop
+    converting the common case while fixing the narrower bug (bools+NA,
+    ``Decimal``, ``date`` wrongly stringified).
+
+    Policy for all-NA / empty columns: treated as string-like (``True``).
+    There is no data to contradict a string classification, and -- more
+    importantly -- this matches dask's *prior* behavior: before GH#12176 was
+    fixed, ``is_object_string_dtype`` was purely dtype-based
+    (``pd.api.types.is_string_dtype(dtype)``, which is unconditionally
+    ``True`` for any bare ``object`` dtype), so every ``object``-dtype
+    column -- including all-NA and empty ones -- was already being
+    converted. Flipping that default now, on top of an already-behavior-
+    changing bugfix, would be a second, unrelated behavior change with no
+    concrete bug motivating it. If maintainers want stricter "all-NA is not
+    a string column" semantics, that should be its own follow-up.
+    """
+    values = np.asarray(obj, dtype=object)
+    mask = pd.isna(values)
+    non_null = values[~mask]
+    if non_null.size == 0:
+        return True
+    return bool(all(isinstance(v, str) for v in non_null))
+
+
 def is_object_string_dtype(dtype, obj=None) -> bool:
     """Determine if input is a non-pyarrow string dtype
 
     If ``obj`` (the actual Series/Index/array the dtype was taken from) is
-    provided *and* ``dtype`` is a bare ``object`` dtype, pandas will inspect
-    the values to distinguish object columns that actually hold strings from
-    those that hold other Python objects (e.g. bools mixed with NA),
-    matching pandas' own ``is_string_dtype`` semantics (see GH#12176).
+    provided *and* ``dtype`` is a bare ``object`` dtype, the values are
+    inspected (via :func:`_is_object_string_like`) to distinguish object
+    columns that actually hold strings from those that hold other Python
+    objects (e.g. bools mixed with NA) -- see GH#12176.
 
     We only do this value-aware check for a bare ``object`` dtype: other
-    dtypes that also report ``kind == "O"`` (e.g. ``Categorical``) would
-    otherwise be misclassified, since ``is_string_dtype`` inspects the
-    *categories* of a categorical Series rather than treating it as
-    non-string.
+    dtypes that also report ``kind == "O"`` (e.g. ``Categorical``) are left
+    to the dtype-only path below, since inspecting their values would
+    misclassify them based on their *categories* rather than treating them
+    as non-string.
 
     Callers that reuse this classification across multiple slices of the
     same logical column (e.g. dask's per-partition meta vs. actual data)
@@ -40,7 +76,7 @@ def is_object_string_dtype(dtype, obj=None) -> bool:
     ``dask/dataframe/dask_expr/io/io.py`` for an example.
     """
     if obj is not None and dtype == object:
-        return pd.api.types.is_string_dtype(obj) and not is_pyarrow_string_dtype(dtype)
+        return _is_object_string_like(obj) and not is_pyarrow_string_dtype(dtype)
     return pd.api.types.is_string_dtype(dtype) and not is_pyarrow_string_dtype(dtype)
 
 
