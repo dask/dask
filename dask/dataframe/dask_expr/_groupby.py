@@ -1983,7 +1983,7 @@ Please provide `meta` if the result is unexpected.
 
         .. warning::
 
-           Pandas' groupby-apply can be used to to apply arbitrary functions,
+           Pandas' groupby-apply can be used to apply arbitrary functions,
            including aggregations that result in one row per group. Dask's
            groupby-apply will apply ``func`` once on each group, doing a shuffle
            if needed, such that each group is contained in one partition.

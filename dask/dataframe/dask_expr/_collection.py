@@ -3433,7 +3433,7 @@ class DataFrame(FrameBase):
         A common case is when we have a datetime column that we know to be
         sorted and is cleanly divided by day.  We can set this index for free
         by specifying both that the column is pre-sorted and the particular
-        divisions along which is is separated
+        divisions along which is separated
 
         >>> import pandas as pd
         >>> divisions = pd.date_range(start="2021-01-01", end="2021-01-07", freq='1D')
