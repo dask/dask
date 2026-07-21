@@ -571,6 +571,8 @@ Series Groupby
    SeriesGroupBy.max
    SeriesGroupBy.mean
    SeriesGroupBy.min
+   SeriesGroupBy.nlargest
+   SeriesGroupBy.nsmallest
    SeriesGroupBy.nunique
    SeriesGroupBy.size
    SeriesGroupBy.std
