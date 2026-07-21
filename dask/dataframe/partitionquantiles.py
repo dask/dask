@@ -31,7 +31,7 @@ Let us describe this to a child of five.  We are given many small cubes
 (of equal size) with numbers on them.  Split these into many piles.  This
 is like the original data.  Let's sort and stack the cubes from one of the
 piles.  Next, we are given a bunch of unlabeled blocks of different sizes,
-and most are much larger than the the original cubes.  Stack these blocks
+and most are much larger than the original cubes.  Stack these blocks
 until they're the same height as our first stack.  Let's write a number on
 each block of the new stack.  To do this, choose the number of the cube in
 the first stack that is located in the middle of an unlabeled block.  We
