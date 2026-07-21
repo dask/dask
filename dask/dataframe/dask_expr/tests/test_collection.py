@@ -872,6 +872,13 @@ def test_drop_not_implemented(pdf, df):
         df.drop(axis=0, labels=[0])
 
 
+def test_drop_empty_list_axis1_matches_pandas(pdf, df):
+    """Empty labels=[] must no-op like pandas, not raise ValueError (#12510)."""
+    assert_eq(df.drop([], axis=1), pdf.drop([], axis=1))
+    assert_eq(df.drop(labels=[], axis=1), pdf.drop(labels=[], axis=1))
+    assert_eq(df.drop(columns=[]), pdf.drop(columns=[]))
+
+
 @xfail_gpu("func not supported by cudf")
 @pytest.mark.parametrize(
     "func",
