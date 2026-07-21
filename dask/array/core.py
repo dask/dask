@@ -4037,6 +4037,10 @@ def to_zarr(
             f"currently supported by Zarr.{unknown_chunk_message}"
         )
 
+    # Zarr v3 cannot encode np.matrix chunks, so normalize them to ndarrays.
+    if isinstance(arr._meta, np.matrix):
+        arr = arr.map_blocks(np.asarray, dtype=arr.dtype, meta=np.asarray(arr._meta))
+
     zarr_array_kwargs = {} if zarr_array_kwargs is None else dict(zarr_array_kwargs)
     if component is not None and "name" in zarr_array_kwargs:
         raise ValueError(
