@@ -66,8 +66,10 @@ from dask.dataframe.groupby import (
     _groupby_slice_transform,
     _head_aggregate,
     _head_chunk,
+    _nlargest_aggregate,
     _non_agg_chunk,
     _normalize_spec,
+    _nsmallest_aggregate,
     _nunique_df_chunk,
     _nunique_df_combine,
     _tail_aggregate,
@@ -870,6 +872,19 @@ class Head(SingleAggregation):
 class Tail(Head):
     groupby_chunk = staticmethod(_tail_chunk)
     groupby_aggregate = staticmethod(_tail_aggregate)
+
+
+class NLargest(SingleAggregation):
+    # ``nlargest`` keeps the group keys in the index, so the intermediate
+    # results can be reduced again by regrouping on those levels. The extra
+    # levels that regrouping adds are dropped in the aggregation step.
+    groupby_chunk = M.nlargest
+    groupby_aggregate = staticmethod(_nlargest_aggregate)
+
+
+class NSmallest(SingleAggregation):
+    groupby_chunk = M.nsmallest
+    groupby_aggregate = staticmethod(_nsmallest_aggregate)
 
 
 class GroupByApply(Expr, GroupByBase):
@@ -2241,6 +2256,41 @@ class SeriesGroupBy(GroupBy):
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def unique(self, **kwargs):
         return self._single_agg(Unique, **kwargs)
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def nlargest(self, n=5, keep="first", split_every=None, split_out=None):
+        return self._n_largest_smallest(
+            NLargest, n=n, keep=keep, split_every=split_every, split_out=split_out
+        )
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def nsmallest(self, n=5, keep="first", split_every=None, split_out=None):
+        return self._n_largest_smallest(
+            NSmallest, n=n, keep=keep, split_every=split_every, split_out=split_out
+        )
+
+    def _n_largest_smallest(self, expr_cls, n, keep, split_every, split_out):
+        if keep == "last":
+            # ``keep="last"`` returns tied values in reverse order of appearance,
+            # so the second pass over the per-partition results would break the
+            # tie in favour of the wrong row.
+            raise NotImplementedError(
+                "keep='last' is not supported for a dask SeriesGroupBy, only "
+                "keep='first' and keep='all'."
+            )
+        chunk_kwargs = {"n": n, "keep": keep}
+        aggregate_kwargs = {
+            "n": n,
+            "keep": keep,
+            "index_levels": len(self.by) if not isinstance(self.by, Expr) else 1,
+        }
+        return self._single_agg(
+            expr_cls,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs=chunk_kwargs,
+            aggregate_kwargs=aggregate_kwargs,
+        )
 
     def idxmin(
         self,
