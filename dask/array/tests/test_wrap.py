@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import inspect
+import pickle
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -43,7 +46,41 @@ def test_full():
     assert (a.compute() == 100).all()
     assert a.dtype == a.compute(scheduler="sync").dtype == "i8"
 
+    # np.full_like remains the backend-aware implementation.
     assert a.name.startswith("full_like-")
+
+
+def test_full_docstring_and_signature():
+    assert list(inspect.signature(da.full).parameters)[:2] == ["shape", "fill_value"]
+    assert da.full.__doc__ is not None
+    assert "Blocked variant of full\n" in da.full.__doc__
+    assert np.full.__doc__ in da.full.__doc__
+
+
+def test_full_like_keyword():
+    like = np.array((), dtype=np.float32)
+    result = da.full((2, 3), 7, chunks=(1, 2), like=like)
+    expected = np.full((2, 3), 7, like=like)
+
+    assert type(result._meta) is type(expected)
+    assert_eq(result, expected)
+
+    result = da.full((2, 3), 7, chunks=(1, 2), like=like, dtype=np.float32)
+    assert_eq(result, expected.astype(np.float32))
+
+
+def test_full_like_keyword_forgets_graph():
+    like = da.arange(3).map_blocks(lambda x: x)
+    with pytest.raises(Exception, match="local object"):
+        pickle.dumps(like)
+
+    result = da.full((2, 3), 7, chunks=(1, 2), like=like)
+    pickle.dumps(result)
+
+
+def test_full_like_keyword_rejects_meta():
+    with pytest.raises(TypeError, match="both 'like' and 'meta'"):
+        da.full((2, 3), 7, like=np.array(()), meta=np.array(()))
 
 
 def test_full_error_nonscalar_fill_value():
