@@ -54,7 +54,10 @@ def test_full_docstring_and_signature():
     assert list(inspect.signature(da.full).parameters)[:2] == ["shape", "fill_value"]
     assert da.full.__doc__ is not None
     assert "Blocked variant of full\n" in da.full.__doc__
-    assert np.full.__doc__ in da.full.__doc__
+    assert "fill_value : scalar\n" in da.full.__doc__
+    assert "fill_value : scalar or array_like" not in da.full.__doc__
+    assert ">>> np.full((2, 2), 10)" in da.full.__doc__
+    assert ">>> np.full((2, 2), [1, 2])" not in da.full.__doc__
 
 
 def test_full_like_keyword():

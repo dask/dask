@@ -189,6 +189,21 @@ w_like = wrap(wrap_func_like)
 empty_like = w_like(np.empty, func_like=np.empty_like)
 
 
+def _remove_docstring_example(docstring, example):
+    """Remove one complete doctest example from a docstring."""
+    lines = docstring.splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if line.lstrip() == example)
+    except StopIteration:
+        return docstring
+
+    end = start + 1
+    while end < len(lines) and lines[end].strip():
+        end += 1
+    del lines[start:end]
+    return "\n".join(lines)
+
+
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
 _full = array_creation_dispatch.register_inplace(
@@ -196,6 +211,11 @@ _full = array_creation_dispatch.register_inplace(
     name="full",
 )(w(np.full, func_like=broadcast_trick(np.full_like)))
 _full_like = w_like(np.full, func_like=np.full_like)
+
+if _full.__doc__ is not None:
+    _full.__doc__ = _remove_docstring_example(
+        _full.__doc__, ">>> np.full((2, 2), [1, 2])"
+    ).replace("fill_value : scalar or array_like", "fill_value : scalar")
 
 
 def full(shape, fill_value, *args, **kwargs):
