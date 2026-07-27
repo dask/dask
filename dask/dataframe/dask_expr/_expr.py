@@ -382,15 +382,15 @@ class Expr(core.SingletonExpr):
     def round(self, decimals=0):
         return Round(self, decimals=decimals)
 
-    def where(self, cond, other=np.nan):
+    def where(self, cond, other=np.nan, axis=None, level=None):
         if not are_co_aligned(self, *[c for c in [cond, other] if isinstance(c, Expr)]):
-            return WhereAlign(self, cond=cond, other=other)
-        return Where(self, cond=cond, other=other)
+            return WhereAlign(self, cond=cond, other=other, axis=axis, level=level)
+        return Where(self, cond=cond, other=other, axis=axis, level=level)
 
-    def mask(self, cond, other=np.nan):
+    def mask(self, cond, other=np.nan, axis=None, level=None):
         if not are_co_aligned(self, *[c for c in [cond, other] if isinstance(c, Expr)]):
-            return MaskAlign(self, cond=cond, other=other)
-        return Mask(self, cond=cond, other=other)
+            return MaskAlign(self, cond=cond, other=other, axis=axis, level=level)
+        return Mask(self, cond=cond, other=other, axis=axis, level=level)
 
     def apply(self, function, *args, meta=None, **kwargs):
         return Apply(self, function, args, meta, kwargs)
@@ -1654,8 +1654,9 @@ class IsNa(Elemwise):
 
 class Mask(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "cond", "other"]
-    _defaults = {"other": np.nan}
+    _parameters = ["frame", "cond", "other", "axis", "level"]
+    _defaults = {"other": np.nan, "axis": None, "level": None}
+    _keyword_only = ["axis", "level"]
     operation = M.mask
 
 
@@ -1667,8 +1668,9 @@ class Round(Elemwise):
 
 class Where(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "cond", "other"]
-    _defaults = {"other": np.nan}
+    _parameters = ["frame", "cond", "other", "axis", "level"]
+    _defaults = {"other": np.nan, "axis": None, "level": None}
+    _keyword_only = ["axis", "level"]
     operation = M.where
 
 
@@ -3675,7 +3677,8 @@ class AssignAlign(MaybeAlignPartitions):
 
 
 class MaskAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "cond", "other"]
+    _parameters = ["frame", "cond", "other", "axis", "level"]
+    _defaults = {"other": np.nan, "axis": None, "level": None}
     _expr_cls: AnyType = Mask
 
 

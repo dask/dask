@@ -829,6 +829,33 @@ def test_squeeze():
     assert msg in str(info.value)
 
 
+@pytest.mark.parametrize("method", ["where", "mask"])
+def test_where_mask_axis_level(method):
+    # `axis` and `level` are part of the pandas signature, and pandas itself
+    # raises "Must specify axis=0 or 1" for a column-labelled operand, so
+    # rejecting the keyword left no way to call it. See GH#10059.
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8]})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    cond_by_column = pd.Series([True, False], index=["a", "b"])
+    other_by_column = pd.Series([-1, -2], index=["a", "b"])
+    assert_eq(
+        getattr(ddf, method)(cond_by_column, other_by_column, axis=1),
+        getattr(pdf, method)(cond_by_column, other_by_column, axis=1),
+    )
+
+    cond_by_index = pd.Series([True, False, True, False])
+    assert_eq(
+        getattr(ddf, method)(cond_by_index, -1, axis=0),
+        getattr(pdf, method)(cond_by_index, -1, axis=0),
+    )
+
+    assert_eq(
+        getattr(ddf, method)(pdf > 2, -1, level=None),
+        getattr(pdf, method)(pdf > 2, -1, level=None),
+    )
+
+
 def test_where_mask():
     pdf1 = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [3, 5, 2, 5, 7, 2, 4, 2, 4]}
