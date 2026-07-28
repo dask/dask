@@ -37,7 +37,15 @@ def create_array_collection(expr):
 
             return Array(expr)
 
-    result = expr.optimize()
+    # Skip the "tune" optimization stage (e.g. FusedIO's IO-partition bucketing)
+    # here: it can reduce the *logical* partition count relative to what the
+    # source collection publicly reports via `.npartitions`/`.divisions`,
+    # which would silently desync the resulting array's chunk structure from
+    # e.g. its originating Index (see GH#12146).
+    result = expr.simplify()
+    result = result.lower_completely()
+    result = result.simplify()
+    result = result.fuse()
     dsk = result.__dask_graph__()
     name = result._name
     meta = result._meta
