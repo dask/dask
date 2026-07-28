@@ -9,8 +9,8 @@ from dask._expr import SingletonExpr as SingletonExpr
 
 try:
     # Backwards compatibility with versioneer
-    from dask._version import commit_id as git_revision
-    from dask._version import version as version
+    from dask._version import __commit_id__ as __git_revision__
+    from dask._version import __version__ as __version__
 except ImportError:  # pragma: no cover
     git_revision = "unknown"
     version = "unknown"
