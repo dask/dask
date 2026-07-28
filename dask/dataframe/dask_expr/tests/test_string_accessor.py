@@ -140,6 +140,28 @@ def test_str_split_(index):
     assert_eq(dd_a, pd_a)
 
 
+def test_str_split_expand_preserves_dtype():
+    pytest.importorskip("pyarrow")
+    df = pd.DataFrame({"a": ["a,b,c", "d,e,f", "g,h,i"]}, dtype="string[pyarrow]")
+    ddf = from_pandas(df, npartitions=1)
+
+    pd_a = df["a"].str.split(",", n=1, expand=True)
+    dd_a = ddf["a"].str.split(",", n=1, expand=True)
+
+    assert_eq(dd_a, pd_a)
+    assert (dd_a.dtypes == pd_a.dtypes).all()
+
+
+def test_str_split_expand_categorical_dtype():
+    df = pd.DataFrame({"a": ["a,b,c", "d,e,f", "g,h,i"]}, dtype="category")
+    ddf = from_pandas(df, npartitions=1)
+
+    pd_a = df["a"].str.split(",", n=1, expand=True)
+    dd_a = ddf["a"].str.split(",", n=1, expand=True)
+
+    assert_eq(dd_a, pd_a)
+
+
 def test_str_accessor_not_available():
     pdf = pd.DataFrame({"a": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=2)
