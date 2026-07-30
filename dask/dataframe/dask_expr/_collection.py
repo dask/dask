@@ -3314,7 +3314,9 @@ class DataFrame(FrameBase):
         axis = _validate_axis(axis)
 
         if axis == 1:
-            columns = labels or columns
+            # Use identity check so empty labels=[] is preserved (pandas-compatible).
+            # `labels or columns` treats [] as falsey and incorrectly becomes None (#12510).
+            columns = labels if columns is None else columns
         elif axis == 0 and columns is None:
             raise NotImplementedError(
                 "Drop currently only works for axis=1 or when columns is not None"
