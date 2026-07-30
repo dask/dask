@@ -7,8 +7,7 @@ build:
 
 sphinx:
   configuration: docs/source/conf.py
-  # Temporarily turning off to get docs build passing
-  # fail_on_warning: true
+  fail_on_warning: true
 
 python:
   install:
