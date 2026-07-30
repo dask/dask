@@ -78,6 +78,10 @@ def test_errors_propagate():
     assert "12345" in str(e.value)
 
 
+def test_chunksize_minus_one_with_no_ready_tasks():
+    dsk = {"x": (inc, 1)}
+    assert get(dsk, "x", chunksize=-1) == 2
+
 def test_remote_exception():
     e = TypeError("hello")
     a = remote_exception(e, "traceback-body")
