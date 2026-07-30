@@ -366,10 +366,10 @@ def to_parquet(
     path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
-    compression : string or dict, default 'snappy'
+    compression : string, dict, or None, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
-        to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
-        to ``"snappy"``.
+        to compressors like ``{"name": "gzip", "values": "snappy"}``. Set
+        to ``None`` to write uncompressed files. Defaults to ``"snappy"``.
     write_index : bool, default True
         Whether or not to write the index. Defaults to True.
     append : bool, default False
