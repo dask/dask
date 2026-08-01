@@ -3414,7 +3414,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             raise ValueError(
                 "auto-chunking with dtype.itemsize == 0 is not supported, please pass in `chunks` explicitly"
             )
-        size = (limit / dtype.itemsize / (largest_block)) ** (1 / len(autos))
+        size = (limit / dtype.itemsize / largest_block) ** (1 / len(autos))
         small = [i for i in autos if shape[i] < size]
         if small:
             for i in small:
