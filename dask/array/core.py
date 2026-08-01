@@ -3321,8 +3321,11 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     limit = max(1, limit)
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
 
-    largest_block = math.prod(
-        cs if isinstance(cs, Number) else max(cs) for cs in chunks if cs != "auto"
+    largest_block = (
+        math.prod(
+            cs if isinstance(cs, Number) else max(cs) for cs in chunks if cs != "auto"
+        )
+        or 1
     )
 
     if previous_chunks:
@@ -3411,7 +3414,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             raise ValueError(
                 "auto-chunking with dtype.itemsize == 0 is not supported, please pass in `chunks` explicitly"
             )
-        size = (limit / dtype.itemsize / (largest_block or 1)) ** (1 / len(autos))
+        size = (limit / dtype.itemsize / (largest_block)) ** (1 / len(autos))
         small = [i for i in autos if shape[i] < size]
         if small:
             for i in small:
