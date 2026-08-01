@@ -40,8 +40,6 @@ FuncType = Callable[..., Any]
 F = TypeVar("F", bound=FuncType)
 
 system_encoding = sys.getdefaultencoding()
-if system_encoding == "ascii":
-    system_encoding = "utf-8"
 
 
 def apply(func, args, kwargs=None):

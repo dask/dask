@@ -1226,7 +1226,7 @@ def store(
                 slices = ArraySliceDep(s.chunks)
                 arrays.append(
                     s.map_blocks(
-                        load_chunk,  # type: ignore[arg-type]
+                        load_chunk,
                         # Note: slices / BlockwiseDep have to be passed by arg, not by kwarg
                         slices,
                         lock=lock,
@@ -1398,8 +1398,8 @@ class Array(DaskMethodsMixin):
         return (self.name,)
 
     def __dask_keys__(self) -> NestedKeys:
-        if self._cached_keys is not None:
-            return self._cached_keys
+        if self._cached_keys is not None:  # type: ignore[has-type]
+            return self._cached_keys  # type: ignore[has-type]
 
         name, chunks, numblocks = self.name, self.chunks, self.numblocks
 
