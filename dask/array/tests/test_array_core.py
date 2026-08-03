@@ -4964,6 +4964,17 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
+@pytest.mark.filterwarnings("ignore:the matrix subclass")
+def test_zarr_roundtrip_numpy_matrix(tmp_path):
+    pytest.importorskip("zarr", minversion="3.0.0")
+    matrix = np.matrix(np.arange(100).reshape(10, 10))
+    path = tmp_path / "matrix.zarr"
+
+    da.from_array(matrix).to_zarr(path, zarr_format=3)
+
+    assert_eq(da.from_zarr(path), np.asarray(matrix))
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize(
     "chunks, shards",
