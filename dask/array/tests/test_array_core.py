@@ -3576,6 +3576,30 @@ def test_to_npy_stack():
         assert_eq(d, e)
 
 
+def test_from_npy_stack_rejects_unsafe_info():
+    import pickle
+
+    x = da.from_array(np.arange(20).reshape((4, 5)), chunks=(2, 5))
+
+    with tmpdir() as dirname:
+        stackdir = os.path.join(dirname, "test")
+        da.to_npy_stack(stackdir, x, axis=0)
+
+        marker = os.path.join(dirname, "pwned")
+
+        class Evil:
+            def __reduce__(self):
+                return (os.system, (f"touch {marker}",))
+
+        info = {"chunks": ((2, 2), (5,)), "dtype": x.dtype, "axis": 0, "evil": Evil()}
+        with open(os.path.join(stackdir, "info"), "wb") as f:
+            pickle.dump(info, f)
+
+        with pytest.raises(pickle.UnpicklingError):
+            da.from_npy_stack(stackdir)
+        assert not os.path.exists(marker)
+
+
 def test_view():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(2, 3))
