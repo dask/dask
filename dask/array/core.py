@@ -3321,11 +3321,11 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     limit = max(1, limit)
     chunksize_tolerance = config.get("array.chunk-size-tolerance")
 
-    largest_block = (
-        math.prod(
-            cs if isinstance(cs, Number) else max(cs) for cs in chunks if cs != "auto"
-        )
-        or 1
+    if any(s == 0 for s in shape):
+        return tuple((s,) for s in shape)
+
+    largest_block = math.prod(
+        cs if isinstance(cs, Number) else max(cs) for cs in chunks if cs != "auto"
     )
 
     if previous_chunks:
