@@ -2,13 +2,42 @@ from __future__ import annotations
 
 import copy
 import os
+from typing import Any, Literal, overload
 
 from fsspec.core import OpenFile, get_fs_token_paths
 from fsspec.utils import infer_compression, read_block
 
 from dask.base import tokenize
-from dask.delayed import delayed
+from dask.delayed import Delayed, delayed
 from dask.utils import is_integer, parse_bytes
+
+
+@overload
+def read_bytes(
+    urlpath: str | list[str],
+    delimiter: bytes | None,
+    not_zero: bool,
+    blocksize: str | int | None,
+    sample: int | str | bool,
+    compression: str | None,
+    include_path: Literal[True],
+    **kwargs: Any,
+) -> tuple[bytes, list[list[Delayed]], list[str]]:
+    ...
+
+
+@overload
+def read_bytes(
+    urlpath: str | list[str],
+    delimiter: bytes | None,
+    not_zero: bool,
+    blocksize: str | int | None,
+    sample: int | str | bool,
+    compression: str | None,
+    include_path: Literal[False],
+    **kwargs: Any,
+) -> tuple[bytes, list[list[Delayed]]]:
+    ...
 
 
 def read_bytes(
@@ -93,8 +122,8 @@ def read_bytes(
         blocksize = int(blocksize)
 
     if blocksize is None:
-        offsets = [[0]] * len(paths)
-        lengths = [[None]] * len(paths)
+        offsets: list[Any] = [[0]] * len(paths)
+        lengths: list[Any] = [[None]] * len(paths)
     else:
         offsets = []
         lengths = []
