@@ -165,10 +165,10 @@ def old_to_new(old_chunks, new_chunks):
     Notes
     -----
     This function expects that the arguments have been pre-processed by
-    :func:`dask.array.core.normalize_chunks`. In particular any ``nan`` values should
-    have been replaced (and are so by :func:`dask.array.core.normalize_chunks`)
+    ``dask.array.core.normalize_chunks``. In particular any ``nan`` values should
+    have been replaced (and are so by ``dask.array.core.normalize_chunks``)
     by the canonical ``np.nan``. It also expects that the arguments have been validated
-    with `_validate_rechunk` and rechunking is thus possible.
+    with ``_validate_rechunk`` and rechunking is thus possible.
 
     Examples
     --------

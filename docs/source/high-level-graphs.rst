@@ -136,7 +136,7 @@ While the DataFrame points to the output layers on which it depends directly:
 HighLevelGraphs
 ---------------
 
-The :obj:`HighLevelGraph` object is a ``Mapping`` object composed of other
+The :obj:`dask.highlevelgraph.HighLevelGraph` object is a ``Mapping`` object composed of other
 sub-``Mappings``, along with a high-level dependency mapping between them:
 
 .. code-block:: python
