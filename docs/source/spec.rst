@@ -41,7 +41,7 @@ A **key** is a str, int, float, or tuple thereof:
    'x'
    ('x', 2, 3)
 
-A **task** is a computation that Dask can perform and is expressed using the :class:`dask.Task` class.  Tasks represent atomic
+A **task** is a computation that Dask can perform and is expressed using the :class:`~dask._task_spec.Task` class.  Tasks represent atomic
 units of work meant to be run by a single worker.  Example:
 
 .. code-block:: python
@@ -61,7 +61,7 @@ units of work meant to be run by a single worker.  Example:
    The legacy representation of a task is a tuple with the first element being a
    callable function.  The rest of the elements are arguments to that function.
    The legacy representation is deprecated and will be removed in a future
-   version of Dask.  Use the :class:`dask.Task` class instead.
+   version of Dask.  Use the :class:`~dask._task_spec.Task` class instead.
 
 
 A **computation** may be one of the following:
