@@ -1355,7 +1355,7 @@ def topk(a, k, axis=-1, split_every=None):
 
     Parameters
     ----------
-    x: Array
+    a: Array
         Data being sorted
     k: int
     axis: int, optional
@@ -1414,7 +1414,7 @@ def argtopk(a, k, axis=-1, split_every=None):
 
     Parameters
     ----------
-    x: Array
+    a: Array
         Data being sorted
     k: int
     axis: int, optional

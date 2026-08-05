@@ -183,7 +183,7 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
         we're in, starting from zero up to some small integer
     k: int
         Desired number of splits from this dataframe
-    npartition: int
+    npartitions: int
         Total number of output partitions for the full dataframe
     nfinal: int
         Total number of output partitions after repartitioning

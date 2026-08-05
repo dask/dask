@@ -320,7 +320,7 @@ class RuleSet:
 
         Parameters
         ----------
-        term: a task
+        task: a task
             The task to be rewritten
         strategy: str, optional
             The rewriting strategy to use. Options are "bottom_up" (default),
