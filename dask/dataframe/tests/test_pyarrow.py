@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from pandas.tests.extension.decimal.array import DecimalDtype
 
+import dask
 import dask.dataframe as dd
 from dask.dataframe._pyarrow import (
     is_object_string_dataframe,
@@ -129,12 +130,19 @@ def test_from_pandas_still_converts_string_column_with_missing_values(missing):
     # `is_string_dtype(series)` returns False for it on pandas>=3 (see
     # `_is_object_string_like`'s docstring). Both `_meta` and the computed
     # partitions must agree it converted.
-    pdf = pd.DataFrame({"c0": ["a", "b", "c", missing]})
-    ddf = dd.from_pandas(pdf, npartitions=2)
+    #
+    # Force `convert-string=True` explicitly: this test asserts on the
+    # conversion decision itself, so it must not depend on the ambient
+    # CI environment's default (the `py310` pixi environment runs with
+    # `DASK_DATAFRAME__CONVERT_STRING=False` to get coverage of that
+    # disabled path -- see AGENTS.md's "Pyarrow string conversion" note).
+    with dask.config.set({"dataframe.convert-string": True}):
+        pdf = pd.DataFrame({"c0": ["a", "b", "c", missing]})
+        ddf = dd.from_pandas(pdf, npartitions=2)
 
-    assert is_pyarrow_string_dtype(ddf._meta["c0"].dtype)
-    result = ddf.compute()
-    assert is_pyarrow_string_dtype(result["c0"].dtype)
+        assert is_pyarrow_string_dtype(ddf._meta["c0"].dtype)
+        result = ddf.compute()
+        assert is_pyarrow_string_dtype(result["c0"].dtype)
 
 
 @pytest.mark.parametrize(
