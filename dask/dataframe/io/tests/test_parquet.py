@@ -1208,6 +1208,21 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
 
 
 @PYARROW_MARK
+def test_to_parquet_manual_list_schema_with_object_meta(tmpdir):
+    @dask.delayed
+    def make_frame():
+        return pd.DataFrame({"a": [[1.0, 2.0]]})
+
+    with dask.config.set({"dataframe.convert-string": False}):
+        meta = dd.utils.make_meta([("a", object)])
+        ddf = dd.from_delayed(make_frame(), meta=meta)
+        ddf.to_parquet(str(tmpdir), schema={"a": pa.list_(pa.float64(), 2)})
+        result = dd.read_parquet(str(tmpdir)).compute()
+
+    assert result["a"].iloc[0].tolist() == [1.0, 2.0]
+
+
+@PYARROW_MARK
 @pytest.mark.parametrize("index", [False, True])
 @pytest.mark.parametrize("schema", ["infer", "complex"])
 def test_pyarrow_schema_inference(tmpdir, index, schema):
