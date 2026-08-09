@@ -585,6 +585,19 @@ def test_visualize():
 
 
 @pytest.mark.skipif("not da")
+def test_visualize_optimizes_combined_graph(monkeypatch):
+    x = da.random.random(10, chunks=5)
+    left = x + 1
+    right = x * 2
+    monkeypatch.setattr("dask.base.visualize_dsk", lambda dsk, **kwargs: dsk)
+
+    unoptimized = visualize(left, right, optimize_graph=False)
+    optimized = visualize(left, right, optimize_graph=True)
+
+    assert len(optimized) <= len(unoptimized)
+
+
+@pytest.mark.skipif("not da")
 @pytest.mark.skipif(
     bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
