@@ -465,6 +465,53 @@ def test_from_dict():
     assert_eq(DataFrame.from_dict(data), expected)
 
 
+def test_from_dict_with_dask_array():
+    pytest.importorskip("dask.array")
+    x = da.from_array(np.array([1, 2, 3, 4]), chunks=2)
+    y = da.from_array(np.array([10, 11, 12, 13]), chunks=2)
+    data = {"a": x, "B": y}
+    result = from_dict(data, npartitions=2)
+    expected = pd.DataFrame({"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]})
+    assert_eq(result, expected, check_index=False)
+
+
+def test_from_dict_with_dask_series():
+    pytest.importorskip("dask.array")
+    sa = dd.from_pandas(pd.Series([1, 2, 3, 4], name="a"), npartitions=2)
+    sb = dd.from_pandas(pd.Series([10, 11, 12, 13], name="B"), npartitions=2)
+    data = {"a": sa, "B": sb}
+    result = from_dict(data, npartitions=2)
+    expected = pd.DataFrame({"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]})
+    assert_eq(result, expected, check_index=False)
+
+
+def test_from_dict_with_dask_dataframe():
+    pytest.importorskip("dask.array")
+    df = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]}), npartitions=2)
+    data = {"a": df.x, "b": df.y}
+    result = from_dict(data, npartitions=2)
+    expected = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8]})
+    assert_eq(result, expected, check_index=False)
+
+
+def test_from_dict_with_mixed_dask_and_scalar():
+    pytest.importorskip("dask.array")
+    x = da.from_array(np.array([1, 2, 3, 4]), chunks=2)
+    data = {"a": x, "B": 10}
+    result = from_dict(data, npartitions=2)
+    expected = pd.DataFrame({"a": [1, 2, 3, 4], "B": [10, 10, 10, 10]})
+    assert_eq(result, expected, check_index=False)
+
+
+def test_from_dict_mismatched_npartitions():
+    pytest.importorskip("dask.array")
+    x = da.from_array(np.array([1, 2, 3, 4]), chunks=2)
+    y = da.from_array(np.array([10, 11, 12, 13]), chunks=4)
+    data = {"a": x, "b": y}
+    with pytest.raises(ValueError, match="same number of partitions"):
+        from_dict(data, npartitions=2)
+
+
 @pytest.mark.parametrize("normalizer", ("filemetadata", "schema"))
 def test_normalize_token_parquet_filemetadata_and_schema(tmpdir, normalizer):
     df = pd.DataFrame({c: range(10) for c in "abcde"})
