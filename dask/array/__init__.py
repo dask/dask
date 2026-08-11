@@ -473,6 +473,7 @@ try:
         einsum,
         expand_dims,
         extract,
+        fill_diagonal,
         flatnonzero,
         flip,
         fliplr,

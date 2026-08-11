@@ -2902,3 +2902,56 @@ def test_pickle_vectorized_routines():
     assert_eq(c, [[0], [1]], check_dtype=False)
     c2 = pickle.loads(pickle.dumps(c))
     assert_eq(c2, [[0], [1]], check_dtype=False)
+
+
+def test_fill_diagonal():
+    A = np.random.default_rng().standard_normal((20, 20))
+    for chk in [(5, 5), (4, 6), (7, 3)]:
+        dA = da.from_array(A, chk)
+        expected = A.copy()
+        np.fill_diagonal(expected, 42)
+        result = da.fill_diagonal(dA, 42)
+        assert_eq(result, expected)
+
+
+def test_fill_diagonal_non_square():
+    A = np.random.default_rng().standard_normal((30, 20))
+    dA = da.from_array(A, chunks=(10, 5))
+    expected = A.copy()
+    np.fill_diagonal(expected, 99)
+    result = da.fill_diagonal(dA, 99)
+    assert_eq(result, expected)
+
+    A2 = np.random.default_rng().standard_normal((20, 30))
+    dA2 = da.from_array(A2, chunks=(5, 10))
+    expected2 = A2.copy()
+    np.fill_diagonal(expected2, -1.5)
+    result2 = da.fill_diagonal(dA2, -1.5)
+    assert_eq(result2, expected2)
+
+
+def test_fill_diagonal_ndims():
+    A = np.random.default_rng().standard_normal((10, 10, 10))
+    dA = da.from_array(A, chunks=(5, 5, 5))
+    expected = A.copy()
+    np.fill_diagonal(expected, 7)
+    result = da.fill_diagonal(dA, 7)
+    assert_eq(result, expected)
+
+
+def test_fill_diagonal_raises():
+    x = da.ones(10, chunks=5)
+    with pytest.raises(ValueError):
+        da.fill_diagonal(x, 1)
+
+    x2d = da.ones((10, 10), chunks=5)
+    with pytest.raises(NotImplementedError):
+        da.fill_diagonal(x2d, 1, wrap=True)
+
+
+def test_fill_diagonal_does_not_modify_original():
+    A = np.random.default_rng().standard_normal((10, 10))
+    dA = da.from_array(A, chunks=5)
+    original = A.copy()
+    result = da.fill_diagonal(dA, 999).compute()
+    assert_eq(dA, original)
