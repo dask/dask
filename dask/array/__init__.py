@@ -183,6 +183,7 @@ __all__ = [
     "einsum",
     "expand_dims",
     "extract",
+    "fill_diagonal",
     "flatnonzero",
     "flip",
     "fliplr",
