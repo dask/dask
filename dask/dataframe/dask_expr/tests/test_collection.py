@@ -63,6 +63,55 @@ def df(pdf):
     yield from_pandas(pdf, npartitions=10)
 
 
+def test_equals(df, pdf):
+    assert df.equals(df)
+    assert df.equals(pdf)
+    assert df.equals(from_pandas(pdf, npartitions=3))
+
+    # Metadata mismatches
+    assert not df.equals(pdf.assign(z=0))
+    assert not df.equals(pdf[["y", "x"]])
+    assert not df.equals(pdf.iloc[:10])
+    assert not df.equals(pdf.astype({"x": float}))
+
+    # Index mismatches
+    assert not df.equals(pdf.iloc[::-1])
+
+    # Value mismatches
+    assert not df.equals(pdf.assign(x=pdf.x + 1))
+
+    # Not a DataFrame
+    assert not df.equals("foo")
+
+    # Index names are ignored, matching pandas
+    assert df.equals(pdf.rename_axis("idx"))
+
+
+def test_equals_nan():
+    pdf = pd.DataFrame({"a": [1.0, np.nan], "b": ["x", None]})
+    df = from_pandas(pdf, npartitions=2)
+    # NaNs in the same location compare equal
+    assert df.equals(pdf)
+    # NaNs in different locations compare unequal
+    assert not df.equals(pdf.iloc[::-1])
+
+
+def test_equals_empty():
+    pdf = pd.DataFrame({"a": pd.Series(dtype="int64")})
+    assert from_pandas(pdf, npartitions=2).equals(pdf)
+    assert not from_pandas(pdf, npartitions=2).equals(
+        pd.DataFrame({"a": pd.Series(dtype="float64")})
+    )
+
+
+def test_equals_string_columns():
+    pdf = pd.DataFrame({"s": ["a", "b", "c"]})
+    assert from_pandas(pdf, npartitions=2).equals(pdf)
+    assert not from_pandas(pdf, npartitions=2).equals(
+        pd.DataFrame({"s": ["a", "b", "d"]})
+    )
+
+
 def test_del(pdf, df):
     pdf = pdf.copy()
 
