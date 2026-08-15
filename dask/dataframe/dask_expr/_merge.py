@@ -477,13 +477,24 @@ class Merge(Expr):
             if right_on is None:
                 right_on = []
 
+            # ``merge_asof`` joins on the by-columns in addition to the
+            # index, so those columns must be kept on each side even if a
+            # later projection does not select them.
+            left_by = _convert_to_list(getattr(self, "left_by", None))
+            if left_by is None:
+                left_by = []
+
+            right_by = _convert_to_list(getattr(self, "right_by", None))
+            if right_by is None:
+                right_by = []
+
             left_suffix, right_suffix = self.suffixes[0], self.suffixes[1]
             project_left, project_right = [], []
             right_suff_columns, left_suff_columns = [], []
 
             # Find columns to project on the left
             for col in left.columns:
-                if col in left_on or col in projection:
+                if col in left_on or col in left_by or col in projection:
                     project_left.append(col)
                 elif f"{col}{left_suffix}" in projection:
                     project_left.append(col)
@@ -494,7 +505,7 @@ class Merge(Expr):
 
             # Find columns to project on the right
             for col in right.columns:
-                if col in right_on or col in projection:
+                if col in right_on or col in right_by or col in projection:
                     project_right.append(col)
                 elif f"{col}{right_suffix}" in projection:
                     project_right.append(col)
