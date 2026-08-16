@@ -35,7 +35,7 @@ def test_hash_pandas_object(obj):
     if isinstance(a, np.ndarray):
         np.testing.assert_equal(a, b)
     else:
-        assert_eq(a, b)
+        assert_eq(a, b, sort_results=False)
 
 
 def test_categorical_consistency():
@@ -81,4 +81,4 @@ def test_object_missing_values():
 def test_hash_object_dispatch(obj):
     result = dd.dispatch.hash_object_dispatch(obj)
     expected = pd.util.hash_pandas_object(obj)
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
