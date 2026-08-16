@@ -71,6 +71,8 @@ complete = [
     "dask[array,dataframe,distributed,diagnostics]",
     "lz4 >= 4.3.2",
 ]
+# Performance optimization: cytoolz provides faster cythonized implementation
+performance = ["cytoolz >= 0.11.2"]
 test = [
     "pandas[test]",
     "pytest",
