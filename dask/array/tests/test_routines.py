@@ -1691,6 +1691,51 @@ def test_take():
     assert same_keys(da.take(a, [3, 4, 5], axis=-1), da.take(a, [3, 4, 5], axis=-1))
 
 
+def test_take_boolean_indices():
+    x = np.arange(12).reshape((3, 4))
+    a = da.from_array(x, chunks=(2, 2))
+
+    lazy_indices = da.from_array(np.array([True, False, True]), chunks=2)
+    lazy_indices = lazy_indices[lazy_indices]
+    indices = [
+        [True, False],
+        (False, True),
+        np.array([True, False]),
+        da.from_array(np.array([False, True]), chunks=1),
+        lazy_indices,
+        True,
+        np.bool_(False),
+        np.array(True),
+        da.from_array(np.array(False), chunks=()),
+    ]
+
+    for index in indices:
+        expected_index = index.compute() if isinstance(index, da.Array) else index
+        for axis in [0, 1, -1]:
+            assert_eq(np.take(x, expected_index, axis), da.take(a, index, axis))
+
+
+def test_take_does_not_convert_arraylike_indices():
+    class ArrayLike:
+        ndim = 1
+
+        def __getitem__(self, index):
+            return index
+
+    class Indices:
+        shape = (2,)
+        dtype = np.dtype(np.intp)
+
+        def __array_function__(self, func, types, args, kwargs):
+            return NotImplemented
+
+        def __array__(self, *args, **kwargs):
+            raise AssertionError("unexpected implicit conversion")
+
+    indices = Indices()
+    assert da.take(ArrayLike(), indices) == (indices,)
+
+
 def test_take_large():
     a = da.arange(1_000_000_000_000, chunks=(200_000_000,), dtype="int64")
 
