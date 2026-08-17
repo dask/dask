@@ -59,6 +59,7 @@ You can install Dask with ``conda``, with ``pip``, or install from source.
          python -m pip install "dask[dataframe]"   # Install requirements for dask dataframe
          python -m pip install "dask[diagnostics]" # Install requirements for dask diagnostics
          python -m pip install "dask[distributed]" # Install requirements for distributed dask
+         python -m pip install "dask[performance]" # Install cytoolz for performance optimization
 
       We have these options so that users of the lightweight core Dask scheduler
       aren't required to download the more exotic dependencies of the collections
@@ -114,7 +115,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `crick`_         | ``>=0.0.5``     | Use ``tdigest`` internal method for dataframe statistics computation                                    |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `cytoolz`_       | ``>=0.11.2``    | Faster cythonized implementation of internal iterators, functions, and dictionaries                     |
+| `cytoolz`_       | ``>=0.11.2``    | Faster cythonized implementation of internal iterators, functions, and dictionaries (install with ``dask[performance]``) |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `dask-ml`_       | ``>=1.4.0``     | Common machine learning functions scaled with Dask                                                      |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
