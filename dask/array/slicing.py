@@ -789,6 +789,12 @@ def normalize_slice(idx, dim):
             if stop is not None and start is not None and stop < start:
                 stop = start
         elif step < 0:
+            if start == -1:
+                # ``idx.indices`` returns ``start == -1`` as a sentinel for a
+                # negative-step slice that begins before the array (an empty
+                # selection). Keeping it would later be reinterpreted as the
+                # last element, so select nothing instead.
+                return slice(0, 0, step)
             if start >= dim - 1:
                 start = None
             if stop < 0:
