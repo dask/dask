@@ -189,25 +189,33 @@ w_like = wrap(wrap_func_like)
 empty_like = w_like(np.empty, func_like=np.empty_like)
 
 
+def _remove_docstring_example(docstring, example):
+    """Remove one complete doctest example from a docstring."""
+    lines = docstring.splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if line.lstrip() == example)
+    except StopIteration:
+        return docstring
+
+    end = start + 1
+    while end < len(lines) and lines[end].strip():
+        end += 1
+    del lines[start:end]
+    return "\n".join(lines)
+
+
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
 _full = array_creation_dispatch.register_inplace(
     backend="numpy",
     name="full",
-)(w(broadcast_trick(np.full_like)))
+)(w(np.full, func_like=broadcast_trick(np.full_like)))
 _full_like = w_like(np.full, func_like=np.full_like)
 
-
-# workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
 if _full.__doc__ is not None:
-    _full.__doc__ = _full.__doc__.replace(
-        "array([0.1,  0.1,  0.1,  0.1,  0.1,  0.1])",
-        "array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])",
-    )
-    _full.__doc__ = _full.__doc__.replace(
-        ">>> np.full_like(y, [0, 0, 255])",
-        ">>> np.full_like(y, [0, 0, 255])  # doctest: +NORMALIZE_WHITESPACE",
-    )
+    _full.__doc__ = _remove_docstring_example(
+        _full.__doc__, ">>> np.full((2, 2), [1, 2])"
+    ).replace("fill_value : scalar or array_like", "fill_value : scalar")
 
 
 def full(shape, fill_value, *args, **kwargs):
@@ -217,6 +225,11 @@ def full(shape, fill_value, *args, **kwargs):
         raise ValueError(
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
+    like = kwargs.pop("like", None)
+    if like is not None:
+        if kwargs.get("meta") is not None:
+            raise TypeError("full() received both 'like' and 'meta'")
+        kwargs["meta"] = meta_from_array(like)
     if kwargs.get("dtype") is None:
         if hasattr(fill_value, "dtype"):
             kwargs["dtype"] = fill_value.dtype
