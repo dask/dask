@@ -92,6 +92,16 @@ def test_concat_multiple_no_columns(df, pdf):
     assert_eq(result, expected)
 
 
+def test_concat_reset_set_index_repr():
+    pdf1 = pd.DataFrame({"trid": [0, 1], "ts": [100, 101]}).set_index("trid")
+    pdf2 = pd.DataFrame({"trid": [2, 3], "ts": [102, 103]}).set_index("trid")
+    result = concat([from_pandas(pdf1), from_pandas(pdf2)]).reset_index()
+    result = result.set_index("trid")
+
+    assert "Dask DataFrame Structure" in repr(result)
+    assert_eq(result, pd.concat([pdf1, pdf2]))
+
+
 def test_concat_simplify(pdf, df):
     pdf2 = pdf.copy()
     pdf2["z"] = 1
