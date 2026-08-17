@@ -84,7 +84,7 @@ result in an error.
    ...
    ValueError: Array chunk sizes unknown
 
-   A possible solution: https://docs.dask.org/en/latest/array-chunks.html#unknown-chunks.
+   A possible solution: https://docs.dask.org/en/stable/array-chunks.html#unknown-chunks.
    Summary: to compute chunks sizes, use
 
        x.compute_chunk_sizes()  # for Dask Array
