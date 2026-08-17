@@ -83,6 +83,106 @@ the same commands to many machines.  We recommend searching online for "cluster
 ssh" or "cssh".
 
 
+.. _deploying-cli.spec:
+
+Dask Spec
+---------
+
+The ``dask spec`` command allows you to launch a Dask cluster using a
+declarative specification. This is useful for defining complex cluster setups
+that involve multiple services.
+
+There are two ways to provide the specification:
+
+``--spec-file``
+   Path to a YAML or JSON file containing the specification.
+
+``--spec``
+   An inline JSON string containing the specification.
+
+You must provide exactly one of these options. For example:
+
+.. code-block:: bash
+
+   # From a YAML file
+   dask spec --spec-file my-cluster.yaml
+
+   # From an inline JSON string
+   dask spec --spec '{"my-worker": {"cls": "distributed.Nanny", "opts": {"nthreads": 2}}}'
+
+Specification Format
+~~~~~~~~~~~~~~~~~~~~
+
+The specification is a mapping of names to process definitions. Each entry
+must include a ``cls`` key and may include an ``opts`` key:
+
+``cls``
+   A fully qualified Python class name as a string. Common choices include
+   ``"distributed.Scheduler"``, ``"distributed.Worker"``, and
+   ``"distributed.Nanny"``.
+
+``opts``
+   A mapping of keyword arguments to pass to the class constructor.
+
+.. important::
+
+   In the Python API of :class:`~distributed.SpecCluster`, ``cls`` is a
+   Python class object (e.g., ``Nanny``) and keyword arguments are provided
+   under ``options``. In YAML/JSON specifications used by ``dask spec``,
+   ``cls`` must be a **dotted import path string** (e.g.,
+   ``"distributed.Nanny"``) and keyword arguments go under ``opts``.
+
+Example
+~~~~~~~
+
+The following example adapts the
+:class:`~distributed.SpecCluster` Python examples into a YAML specification
+file. Save this as ``my-cluster.yaml``:
+
+.. code-block:: yaml
+
+   my-scheduler:
+     cls: distributed.Scheduler
+     opts:
+       dashboard_address: ':8787'
+
+   my-worker:
+     cls: distributed.Worker
+     opts:
+       nthreads: 1
+
+   my-nanny:
+     cls: distributed.Nanny
+     opts:
+       nthreads: 2
+
+Then launch the cluster:
+
+.. code-block:: bash
+
+   dask spec --spec-file my-cluster.yaml
+
+This is equivalent to the following Python code using
+:class:`~distributed.SpecCluster`:
+
+.. code-block:: python
+
+   from distributed import Scheduler, Worker, Nanny, SpecCluster
+
+   scheduler = {"cls": Scheduler, "options": {"dashboard_address": ":8787"}}
+   workers = {
+       "my-worker": {"cls": Worker, "options": {"nthreads": 1}},
+       "my-nanny": {"cls": Nanny, "options": {"nthreads": 2}},
+   }
+   cluster = SpecCluster(scheduler=scheduler, workers=workers)
+
+Note the two key differences between the Python API and the YAML format:
+
+- ``cls`` uses a dotted import string (``"distributed.Nanny"``) instead of a
+  class reference (``Nanny``).
+- Keyword arguments use the key ``opts`` instead of ``options``.
+
+
 .. _worker-scheduler-cli-options:
 
 CLI Options
@@ -91,8 +191,8 @@ CLI Options
 .. note::
 
    The command line documentation here may differ depending on your installed
-   version. We recommend referring to the output of ``dask scheduler --help``
-   and ``dask worker --help``.
+   version. We recommend referring to the output of ``dask scheduler --help``,
+   ``dask worker --help`` and ``dask spec --help``.
 
 .. click:: distributed.cli.dask_scheduler:main
    :prog: dask scheduler
@@ -100,4 +200,8 @@ CLI Options
 
 .. click:: distributed.cli.dask_worker:main
    :prog: dask worker
+   :show-nested:
+
+.. click:: distributed.cli.dask_spec:main
+   :prog: dask spec
    :show-nested:
