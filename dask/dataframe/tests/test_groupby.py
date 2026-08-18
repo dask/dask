@@ -2895,6 +2895,26 @@ def test_series_named_agg(shuffle_method, agg):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("shuffle_method", [True, False])
+def test_series_named_agg_custom_aggregation(shuffle_method):
+    # Regression test for https://github.com/dask/dask/issues/10836:
+    # dd.Aggregation objects were rejected when passed as named-aggregation
+    # kwargs (``.agg(name=agg)``) even though the positional/list forms worked.
+    df = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, 5, 6, 9, 2, 6, 8],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    expected = df.groupby("a").b.agg(avg="mean", total="sum")
+    actual = ddf.groupby("a").b.agg(
+        shuffle_method=shuffle_method, avg=custom_mean, total=custom_sum
+    )
+    assert_eq(expected, actual, check_dtype=False)
+
+
 @pytest.mark.parametrize("by", ["A", ["A", "B"]])
 def test_empty_partitions_with_value_counts(by):
     # https://github.com/dask/dask/issues/7065
