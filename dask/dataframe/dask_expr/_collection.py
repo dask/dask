@@ -462,7 +462,19 @@ Expr={expr}"""
         return np.array(self.compute())
 
     def persist(self, fuse=True, **kwargs):
-        out = self.optimize(fuse=fuse)
+        # Wrap in `_ExprSequence` before optimizing, matching what
+        # `distributed.Client.persist` does via `collections_to_expr`: the
+        # "tune" optimization stage (e.g. FusedIO's IO-partition bucketing)
+        # only fires on a node that has a parent (see `Expr.rewrite`), so a
+        # bare root expr optimized on its own here would silently disagree
+        # with the (wrapped, and therefore tuned) expr that
+        # `distributed.Client.persist` submits for execution, leaving the
+        # returned collection's reported npartitions out of sync with the
+        # futures actually created (GH#12488).
+        from dask._expr import _ExprSequence
+
+        tuned_expr = _ExprSequence(self.expr).optimize(fuse=fuse)[0]
+        out = new_collection(tuned_expr)
         return DaskMethodsMixin.persist(out, **kwargs)
 
     def analyze(self, filename: str | None = None, format: str | None = None) -> None:
