@@ -327,6 +327,17 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     vals = np.array(vals)
     weights = np.array(weights)
 
+    # Guard against empty data (prevents IndexError during repr)
+    # This can occur when operations like merge, filter, or drop_duplicates
+    # result in empty partitions. Return unknown divisions to maintain
+    # consistent behavior with other cases where divisions cannot be determined.
+    if len(vals) == 0 or len(weights) == 0:
+        try:
+            return np.array([None] * (npartitions + 1), dtype=dtype)
+        except Exception:
+            # dtype does not support None value so allow it to change
+            return np.array([None] * (npartitions + 1), dtype=np.float64)
+
     # We want to create exactly `npartition` number of groups of `vals` that
     # are approximately the same weight and non-empty if possible.  We use a
     # simple approach (more accurate algorithms exist):
