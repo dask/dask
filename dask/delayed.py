@@ -137,7 +137,7 @@ def unpack_collections(expr, _return_collections=True):
         The object to be normalized. This function knows how to handle
         dask collections, as well as most builtin python types.
 
-    _optimize_collections: bool, optional
+    _return_collections: bool, optional
         Internal use only!
 
 
