@@ -2252,7 +2252,7 @@ class Array(DaskMethodsMixin):
 
         return choose(self, choices)
 
-    def reshape(self, *shape, merge_chunks=True, limit=None):
+    def reshape(self, *shape, merge_chunks=True, limit=None, copy=None):
         """Reshape array to new shape
 
         Refer to :func:`dask.array.reshape` for full documentation.
@@ -2265,7 +2265,7 @@ class Array(DaskMethodsMixin):
 
         if len(shape) == 1 and not isinstance(shape[0], Number):
             shape = shape[0]
-        return reshape(self, shape, merge_chunks=merge_chunks, limit=limit)
+        return reshape(self, shape, merge_chunks=merge_chunks, limit=limit, copy=copy)
 
     def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.

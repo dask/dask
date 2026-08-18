@@ -9,6 +9,7 @@ import numpy as np
 
 from dask._task_spec import Task, TaskRef
 from dask.array.core import Array
+from dask.array.numpy_compat import NUMPY_GE_210
 from dask.array.utils import meta_from_array
 from dask.base import tokenize
 from dask.core import flatten
@@ -280,7 +281,28 @@ def contract_tuple(chunks, factor):
     return tuple(out)
 
 
-def reshape(x, shape, merge_chunks=True, limit=None):
+def _reshape_block(x, shape, copy):
+    if copy is True:
+        return x.copy().reshape(shape)
+    if copy is False:
+        if isinstance(x, np.ndarray) and NUMPY_GE_210:
+            return np.reshape(x, shape, copy=False)
+        try:
+            view = x.view()
+            view.shape = shape
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Unable to avoid a copy while reshaping.") from error
+        return view
+    return x.reshape(shape)
+
+
+def _reshape_task(key, input_key, shape, copy):
+    if copy is None:
+        return Task(key, M.reshape, TaskRef(input_key), shape)
+    return Task(key, _reshape_block, TaskRef(input_key), shape, copy)
+
+
+def reshape(x, shape, merge_chunks=True, limit=None, *, copy=None):
     """Reshape array to new shape
 
     Parameters
@@ -298,6 +320,9 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     limit: int (optional)
         The maximum block size to target in bytes. If no limit is provided,
         it defaults to using the ``array.chunk-size`` Dask config value.
+    copy : bool, optional
+        If True, copy each output block. If False, raise a ValueError when the
+        reshape needs different input chunks or a block cannot return a view.
 
     Notes
     -----
@@ -332,23 +357,27 @@ def reshape(x, shape, merge_chunks=True, limit=None):
         # Fastpath for x.reshape(-1) on 1D arrays, allows unknown shape in x
         # for this case only.
         if len(shape) == 1 and x.ndim == 1:
+            if copy is True:
+                return x.map_blocks(M.copy, meta=x._meta)
             return x
         missing_size = sanitize_index(x.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
     _sanity_checks(x, shape)
 
-    if x.shape == shape:
+    if x.shape == shape and copy is not True:
         return x
 
     meta = meta_from_array(x, len(shape))
 
     name = "reshape-" + tokenize(x, shape)
+    if copy is not None:
+        name = "reshape-" + tokenize(x, shape, copy)
 
     if x.npartitions == 1:
         key = next(flatten(x.__dask_keys__()))
         new_key = (name,) + (0,) * len(shape)
-        dsk = {new_key: Task(new_key, M.reshape, TaskRef(key), shape)}
+        dsk = {new_key: _reshape_task(new_key, key, shape, copy)}
         chunks = tuple((d,) for d in shape)
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
         return Array(graph, name, chunks, meta=meta)
@@ -357,9 +386,14 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     din = len(x.shape)
     dout = len(shape)
     if not merge_chunks and din > dout:
-        x = x.rechunk(dict.fromkeys(range(din - dout), 1))
+        rechunked = x.rechunk(dict.fromkeys(range(din - dout), 1))
+        if copy is False and rechunked.chunks != x.chunks:
+            raise ValueError("Unable to avoid a copy while reshaping.")
+        x = rechunked
 
     inchunks, outchunks, _, _ = reshape_rechunk(x.shape, shape, x.chunks)
+    if copy is False and inchunks != x.chunks:
+        raise ValueError("Unable to avoid a copy while reshaping.")
     x2 = x.rechunk(inchunks)
 
     # Construct graph
@@ -367,7 +401,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     out_keys = list(product([name], *[range(len(c)) for c in outchunks]))
     shapes = list(product(*outchunks))
     dsk = {
-        a: Task(a, M.reshape, TaskRef(b), shape)
+        a: _reshape_task(a, b, shape, copy)
         for a, b, shape in zip(out_keys, in_keys, shapes)
     }
 
