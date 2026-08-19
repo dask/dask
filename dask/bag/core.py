@@ -10,6 +10,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Iterator, Sequence
 from functools import partial, reduce, wraps
 from random import Random
+from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 import tlz as toolz
@@ -1813,6 +1814,17 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     return Bag(d, name, len(d))
 
 
+def _open_url(url):
+    # from_url is meant for remote HTTP(S) fetches, but urlopen also honors
+    # file://, ftp:// and data: URLs, so an attacker-controlled url string
+    # turns into a local-file read or an SSRF request. Pin the scheme here,
+    # at the fetch site, so the check applies to the url actually opened.
+    scheme = urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"from_url only supports http and https URLs, got {url!r}")
+    return urlopen(url)
+
+
 def from_url(urls):
     """Create a dask Bag from a url.
 
@@ -1841,7 +1853,7 @@ def from_url(urls):
     name = f"from_url-{uuid.uuid4().hex}"
     dsk = {}
     for i, u in enumerate(urls):
-        dsk[(name, i)] = (list, (urlopen, u))
+        dsk[(name, i)] = (list, (_open_url, u))
     return Bag(dsk, name, len(urls))
 
 
