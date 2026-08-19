@@ -300,11 +300,11 @@ class Layer(Graph):
 
         return get_template("highlevelgraph_layer.html.j2").render(
             materialized=self.is_materialized(),
-            shortname=shortname,
+            shortname=html.escape(str(shortname)),
             layer_index=layer_index,
-            highlevelgraph_key=highlevelgraph_key,
+            highlevelgraph_key=html.escape(str(highlevelgraph_key)),
             info=self.layer_info_dict(),
-            dependencies=dependencies,
+            dependencies=[html.escape(str(dep)) for dep in dependencies],
             svg_repr=svg_repr,
         )
 
@@ -316,12 +316,12 @@ class Layer(Graph):
         }
         if self.annotations is not None:
             for key, val in self.annotations.items():
-                info[key] = html.escape(str(val))
+                info[html.escape(str(key))] = html.escape(str(val))
         if self.collection_annotations is not None:
             for key, val in self.collection_annotations.items():
                 # Hide verbose chunk details from the HTML table
                 if key != "chunks":
-                    info[key] = html.escape(str(val))
+                    info[html.escape(str(key))] = html.escape(str(val))
         return info
 
 
