@@ -829,7 +829,7 @@ def test_groupby():
 
 def test_groupby_with_indexer():
     b = db.from_sequence([[1, 2, 3], [1, 4, 9], [2, 3, 4]])
-    result = dict(b.groupby(0))
+    result = dict(b.groupby(lambda x: x[0]))
     assert valmap(sorted, result) == {1: [[1, 2, 3], [1, 4, 9]], 2: [[2, 3, 4]]}
 
 
