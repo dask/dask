@@ -4875,6 +4875,7 @@ def test_normalize_chunks_auto_1d(shape, limit, expected):
             ((4, 4, 4, 4, 4), (2, 2, 2, 2, 2, 5, 5)),
         ),
         ((1, 20), "auto", 10, ((1,), (10, 10))),
+        ((0, 20), "auto", 20, ((0,), (20,))),
     ],
 )
 def test_normalize_chunks_auto_2d(shape, chunks, limit, expected):
