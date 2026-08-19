@@ -76,3 +76,48 @@ def test_merge_asof_one_partition():
         direction="nearest",
     )
     assert_eq(result, expected)
+
+
+def test_merge_asof_drop_by_column():
+    # https://github.com/dask/dask/issues/12544
+    # Dropping a by-column after a merge_asof must not remove it from the
+    # input sides of the optimized graph, where it is still needed.
+    left = pd.DataFrame(
+        {
+            "timestamp": pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"]),
+            "key": [1, 1, 2],
+        }
+    ).set_index("timestamp")
+    right = pd.DataFrame(
+        {
+            "timestamp_right": pd.to_datetime(
+                ["2024-01-01", "2024-01-02", "2024-01-03"]
+            ),
+            "key_right": [1, 1, 2],
+            "value": ["a", "b", "c"],
+        }
+    ).set_index("timestamp_right")
+
+    ddf_left = from_pandas(left, npartitions=1)
+    ddf_right = from_pandas(right, npartitions=1)
+    result = merge_asof(
+        ddf_left,
+        ddf_right,
+        left_index=True,
+        right_index=True,
+        left_by="key",
+        right_by="key_right",
+        direction="backward",
+    )
+
+    expected = pd.merge_asof(
+        left,
+        right,
+        left_index=True,
+        right_index=True,
+        left_by="key",
+        right_by="key_right",
+        direction="backward",
+    )
+    assert_eq(result.drop(columns=["key_right"]), expected.drop(columns=["key_right"]))
+    assert_eq(result.drop(columns=["key"]), expected.drop(columns=["key"]))
