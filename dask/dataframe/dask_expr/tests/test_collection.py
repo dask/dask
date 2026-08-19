@@ -2804,3 +2804,24 @@ def test_align_known_divisions_in_assign():
     df = df.assign(c=df["a"])
     assert_eq(ddf, df)
     assert_eq(ddf.optimize(), df)
+
+
+def test_visualize_respects_configured_engine():
+    # See https://github.com/dask/dask/issues/11447
+    # The default (expression-graph) visualization only supports the
+    # ``graphviz`` engine. When a different engine is configured (or
+    # requested explicitly), ``visualize`` should fall back to the
+    # task-graph visualization instead of silently ignoring the setting
+    # and always trying to use ``graphviz``.
+    ipycytoscape = pytest.importorskip("ipycytoscape")
+
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4]})
+    ddf = from_pandas(pdf, npartitions=2)
+
+    with dask.config.set({"visualization.engine": "cytoscape"}):
+        result = ddf.visualize(filename=None)
+    assert isinstance(result, ipycytoscape.CytoscapeWidget)
+
+    # An explicit ``engine`` kwarg should also be respected.
+    result = ddf.visualize(filename=None, engine="cytoscape")
+    assert isinstance(result, ipycytoscape.CytoscapeWidget)

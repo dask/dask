@@ -26,7 +26,7 @@ from tlz import first
 
 import dask.array as da
 import dask.dataframe.dask_expr._backends  # noqa: F401
-from dask import compute, get_annotations
+from dask import compute, config, get_annotations
 from dask._collections import new_collection
 from dask._expr import OptimizerStage
 from dask._task_spec import Dict, TaskRef
@@ -629,6 +629,19 @@ Expr={expr}"""
             Whether to visualize the task graph. By default
             the expression graph will be visualized instead.
         """
+        if not tasks:
+            # The expression-graph visualization (``Expr.visualize``) only
+            # knows how to render with ``graphviz``. If the user has
+            # configured a different engine (e.g. via
+            # ``dask.config.set({"visualization.engine": "cytoscape"})``
+            # or an explicit ``engine`` kwarg), fall back to the task-graph
+            # visualization instead, since that path already respects the
+            # configured/requested engine.
+            engine = kwargs.get("engine", None) or config.get(
+                "visualization.engine", None
+            )
+            if engine not in (None, "graphviz"):
+                tasks = True
         if tasks:
             return super().visualize(**kwargs)
         return self.expr.visualize(**kwargs)
