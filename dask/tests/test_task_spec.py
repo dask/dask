@@ -907,6 +907,26 @@ def test_linear_fusion():
     assert not any("-" in k for k in dsk)
 
 
+def test_linear_fusion_avoids_renamed_key_collisions(monkeypatch):
+    monkeypatch.setattr(
+        "dask.optimization.default_fused_keys_renamer", lambda _: "collision"
+    )
+
+    tasks = [
+        a1 := Task("a1", func, 1),
+        Task("a2", func, a1.ref()),
+        b1 := Task("b1", func, 2),
+        Task("b2", func, b1.ref()),
+    ]
+    result = fuse_linear_task_spec({t.key: t for t in tasks}, {"a2", "b2"})
+
+    assert isinstance(result["collision"], Task)
+    assert isinstance(result["a2"], Alias)
+    assert result["a2"].target == "collision"
+    assert isinstance(result["b2"], Task)
+    assert result["b2"].key == "b2"
+
+
 def test_linear_fusion_intermediate_branch():
     tasks = [
         io := DataNode("foo", 1),
