@@ -3926,7 +3926,9 @@ def _setup_zarr_store(
     # Cannot directly import FSStore from storage.
     from zarr import storage
 
-    if storage_options is not None:
+    if storage_options is not None and len(storage_options) > 0:
+        if isinstance(url, storage.StoreLike):
+            raise ValueError("Storage options cannot be used with existing store")
         if _zarr_v3():
             read_only = kwargs.pop("read_only", kwargs.pop("mode", "a") == "r")
             store = storage.FsspecStore.from_url(
