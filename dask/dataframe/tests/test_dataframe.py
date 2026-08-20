@@ -5416,9 +5416,7 @@ def test_visualize_respects_cytoscape_engine_config(monkeypatch):
         return "cytoscape-widget"
 
     def fake_graphviz_to_file(*args, **kwargs):
-        raise AssertionError(
-            "graphviz path should not be used when engine='cytoscape'"
-        )
+        raise AssertionError("graphviz path should not be used when engine='cytoscape'")
 
     monkeypatch.setattr("dask.dot._cytoscape_widget", fake_cytoscape_widget)
     monkeypatch.setattr("dask.dot.graphviz_to_file", fake_graphviz_to_file)
