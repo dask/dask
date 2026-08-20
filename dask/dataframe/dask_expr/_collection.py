@@ -4323,6 +4323,15 @@ class Series(FrameBase):
         Returns
         -------
         uniques : Series
+
+        Notes
+        -----
+        Unlike :meth:`pandas.Series.unique`, the order of the returned values is
+        not guaranteed to match the order in which they first appear in the data.
+        By default the unique values are combined across partitions using a
+        shuffle, which does not preserve the input order. Pass ``split_out=1`` to
+        compute the result on a single partition and preserve the original order
+        (only suitable for low-cardinality data).
         """
         shuffle_method = _get_shuffle_preferring_order(shuffle_method)
         return new_collection(Unique(self, split_every, split_out, shuffle_method))
