@@ -5398,3 +5398,40 @@ def test_loc_partitions_are_plain_scalars():
 
     result = ddf.loc[indexer.tolist()]
     assert type(result.divisions[0]) is int
+
+
+def test_visualize_respects_cytoscape_engine_config(monkeypatch):
+    # Regression test for https://github.com/dask/dask/issues/11447
+    # `.visualize()` on a dask.dataframe collection (backed by `Expr`) must
+    # respect the "visualization.engine" config, just like `dask.array` does,
+    # instead of always going through the graphviz-only code path.
+    df = pd.DataFrame({"a": range(8), "b": range(8)})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    called = {}
+
+    def fake_cytoscape_widget(data, filename=None, **kwargs):
+        called["data"] = data
+        called["filename"] = filename
+        return "cytoscape-widget"
+
+    def fake_graphviz_to_file(*args, **kwargs):
+        raise AssertionError("graphviz path should not be used when engine='cytoscape'")
+
+    monkeypatch.setattr("dask.dot._cytoscape_widget", fake_cytoscape_widget)
+    monkeypatch.setattr("dask.dot.graphviz_to_file", fake_graphviz_to_file)
+
+    with dask.config.set({"visualization.engine": "cytoscape"}):
+        result = ddf.visualize(filename=None)
+
+    assert result == "cytoscape-widget"
+    assert "data" in called
+    assert called["data"]["nodes"]
+    assert called["filename"] is None
+
+    # Passing engine explicitly also works, overriding the config.
+    called.clear()
+    with dask.config.set({"visualization.engine": "graphviz"}):
+        result = ddf.visualize(filename=None, engine="cytoscape")
+    assert result == "cytoscape-widget"
+    assert called["data"]["nodes"]
