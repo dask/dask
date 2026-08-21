@@ -5073,10 +5073,48 @@ def from_dict(
 
     collection_types = {type(v) for v in data.values() if is_dask_collection(v)}
     if collection_types:
-        raise NotImplementedError(
-            "from_dict doesn't currently support Dask collections as inputs. "
-            f"Objects of type {collection_types} were given in the input dict."
-        )
+        nparts_set = {v.npartitions for v in data.values() if is_dask_collection(v)}
+        if len(nparts_set) > 1:
+            raise ValueError(
+                "All Dask collections in the input dict must have the same "
+                f"number of partitions. Got {sorted(nparts_set)}."
+            )
+        nparts = nparts_set.pop()
+
+        from dask import delayed
+        from dask.dataframe.dask_expr.io._delayed import from_delayed
+        from dask.tokenize import tokenize as _tokenize
+
+        keys = list(data.keys())
+
+        @delayed
+        def _make_partition(*args, orient, dtype, columns, keys):
+            part_dict = dict(zip(keys, args))
+            return constructor.from_dict(part_dict, orient, dtype, columns)
+
+        name_prefix = "from-dict-" + _tokenize(data, orient, dtype, columns)
+
+        delayed_parts = []
+        for i in range(nparts):
+            args = []
+            for k in keys:
+                v = data[k]
+                if is_dask_collection(v):
+                    args.append(v.to_delayed()[i])
+                else:
+                    args.append(v)
+            delayed_parts.append(
+                _make_partition(
+                    *args,
+                    orient=orient,
+                    dtype=dtype,
+                    columns=columns,
+                    keys=keys,
+                    dask_key_name=f"{name_prefix}-{i}",
+                )
+            )
+
+        return from_delayed(delayed_parts, prefix=name_prefix)
 
     return from_pandas(
         constructor.from_dict(data, orient, dtype, columns),

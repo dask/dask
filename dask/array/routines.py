@@ -2612,3 +2612,33 @@ def triu_indices_from(arr, k=0):
     if arr.ndim != 2:
         raise ValueError("input array must be 2-d")
     return triu_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)
+
+
+@derived_from(np)
+def fill_diagonal(a, val, wrap=False):
+    if a.ndim < 2:
+        raise ValueError("array must be at least 2-d")
+    if wrap:
+        raise NotImplementedError("wrap=True is not yet supported for dask arrays")
+
+    a = asarray_safe(a, like=a)
+
+    def _fill_diagonal_chunk(block, val, block_info=None):
+        result = block.copy()
+        locs = block_info[0]["array-location"]
+
+        starts = [loc[0] for loc in locs]
+        stops = [loc[1] for loc in locs]
+
+        diag_start = max(starts)
+        diag_stop = min(stops)
+
+        if diag_start < diag_stop:
+            n = diag_stop - diag_start
+            local_starts = [diag_start - s for s in starts]
+            slices = tuple(slice(ls, ls + n) for ls in local_starts)
+            np.fill_diagonal(result[slices], val)
+
+        return result
+
+    return map_blocks(_fill_diagonal_chunk, a, val, dtype=a.dtype)
