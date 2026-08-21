@@ -18,7 +18,7 @@ from dask.dataframe.dask_expr._shuffle import (
 )
 from dask.dataframe.dask_expr.io import FromPandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq, xfail_gpu
-from dask.dataframe.utils import pyarrow_strings_enabled
+from dask.dataframe.utils import pyarrow_strings_enabled, valid_divisions
 
 # Set DataFrame backend for this module
 pd = _backend_library()
@@ -299,6 +299,35 @@ def test_set_index_repartition(df, pdf):
     result = df.set_index("x", npartitions=2)
     assert result.npartitions == 2
     assert result.optimize(fuse=False).npartitions == 2
+    assert_eq(result, pdf.set_index("x"))
+
+
+def test_set_index_drop_duplicates_divisions():
+    pdf = pd.DataFrame({"x": ["IBAN1", "IBAN2", "IBAN3", "IBAN4"]})
+    df = from_pandas(pdf, npartitions=4)
+
+    result = df.drop_duplicates().set_index("x", npartitions=2)
+    optimized = result.optimize(fuse=False)
+
+    assert len(result.divisions) == result.npartitions + 1
+    assert valid_divisions(result.divisions)
+    assert optimized.npartitions == result.npartitions
+    assert optimized.divisions == result.divisions
+    assert_eq(result, pdf.drop_duplicates().set_index("x"))
+
+
+def test_set_index_constant_index_divisions():
+    pdf = pd.DataFrame({"x": ["same"] * 4})
+    df = from_pandas(pdf, npartitions=4)
+
+    result = df.set_index("x", npartitions=10)
+    optimized = result.optimize(fuse=False)
+
+    assert result.npartitions == 1
+    assert len(result.divisions) == result.npartitions + 1
+    assert valid_divisions(result.divisions)
+    assert optimized.npartitions == result.npartitions
+    assert optimized.divisions == result.divisions
     assert_eq(result, pdf.set_index("x"))
 
 
