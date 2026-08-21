@@ -2953,5 +2953,5 @@ def test_fill_diagonal_does_not_modify_original():
     A = np.random.default_rng().standard_normal((10, 10))
     dA = da.from_array(A, chunks=5)
     original = A.copy()
-    result = da.fill_diagonal(dA, 999).compute()
+    da.fill_diagonal(dA, 999).compute()
     assert_eq(dA, original)

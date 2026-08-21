@@ -487,7 +487,9 @@ def test_from_dict_with_dask_series():
 
 def test_from_dict_with_dask_dataframe():
     pytest.importorskip("dask.array")
-    df = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]}), npartitions=2)
+    df = dd.from_pandas(
+        pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]}), npartitions=2
+    )
     data = {"a": df.x, "b": df.y}
     result = from_dict(data, npartitions=2)
     expected = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8]})
