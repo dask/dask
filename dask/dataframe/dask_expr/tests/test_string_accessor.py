@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+import dask
 from dask.dataframe.dask_expr._collection import DataFrame, from_pandas
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
 from dask.dataframe.utils import pyarrow_strings_enabled
@@ -131,13 +132,15 @@ def test_str_accessor_cat(ser, dser):
 
 @pytest.mark.parametrize("index", [None, [0]], ids=["range_index", "other index"])
 def test_str_split_(index):
-    df = pd.DataFrame({"a": ["a\nb"]}, index=index)
-    ddf = from_pandas(df, npartitions=1)
+    # Disable pyarrow string conversion for this test to match pandas behavior
+    with dask.config.set({"dataframe.convert-string": False}):
+        df = pd.DataFrame({"a": ["a\nb"]}, index=index)
+        ddf = from_pandas(df, npartitions=1)
 
-    pd_a = df["a"].str.split("\n", n=1, expand=True)
-    dd_a = ddf["a"].str.split("\n", n=1, expand=True)
+        pd_a = df["a"].str.split("\n", n=1, expand=True)
+        dd_a = ddf["a"].str.split("\n", n=1, expand=True)
 
-    assert_eq(dd_a, pd_a)
+        assert_eq(dd_a, pd_a)
 
 
 def test_str_accessor_not_available():
@@ -157,3 +160,29 @@ def test_partition():
     result = df[1]
     expected = pd.DataFrame.from_dict({"A": ["A|B", "C|D"]})["A"].str.partition("|")[1]
     assert_eq(result, expected)
+
+
+def test_str_split_expand_preserves_dtype():
+    # Test that str.split with expand=True preserves string dtypes
+    # Regression test for issue #11884
+    data = {"c": ["a,b,c", "d,e,f", "g,h,i"]}
+
+    # Test with string[pyarrow] dtype
+    df = pd.DataFrame(data, dtype="string[pyarrow]")
+    ddf = from_pandas(df, npartitions=2)
+
+    expected = df["c"].str.split(",", n=1, expand=True)
+    result = ddf["c"].str.split(",", n=1, expand=True)
+
+    # Check that dtypes match (this checks meta dtypes)
+    assert_eq(result, expected)
+
+    # Test with regular string dtype (disable pyarrow conversion to preserve dtype)
+    with dask.config.set({"dataframe.convert-string": False}):
+        df_string = pd.DataFrame(data, dtype="string")
+        ddf_string = from_pandas(df_string, npartitions=2)
+
+        expected_string = df_string["c"].str.split(",", n=1, expand=True)
+        result_string = ddf_string["c"].str.split(",", n=1, expand=True)
+
+        assert_eq(result_string, expected_string)
