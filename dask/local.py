@@ -489,6 +489,8 @@ def get_async(
                 """Fire off a task to the thread pool"""
                 # Determine chunksize and/or number of tasks to submit
                 nready = len(state["ready"])
+                if nready == 0:
+                    return
                 if chunksize == -1:
                     ntasks = nready
                     chunksize = -(ntasks // -num_workers)
