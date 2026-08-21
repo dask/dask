@@ -5706,7 +5706,7 @@ def concatenate_axes(arrays, axes):
     return concatenate3(transposelist(arrays, axes, extradims=extradims))
 
 
-def to_hdf5(filename, *args, chunks=True, **kwargs):
+def to_hdf5(filename, *args, chunks=True, compute=True, **kwargs):
     """Store arrays in HDF5 file
 
     This saves several dask arrays into several datapaths in an HDF5 file.
@@ -5717,6 +5717,9 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
     chunks: tuple or ``True``
         Chunk shape, or ``True`` to pass the chunks from the dask array.
         Defaults to ``True``.
+    compute: bool, optional
+        If True (default), compute immediately. If False, return a
+        ``dask.delayed.Delayed`` object that can be computed later.
 
     Examples
     --------
@@ -5751,7 +5754,21 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
 
     import h5py
 
-    with h5py.File(filename, mode="a") as f:
+    if compute:
+        with h5py.File(filename, mode="a") as f:
+            dsets = [
+                f.require_dataset(
+                    dp,
+                    shape=x.shape,
+                    dtype=x.dtype,
+                    chunks=tuple(c[0] for c in x.chunks) if chunks is True else chunks,
+                    **kwargs,
+                )
+                for dp, x in data.items()
+            ]
+            store(list(data.values()), dsets)
+    else:
+        f = h5py.File(filename, mode="a")
         dsets = [
             f.require_dataset(
                 dp,
@@ -5762,7 +5779,7 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
             )
             for dp, x in data.items()
         ]
-        store(list(data.values()), dsets)
+        return store(list(data.values()), dsets, compute=False)
 
 
 def interleave_none(a, b):
