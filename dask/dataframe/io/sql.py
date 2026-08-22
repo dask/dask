@@ -13,7 +13,6 @@ from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.delayed import delayed, tokenize
 from dask.utils import parse_bytes
 
-
 def read_sql_query(
     sql,
     con,
@@ -147,6 +146,10 @@ def read_sql_query(
             minmax = pd.read_sql(q, engine)
             maxi, mini = minmax.iloc[0]
             dtype = minmax.dtypes["max_1"]
+            if dtype == "O":
+                q = sql.select([sql.func.count(index), 0]).select_from(table)
+                minmax = pd.read_sql(q, engine)
+                maxi, mini = minmax.iloc[0]
         else:
             mini, maxi = limits
             dtype = pd.Series(limits).dtype
@@ -169,7 +172,9 @@ def read_sql_query(
             divisions[0] = mini
             divisions[-1] = maxi
         elif dtype.kind in ["i", "u", "f"]:
-            divisions = np.linspace(mini, maxi, npartitions + 1, dtype=dtype).tolist()
+            divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
+        elif dtype.kind == "O":
+            divisions = np.linspace(mini, maxi, npartitions + 1, dtype=int).tolist()
         else:
             raise TypeError(
                 f'Provided index column is of type "{dtype}".  If divisions is not provided the '
@@ -180,7 +185,26 @@ def read_sql_query(
     lowers, uppers = divisions[:-1], divisions[1:]
     for i, (lower, upper) in enumerate(zip(lowers, uppers)):
         cond = index <= upper if i == len(lowers) - 1 else index < upper
-        q = sql.where(sa.sql.and_(index >= lower, cond))
+        if divisions is None:
+            if dtype.kind == "O":
+                q = (
+                    sql.select(columns)
+                    .offset(lower)
+                    .limit(upper - lower)
+                    .select_from(table)
+                )
+            else:
+                q = (
+                    sql.select(columns)
+                    .where(sql.and_(index >= lower, cond))
+                    .select_from(table)
+                )
+        else:
+            q = (
+                sql.select(columns)
+                .where(sql.and_(index >= lower, cond))
+                .select_from(table)
+            )
         parts.append(
             delayed(_read_sql_chunk)(
                 q, con, meta, engine_kwargs=engine_kwargs, **kwargs
