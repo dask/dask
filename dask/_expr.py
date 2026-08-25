@@ -765,10 +765,67 @@ class Expr:
 
         return g
 
-    def visualize(self, filename="dask-expr.svg", format=None, **kwargs):
+    def _to_cytoscape_json(self, **kwargs):
+        from dask.dot import label, name
+
+        nodes = []
+        edges = []
+        data = {"nodes": nodes, "edges": edges}
+
+        stack = [self]
+        seen = set()
+        dependencies = {}
+        while stack:
+            expr = stack.pop()
+
+            if expr._name in seen:
+                continue
+            seen.add(expr._name)
+
+            dependencies[expr] = set(expr.dependencies())
+            for dep in expr.dependencies():
+                stack.append(dep)
+
+        cache = {}
+        for expr in dependencies:
+            expr_name = name(expr)
+
+            deps = [
+                funcname(type(dep)) if isinstance(dep, Expr) else str(dep)
+                for dep in expr._node_label_args()
+            ]
+            _label = funcname(type(expr))
+            if deps:
+                _label = f"{_label}({', '.join(deps)})" if deps else _label
+            node_label = label(_label, cache=cache)
+
+            nodes.append(
+                {
+                    "data": {
+                        "id": expr_name,
+                        "label": str(node_label),
+                        "shape": "rectangle",
+                        "color": "gray",
+                    }
+                }
+            )
+
+        for expr, deps in dependencies.items():
+            expr_name = name(expr)
+            for dep in deps:
+                dep_name = name(dep)
+                edges.append({"data": {"source": dep_name, "target": expr_name}})
+
+        return data
+
+    def visualize(self, filename="dask-expr.svg", format=None, engine=None, **kwargs):
         """
         Visualize the expression graph.
-        Requires ``graphviz`` to be installed.
+
+        By default this requires ``graphviz`` to be installed. Alternatively,
+        the ``ipycytoscape`` engine can be used by either passing
+        ``engine="cytoscape"`` or by setting the ``visualization.engine``
+        dask config option to ``"cytoscape"``.
 
         Parameters
         ----------
@@ -779,14 +836,46 @@ class Expr:
             rendered in the Jupyter notebook only.
         format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
             Format in which to write output file. Default is 'svg'.
+        engine : {"graphviz", "ipycytoscape", "cytoscape"}, optional.
+            The visualization engine to use. If not provided, this checks the
+            dask config value ``"visualization.engine"``. If that is not set,
+            it tries to import ``graphviz`` and ``ipycytoscape``, using the
+            first one to succeed.
         **kwargs
-           Additional keyword arguments to forward to ``to_graphviz``.
+           Additional keyword arguments to forward to the visualization engine.
         """
-        from dask.dot import graphviz_to_file
+        engine = engine or dask.config.get("visualization.engine", None)
 
-        g = self._to_graphviz(**kwargs)
-        graphviz_to_file(g, filename, format)
-        return g
+        if not engine:
+            try:
+                import graphviz  # noqa: F401
+
+                engine = "graphviz"
+            except ImportError:
+                try:
+                    import ipycytoscape  # noqa: F401
+
+                    engine = "cytoscape"
+                except ImportError:
+                    pass
+
+        if engine == "graphviz":
+            from dask.dot import graphviz_to_file
+
+            g = self._to_graphviz(**kwargs)
+            graphviz_to_file(g, filename, format)
+            return g
+        elif engine in ("cytoscape", "ipycytoscape"):
+            from dask.dot import _cytoscape_widget
+
+            data = self._to_cytoscape_json()
+            return _cytoscape_widget(data, filename=filename, **kwargs)
+        elif engine is None:
+            raise RuntimeError(
+                "No visualization engine detected, please install graphviz or ipycytoscape"
+            )
+        else:
+            raise ValueError(f"Visualization engine {engine} not recognized")
 
     def walk(self) -> Generator[Expr]:
         """Iterate through all expressions in the tree

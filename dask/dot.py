@@ -469,6 +469,37 @@ def cytoscape_graph(
     -------
     result : ipycytoscape.CytoscapeWidget
     """
+    data = _to_cytoscape_json(dsk, **kwargs)
+    return _cytoscape_widget(
+        data,
+        filename=filename,
+        rankdir=rankdir,
+        node_sep=node_sep,
+        edge_sep=edge_sep,
+        spacing_factor=spacing_factor,
+        node_style=node_style,
+        edge_style=edge_style,
+    )
+
+
+def _cytoscape_widget(
+    data,
+    filename: str | None = "mydask",
+    *,
+    rankdir: str = "BT",
+    node_sep: float = 10,
+    edge_sep: float = 10,
+    spacing_factor: float = 1,
+    node_style: dict[str, str] | None = None,
+    edge_style: dict[str, str] | None = None,
+):
+    """Build (and optionally write to disk) an ipycytoscape widget from
+    Cytoscape JSON data (see ``_to_cytoscape_json``).
+
+    This is factored out of ``cytoscape_graph`` so that callers which do not
+    have a plain dask task graph (e.g. ``dask_expr`` expression graphs) can
+    still render using the cytoscape engine.
+    """
     ipycytoscape = import_required(
         "ipycytoscape",
         "Drawing dask graphs with the cytoscape engine requires the `ipycytoscape` "
@@ -481,7 +512,6 @@ def cytoscape_graph(
     node_style = node_style or {}
     edge_style = edge_style or {}
 
-    data = _to_cytoscape_json(dsk, **kwargs)
     # TODO: it's not easy to programmatically increase the height of the widget.
     # Ideally we would make it a bit bigger, but that will probably require upstreaming
     # some fixes.
