@@ -241,6 +241,16 @@ class Layer(Graph):
             """
             nonlocal is_leaf
 
+            # Handle new-style GraphNode / Task objects from dask._task_spec.
+            # The legacy tuple path below only handles (callable, args…) tuples;
+            # Task objects must go through their .substitute() API so that
+            # internal TaskRef dependencies are renamed correctly (gh-12127).
+            if isinstance(o, GraphNode):
+                if hasattr(o, "dependencies") and (deps := o.dependencies & keys):
+                    is_leaf = False
+                    return o.substitute({k: clone_key(k, seed) for k in deps})
+                return o
+
             typ = type(o)
             if typ is tuple and o and callable(o[0]):
                 return (o[0],) + tuple(clone_value(i) for i in o[1:])
