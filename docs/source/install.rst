@@ -212,7 +212,7 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _jinja2: https://jinja.palletsprojects.com/
 .. _lz4: https://python-lz4.readthedocs.io/en/stable/index.html
 .. _matplotlib: https://matplotlib.org/
-.. _mimesis: https://mimesis.name/en/master/
+.. _mimesis: https://pypi.org/project/mimesis/
 .. _mmh3: https://github.com/hajimes/mmh3
 .. _numpy: https://numpy.org/
 .. _pandas: https://pandas.pydata.org/

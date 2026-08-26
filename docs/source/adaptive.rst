@@ -49,7 +49,7 @@ Adaptive
 To make setting up adaptive deployments easy, some Dask deployment solutions
 offer an ``.adapt()`` method.  Here is an example with
 `dask_kubernetes.KubeCluster
-<https://kubernetes.dask.org/en/latest/kubecluster.html>`_.
+<https://kubernetes.dask.org/en/stable/>`_.
 
 .. code-block:: python
 
