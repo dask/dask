@@ -167,7 +167,7 @@ def test_str_split_expand_preserves_dtype():
     # Regression test for issue #11884
     data = {"c": ["a,b,c", "d,e,f", "g,h,i"]}
 
-    # Test with string[pyarrow] dtype
+    # Test with string[pyarrow] dtype (default config)
     df = pd.DataFrame(data, dtype="string[pyarrow]")
     ddf = from_pandas(df, npartitions=2)
 
@@ -176,6 +176,10 @@ def test_str_split_expand_preserves_dtype():
 
     # Check that dtypes match (this checks meta dtypes)
     assert_eq(result, expected)
+
+    # Verify that the default config preserves string[pyarrow] dtype
+    assert result._meta.dtypes[0] == "string[pyarrow]"
+    assert result.compute().dtypes[0] == "string[pyarrow]"
 
     # Test with regular string dtype (disable pyarrow conversion to preserve dtype)
     with dask.config.set({"dataframe.convert-string": False}):
@@ -186,3 +190,7 @@ def test_str_split_expand_preserves_dtype():
         result_string = ddf_string["c"].str.split(",", n=1, expand=True)
 
         assert_eq(result_string, expected_string)
+
+        # Verify that the dtype is preserved when convert-string is disabled
+        assert result_string._meta.dtypes[0] == "string"
+        assert result_string.compute().dtypes[0] == "string"
