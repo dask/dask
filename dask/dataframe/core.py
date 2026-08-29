@@ -39,6 +39,20 @@ def _concat(args, ignore_index=False):
     if isinstance(first(core.flatten(args)), np.ndarray):
         return da.core.concatenate3(args)
     if not has_parallel_type(args[0]):
+        # An empty partition backed by a pyarrow-typed datetime or timedelta
+        # column reduces (min/max) to pandas.NA rather than the dtype's own
+        # NaT, since pandas' scalar reduction over an empty ArrowDtype series
+        # doesn't box the missing value the same way a non-empty one would.
+        # Mixed into a plain list with real Timestamp/Timedelta scalars from
+        # the other partitions, that NA forces pd.Series(args) to infer
+        # dtype=object instead of a datetime64/timedelta64 dtype, and a
+        # second min/max over that object Series then compares a Timestamp
+        # against pandas.NA directly and raises. Swapping it for NaT here
+        # lets pandas infer the proper dtype and skip it correctly instead.
+        if any(isinstance(a, (pd.Timestamp, pd.Timedelta)) for a in args) and any(
+            a is pd.NA for a in args
+        ):
+            args = [pd.NaT if a is pd.NA else a for a in args]
         try:
             return pd.Series(args)
         except Exception:

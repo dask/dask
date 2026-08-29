@@ -1256,6 +1256,28 @@ def test_empty_df_reductions(func):
     assert_eq(dsk_func(ddf), pd_func(pdf))
 
 
+@pytest.mark.parametrize("func", ["min", "max"])
+def test_pyarrow_timestamp_reduction_with_empty_partition(func):
+    # An empty partition backed by a pyarrow timestamp dtype reduces
+    # (min/max) to pandas.NA rather than NaT, and mixing that NA into a
+    # scalar list alongside real Timestamps from the other partitions used
+    # to make the final combine step infer dtype=object and then raise
+    # comparing a Timestamp against pandas.NA directly (#12048).
+    pdf = pd.DataFrame(
+        {
+            "id": [0, 1, 2],
+            "time": pd.to_datetime(["2018-01-01", "2018-01-02", "2018-01-03"]),
+        }
+    ).astype({"time": "timestamp[ns][pyarrow]"})
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = ddf[ddf["id"] != 1]
+    assert list(ddf.map_partitions(len).compute()) == [1, 0, 1]
+
+    result = getattr(ddf["time"], func)().compute()
+    expected = getattr(pdf[pdf["id"] != 1]["time"], func)()
+    assert result == expected
+
+
 @pytest.mark.parametrize("method", ["sum", "prod", "product"])
 @pytest.mark.parametrize("min_count", [0, 9])
 def test_series_agg_with_min_count(method, min_count):
