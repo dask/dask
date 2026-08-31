@@ -17,6 +17,9 @@ from dask.dataframe.utils import (
     check_meta,
     has_known_categories,
 )
+from dask.utils_test import import_or_none
+
+pa = import_or_none("pyarrow")
 
 
 def test_merge_indexed_dataframe_to_indexed_dataframe():
@@ -2117,6 +2120,55 @@ def test_dtype_equality_warning():
     with warnings.catch_warnings(record=True) as record:
         dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
     assert not record
+
+
+@pytest.mark.parametrize(
+    "make_dtypes",
+    [
+        # Built lazily: pd.StringDtype("pyarrow") raises ImportError without
+        # pyarrow, and a parametrize argument is evaluated at collection time,
+        # which would break this module in pyarrow-free environments.
+        pytest.param(
+            lambda: (pd.StringDtype("pyarrow"), pd.StringDtype("python")),
+            marks=pytest.mark.skipif(pa is None, reason="requires pyarrow"),
+            id="string-storage",
+        ),
+        pytest.param(
+            lambda: (pd.CategoricalDtype(["a", "b"]), pd.CategoricalDtype(["x", "y"])),
+            id="categorical-categories",
+        ),
+    ],
+)
+def test_dtype_mismatch_warning_distinguishes_dtypes(make_dtypes):
+    # https://github.com/dask/dask/issues/11978
+    # Dtypes that differ but share a str() representation must not be
+    # rendered identically, or the warning appears to report a column
+    # mismatching itself.
+    left_dtype, right_dtype = make_dtypes()
+    df1 = pd.DataFrame({"a": pd.array(["a", "b"], dtype=left_dtype)})
+    df2 = pd.DataFrame({"a": pd.array(["x", "y"], dtype=right_dtype)})
+
+    with pytest.warns(UserWarning, match="data type mismatches") as record:
+        dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
+
+    message = str(record[0].message)
+    left_repr, right_repr = repr(left_dtype), repr(right_dtype)
+    assert left_repr in message
+    assert right_repr in message
+
+
+def test_dtype_mismatch_warning_keeps_str_when_unambiguous():
+    # Dtypes that already render distinctly keep their concise str() form,
+    # so the common case is not regressed to repr() (e.g. dtype('int64')).
+    df1 = pd.DataFrame({"a": np.array([1, 2], dtype="int64")})
+    df2 = pd.DataFrame({"a": np.array([1.0, 2.0], dtype="float64")})
+
+    with pytest.warns(UserWarning, match="data type mismatches") as record:
+        dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
+
+    message = str(record[0].message)
+    assert "int64" in message and "float64" in message
+    assert "dtype('int64')" not in message
 
 
 @pytest.mark.parametrize(
