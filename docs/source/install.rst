@@ -59,7 +59,7 @@ You can install Dask with ``conda``, with ``pip``, or install from source.
          python -m pip install "dask[dataframe]"   # Install requirements for dask dataframe
          python -m pip install "dask[diagnostics]" # Install requirements for dask diagnostics
          python -m pip install "dask[distributed]" # Install requirements for distributed dask
-         python -m pip install "dask[performance]" # Install cytoolz for performance optimization
+         python -m pip install "dask[performance]" # Install cytoolz and cityhash for performance optimization
 
       We have these options so that users of the lightweight core Dask scheduler
       aren't required to download the more exotic dependencies of the collections
@@ -111,7 +111,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `cachey`_        | ``>=0.1.1``     | Use caching for computation                                                                             |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
-| `cityhash`_      | ``>=0.2.4``     | Use CityHash and FarmHash hash functions for array hashing (~2x faster than MurmurHash)                 |
+| `cityhash`_      | ``>=0.2.4``     | Use CityHash and FarmHash hash functions for array hashing (~2x faster than MurmurHash) (install with ``dask[performance]``) |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+
 | `crick`_         | ``>=0.0.5``     | Use ``tdigest`` internal method for dataframe statistics computation                                    |
 +------------------+-----------------+---------------------------------------------------------------------------------------------------------+

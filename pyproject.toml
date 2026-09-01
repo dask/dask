@@ -72,7 +72,8 @@ complete = [
     "lz4 >= 4.3.2",
 ]
 # Performance optimization: cytoolz provides faster cythonized implementation
-performance = ["cytoolz >= 0.11.2"]
+# cityhash provides faster hash functions for array hashing
+performance = ["cytoolz >= 0.11.2", "cityhash >= 0.2.4"]
 test = [
     "pandas[test]",
     "pytest",
