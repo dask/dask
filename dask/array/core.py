@@ -4100,9 +4100,8 @@ def to_zarr(
     zarr_array_kwargs.setdefault("dtype", arr.dtype)
 
     array_name = component or zarr_array_kwargs.pop("name", None)
-    lock = False
+    lock = True
     if mode == "w":
-        lock = True
         zarr_array_kwargs["overwrite"] = True
 
     zarr_array_kwargs["store"] = zarr_store
