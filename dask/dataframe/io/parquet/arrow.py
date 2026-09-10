@@ -1152,6 +1152,7 @@ class ArrowDatasetEngine(Engine):
             arrow_to_pandas=arrow_to_pandas,
             dtype_backend=dtype_backend,
             convert_string=convert_string,
+            ignore_metadata=dtype_backend == "pyarrow",
         )
         index_names = list(meta.index.names)
         column_names = list(meta.columns)
