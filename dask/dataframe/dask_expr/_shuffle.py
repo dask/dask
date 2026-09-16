@@ -70,6 +70,19 @@ from dask.utils import (
 )
 
 
+def _helper_column(name, meta):
+    """Label for a shuffle helper column that fits the frame's columns.
+
+    A frame with MultiIndex columns stores an assigned string label as a
+    tuple padded with empty strings, and pandas 4 requires the full-length
+    tuple up front, so build the label explicitly for such frames.
+    """
+    nlevels = getattr(getattr(meta, "columns", None), "nlevels", 1)
+    if nlevels > 1:
+        return (name,) + ("",) * (nlevels - 1)
+    return name
+
+
 class ShuffleBase(Expr):
     _parameters = [
         "frame",
@@ -100,7 +113,9 @@ class ShuffleBase(Expr):
     @functools.cached_property
     def _partitioning_index(self):
         partitioning_index = self.partitioning_index
-        if isinstance(partitioning_index, (str, int)):
+        # A tuple is a single column label of a frame with MultiIndex
+        # columns, not a list of columns.
+        if isinstance(partitioning_index, (str, int, tuple)):
             partitioning_index = [partitioning_index]
         return partitioning_index
 
@@ -256,18 +271,20 @@ class RearrangeByColumn(ShuffleBase):
                 f"{type(partitioning_index)} not a supported type for partitioning_index"
             )
 
+        partitions_col = _helper_column("_partitions", frame._meta)
+        partitions_0_col = _helper_column("_partitions_0", frame._meta)
         if not isinstance(partitioning_index, Expr) and not index_shuffle:
             cs = [col for col in partitioning_index if col not in frame.columns]
             if len(cs) == 1:
-                frame = Assign(frame, "_partitions_0", frame.index)
+                frame = Assign(frame, partitions_0_col, frame.index)
                 partitioning_index = partitioning_index.copy()
-                partitioning_index[partitioning_index.index(cs[0])] = "_partitions_0"
+                partitioning_index[partitioning_index.index(cs[0])] = partitions_0_col
 
         # Assign new "_partitions" column
         index_added = AssignPartitioningIndex(
             frame,
             partitioning_index,
-            "_partitions",
+            partitions_col,
             npartitions_out,
             frame._meta,
             index_shuffle,
@@ -276,7 +293,7 @@ class RearrangeByColumn(ShuffleBase):
         # Apply shuffle
         shuffled = Shuffle(
             index_added,
-            "_partitions",
+            partitions_col,
             npartitions_out,
             ignore_index,
             self.method,
@@ -289,7 +306,7 @@ class RearrangeByColumn(ShuffleBase):
 
         # Drop "_partitions" column and return
         return shuffled[
-            [c for c in shuffled.columns if c not in ["_partitions", "_partitions_0"]]
+            [c for c in shuffled.columns if c not in (partitions_col, partitions_0_col)]
         ]
 
 
@@ -764,7 +781,11 @@ class AssignPartitioningIndex(Blockwise):
         index = partitioning_index(index, npartitions)
         if df.ndim == 1:
             df = df.to_frame()
-        return df.assign(**{name: index})
+        # Setting the column directly accepts the tuple label a frame with
+        # MultiIndex columns needs; DataFrame.assign only takes strings.
+        df = df.copy(deep=False)
+        df[name] = index
+        return df
 
 
 class BaseSetIndexSortValues(Expr):

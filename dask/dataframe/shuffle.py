@@ -138,14 +138,25 @@ def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     return partitions
 
 
+def _is_partitions_column(col):
+    """Whether ``col`` is the precomputed "_partitions" helper column.
+
+    A frame with MultiIndex columns carries the helper as a tuple label
+    whose first level is the name.
+    """
+    if isinstance(col, tuple):
+        return len(col) > 0 and col[0] == "_partitions"
+    return col == "_partitions"
+
+
 def shuffle_group_2(df, cols, ignore_index, nparts):
     if not len(df):
         return {}, df
 
-    if isinstance(cols, str):
+    if isinstance(cols, (str, tuple)):
         cols = [cols]
 
-    if cols and cols[0] == "_partitions":
+    if cols and _is_partitions_column(cols[0]):
         ind = df[cols[0]].astype(np.int32)
     else:
         ind = (
@@ -194,10 +205,10 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
         A dictionary mapping integers in {0..k} to dataframes such that the
         hash values of ``df[col]`` are well partitioned.
     """
-    if isinstance(cols, str):
+    if isinstance(cols, (str, tuple)):
         cols = [cols]
 
-    if cols and cols[0] == "_partitions":
+    if cols and _is_partitions_column(cols[0]):
         ind = df[cols[0]]
     else:
         ind = hash_object_dispatch(df[cols] if cols else df, index=False)
