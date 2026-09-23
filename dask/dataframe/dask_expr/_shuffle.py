@@ -1412,6 +1412,11 @@ def _calculate_divisions(
 
     if mins.isna().any() or maxes.isna().any():
         presorted = False
+    elif mins.size != frame.npartitions:
+        # ``other`` was partitioned differently from ``frame`` (e.g. a
+        # size-based repartition of a projection), so its per-partition
+        # bounds say nothing about the partitions of ``frame``.
+        presorted = False
     else:
         n = mins.size
         maxes2 = (maxes.iloc[: n - 1] if ascending else maxes.iloc[1:]).reset_index(
