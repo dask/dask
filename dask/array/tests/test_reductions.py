@@ -1018,6 +1018,33 @@ def test_nanquantile(rechunk, q, axis):
     )
 
 
+def test_nanquantile_float32_uses_numbagg(monkeypatch):
+    calls = []
+
+    def fake_numbagg(a, q, **kwargs):
+        calls.append("numbagg")
+        return np.nanquantile(a, q, axis=tuple(kwargs["axis"]))
+
+    def fake_custom(a, q, **kwargs):
+        calls.append("custom")
+        return np.nanquantile(a, q, axis=tuple(kwargs["axis"]))
+
+    monkeypatch.setattr(da.reductions, "HAS_NUMBAGG", True)
+    monkeypatch.setattr(da.reductions, "_numbagg_nanquantile", fake_numbagg)
+    monkeypatch.setattr(da.reductions, "_custom_nanquantile", fake_custom)
+
+    arr = np.arange(40, dtype=np.float32).reshape(8, 5)
+    darr = da.from_array(arr, chunks=(4, 5))
+
+    assert_eq(
+        da.nanquantile(darr, 0.5, axis=1),
+        np.nanquantile(arr, 0.5, axis=1),
+        check_dtype=False,
+    )
+    assert calls
+    assert set(calls) == {"numbagg"}
+
+
 @pytest.mark.parametrize("axis", [3, [1, 3]])
 @pytest.mark.parametrize("q", [0.75, [0.75]])
 @pytest.mark.parametrize("rechunk", [True, False])
