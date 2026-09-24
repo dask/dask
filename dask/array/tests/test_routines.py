@@ -283,6 +283,10 @@ def test_rot90(kwargs, shape):
                 assert_eq(np_r, da_r)
 
 
+def test_rot90_docstring():
+    assert "Dask arrays do not support NumPy-style views" in da.rot90.__doc__
+
+
 @pytest.mark.parametrize(
     "x_shape, y_shape, x_chunks, y_chunks",
     [
