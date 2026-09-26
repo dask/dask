@@ -152,7 +152,8 @@ def merge_chunk(
         and kwargs.get("how") in ("left", "outer")
     ):
         out.index = pd.Index(
-            [np.nan] * len(out), dtype=rhs.index.dtype, name=rhs.index.name
+            pd.Series(dtype=rhs.index.dtype).reindex(range(len(out))),
+            name=rhs.index.name,
         )
 
     return out
