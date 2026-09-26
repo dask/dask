@@ -1139,8 +1139,8 @@ def test_left_merge_empty_right_partition_index_bug():
     merged = left.merge(right, how="left", left_index=True, right_on="id")
 
     expected = pd.DataFrame(
-        {"id": ["A", "B", "C"], "value": [1.0, 2.0, None]},
-        index=pd.Index(["AAA", "BBB", None], dtype=str),
+        {"id": ["A", "B", "C"], "value": [1.0, 2.0, np.nan]},
+        index=pd.Index(["AAA", "BBB", np.nan], dtype=str),
     )
 
     assert_eq(merged, expected)
