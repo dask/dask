@@ -141,6 +141,20 @@ def merge_chunk(
     # of input dtypes.
     if len(out) == 0 and empty_index_dtype is not None:
         out.index = out.index.astype(empty_index_dtype)
+
+    # Workaround pandas bug where merging with an empty dataframe with `left_index=True`
+    # and `how="left"` (or `how="outer"`) incorrectly retains the left index
+    # instead of behaving like a non-empty merge (where unmatched rows get NaN).
+    if (
+        len(rhs) == 0
+        and left_index
+        and not right_index
+        and kwargs.get("how") in ("left", "outer")
+    ):
+        out.index = pd.Index(
+            [np.nan] * len(out), dtype=rhs.index.dtype, name=rhs.index.name
+        )
+
     return out
 
 

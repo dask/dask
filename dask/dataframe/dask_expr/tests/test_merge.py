@@ -1108,3 +1108,39 @@ def test_merged_partitions_filtered():
     # Check result
     expect = a.compute().merge(b.compute(), left_on=["y"], right_on=["yy"], how="inner")
     assert_eq(result, expect, check_index=False)
+
+
+def test_left_merge_empty_right_partition_index_bug():
+    # https://github.com/dask/dask/issues/12564
+    empty_partition = pd.DataFrame(
+        data={"id": pd.Series([], dtype=str), "value": pd.Series([], dtype=int)},
+        index=pd.Index([], dtype=str),
+    )
+
+    left = from_delayed(
+        [
+            delayed(pd.DataFrame(index=["A"])),
+            delayed(pd.DataFrame(index=["B", "C"])),
+        ],
+        divisions=("A", "B", "C"),
+        meta=pd.DataFrame(index=pd.Index([], dtype=str)),
+    )
+
+    right = from_delayed(
+        [
+            delayed(empty_partition),
+            delayed(empty_partition),
+            delayed(pd.DataFrame(data={"id": ["A"], "value": [1]}, index=["AAA"])),
+            delayed(pd.DataFrame(data={"id": ["B"], "value": [2]}, index=["BBB"])),
+        ],
+        meta=empty_partition,
+    )
+
+    merged = left.merge(right, how="left", left_index=True, right_on="id")
+
+    expected = pd.DataFrame(
+        {"id": ["A", "B", "C"], "value": [1.0, 2.0, None]},
+        index=pd.Index(["AAA", "BBB", None], dtype=str),
+    )
+
+    assert_eq(merged, expected)
