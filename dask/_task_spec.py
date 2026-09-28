@@ -107,6 +107,10 @@ def identity(*args):
     return args
 
 
+def _identity(value):
+    return value
+
+
 def _identity_cast(*args, typ):
     return typ(args)
 
@@ -241,8 +245,9 @@ def convert_legacy_task(
         }
         if any(isinstance(v, GraphNode) for v in parsed_dict.values()):
             converted = Dict(parsed_dict)
-            converted.key = key
-            return converted
+            if key is None:
+                return converted
+            return Task(key, _identity, converted)
         return task
 
     if isinstance(task, (list, tuple, set, frozenset)):
