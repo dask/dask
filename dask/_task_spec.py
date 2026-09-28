@@ -214,7 +214,12 @@ def convert_legacy_task(
         new: object
         for a in args:
             if isinstance(a, dict):
-                new = Dict(a)
+                new = Dict(
+                    {
+                        k: convert_legacy_task(None, v, all_keys)
+                        for k, v in a.items()
+                    }
+                )
             else:
                 new = convert_legacy_task(None, a, all_keys)
             new_args.append(new)
@@ -229,6 +234,16 @@ def convert_legacy_task(
     except TypeError:
         # Unhashable
         pass
+
+    if isinstance(task, dict):
+        parsed_dict = {
+            k: convert_legacy_task(None, v, all_keys) for k, v in task.items()
+        }
+        if any(isinstance(v, GraphNode) for v in parsed_dict.values()):
+            converted = Dict(parsed_dict)
+            converted.key = key
+            return converted
+        return task
 
     if isinstance(task, (list, tuple, set, frozenset)):
         if is_namedtuple_instance(task):
