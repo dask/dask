@@ -2465,6 +2465,18 @@ def test_groupby_dropna_pandas(dropna):
     assert_eq(dask_result, pd_result)
 
 
+@pytest.mark.parametrize("dropna", [False, True, None])
+@pytest.mark.parametrize("func", ["mean", "var", "std"])
+def test_groupby_dropna_mean_var_std(dropna, func):
+    df = pd.DataFrame({"a": [1, 1, 2, 2, None, None], "e": [1, 2, 3, 4, 5, 6]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    kwargs = {} if dropna is None else {"dropna": dropna}
+    dask_result = getattr(ddf.groupby("a", **kwargs).e, func)()
+    pd_result = getattr(df.groupby("a", **kwargs).e, func)()
+    assert_eq(dask_result, pd_result)
+
+
 @pytest.mark.gpu
 @pytest.mark.parametrize("dropna", [False, True, None])
 @pytest.mark.parametrize("by", ["a", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]])
@@ -2669,20 +2681,13 @@ def test_groupby_large_ints_exception(backend):
 
 
 @pytest.mark.parametrize("by", ["a", "b", "c", ["a", "b"], ["a", "c"]])
-@pytest.mark.parametrize(
-    "agg",
-    [
-        "count",
-        pytest.param(
-            "mean", marks=pytest.mark.xfail(reason="numeric_only=False not implemented")
-        ),
-        pytest.param(
-            "std", marks=pytest.mark.xfail(reason="numeric_only=False not implemented")
-        ),
-    ],
-)
+@pytest.mark.parametrize("agg", ["count", "mean", "std"])
 @pytest.mark.parametrize("sort", [True, False])
-def test_groupby_sort_argument(by, agg, sort):
+def test_groupby_sort_argument(xfail, by, agg, sort):
+    by_cols = [by] if isinstance(by, str) else by
+    if agg in ("mean", "std") and "c" not in by_cols:
+        xfail("numeric_only=False not implemented")
+
     df = pd.DataFrame(
         {
             "a": [1, 2, 3, 4, None, None, 7, 8],
