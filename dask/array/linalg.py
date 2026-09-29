@@ -832,13 +832,18 @@ def svd_compressed(
     return u, s, v
 
 
-def qr(a):
+def qr(a, mode="reduced"):
     """
     Compute the qr factorization of a matrix.
 
     Parameters
     ----------
     a : Array
+    mode : {'reduced', 'complete'}, optional
+        If K = min(M, N), then
+        * 'reduced': returns Q, R with dimensions (M, K), (K, N) (default)
+        * 'complete': returns Q, R with dimensions (M, M), (M, N)
+        Note that only 'reduced' is currently implemented.
 
     Returns
     -------
@@ -855,6 +860,10 @@ def qr(a):
     dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
     dask.array.linalg.sfqr: Implementation for short-and-fat arrays
     """
+    if mode != "reduced":
+        raise NotImplementedError(
+            f"qr currently supports only mode='reduced', got mode='{mode}'"
+        )
 
     if len(a.chunks[1]) == 1 and len(a.chunks[0]) > 1:
         return tsqr(a)
