@@ -1972,20 +1972,26 @@ Expr={expr}"""
         return new_collection(self.expr.round(decimals))
 
     @derived_from(pd.DataFrame)
-    def where(self, cond, other=np.nan):
-        cond = self._create_alignable_frame(cond)
-        other = self._create_alignable_frame(other)
+    def where(self, cond, other=np.nan, *, axis=None, level=None):
+        if axis not in (1, "columns"):
+            # With axis=1 the operands are labelled by column, not by index, so
+            # aligning them against our divisions would be wrong.
+            cond = self._create_alignable_frame(cond)
+            other = self._create_alignable_frame(other)
         cond = cond.expr if isinstance(cond, FrameBase) else cond
         other = other.expr if isinstance(other, FrameBase) else other
-        return new_collection(self.expr.where(cond, other))
+        return new_collection(self.expr.where(cond, other, axis=axis, level=level))
 
     @derived_from(pd.DataFrame)
-    def mask(self, cond, other=np.nan):
-        cond = self._create_alignable_frame(cond)
-        other = self._create_alignable_frame(other)
+    def mask(self, cond, other=np.nan, *, axis=None, level=None):
+        if axis not in (1, "columns"):
+            # With axis=1 the operands are labelled by column, not by index, so
+            # aligning them against our divisions would be wrong.
+            cond = self._create_alignable_frame(cond)
+            other = self._create_alignable_frame(other)
         cond = cond.expr if isinstance(cond, FrameBase) else cond
         other = other.expr if isinstance(other, FrameBase) else other
-        return new_collection(self.expr.mask(cond, other))
+        return new_collection(self.expr.mask(cond, other, axis=axis, level=level))
 
     @derived_from(pd.DataFrame)
     def replace(self, to_replace=None, value=no_default, regex=False):
