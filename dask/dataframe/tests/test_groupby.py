@@ -1918,6 +1918,26 @@ def test_groupby_cov(columns):
         assert_eq(expected, result)
 
 
+@pytest.mark.parametrize("ddof", [0, 1, 2])
+def test_groupby_cov_ddof(ddof):
+    df = pd.DataFrame(np.random.randn(20, 3), columns=["a", "b", "c"])
+    df["key"] = [0] * 10 + [1] * 5 + [2] * 5
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(df.groupby("key").cov(ddof=ddof), ddf.groupby("key").cov(ddof=ddof))
+
+
+@pytest.mark.parametrize("cols", [10, 11, 13])
+def test_groupby_cov_many_columns(cols):
+    # the intermediate column names must stay unambiguous past ten columns
+    df = pd.DataFrame(np.random.randn(20, cols), columns=[f"c{i}" for i in range(cols)])
+    df["key"] = [0] * 10 + [1] * 5 + [2] * 5
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(df.groupby("key").cov(), ddf.groupby("key").cov())
+    assert_eq(df.groupby("key").corr(), ddf.groupby("key").corr())
+
+
 def test_df_groupby_idxmin():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
