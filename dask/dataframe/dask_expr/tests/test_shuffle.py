@@ -654,6 +654,17 @@ def test_set_index_npartitions_changes(pdf):
     assert_eq(result, pdf.set_index("x"))
 
 
+def test_set_index_npartitions_duplicate_divisions():
+    # Duplicate quantile boundaries collapse, so set_index ends up with fewer
+    # partitions than requested. GH#12565
+    pdf = pd.DataFrame({"x": ["IBAN1", "IBAN2", "IBAN3", "IBAN4"]})
+    df = from_pandas(pdf, npartitions=4)
+    result = df.drop_duplicates().set_index("x", npartitions=2)
+    assert len(result.divisions) == result.npartitions + 1
+    assert result.npartitions == result.optimize().npartitions
+    assert_eq(result, pdf.drop_duplicates().set_index("x"))
+
+
 def test_set_index_sorted_divisions(df):
     with pytest.raises(ValueError, match="must be the same length"):
         df.set_index("x", divisions=(1, 2, 3), sorted=True)
