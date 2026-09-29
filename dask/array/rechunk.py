@@ -269,7 +269,7 @@ def _validate_rechunk(old_chunks, new_chunks):
 
 def rechunk(
     x,
-    chunks="auto",
+    chunks: int | str | tuple | list | dict | None = "auto",
     threshold=None,
     block_size_limit=None,
     balance=False,
@@ -352,14 +352,14 @@ def rechunk(
 
     # Now chunks are tuple of tuples
     ndim = x.ndim
-    if not len(chunks) == ndim:
+    if not len(chunks) == ndim:  # type: ignore[arg-type]
         raise ValueError("Provided chunks are not consistent with shape")
 
     if not balance and (chunks == x.chunks):
         return x
 
     if balance:
-        chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
+        chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)  # type: ignore[arg-type, union-attr]
 
     _validate_rechunk(x.chunks, chunks)
 
