@@ -577,6 +577,32 @@ def test_timestamp_divisions(tmpdir):
     )
 
 
+def test_read_parquet_boolean_array_indexing_after_fusion(tmpdir):
+    # https://github.com/dask/dask/issues/12146
+    #
+    # FusedIO ("tune" optimization stage) can reduce the *logical* partition
+    # count relative to what the un-optimized collection reports via
+    # `.npartitions`/`.divisions`. `to_dask_array`/`.values` used to build its
+    # array chunk structure from the *optimized* (post-fusion) expr, so a
+    # small, many-file parquet dataset would silently disagree with the
+    # source collection's partition count, and boolean-array `.loc` indexing
+    # (which relies on the two matching) would raise:
+    #   ValueError: The index and array have different numbers of blocks.
+    pdf = pd.DataFrame({"a": range(20)}, index=range(20))
+    ddf = from_pandas(pdf, npartitions=2)
+    ddf.to_parquet(str(tmpdir), write_index=True, overwrite=True)
+
+    back = read_parquet(str(tmpdir), calculate_divisions=True)
+    assert back.npartitions == 2
+
+    indexer = back.index > 3
+    assert indexer.npartitions == back.npartitions
+
+    result = back.loc[indexer]
+    expected = pdf.loc[pdf.index > 3]
+    assert_eq(result, expected)
+
+
 def test_read_parquet_index_projection(tmpdir):
     df = from_array(
         np.zeros((201 * 10, 8), dtype=np.int64),
