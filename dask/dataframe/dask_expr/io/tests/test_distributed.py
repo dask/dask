@@ -54,6 +54,37 @@ def test_parquet_distributed(c, tmpdir, filesystem):
     assert_eq(c.gather(c.compute(df)), pdf)
 
 
+def test_persist_root_expr_npartitions_matches_futures(c, tmpdir):
+    # https://github.com/dask/dask/issues/12488
+    #
+    # `FrameBase.persist` used to optimize a bare (parent-less) root expr on
+    # its own, so the "tune" stage (e.g. FusedIO's IO-partition bucketing,
+    # triggered here by selecting few enough columns) never fired: `_tune_up`
+    # only runs when a parent calls it on a child during `Expr.rewrite`.
+    # `Client.persist` re-optimizes the same expr wrapped for submission,
+    # where it *does* have a parent, so it *does* get fused. The two passes
+    # would disagree on partition count, leaving the returned collection's
+    # npartitions out of sync with the futures actually created -- any later
+    # compute would fail with "lost dependencies".
+    pdf = pd.DataFrame({c: range(10) for c in "abcde"})
+    for i in range(2):
+        _make_file(tmpdir, df=pdf, filename=f"part.{i}.parquet")
+
+    # 2 of 5 columns selected -> low fusion_compression_factor -> IO fusion
+    df = read_parquet(str(tmpdir), columns=["a", "b"])
+    persisted = df.persist()
+
+    from distributed.client import futures_of
+
+    assert persisted.npartitions == len(futures_of(persisted))
+    assert_eq(
+        persisted.compute().sort_values("a", ignore_index=True),
+        pd.concat([pdf[["a", "b"]], pdf[["a", "b"]]], ignore_index=True).sort_values(
+            "a", ignore_index=True
+        ),
+    )
+
+
 def test_pickle_size(tmpdir, filesystem):
     pdf = pd.DataFrame({"x": [1, 4, 3, 2, 0, 5]})
     [_make_file(tmpdir, df=pdf, filename=f"{x}.parquet") for x in range(10)]
