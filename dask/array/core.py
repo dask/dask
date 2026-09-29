@@ -6076,6 +6076,10 @@ def to_npy_stack(dirname, x, axis=0):
     This partitions the dask.array along one axis and stores each block along
     that axis as a single .npy file in the specified directory
 
+    .. warning::
+       This format uses the :mod:`pickle` module to serialize array metadata.
+       The ``pickle`` module is not secure. Only load `.npy` stacks you trust.
+
     Examples
     --------
     >>> x = da.ones((5, 10, 10), chunks=(2, 4, 4))  # doctest: +SKIP
@@ -6124,6 +6128,12 @@ def to_npy_stack(dirname, x, axis=0):
 
 def from_npy_stack(dirname, mmap_mode="r"):
     """Load dask array from stack of npy files
+
+    .. warning::
+       This function uses the :mod:`pickle` module to load array metadata.
+       The ``pickle`` module is not secure against erroneous or maliciously
+       constructed data. Never load data that could have come from an untrusted
+       source, or that could have been tampered with.
 
     Parameters
     ----------
