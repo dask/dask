@@ -2464,7 +2464,6 @@ def test_to_hdf5():
         x.to_hdf5(fn, "/x")
         with h5py.File(fn, mode="r+") as f:
             d = f["/x"]
-
             assert_eq(d[:], x)
             assert d.chunks == (2, 2)
 
@@ -2492,6 +2491,68 @@ def test_to_hdf5():
             assert f["/x"].chunks == (2, 2)
             assert_eq(f["/y"][:], y)
             assert f["/y"].chunks == (2,)
+
+
+def test_to_hdf5_vds(tmp_path):
+    h5py = pytest.importorskip("h5py")
+    x = da.ones((4, 4), chunks=(2, 2))
+    y = da.ones(4, chunks=2, dtype="i4")
+
+    fn = str(tmp_path / "test.hdf5")
+    x.to_hdf5(fn, "x", use_vds=True)
+    with h5py.File(fn, mode="r+") as f:
+        d = f["x"]
+        assert_eq(d[:], x)
+        assert tuple(d.attrs["chunks"]) == (2, 2)
+
+    fn2 = str(tmp_path / "test2.hdf5")
+
+    da.to_hdf5(fn2, {"x": x, "y": y}, use_vds=True)
+
+    with h5py.File(fn2, mode="r+") as f:
+        assert_eq(f["x"][:], x)
+        assert tuple(f["x"].attrs["chunks"]) == (2, 2)
+        assert_eq(f["y"][:], y)
+        assert tuple(f["y"].attrs["chunks"]) == (2,)
+
+
+def test_to_hdf5_vds_move(tmp_path):
+    import shutil
+
+    h5py = pytest.importorskip("h5py")
+    x = da.ones((4, 4), chunks=(2, 2))
+
+    src = tmp_path / "src"
+    src.mkdir()
+    x.to_hdf5(str(src / "test.hdf5"), "x", use_vds=True)
+
+    dst = tmp_path / "dst"
+    shutil.move(str(src), str(dst))
+
+    with h5py.File(dst / "test.hdf5", mode="r") as f:
+        d = f["x"]
+        assert_eq(d[:], x)
+        assert tuple(d.attrs["chunks"]) == (2, 2)
+
+
+def test_to_hdf5_vds_missing_chunks(tmp_path):
+    import os
+
+    h5py = pytest.importorskip("h5py")
+    x = da.ones((4, 4), chunks=(2, 2))
+
+    fn = str(tmp_path / "test.hdf5")
+    x.to_hdf5(fn, "x", use_vds=True)
+
+    for f in os.listdir(str(tmp_path)):
+        if f.startswith(".test-") and f.endswith(".hdf5"):
+            (tmp_path / f).unlink()
+
+    with h5py.File(fn, mode="r") as f:
+        data = f["x"][:]
+
+    assert not np.array_equal(data, x.compute())
+    assert np.all(data == -1)
 
 
 def test_to_dask_dataframe():

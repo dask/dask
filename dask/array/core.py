@@ -1810,10 +1810,14 @@ class Array(DaskMethodsMixin):
 
         return svg(self.chunks, size=size)
 
-    def to_hdf5(self, filename, datapath, **kwargs):
+    def to_hdf5(self, filename, datapath, use_vds=False, **kwargs):
         """Store array in HDF5 file
 
         >>> x.to_hdf5('myfile.hdf5', '/x')  # doctest: +SKIP
+
+        Can also use HDF5 virtual datasets to store arrays with:
+
+        >>> x.to_hdf5('myfile.hdf5', '/x', use_vds=True)  # doctest: +SKIP
 
         Optionally provide arguments as though to ``h5py.File.create_dataset``
 
@@ -5706,7 +5710,7 @@ def concatenate_axes(arrays, axes):
     return concatenate3(transposelist(arrays, axes, extradims=extradims))
 
 
-def to_hdf5(filename, *args, chunks=True, **kwargs):
+def to_hdf5(filename, *args, chunks=True, use_vds=False, **kwargs):
     """Store arrays in HDF5 file
 
     This saves several dask arrays into several datapaths in an HDF5 file.
@@ -5717,6 +5721,9 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
     chunks: tuple or ``True``
         Chunk shape, or ``True`` to pass the chunks from the dask array.
         Defaults to ``True``.
+    use_vds: bool
+        Whether to use HDF5 Virtual Dataset to store the data. If False, all data will be stored in the same file. If True, each chunk will be stored in a separate file, and a VDS will be created to link them together.
+        Defaults to ``False``.
 
     Examples
     --------
@@ -5751,18 +5758,170 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
 
     import h5py
 
-    with h5py.File(filename, mode="a") as f:
-        dsets = [
-            f.require_dataset(
-                dp,
-                shape=x.shape,
-                dtype=x.dtype,
-                chunks=tuple(c[0] for c in x.chunks) if chunks is True else chunks,
-                **kwargs,
+    if use_vds:
+        to_hdf5_vds(filename, data, **kwargs)
+    else:
+        with h5py.File(filename, mode="a") as f:
+            dsets = [
+                f.require_dataset(
+                    dp,
+                    shape=x.shape,
+                    dtype=x.dtype,
+                    chunks=tuple(c[0] for c in x.chunks) if chunks is True else chunks,
+                    **kwargs,
+                )
+                for dp, x in data.items()
+            ]
+            store(list(data.values()), dsets)
+
+
+def to_hdf5_vds(fname: str, sources, **kwargs) -> None:
+    """Store arrays in HDF5 file using HDF5 VDS.
+
+    Useful for distributed writes as each chunk is stored in a separate file
+    as an individual task and then after exposed as one logical dataset.
+
+    Parameters
+    ----------
+    fname : str
+        The name of the final file where the data will be stored.
+    sources : dict[str, dask.array]
+        Dict mapping the datasets in final file to final files
+
+    Notes
+    -----
+    This method creates files for each chunk, then links the
+    files using HDF5 VDS. The chunk file is named as
+    `.{filename}-{chunk_position}.h5`.
+    """
+
+    import pathlib
+
+    import h5py
+
+    import dask.delayed
+
+    def chunk_fname(
+        fname: str | pathlib.Path, dataset: str, chunkid: tuple[int, ...] = ()
+    ):
+        """
+        Create the filename for a chunk.
+
+        Parameters
+        ----------
+        fname : str | pathlib.Path
+            The name of the final file where the data will be stored.
+        dataset : str
+            The name of the dataset in the hdf5 where the data will be stored.
+        chunkid : tuple[int, ...]
+            Chunk position to create the file.
+
+        Returns
+        -------
+        str
+            Filename for the chunk of position block_id.
+        """
+
+        path = pathlib.Path(fname)
+        parents, name, suffix = path.parents[0], path.stem, path.suffix
+        chunk_str = "-".join(map(str, chunkid))
+
+        # Hidden name for the chunk files
+        new_name = "." + name + "-" + dataset + f"-{chunk_str}" + suffix
+
+        return parents / new_name
+
+    def save_chunk(
+        chunk: np.ndarray, fname: str, dataset: str, block_id: tuple[int, ...], **kwargs
+    ) -> None:
+        """
+        Save one chunk to a individual hdf5 file.
+
+        Parameters
+        ----------
+        chunk : np.ndarray
+            Chunk to be stored.
+        fname : str
+            The name of the final file where the data will be stored.
+        dataset : str
+            The name of the dataset in the hdf5 where the data will be stored.
+        block_id : tuple[int, ...]
+            Chunk position, used to merge into a VDS.
+        """
+
+        filename = chunk_fname(fname, dataset, block_id)
+
+        with h5py.File(filename, "w") as f:
+            f.create_dataset(dataset, data=chunk, chunks=chunk.shape, **kwargs)
+
+    def create_vds(
+        fname: str | pathlib.Path,
+        dataset: str,
+        chunk_shape: tuple[int, ...],
+        data_shape: tuple[int, ...],
+        nb_chunks_per_dim: tuple[int, ...],
+        data_dtype: np.dtype,
+    ) -> None:
+        """
+        Creates a VDS aggregating all chunk files.
+
+        Parameters
+        ----------
+        fname : str | pathlib.Path
+            The name of the final file where the data will be stored.
+        dataset : str
+            The name of the dataset in the hdf5 where the data will be stored.
+        chunk_shape : tuple[int,...]
+            Shape of the chunks, used to map the chunks into the VDS.4
+        data_shape : tuple[int,...]
+            Shape of the data.
+        nb_chunks_per_dim : tuple[int,...]
+            Number of chunks for each dimension
+        data_dtype : np.dtype
+            The numpy dtype of the data.
+        """
+
+        layout = h5py.VirtualLayout(shape=data_shape, dtype=data_dtype)
+
+        for block_id in np.ndindex(nb_chunks_per_dim):
+            name = chunk_fname(fname, dataset, block_id)
+            vsource = h5py.VirtualSource(name.name, dataset, shape=chunk_shape)
+
+            selection = tuple(
+                slice(idx * size, (idx + 1) * size)
+                for idx, size in zip(block_id, chunk_shape)
             )
-            for dp, x in data.items()
-        ]
-        store(list(data.values()), dsets)
+
+            layout[selection] = vsource
+
+        with h5py.File(fname, "a", libver="latest") as f:
+            ds = f.create_virtual_dataset(dataset, layout, fillvalue=-1)
+            ds.attrs["chunks"] = chunk_shape
+
+    full_path = pathlib.Path(fname)
+
+    writing_tasks = []
+    for dataset, arr in sources.items():
+        delayed_grid = arr.to_delayed()
+
+        for block_id in np.ndindex(delayed_grid.shape):
+            chunk = delayed_grid[block_id]
+
+            writing_tasks.append(
+                dask.delayed(save_chunk)(
+                    chunk,
+                    fname=str(full_path),
+                    dataset=dataset,
+                    block_id=block_id,
+                    **kwargs,
+                )
+            )
+
+        create_vds(
+            full_path, dataset, arr.chunksize, arr.shape, arr.numblocks, arr.dtype
+        )
+
+    dask.compute(*writing_tasks)
 
 
 def interleave_none(a, b):
