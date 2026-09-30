@@ -148,6 +148,37 @@ def test_join(how, shuffle_method):
     assert_eq(df3.optimize(), expect, check_index=False)
 
 
+@pytest.mark.parametrize("shuffle_method", ["tasks", "disk"])
+def test_join_multiindex_columns_shuffle(shuffle_method):
+    # With MultiIndex columns the "_partitions" helper must be assigned as
+    # the full tuple ("_partitions", ""), kept through the projection
+    # push-down, and dropped again after the shuffle.
+    idx = pd.RangeIndex(6, name="id")
+    pdf1 = pd.DataFrame(
+        np.arange(12).reshape(6, 2),
+        index=idx,
+        columns=pd.MultiIndex.from_tuples([("a", "median"), ("b", "median")]),
+    )
+    pdf2 = pd.DataFrame(
+        np.arange(12).reshape(6, 2),
+        index=idx,
+        columns=pd.MultiIndex.from_tuples([("c", "median"), ("d", "median")]),
+    )
+    df1 = from_pandas(pdf1, 1)
+    # Unknown divisions on a multi-partition frame force the shuffle path.
+    df2 = from_pandas(pdf2, 2).clear_divisions()
+    expect = pdf1.join(pdf2)
+
+    result = df1.join(df2, shuffle_method=shuffle_method)
+    assert_eq(result, expect)
+    assert_eq(result.optimize(), expect)
+
+    # Both sides shuffled.
+    df1 = from_pandas(pdf1, 2).clear_divisions()
+    result = df1.join(df2, shuffle_method=shuffle_method)
+    assert_eq(result, expect)
+
+
 def test_join_recursive():
     pdf = pd.DataFrame({"x": [1, 2, 3], "y": 1}, index=pd.Index([1, 2, 3], name="a"))
     df = from_pandas(pdf, npartitions=2)
