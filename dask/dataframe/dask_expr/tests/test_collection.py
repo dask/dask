@@ -325,6 +325,24 @@ def test_assign_empty_columns(df, pdf):
     assert_eq(df, pdf)
 
 
+def test_assign_new_column_keeps_other_dtypes(df, pdf):
+    # Assigning a datetime column must not silently upcast unrelated columns
+    # (GH#12556): the meta was computed by assigning the new column into the
+    # *empty* meta frame, which made pandas align on the index and fill the
+    # other columns with NaN, upcasting e.g. int64 -> float64.
+    year = pd.Series(range(2000, 2000 + len(pdf)), index=pdf.index)
+
+    pdf = pdf.copy()
+    pdf["z"] = pd.to_datetime(year, format="%Y")
+
+    df = df.copy()
+    df["z"] = to_datetime(year, format="%Y")
+
+    # The meta must not upcast unrelated columns (int64 -> float64)
+    assert df.dtypes.equals(pdf.dtypes)
+    assert_eq(df, pdf)
+
+
 def test_index_divisions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = from_pandas(df, npartitions=2)
