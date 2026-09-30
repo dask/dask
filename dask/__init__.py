@@ -6,9 +6,12 @@ from dask._expr import Expr, HLGExpr, LLGExpr, SingletonExpr
 try:
     # Backwards compatibility with versioneer
     from dask._version import __commit_id__ as __git_revision__
-    from dask._version import __version__
 except ImportError:  # pragma: no cover
     __git_revision__ = "unknown"
+
+try:
+    from dask._version import __version__
+except ImportError:  # pragma: no cover
     __version__ = "unknown"
 from dask.base import (
     annotate,
