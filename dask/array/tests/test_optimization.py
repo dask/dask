@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import json
+import os
+import re
+import subprocess
+import sys
+
 import pytest
 
 from dask._task_spec import Alias, DataNode
@@ -38,6 +44,97 @@ def _check_get_task_eq(a, b) -> bool:
         elif ae != be:
             return False
     return True
+
+
+def _hash_seed_cull_result():
+    block_size = 32
+    nt, ny, nx = 2, 2, 4
+
+    def identity(block):
+        return block
+
+    def read(i, j, t):
+        value = t * 10_000 + i * 100 + j
+        return np.full((block_size, block_size), value, dtype=float)
+
+    times = []
+    for t in range(nt):
+        rows = []
+        for i in range(ny):
+            row = [
+                da.from_delayed(
+                    dask.delayed(read)(
+                        i,
+                        j,
+                        t,
+                        dask_key_name=f"read-{t}-{i}-{j}",
+                    ),
+                    (block_size, block_size),
+                    dtype=float,
+                )
+                for j in range(nx)
+            ]
+            rows.append(da.concatenate(row, axis=1))
+        times.append(da.concatenate(rows, axis=0)[None])
+
+    source = da.concatenate(times, axis=0)
+    overlapped = source.map_overlap(
+        identity,
+        depth={1: 2, 2: 2},
+        boundary="none",
+    )
+    selected = overlapped.rechunk((nt, block_size, block_size))[:, :8, :8]
+    (optimized,) = dask.optimize(selected)
+    result = optimized.compute(scheduler="sync", optimize_graph=False)
+    expected = np.broadcast_to(
+        np.arange(nt, dtype=float)[:, None, None] * 10_000,
+        (nt, 8, 8),
+    )
+
+    def normalize_key(key):
+        if isinstance(key, tuple):
+            name, *coordinates = key
+            return (re.sub(r"-[0-9a-f]{32}", "", name), *coordinates)
+        return re.sub(r"-[0-9a-f]{32}", "", key)
+
+    return {
+        "task_count": len(optimized.__dask_graph__()),
+        "normalized_keys": sorted(
+            map(str, map(normalize_key, optimized.__dask_graph__()))
+        ),
+        "shape": result.shape,
+        "dtype": str(result.dtype),
+        "time_values": result[:, 0, 0].tolist(),
+        "matches_expected": np.array_equal(result, expected),
+    }
+
+
+def test_cull_is_hash_seed_independent():
+    code = (
+        "import json; "
+        "from dask.array.tests.test_optimization import _hash_seed_cull_result; "
+        "print(json.dumps(_hash_seed_cull_result(), sort_keys=True))"
+    )
+    results = {}
+    for seed in (0, 7):
+        env = os.environ.copy()
+        env["PYTHONHASHSEED"] = str(seed)
+        completed = subprocess.run(
+            [sys.executable, "-c", code],
+            check=True,
+            capture_output=True,
+            env=env,
+            text=True,
+        )
+        results[seed] = json.loads(completed.stdout)
+
+    assert results[0]["task_count"] == results[7]["task_count"] == 22
+    assert results[0]["normalized_keys"] == results[7]["normalized_keys"]
+    for result in results.values():
+        assert result["shape"] == [2, 8, 8]
+        assert result["dtype"] == "float64"
+        assert result["time_values"] == [0.0, 10_000.0]
+        assert result["matches_expected"]
 
 
 def test_optimize_with_getitem_fusion():

@@ -150,7 +150,7 @@ class Layer(Graph):
         """
 
         if self.has_legacy_tasks:
-            if len(keys) == len(self):
+            if len(keys) == len(self) and keys == self.keys():
                 # Nothing to cull if preserving all existing keys
                 return (
                     self,
@@ -763,20 +763,21 @@ class HighLevelGraph(Graph):
         layer_dependencies = {}
         tok = tokenize(keys_set)
         for layer_name in reversed(self._toposort_layers()):
+            if not keys_set:
+                break
             new_layer_name = f"{layer_name}-{tok}"
             layer = self.layers[layer_name]
-            if keys_set:
-                culled_layer, culled_deps = layer.cull(keys_set, all_ext_keys)
-                if not culled_deps:
-                    continue
+            culled_layer, culled_deps = layer.cull(keys_set, all_ext_keys)
+            if not culled_deps:
+                continue
 
-                # Update `keys` with all layer's external key dependencies,
-                # which are all the layer's dependencies (`culled_deps`)
-                # excluding the layer's output keys.
-                for k, d in culled_deps.items():
-                    keys_set |= d
-                    keys_set.discard(k)
-                layer = culled_layer
+            # Update `keys` with all layer's external key dependencies,
+            # which are all the layer's dependencies (`culled_deps`)
+            # excluding the layer's output keys.
+            for k, d in culled_deps.items():
+                keys_set |= d
+                keys_set.discard(k)
+            layer = culled_layer
             # Save the culled layer and its key dependencies
             ret_layers[new_layer_name] = layer
             layer_dependencies[new_layer_name] = self.dependencies[layer_name]
