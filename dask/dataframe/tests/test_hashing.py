@@ -82,3 +82,33 @@ def test_hash_object_dispatch(obj):
     result = dd.dispatch.hash_object_dispatch(obj)
     expected = pd.util.hash_pandas_object(obj)
     assert_eq(result, expected)
+
+
+def test_hash_object_dispatch_custom_hash_key():
+    import dask
+
+    obj = pd.DataFrame({"x": ["a", "b", "c"], "y": ["d", "e", "f"]})
+    default_hash = dd.dispatch.hash_object_dispatch(obj, index=False)
+
+    with dask.config.set({"dataframe.shuffle.hash-key": "abcdefghijklmnop"}):
+        keyed_hash = dd.dispatch.hash_object_dispatch(obj, index=False)
+
+    assert not (default_hash == keyed_hash).all()
+
+
+def test_hash_object_dispatch_explicit_key_overrides_config():
+    import dask
+
+    obj = pd.Series(["a", "b", "c"])
+    explicit_hash = dd.dispatch.hash_object_dispatch(
+        obj, index=False, hash_key="abcdefghijklmnop"
+    )
+
+    with dask.config.set({"dataframe.shuffle.hash-key": "zyxwvutsrqponmlk"}):
+        config_hash = dd.dispatch.hash_object_dispatch(obj, index=False)
+        explicit_in_config = dd.dispatch.hash_object_dispatch(
+            obj, index=False, hash_key="abcdefghijklmnop"
+        )
+
+    assert_eq(explicit_hash, explicit_in_config)
+    assert not (explicit_hash == config_hash).all()
