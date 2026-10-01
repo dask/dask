@@ -4493,8 +4493,6 @@ class Series(FrameBase):
             If dict-like or callable, the transformation is applied to the
             index. Scalar or hashable sequence-like will alter the
             ``Series.name`` attribute.
-        inplace : boolean, default False
-            Whether to return a new Series or modify this one inplace.
         sorted_index : bool, default False
             If true, the output ``Series`` will have known divisions inferred
             from the input series and the transformation. Ignored for
@@ -4984,7 +4982,7 @@ def from_array(arr, chunksize=50_000, columns=None, meta=None):
 
     Parameters
     ----------
-    x : array_like
+    arr : array_like
     chunksize : int, optional
         The number of rows per partition to use.
     columns : list or string, optional
