@@ -392,6 +392,19 @@ def test_set_index_single_partition(pdf):
     assert_eq(df.set_index("x"), pdf.set_index("x"))
 
 
+def test_set_index_after_repartition_partition_size():
+    # https://github.com/dask/dask/issues/12604
+    # The partition size is computed from the projected key column alone, which
+    # fits into a single partition. That single partition must not be taken as
+    # proof that the full frame is already sorted.
+    rng = np.random.default_rng(0)
+    pdf = pd.DataFrame({"key": rng.permutation(400), "payload": ["x" * 2000] * 400})
+    df = from_pandas(pdf, npartitions=4, sort=False)
+    df = df.repartition(partition_size="400kB")
+    assert df["key"].optimize().npartitions < df.optimize().npartitions
+    assert_eq(df.set_index("key"), pdf.set_index("key"))
+
+
 def test_set_index_list(df, pdf):
     assert_eq(df.set_index(["x"]), pdf.set_index(["x"]))
 
