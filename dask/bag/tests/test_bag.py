@@ -689,6 +689,12 @@ def test_from_url():
     assert b"Dask\n" in b.take(10)
 
 
+@pytest.mark.parametrize("url", ["file:///etc/hostname", "ftp://x/y", "data:,hi"])
+def test_from_url_rejects_non_http(url):
+    with pytest.raises(ValueError, match="http"):
+        db.from_url(url).compute(scheduler="sync")
+
+
 def test_read_text():
     with filetexts({"a1.log": "A\nB", "a2.log": "C\nD"}) as fns:
         assert {line.strip() for line in db.read_text(fns)} == set("ABCD")
