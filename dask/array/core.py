@@ -3734,6 +3734,33 @@ def _zarr_v3() -> bool:
         return Version(zarr.__version__).major >= 3
 
 
+def _reject_zarr_pickle_codec(z) -> None:
+    """Refuse a zarr array whose chunks are decoded with pickle.
+
+    A zarr store carries its codec configuration in its own metadata, so a
+    store can declare a numcodecs ``Pickle`` codec and have every chunk stored
+    as a pickle. Decoding such a chunk runs ``pickle.loads`` on the stored
+    bytes, which is arbitrary code execution when the store comes from an
+    untrusted source. Reject it up front rather than deserialize it, mirroring
+    NumPy's ``allow_pickle=False`` default.
+    """
+    codecs = []
+    for attr in ("filters", "compressor"):
+        value = getattr(z, attr, None)
+        if value:
+            codecs.extend(value if isinstance(value, (list, tuple)) else [value])
+    codecs.extend(getattr(getattr(z, "metadata", None), "codecs", None) or [])
+    for codec in codecs:
+        if getattr(codec, "codec_id", None) == "pickle":
+            raise ValueError(
+                "Refusing to load a zarr array that declares a 'pickle' codec: "
+                "its chunks are decoded with pickle, which executes arbitrary "
+                "code from the store and is unsafe for data from an untrusted "
+                "source. Re-encode the array with a non-pickle codec, or decode "
+                "it yourself if you trust the source."
+            )
+
+
 def from_zarr(
     url,
     component=None,
@@ -3788,6 +3815,7 @@ def from_zarr(
         z = zarr.open_array(store=zarr_store, path=component, **kwargs)
     else:
         z = zarr.open_array(store=url, path=component, **kwargs)
+    _reject_zarr_pickle_codec(z)
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
