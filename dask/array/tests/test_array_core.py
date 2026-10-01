@@ -4964,6 +4964,33 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
+def test_from_zarr_rejects_pickle_codec():
+    zarr = pytest.importorskip("zarr")
+    numcodecs = pytest.importorskip("numcodecs")
+
+    with tmpdir() as d:
+        z = zarr.open_array(
+            store=d,
+            mode="w",
+            shape=(1,),
+            chunks=(1,),
+            dtype=object,
+            object_codec=numcodecs.Pickle(),
+        )
+        z[0] = "payload"
+
+        # Computing such a store runs pickle.loads on the chunk bytes, so
+        # from_zarr must refuse it before building the graph.
+        with pytest.raises(ValueError, match="pickle"):
+            da.from_zarr(d)
+
+    # An ordinary store (no pickle codec) is unaffected.
+    with tmpdir() as d:
+        a = da.arange(6, chunks=3)
+        a.to_zarr(d)
+        assert_eq(da.from_zarr(d), a)
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize(
     "chunks, shards",
