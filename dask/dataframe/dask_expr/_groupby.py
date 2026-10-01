@@ -79,7 +79,7 @@ from dask.dataframe.groupby import (
     _var_chunk,
 )
 from dask.dataframe.utils import insert_meta_param_description, is_scalar
-from dask.typing import Key
+from dask.typing import TYPE_CHECKING, Key
 from dask.utils import M, derived_from, is_index_like
 
 
@@ -647,7 +647,15 @@ class Unique(SingleAggregation):
 
 class Cov(SingleAggregation):
     chunk = staticmethod(_cov_chunk)
-    std = False
+
+    if TYPE_CHECKING:
+
+        @staticmethod
+        def std(cls):
+            return False
+
+    else:
+        std = False
 
     @classmethod
     def combine(cls, g, levels):
@@ -675,7 +683,15 @@ class Cov(SingleAggregation):
 
 
 class Corr(Cov):
-    std = True
+
+    if TYPE_CHECKING:
+
+        @staticmethod
+        def std(cls):
+            return True
+
+    else:
+        std = True
 
 
 class GroupByReduction(Reduction, GroupByBase):
@@ -761,7 +777,10 @@ class Var(GroupByReduction):
     }
     reduction_aggregate = staticmethod(_var_agg)
     reduction_combine = staticmethod(_var_combine)
-    chunk = staticmethod(_var_chunk)
+
+    @classmethod
+    def chunk(cls, df, *by, **kwargs):
+        return _var_chunk(df, *by, **kwargs)
 
     @functools.cached_property
     def aggregate_kwargs(self):
@@ -816,7 +835,10 @@ class Mean(GroupByReduction):
     _defaults = SingleAggregation._defaults
     reduction_aggregate = staticmethod(_mean_agg)
     reduction_combine = staticmethod(_mean_combine)
-    chunk = staticmethod(_mean_chunk)
+
+    @classmethod
+    def chunk(cls, df, *by, **kwargs):
+        return _mean_chunk(df, *by, **kwargs)
 
 
 def nunique_df_combine(dfs, *args, **kwargs):
@@ -833,8 +855,11 @@ def nunique_df_aggregate(dfs, levels, name, sort=False):
 
 
 class NUnique(SingleAggregation):
-    aggregate = staticmethod(nunique_df_aggregate)
     combine = staticmethod(nunique_df_combine)
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        return nunique_df_aggregate(inputs, **kwargs)
 
     @staticmethod
     def chunk(df, *by, **kwargs):
