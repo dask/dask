@@ -19,7 +19,13 @@ from dask._task_spec import (
 )
 from dask.array.chunk import getitem
 from dask.array.core import getter, getter_inline, getter_nofancy
-from dask.blockwise import fuse_roots, optimize_blockwise
+
+# Re-exported for backwards compatibility.
+from dask.blockwise import (  # noqa: F401
+    fuse_roots,
+    optimize_blockwise,
+    optimize_highlevel_graph,
+)
 from dask.core import flatten
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import ensure_dict
@@ -47,8 +53,7 @@ def optimize(dsk, keys, **kwargs):
     if not isinstance(dsk, HighLevelGraph):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
 
-    dsk = optimize_blockwise(dsk, keys=keys)
-    dsk = fuse_roots(dsk, keys=keys)
+    dsk = optimize_highlevel_graph(dsk, keys)
     dsk = dsk.cull(set(keys))
 
     # Perform low-level fusion unless the user has

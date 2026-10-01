@@ -12,9 +12,12 @@ import dask
 import dask.array as da
 from dask.array.chunk import getitem
 from dask.array.core import getter
-from dask.array.optimization import fuse_slice, optimize, optimize_blockwise
+from dask.array.optimization import fuse_slice, optimize
 from dask.array.utils import assert_eq
+from dask.blockwise import Blockwise, optimize_blockwise
+from dask.core import flatten
 from dask.highlevelgraph import HighLevelGraph
+from dask.utils import ensure_dict
 
 
 def _check_get_task_eq(a, b) -> bool:
@@ -254,3 +257,98 @@ def test_optimize_blockwise_duplicate_dependency(optimize_graph):
     # Compare to known answer
     result = z.compute(optimize_graph=optimize_graph)
     assert assert_eq(result, [[12, 12], [24, 24]])
+
+
+# Cross-collection high-level optimization: array Blockwise layers embedded in
+# delayed/bag graphs should still get fused.
+
+
+def _ntasks(dsk):
+    """Number of real (callable) tasks in a low-level graph."""
+    return sum(map(dask.istask, dsk.values()))
+
+
+def _cull_only_ntasks(collection):
+    """Task count of the pre-fix behaviour: cull, but no high-level fusion."""
+    g = collection.__dask_graph__()
+    keys = set(flatten(collection.__dask_keys__()))
+    return _ntasks(ensure_dict(g.cull(keys)))
+
+
+def test_delayed_wrapping_array_blockwise_fusion():
+    x = da.ones((400,), chunks=(100,))
+    y = (da.exp(da.log(x)) + 1) * 2 - 3
+
+    # Carry the *unoptimized* array Blockwise layers into Delayed objects.
+    delayeds = y.to_delayed(optimize_graph=False).flatten().tolist()
+    d = delayeds[0]
+
+    raw = d.__dask_graph__()
+    n_blockwise = sum(isinstance(layer, Blockwise) for layer in raw.layers.values())
+    assert n_blockwise > 1
+
+    (opt,) = dask.optimize(d)
+    optimized = dict(opt.__dask_graph__())
+    # The chain fuses: strictly fewer tasks than the old cull-only behaviour.
+    assert _ntasks(optimized) < _cull_only_ntasks(d)
+
+    expected = (np.exp(np.log(np.ones(400))) + 1) * 2 - 3
+    np.testing.assert_array_equal(d.compute(), expected[:100])
+
+
+def test_compute_mixed_array_and_delayed_results():
+    x = da.ones((400,), chunks=(100,))
+    y = (x + 1) * 2
+    d = y.to_delayed(optimize_graph=False).flatten().tolist()[0]
+
+    r_sum, r_chunk = dask.compute(y.sum(), d)
+    expected = (np.ones(400) + 1) * 2
+    np.testing.assert_array_equal(r_sum, expected.sum())
+    np.testing.assert_array_equal(r_chunk, expected[:100])
+
+
+def test_bag_from_delayed_array_blockwise_fusion():
+    db = pytest.importorskip("dask.bag")
+
+    x = da.ones((300,), chunks=(100,))
+    y = (x + 1) * 2 - 3
+    delayeds = y.to_delayed(optimize_graph=False).flatten().tolist()
+    b = db.from_delayed(delayeds)
+
+    (opt,) = dask.optimize(b)
+    optimized = dict(opt.__dask_graph__())
+    assert _ntasks(optimized) < _cull_only_ntasks(b)
+
+    expected = (np.ones(300) + 1) * 2 - 3
+    np.testing.assert_array_equal(np.array(b.compute()), expected)
+
+
+def _assert_delayed_roundtrip(arr, expected):
+    """Optimize+compute every chunk via the Delayed path and compare to numpy."""
+    parts = arr.to_delayed(optimize_graph=False).flatten().tolist()
+    results = dask.compute(*parts)
+    pieces = [np.atleast_1d(np.asarray(r, dtype=expected.dtype)) for r in results]
+    got = np.concatenate(pieces) if pieces else np.asarray([], dtype=expected.dtype)
+    np.testing.assert_array_equal(got, expected.ravel())
+
+
+def test_delayed_array_optimization_edge_cases():
+    # zero-size array
+    z = da.ones((0,), chunks=(10,))
+    _assert_delayed_roundtrip(z + 1, np.ones(0) + 1)
+
+    # single-chunk array
+    s = da.arange(50, chunks=50)
+    _assert_delayed_roundtrip((s * 2) + 1, np.arange(50) * 2 + 1)
+
+    # object dtype
+    base = np.array([1, 2, 3], dtype=object)
+    o = da.from_array(base, chunks=2)
+    _assert_delayed_roundtrip(o + o, base + base)
+
+
+def test_delayed_array_unknown_chunks():
+    a = da.arange(20, chunks=5)
+    b = a[a > 5] + 1  # boolean mask -> unknown (nan) chunk sizes
+    assert any(np.isnan(c) for c in b.chunks[0])
+    _assert_delayed_roundtrip(b, np.arange(20)[np.arange(20) > 5] + 1)
