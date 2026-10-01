@@ -588,7 +588,11 @@ class ArrowDatasetEngine(Engine):
 
         # Convert to pandas
         df = cls._arrow_table_to_pandas(
-            arrow_table, categories, dtype_backend=dtype_backend, **kwargs
+            arrow_table,
+            categories,
+            dtype_backend=dtype_backend,
+            ignore_metadata=dtype_backend == "pyarrow",
+            **kwargs,
         )
 
         # For pyarrow.dataset api, need to convert partition columns
@@ -1148,6 +1152,7 @@ class ArrowDatasetEngine(Engine):
             arrow_to_pandas=arrow_to_pandas,
             dtype_backend=dtype_backend,
             convert_string=convert_string,
+            ignore_metadata=dtype_backend == "pyarrow",
         )
         index_names = list(meta.index.names)
         column_names = list(meta.columns)
@@ -1789,10 +1794,11 @@ class ArrowDatasetEngine(Engine):
         categories,
         dtype_backend=None,
         convert_string=False,
+        ignore_metadata=False,
         **kwargs,
     ) -> pd.DataFrame:
         _kwargs = kwargs.get("arrow_to_pandas", {})
-        _kwargs.update({"use_threads": False, "ignore_metadata": False})
+        _kwargs.update({"use_threads": False, "ignore_metadata": ignore_metadata})
 
         types_mapper = cls._determine_type_mapper(
             dtype_backend=dtype_backend,
