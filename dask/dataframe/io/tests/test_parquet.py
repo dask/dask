@@ -1337,6 +1337,28 @@ def test_partition_on_duplicates(tmpdir, engine):
 
 
 @PYARROW_MARK
+def test_partition_on_escapes_values(tmpdir):
+    # Partition values are data, so they must not be able to steer the write
+    # out of the dataset directory or split into several path segments.
+    # Encoding also keeps the round trip lossless, since hive segments are
+    # decoded as URIs on read.
+    path = os.path.join(str(tmpdir), "a", "b", "dataset")
+    values = ["../../../escaped", "a/b", "x y", "100%", "plain"]
+    df = pd.DataFrame({"aa": values, "bb": range(len(values))})
+    d = dd.from_pandas(df, npartitions=1)
+    d.to_parquet(path, partition_on=["aa"], write_index=False)
+
+    root = os.path.realpath(path)
+    for dirpath, _, files in os.walk(str(tmpdir)):
+        for file in files:
+            written = os.path.realpath(os.path.join(dirpath, file))
+            assert written.startswith(root + os.sep)
+
+    out = dd.read_parquet(path, index=False, calculate_divisions=False).compute()
+    assert sorted(out.aa.astype(str)) == sorted(values)
+
+
+@PYARROW_MARK
 @pytest.mark.parametrize("partition_on", ["aa", ["aa"]])
 def test_partition_on_string(tmpdir, partition_on):
     tmpdir = str(tmpdir)
