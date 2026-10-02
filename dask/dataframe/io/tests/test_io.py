@@ -389,6 +389,7 @@ def test_from_dask_array_lowered_index(
     set_index_frame: tuple[pd.DataFrame, dd.DataFrame], as_frame: bool
 ) -> None:
     expected, frame = set_index_frame
+    columns: str | list[str]
     if as_frame:
         columns = ["value"]
     else:
@@ -396,7 +397,7 @@ def test_from_dask_array_lowered_index(
         frame = frame.value
         columns = "value"
     values = frame.values
-    computations = []
+    computations: list[object] = []
     with Callback(start=computations.append):
         result = dd.from_dask_array(values, columns=columns, index=frame.index)
     assert not computations
