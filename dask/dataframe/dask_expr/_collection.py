@@ -2962,6 +2962,12 @@ class DataFrame(FrameBase):
         an internal ``shuffle``, because shuffling places all rows that have the same
         index in the same partition. To avoid this error, make sure all rows with the
         same ``on``-column value can fit on a single partition.
+
+        When merging on a column rather than on the index, the index of the result
+        is reset within each partition. Because Dask does not know the partition
+        sizes ahead of time, the resulting index is not consecutive and may contain
+        duplicate values. Call ``reset_index`` on the result if you need a unique,
+        consecutive index (this triggers computation of the partition sizes).
         """
         return merge(
             self,
