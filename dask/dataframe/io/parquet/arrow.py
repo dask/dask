@@ -650,20 +650,36 @@ class ArrowDatasetEngine(Engine):
         **kwargs,
     ):
         if schema == "infer" or isinstance(schema, dict):
-            # Start with schema from _meta_nonempty
-            inferred_schema = pyarrow_schema_dispatch(
+            meta = (
                 df._meta_nonempty.set_index(index_cols)
                 if index_cols
                 else df._meta_nonempty
-            ).remove_metadata()
+            )
+            meta_columns = list(meta.columns)
+
+            user_schema = None
+            if isinstance(schema, dict):
+                user_schema = pa.schema(schema)
+                specified_columns = [
+                    name for name in user_schema.names if name in meta.columns
+                ]
+                meta = meta.drop(columns=specified_columns)
+
+            # Infer fields not supplied by the user from _meta_nonempty
+            inferred_schema = pyarrow_schema_dispatch(meta).remove_metadata()
 
             # Use dict to update our inferred schema
-            if isinstance(schema, dict):
-                schema = pa.schema(schema)
-                for name in schema.names:
-                    i = inferred_schema.get_field_index(name)
-                    j = schema.get_field_index(name)
-                    inferred_schema = inferred_schema.set(i, schema.field(j))
+            if user_schema is not None:
+                for i, name in enumerate(meta_columns):
+                    j = user_schema.get_field_index(name)
+                    if j >= 0:
+                        inferred_schema = inferred_schema.insert(
+                            i, user_schema.field(j)
+                        )
+                for field in user_schema:
+                    if field.name not in meta_columns:
+                        i = inferred_schema.get_field_index(field.name)
+                        inferred_schema = inferred_schema.set(i, field)
             schema = inferred_schema
 
         # Check that target directory exists
