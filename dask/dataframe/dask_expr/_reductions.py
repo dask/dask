@@ -1084,7 +1084,7 @@ class Size(Reduction):
         return df.size
 
     def _simplify_down(self):
-        if is_dataframe_like(self.frame._meta) and len(self.frame.columns) > 1:
+        if is_dataframe_like(self.frame._meta):
             return len(self.frame.columns) * Len(self.frame)
         else:
             return Len(self.frame)
