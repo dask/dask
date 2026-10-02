@@ -219,10 +219,7 @@ def convert_legacy_task(
         for a in args:
             if isinstance(a, dict):
                 new = Dict(
-                    {
-                        k: convert_legacy_task(None, v, all_keys)
-                        for k, v in a.items()
-                    }
+                    {k: convert_legacy_task(None, v, all_keys) for k, v in a.items()}
                 )
             else:
                 new = convert_legacy_task(None, a, all_keys)
@@ -248,7 +245,7 @@ def convert_legacy_task(
             if key is None:
                 return converted
             return Task(key, _identity, converted)
-        return task
+        return cast(_T, task)
 
     if isinstance(task, (list, tuple, set, frozenset)):
         if is_namedtuple_instance(task):
