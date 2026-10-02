@@ -1260,3 +1260,13 @@ def _head_chunk(series_gb, **kwargs):
 def _head_aggregate(series_gb, **kwargs):
     levels = kwargs.pop("index_levels")
     return series_gb.head(**kwargs).droplevel(list(range(levels)))
+
+
+def _nlargest_aggregate(series_gb, **kwargs):
+    levels = kwargs.pop("index_levels")
+    return series_gb.nlargest(**kwargs).droplevel(list(range(levels)))
+
+
+def _nsmallest_aggregate(series_gb, **kwargs):
+    levels = kwargs.pop("index_levels")
+    return series_gb.nsmallest(**kwargs).droplevel(list(range(levels)))

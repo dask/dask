@@ -2110,6 +2110,62 @@ def test_groupby_unique(int_dtype):
     assert_eq(dd_gb.explode(), pd_gb.explode())
 
 
+@pytest.fixture
+def nlargest_frame():
+    rng = np.random.RandomState(42)
+    df = pd.DataFrame(
+        {
+            "foo": rng.randint(4, size=60),
+            "bar": rng.randint(3, size=60),
+            "baz": rng.rand(60),
+        }
+    )
+    # Ties, so that ``keep`` actually has something to break
+    df.loc[:20, "baz"] = 0.5
+    return df
+
+
+@pytest.mark.parametrize("method", ["nlargest", "nsmallest"])
+@pytest.mark.parametrize("by", ["foo", ["foo", "bar"]])
+@pytest.mark.parametrize("n", [1, 3, 10])
+@pytest.mark.parametrize("keep", ["first", "all"])
+def test_groupby_nlargest_nsmallest(nlargest_frame, method, by, n, keep):
+    df = nlargest_frame
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    pd_gb = getattr(df.groupby(by).baz, method)(n=n, keep=keep)
+    dd_gb = getattr(ddf.groupby(by).baz, method)(n=n, keep=keep)
+    assert_eq(dd_gb, pd_gb)
+
+
+@pytest.mark.parametrize("method", ["nlargest", "nsmallest"])
+def test_groupby_nlargest_nsmallest_defaults(nlargest_frame, method):
+    df = nlargest_frame
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    assert_eq(
+        getattr(ddf.groupby("foo").baz, method)(),
+        getattr(df.groupby("foo").baz, method)(),
+    )
+    # Grouping by a Series rather than a column name
+    assert_eq(
+        getattr(ddf.groupby(ddf.foo).baz, method)(2),
+        getattr(df.groupby(df.foo).baz, method)(2),
+    )
+    # split_every forces a multi-stage tree reduction
+    assert_eq(
+        getattr(ddf.groupby("foo").baz, method)(2, split_every=2),
+        getattr(df.groupby("foo").baz, method)(2),
+    )
+
+
+@pytest.mark.parametrize("method", ["nlargest", "nsmallest"])
+def test_groupby_nlargest_nsmallest_keep_last_raises(nlargest_frame, method):
+    ddf = dd.from_pandas(nlargest_frame, npartitions=5)
+    with pytest.raises(NotImplementedError, match="keep='last'"):
+        getattr(ddf.groupby("foo").baz, method)(2, keep="last")
+
+
 @pytest.mark.parametrize("by", ["foo", ["foo", "bar"]])
 @pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
 def test_groupby_value_counts(by, int_dtype):
