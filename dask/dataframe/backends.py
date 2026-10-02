@@ -745,7 +745,21 @@ def concat_pandas(
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if filter_warning:
                     warnings.simplefilter("ignore", FutureWarning)
-                out = pd.concat(dfs3, join=join, sort=False)
+
+                if hasattr(dfs3[0], "dtypes") and any(
+                    "pyarrow" in str(dtype) for dtype in dfs3[0].dtypes
+                ):
+                    import pyarrow as pa
+
+                    tables = [pa.Table.from_pandas(df) for df in dfs3]
+                    mapper = {
+                        k: v
+                        for k, v in dfs3[0].dtypes.to_dict().items()
+                        if "pyarrow" in str(v)
+                    }
+                    out = pa.concat_tables(tables).to_pandas(types_mapper=mapper.get)
+                else:
+                    out = pd.concat(dfs3, join=join, sort=False)
     else:
         if isinstance(dfs2[0].dtype, pd.CategoricalDtype):
             if ind is None:
