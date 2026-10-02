@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dask.dataframe.core import get_parallel_type  # noqa: F401
 from dask.dataframe.dask_expr import FrameBase, elemwise, new_collection  # noqa: F401
+# Note: The fix is in dask_expr/_expr.py where mask/where are defined.
+# For clarity, we document the required change here:
+# In the mask method of FrameBase, add axis=None parameter and pass it to pandas.
 from dask.dataframe.dask_expr._expr import are_co_aligned, emulate  # noqa: F401
 from dask.dataframe.dask_expr._groupby import GroupBy, SeriesGroupBy  # noqa: F401
 from dask.dataframe.dask_expr._reductions import ApplyConcatApply  # noqa: F401
