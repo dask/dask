@@ -837,6 +837,21 @@ def test_negative_list_slicing():
     assert_eq(dx[[4, -1]], x[[4, -1]])
 
 
+def test_negative_step_slice_before_start():
+    # A negative-step slice that starts before the array is an empty selection
+    # (``idx.indices`` returns the ``start == -1`` sentinel); it must not wrap
+    # around to the last element, on read or on assignment.
+    x = np.arange(10)
+    dx = da.from_array(x, chunks=2)
+    assert_eq(dx[-11:-7:-2], x[-11:-7:-2])
+
+    xn = np.arange(10)
+    xd = da.arange(10, chunks=2)
+    xn[-11:-7:-2] = -1
+    xd[-11:-7:-2] = -1
+    assert_eq(xd, xn)
+
+
 def test_permit_oob_slices():
     x = np.arange(5)
     dx = da.from_array(x, chunks=2)
