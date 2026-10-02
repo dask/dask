@@ -4119,6 +4119,24 @@ def to_zarr(
             **zarr_array_kwargs,
         )
 
+    # A `chunks` value passed by the caller overrides the Dask chunking used above. If the
+    # Dask chunks are not a whole multiple of it, several Dask blocks write into the same
+    # Zarr chunk concurrently, which silently corrupts it. Align the Dask chunks with the
+    # on-disk chunks so that every Zarr chunk is written by exactly one block.
+    if any(
+        c[0] % zc for c, zc in zip(arr.chunks, z.chunks, strict=True) if len(c) >= 1
+    ):
+        warnings.warn(
+            f"The Dask chunks do not align with the requested Zarr chunks {z.chunks}. "
+            "Rechunking to aligned chunks to ensure the data can be written safely. To "
+            "avoid this automatic rechunking, pass a `chunks` value that the Dask chunks "
+            "are a whole multiple of, or rechunk the array yourself "
+            "(e.g. arr = arr.rechunk(...)).",
+            UserWarning,
+            stacklevel=2,
+        )
+        arr = arr.rechunk(z.chunks)
+
     # TODO discuss problem with lock is False when overwriting. We get a checksum error in that case. This is fixed
     # by setting it to True. Bug in zarr?
     return arr.store(z, lock=lock, compute=compute, return_stored=return_stored)
