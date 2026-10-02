@@ -774,6 +774,36 @@ def test_reductions_non_numeric_dtypes():
     assert_eq(dds.nunique(), pds.nunique())
 
 
+def test_skew_kurtosis_propagate_nan_on_dataframe():
+    # DataFrame.skew()/kurtosis() filled an undefined moment ratio with 0.0,
+    # so a column holding a single NaN reported 0.0 skew and -3.0 kurtosis
+    # instead of NaN. Series.skew() on the same column already returned NaN,
+    # and nan_policy is documented as "propagate" and is the only accepted
+    # value, so the two paths disagreed within one library.
+    pdf = pd.DataFrame(
+        {
+            "one_nan": [1.0, 2.0, np.nan, 4.0, 9.0, 5.0, 3.0, 2.0],
+            "all_nan": [np.nan] * 8,
+            "clean": [1.0, 2.0, 3.0, 4.0, 9.0, 5.0, 3.0, 2.0],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    frame_skew = ddf.skew().compute()
+    frame_kurt = ddf.kurtosis().compute()
+
+    for col in pdf.columns:
+        assert_eq(frame_skew[col], ddf[col].skew().compute())
+        assert_eq(frame_kurt[col], ddf[col].kurtosis().compute())
+
+    assert np.isnan(frame_skew["one_nan"])
+    assert np.isnan(frame_skew["all_nan"])
+    assert not np.isnan(frame_skew["clean"])
+    assert np.isnan(frame_kurt["one_nan"])
+    assert np.isnan(frame_kurt["all_nan"])
+    assert not np.isnan(frame_kurt["clean"])
+
+
 @pytest.mark.parametrize("split_every", [False, 2])
 def test_reductions_frame(split_every):
     dsk = {

@@ -1699,10 +1699,11 @@ Expr={expr}"""
             )
         m2 = new_collection(Moment(frame, order=2))
         m3 = new_collection(Moment(frame, order=3))
-        result = m3 / m2**1.5
-        if result.ndim == 1:
-            result = result.fillna(0.0)
-        return result
+        # No fillna: nan_policy is "propagate" and is the only accepted value,
+        # so an undefined moment ratio must stay NaN. result.ndim == 1 is true
+        # exactly for a DataFrame input, so this branch made the per-column
+        # result disagree with Series.skew() on the same column.
+        return m3 / m2**1.5
 
     @derived_from(pd.DataFrame)
     def kurtosis(
@@ -1760,9 +1761,9 @@ Expr={expr}"""
             )
         m2 = new_collection(Moment(frame, order=2))
         m4 = new_collection(Moment(frame, order=4))
+        # See skew: the DataFrame path must not invent a value where the
+        # Series path returns NaN.
         result = m4 / m2**2.0
-        if result.ndim == 1:
-            result = result.fillna(0.0)
         if fisher:
             return result - 3
         else:
