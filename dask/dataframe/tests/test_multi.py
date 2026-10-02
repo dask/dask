@@ -2436,3 +2436,160 @@ def test_ensure_npartitions_properly_set(how, npartitions_left, npartitions_righ
     assert res.npartitions == res.optimize().npartitions
     assert len(res) == len(res.compute())
     assert len(res) == sum(res.map_partitions(len).compute())
+
+
+def _index_by_id(df):
+    """Map each ``id`` to the index the merged frame reports for it."""
+    return {row["id"]: (None if pd.isna(idx) else idx) for idx, row in df.iterrows()}
+
+
+def test_merge_indexed_left_with_empty_right_partitions():
+    """A left merge on the left index must not fall back to the left index for
+    rows whose matching right partition is empty (GH#12564)."""
+    from dask import delayed
+
+    empty = pd.DataFrame(
+        {"id": pd.Series([], dtype=str), "value": pd.Series([], dtype=int)},
+        index=pd.Index([], dtype=str),
+    )
+    left = dd.from_delayed(
+        [delayed(pd.DataFrame(index=["A"])), delayed(pd.DataFrame(index=["B", "C"]))],
+        divisions=("A", "B", "C"),
+        meta=pd.DataFrame(index=pd.Index([], dtype=str)),
+    )
+    right = dd.from_delayed(
+        [
+            delayed(empty),
+            delayed(empty),
+            delayed(pd.DataFrame({"id": ["A"], "value": [1]}, index=["AAA"])),
+            delayed(pd.DataFrame({"id": ["B"], "value": [2]}, index=["BBB"])),
+        ],
+        meta=empty,
+    )
+    right_single_partition = dd.from_delayed(
+        [
+            delayed(
+                pd.DataFrame(
+                    {"id": ["A", "B"], "value": [1, 2]},
+                    index=pd.Index(["AAA", "BBB"], dtype=str),
+                )
+            )
+        ],
+        meta=empty,
+    )
+    expected = pd.DataFrame(index=pd.Index(["A", "B", "C"], dtype=str)).merge(
+        pd.DataFrame(
+            {"id": ["A", "B"], "value": [1, 2]},
+            index=pd.Index(["AAA", "BBB"], dtype=str),
+        ),
+        how="left",
+        left_index=True,
+        right_on="id",
+    )
+    expected_index = _index_by_id(expected)
+    assert expected_index == {"A": "AAA", "B": "BBB", "C": None}
+
+    result = left.merge(right, how="left", left_index=True, right_on="id").compute()
+    assert _index_by_id(result) == expected_index
+
+    # The result must not change with the partitioning of the right frame.
+    other = left.merge(
+        right_single_partition, how="left", left_index=True, right_on="id"
+    ).compute()
+    assert _index_by_id(other) == expected_index
+
+
+def test_merge_indexed_right_with_empty_left_partitions():
+    """The same rule applies when the merge key is the right frame's index and
+    the left partitions are empty (GH#12564)."""
+    from dask import delayed
+
+    empty = pd.DataFrame(
+        {"id": pd.Series([], dtype="int64"), "value": pd.Series([], dtype="int64")}
+    )
+    right = dd.from_delayed(
+        [delayed(pd.DataFrame(index=[10])), delayed(pd.DataFrame(index=[20, 30]))],
+        divisions=(10, 20, 30),
+        meta=pd.DataFrame(index=pd.Index([], dtype="int64")),
+    )
+    left = dd.from_delayed(
+        [
+            delayed(empty),
+            delayed(pd.DataFrame({"id": [20], "value": [5]}, index=[7])),
+            delayed(empty),
+        ],
+        meta=empty,
+    )
+    expected = pd.DataFrame({"id": [20], "value": [5]}, index=pd.Index([7])).merge(
+        pd.DataFrame(index=pd.Index([10, 20, 30])),
+        how="right",
+        right_index=True,
+        left_on="id",
+    )
+    expected_index = _index_by_id(expected)
+    assert expected_index == {10: None, 20: 7.0, 30: None}
+
+    result = left.merge(right, how="right", right_index=True, left_on="id").compute()
+    assert _index_by_id(result) == expected_index
+
+
+def test_merge_with_empty_other_side_reports_missing_index():
+    """A row without a match reports a missing index, including when the frame
+    it was merged against is empty as a whole (GH#12564).
+
+    Pandas keeps the other frame's index in that case, so this pins the one
+    deliberate deviation from it: only the merged-against frame being empty
+    decides, never which partition a row happened to land in.
+    """
+    from dask import delayed
+
+    empty = pd.DataFrame(
+        {"value": pd.Series([], dtype="int64")},
+        index=pd.Index([], dtype=str, name="id"),
+    )
+    left = dd.from_delayed(
+        [delayed(pd.DataFrame(index=["A"])), delayed(pd.DataFrame(index=["B", "C"]))],
+        divisions=("A", "B", "C"),
+        meta=pd.DataFrame(index=pd.Index([], dtype=str)),
+    )
+    right_all_empty = dd.from_delayed([delayed(empty), delayed(empty)], meta=empty)
+    result = left.merge(
+        right_all_empty, how="left", left_index=True, right_on="id"
+    ).compute()
+    assert result.index.isna().all()
+
+    # The same holds when the right frame has rows, but its index is the merge
+    # column and none of them match.
+    right_named_index = dd.from_delayed(
+        [
+            delayed(empty),
+            delayed(pd.DataFrame({"value": [1]}, index=pd.Index(["AAA"], name="id"))),
+            delayed(pd.DataFrame({"value": [2]}, index=pd.Index(["BBB"], name="id"))),
+        ],
+        meta=empty,
+    )
+    other = left.merge(
+        right_named_index, how="left", left_index=True, right_on="id"
+    ).compute()
+    assert other.index.isna().all()
+    assert other["value"].isna().all()
+
+
+def test_missing_index_uses_a_dtype_that_holds_missing_values():
+    """``bool`` cannot hold NaN and pandas coerces it to ``True``, which would
+    report a match for rows that had none (GH#12564)."""
+    from dask.dataframe.multi import _missing_index
+
+    assert _missing_index(2, "str").isna().all()
+    # "str" is the string extension dtype on pandas 3 and object dtype on
+    # pandas < 3, so ask pandas what it resolves to instead of pinning either.
+    assert _missing_index(2, "str").dtype == pd.Index([np.nan], dtype="str").dtype
+
+    upcast = _missing_index(2, "int64")
+    assert upcast.isna().all()
+    assert upcast.dtype == "float64"
+
+    coerced = _missing_index(2, "bool")
+    assert coerced.isna().all()
+    assert coerced.isna().tolist() == [True, True]
+    assert coerced.dtype != "bool"

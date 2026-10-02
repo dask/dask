@@ -74,6 +74,23 @@ from dask.dataframe.utils import asciitable
 ###############################################################
 
 
+def _missing_index(length, dtype):
+    """An all-missing index, using ``dtype`` when that dtype can hold one.
+
+    Pandas upcasts an index whose entries have no counterpart (``int64`` to
+    ``float64``) and silently coerces others (``bool`` to ``True``), so a
+    candidate index is only kept when it really is all-missing.
+    """
+    try:
+        index = pd.Index(np.full(length, np.nan), dtype=dtype)
+    except (TypeError, ValueError):
+        pass
+    else:
+        if index.isna().all():
+            return index
+    return pd.Index(np.full(length, np.nan))
+
+
 def merge_chunk(
     lhs,
     *args,
@@ -83,6 +100,8 @@ def merge_chunk(
     rhs, *args = args
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
+    left_on = kwargs.get("left_on")
+    right_on = kwargs.get("right_on")
     empty_index_dtype = result_meta.index.dtype
     categorical_columns = result_meta.select_dtypes(include="category").columns
 
@@ -141,6 +160,27 @@ def merge_chunk(
     # of input dtypes.
     if len(out) == 0 and empty_index_dtype is not None:
         out.index = out.index.astype(empty_index_dtype)
+
+    # A row that found no match must not keep the index of the frame it was
+    # merged against, whichever partition it landed in. Pandas reports a
+    # missing value for such a row whenever that frame has rows, but keeps the
+    # other frame's index when it is empty - as a whole, or, for dask,
+    # partition by partition - which made the result depend on how the inputs
+    # were partitioned (GH#12564). Reporting a missing value in both cases
+    # leaves one rule: a row without a match has no index.
+    merge_on_left_index = (
+        left_index and not right_index and right_on is not None and len(rhs) == 0
+    )
+    merge_on_right_index = (
+        right_index and not left_index and left_on is not None and len(lhs) == 0
+    )
+    if (
+        (merge_on_left_index or merge_on_right_index)
+        and len(out)
+        and isinstance(lhs, pd.DataFrame)
+    ):
+        out.index = _missing_index(len(out), empty_index_dtype)
+
     return out
 
 
