@@ -140,6 +140,35 @@ def test_str_split_(index):
     assert_eq(dd_a, pd_a)
 
 
+def test_str_split_preserves_dtype():
+    # The lazy `_meta`'s dtype must match the actual computed dtype, not just
+    # fall back to `object`. Regression test for #11884.
+    pytest.importorskip("pyarrow")
+    ser = pd.Series(["a,b", "c,d"], dtype="string[pyarrow]")
+    dser = from_pandas(ser.to_frame("a"), npartitions=1)["a"]
+
+    result = dser.str.split(",", n=1, expand=True)
+    assert result._meta[0].dtype == ser.dtype
+    assert result.compute()[0].dtype == ser.dtype
+
+
+def test_str_split_categorical_preserves_categories_dtype():
+    # `str` operations on a categorical operate on the categories, so the
+    # split result's dtype should follow the categories' dtype, not the
+    # categorical dtype itself. Categories use a pyarrow-backed string dtype
+    # so this actually discriminates from the buggy `object` fallback (a
+    # plain-object categorical's categories dtype is also `object`, which
+    # would pass even without the fix).
+    pytest.importorskip("pyarrow")
+    cat_dtype = pd.CategoricalDtype(pd.array(["a,b", "c,d"], dtype="string[pyarrow]"))
+    ser = pd.Series(["a,b", "c,d"], dtype=cat_dtype)
+    dser = from_pandas(ser.to_frame("a"), npartitions=1)["a"]
+
+    result = dser.str.split(",", n=1, expand=True)
+    assert result._meta[0].dtype == ser.cat.categories.dtype
+    assert result.compute()[0].dtype == ser.cat.categories.dtype
+
+
 def test_str_accessor_not_available():
     pdf = pd.DataFrame({"a": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=2)
