@@ -63,7 +63,7 @@ in-place, include:
   ways to install specific binaries to all workers in a cluster.
 
 .. _conda-pack: https://conda.github.io/conda-pack/
-.. _parcels: https://docs.cloudera.com/documentation/enterprise/latest/topics/cm_ig_parcels.html
+.. _parcels: https://docs.cloudera.com/
 
 Temporary installations
 ```````````````````````

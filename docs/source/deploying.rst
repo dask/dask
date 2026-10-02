@@ -181,7 +181,7 @@ deployments this is often handled by other Kubernetes services.
 
 See :doc:`deploying-kubernetes` for more details.
 
-.. _Dask-Kubernetes: https://kubernetes.dask.org/en/latest/operator.html
+.. _Dask-Kubernetes: https://kubernetes.dask.org/en/stable/
 .. |Dask-Kubernetes| replace:: **Dask Kubernetes Operator (recommended)**
 
 .. _managed-cluster-solutions:

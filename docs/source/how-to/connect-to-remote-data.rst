@@ -152,7 +152,7 @@ The following additional options may be passed to the ``PyArrow`` driver via
 PyArrow's ``libhdfs`` driver can also be affected by a few environment
 variables. For more information on these, see the `PyArrow documentation`_.
 
-.. _PyArrow documentation: https://arrow.apache.org/docs/python/filesystems_deprecated.html#hadoop-file-system-hdfs
+.. _PyArrow documentation: https://arrow.apache.org/docs/python/filesystems.html#hadoop-file-system-hdfs
 
 .. _connect-to-remote-data-s3:
 
