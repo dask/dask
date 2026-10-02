@@ -1,22 +1,43 @@
 GPUs
 ====
 
-Dask works with GPUs in a few ways.
+Graphics Processing Units (GPUs) can dramatically speed up certain numerical computations like
+machine learning model training. Tools like RAPIDS, TensorFlow, and PyTorch can be run on
+GPUs instead of a standard CPU to produce results an order of magnitude faster (or more).
+Dask connects nicely with these different tools--while the particular hardware might be different
+when using GPUs, so long as the Python code can run on a set of machines
+Dask can coordinate running that code.
 
+There are many different ways to use Dask and GPUs--from training one large machine learning model
+across many workers concurrently, to doing hyperparameter tuning where each worker has a different
+set of hyperparameters to test. This page will walk through a few of them.
 
-Custom Computations
--------------------
+GPU-accelerated libraries for large computations
+------------------------------------------------
 
-Many people use Dask alongside GPU-accelerated libraries like PyTorch and
-TensorFlow to manage workloads across several machines.  They typically use
-Dask's custom APIs, notably :doc:`Delayed <delayed>` and :doc:`Futures
-<futures>`.
+Tools like PyTorch and TensorFlow both have the capability to use GPUs as well as the ability to
+train a single model across many machines. This has very practical applications: large models like
+`GPT-3 <https://arxiv.org/abs/2005.14165>`_ are trained on clusters of computers in this manner.
+Dask can be used as a straightforward manner of coordinating such a cluster to train a model. while
+there are benefits to using Dask for training very large models, there may still be speed
+improvements for training models with fewer parameters as well.
 
-Dask doesn't need to know that these functions use GPUs.  It just runs Python
-functions.  Whether or not those Python functions use a GPU is orthogonal to
-Dask.  It will work regardless.
+.. image:: images/gpu-1-libraries.png
+   :alt: Training a model over GPUs across multiple workers
+   :width: 80%
 
-As a worked example, you may want to view this talk:
+To take one example, PyTorch has the
+`DistributedDataParallel <https://pytorch.org/tutorials/intermediate/ddp_tutorial.html>`_ (DDP)
+library that allows machines to concurrently train the same model and share results after each data
+batch. With Dask, each worker can be passed the Python code to train a machine learning model, then
+the DDP library will share the results so the model trains faster.
+
+Dask does not need to know that any of its tasks use GPUs. As long as the worker has access to GPUs
+and the environment has been configured with the necessary packages, Dask will work.
+
+Here is a talk from the GTC Silicon Valley 2019 conference
+by Danielle Dean and Mathew Salvaris of Microsoft that discusses using Dask and V100 GPUs for 
+distributed scoring of machine learning models for vision.
 
 .. raw:: html
 
@@ -25,29 +46,45 @@ As a worked example, you may want to view this talk:
                 type="video/mp4">
     </video>
 
-High Level Collections
-----------------------
+`Dask and V100s for Fast, Distributed Batch Scoring of Computer Vision Workloads <https://developer.nvidia.com/gtc/2019/video/s9198>`_
 
-Dask can also help to scale out large array and dataframe computations by
-combining the Dask Array and DataFrame collections with a GPU-accelerated
-array or dataframe library.
+Having parallel tasks use GPUs
+------------------------------
 
-Recall that :doc:`Dask Array <array>` creates a large array out of many NumPy
+Tasks like running experiments of different parameters of a machine learning model on a GPU
+are embarrassingly parallelizable. Dask can be used to run each experiment trial concurrently,
+dramatically speeding up the process. Parallelizing experiment runs can be useful with or without
+GPUs, however because models that are trained on GPUs often take an especially long time to train
+there is a lot of benefit in this situation especially. If you have n different trials that you were
+previously running sequentially then parallelizing them is useful, regardless of if it's on a CPU or GPU.
+
+.. image:: images/gpu-2-experiments.png
+   :alt: Running GPU experiments across multiple workers
+   :width: 80%
+
+Data collections
+---------------------------
+
+Collections of data like Dask Array and Dask DataFrame can be improved with by using GPUs as well
+with the help of external libraries. :doc:`Dask Array <array>` creates a large array out of many NumPy
 arrays and :doc:`Dask DataFrame <dataframe>` creates a large dataframe out of
-many Pandas dataframes.  We can use these same systems with GPUs if we swap out
-the NumPy/Pandas components with GPU-accelerated versions of those same
+many pandas dataframes.  We can use these same systems with GPUs if we swap out
+the NumPy/pandas components with GPU-accelerated versions of those same
 libraries, as long as the GPU accelerated version looks enough like
-NumPy/Pandas in order to interoperate with Dask.
+NumPy/pandas in order to interoperate with Dask.
 
 Fortunately, libraries that mimic NumPy, Pandas, and Scikit-Learn on the GPU do
 exist.
 
+.. image:: images/gpu-3-data.png
+   :alt: Using data collections to spread data across GPUs on multiple workers
+   :width: 80%
 
 DataFrames
 ~~~~~~~~~~
 
 The `RAPIDS <https://rapids.ai>`_ libraries provide a GPU accelerated
-Pandas-like library,
+pandas-like library,
 `cuDF <https://github.com/rapidsai/cudf>`_,
 which interoperates well and is tested against Dask DataFrame.
 
@@ -109,13 +146,13 @@ Some of these include:
 -  `Thunder GBM <https://github.com/Xtra-Computing/thundergbm>`_
 
 
-Setup
------
+Setting up Dask for using GPUs
+------------------------------
 
 From the examples above we can see that the user experience of using Dask with
 GPU-backed libraries isn't very different from using it with CPU-backed
 libraries.  However, there are some changes you might consider making when
-setting up your cluster.
+setting up your Dask cluster.
 
 Restricting Work
 ~~~~~~~~~~~~~~~~
