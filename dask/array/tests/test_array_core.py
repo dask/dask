@@ -5276,6 +5276,86 @@ def test_zarr_risky_shards_warns():
             arr.to_zarr(z)
 
 
+def _misaligned_boundaries(dask_write_chunks, zarr_write_chunks):
+    """Yield the (axis, boundary) pairs that split an on-disk chunk."""
+    for axis, (chunks, unit) in enumerate(
+        zip(dask_write_chunks, zarr_write_chunks, strict=True)
+    ):
+        boundary = 0
+        for chunk_size in chunks[:-1]:
+            boundary += chunk_size
+            if boundary % unit != 0:
+                yield axis, boundary
+
+
+def test_zarr_aligned_write_does_not_warn():
+    """
+    A block layout whose boundaries all fall on shard boundaries is safe, even
+    when the block size itself does not divide evenly into the shard shape.
+
+    Regression test for https://github.com/dask/dask/issues/12263.
+    """
+    zarr = pytest.importorskip("zarr", minversion="3.0.0")
+
+    shape = (65, 65, 65)
+    zarr_chunk_shape = (16, 16, 16)
+    zarr_shard_shape = (32, 32, 32)
+
+    arr = da.ones(shape, chunks=(32, 32, 32))
+
+    z = zarr.create_array(
+        store={},
+        shape=shape,
+        chunks=zarr_chunk_shape,
+        shards=zarr_shard_shape,
+        dtype=arr.dtype,
+    )
+
+    # A chunk size this large leaves one block per axis, which cannot split a
+    # shard, so the write is safe and must not warn.
+    with dask.config.set({"array.chunk-size": "16 MiB"}):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", PerformanceWarning)
+            result = arr.to_zarr(z, compute=False)
+            result.compute()
+
+    # Pin the layout that the old check mishandled. Its block size divides
+    # evenly into neither the shard shape nor, therefore, the axis lengths,
+    # which is exactly what it warned about, and it has no interior boundary
+    # to misalign. If auto chunking stops producing this layout the test no
+    # longer covers gh-12263 and should be rewritten rather than left passing.
+    assert result.chunks == ((65,), (65,), (65,))
+    assert list(_misaligned_boundaries(result.chunks, zarr_shard_shape)) == []
+    assert_eq(z[...], arr.compute())
+
+
+def test_zarr_misaligned_write_warns():
+    """
+    A block boundary that falls inside a shard lets two Dask blocks write to
+    the same shard at the same time, which still has to warn.
+
+    The message match pins the wording of the new predicate: the layout below
+    warns, and in the same run each of two concurrent writers was observed to
+    overwrite the other's shard.
+    """
+    zarr = pytest.importorskip("zarr", minversion="3.0.0")
+
+    shape = (65, 65, 65)
+    arr = da.ones(shape, chunks=(32, 32, 32))
+
+    z = zarr.create_array(
+        store={},
+        shape=shape,
+        chunks=(16, 16, 16),
+        shards=(32, 32, 32),
+        dtype=arr.dtype,
+    )
+
+    with dask.config.set({"array.chunk-size": "1 kiB"}):
+        with pytest.raises(PerformanceWarning, match="block boundary at"):
+            arr.to_zarr(z, compute=False)
+
+
 def test_zarr_nocompute():
     pytest.importorskip("zarr")
     with tmpdir() as d:
@@ -5300,16 +5380,19 @@ def test_zarr_regions():
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    with pytest.warns(PerformanceWarning):
-        a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
+    # These region writes put a single block along each axis, and a block
+    # boundary that falls inside a chunk is what makes a write unsafe. A
+    # single block has no boundary, so no warning is warranted here even
+    # though the block sizes do not divide the chunk size of the Zarr array
+    # (gh-12263).
+    a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
 
     a2 = da.from_zarr(z)
     expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 0, 7, 0], [0, 0, 11, 0]]
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    with pytest.warns(PerformanceWarning):
-        a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
+    a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
 
     a2 = da.from_zarr(z)
     expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 15, 7, 0], [0, 0, 11, 0]]

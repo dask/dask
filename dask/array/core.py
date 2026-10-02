@@ -3857,28 +3857,45 @@ def _write_dask_to_existing_zarr(
     for ax, (dw, zw) in enumerate(
         zip(dask_write_chunks, zarr_write_chunks, strict=True)
     ):
-        if len(dw) >= 1:
-            nominal_dask_chunk_size = dw[0]
-            if not nominal_dask_chunk_size % zw == 0:
-                safe_chunk_size = np.prod(zarr_write_chunks) * max(1, z.dtype.itemsize)
-                msg = (
-                    f"The input Dask array will be rechunked along axis {ax} with chunk size "
-                    f"{nominal_dask_chunk_size}, but a chunk size divisible by {zw} is "
-                    f"required for Dask to write safely to the Zarr array {z}. "
-                    "To avoid risk of data loss when writing to this Zarr array, set the "
-                    '"array.chunk-size" configuration parameter to at least the size in'
-                    " bytes of a single on-disk "
-                    f"chunk (or shard) of the Zarr array, which in this case is "
-                    f"{safe_chunk_size} bytes. "
-                    f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
-                )
-
-                warnings.warn(
-                    msg,
-                    PerformanceWarning,
-                    stacklevel=3,
-                )
+        # Two Dask blocks can write to the same on-disk chunk (or shard) at the
+        # same time only if the boundary between them falls inside one, so a
+        # layout whose block boundaries all land on multiples of the storage
+        # unit is safe however many blocks it has. A single block has no
+        # boundary at all and can never be misaligned; a nominal chunk size
+        # that merely fails to divide evenly into the unit says nothing about
+        # where the boundaries are, and warns on safe writes.
+        boundary = 0
+        misaligned = None
+        for chunk_size in dw[:-1]:
+            boundary += chunk_size
+            if boundary % zw != 0:
+                misaligned = boundary
                 break
+
+        if misaligned is not None:
+            nominal_dask_chunk_size = dw[0]
+            safe_chunk_size = np.prod(zarr_write_chunks) * max(1, z.dtype.itemsize)
+            msg = (
+                f"The input Dask array will be rechunked along axis {ax} with chunk size "
+                f"{nominal_dask_chunk_size}, but the block boundary at offset {misaligned} "
+                f"of the written region does not align with the {zw} chunk (or shard) grid "
+                f"of the Zarr array {z}, so two Dask blocks can write to the same on-disk "
+                "chunk (or shard) at the same time and the result depends on which one is "
+                "written last. "
+                "To avoid risk of data loss when writing to this Zarr array, set the "
+                '"array.chunk-size" configuration parameter to at least the size in'
+                " bytes of a single on-disk "
+                f"chunk (or shard) of the Zarr array, which in this case is "
+                f"{safe_chunk_size} bytes. "
+                f'E.g., dask.config.set({{"array.chunk-size": {safe_chunk_size}}})'
+            )
+
+            warnings.warn(
+                msg,
+                PerformanceWarning,
+                stacklevel=3,
+            )
+            break
 
     arr = arr.rechunk(dask_write_chunks)
 
