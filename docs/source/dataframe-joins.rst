@@ -23,6 +23,17 @@ performance costs.
 These problems are solvable, but will be significantly slower than many other
 operations.  They are best avoided if possible.
 
+Because all of the rows that share a value in the join column are shuffled into
+the same partition, every group of matching rows needs to be able to fit into
+memory on a single worker.  This means that joining on a column with very few
+unique values (for example a column with ten distinct values and thousands of
+partitions) can be problematic: each partition ends up holding every row that
+belongs to one of those values, and the resulting partition size can grow much
+larger than the original partitions.  If the largest group of matching rows
+does not fit in memory, the join can raise a ``MemoryError``.  In that case,
+joining on a column with higher cardinality, or joining on the index after a
+``set_index`` (see `Sorted Joins`_ below), may be a better option.
+
 Large to Small Joins
 --------------------
 
