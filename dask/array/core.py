@@ -3652,14 +3652,20 @@ def from_array(
     if asarray is None:
         asarray = not hasattr(x, "__array_function__")
 
-    previous_chunks = getattr(x, "chunks", None)
+    chunks_attr_name = "chunks"
+    try:
+        hasattr(x, "chunks")
+    except NotImplementedError:
+        # zarr arrays with rectilinear chunks throw an exception when reading chunks attr
+        chunks_attr_name = "read_chunk_sizes"
+    previous_chunks = getattr(x, chunks_attr_name, None)
 
     # As of Zarr 3.x, arrays can have a shards attribute. If present,
     # this defines the smallest array region that is safe to write, and
     # thus this is a better starting point than the chunks attribute.
     # We check for chunks AND shards to be somewhat specific to Zarr 3.x arrays
     if (
-        hasattr(x, "chunks")
+        hasattr(x, chunks_attr_name)
         and hasattr(x, "shards")
         and (x.shards is not None)
         and chunks == "auto"
@@ -3788,6 +3794,12 @@ def from_zarr(
         z = zarr.open_array(store=zarr_store, path=component, **kwargs)
     else:
         z = zarr.open_array(store=url, path=component, **kwargs)
+    if chunks is None:
+        try:
+            chunks = z.chunks
+        except NotImplementedError:
+            chunks = z.read_chunk_sizes
+
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
@@ -4074,7 +4086,9 @@ def to_zarr(
             url, arr, region, zarr_mem_store_types, compute, return_stored
         )
 
-    if not _check_regular_chunks(arr.chunks):
+    if not zarr.config.get(
+        "array.rectilinear_chunks", False
+    ) and not _check_regular_chunks(arr.chunks):
         warnings.warn(
             "The array uses irregular chunk sizes. Rechunking to regular (uniform) chunks "
             "to ensure the data can be written safely. If you want to avoid this automatic "
