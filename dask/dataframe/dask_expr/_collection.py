@@ -17,6 +17,7 @@ from pandas.api.types import (
     is_bool_dtype,
     is_datetime64_any_dtype,
     is_numeric_dtype,
+    is_string_dtype,
     is_timedelta64_dtype,
 )
 from pandas.api.types import is_scalar as pd_is_scalar
@@ -293,6 +294,20 @@ def _wrap_unary_expr_op(self, op=None):
     # Wrap expr operator
     assert op is not None
     return new_collection(getattr(self.expr, op)())
+
+
+def _partitions_equal(left, right):
+    # Column-by-column 1D comparisons: DataFrame-level binary ops route
+    # through pandas operate_blockwise, which fails on older pandas for
+    # pyarrow-backed data (ArrowExtensionArray does not support reshape).
+    equal = True
+    for pos in range(len(left.columns)):
+        lcol = left.iloc[:, pos]
+        rcol = right.iloc[:, pos]
+        if not ((lcol == rcol) | (lcol.isna() & rcol.isna())).all():
+            equal = False
+            break
+    return pd.Series(equal, dtype="bool")
 
 
 _WARN_ANNOTATIONS = True
@@ -2686,6 +2701,22 @@ for op in [
     setattr(FrameBase, op, functools.partialmethod(_wrap_unary_expr_op, op=op))
 
 
+def _dtypes_equal(left: pd.Series, right: pd.Series) -> bool:
+    """Compare data dtypes positionally, tolerating string storage differences."""
+    if len(left) != len(right):
+        return False
+    for l, r in zip(left, right):
+        if l == r:
+            continue
+        # StringDtype with different storage (e.g. python vs pyarrow) or
+        # na_value compare unequal even though the values are the same kind
+        # of data; dask may store strings in a different backend than pandas
+        if is_string_dtype(l) and is_string_dtype(r):
+            continue
+        return False
+    return True
+
+
 class DataFrame(FrameBase):
     """DataFrame-like Expr Collection.
 
@@ -3179,6 +3210,41 @@ class DataFrame(FrameBase):
                 keep=keep,
             )
         )
+
+    @derived_from(pd.DataFrame)
+    def equals(self, other):
+        if not isinstance(other, (DataFrame, pd.DataFrame)):
+            return False
+
+        # Cheap metadata checks that avoid computing the data
+        if len(self.columns) != len(other.columns):
+            return False
+        if not self.columns.equals(other.columns):
+            return False
+        if not _dtypes_equal(self.dtypes, other.dtypes):
+            return False
+
+        # Index values and order must match
+        left_index = self.index.compute()
+        right_index = (
+            other.index.compute() if isinstance(other, DataFrame) else other.index
+        )
+        if not left_index.equals(right_index):
+            return False
+        if len(left_index) == 0:
+            return True
+
+        # Compare partitions directly with an explicitly provided meta so that
+        # metadata never has to be evaluated through pandas. NaNs in the same
+        # location are considered equal
+        mask = elemwise(
+            _partitions_equal,
+            self,
+            other,
+            meta=pd.Series(dtype="bool"),
+            transform_divisions=False,
+        )
+        return bool(mask.all().compute())
 
     @insert_meta_param_description(pad=12)
     def apply(self, function, *args, meta=no_default, axis=0, **kwargs):
