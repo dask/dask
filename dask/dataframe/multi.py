@@ -144,6 +144,26 @@ def merge_chunk(
     return out
 
 
+def _format_dtype_mismatch(left_dtype, right_dtype):
+    """Format a mismatched dtype pair for display.
+
+    ``str(dtype)`` is normally the most readable form, but it is not always
+    faithful: distinct dtypes can share it. ``string[pyarrow]`` and
+    ``string[python]`` both stringify to ``"string"``, and every
+    ``CategoricalDtype`` stringifies to ``"category"`` regardless of its
+    categories. Rendering those with ``str`` makes the mismatch warning
+    report a column as mismatching itself.
+
+    Fall back to ``repr`` for the pair only when their ``str`` forms
+    collide, so the common case keeps its concise output (``int64``
+    rather than ``dtype('int64')``).
+    """
+    left_str, right_str = str(left_dtype), str(right_dtype)
+    if left_str == right_str:
+        return repr(left_dtype), repr(right_dtype)
+    return left_str, right_str
+
+
 def warn_dtype_mismatch(left, right, left_on, right_on):
     """Checks for merge column dtype mismatches and throws a warning (#4574)"""
 
@@ -156,7 +176,7 @@ def warn_dtype_mismatch(left, right, left_on, right_on):
         col in right.columns for col in right_on
     ):
         dtype_mism = [
-            ((lo, ro), left.dtypes[lo], right.dtypes[ro])
+            ((lo, ro), *_format_dtype_mismatch(left.dtypes[lo], right.dtypes[ro]))
             for lo, ro in zip(left_on, right_on)
             if not is_dtype_equal(left.dtypes[lo], right.dtypes[ro])
         ]
