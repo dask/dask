@@ -5061,8 +5061,8 @@ def test_from_dict(dtype, orient, npartitions):
 def test_from_dict_raises():
     s = pd.Series(range(10))
     ds = dd.from_pandas(s, npartitions=2)
-    with pytest.raises(NotImplementedError, match="Dask collections as inputs"):
-        dd.DataFrame.from_dict({"a": ds}, npartitions=2)
+    with pytest.raises(ValueError, match="same number of partitions"):
+        dd.DataFrame.from_dict({"a": ds, "b": ds.repartition(npartitions=3)})
 
 
 def test_empty():
