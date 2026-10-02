@@ -8,10 +8,23 @@ import numpy as np
 import tlz as toolz
 
 from dask import base, utils
+from dask._expr import HLGExpr
 from dask.blockwise import blockwise as core_blockwise
-from dask.delayed import unpack_collections
+from dask.delayed import Delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayBlockwiseDep
+from dask.typing import DaskCollection
+
+
+def _unpack_arg(arg: object) -> tuple[object, tuple[DaskCollection, ...]]:
+    from dask.array.core import Array
+
+    if isinstance(arg, Array):
+        # Optimize literal and indexed arrays together so shared tasks retain
+        # their keys. Finalization still assembles and copies the literal value.
+        expr = HLGExpr.from_collection(arg, optimize_graph=False).finalize_compute()
+        arg = Delayed(expr.__dask_keys__()[0], expr.hlg)
+    return unpack_collections(arg)
 
 
 def blockwise(
@@ -215,7 +228,7 @@ def blockwise(
     for arg, ind in arginds:
         if ind is None:
             arg = normalize_arg(arg)
-            arg, collections = unpack_collections(arg)
+            arg, collections = _unpack_arg(arg)
 
             dependencies.extend(collections)
         else:
@@ -237,7 +250,7 @@ def blockwise(
     kwargs2 = {}
     for k, v in kwargs.items():
         v = normalize_arg(v)
-        v, collections = unpack_collections(v)
+        v, collections = _unpack_arg(v)
         dependencies.extend(collections)
         kwargs2[k] = v
 
