@@ -10,6 +10,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 from dask import config
+from dask.callbacks import Callback
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
 from dask.dataframe.utils import assert_eq, get_string_dtype
@@ -365,6 +366,53 @@ def test_from_dask_array_index(as_frame):
         s = s.to_frame()
     result = dd.from_dask_array(s.values, index=s.index)
     assert_eq(s, result)
+
+
+@pytest.fixture
+def set_index_frame() -> tuple[pd.DataFrame, dd.DataFrame]:
+    frames = [
+        pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", "2024-01-31", periods=n),
+                "value": np.arange(n) + group * 10,
+            }
+        )
+        for group, n in enumerate([2, 5, 10])
+    ]
+    expected = pd.concat(frames).set_index("timestamp")
+    frame = dd.concat([dd.from_pandas(part, npartitions=1) for part in frames])
+    return expected, frame.set_index("timestamp", npartitions=3)
+
+
+@pytest.mark.parametrize("as_frame", [True, False])
+def test_from_dask_array_lowered_index(
+    set_index_frame: tuple[pd.DataFrame, dd.DataFrame], as_frame: bool
+) -> None:
+    expected, frame = set_index_frame
+    if as_frame:
+        columns = ["value"]
+    else:
+        expected = expected.value
+        frame = frame.value
+        columns = "value"
+    values = frame.values
+    computations = []
+    with Callback(start=computations.append):
+        result = dd.from_dask_array(values, columns=columns, index=frame.index)
+    assert not computations
+    tm.assert_index_equal(result._meta.index, expected.index[:0])
+    assert result.divisions == frame.divisions
+    assert_eq(result, expected)
+
+
+def test_from_dask_array_index_boolean_loc(
+    set_index_frame: tuple[pd.DataFrame, dd.DataFrame],
+) -> None:
+    expected, frame = set_index_frame
+    expected = expected.loc[expected.index > "2024-01-15"]
+    result = frame.loc[frame.index > "2024-01-15"].compute()
+    assert len(result) == 9
+    assert_eq(result.sort_values("value"), expected.sort_values("value"))
 
 
 def test_from_dask_array_index_raises():

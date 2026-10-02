@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from dask._collections import new_collection
 from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe.dispatch import meta_lib_from_array, tolist
 from dask.dataframe.utils import pyarrow_strings_enabled
@@ -152,6 +153,8 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     if index is not None:
         # An index is explicitly given by the caller, so we can pass it through to the
         # initializer after a few checks.
+        # Match the name and partition count to the graph's lowered expression.
+        index = new_collection(index.expr.lower_completely())
         if index.npartitions != x.numblocks[0]:
             msg = (
                 "The index and array have different numbers of blocks. "
@@ -208,7 +211,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
 
     from dask.array.optimization import optimize
-    from dask.dataframe.dask_expr._collection import from_graph, new_collection
+    from dask.dataframe.dask_expr._collection import from_graph
     from dask.dataframe.dask_expr._expr import ArrowStringConversion
     from dask.utils import key_split
 
