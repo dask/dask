@@ -3428,6 +3428,9 @@ def _split_up_single_chunk(
     c: int, this_chunksize_tolerance: float, max_chunk_size: int, proposed: int
 ) -> list[int]:
     # Calculate by what factor we have to split this chunk
+    if proposed == 0:
+        # Fallback to max_chunk_size if proposed is zero
+        proposed = max(1, max_chunk_size)
     m = c / proposed
     if math.ceil(m) / m > this_chunksize_tolerance:
         # We want to smooth things potentially if rounding up would change the result
