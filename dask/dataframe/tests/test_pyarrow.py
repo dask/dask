@@ -11,6 +11,7 @@ from dask.dataframe._pyarrow import (
     is_object_string_index,
     is_object_string_series,
     is_pyarrow_string_dtype,
+    to_pyarrow_string,
 )
 
 pa = pytest.importorskip("pyarrow")
@@ -182,3 +183,41 @@ def test_is_object_string_series(series, expected):
 )
 def tests_is_object_string_dataframe(series, expected):
     assert is_object_string_dataframe(series) is expected
+
+@pytest.mark.parametrize(
+    "data,should_convert",
+    [
+        (["a", "b", None], True),
+        (["a", "b"], True),
+        ([], True),
+        ([None, None], True),
+        (["1", 1, None], False),
+        ([1, 2], False),
+        ([1, "1"], False),
+        ([True, False], False),
+        ([True, "a"], False),
+    ],
+)
+def test_to_pyarrow_string_skips_mixed_object(data, should_convert):
+    s = pd.Series(data, dtype=object)
+    result = to_pyarrow_string(s)
+    if should_convert:
+        assert is_pyarrow_string_dtype(result.dtype)
+    else:
+        assert result.dtype == object
+        assert result.tolist() == s.tolist()
+
+
+def test_to_pyarrow_string_preserves_pure_string_object_dataframe():
+    df = pd.DataFrame(
+        {
+            "pure": pd.Series(["a", "b", None], dtype=object),
+            "mixed": pd.Series(["1", 1, None], dtype=object),
+            "ints": pd.Series([1, 2, 3], dtype=int),
+        }
+    )
+    result = to_pyarrow_string(df)
+    assert is_pyarrow_string_dtype(result["pure"].dtype)
+    assert result["mixed"].dtype == object
+    assert result["mixed"].tolist() == ["1", 1, None]
+    assert pd.api.types.is_integer_dtype(result["ints"].dtype)
