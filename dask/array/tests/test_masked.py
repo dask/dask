@@ -34,6 +34,18 @@ def test_from_array_masked_array():
     assert_eq(dm, m)
 
 
+def test_elemwise_dtype_matches_masked_array_result():
+    masked_array = da.ma.masked_array([1.00000000009], dtype=np.float32)
+
+    result = masked_array * 1.5
+    computed = result.compute()
+
+    assert result.dtype == computed.dtype
+
+    cast = result.astype(np.float32)
+    assert cast.dtype == cast.compute().dtype == np.dtype(np.float32)
+
+
 def test_copy_deepcopy():
     t = np.ma.masked_array([1, 2], mask=[0, 1])
     x = da.from_array(t, chunks=t.shape, asarray=False)
