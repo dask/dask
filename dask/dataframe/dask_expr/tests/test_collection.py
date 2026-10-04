@@ -2498,6 +2498,21 @@ def test_isin_strings():
     assert_eq(df.foo.isin(["1", "2"]), pdf.foo.isin(["1", "2"]))
 
 
+def test_isin_mixed_object_matches_pandas():
+    # https://github.com/dask/dask/issues/12612
+    # Mixed object columns must not be coerced to pyarrow string on from_pandas
+    s = ["1", 1, None]
+    pdf = pd.Series(s, dtype=object)
+    ds = from_pandas(pdf, npartitions=1)
+    assert_eq(ds.isin([1]), pdf.isin([1]))
+    assert_eq(ds.isin(["1"]), pdf.isin(["1"]))
+
+    pdf2 = pd.Series(["1", 1], dtype=object)
+    ds2 = from_pandas(pdf2, npartitions=2)
+    assert_eq(ds2.isin([1]), pdf2.isin([1]))
+    assert_eq(ds2.isin(["1"]), pdf2.isin(["1"]))
+
+
 def test_predicate_pushdown_ndim_change(df, pdf):
     result = df.sum().to_frame()
     result = result[result[0] > 1]
