@@ -11,7 +11,8 @@ from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from gzip import GzipFile
-from itertools import repeat
+from itertools import accumulate, repeat
+from operator import sub
 
 import partd
 import pytest
@@ -36,7 +37,7 @@ from dask.bag.core import (
 from dask.bag.utils import assert_eq
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
-from dask.typing import Graph
+from dask.typing import Graph, no_default
 from dask.utils import filetexts, tmpdir, tmpfile
 from dask.utils_test import add, hlg_layer, inc
 
@@ -1353,6 +1354,62 @@ def test_accumulate():
 
     b = db.from_sequence([1, 2, 3], npartitions=1)
     assert b.accumulate(add).compute() == [1, 3, 6]
+
+
+@pytest.mark.parametrize(
+    "keep", [(), (0,), (1,), (2,), (3,), (1, 3), (0, 2), (0, 1, 2, 3)]
+)
+@pytest.mark.parametrize("partition_size", [1, 2, 4, 8])
+@pytest.mark.parametrize("initial", [no_default, 10])
+@pytest.mark.parametrize("binop", [add, sub])
+def test_accumulate_filtered_empty_partitions(keep, partition_size, initial, binop):
+    values = list(range(8))
+    bag = db.from_sequence(values, partition_size=partition_size).filter(
+        lambda x: x // 2 in keep
+    )
+    expected = [x for x in values if x // 2 in keep]
+    if initial is not no_default:
+        expected.insert(0, initial)
+    result = bag.accumulate(binop, initial=initial)
+    assert result.npartitions == bag.npartitions
+    assert result.compute(scheduler="sync") == list(accumulate(expected, binop))
+
+
+@pytest.mark.parametrize("initial", [no_default, None, []])
+@pytest.mark.parametrize("values", [[], [[], [], [1]], [None, None, "x"]])
+@pytest.mark.parametrize(
+    "empty_positions", [(), (0,), (0, 1), (1,), (3,), (0, 1, 2, 3)]
+)
+def test_accumulate_empty_partitions_values(initial, values, empty_positions):
+    def pair(left, right):
+        return (left, right)
+
+    parts = [[value] for value in values] or [[]]
+    for position in empty_positions:
+        parts.insert(position, [])
+    bag = db.from_delayed([dask.delayed(part) for part in parts])
+    expected = values if initial is no_default else [initial, *values]
+    assert bag.accumulate(pair, initial).compute(scheduler="sync") == list(
+        accumulate(expected, pair)
+    )
+
+
+def test_accumulate_empty_partitions_lazy_repartition():
+    calls = []
+
+    @dask.delayed
+    def partition(values):
+        calls.append(values)
+        return values
+
+    bag = db.from_delayed([partition([]), partition([2, 3]), partition([])])
+    result = bag.accumulate(add)
+    assert not calls
+    assert result.compute(scheduler="sync") == [2, 5]
+    for npartitions in [1, 2, 5]:
+        assert bag.repartition(npartitions=npartitions).accumulate(add).compute(
+            scheduler="sync"
+        ) == [2, 5]
 
 
 def test_groupby_tasks():
