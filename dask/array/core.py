@@ -5135,6 +5135,10 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     out = _elemwise_normalize_out(out)
     where = _elemwise_normalize_where(where)
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
+    # Zero-dimensional ndarrays are passed as scalar literals to blockwise rather
+    # than through from_array, which copies its inputs. Snapshot these mutable
+    # literals too, so changing an operand cannot change an existing task graph.
+    args = [a.copy() if isinstance(a, np.ndarray) and a.ndim == 0 else a for a in args]
 
     shapes = []
     for arg in args:
