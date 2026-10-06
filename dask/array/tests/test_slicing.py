@@ -707,6 +707,22 @@ def test_index_with_int_dask_array_dtypes(dtype):
     assert_eq(a[idx], np.array([20, 30]))
 
 
+def test_index_with_int_dask_array_complex_no_warning():
+    # gh#11883
+    a = da.asarray([1.0 + 2.0j, 2.0 + 3.0j])
+    idx = da.asarray([1, 0])
+    complex_warning = getattr(
+        getattr(np, "exceptions", None),
+        "ComplexWarning",
+        getattr(np, "ComplexWarning", None),
+    )
+    with warnings.catch_warnings():
+        if complex_warning is not None:
+            warnings.simplefilter("error", complex_warning)
+        res = a[idx]
+        assert_eq(res, np.array([2.0 + 3.0j, 1.0 + 2.0j]))
+
+
 def test_index_with_int_dask_array_nocompute():
     """Test that when the indices are a dask array
     they are not accidentally computed
