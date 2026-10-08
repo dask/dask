@@ -1111,7 +1111,20 @@ def lu(a):
     return p, l, u
 
 
-def solve_triangular(a, b, lower=False):
+def _lstsq_triangular(a, b):
+    """Solve one triangular block, falling back to a min-norm least squares solve.
+
+    ``lstsq`` only uses this when ``R`` is a single block. A zero diagonal makes
+    the triangular solve raise; NumPy's ``lstsq`` returns the minimum-norm
+    solution instead.
+    """
+    try:
+        return solve_triangular_safe(a, b)
+    except np.linalg.LinAlgError:
+        return np.linalg.lstsq(a, b, rcond=None)[0]
+
+
+def solve_triangular(a, b, lower=False, *, solver=solve_triangular_safe):
     """
     Solve the equation `a x = b` for `x`, assuming a is a triangular matrix.
 
@@ -1188,7 +1201,7 @@ def solve_triangular(a, b, lower=False):
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (
-                    solve_triangular_safe,
+                    solver,
                     (a.name, i, i),
                     target,
                 )
@@ -1441,7 +1454,16 @@ def lstsq(a, b):
         Singular values of `a`.
     """
     q, r = qr(a)
-    x = solve_triangular(r, q.T.conj().dot(b))
+    # One R block is the whole reduced system, so a singular diagonal can be
+    # solved as a small least-squares problem. Chunked R keeps the raising
+    # triangular solve.
+    rhs = q.T.conj().dot(b)
+    solver = (
+        _lstsq_triangular
+        if len(r.chunks[0]) == 1 and len(r.chunks[1]) == 1
+        else solve_triangular_safe
+    )
+    x = solve_triangular(r, rhs, solver=solver)
     residuals = b - a.dot(x)
     residuals = abs(residuals**2).sum(axis=0, keepdims=b.ndim == 1)
 
