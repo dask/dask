@@ -56,9 +56,7 @@ def _contains_only_strings_or_na(x) -> bool:
     return pd.api.types.infer_dtype(x, skipna=True) in ("string", "unicode", "empty")
 
 
-def _to_string_dtype(
-    df, dtype_check, index_check, string_dtype, check_values=False
-):
+def _to_string_dtype(df, dtype_check, index_check, string_dtype, check_values=False):
     if not (is_dataframe_like(df) or is_series_like(df) or is_index_like(df)):
         return df
 
