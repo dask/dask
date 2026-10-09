@@ -140,6 +140,19 @@ def test_str_split_(index):
     assert_eq(dd_a, pd_a)
 
 
+def test_str_split_preserves_dtype():
+    """Regression test for GH#11884: split(expand=True) should preserve string dtype."""
+    df = pd.DataFrame({"a": ["a,b,c", "d,e,f"]}, dtype="string[pyarrow]")
+    ddf = from_pandas(df, npartitions=1)
+
+    pd_a = df["a"].str.split(",", n=1, expand=True)
+    dd_a = ddf["a"].str.split(",", n=1, expand=True)
+
+    assert_eq(dd_a, pd_a)
+    # Verify dtype is preserved
+    assert dd_a.dtypes.tolist() == pd_a.dtypes.tolist()
+
+
 def test_str_accessor_not_available():
     pdf = pd.DataFrame({"a": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=2)
