@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import date
 from decimal import Decimal
+from typing import Literal
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -75,6 +76,34 @@ def test_get_engine_pyarrow():
 
     assert get_engine("auto") is ArrowDatasetEngine
     assert get_engine("pyarrow") is ArrowDatasetEngine
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("operation", ["set", "reset", "reset-drop"])
+def test_parquet_index_changes_share_data(
+    operation: Literal["set", "reset", "reset-drop"],
+) -> None:
+    from dask.dataframe.io.parquet.arrow import _reset_index, _set_index
+
+    df = pd.DataFrame({"key": np.arange(5), "value": np.arange(5, dtype="float64")})
+    if operation != "set":
+        df = df.set_index("key")
+    original_values = df["value"].to_numpy(copy=False)
+
+    if operation == "set":
+        result = _set_index(df, ["key"])
+        expected = pd.DataFrame(
+            {"value": np.arange(5, dtype="float64")},
+            index=pd.Index(np.arange(5), name="key"),
+        )
+    else:
+        result = _reset_index(df, drop=operation == "reset-drop")
+        expected = pd.DataFrame({"value": np.arange(5, dtype="float64")})
+        if operation == "reset":
+            expected.insert(0, "key", np.arange(5))
+
+    assert_eq(result, expected)
+    assert np.shares_memory(original_values, result["value"].to_numpy(copy=False))
 
 
 @pytest.mark.skipif(pa, reason="pyarrow are installed")
@@ -984,7 +1013,7 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 
     fns = glob.glob(os.path.join(tmp, "*.parquet"))
     df2 = dd.read_parquet(fns, columns=["i32"], engine=engine).compute()
-    df2.sort_values("i32", inplace=True)
+    df2 = df2.sort_values("i32")
     assert_eq(df[["i32"]], df2, check_index=False, check_divisions=False)
 
     df3 = dd.read_parquet(
