@@ -920,6 +920,19 @@ def test_lstsq_rank_deficient_minimum_norm():
     np.testing.assert_allclose(got, expected)
 
 
+def test_solve_triangular_key_depends_on_solver():
+    # The lstsq fallback solver must not share task keys with the default one.
+    from dask.array.linalg import _lstsq_triangular, _solve_triangular
+    from dask.array.utils import solve_triangular_safe
+
+    a = da.from_array(np.triu(np.ones((4, 4))), chunks=4)
+    b = da.from_array(np.ones(4), chunks=4)
+    default = _solve_triangular(a, b, False, solve_triangular_safe)
+    fallback = _solve_triangular(a, b, False, _lstsq_triangular)
+    assert default.name != fallback.name
+    assert da.linalg.solve_triangular(a, b).name == default.name
+
+
 def test_no_chunks_svd():
     x = np.random.default_rng().random((100, 10))
     u, s, v = np.linalg.svd(x, full_matrices=False)

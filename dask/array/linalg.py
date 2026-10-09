@@ -1124,7 +1124,7 @@ def _lstsq_triangular(a, b):
         return np.linalg.lstsq(a, b, rcond=None)[0]
 
 
-def solve_triangular(a, b, lower=False, *, solver=solve_triangular_safe):
+def solve_triangular(a, b, lower=False):
     """
     Solve the equation `a x = b` for `x`, assuming a is a triangular matrix.
 
@@ -1143,6 +1143,15 @@ def solve_triangular(a, b, lower=False, *, solver=solve_triangular_safe):
     x : (M,) or (M, N) array
         Solution to the system `a x = b`. Shape of return matches `b`.
     """
+    return _solve_triangular(a, b, lower, solve_triangular_safe)
+
+
+def _solve_triangular(a, b, lower, upper_solver):
+    """Build the ``solve_triangular`` graph.
+
+    ``upper_solver`` solves each diagonal block of an upper triangular ``a``;
+    ``lstsq`` passes one that tolerates a singular ``R``.
+    """
 
     if a.ndim != 2:
         raise ValueError("a must be 2 dimensional")
@@ -1157,7 +1166,7 @@ def solve_triangular(a, b, lower=False, *, solver=solve_triangular_safe):
 
     vchunks = len(a.chunks[1])
     hchunks = 1 if b.ndim == 1 else len(b.chunks[1])
-    token = tokenize(a, b, lower)
+    token = tokenize(a, b, lower, upper_solver)
     name = f"solve-triangular-{token}"
 
     # for internal calculation
@@ -1200,11 +1209,7 @@ def solve_triangular(a, b, lower=False, *, solver=solve_triangular_safe):
                         dsk[prev] = (np.dot, (a.name, i, k), _key(k, j))
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
-                dsk[_key(i, j)] = (
-                    solver,
-                    (a.name, i, i),
-                    target,
-                )
+                dsk[_key(i, j)] = (upper_solver, (a.name, i, i), target)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
 
@@ -1463,7 +1468,7 @@ def lstsq(a, b):
         if len(r.chunks[0]) == 1 and len(r.chunks[1]) == 1
         else solve_triangular_safe
     )
-    x = solve_triangular(r, rhs, solver=solver)
+    x = _solve_triangular(r, rhs, False, solver)
     residuals = b - a.dot(x)
     residuals = abs(residuals**2).sum(axis=0, keepdims=b.ndim == 1)
 
