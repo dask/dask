@@ -1174,7 +1174,7 @@ def pad_stats(array, pad_width, mode, stat_length):
                 pad_chunks.append(w[0])
             elif i > 1:
                 axes.append(d)
-                select.append(slice(s - l[1], None, None))
+                select.append(slice(max(s - l[1], 0), None, None))
                 pad_shape.append(w[1])
                 pad_chunks.append(w[1])
             else:

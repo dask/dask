@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pickle
+from typing import Literal
 
 import pytest
 
@@ -919,6 +920,21 @@ def test_pad_constant_values(np_a, pad_value):
     da_r = da.pad(da_a, pad_width, mode="constant", constant_values=pad_value)
 
     assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize("mode", ["minimum", "mean", "maximum"])
+@pytest.mark.parametrize("stat_length", [3, 4, 5, 6])
+@pytest.mark.parametrize("ndim", [1, 2])
+def test_pad_stats_oversized_window(
+    mode: Literal["minimum", "mean", "maximum"], stat_length: int, ndim: int
+) -> None:
+    np_a = np.array([1, 7, 3], dtype=float)
+    if ndim == 2:
+        np_a = np.vstack([np_a, np_a[::-1] + 1, np_a * 2])
+    da_a = da.from_array(np_a, chunks=2)
+    expected = np.pad(np_a, (1, 2), mode=mode, stat_length=stat_length)
+    result = da.pad(da_a, (1, 2), mode=mode, stat_length=stat_length)
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("dtype", [np.uint8, np.int16, np.float32, bool])
