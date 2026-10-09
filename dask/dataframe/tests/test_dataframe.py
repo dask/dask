@@ -206,6 +206,27 @@ def test_series_axes():
     assert all(assert_eq(d, p) for d, p in zip(ds.axes, ps.axes))
 
 
+def test_from_pandas_object_columns_with_nonstring_values():
+    # object dtype can hold arbitrary Python objects, so only columns
+    # whose values are all strings may convert to `string[pyarrow]`.
+    # https://github.com/dask/dask/issues/12612
+    ps = pd.Series(["1", 1, "x", 2], name="mixed")
+    ds = dd.from_pandas(ps, npartitions=2)
+    assert ds.compute().tolist() == ["1", 1, "x", 2]
+    if pyarrow_strings_enabled():
+        assert pd.api.types.is_object_dtype(ds.dtype)
+    assert_eq(ds.isin([1]), ps.isin([1]))
+    assert_eq(ds.isin(["1"]), ps.isin(["1"]))
+
+    df = pd.DataFrame({"mixed": ["1", 1, "x", 2], "strings": ["a", "b", "c", "d"]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    result = ddf.compute()
+    assert result["mixed"].tolist() == ["1", 1, "x", 2]
+    if pyarrow_strings_enabled():
+        assert pd.api.types.is_object_dtype(ddf["mixed"].dtype)
+        assert not pd.api.types.is_object_dtype(ddf["strings"].dtype)
+
+
 def test_attributes():
     assert "a" in dir(d)
     assert "foo" not in dir(d)
