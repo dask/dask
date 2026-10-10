@@ -37,6 +37,24 @@ def test_map_partitions(df):
     assert_eq(df2, df + (df + 1))
 
 
+@pytest.mark.parametrize("delayed_kwargs", [False, True])
+def test_map_partitions_kwargs_tokenization(delayed_kwargs: bool) -> None:
+    def offset(frame: pd.DataFrame, *, a: int, b: int) -> pd.DataFrame:
+        return frame + a - b
+
+    pdf = pd.DataFrame({"x": [10, 20]})
+    df = from_pandas(pdf, npartitions=2)
+    a, b = 1, 2
+    if delayed_kwargs:
+        a, b = dask.delayed(a), dask.delayed(b)
+
+    first = df.map_partitions(offset, a=a, b=b, meta=pdf.iloc[:0])
+    second = df.map_partitions(offset, a=b, b=a, meta=pdf.iloc[:0])
+    actual_first, actual_second = dask.compute(first, second, scheduler="synchronous")
+    assert_eq(actual_first, pdf - 1)
+    assert_eq(actual_second, pdf + 1)
+
+
 def test_map_partitions_broadcast(df):
     def combine_x_y(x, y, val, foo=None):
         assert foo == "bar"
