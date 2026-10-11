@@ -17,14 +17,14 @@ Highlights
 
 .. dropdown:: Additional changes
 
-   - docs: fix duplicated-word typos in docstrings (:pr:`12516) \`Sreekant Baheti\`_
-   - Bump scientific-python/issue-from-pytest-log-action from 1.6.0 to 1.6.1 (:pr:`12524) \`dependabot[bot]\`_
-   - docs: fix broken cross-references in expr-system docs (:pr:`12494) \`Ritika shrestha\`_
-   - Suppress Pandas4Warning in nightly CI caused by PyArrow (:pr:`12498) \`Guido Imperiale\`_
-   - Fix pixi compatibility with upstream distributed (:pr:`12497) \`Guido Imperiale\`_
-   - Update guidance on AI-assisted PRs (:pr:`12496) \`Guido Imperiale\`_
-   - Bump scientific-python/issue-from-pytest-log-action from 1.5.0 to 1.6.0 (:pr:`12490) \`dependabot[bot]\`_
-   - Bump astral-sh/setup-uv from 8.2.0 to 8.3.0 (:pr:`12491) \`dependabot[bot]\`_
+   - docs: fix duplicated-word typos in docstrings (:pr:`12516`) `Sreekant Baheti`_
+   - Bump scientific-python/issue-from-pytest-log-action from 1.6.0 to 1.6.1 (:pr:`12524`) `dependabot[bot]`_
+   - docs: fix broken cross-references in expr-system docs (:pr:`12494`) `Ritika shrestha`_
+   - Suppress Pandas4Warning in nightly CI caused by PyArrow (:pr:`12498`) `Guido Imperiale`_
+   - Fix pixi compatibility with upstream distributed (:pr:`12497`) `Guido Imperiale`_
+   - Update guidance on AI-assisted PRs (:pr:`12496`) `Guido Imperiale`_
+   - Bump scientific-python/issue-from-pytest-log-action from 1.5.0 to 1.6.0 (:pr:`12490`) `dependabot[bot]`_
+   - Bump astral-sh/setup-uv from 8.2.0 to 8.3.0 (:pr:`12491`) `dependabot[bot]`_
 
 .. _v2026.7.0:
 
@@ -10180,3 +10180,13 @@ Other
 .. _`Zeus Almightee`: https://github.com/ernestprovo23
 .. _`Ernest Provo`: https://github.com/ernestprovo23
 .. _`Kevin Ziroldi`: https://github.com/kevinziroldi
+.. _`Sreekant Baheti`: https://github.com/Sreekant13
+.. _`dependabot[bot]`: https://github.com/apps/dependabot
+.. _`Ritika shrestha`: https://github.com/ritsth
+.. _`Maxime Grenu`: https://github.com/cluster2600
+.. _`monkeyjack123`: https://github.com/monkeyjack123
+.. _`Marianne Corvellec`: https://github.com/mkcor
+.. _`Harshith J`: https://github.com/abslock128w
+.. _`Ayan Bag`: https://github.com/ayanbag
+.. _`Chase Naples`: https://github.com/cnaples79
+.. _`Navid`: https://github.com/nadzhou
