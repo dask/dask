@@ -1810,7 +1810,7 @@ class Array(DaskMethodsMixin):
 
         return svg(self.chunks, size=size)
 
-    def to_hdf5(self, filename, datapath, **kwargs):
+    def to_hdf5(self, filename, datapath, compute=True, **kwargs):
         """Store array in HDF5 file
 
         >>> x.to_hdf5('myfile.hdf5', '/x')  # doctest: +SKIP
@@ -1824,7 +1824,7 @@ class Array(DaskMethodsMixin):
         dask.array.store
         h5py.File.create_dataset
         """
-        return to_hdf5(filename, datapath, self, **kwargs)
+        return to_hdf5(filename, datapath, self, compute=compute, **kwargs)
 
     def to_dask_dataframe(self, columns=None, index=None, meta=None):
         """Convert dask Array to dask Dataframe
@@ -5706,7 +5706,7 @@ def concatenate_axes(arrays, axes):
     return concatenate3(transposelist(arrays, axes, extradims=extradims))
 
 
-def to_hdf5(filename, *args, chunks=True, **kwargs):
+def to_hdf5(filename, *args, chunks=True, compute=True, **kwargs):
     """Store arrays in HDF5 file
 
     This saves several dask arrays into several datapaths in an HDF5 file.
@@ -5717,6 +5717,13 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
     chunks: tuple or ``True``
         Chunk shape, or ``True`` to pass the chunks from the dask array.
         Defaults to ``True``.
+    compute: bool
+        If ``True`` (default), write the data immediately and return
+        ``None``. If ``False``, create the datasets now but defer writing
+        the data: return the lazy result of :func:`dask.array.store`
+        (as with ``compute=False`` in :func:`dask.array.to_zarr`), which
+        writes the data when computed. Each deferred chunk write reopens
+        the file.
 
     Examples
     --------
@@ -5762,7 +5769,28 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
             )
             for dp, x in data.items()
         ]
-        store(list(data.values()), dsets)
+        if compute:
+            store(list(data.values()), dsets)
+            return None
+
+    # h5py objects can't outlive the file or be pickled, so the deferred
+    # graph writes through targets that reopen the file for each chunk.
+    targets = [_HDF5DatasetWriter(filename, dp) for dp in data]
+    return store(list(data.values()), targets, compute=False)
+
+
+class _HDF5DatasetWriter:
+    """Picklable store target that opens the HDF5 file on every write"""
+
+    def __init__(self, filename, datapath):
+        self.filename = filename
+        self.datapath = datapath
+
+    def __setitem__(self, key, value):
+        import h5py
+
+        with h5py.File(self.filename, mode="a") as f:
+            f[self.datapath][key] = value
 
 
 def interleave_none(a, b):
