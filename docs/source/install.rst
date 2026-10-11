@@ -214,6 +214,8 @@ See the :ref:`section on testing <develop-test>` in the Development Guidelines f
 .. _matplotlib: https://matplotlib.org/
 .. _mimesis: https://mimesis.name/en/master/
 .. _mmh3: https://github.com/hajimes/mmh3
+.. _numba: https://numba.pydata.org/
+.. _numbagg: https://github.com/numbagg/numbagg
 .. _numpy: https://numpy.org/
 .. _pandas: https://pandas.pydata.org/
 .. _psutil: https://psutil.readthedocs.io/en/latest/
