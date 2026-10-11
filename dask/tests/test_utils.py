@@ -600,6 +600,40 @@ def test_derived_from():
 
 
 @pytest.mark.parametrize(
+    "inconsistencies, expected",
+    [
+        ("x differs", ["- x differs"]),
+        (["x differs", "y differs"], ["- x differs", "- y differs"]),
+    ],
+)
+def test_derived_from_inconsistencies(inconsistencies, expected):
+    class Foo:
+        def f(a):
+            """A super docstring
+
+            An explanation
+            """
+
+    class Bar:
+        @derived_from(Foo, inconsistencies=inconsistencies)
+        def f(a):
+            pass
+
+    lines = Bar.f.__doc__.split("\n")
+    indent = " " * 12
+    # every inserted line keeps the docstring's indentation so the rst
+    # renders as one block, and list entries become bullets
+    assert indent + "Some inconsistencies with the Dask version may exist." in lines
+    start = lines.index(indent + "Known inconsistencies:")
+    assert lines[start + 1] == ""
+    assert lines[start + 2 : start + 2 + len(expected)] == [
+        indent + item for item in expected
+    ]
+    assert lines[start + 2 + len(expected)] == ""
+    assert "[" not in Bar.f.__doc__
+
+
+@pytest.mark.parametrize(
     "decorator",
     [property, functools.cached_property],
     ids=["@property", "@cached_property"],
