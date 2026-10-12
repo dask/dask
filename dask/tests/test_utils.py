@@ -620,7 +620,10 @@ def test_derived_from_inconsistencies(inconsistencies, expected):
             pass
 
     lines = Bar.f.__doc__.split("\n")
-    indent = " " * 12
+    # Python 3.13+ strips docstring indentation at compile time, so take it
+    # from the copied text rather than assuming 12 spaces
+    copied = next(line for line in lines if "This docstring was copied" in line)
+    indent = copied[: len(copied) - len(copied.lstrip())]
     # every inserted line keeps the docstring's indentation so the rst
     # renders as one block, and list entries become bullets
     assert indent + "Some inconsistencies with the Dask version may exist." in lines
