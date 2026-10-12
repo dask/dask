@@ -140,6 +140,21 @@ def test_str_split_(index):
     assert_eq(dd_a, pd_a)
 
 
+@pytest.mark.parametrize("dtype", ["string", "string[pyarrow]"])
+def test_str_split_expand_preserves_dtype(dtype):
+    # https://github.com/dask/dask/issues/11884
+    pdf = pd.DataFrame({"c": ["a,b,c", "d,e,f", "g,h,i"]}, dtype=dtype)
+    ddf = from_pandas(pdf, npartitions=2)
+
+    expected = pdf["c"].str.split(",", n=1, expand=True)
+    result = ddf["c"].str.split(",", n=1, expand=True)
+
+    assert_eq(result, expected)
+    # the metadata should preserve the dtype of the original series
+    assert list(result._meta.dtypes) == list(result.compute().dtypes)
+    assert list(result.dtypes) == list(expected.dtypes)
+
+
 def test_str_accessor_not_available():
     pdf = pd.DataFrame({"a": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=2)
