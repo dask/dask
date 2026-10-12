@@ -146,7 +146,9 @@ def test_str_split_expand_preserves_dtype(dtype):
     pdf = pd.DataFrame({"c": ["a,b,c", "d,e,f", "g,h,i"]}, dtype=dtype)
     ddf = from_pandas(pdf, npartitions=2)
 
-    expected = pdf["c"].str.split(",", n=1, expand=True)
+    # dask may convert string columns on ingest (dataframe.convert-string),
+    # so build the pandas reference from the dtype the dask series actually has
+    expected = pdf["c"].astype(ddf["c"].dtype).str.split(",", n=1, expand=True)
     result = ddf["c"].str.split(",", n=1, expand=True)
 
     assert_eq(result, expected)
