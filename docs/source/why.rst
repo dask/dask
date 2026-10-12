@@ -239,4 +239,4 @@ content:
 -  :doc:`user-interfaces`
 -  :doc:`scheduling`
 -  :doc:`spark`
--  `Slides <https://docs.dask.org/en/latest/#talks-and-tutorials>`_
+-  `Talks and tutorials <https://docs.dask.org/en/latest/presentations.html>`_
