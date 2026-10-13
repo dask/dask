@@ -976,12 +976,14 @@ class HLGExpr(Expr):
         "dsk",
         "low_level_optimizer",
         "output_keys",
+        "output_layers",
         "postcompute",
         "_cached_optimized",
     ]
     _defaults = {
         "low_level_optimizer": None,
         "output_keys": None,
+        "output_layers": None,
         "postcompute": None,
         "_cached_optimized": None,
     }
@@ -1003,9 +1005,13 @@ class HLGExpr(Expr):
         # through optimize / persist
         if not isinstance(dsk, HighLevelGraph):
 
-            dsk = HighLevelGraph.from_collections(
-                str(id(collection)), dsk, dependencies=()
-            )
+            layer_name = str(id(collection))
+            dsk = HighLevelGraph.from_collections(layer_name, dsk, dependencies=())
+            output_layers = (layer_name,)
+        elif hasattr(collection, "__dask_layers__"):
+            output_layers = tuple(collection.__dask_layers__())
+        else:
+            output_layers = None
         if optimize_graph and not hasattr(collection, "__dask_optimize__"):
             warnings.warn(
                 f"Collection {type(collection)} does not define a "
@@ -1022,6 +1028,7 @@ class HLGExpr(Expr):
             dsk=dsk,
             low_level_optimizer=low_level_optimizer,
             output_keys=collection.__dask_keys__(),
+            output_layers=output_layers,
             postcompute=collection.__dask_postcompute__(),
         )
 
@@ -1030,6 +1037,7 @@ class HLGExpr(Expr):
             self,
             low_level_optimizer=self.low_level_optimizer,
             output_keys=self.output_keys,
+            output_layers=self.output_layers,
             postcompute=self.postcompute,
         )
 
@@ -1122,10 +1130,20 @@ class _HLGExprSequence(Expr):
 
                 changed = True
                 dsk = HighLevelGraph.merge(*graphs)
+                output_layers = (
+                    tuple(
+                        dict.fromkeys(
+                            layer for expr in group for layer in expr.output_layers
+                        )
+                    )
+                    if all(expr.output_layers is not None for expr in group)
+                    else None
+                )
                 hlg_group = _HLGExprGroup(
                     dsk=dsk,
                     low_level_optimizer=optimizer,
                     output_keys=[v.__dask_keys__() for v in group],
+                    output_layers=output_layers,
                     postcompute=[g.postcompute for g in group],
                 )
                 exprs.append(hlg_group)
@@ -1380,7 +1398,9 @@ class HLGFinalizeCompute(HLGExpr):
             leafs -= val
         for t in tasks:
             layers[t.key] = MaterializedLayer({t.key: t})
-            deps[t.key] = leafs
+            deps[t.key] = (
+                set(expr.output_layers) if expr.output_layers is not None else leafs
+            )
         return HighLevelGraph(layers, dependencies=deps)
 
     def __dask_keys__(self):
