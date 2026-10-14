@@ -1485,7 +1485,17 @@ def test_bag_picklable():
 
     s = b.sum()
     s2 = loads(dumps(s))
+    assert s2.__dask_layers__() == s.__dask_layers__()
     assert s.compute() == s2.compute()
+
+
+def test_item_legacy_pickled_state():
+    item = db.from_sequence(range(10)).sum()
+    restored = object.__new__(db.Item)
+    restored.__setstate__((item.dask, item.key))
+
+    assert restored.__dask_layers__() == item.__dask_layers__()
+    assert restored.compute() == item.compute()
 
 
 def test_msgpack_unicode():
@@ -1664,6 +1674,8 @@ def test_dask_layers():
 
 @pytest.mark.parametrize("optimize", [False, True])
 def test_dask_layers_to_delayed(optimize):
+    from pickle import dumps, loads
+
     # `da.Array.to_delayed` causes the layer name to not match the key.
     # Ensure the layer name is propagated between `Delayed` and `Item`.
     pytest.importorskip("numpy")
@@ -1674,6 +1686,8 @@ def test_dask_layers_to_delayed(optimize):
     assert i.dask.layers.keys() == {f"delayed-{name}"}
     assert i.dask.dependencies == {f"delayed-{name}": set()}
     assert i.__dask_layers__() == (f"delayed-{name}",)
+    i2 = loads(dumps(i))
+    assert i2.__dask_layers__() == i.__dask_layers__()
 
     arr = da.ones(1) + 1
     delayed = arr.to_delayed(optimize_graph=optimize)[0]
