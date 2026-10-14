@@ -759,8 +759,10 @@ def map_overlap(
         # Trim using depth/boundary setting for array of highest rank
         depth = depth[i]
         boundary = boundary[i]
-        # remove any dropped axes from depth and boundary variables
-        drop_axis = kwargs.pop("drop_axis", None)
+        # Track input axes through the same drops and insertions as map_blocks.
+        # Rebuilding the mappings avoids overwriting settings when axes shift.
+        axes: list[int | None] = list(range(args[i].ndim))
+        drop_axis = kwargs.get("drop_axis")
         if drop_axis is not None:
             if isinstance(drop_axis, Number):
                 drop_axis = [drop_axis]
@@ -769,31 +771,23 @@ def map_overlap(
             ndim_out = max(a.ndim for a in args if isinstance(a, Array))
             drop_axis = [d % ndim_out for d in drop_axis]
 
-            kept_axes = tuple(ax for ax in range(args[i].ndim) if ax not in drop_axis)
-            # note that keys are relabeled to match values in range(x.ndim)
-            depth = {n: depth[ax] for n, ax in enumerate(kept_axes)}
-            boundary = {n: boundary[ax] for n, ax in enumerate(kept_axes)}
+            axes = [ax for ax in axes if ax not in drop_axis]
 
-        # add any new axes to depth and boundary variables
-        new_axis = kwargs.pop("new_axis", None)
+        new_axis = kwargs.get("new_axis")
+        if new_axis is None and x.ndim > len(axes):
+            # map_blocks infers new leading axes from the chunks argument.
+            new_axis = range(x.ndim - len(axes))
         if new_axis is not None:
             if isinstance(new_axis, Number):
                 new_axis = [new_axis]
 
-            # convert negative new_axis to equivalent positive value
-            ndim_out = max(a.ndim for a in args if isinstance(a, Array))
-            new_axis = [d % ndim_out for d in new_axis]
+            for axis in sorted(new_axis):
+                axes.insert(axis, None)
 
-            for axis in new_axis:
-                for existing_axis in list(depth.keys()):
-                    if existing_axis >= axis:
-                        # Shuffle existing axis forward to give room to insert new_axis
-                        depth[existing_axis + 1] = depth[existing_axis]
-                        boundary[existing_axis + 1] = boundary[existing_axis]
-
-                depth[axis] = 0
-                boundary[axis] = "none"
-
+        depth = {n: 0 if ax is None else depth[ax] for n, ax in enumerate(axes)}
+        boundary = {
+            n: "none" if ax is None else boundary[ax] for n, ax in enumerate(axes)
+        }
         return trim_internal(x, depth, boundary)
     else:
         return x

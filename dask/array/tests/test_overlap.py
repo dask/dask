@@ -974,6 +974,120 @@ def test_map_overlap_new_axis():
     assert_eq(expected, actual, check_shape=False, check_chunks=False)
 
 
+@pytest.mark.parametrize("new_axis", [0, 1, 2, 3, (0, 2), (3, 0)])
+@pytest.mark.parametrize(
+    "boundary, depth",
+    [
+        ("none", (0, 1, 2)),
+        ((0, "reflect", "nearest"), (1, 2, 3)),
+        ("none", {0: (0, 1), 1: (2, 0), 2: (1, 3)}),
+    ],
+)
+def test_map_overlap_trim_new_axes(new_axis, boundary, depth):
+    # Each input axis has different overlap, so shifting its settings onto
+    # another axis changes both the values and the shape of the result.
+    data = np.arange(6 * 8 * 10).reshape(6, 8, 10)
+    arr = da.from_array(data, chunks=(3, 4, 5))
+    axes = [new_axis] if np.isscalar(new_axis) else sorted(new_axis)
+
+    def expand(x):
+        for axis in axes:
+            x = np.expand_dims(x, axis=axis)
+        return x
+
+    actual = arr.map_overlap(
+        expand, depth=depth, boundary=boundary, new_axis=new_axis, dtype=arr.dtype
+    )
+    assert_eq(expand(data), actual)
+
+
+@pytest.mark.parametrize("drop_axis", [0, 1, -1, (0, 2)])
+@pytest.mark.parametrize("new_axis", [0, 1, (2, 0)])
+def test_map_overlap_trim_new_and_dropped_axes(drop_axis, new_axis):
+    data = np.arange(6 * 8 * 10).reshape(6, 8, 10)
+    arr = da.from_array(data, chunks=(3, 4, 5))
+    dropped = [drop_axis] if np.isscalar(drop_axis) else drop_axis
+    dropped = {axis % arr.ndim for axis in dropped}
+    depth = tuple(0 if axis in dropped else axis + 1 for axis in range(arr.ndim))
+    axes = [new_axis] if np.isscalar(new_axis) else sorted(new_axis)
+
+    def reduce_and_expand(x):
+        x = x.sum(axis=drop_axis)
+        for axis in axes:
+            x = np.expand_dims(x, axis=axis)
+        return x
+
+    actual = arr.map_overlap(
+        reduce_and_expand,
+        depth=depth,
+        boundary=(0, "reflect", "nearest"),
+        drop_axis=drop_axis,
+        new_axis=new_axis,
+        dtype=arr.dtype,
+    )
+    assert_eq(reduce_and_expand(data), actual)
+
+
+def test_map_overlap_trim_inferred_new_axes():
+    data = np.arange(6 * 8 * 10).reshape(6, 8, 10)
+    arr = da.from_array(data, chunks=(3, 4, 5))
+
+    def expand(x):
+        return np.stack([x, x + 1])
+
+    # As in map_blocks, extra leading axes are inferred from chunks. The
+    # supplied chunk sizes describe the function's output before trimming.
+    actual = arr.map_overlap(
+        expand,
+        depth=(0, 1, 2),
+        boundary="reflect",
+        chunks=(2, 3, 6, 9),
+        dtype=arr.dtype,
+    )
+    assert_eq(expand(data), actual)
+
+
+@pytest.mark.parametrize("highest_rank_first", [False, True])
+def test_map_overlap_trim_new_axis_broadcast(highest_rank_first):
+    data = np.arange(6 * 8 * 10).reshape(6, 8, 10)
+    offsets = np.arange(8 * 10).reshape(8, 10)
+    arr = da.from_array(data, chunks=(3, 4, 5))
+    other = da.from_array(offsets, chunks=(4, 5))
+    args = [arr, other] if highest_rank_first else [other, arr]
+    depths = [(0, 1, 2), (1, 2)] if highest_rank_first else [(1, 2), (0, 1, 2)]
+
+    actual = da.map_overlap(
+        lambda x, y: (x + y)[None],
+        *args,
+        depth=depths,
+        boundary="none",
+        new_axis=0,
+        dtype=arr.dtype,
+    )
+    assert_eq((data + offsets)[None], actual)
+
+
+def test_map_overlap_new_axis_neighborhood_filter():
+    ndimage = pytest.importorskip("scipy.ndimage")
+    data = np.arange(4 * 20 * 20, dtype=float).reshape(4, 20, 20)
+    arr = da.from_array(data, chunks=(4, 5, 5))
+
+    def features(x):
+        smooth = ndimage.uniform_filter(x, size=(1, 3, 5))
+        return np.stack([x, smooth])
+
+    actual = arr.map_overlap(
+        features,
+        depth=(0, 1, 2),
+        boundary="none",
+        new_axis=0,
+        dtype=float,
+    )
+    # Without explicit chunks, map_blocks assumes new axes have length one.
+    # Check the computed two-channel result, including every chunk boundary.
+    assert_array_almost_equal(features(data), actual.compute())
+
+
 @pytest.mark.xfail(da._array_expr_enabled(), reason="xarray doesn't work yet")
 def test_overlap_not_blowing_up_graph():
     xr = pytest.importorskip("xarray")
