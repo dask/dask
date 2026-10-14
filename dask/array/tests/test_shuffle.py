@@ -152,3 +152,15 @@ def test_dtype_taker(arr, darr):
         for k, v in dict(result.dask).items()
         if "shuffle-taker" in k
     )
+
+
+def test_shuffle_indexer_larger_than_uint8():
+    # Regression test for https://github.com/dask/dask/issues/12632
+    # The taker dtype must span the whole axis length, not a single chunk,
+    # otherwise index positions beyond 255 overflow and indexing fails.
+    y = np.random.default_rng(0).choice(5, size=10_000)
+    indexer = [np.flatnonzero(y == k).tolist() for k in range(5)]
+    x = da.arange(10_000, chunks=100)
+    result = shuffle(x, indexer, axis=0, chunks="auto")
+    expected = np.concatenate([np.arange(10_000)[idx] for idx in indexer])
+    assert_eq(result, expected)
