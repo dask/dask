@@ -2752,26 +2752,31 @@ def test_rename_index():
     pytest.raises(ValueError, lambda: d.rename(index=renamer))
 
 
-def test_to_timestamp():
+@pytest.mark.parametrize("npartitions", [1, 2, 3])
+def test_to_timestamp(npartitions):
     index = pd.period_range(freq="Y", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
-    ddf = dd.from_pandas(df, npartitions=3)
-    assert_eq(ddf.to_timestamp(), df.to_timestamp(), check_freq=False)
+    ddf = dd.from_pandas(df, npartitions=npartitions)
+    assert_eq(ddf.to_timestamp(), df.to_timestamp())
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        check_freq=False,
     )
-    assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp(), check_freq=False)
+    assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        check_freq=False,
     )
-
-    ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(ddf.to_timestamp(how="end"), df.to_timestamp(how="end"))
     assert_eq(ddf.x.to_timestamp(how="end"), df.x.to_timestamp(how="end"))
+
+    # GH#9954: freq must survive on small partitions
+    index = pd.period_range("2023-01-01", freq="D", periods=6)
+    df = pd.DataFrame({"x": range(6)}, index=index)
+    ddf = dd.from_pandas(df, npartitions=npartitions)
+    assert ddf.to_timestamp().compute().index.freq == pd.tseries.frequencies.to_offset(
+        "D"
+    )
 
 
 def test_to_frame():

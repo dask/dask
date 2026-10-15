@@ -1519,13 +1519,45 @@ class Between(Elemwise):
     operation = M.between
 
 
+def to_timestamp_keep_freq(df, freq=None, how="start", out_freq=None):
+    result = df.to_timestamp(freq=freq, how=how)
+    if out_freq is not None and result.index.freq is None:
+        try:
+            result.index.freq = out_freq
+        except ValueError:
+            # pandas rejects values that don't match the timestamps (e.g. a
+            # month-end freq on month-start timestamps); keep them freq-less
+            pass
+    return result
+
+
 class ToTimestamp(Elemwise):
     _projection_passthrough = True
     _parameters = ["frame", "freq", "how"]
     _defaults = {"freq": None, "how": "start"}
-    operation = M.to_timestamp
+    operation = staticmethod(to_timestamp_keep_freq)
     _filter_passthrough = True
     _preserves_partitioning_information = True
+
+    @functools.cached_property
+    def _out_freq(self):
+        # pandas fails to infer the output frequency on partitions with fewer
+        # than 3 timestamps, losing `index.freq` overall (GH#9954). The source
+        # PeriodIndex frequency lives in its dtype (hence survives the empty
+        # `_meta`), so we can reproduce pandas' full-data inference on a small
+        # regular sample, independent of the partitioning.
+        freq = getattr(self.frame._meta.index, "freq", None)
+        if freq is None:
+            return None
+        try:
+            sample = pd.period_range("2000-01-01", periods=4, freq=freq)
+            return sample.to_timestamp(freq=self.freq, how=self.how).freq
+        except Exception:
+            return None
+
+    @functools.cached_property
+    def _kwargs(self) -> dict:
+        return {"out_freq": self._out_freq}
 
     def _divisions(self):
         return tuple(
