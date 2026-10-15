@@ -600,6 +600,18 @@ def test_map_overlap_trim_false_chunking():
     print(d.compute().shape)
 
 
+@pytest.mark.parametrize("kwargs", [{}, {"chunks": None}])
+def test_map_overlap_trim_false_chunks_none(kwargs):
+    # https://github.com/dask/dask/issues/12640
+    x = np.arange(10)
+    d = da.from_array(x, chunks=5)
+    y = da.map_overlap(
+        lambda b: b[1:-1], d, depth=1, boundary="reflect", trim=False, **kwargs
+    )
+    assert y.chunks == d.chunks
+    assert_eq(y, x)
+
+
 def test_nearest_overlap():
     a = np.arange(144).reshape(12, 12).astype(float)
 
