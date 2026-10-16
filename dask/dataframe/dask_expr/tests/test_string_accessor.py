@@ -150,6 +150,25 @@ def test_str_accessor_not_available():
     assert "str" not in dir(df.a)
 
 
+def test_str_split_preserves_dtype():
+    """Test that str.split(expand=True) preserves string dtype (fix for #11884)"""
+    import pandas as pd
+
+    # Test with string dtype
+    df = pd.DataFrame({"c": ["a,b,c", "d,e,f", "g,h,i"]}, dtype="string[pyarrow]")
+    ddf = from_pandas(df)
+
+    result = ddf["c"].str.split(",", n=1, expand=True)
+    result_pd = df["c"].str.split(",", n=1, expand=True)
+
+    # Check that values match
+    assert_eq(result, result_pd)
+
+    # Check that dtypes are preserved (string, not object)
+    for col in result.columns:
+        assert str(result[col].dtype) == "string", f"Column {col} should be string, got {result[col].dtype}"
+
+
 def test_partition():
     df = DataFrame.from_dict({"A": ["A|B", "C|D"]}, npartitions=2)["A"].str.partition(
         "|"

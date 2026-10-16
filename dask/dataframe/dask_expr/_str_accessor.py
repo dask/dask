@@ -187,6 +187,13 @@ class SplitMap(FunctionMap):
             [delimiter.join(["a"] * (self.n + 1))],
             index=meta.iloc[:1].index,
         )
-        return make_meta(
+        result = make_meta(
             getattr(meta.str, self.attr)(n=self.n, expand=self.expand, pat=self.pat)
         )
+        # Preserve the original string dtype (e.g., string[pyarrow]) in output columns
+        if self.expand and hasattr(self.frame._meta, 'dtype'):
+            input_dtype = self.frame._meta.dtype
+            if hasattr(input_dtype, 'storage'):  # Check for string dtype variants
+                import pandas as pd
+                result = result.astype({col: pd.StringDtype() for col in result.columns})
+        return result
