@@ -242,6 +242,34 @@ def test_map_overlap_provide_meta():
     assert_eq(res, sol)
 
 
+def test_map_overlap_column_projection():
+    # Regression test for #12122: map_overlap should not raise
+    # AttributeError "MapOverlap has no attribute 'required_columns'" when
+    # a column projection triggers _simplify_up on the MapOverlap expr.
+
+    def fn(data, *args, **kwargs):
+        return np.array([data["alpha"].sum()])
+
+    df = dd.from_pandas(
+        pd.DataFrame(np.array([1, 1, 1, 1, 1]), columns=["alpha"]),
+        npartitions=1,
+    )
+    meta = pd.DataFrame({"alpha": pd.Series(dtype="int64")})
+    mov_df = df.map_overlap(fn, 0, 0, 1, 0, 1, meta=meta)
+
+    # Trigger the same path as #12122: a column projection causes the
+    # expression tree to call MapOverlap._simplify_up which used to crash.
+    from dask.dataframe.dask_expr import _expr
+
+    proj = _expr.Projection(mov_df.expr, ["alpha"])
+    proj.simplify()  # would raise AttributeError before the fix
+
+    # Whole pipeline optimization also exercises _simplify_up on the
+    # MapOverlap node.
+    mov_df.optimize()
+    mov_df.expr.simplify()
+
+
 def mad(x):
     return np.fabs(x - x.mean()).mean()
 

@@ -1029,6 +1029,11 @@ class MapOverlap(MapPartitions):
             *self.args[1:],
         )
 
+    def _simplify_up(self, parent, dependents):
+        # Disable column projection: user-supplied ``func`` may access any
+        # column of the input frame. See issue #12122.
+        return
+
 
 class CreateOverlappingPartitions(Expr):
     _parameters = ["frame", "before", "after"]
