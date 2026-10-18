@@ -2720,6 +2720,10 @@ class BlockwiseTail(Tail, Blockwise):
 
     _preserves_partitioning_information = True
 
+    def _simplify_down(self) -> None:
+        # Keep the concrete tail after lowering, as for BlockwiseHead.
+        return
+
     def _divisions(self):
         return self.frame.divisions
 
