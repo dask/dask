@@ -1,9 +1,34 @@
 from __future__ import annotations
 
+import pytest
+
 from dask.dataframe.dask_expr import from_pandas, merge_asof
 from dask.dataframe.dask_expr.tests._util import _backend_library, assert_eq
 
 pd = _backend_library()
+
+
+@pytest.mark.parametrize("direction", ["backward", "forward", "nearest"])
+@pytest.mark.parametrize("indexed", [False, True])
+def test_merge_asof_tail(direction: str, indexed: bool) -> None:
+    left = pd.DataFrame({"a": list(range(12)), "left_val": list(range(12))})
+    right = pd.DataFrame({"a": [0, 3, 6, 9, 12], "right_val": [10, 20, 30, 40, 50]})
+    kwargs = {"direction": direction}
+    if indexed:
+        left = left.set_index("a")
+        right = right.set_index("a")
+        kwargs.update(left_index=True, right_index=True)
+    else:
+        kwargs["on"] = "a"
+
+    result = merge_asof(
+        from_pandas(left, npartitions=3),
+        from_pandas(right, npartitions=2),
+        **kwargs,
+    )
+    expected = pd.merge_asof(left, right, **kwargs).tail(2)
+    assert_eq(result.tail(2, compute=False), expected, check_index=indexed)
+    assert_eq(result.tail(2), expected, check_index=indexed)
 
 
 def test_merge_asof_indexed():
