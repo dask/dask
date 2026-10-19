@@ -1177,6 +1177,30 @@ def test_fancy_index_newaxis(
 
 
 @pytest.mark.parametrize(
+    "unknown_shape, index",
+    [
+        pytest.param((4, np.nan), (1, [1, 0], None), id="trailing"),
+        pytest.param((4, np.nan), (None, 1, [1, 0]), id="leading"),
+        pytest.param((4, np.nan), (None, 1, [1, 0], None), id="multiple"),
+        pytest.param((np.nan, 4), ([1, 0], 1, None), id="integer-after-fancy"),
+        pytest.param((4, np.nan), (1, [1, 0]), id="no-newaxis"),
+        pytest.param((4, np.nan), (1, slice(None), None), id="basic-input"),
+        pytest.param((4, np.nan), (slice(None), [1, 0], None), id="no-integer-removal"),
+    ],
+)
+def test_fancy_index_newaxis_unknown_single_chunk(
+    unknown_shape: tuple[int | float, int | float],
+    index: tuple[int | slice | list[int] | None, ...],
+) -> None:
+    numpy_input = np.arange(16).reshape(4, 4)
+    array = da.from_delayed(
+        delayed(numpy_input), shape=unknown_shape, dtype=numpy_input.dtype
+    )
+    result = array[index]
+    assert_eq(result, numpy_input[index])
+
+
+@pytest.mark.parametrize(
     "shapes",
     [
         (10, 10),

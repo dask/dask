@@ -204,7 +204,11 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
         for k, v in dsk.items():
             if k[0] == out_name:
                 k2 = (out_name,) + expand(k[1:], 0)
-                if isinstance(v, Task) and v.func is getitem:
+                if (
+                    isinstance(v, Task)
+                    and v.func is getitem
+                    and v.args[0].key[0] == in_name
+                ):
                     arg = expand_orig(v.args[1], None)
                     dsk2[k2] = Task(k2, getitem, v.args[0], arg)
                 else:
