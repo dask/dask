@@ -12,7 +12,7 @@ import numpy as np
 from tlz import concat, memoize, merge, pluck
 
 from dask import core
-from dask._task_spec import Alias, DataNode, Task, TaskRef
+from dask._task_spec import Alias, Task, TaskRef
 from dask.array.chunk import getitem
 from dask.base import is_dask_collection, tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -204,16 +204,12 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
         for k, v in dsk.items():
             if k[0] == out_name:
                 k2 = (out_name,) + expand(k[1:], 0)
-                if isinstance(v.args[1], TaskRef):
-                    # positional indexing with newaxis
-                    indexer = expand_orig(dsk[v.args[1].key].value[1], None)
-                    tok = "shuffle-taker-" + tokenize(indexer)
-                    dsk2[tok] = DataNode(tok, (1, indexer))
-                    arg = TaskRef(tok)
-                else:
+                if isinstance(v, Task) and v.func is getitem:
                     arg = expand_orig(v.args[1], None)
-                # raise NotImplementedError
-                dsk2[k2] = Task(k2, v.func, v.args[0], arg)
+                    dsk2[k2] = Task(k2, getitem, v.args[0], arg)
+                else:
+                    arg = expand((slice(None),) * len(blockdims2), None)
+                    dsk2[k2] = Task(k2, getitem, v, arg)
             else:
                 dsk2[k] = v
 
