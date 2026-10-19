@@ -157,6 +157,57 @@ reproduction of our original problem as a parallel code:
     total = dask.delayed(sum)(output)
 
 
+.. _delayed-containers:
+
+Traversing containers and dataclasses
+-------------------------------------
+
+When building a graph, ``dask.delayed`` searches for Dask collections inside
+built-in containers such as lists, tuples, dictionaries, and sets. It also
+traverses named tuples and dataclass instances. Collections found in these
+objects are computed before the objects are passed to a delayed function.
+Other Python objects are not generally traversed.
+
+For example, ``getattr`` below receives a reconstructed dataclass whose field
+contains the computed result, rather than the original ``Delayed`` value:
+
+.. doctest:: dataclass-traversal
+
+   >>> from dataclasses import dataclass
+   >>> from dask import delayed
+   >>> from dask.delayed import Delayed
+   >>> @dataclass
+   ... class Measurement:
+   ...     value: object
+   >>> record = Measurement(delayed(sum)([1, 2]))
+   >>> delayed(getattr)(record, "value").compute()
+   3
+
+Dataclasses containing Dask collections may be reconstructed, so their
+``__init__`` and ``__post_init__`` methods can run again, including during graph
+construction. Dataclasses with custom constructors or populated
+``init=False`` fields are not generally supported. Avoid constructor side
+effects and use dataclasses whose fields can be passed to their constructor.
+
+To treat a concrete object as opaque, wrap it with ``traverse=False``. Its
+fields will not be inspected, and nested ``Delayed`` values remain uncomputed:
+
+.. doctest:: dataclass-traversal
+
+   >>> opaque = delayed(record, traverse=False)
+   >>> isinstance(opaque.compute().value, Delayed)
+   True
+
+This option applies when wrapping the object, not to the arguments of later
+function calls. Setting ``traverse=False`` on a function wrapper does not
+disable traversal of the function's arguments:
+
+.. doctest:: dataclass-traversal
+
+   >>> delayed(getattr, traverse=False)(record, "value").compute()
+   3
+
+
 Real time
 ---------
 
