@@ -1117,6 +1117,89 @@ def test_positional_indexer_newaxis():
     assert_eq(new, arr.compute()[[True, True, False], np.newaxis])
 
 
+def test_fancy_index_newaxis_cross_chunk_boolean() -> None:
+    numpy_input = np.arange(4)
+    index = (None, [True, False, True, False])
+    result = da.from_array(numpy_input, chunks=2)[index]
+    assert_eq(result, numpy_input[index])
+
+
+@pytest.mark.parametrize(
+    "shape, chunks, index",
+    [
+        pytest.param(
+            (4,), 2, ([True, False, True, False], None), id="boolean-trailing"
+        ),
+        pytest.param((4,), 2, (None, [2, 0]), id="integer-leading"),
+        pytest.param((4,), 2, ([2, 0], None), id="integer-trailing"),
+        pytest.param((4,), 2, (None, [2, 0], None, None), id="multiple-newaxes"),
+        pytest.param((4,), 2, (None, [2, 0, 2, 1, 3, 0]), id="reordered-repeated"),
+        pytest.param((4,), 2, (None, [1, 0]), id="single-source"),
+        pytest.param((4,), 4, (None, [3, 0, 3]), id="single-chunk"),
+        pytest.param((4,), 2, (None, []), id="empty-integers"),
+        pytest.param((4,), 2, ([False] * 4, None), id="empty-boolean"),
+        pytest.param((4,), 2, (None, [0, 1, 2, 3]), id="full-range-alias"),
+        pytest.param((4,), 2, ([True] * 4, None), id="full-boolean-alias"),
+        pytest.param((4,), 2, ([2, 0],), id="no-newaxis"),
+        pytest.param((4,), 2, ([0, 1, 2, 3],), id="full-range-no-newaxis"),
+        pytest.param((4, 4), (2, 2), (None, [2, 0], slice(None)), id="2d-leading"),
+        pytest.param((4, 4), (2, 2), (slice(None), None, [2, 0]), id="2d-middle"),
+        pytest.param((4, 4), (2, 2), (slice(None), [2, 0], None), id="2d-trailing"),
+        pytest.param(
+            (4, 4), (2, 2), (slice(1, 3), None, [2, 0]), id="2d-partial-slice"
+        ),
+        pytest.param((4, 4), (2, 2), (1, [2, 0], None), id="integer-removal-merge"),
+        pytest.param(
+            (4, 4), (2, 2), (1, [1, 0], None), id="integer-removal-single-source"
+        ),
+        pytest.param(
+            (4, 4), (2, 2), (1, [0, 1, 2, 3], None), id="integer-removal-alias"
+        ),
+        pytest.param(
+            (4, 4), (2, 2), ([2, 0], 1, None), id="integer-removal-after-fancy"
+        ),
+        pytest.param(
+            (4, 4),
+            (2, 2),
+            (None, 1, [2, 0], None),
+            id="integer-removal-multiple-newaxes",
+        ),
+    ],
+)
+def test_fancy_index_newaxis(
+    shape: tuple[int, ...],
+    chunks: int | tuple[int, ...],
+    index: tuple[int | slice | list[int] | list[bool] | None, ...],
+) -> None:
+    numpy_input = np.arange(np.prod(shape)).reshape(shape)
+    result = da.from_array(numpy_input, chunks=chunks)[index]
+    assert_eq(result, numpy_input[index])
+
+
+@pytest.mark.parametrize(
+    "unknown_shape, index",
+    [
+        pytest.param((4, np.nan), (1, [1, 0], None), id="trailing"),
+        pytest.param((4, np.nan), (None, 1, [1, 0]), id="leading"),
+        pytest.param((4, np.nan), (None, 1, [1, 0], None), id="multiple"),
+        pytest.param((np.nan, 4), ([1, 0], 1, None), id="integer-after-fancy"),
+        pytest.param((4, np.nan), (1, [1, 0]), id="no-newaxis"),
+        pytest.param((4, np.nan), (1, slice(None), None), id="basic-input"),
+        pytest.param((4, np.nan), (slice(None), [1, 0], None), id="no-integer-removal"),
+    ],
+)
+def test_fancy_index_newaxis_unknown_single_chunk(
+    unknown_shape: tuple[int | float, int | float],
+    index: tuple[int | slice | list[int] | None, ...],
+) -> None:
+    numpy_input = np.arange(16).reshape(4, 4)
+    array = da.from_delayed(
+        delayed(numpy_input), shape=unknown_shape, dtype=numpy_input.dtype
+    )
+    result = array[index]
+    assert_eq(result, numpy_input[index])
+
+
 @pytest.mark.parametrize(
     "shapes",
     [
