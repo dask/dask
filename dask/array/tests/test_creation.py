@@ -55,6 +55,34 @@ def test_array_structured_dtype(
 
 
 @pytest.mark.normal_and_array_expr
+@pytest.mark.parametrize("ndmin", [None, 0, 1, 2, 3])
+@pytest.mark.parametrize("like_kind", [None, "numpy", "dask"])
+@pytest.mark.parametrize(
+    "x, dtype",
+    [
+        pytest.param((1, 2), [("x", "i4"), ("y", "i4")], id="record"),
+        pytest.param(1, None, id="numeric"),
+        pytest.param(1, "f4", id="numeric-cast"),
+    ],
+)
+def test_array_scalar_ndmin(
+    x: tuple[int, int] | int,
+    dtype: list[tuple[str, str]] | str | None,
+    ndmin: int | None,
+    like_kind: str | None,
+) -> None:
+    like = None
+    if like_kind == "numpy":
+        like = np.array(0)
+    elif like_kind == "dask":
+        like = da.array(0)
+
+    expected = np.array(x, dtype=dtype, ndmin=ndmin or 0)
+    actual = da.array(x, dtype=dtype, ndmin=ndmin, like=like)
+    assert_eq(actual, expected)
+
+
+@pytest.mark.normal_and_array_expr
 @pytest.mark.parametrize("input_kind", ["list", "ndarray"])
 @pytest.mark.parametrize("dtype", [None, "i2", "f4"])
 @pytest.mark.parametrize("ndmin", [0, 3])

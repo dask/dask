@@ -55,7 +55,7 @@ _range = range
 def array(x, dtype=None, ndmin=None, *, like=None):
     x = asarray(x, dtype=dtype if not isinstance(x, Array) else None, like=like)
     while ndmin is not None and x.ndim < ndmin:
-        x = x[None, :]
+        x = x[None, ...]
     if dtype is not None and x.dtype != dtype:
         x = x.astype(dtype)
     return x
