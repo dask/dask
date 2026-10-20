@@ -34,6 +34,9 @@ DataFrame
   GPU-enabled dataframes which can be used as partitions in Dask Dataframes.
 - `dask-geopandas <https://github.com/geopandas/dask-geopandas>`_: Early-stage subproject of
   geopandas, enabling parallelization of geopandas dataframes.
+- `adbc-driver-redis <https://github.com/alberttwong/redis-adbc-driver/blob/main/docs/python-integrations.md#dask>`_:
+  Reads partitioned Redis queries into Dask DataFrames through Arrow Database
+  Connectivity (ADBC), using explicit query parameters and an Arrow result schema.
 
 SQL
 ~~~
