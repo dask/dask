@@ -40,10 +40,11 @@ def test_array_structured_dtype(
         like = da.array(0)
 
     if isinstance(x, tuple):
-        with pytest.raises(TypeError):
+        with pytest.raises((TypeError, ValueError)) as numpy_error:
             np.array(x, dtype=dtype, ndmin=ndmin or 0)
-        with pytest.raises(TypeError):
+        with pytest.raises(numpy_error.type) as dask_error:
             da.array(x, dtype=dtype, ndmin=ndmin, like=like)
+        assert dask_error.type is numpy_error.type
         return
 
     expected = np.array(x, dtype=dtype, ndmin=ndmin or 0)
