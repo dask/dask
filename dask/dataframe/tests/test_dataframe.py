@@ -3822,6 +3822,46 @@ def test_idxmaxmin_empty_partitions():
         ddf.b.idxmax().compute()
 
 
+def test_idxmaxmin_all_na_partitions():
+    # An all-NA partition must not fail the reduction; like an empty
+    # partition it contributes nothing
+    df = pd.DataFrame(
+        {"a": [np.nan, np.nan, 3.0, 1.0], "b": [np.nan, np.nan, np.nan, 7.0]}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # Series with an all-NA first partition
+    assert_eq(ddf.a.idxmax(), df.a.idxmax())
+    assert_eq(ddf.a.idxmin(), df.a.idxmin())
+
+    # DataFrame with per-column all-NA partitions
+    if PANDAS_GE_300:
+        assert_eq(ddf.idxmax(), df.idxmax())
+        assert_eq(ddf.idxmin(), df.idxmin())
+        assert_eq(
+            dd.from_pandas(df, npartitions=4).idxmax(split_every=2), df.idxmax()
+        )
+        assert_eq(
+            dd.from_pandas(df, npartitions=4).idxmin(split_every=2), df.idxmin()
+        )
+
+    # All-NA everywhere raises, like pandas
+    s = pd.Series([np.nan, np.nan, np.nan])
+    ds = dd.from_pandas(s, npartitions=2)
+    with pytest.raises(ValueError, match="all NA|empty sequence"):
+        ds.idxmax().compute()
+    with pytest.raises(ValueError, match="all NA|empty sequence"):
+        ds.idxmin().compute()
+
+    if PANDAS_GE_300:
+        df = pd.DataFrame({"a": [np.nan, np.nan, 3.0, 1.0], "b": [np.nan] * 4})
+        ddf = dd.from_pandas(df, npartitions=2)
+        with pytest.raises(ValueError, match="Encountered all NA values"):
+            ddf.idxmax().compute()
+        with pytest.raises(ValueError, match="Encountered all NA values"):
+            ddf.idxmin().compute()
+
+
 def test_mode_numeric_only():
     df = pd.DataFrame(
         {

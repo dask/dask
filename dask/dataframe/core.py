@@ -318,8 +318,37 @@ def idxmaxmin_chunk(x, fn=None, skipna=True, numeric_only=False):
     numeric_only_kwargs = {} if is_series_like(x) else {"numeric_only": numeric_only}
     minmax = "max" if fn == "idxmax" else "min"
     if len(x) > 0:
-        idx = getattr(x, fn)(skipna=skipna, **numeric_only_kwargs)
-        value = getattr(x, minmax)(skipna=skipna, **numeric_only_kwargs)
+        if skipna and is_series_like(x) and x.isna().all():
+            # pandas raises on all-NA input, but a single all-NA partition
+            # must not fail the whole reduction. Contribute nothing, like an
+            # empty partition; the aggregate raises if no partition did.
+            idx = value = meta_series_constructor(x)([], dtype="i8")
+        elif (
+            PANDAS_GE_300
+            and skipna
+            and is_dataframe_like(x)
+            and not x.notna().any().all()
+        ):
+            # pandas >= 3 raises if any column is all-NA. Report a NaN value
+            # with a dummy in-dtype label for all-NA columns instead, so that
+            # other partitions can still win for those columns and the combine
+            # step raises if no partition has a valid value for them.
+            if numeric_only:
+                x = x._get_numeric_data()
+            notna = x.notna().any()
+            if notna.any():
+                idx = getattr(x.loc[:, notna], fn)(skipna=skipna).reindex(notna.index)
+                value = getattr(x.loc[:, notna], minmax)(skipna=skipna).reindex(
+                    notna.index
+                )
+                idx = idx.fillna(x.index[0]).astype(x.index.dtype)
+            else:
+                # every column is all-NA: contribute nothing, like an empty
+                # partition; the aggregate raises if no partition did
+                idx = value = meta_series_constructor(x)([], dtype="i8")
+        else:
+            idx = getattr(x, fn)(skipna=skipna, **numeric_only_kwargs)
+            value = getattr(x, minmax)(skipna=skipna, **numeric_only_kwargs)
     else:
         idx = value = meta_series_constructor(x)([], dtype="i8")
     if is_series_like(idx):
@@ -333,8 +362,15 @@ def idxmaxmin_row(x, fn=None, skipna=True):
         x = x.set_index("idx")
         # potentially coerced to object, so cast back
         value = x.value.infer_objects()
-        idx = [getattr(value, fn)(skipna=skipna)]
-        value = [getattr(value, minmax)(skipna=skipna)]
+        if skipna and not value.notna().any():
+            # every contributing partition was all-NA for this column:
+            # propagate a dummy in-dtype label with a NaN value; the aggregate
+            # raises if no partition ever contributes a valid value
+            idx = [x.index[0]]
+            value = [np.nan]
+        else:
+            idx = [getattr(value, fn)(skipna=skipna)]
+            value = [getattr(value, minmax)(skipna=skipna)]
     else:
         idx = value = meta_series_constructor(x)([], dtype="i8")
     return meta_frame_constructor(x)(
@@ -356,9 +392,12 @@ def idxmaxmin_combine(x, fn=None, skipna=True):
 
 
 def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False, numeric_only=no_default):
-    res = idxmaxmin_combine(x, fn, skipna=skipna)["idx"]
-    if len(res) == 0:
+    combined = idxmaxmin_combine(x, fn, skipna=skipna)
+    if len(combined) == 0:
         raise ValueError("attempt to get argmax of an empty sequence")
+    if skipna and combined["value"].isna().any():
+        raise ValueError("Encountered all NA values")
+    res = combined["idx"]
     if scalar:
         return res[0]
     res.name = None
