@@ -50,6 +50,7 @@ from dask.dataframe.utils import (
     clear_known_categories,
     is_scalar,
     raise_on_meta_error,
+    sort_labels_nan_last,
     valid_divisions,
 )
 from dask.typing import Key, no_default
@@ -4107,7 +4108,9 @@ def calc_divisions_for_align(*exprs, allow_shuffle=True):
         return (None,) * (max(df.npartitions for df in dfs) + 1)
     if all(dfs[0].divisions == df.divisions for df in dfs):
         return dfs[0].divisions
-    divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
+    divisions = sort_labels_nan_last(
+        unique(merge_sorted(*[df.divisions for df in dfs]))
+    )
     if len(divisions) == 1:  # single value for index
         divisions = (divisions[0], divisions[0])
     return divisions

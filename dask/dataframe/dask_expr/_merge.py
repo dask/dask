@@ -42,7 +42,7 @@ from dask.dataframe.multi import (
     merge_chunk,
 )
 from dask.dataframe.shuffle import partitioning_index
-from dask.dataframe.utils import is_scalar
+from dask.dataframe.utils import is_scalar, sort_labels_nan_last
 from dask.tokenize import _tokenize_deterministic
 from dask.typing import Key
 from dask.utils import apply, get_default_shuffle_method
@@ -316,7 +316,9 @@ class Merge(Expr):
         shuffle_right_on = right_on
         if self.merge_indexed_left and self.merge_indexed_right:
             # fully-indexed merge
-            divisions = list(unique(merge_sorted(left.divisions, right.divisions)))
+            divisions = sort_labels_nan_last(
+                unique(merge_sorted(left.divisions, right.divisions))
+            )
             if len(divisions) == 1:
                 divisions = (divisions[0], divisions[0])
             right = Repartition(right, new_divisions=divisions, force=True)
@@ -874,7 +876,7 @@ class BlockwiseMerge(Merge, Blockwise):
             and self.merge_indexed_left
             and self.merge_indexed_right
         ):
-            divisions = list(
+            divisions = sort_labels_nan_last(
                 unique(merge_sorted(self.left.divisions, self.right.divisions))
             )
             if len(divisions) == 1:
