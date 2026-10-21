@@ -157,6 +157,53 @@ reproduction of our original problem as a parallel code:
     total = dask.delayed(sum)(output)
 
 
+Repeated calls and multiple outputs
+-----------------------------------
+
+To repeat independent work, create one delayed call per iteration and collect
+the results before computing. This example uses a small function returning
+three statistics:
+
+.. code-block:: python
+
+    >>> import dask
+    >>> def summarize(values: list[int]) -> tuple[int, int, float]:
+    ...     total = sum(values)
+    ...     count = len(values)
+    ...     return total, count, total / count
+    >>> delayed_summary = dask.delayed(summarize, nout=3, pure=False)
+    >>> totals, counts, means = [], [], []
+    >>> for _ in range(3):
+    ...     total, count, mean = delayed_summary([1, 2, 3])
+    ...     totals.append(total)
+    ...     counts.append(count)
+    ...     means.append(mean)
+    >>> dask.compute(totals, counts, means)
+    ([6, 6, 6], [3, 3, 3], [2.0, 2.0, 2.0])
+
+``nout=3`` declares that each call returns three items, allowing its delayed
+result to be unpacked while building the graph. Use it only when the number
+of returned items is known in advance and matches the function's return value.
+Without ``nout``, unpacking this function's delayed result raises
+``TypeError: Delayed objects of unspecified length are not iterable``.
+
+``pure=False`` makes the repeated calls distinct even when their arguments are
+identical. None of the calls to ``summarize`` execute until ``dask.compute``.
+Keep computation outside the loop so that the scheduler can schedule all the
+repetitions together. ``dask.compute`` accepts lists of delayed objects and
+returns the corresponding lists of results.
+
+If you want the complete return tuple from each call instead of unpacking it
+into separate delayed outputs, you do not need ``nout``:
+
+.. code-block:: python
+
+    >>> whole_summary = dask.delayed(summarize, pure=False)
+    >>> calls = [whole_summary([1, 2, 3]) for _ in range(3)]
+    >>> dask.compute(calls)
+    ([(6, 3, 2.0), (6, 3, 2.0), (6, 3, 2.0)],)
+
+
 Real time
 ---------
 
