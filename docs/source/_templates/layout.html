@@ -1,3 +1,4 @@
 {% extends "!layout.html" %}
+{% set favicon_url = favicon_url or pathto('_static/images/favicon.svg', 1) %}
 {% set css_files = css_files + ["_static/style.css"] %}
 {% set script_files = script_files + ["_static/yaml.min.js", "_static/config_converter.js"] %}
