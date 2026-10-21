@@ -5398,3 +5398,26 @@ def test_loc_partitions_are_plain_scalars():
 
     result = ddf.loc[indexer.tolist()]
     assert type(result.divisions[0]) is int
+
+
+def test_boundary_slice_nan_in_index():
+    # NaN sorts after every other label, so a slice up to NaN
+    # reaches through the end of the data
+    df = pd.DataFrame({"B": range(4)}, index=pd.Index([1.0, 2.0, np.nan, np.nan]))
+
+    result = methods.boundary_slice(df, 1.0, np.nan)
+    tm.assert_frame_equal(result, df)
+
+    result = methods.boundary_slice(df, 2.0, np.nan)
+    tm.assert_frame_equal(result, df.iloc[1:])
+
+    # exclusive NaN stop excludes the NaN bucket
+    result = methods.boundary_slice(df, 1.0, np.nan, right_boundary=False)
+    tm.assert_frame_equal(result, df.iloc[:2])
+
+    # NaN start selects only the NaN bucket
+    result = methods.boundary_slice(df, np.nan, np.nan)
+    tm.assert_frame_equal(result, df.iloc[2:])
+
+    result = methods.boundary_slice(df, np.nan, np.nan, left_boundary=False)
+    tm.assert_frame_equal(result, df.iloc[0:0])

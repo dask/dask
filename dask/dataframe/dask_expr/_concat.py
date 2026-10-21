@@ -20,7 +20,11 @@ from dask.dataframe.dask_expr._expr import (
 from dask.dataframe.dask_expr._util import _convert_to_list
 from dask.dataframe.dispatch import make_meta, meta_nonempty
 from dask.dataframe.multi import concat_and_check
-from dask.dataframe.utils import check_meta, strip_unknown_categories
+from dask.dataframe.utils import (
+    check_meta,
+    sort_labels_nan_last,
+    strip_unknown_categories,
+)
 from dask.utils import apply, is_dataframe_like, is_series_like
 
 
@@ -89,7 +93,9 @@ class Concat(Expr):
                     return min(divisions), max(divisions)
                 return dfs[0].divisions
             elif self._all_known_divisions:
-                divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
+                divisions = sort_labels_nan_last(
+                    unique(merge_sorted(*[df.divisions for df in dfs]))
+                )
                 if len(divisions) == 1:  # single value for index
                     divisions = (divisions[0], divisions[0])
                 return divisions
@@ -103,7 +109,9 @@ class Concat(Expr):
             divisions += dfs[-1].divisions
             return divisions
         elif self._all_known_divisions and self.interleave_partitions:
-            divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
+            divisions = sort_labels_nan_last(
+                unique(merge_sorted(*[df.divisions for df in dfs]))
+            )
             if len(divisions) == 1:  # single value for index
                 divisions = (divisions[0], divisions[0])
             return divisions
