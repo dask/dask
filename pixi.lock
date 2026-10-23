@@ -136,7 +136,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/backports.zstd-1.6.0-py314h680f03e_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/beautifulsoup4-4.15.0-pyha770c72_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boltons-26.0.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2026.10.23-pyhd8ed1ab_0.conda
@@ -342,7 +342,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/backports.zstd-1.6.0-py314h680f03e_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/beautifulsoup4-4.15.0-pyha770c72_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boltons-26.0.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2026.10.23-pyhd8ed1ab_0.conda
@@ -453,7 +453,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/backports.zstd-1.6.0-py314h680f03e_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/beautifulsoup4-4.15.0-pyha770c72_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boltons-26.0.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2026.10.23-pyhd8ed1ab_0.conda
@@ -653,7 +653,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/backports.zstd-1.6.0-py314h680f03e_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/beautifulsoup4-4.15.0-pyha770c72_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boltons-26.0.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2026.10.23-pyhd8ed1ab_0.conda
@@ -1112,7 +1112,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -1270,8 +1270,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.2.1-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/alsa-lib-1.2.16.1-he30d5cf_0.conda
@@ -1546,7 +1546,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -1703,8 +1703,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.2.1-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[b6578585] @ .
-      - conda_source: distributed[83942e98] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[f38a8daa] @ .
+      - conda_source: distributed[386e8979] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/adwaita-icon-theme-49.0-unix_0.conda
@@ -1725,7 +1725,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -2080,8 +2080,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-1.3.2-h8088a28_2.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-ng-2.3.3-hed4e4f5_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       win-64:
       - conda: https://prefix.dev/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
@@ -2100,7 +2100,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -2465,8 +2465,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zlib-1.3.2-hfd05255_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/zlib-ng-2.3.3-h0261ad2_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: dask-core[ea57c2cc] @ .
-      - conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[e1315053] @ .
+      - conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   lint:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -2495,7 +2495,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/ukkonen-1.1.0-py314h9891dd4_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/yaml-0.2.5-h280c20c_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cfgv-3.5.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/filelock-3.29.7-pyhd8ed1ab_0.conda
@@ -2537,7 +2537,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/ukkonen-1.1.0-py314hd7d8586_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/yaml-0.2.5-h80f16a2_3.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cfgv-3.5.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/filelock-3.29.7-pyhd8ed1ab_0.conda
@@ -2555,7 +2555,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/virtualenv-21.6.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
       osx-arm64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cfgv-3.5.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/filelock-3.29.7-pyhd8ed1ab_0.conda
@@ -2591,7 +2591,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/yaml-0.2.5-h925e9cb_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
       win-64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cfgv-3.5.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/filelock-3.29.7-pyhd8ed1ab_0.conda
@@ -2664,7 +2664,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
       - conda: https://prefix.dev/conda-forge/linux-64/yaml-0.2.5-h280c20c_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -2693,7 +2693,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[07415ef2] @ .
+      - conda_source: dask-core[c7a4c1f7] @ .
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/bzip2-1.0.8-h4777abc_9.conda
@@ -2728,7 +2728,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/tk-8.6.13-noxft_h0dc03b3_103.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/yaml-0.2.5-h80f16a2_3.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -2757,9 +2757,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[56c3eb66] @ .
+      - conda_source: dask-core[f38a8daa] @ .
       osx-arm64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -2813,9 +2813,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/yaml-0.2.5-h925e9cb_3.conda
-      - conda_source: dask-core[71f6a897] @ .
+      - conda_source: dask-core[3fcf216c] @ .
       win-64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh7428d3b_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -2874,7 +2874,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2015_runtime-14.51.36231-h84cd919_39.conda
       - conda: https://prefix.dev/conda-forge/win-64/yaml-0.2.5-h6a83c73_3.conda
-      - conda_source: dask-core[3dd497fa] @ .
+      - conda_source: dask-core[e1315053] @ .
   mindeps-dataframe:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -2963,7 +2963,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
       - conda: https://prefix.dev/conda-forge/linux-64/yaml-0.2.5-h280c20c_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -2995,7 +2995,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[07415ef2] @ .
+      - conda_source: dask-core[c7a4c1f7] @ .
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/aws-c-auth-0.7.20-haea164f_0.conda
@@ -3080,7 +3080,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/tk-8.6.13-noxft_h0dc03b3_103.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/yaml-0.2.5-h80f16a2_3.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3112,9 +3112,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[56c3eb66] @ .
+      - conda_source: dask-core[f38a8daa] @ .
       osx-arm64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3221,9 +3221,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/yaml-0.2.5-h925e9cb_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[71f6a897] @ .
+      - conda_source: dask-core[3fcf216c] @ .
       win-64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh7428d3b_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3330,7 +3330,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vs2015_runtime-14.51.36231-h84cd919_39.conda
       - conda: https://prefix.dev/conda-forge/win-64/yaml-0.2.5-h6a83c73_3.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: dask-core[3dd497fa] @ .
+      - conda_source: dask-core[e1315053] @ .
   mindeps-distributed:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -3364,7 +3364,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/tornado-6.5.7-py310h7c4b9e2_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/yaml-0.2.5-h280c20c_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3397,8 +3397,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/bzip2-1.0.8-h4777abc_9.conda
@@ -3429,7 +3429,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/tornado-6.5.7-py310ha7967c6_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/yaml-0.2.5-h80f16a2_3.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3462,10 +3462,10 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[b6578585] @ .
-      - conda_source: distributed[83942e98] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[f38a8daa] @ .
+      - conda_source: distributed[386e8979] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       osx-arm64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3517,10 +3517,10 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/tornado-6.5.7-py310h72544b6_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/yaml-0.2.5-h925e9cb_3.conda
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       win-64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh7428d3b_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3574,8 +3574,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2015_runtime-14.51.36231-h84cd919_39.conda
       - conda: https://prefix.dev/conda-forge/win-64/yaml-0.2.5-h6a83c73_3.conda
-      - conda_source: dask-core[ea57c2cc] @ .
-      - conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[e1315053] @ .
+      - conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   mindeps-non-optional:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -3604,7 +3604,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
       - conda: https://prefix.dev/conda-forge/linux-64/yaml-0.2.5-h280c20c_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3633,7 +3633,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[07415ef2] @ .
+      - conda_source: dask-core[c7a4c1f7] @ .
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/bzip2-1.0.8-h4777abc_9.conda
@@ -3660,7 +3660,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/tk-8.6.13-noxft_h0dc03b3_103.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/yaml-0.2.5-h80f16a2_3.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3689,9 +3689,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[56c3eb66] @ .
+      - conda_source: dask-core[f38a8daa] @ .
       osx-arm64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3734,9 +3734,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/yaml-0.2.5-h925e9cb_3.conda
-      - conda_source: dask-core[71f6a897] @ .
+      - conda_source: dask-core[3fcf216c] @ .
       win-64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.1.8-pyh7428d3b_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -3782,7 +3782,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2015_runtime-14.51.36231-h84cd919_39.conda
       - conda: https://prefix.dev/conda-forge/win-64/yaml-0.2.5-h6a83c73_3.conda
-      - conda_source: dask-core[3dd497fa] @ .
+      - conda_source: dask-core[e1315053] @ .
   mindeps-optional:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -4053,7 +4053,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bleach-6.4.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.1.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.20.106-pyhd8ed1ab_0.tar.bz2
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.1.1-pyh9f0ad1d_0.tar.bz2
@@ -4172,8 +4172,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-2.12.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/noarch/adwaita-icon-theme-49.0-unix_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-1.4.1-pyhd8ed1ab_0.tar.bz2
@@ -4191,7 +4191,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bleach-6.4.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.1.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.20.106-pyhd8ed1ab_0.tar.bz2
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.1.1-pyh9f0ad1d_0.tar.bz2
@@ -4483,8 +4483,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/zeromq-4.3.5-h10816f8_11.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-ng-2.3.3-hed4e4f5_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       win-64:
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-1.4.1-pyhd8ed1ab_0.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/aiohappyeyeballs-2.7.1-pyhd8ed1ab_0.conda
@@ -4500,7 +4500,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bleach-6.4.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.1.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.20.106-pyhd8ed1ab_0.tar.bz2
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.1.1-pyh9f0ad1d_0.tar.bz2
@@ -4830,8 +4830,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zlib-1.3.2-hfd05255_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/zlib-ng-2.2.5-h32d8bfd_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: dask-core[ea57c2cc] @ .
-      - conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[e1315053] @ .
+      - conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   nightly:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -4887,7 +4887,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/attrs-26.1.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/backports.zstd-1.6.0-py314h680f03e_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.4.2-pyhc90fa1f_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.1.2-pyhcf101f3_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -4929,10 +4929,10 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/urllib3-2.7.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/yarl-1.24.2-pyh7db6752_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
-      - conda_source: fsspec[9bcb0b2b] @ continuous_integration/pixi-recipes/fsspec
-      - conda_source: s3fs[071d1671] @ continuous_integration/pixi-recipes/s3fs
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: fsspec[2c6d1ee0] @ continuous_integration/pixi-recipes/fsspec
+      - conda_source: s3fs[027033fa] @ continuous_integration/pixi-recipes/s3fs
       - pypi: git+https://github.com/bokeh/bokeh#784d225625feb5b826929e357848de97f73fad6d
       - pypi: git+https://github.com/zarr-developers/zarr-python#79486f7f42f64c50a9655d3ef3cea39a144dc4b2
       - pypi: https://files.pythonhosted.org/packages/0c/d5/c5db1ea3394c6e1732fb3286b3bd878b59507a8f77d32a2cebda7d7b7cd4/donfig-0.8.1.post1-py3-none-any.whl
@@ -4957,7 +4957,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/attrs-26.1.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/backports.zstd-1.6.0-py314h680f03e_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.4.2-pyhc90fa1f_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.1.2-pyhcf101f3_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -5032,10 +5032,10 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/wrapt-2.2.2-py314h6c2aa35_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/yaml-0.2.5-h925e9cb_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
-      - conda_source: fsspec[cceafc53] @ continuous_integration/pixi-recipes/fsspec
-      - conda_source: s3fs[73eba53a] @ continuous_integration/pixi-recipes/s3fs
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: fsspec[ae59973b] @ continuous_integration/pixi-recipes/fsspec
+      - conda_source: s3fs[562f6d4c] @ continuous_integration/pixi-recipes/s3fs
       - pypi: git+https://github.com/bokeh/bokeh#784d225625feb5b826929e357848de97f73fad6d
       - pypi: git+https://github.com/zarr-developers/zarr-python#79486f7f42f64c50a9655d3ef3cea39a144dc4b2
       - pypi: https://files.pythonhosted.org/packages/0c/d5/c5db1ea3394c6e1732fb3286b3bd878b59507a8f77d32a2cebda7d7b7cd4/donfig-0.8.1.post1-py3-none-any.whl
@@ -5335,7 +5335,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -5488,8 +5488,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-2.18.3-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/aiohttp-3.14.1-py310h37690e7_0.conda
@@ -5769,7 +5769,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -5921,8 +5921,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-2.18.3-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[b6578585] @ .
-      - conda_source: distributed[83942e98] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[f38a8daa] @ .
+      - conda_source: distributed[386e8979] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/noarch/adwaita-icon-theme-49.0-unix_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
@@ -5941,7 +5941,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -6296,8 +6296,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-ng-2.2.5-h3470cca_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstandard-0.25.0-py310hf151d32_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       win-64:
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiohappyeyeballs-2.7.1-pyhd8ed1ab_0.conda
@@ -6314,7 +6314,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -6672,8 +6672,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zlib-ng-2.2.5-h32d8bfd_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstandard-0.25.0-py310h1637853_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: dask-core[ea57c2cc] @ .
-      - conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[e1315053] @ .
+      - conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   py311:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -6961,7 +6961,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -7115,8 +7115,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.1.6-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/aiohttp-3.14.1-py311hf076524_0.conda
@@ -7398,7 +7398,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -7551,8 +7551,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.1.6-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[b6578585] @ .
-      - conda_source: distributed[83942e98] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[f38a8daa] @ .
+      - conda_source: distributed[386e8979] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/noarch/adwaita-icon-theme-49.0-unix_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
@@ -7569,7 +7569,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -7932,8 +7932,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-1.3.2-h8088a28_2.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-ng-2.3.3-hed4e4f5_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       win-64:
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiohappyeyeballs-2.7.1-pyhd8ed1ab_0.conda
@@ -7948,7 +7948,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -8319,8 +8319,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zlib-1.3.2-hfd05255_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/zlib-ng-2.3.3-h0261ad2_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: dask-core[ea57c2cc] @ .
-      - conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[e1315053] @ .
+      - conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   py312:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -8610,7 +8610,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -8765,8 +8765,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.2.1-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/aiohttp-3.14.1-py312he7e3343_0.conda
@@ -9050,7 +9050,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -9204,8 +9204,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.2.1-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[b6578585] @ .
-      - conda_source: distributed[83942e98] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[f38a8daa] @ .
+      - conda_source: distributed[386e8979] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/adwaita-icon-theme-49.0-unix_0.conda
@@ -9223,7 +9223,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -9588,8 +9588,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-1.3.2-h8088a28_2.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-ng-2.3.3-hed4e4f5_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       win-64:
       - conda: https://prefix.dev/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
@@ -9605,7 +9605,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -9979,8 +9979,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zlib-1.3.2-hfd05255_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/zlib-ng-2.3.3-h0261ad2_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: dask-core[ea57c2cc] @ .
-      - conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[e1315053] @ .
+      - conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   py313:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -10262,7 +10262,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -10415,8 +10415,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.2.1-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/aiohttp-3.14.1-py313ha60b548_0.conda
@@ -10694,7 +10694,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -10846,8 +10846,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.2.1-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[b6578585] @ .
-      - conda_source: distributed[83942e98] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[f38a8daa] @ .
+      - conda_source: distributed[386e8979] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/adwaita-icon-theme-49.0-unix_0.conda
@@ -10865,7 +10865,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -11221,8 +11221,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-1.3.2-h8088a28_2.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-ng-2.3.3-hed4e4f5_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       win-64:
       - conda: https://prefix.dev/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
@@ -11238,7 +11238,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -11604,8 +11604,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zlib-1.3.2-hfd05255_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/zlib-ng-2.3.3-h0261ad2_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: dask-core[ea57c2cc] @ .
-      - conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[e1315053] @ .
+      - conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   py314:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -11884,7 +11884,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -12042,8 +12042,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.2.1-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/alsa-lib-1.2.16.1-he30d5cf_0.conda
@@ -12318,7 +12318,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -12475,8 +12475,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/zarr-3.2.1-pyhc364b38_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
-      - conda_source: dask-core[b6578585] @ .
-      - conda_source: distributed[83942e98] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[f38a8daa] @ .
+      - conda_source: distributed[386e8979] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/adwaita-icon-theme-49.0-unix_0.conda
@@ -12497,7 +12497,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -12852,8 +12852,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-1.3.2-h8088a28_2.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-ng-2.3.3-hed4e4f5_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       win-64:
       - conda: https://prefix.dev/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
@@ -12872,7 +12872,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -13237,8 +13237,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zlib-1.3.2-hfd05255_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/zlib-ng-2.3.3-h0261ad2_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: dask-core[ea57c2cc] @ .
-      - conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: dask-core[e1315053] @ .
+      - conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   py314t:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -13458,7 +13458,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -13562,9 +13562,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/xyzservices-2026.3.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/yarl-1.24.2-pyh7db6752_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
-      - conda_source: brotli-python[01e1d6de] @ continuous_integration/pixi-recipes/brotli
-      - conda_source: dask-core[7a8f9ab0] @ .
-      - conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: brotli-python[a000f1b0] @ continuous_integration/pixi-recipes/brotli
+      - conda_source: dask-core[c7a4c1f7] @ .
+      - conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/aom-3.14.1-pl5321h8fffa31_1.conda
@@ -13780,7 +13780,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -13884,9 +13884,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/xyzservices-2026.3.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/yarl-1.24.2-pyh7db6752_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/zict-3.0.0-pyhd8ed1ab_1.conda
-      - conda_source: brotli-python[fc976456] @ continuous_integration/pixi-recipes/brotli
-      - conda_source: dask-core[b6578585] @ .
-      - conda_source: distributed[83942e98] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: brotli-python[6a1495f0] @ continuous_integration/pixi-recipes/brotli
+      - conda_source: dask-core[f38a8daa] @ .
+      - conda_source: distributed[386e8979] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/noarch/adwaita-icon-theme-49.0-unix_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
@@ -13902,7 +13902,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -14170,9 +14170,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-1.3.2-h8088a28_2.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-ng-2.3.3-hed4e4f5_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: brotli-python[15793782] @ continuous_integration/pixi-recipes/brotli
-      - conda_source: dask-core[de195260] @ .
-      - conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: brotli-python[e6d1249e] @ continuous_integration/pixi-recipes/brotli
+      - conda_source: dask-core[3fcf216c] @ .
+      - conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
       win-64:
       - conda: https://prefix.dev/conda-forge/noarch/aiobotocore-3.7.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/aiohappyeyeballs-2.7.1-pyhd8ed1ab_0.conda
@@ -14187,7 +14187,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/bokeh-3.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/boto3-1.43.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/botocore-1.43.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cached_property-1.5.2-pyha770c72_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/cachey-0.2.1-pyh9f0ad1d_0.tar.bz2
@@ -14458,9 +14458,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/zlib-1.3.2-hfd05255_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/zlib-ng-2.3.3-h0261ad2_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: brotli-python[93e913b9] @ continuous_integration/pixi-recipes/brotli
-      - conda_source: dask-core[ea57c2cc] @ .
-      - conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+      - conda_source: brotli-python[d68c46f6] @ continuous_integration/pixi-recipes/brotli
+      - conda_source: dask-core[e1315053] @ .
+      - conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   spark:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -14600,7 +14600,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/yaml-0.2.5-h280c20c_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zlib-1.3.2-h25fd6f3_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.4.2-pyhc90fa1f_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.1.2-pyhcf101f3_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -14637,7 +14637,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/toolz-1.1.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-      - conda_source: dask-core[07415ef2] @ .
+      - conda_source: dask-core[c7a4c1f7] @ .
       linux-aarch64:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/alsa-lib-1.2.16.1-he30d5cf_0.conda
@@ -14773,7 +14773,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/yaml-0.2.5-h80f16a2_3.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/zlib-1.3.2-hdc9db2a_2.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.4.2-pyhc90fa1f_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.1.2-pyhcf101f3_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -14810,9 +14810,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/toolz-1.1.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-      - conda_source: dask-core[56c3eb66] @ .
+      - conda_source: dask-core[f38a8daa] @ .
       osx-arm64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.4.2-pyhc90fa1f_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.1.2-pyhcf101f3_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -14933,9 +14933,9 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/yaml-0.2.5-h925e9cb_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zlib-1.3.2-h8088a28_2.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-      - conda_source: dask-core[71f6a897] @ .
+      - conda_source: dask-core[3fcf216c] @ .
       win-64:
-      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.4.2-pyh6dadd2b_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cloudpickle-3.1.2-pyhcf101f3_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
@@ -15054,7 +15054,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/yaml-0.2.5-h6a83c73_3.conda
       - conda: https://prefix.dev/conda-forge/win-64/zlib-1.3.2-hfd05255_2.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-      - conda_source: dask-core[3dd497fa] @ .
+      - conda_source: dask-core[e1315053] @ .
 packages:
 - conda: https://prefix.dev/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -41471,25 +41471,25 @@ packages:
   run_exports: {}
   size: 8647283
   timestamp: 1777577830442
-- conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
-  sha256: 7f458e4a82514d7bebbfef23d92817794a16aaf1c748a15f04870d4fb49aeab2
-  md5: b9696b2cf00dfeec138c70cee38ed192
+- conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
+  sha256: 44a799ed27b3764416f8f26f56592e0ecfc67c161d79470e986e771cb2e0bf70
+  md5: 7d455c7ee6e34a4f429fd6f3a0215781
   depends:
   - __win
   license: ISC
   run_exports: {}
-  size: 129352
-  timestamp: 1781709016515
-- conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-  sha256: f8e3c730fa14ee3f170493779f06522c4acf89169f43db4f039727709b6419cf
-  md5: a9965dd99f683c5f444428f896635716
+  size: 131658
+  timestamp: 1792483578001
+- conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
+  sha256: 9404ee878c6bd5b260655ab651366db43fac6be8d465fcc0acd0f7a50be91acb
+  md5: a1d1bf676059d2863f000d5e2777743f
   depends:
   - __unix
   license: ISC
   purls: []
   run_exports: {}
-  size: 128866
-  timestamp: 1781708962055
+  size: 131396
+  timestamp: 1792483552251
 - conda: https://prefix.dev/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_2.conda
   noarch: python
   sha256: 0d00dd61cb91b1bd1536600c64c9db4f94f3c699fec42864d0a2f4bc2ad8c3e8
@@ -70377,97 +70377,7 @@ packages:
     - zstd >=1.5.7,<1.6.0a0
   size: 388453
   timestamp: 1764777142545
-- conda_source: brotli-python[01e1d6de] @ continuous_integration/pixi-recipes/brotli
-  variants:
-    target_platform: noarch
-  depends:
-  - python
-  - python *
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/bzip2-1.0.8-hda65f42_9.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.45.1-default_hbd61a6d_102.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libexpat-2.8.1-hecca717_1.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libffi-3.5.2-h3435931_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.2.0-he0feb66_19.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libgomp-15.2.0-he0feb66_19.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/liblzma-5.8.3-hb03c661_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libmpdec-4.0.0-hb03c661_1.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libsqlite-3.53.3-h0c1763c_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-15.2.0-h934c35e_19.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libuuid-2.42.2-h5347b49_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libzlib-1.3.2-h25fd6f3_2.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/ncurses-6.6-hdb14827_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/openssl-3.6.3-h35e630c_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/python-3.14.6-habeac84_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/uv-0.11.28-h26efc2c_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-- conda_source: brotli-python[15793782] @ continuous_integration/pixi-recipes/brotli
-  variants:
-    target_platform: noarch
-  depends:
-  - python
-  - python *
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_9.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-22.1.8-h55c6f16_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.8.1-hf6b4638_1.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.5.2-hcf2aa1b_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.8.3-h8088a28_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libmpdec-4.0.0-h84a0fba_1.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libsqlite-3.53.3-h1b79a29_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libzlib-1.3.2-h8088a28_2.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.6-h1d4f5a5_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.6.3-hd24854e_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/python-3.14.6-h156bc91_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/uv-0.11.28-hc169f86_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-- conda_source: brotli-python[93e913b9] @ continuous_integration/pixi-recipes/brotli
-  variants:
-    target_platform: noarch
-  depends:
-  - python
-  - python *
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-  - conda: https://prefix.dev/conda-forge/win-64/bzip2-1.0.8-h0ad9c76_9.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libexpat-2.8.1-hac47afa_1.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libffi-3.5.2-h3d046cb_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/liblzma-5.8.3-hfd05255_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libmpdec-4.0.0-hfd05255_1.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libsqlite-3.53.3-hf5d6505_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libzlib-1.3.2-hfd05255_2.conda
-  - conda: https://prefix.dev/conda-forge/win-64/openssl-3.6.3-hf411b9b_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/python-3.14.6-h4b44e0e_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h6ed50ae_3.conda
-  - conda: https://prefix.dev/conda-forge/win-64/ucrt-10.0.26100.0-h57928b3_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/uv-0.11.28-h2229357_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/vc-14.5-h1b7c187_39.conda
-  - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.51.36231-h1b9f54f_39.conda
-  - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
-  - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-- conda_source: brotli-python[fc976456] @ continuous_integration/pixi-recipes/brotli
+- conda_source: brotli-python[6a1495f0] @ continuous_integration/pixi-recipes/brotli
   variants:
     target_platform: noarch
   depends:
@@ -70497,11 +70407,101 @@ packages:
   - conda: https://prefix.dev/conda-forge/linux-aarch64/tk-8.6.13-noxft_h0dc03b3_103.conda
   - conda: https://prefix.dev/conda-forge/linux-aarch64/uv-0.11.28-haa595b2_0.conda
   - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
   - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-- conda_source: dask-core[07415ef2] @ .
+- conda_source: brotli-python[a000f1b0] @ continuous_integration/pixi-recipes/brotli
+  variants:
+    target_platform: noarch
+  depends:
+  - python
+  - python *
+  source:
+    path: ''
+  host_packages:
+  - conda: https://prefix.dev/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/bzip2-1.0.8-hda65f42_9.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.45.1-default_hbd61a6d_102.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/libexpat-2.8.1-hecca717_1.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/libffi-3.5.2-h3435931_0.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.2.0-he0feb66_19.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/libgomp-15.2.0-he0feb66_19.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/liblzma-5.8.3-hb03c661_0.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/libmpdec-4.0.0-hb03c661_1.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/libsqlite-3.53.3-h0c1763c_0.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-15.2.0-h934c35e_19.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/libuuid-2.42.2-h5347b49_0.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/libzlib-1.3.2-h25fd6f3_2.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/ncurses-6.6-hdb14827_0.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/openssl-3.6.3-h35e630c_0.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/python-3.14.6-habeac84_100_cp314.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/uv-0.11.28-h26efc2c_0.conda
+  - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
+  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
+- conda_source: brotli-python[d68c46f6] @ continuous_integration/pixi-recipes/brotli
+  variants:
+    target_platform: noarch
+  depends:
+  - python
+  - python *
+  source:
+    path: ''
+  host_packages:
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
+  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
+  - conda: https://prefix.dev/conda-forge/win-64/bzip2-1.0.8-h0ad9c76_9.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libexpat-2.8.1-hac47afa_1.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libffi-3.5.2-h3d046cb_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/liblzma-5.8.3-hfd05255_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libmpdec-4.0.0-hfd05255_1.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libsqlite-3.53.3-hf5d6505_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libzlib-1.3.2-hfd05255_2.conda
+  - conda: https://prefix.dev/conda-forge/win-64/openssl-3.6.3-hf411b9b_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/python-3.14.6-h4b44e0e_100_cp314.conda
+  - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h6ed50ae_3.conda
+  - conda: https://prefix.dev/conda-forge/win-64/ucrt-10.0.26100.0-h57928b3_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/uv-0.11.28-h2229357_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/vc-14.5-h1b7c187_39.conda
+  - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.51.36231-h1b9f54f_39.conda
+  - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
+  - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
+- conda_source: brotli-python[e6d1249e] @ continuous_integration/pixi-recipes/brotli
+  variants:
+    target_platform: noarch
+  depends:
+  - python
+  - python *
+  source:
+    path: ''
+  host_packages:
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
+  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_9.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-22.1.8-h55c6f16_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.8.1-hf6b4638_1.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.5.2-hcf2aa1b_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.8.3-h8088a28_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libmpdec-4.0.0-h84a0fba_1.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libsqlite-3.53.3-h1b79a29_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libzlib-1.3.2-h8088a28_2.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.6-h1d4f5a5_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.6.3-hd24854e_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/python-3.14.6-h156bc91_100_cp314.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/uv-0.11.28-hc169f86_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
+- conda_source: dask-core[3fcf216c] @ .
   variants:
     target_platform: noarch
   depends:
@@ -70510,10 +70510,51 @@ packages:
   - fsspec >=2021.9.0
   - packaging >=20.0
   - partd >=1.4.0
+  - python *
+  - python >=3.10
   - pyyaml >=5.4.1
   - toolz >=0.12.0
-  - python >=3.10
+  license: BSD-3-Clause
+  source:
+    path: ''
+  host_packages:
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
+  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
+  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_9.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-22.1.8-h55c6f16_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.8.1-hf6b4638_1.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.5.2-hcf2aa1b_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.8.3-h8088a28_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libmpdec-4.0.0-h84a0fba_1.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libsqlite-3.53.3-h1b79a29_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libzlib-1.3.2-h8088a28_2.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.6-h1d4f5a5_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.6.3-hd24854e_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/python-3.14.6-h156bc91_100_cp314.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/uv-0.11.28-hc169f86_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
+- conda_source: dask-core[c7a4c1f7] @ .
+  variants:
+    target_platform: noarch
+  depends:
+  - click >=8.1
+  - cloudpickle >=3.0.0
+  - fsspec >=2021.9.0
+  - packaging >=20.0
+  - partd >=1.4.0
   - python *
+  - python >=3.10
+  - pyyaml >=5.4.1
+  - toolz >=0.12.0
   license: BSD-3-Clause
   source:
     path: ''
@@ -70538,7 +70579,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
   - conda: https://prefix.dev/conda-forge/linux-64/uv-0.11.28-h26efc2c_0.conda
   - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
   - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
@@ -70547,7 +70588,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
   - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-- conda_source: dask-core[3dd497fa] @ .
+- conda_source: dask-core[e1315053] @ .
   variants:
     target_platform: noarch
   depends:
@@ -70556,15 +70597,15 @@ packages:
   - fsspec >=2021.9.0
   - packaging >=20.0
   - partd >=1.4.0
+  - python *
+  - python >=3.10
   - pyyaml >=5.4.1
   - toolz >=0.12.0
-  - python >=3.10
-  - python *
   license: BSD-3-Clause
   source:
     path: ''
   host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
   - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
@@ -70589,141 +70630,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.51.36231-h1b9f54f_39.conda
   - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
   - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-- conda_source: dask-core[56c3eb66] @ .
-  variants:
-    target_platform: noarch
-  depends:
-  - click >=8.1
-  - cloudpickle >=3.0.0
-  - fsspec >=2021.9.0
-  - packaging >=20.0
-  - partd >=1.4.0
-  - pyyaml >=5.4.1
-  - toolz >=0.12.0
-  - python >=3.10
-  - python *
-  license: BSD-3-Clause
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/bzip2-1.0.8-h4777abc_9.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/icu-78.3-hcab7f73_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/ld_impl_linux-aarch64-2.45.1-default_h1979696_102.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/libexpat-2.8.1-hfae3067_1.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/libffi-3.5.2-h376a255_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/libgcc-15.2.0-h8acb6b2_19.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/libgomp-15.2.0-h8acb6b2_19.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/liblzma-5.8.3-he30d5cf_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/libmpdec-4.0.0-he30d5cf_1.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/libsqlite-3.53.3-h10b116e_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/libstdcxx-15.2.0-hef695bb_19.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/libuuid-2.42.2-h1022ec0_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/libzlib-1.3.2-hdc9db2a_2.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/ncurses-6.6-hf8d1292_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/openssl-3.6.3-h546c87b_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/python-3.14.6-hc679e19_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/readline-8.3-hb682ff5_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/tk-8.6.13-noxft_h0dc03b3_103.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/uv-0.11.28-haa595b2_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-- conda_source: dask-core[71f6a897] @ .
-  variants:
-    target_platform: noarch
-  depends:
-  - click >=8.1
-  - cloudpickle >=3.0.0
-  - fsspec >=2021.9.0
-  - packaging >=20.0
-  - partd >=1.4.0
-  - pyyaml >=5.4.1
-  - toolz >=0.12.0
-  - python >=3.10
-  - python *
-  license: BSD-3-Clause
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_9.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-22.1.8-h55c6f16_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.8.1-hf6b4638_1.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.5.2-hcf2aa1b_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.8.3-h8088a28_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libmpdec-4.0.0-h84a0fba_1.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libsqlite-3.53.3-h1b79a29_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libzlib-1.3.2-h8088a28_2.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.6-h1d4f5a5_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.6.3-hd24854e_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/python-3.14.6-h156bc91_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/uv-0.11.28-hc169f86_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-- conda_source: dask-core[7a8f9ab0] @ .
-  variants:
-    target_platform: noarch
-  depends:
-  - click >=8.1
-  - cloudpickle >=3.0.0
-  - fsspec >=2021.9.0
-  - packaging >=20.0
-  - partd >=1.4.0
-  - python *
-  - python >=3.10
-  - pyyaml >=5.4.1
-  - toolz >=0.12.0
-  license: BSD-3-Clause
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/bzip2-1.0.8-hda65f42_9.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.45.1-default_hbd61a6d_102.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libexpat-2.8.1-hecca717_1.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libffi-3.5.2-h3435931_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.2.0-he0feb66_19.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libgomp-15.2.0-he0feb66_19.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/liblzma-5.8.3-hb03c661_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libmpdec-4.0.0-hb03c661_1.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libsqlite-3.53.3-h0c1763c_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-15.2.0-h934c35e_19.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libuuid-2.42.2-h5347b49_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/libzlib-1.3.2-h25fd6f3_2.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/ncurses-6.6-hdb14827_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/openssl-3.6.3-h35e630c_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/python-3.14.6-habeac84_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/uv-0.11.28-h26efc2c_0.conda
-  - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-- conda_source: dask-core[b6578585] @ .
+- conda_source: dask-core[f38a8daa] @ .
   variants:
     target_platform: noarch
   depends:
@@ -70761,7 +70668,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/linux-aarch64/tk-8.6.13-noxft_h0dc03b3_103.conda
   - conda: https://prefix.dev/conda-forge/linux-aarch64/uv-0.11.28-haa595b2_0.conda
   - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
   - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
@@ -70770,138 +70677,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
   - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-- conda_source: dask-core[de195260] @ .
-  variants:
-    target_platform: noarch
-  depends:
-  - click >=8.1
-  - cloudpickle >=3.0.0
-  - fsspec >=2021.9.0
-  - packaging >=20.0
-  - partd >=1.4.0
-  - python *
-  - python >=3.10
-  - pyyaml >=5.4.1
-  - toolz >=0.12.0
-  license: BSD-3-Clause
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_9.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-22.1.8-h55c6f16_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.8.1-hf6b4638_1.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.5.2-hcf2aa1b_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.8.3-h8088a28_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libmpdec-4.0.0-h84a0fba_1.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libsqlite-3.53.3-h1b79a29_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libzlib-1.3.2-h8088a28_2.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.6-h1d4f5a5_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.6.3-hd24854e_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/python-3.14.6-h156bc91_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/uv-0.11.28-hc169f86_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-- conda_source: dask-core[ea57c2cc] @ .
-  variants:
-    target_platform: noarch
-  depends:
-  - click >=8.1
-  - cloudpickle >=3.0.0
-  - fsspec >=2021.9.0
-  - packaging >=20.0
-  - partd >=1.4.0
-  - python *
-  - python >=3.10
-  - pyyaml >=5.4.1
-  - toolz >=0.12.0
-  license: BSD-3-Clause
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/bzip2-1.0.8-h0ad9c76_9.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libexpat-2.8.1-hac47afa_1.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libffi-3.5.2-h3d046cb_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/liblzma-5.8.3-hfd05255_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libmpdec-4.0.0-hfd05255_1.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libsqlite-3.53.3-hf5d6505_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libzlib-1.3.2-hfd05255_2.conda
-  - conda: https://prefix.dev/conda-forge/win-64/openssl-3.6.3-hf411b9b_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/python-3.14.6-h4b44e0e_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h6ed50ae_3.conda
-  - conda: https://prefix.dev/conda-forge/win-64/ucrt-10.0.26100.0-h57928b3_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/uv-0.11.28-h2229357_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/vc-14.5-h1b7c187_39.conda
-  - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.51.36231-h1b9f54f_39.conda
-  - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
-  - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-- conda_source: distributed[66fb0b73] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
-  version: 2099.0.0
-  build: pyh4616a5c_0
-  subdir: noarch
-  noarch: python
-  variants:
-    target_platform: noarch
-  depends:
-  - dask-core
-  - jinja2 >=2.10.3
-  - locket >=1.0.0
-  - msgpack-python >=1.0.2
-  - psutil >=5.8.0
-  - python *
-  - python >=3.10
-  - sortedcontainers >=2.0.5
-  - tblib >=1.6.0,!=3.2.0,!=3.2.1
-  - tornado >=6.2.0
-  - zict >=3.0.0
-  license: BSD-3-Clause
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-h4c7d964_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/bzip2-1.0.8-h0ad9c76_9.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libexpat-2.8.1-hac47afa_1.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libffi-3.5.2-h3d046cb_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/liblzma-5.8.3-hfd05255_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libmpdec-4.0.0-hfd05255_1.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libsqlite-3.53.3-hf5d6505_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/libzlib-1.3.2-hfd05255_2.conda
-  - conda: https://prefix.dev/conda-forge/win-64/openssl-3.6.3-hf411b9b_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/python-3.14.6-h4b44e0e_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h6ed50ae_3.conda
-  - conda: https://prefix.dev/conda-forge/win-64/ucrt-10.0.26100.0-h57928b3_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/uv-0.11.28-h2229357_0.conda
-  - conda: https://prefix.dev/conda-forge/win-64/vc-14.5-h1b7c187_39.conda
-  - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.51.36231-h1b9f54f_39.conda
-  - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
-  - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
-- conda_source: distributed[83942e98] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+- conda_source: distributed[386e8979] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   version: 2099.0.0
   build: pyh4616a5c_0
   subdir: noarch
@@ -70945,7 +70721,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/linux-aarch64/tk-8.6.13-noxft_h0dc03b3_103.conda
   - conda: https://prefix.dev/conda-forge/linux-aarch64/uv-0.11.28-haa595b2_0.conda
   - conda: https://prefix.dev/conda-forge/linux-aarch64/zstd-1.5.7-h85ac4a6_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
   - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
@@ -70954,7 +70730,102 @@ packages:
   - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
   - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-- conda_source: distributed[c20f79ef] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+- conda_source: distributed[47bde7a1] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+  version: 2099.0.0
+  build: pyh4616a5c_0
+  subdir: noarch
+  noarch: python
+  variants:
+    target_platform: noarch
+  depends:
+  - dask-core
+  - jinja2 >=2.10.3
+  - locket >=1.0.0
+  - msgpack-python >=1.0.2
+  - psutil >=5.8.0
+  - python *
+  - python >=3.10
+  - sortedcontainers >=2.0.5
+  - tblib >=1.6.0,!=3.2.0,!=3.2.1
+  - tornado >=6.2.0
+  - zict >=3.0.0
+  license: BSD-3-Clause
+  source:
+    path: ''
+  host_packages:
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
+  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
+  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_9.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-22.1.8-h55c6f16_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.8.1-hf6b4638_1.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.5.2-hcf2aa1b_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.8.3-h8088a28_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libmpdec-4.0.0-h84a0fba_1.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libsqlite-3.53.3-h1b79a29_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/libzlib-1.3.2-h8088a28_2.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.6-h1d4f5a5_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.6.3-hd24854e_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/python-3.14.6-h156bc91_100_cp314.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/uv-0.11.28-hc169f86_0.conda
+  - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
+- conda_source: distributed[65d0b803] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
+  version: 2099.0.0
+  build: pyh4616a5c_0
+  subdir: noarch
+  noarch: python
+  variants:
+    target_platform: noarch
+  depends:
+  - dask-core
+  - jinja2 >=2.10.3
+  - locket >=1.0.0
+  - msgpack-python >=1.0.2
+  - psutil >=5.8.0
+  - python *
+  - python >=3.10
+  - sortedcontainers >=2.0.5
+  - tblib >=1.6.0,!=3.2.0,!=3.2.1
+  - tornado >=6.2.0
+  - zict >=3.0.0
+  license: BSD-3-Clause
+  source:
+    path: ''
+  host_packages:
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-h4c7d964_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
+  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
+  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/bzip2-1.0.8-h0ad9c76_9.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libexpat-2.8.1-hac47afa_1.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libffi-3.5.2-h3d046cb_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/liblzma-5.8.3-hfd05255_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libmpdec-4.0.0-hfd05255_1.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libsqlite-3.53.3-hf5d6505_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/libzlib-1.3.2-hfd05255_2.conda
+  - conda: https://prefix.dev/conda-forge/win-64/openssl-3.6.3-hf411b9b_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/python-3.14.6-h4b44e0e_100_cp314.conda
+  - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h6ed50ae_3.conda
+  - conda: https://prefix.dev/conda-forge/win-64/ucrt-10.0.26100.0-h57928b3_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/uv-0.11.28-h2229357_0.conda
+  - conda: https://prefix.dev/conda-forge/win-64/vc-14.5-h1b7c187_39.conda
+  - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.51.36231-h1b9f54f_39.conda
+  - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
+  - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
+- conda_source: distributed[aa45890a] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
   version: 2099.0.0
   build: pyh4616a5c_0
   subdir: noarch
@@ -70997,7 +70868,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
   - conda: https://prefix.dev/conda-forge/linux-64/uv-0.11.28-h26efc2c_0.conda
   - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
   - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
@@ -71006,54 +70877,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
   - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-- conda_source: distributed[cc664ccf] @ git+https://github.com/dask/distributed#777f555d99598274105459db9337de7e3c863f14
-  version: 2099.0.0
-  build: pyh4616a5c_0
-  subdir: noarch
-  noarch: python
-  variants:
-    target_platform: noarch
-  depends:
-  - dask-core
-  - jinja2 >=2.10.3
-  - locket >=1.0.0
-  - msgpack-python >=1.0.2
-  - psutil >=5.8.0
-  - python *
-  - python >=3.10
-  - sortedcontainers >=2.0.5
-  - tblib >=1.6.0,!=3.2.0,!=3.2.1
-  - tornado >=6.2.0
-  - zict >=3.0.0
-  license: BSD-3-Clause
-  source:
-    path: ''
-  host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/packaging-26.2-pyhc364b38_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/setuptools-scm-10.2.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tomli-2.4.1-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-  - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_9.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-22.1.8-h55c6f16_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.8.1-hf6b4638_1.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.5.2-hcf2aa1b_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.8.3-h8088a28_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libmpdec-4.0.0-h84a0fba_1.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libsqlite-3.53.3-h1b79a29_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/libzlib-1.3.2-h8088a28_2.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.6-h1d4f5a5_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.6.3-hd24854e_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/python-3.14.6-h156bc91_100_cp314.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/uv-0.11.28-hc169f86_0.conda
-  - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-- conda_source: fsspec[9bcb0b2b] @ continuous_integration/pixi-recipes/fsspec
+- conda_source: fsspec[2c6d1ee0] @ continuous_integration/pixi-recipes/fsspec
   variants:
     target_platform: noarch
   depends:
@@ -71085,7 +70909,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
   - conda: https://prefix.dev/conda-forge/linux-64/uv-0.11.28-h26efc2c_0.conda
   - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/hatch-vcs-0.5.0-pyhd8ed1ab_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/hatchling-1.31.0-pyhcf101f3_0.conda
@@ -71100,7 +70924,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.16.0-pyhcf101f3_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
   - conda: https://prefix.dev/conda-forge/noarch/vcs_versioning-2.2.2-pyhcf101f3_0.conda
-- conda_source: fsspec[cceafc53] @ continuous_integration/pixi-recipes/fsspec
+- conda_source: fsspec[ae59973b] @ continuous_integration/pixi-recipes/fsspec
   variants:
     target_platform: noarch
   depends:
@@ -71112,7 +70936,7 @@ packages:
     git: https://github.com/fsspec/filesystem_spec
     rev: 0907962e6b94eea3b4ba86a6cc20b36ddb29f2dd
   host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/hatch-vcs-0.5.0-pyhd8ed1ab_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/hatchling-1.31.0-pyhcf101f3_0.conda
@@ -71142,7 +70966,7 @@ packages:
   - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h010d191_3.conda
   - conda: https://prefix.dev/conda-forge/osx-arm64/uv-0.11.28-hc169f86_0.conda
   - conda: https://prefix.dev/conda-forge/osx-arm64/zstd-1.5.7-hbf9d68e_6.conda
-- conda_source: s3fs[071d1671] @ continuous_integration/pixi-recipes/s3fs
+- conda_source: s3fs[027033fa] @ continuous_integration/pixi-recipes/s3fs
   variants:
     target_platform: noarch
   depends:
@@ -71170,12 +70994,12 @@ packages:
   - conda: https://prefix.dev/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
   - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h366c992_103.conda
   - conda: https://prefix.dev/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/pip-26.2.2-pyh145f28c_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
   - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025c-hc9c84f9_1.conda
-- conda_source: s3fs[73eba53a] @ continuous_integration/pixi-recipes/s3fs
+- conda_source: s3fs[562f6d4c] @ continuous_integration/pixi-recipes/s3fs
   variants:
     target_platform: noarch
   depends:
@@ -71185,7 +71009,7 @@ packages:
   - python
   - python *
   host_packages:
-  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda
+  - conda: https://prefix.dev/conda-forge/noarch/ca-certificates-2026.10.19-hbd8a1cb_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/pip-26.2.2-pyh145f28c_0.conda
   - conda: https://prefix.dev/conda-forge/noarch/python_abi-3.14-8_cp314.conda
   - conda: https://prefix.dev/conda-forge/noarch/setuptools-82.0.1-pyh332efcf_0.conda
