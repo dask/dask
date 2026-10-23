@@ -363,6 +363,16 @@ def test_topk_with_multiarg_lambda():
     assert list(b.topk(2, key=lambda a, b: b)) == [(1, 10), (2, 9)]
 
 
+@pytest.mark.parametrize("key", [0, ""])
+@pytest.mark.parametrize("npartitions", [1, 2, 4])
+@pytest.mark.parametrize("split_every", [2, 8])
+def test_topk_with_falsy_key(key, npartitions, split_every):
+    data = [{key: value} for value in [1, 4, 2, 3]]
+    b = db.from_sequence(data, npartitions=npartitions)
+    result = b.topk(2, key=key, split_every=split_every)
+    assert result.compute(scheduler="sync") == [{key: 4}, {key: 3}]
+
+
 def test_lambdas():
     assert list(b.map(lambda x: x + 1)) == list(b.map(inc))
 
