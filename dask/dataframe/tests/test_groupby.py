@@ -2895,6 +2895,62 @@ def test_series_named_agg(shuffle_method, agg):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize("split_out", [1, 2])
+@pytest.mark.parametrize("series_groupby", [False, True])
+@pytest.mark.parametrize(
+    "pandas_spec, dask_spec",
+    [
+        ({"total": "sum"}, {"total": custom_sum}),
+        ({"average": "mean"}, {"average": custom_mean}),
+        (
+            {"total": "sum", "average": "mean"},
+            {"total": custom_sum, "average": custom_mean},
+        ),
+        (
+            {"largest": "max", "total": "sum", "average": "mean"},
+            {"largest": np.max, "total": custom_sum, "average": "mean"},
+        ),
+    ],
+)
+def test_series_named_agg_custom(
+    split_out: int, series_groupby: bool, pandas_spec: dict, dask_spec: dict
+) -> None:
+    df = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, np.nan, 6, 9, 2, 6, 8],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=4)
+    if series_groupby:
+        expected = df.b.groupby(df.a).agg(**pandas_spec)
+        grouped = ddf.b.groupby(ddf.a)
+    else:
+        expected = df.groupby("a").b.agg(**pandas_spec)
+        grouped = ddf.groupby("a").b
+
+    actual = grouped.agg(split_every=2, split_out=split_out, **dask_spec)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("agg", [None, 1, [], {}, ("b", "sum")])
+@pytest.mark.parametrize("with_custom", [False, True])
+def test_series_named_agg_invalid(agg: object, with_custom: bool) -> None:
+    ddf = dd.from_pandas(pd.DataFrame({"a": [0, 0, 1], "b": [1, 2, 3]}))
+    kwargs: dict[str, object] = {"total": custom_sum} if with_custom else {}
+    kwargs["invalid"] = agg
+    with pytest.raises(
+        TypeError, match=f"func is expected but received {type(agg).__name__}"
+    ):
+        ddf.groupby("a").b.agg(**kwargs)
+
+
+def test_series_named_agg_no_arguments() -> None:
+    ddf = dd.from_pandas(pd.DataFrame({"a": [0, 0, 1], "b": [1, 2, 3]}))
+    with pytest.raises(TypeError, match="Must provide 'func' or named aggregation"):
+        ddf.groupby("a").b.agg()
+
+
 @pytest.mark.parametrize("by", ["A", ["A", "B"]])
 def test_empty_partitions_with_value_counts(by):
     # https://github.com/dask/dask/issues/7065

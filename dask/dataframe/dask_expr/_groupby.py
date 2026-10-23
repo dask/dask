@@ -78,6 +78,9 @@ from dask.dataframe.groupby import (
     _var_agg,
     _var_chunk,
 )
+from dask.dataframe.groupby import (
+    Aggregation as CustomAggregation,
+)
 from dask.dataframe.utils import insert_meta_param_description, is_scalar
 from dask.typing import Key
 from dask.utils import M, derived_from, is_index_like
@@ -1931,7 +1934,16 @@ class GroupBy:
             if not isinstance(self, SeriesGroupBy):
                 relabeling, arg, columns, order = reconstruct_func(arg, **kwargs)
             elif isinstance(self, SeriesGroupBy):
-                columns, arg = validate_func_kwargs(kwargs)
+                # Pandas does not recognize Dask's custom aggregation objects.
+                non_custom_kwargs = {
+                    name: func
+                    for name, func in kwargs.items()
+                    if not isinstance(func, CustomAggregation)
+                }
+                if non_custom_kwargs or not kwargs:
+                    validate_func_kwargs(non_custom_kwargs)
+                columns = list(kwargs)
+                arg = list(kwargs.values())
                 relabeling = True
 
         if arg == "size":
