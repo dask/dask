@@ -226,7 +226,7 @@ python = "=3.14"
 # Can't use bokeh nightlies from the bokeh/label/dev channel because
 # it would downgrade NumPy to the latest release (and building
 # NumPy from sources takes longer than building Bokeh).
-nodejs = "*"
+nodejs = ">=26.12.1,<27"
 # See continuous_integration/pixi-recipes/README.md
 fsspec = { path = "continuous_integration/pixi-recipes/fsspec" }
 s3fs = { path = "continuous_integration/pixi-recipes/s3fs" }
