@@ -180,16 +180,6 @@ python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
 crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
 tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
 
-[feature.py310.dependencies]
-python = "=3.10"
-importlib_metadata = "*"
-numpy = "=1.26"
-pandas = "=2.1"
-pyarrow = "=18.0"
-
-[feature.py310.activation.env]
-DASK_DATAFRAME__CONVERT_STRING="False"  # Only tested here
-
 [feature.py311.dependencies]
 python = "=3.11"
 importlib_metadata = "*"
@@ -252,7 +242,7 @@ pyarrow = "*"
 # https://spark.apache.org/docs/latest/
 # https://issues.apache.org/jira/browse/ARTEMIS-5374
 # https://stackoverflow.com/questions/79016199/
-openjdk = "=21"  
+openjdk = "=21"
 pyspark = "*"
 
 [feature.spark.activation.env]
@@ -307,7 +297,6 @@ mindeps-array = ["mindeps-non-optional", "mindeps-array", "test"]
 mindeps-dataframe = ["mindeps-non-optional", "mindeps-dataframe", "test"]
 mindeps-distributed = ["mindeps-non-optional", "test", "distributed"]
 mindeps-optional = ["mindeps-non-optional", "mindeps-optional", "test", "distributed"]
-py310 = ["py310", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
 py311 = ["py311", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
 py312 = ["py312", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
 py313 = ["py313", "optional", "test", "distributed", "optional-gil"]
