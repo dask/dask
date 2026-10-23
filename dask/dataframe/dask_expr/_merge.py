@@ -487,10 +487,13 @@ class Merge(Expr):
                     project_left.append(col)
                 elif f"{col}{left_suffix}" in projection:
                     project_left.append(col)
-                    if col in right.columns:
-                        # Right column must be present
-                        # for the suffix to be applied
-                        right_suff_columns.append(col)
+                if (
+                    left_suffix
+                    and f"{col}{left_suffix}" in projection
+                    and col in right.columns
+                ):
+                    # Right column must be present for the suffix to be applied
+                    right_suff_columns.append(col)
 
             # Find columns to project on the right
             for col in right.columns:
@@ -498,10 +501,14 @@ class Merge(Expr):
                     project_right.append(col)
                 elif f"{col}{right_suffix}" in projection:
                     project_right.append(col)
-                    if col in left.columns and col not in project_left:
-                        # Left column must be present
-                        # for the suffix to be applied
-                        left_suff_columns.append(col)
+                if (
+                    right_suffix
+                    and f"{col}{right_suffix}" in projection
+                    and col in left.columns
+                    and col not in project_left
+                ):
+                    # Left column must be present for the suffix to be applied
+                    left_suff_columns.append(col)
             project_left.extend([c for c in left_suff_columns if c not in project_left])
             project_right.extend(
                 [c for c in right_suff_columns if c not in project_right]
