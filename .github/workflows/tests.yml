@@ -34,7 +34,7 @@ jobs:
         # Note: after adding/removing builds here, update
         # codecov.yml to match.
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
-        environment: [py310, py311, py312, py313, py314]
+        environment: [py311, py312, py313, py314]
         task: [test-ci]
         include:
           # MacOS CI does not have many hosts available; run it on 3.14 only
@@ -86,7 +86,7 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@v0.10.0
         with:
-          pixi-version: v0.72.1
+          pixi-version: v0.83.0
           environments: ${{ matrix.environment }}
           cache: true
           locked: true
@@ -94,7 +94,7 @@ jobs:
       - name: Run tests
         id: run_tests
         run: pixi run -e ${{ matrix.environment }} ${{ matrix.task }}
-  
+
       - name: Coverage
         uses: codecov/codecov-action@v7
         with:

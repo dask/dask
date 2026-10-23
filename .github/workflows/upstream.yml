@@ -44,7 +44,7 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@v0.10.0
         with:
-          pixi-version: v0.72.1
+          pixi-version: v0.83.0
           run-install: false
           cache: false
           locked: false

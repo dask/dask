@@ -1,5 +1,5 @@
 [workspace]
-requires-pixi = ">=0.72.1"
+requires-pixi = ">=0.82.1"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
 preview = ["pixi-build"]
@@ -180,16 +180,6 @@ python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
 crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
 tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
 
-[feature.py310.dependencies]
-python = "=3.10"
-importlib_metadata = "*"
-numpy = "=1.26"
-pandas = "=2.1"
-pyarrow = "=18.0"
-
-[feature.py310.activation.env]
-DASK_DATAFRAME__CONVERT_STRING="False"  # Only tested here
-
 [feature.py311.dependencies]
 python = "=3.11"
 importlib_metadata = "*"
@@ -226,7 +216,7 @@ python = "=3.14"
 # Can't use bokeh nightlies from the bokeh/label/dev channel because
 # it would downgrade NumPy to the latest release (and building
 # NumPy from sources takes longer than building Bokeh).
-nodejs = "*"
+nodejs = ">=26.12.1,<27"
 # See continuous_integration/pixi-recipes/README.md
 fsspec = { path = "continuous_integration/pixi-recipes/fsspec" }
 s3fs = { path = "continuous_integration/pixi-recipes/s3fs" }
@@ -252,7 +242,7 @@ pyarrow = "*"
 # https://spark.apache.org/docs/latest/
 # https://issues.apache.org/jira/browse/ARTEMIS-5374
 # https://stackoverflow.com/questions/79016199/
-openjdk = "=21"  
+openjdk = "=21"
 pyspark = "*"
 
 [feature.spark.activation.env]
@@ -307,7 +297,6 @@ mindeps-array = ["mindeps-non-optional", "mindeps-array", "test"]
 mindeps-dataframe = ["mindeps-non-optional", "mindeps-dataframe", "test"]
 mindeps-distributed = ["mindeps-non-optional", "test", "distributed"]
 mindeps-optional = ["mindeps-non-optional", "mindeps-optional", "test", "distributed"]
-py310 = ["py310", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
 py311 = ["py311", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
 py312 = ["py312", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
 py313 = ["py313", "optional", "test", "distributed", "optional-gil"]
