@@ -186,7 +186,7 @@ def test_parquet():
 
     df = dd.read_parquet(
         [
-            "https://github.com/Parquet/parquet-compatibility/raw/"
+            "https://raw.githubusercontent.com/Parquet/parquet-compatibility/"
             "master/parquet-testdata/impala/1.1.1-NONE/"
             "nation.impala.parquet"
         ],
