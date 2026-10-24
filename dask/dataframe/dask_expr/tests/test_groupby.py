@@ -647,6 +647,23 @@ def test_groupby_var_dropna_observed(dropna, observed, func):
     assert_eq(dd_result, pdf_result)
 
 
+@pytest.mark.parametrize("func", ["var", "std"])
+@pytest.mark.parametrize("observed", [True, False])
+def test_groupby_aggregate_categorical_observed(func: str, observed: bool) -> None:
+    pdf = pd.DataFrame(
+        {
+            "group": pd.Categorical(
+                ["a", "a", "b", "b"], categories=["a", "b", "unused"]
+            ),
+            "value": [1.0, 3.0, 5.0, 7.0],
+        }
+    )
+    df = from_pandas(pdf, npartitions=2)
+    expected = pdf.groupby("group", observed=observed).agg({"value": [func]})
+    result = df.groupby("group", observed=observed).agg({"value": [func]})
+    assert_eq(result, expected)
+
+
 def test_groupby_median(df, pdf):
     assert_eq(df.groupby("x").median(), pdf.groupby("x").median())
     q = df.groupby("x").median(split_out=2)
