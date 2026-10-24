@@ -813,6 +813,33 @@ def test_to_datetime_timezone():
     assert_eq(df, pdf)
 
 
+@pytest.mark.parametrize("arg_kind", ["series", "frame"])
+@pytest.mark.parametrize("utc", [False, True])
+@pytest.mark.parametrize("custom_index", [False, True])
+@pytest.mark.parametrize("npartitions", [1, 2])
+def test_to_datetime_comparison_metadata(
+    arg_kind: str, utc: bool, custom_index: bool, npartitions: int
+) -> None:
+    pdf = pd.DataFrame(
+        {
+            "score": [1, 4, 5],
+            "date": ["2000-01-01", "2015-01-01", "2020-02-07"],
+            "year": [2000, 2015, 2020],
+            "month": [1, 1, 2],
+            "day": [1, 1, 7],
+        }
+    )
+    if custom_index:
+        pdf.index = pd.Index([10, 20, 30], name="record_id")
+    df = from_pandas(pdf, npartitions=npartitions)
+    columns = "date" if arg_kind == "series" else ["year", "month", "day"]
+    result = to_datetime(df[columns], utc=utc)
+    expected = pd.to_datetime(pdf[columns], utc=utc)
+
+    assert_eq(df.score >= result.dt.day_of_week, pdf.score >= expected.dt.day_of_week)
+    assert result._meta.empty
+
+
 def test_to_datetime():
     pdf = pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]})
     df = from_pandas(pdf, npartitions=2)
