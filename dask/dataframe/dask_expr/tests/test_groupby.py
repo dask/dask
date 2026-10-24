@@ -647,6 +647,19 @@ def test_groupby_var_dropna_observed(dropna, observed, func):
     assert_eq(dd_result, pdf_result)
 
 
+@pytest.mark.parametrize("func", ["var", "std"])
+@pytest.mark.parametrize("column", [0, "", "value"])
+@pytest.mark.parametrize("npartitions", [1, 2])
+def test_groupby_aggregate_falsy_column(
+    func: str, column: int | str, npartitions: int
+) -> None:
+    pdf = pd.DataFrame({"group": ["a", "b", "a", "b"], column: [1.0, 5.0, 3.0, 7.0]})
+    df = from_pandas(pdf, npartitions=npartitions)
+    expected = pdf.groupby("group").agg({column: [func]})
+    result = df.groupby("group").agg({column: [func]})
+    assert_eq(result, expected)
+
+
 def test_groupby_median(df, pdf):
     assert_eq(df.groupby("x").median(), pdf.groupby("x").median())
     q = df.groupby("x").median(split_out=2)
