@@ -3939,7 +3939,15 @@ def test_shift_with_freq_DatetimeIndex(data_freq, divs1):
     df = _compat.makeTimeDataFrame()
     df = df.set_index(_compat.makeDateIndex(30, freq=data_freq))
     ddf = dd.from_pandas(df, npartitions=4)
-    for freq, divs2 in [("s", True), ("W", False), (pd.Timedelta(10, unit="h"), True)]:
+    for freq, divs2 in [
+        ("s", True),
+        ("W", False),
+        (pd.Timedelta(10, unit="h"), True),
+        (pd.offsets.Hour(), True),
+        (pd.offsets.Day(), True),
+        (pd.offsets.Week(), False),
+        (pd.DateOffset(hours=1), False),
+    ]:
         for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:
             res = d.shift(2, freq=freq)
             assert_eq(res, p.shift(2, freq=freq))
