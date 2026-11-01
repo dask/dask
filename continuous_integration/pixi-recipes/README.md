@@ -34,11 +34,3 @@ brotli is an optional dependency of urllib3, which is in turn a dependency of re
 which is in turn an optional dependency of fsspec.
 As of 1.2.0, brotli does not release the GIL on import in Python 3.14t.
 This causes `import requests` to lock the GIL.
-
-### msgpack
-Pure-python variant of conda package `msgpack-python=1.1.2`, which in conda-forge
-is compiled with the C extensions enabled and does not release the GIL.
-
-**Note:** this is expected to substantially degrade dask.distributed performance. For
-benchmarks you should use the conda-forge version with the `PYTHON_GIL=0` environment
-variable set.

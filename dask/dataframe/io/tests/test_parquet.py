@@ -1033,14 +1033,6 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 )
 @pytest.mark.skip_with_pyarrow_strings  # don't want to convert binary data to pyarrow strings
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
-    if "x" in df and df.x.dtype == "M8[ns]" and engine == "pyarrow":
-        pytest.xfail(reason="Parquet pyarrow v1 doesn't support nanosecond precision")
-
-    # non-ns times
-    if "x" in df and (df.x.dtype == "M8[ms]" or df.x.dtype == "M8[us]"):
-        if engine == "pyarrow":
-            pytest.xfail("https://github.com/apache/arrow/issues/15079")
-
     tmp = str(tmpdir)
     if df.index.name is None:
         df.index.name = "index"
@@ -1644,7 +1636,7 @@ def check_compression(engine, filename, compression):
                 assert column.total_compressed_size != column.total_uncompressed_size
 
 
-@pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
+@pytest.mark.parametrize("compression", [None, "gzip", "snappy"])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
 
@@ -1658,7 +1650,7 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     check_compression(engine, fn, compression)
 
 
-@pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
+@pytest.mark.parametrize("compression", [None, "gzip", "snappy"])
 def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
 

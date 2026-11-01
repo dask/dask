@@ -3433,7 +3433,7 @@ class DataFrame(FrameBase):
         A common case is when we have a datetime column that we know to be
         sorted and is cleanly divided by day.  We can set this index for free
         by specifying both that the column is pre-sorted and the particular
-        divisions along which is is separated
+        divisions along which it is separated
 
         >>> import pandas as pd
         >>> divisions = pd.date_range(start="2021-01-01", end="2021-01-07", freq='1D')
@@ -4227,7 +4227,7 @@ class Series(FrameBase):
                 if meta is None:
                     warnings.warn(meta_warning(meta, method="map"))
                 return new_collection(
-                    expr.MapAlign(self, arg, op=None, na_action=na_action, meta=meta)
+                    expr.MapAlign(self, arg, na_action=na_action, meta=meta)
                 )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)

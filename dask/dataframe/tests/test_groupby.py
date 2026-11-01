@@ -40,46 +40,16 @@ if PANDAS_GE_220 and not PANDAS_GE_300:
 
 AGG_FUNCS = [
     "sum",
-    pytest.param(
-        "mean",
-        marks=pytest.mark.xfail(
-            reason="numeric_only=False not implemented",
-            strict=False,
-        ),
-    ),
+    "mean",
     "median",
     "min",
     "max",
     "count",
     "size",
-    pytest.param(
-        "std",
-        marks=pytest.mark.xfail(
-            reason="numeric_only=False not implemented",
-            strict=False,
-        ),
-    ),
-    pytest.param(
-        "var",
-        marks=pytest.mark.xfail(
-            reason="numeric_only=False not implemented",
-            strict=False,
-        ),
-    ),
-    pytest.param(
-        "cov",
-        marks=pytest.mark.xfail(
-            reason="numeric_only=False not implemented",
-            strict=False,
-        ),
-    ),
-    pytest.param(
-        "corr",
-        marks=pytest.mark.xfail(
-            reason="numeric_only=False not implemented",
-            strict=False,
-        ),
-    ),
+    "std",
+    "var",
+    "cov",
+    "corr",
     "nunique",
     "first",
     "last",
@@ -274,22 +244,23 @@ def test_groupby_on_index(scheduler):
             )
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize(
-    "grouper",
+    "grouper_id,grouper",
     [
-        lambda df: df.groupby("a")["b"],
-        lambda df: df.groupby(["a", "b"]),
-        lambda df: df.groupby(["a", "b"])["c"],
-        lambda df: df.groupby(df["a"])[["b", "c"]],
-        lambda df: df.groupby("a")[["b", "c"]],
-        lambda df: df.groupby("a")[["b"]],
-        lambda df: df.groupby(["a", "b", "c"]),
+        (0, lambda df: df.groupby("a")["b"]),
+        (1, lambda df: df.groupby(["a", "b"])),
+        (2, lambda df: df.groupby(["a", "b"])["c"]),
+        (3, lambda df: df.groupby(df["a"])[["b", "c"]]),
+        (4, lambda df: df.groupby("a")[["b", "c"]]),
+        (5, lambda df: df.groupby("a")[["b"]]),
+        (6, lambda df: df.groupby(["a", "b", "c"])),
     ],
 )
-def test_groupby_multilevel_getitem(grouper, agg_func):
+def test_groupby_multilevel_getitem(xfail, grouper_id, grouper, agg_func):
     # nunique is not implemented for DataFrameGroupBy
-    if agg_func == "nunique":
-        return
+    if agg_func == "nunique" and grouper_id in (1, 3, 4, 5, 6):
+        xfail("not implemented for DataFrameGroupBy")
 
     df = pd.DataFrame(
         {
@@ -693,9 +664,14 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-def test_groupby_reduction_split(keyword, agg_func, shuffle_method):
-    if agg_func in {"first", "last"} and shuffle_method == "disk":
-        pytest.skip(reason="https://github.com/dask/dask/issues/10034")
+def test_groupby_reduction_split(xfail, keyword, agg_func, shuffle_method):
+    if (
+        agg_func in {"first", "last"}
+        and shuffle_method == "disk"
+        and keyword == "split_out"
+    ):
+        xfail(reason="https://github.com/dask/dask/issues/10034")
+
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
     )
@@ -905,7 +881,7 @@ def test_groupby_normalize_by():
     assert d.groupby([d["a"], "b"]).by == ["a", "b"]
 
 
-def test_aggregate__single_element_groups(agg_func):
+def test_aggregate_single_element_groups(agg_func):
     spec = agg_func
 
     # nunique/cov is not supported in specs
@@ -1108,17 +1084,24 @@ def test_bfill(group_keys, limit):
 
 @pytest.mark.flaky(reruns=5)  # See https://github.com/dask/dask/issues/9793
 @pytest.mark.parametrize(
-    "grouper",
+    "grouper_id,grouper",
     [
-        lambda df: ["a"],
-        lambda df: ["a", "b"],
-        lambda df: df["a"],
-        lambda df: [df["a"], df["b"]],
-        lambda df: [df["a"] > 2, df["b"] > 1],
+        (0, lambda df: ["a"]),
+        (1, lambda df: ["a", "b"]),
+        (2, lambda df: df["a"]),
+        (3, lambda df: [df["a"], df["b"]]),
+        (4, lambda df: [df["a"] > 2, df["b"] > 1]),
     ],
 )
 @pytest.mark.parametrize("split_out", [1, 2])
-def test_dataframe_aggregations_multilevel(grouper, agg_func, split_out):
+def test_dataframe_aggregations_multilevel(
+    xfail, grouper_id, grouper, agg_func, split_out
+):
+    if agg_func in ("cov", "corr") and split_out == 1 and grouper_id == 4:
+        xfail("Unknown issue")
+    elif agg_func in ("cov", "corr") and split_out > 1:
+        xfail("https://github.com/dask/dask/issues/9509")
+
     sort = split_out == 1  # Don't sort for split_out > 1
 
     def call(g, m, **kwargs):
@@ -1150,8 +1133,6 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func, split_out):
 
     # not supported by pandas
     if agg_func != "nunique":
-        if agg_func in ("cov", "corr") and split_out > 1:
-            pytest.skip("https://github.com/dask/dask/issues/9509")
         assert_eq(
             call(pdf.groupby(grouper(pdf), sort=sort)[["c", "d"]], agg_func),
             call(
@@ -2688,22 +2669,15 @@ def test_groupby_large_ints_exception(backend):
 
 
 @pytest.mark.parametrize("by", ["a", "b", "c", ["a", "b"], ["a", "c"]])
-# TODO: Remove the need for `strict=False` below
 @pytest.mark.parametrize(
     "agg",
     [
         "count",
         pytest.param(
-            "mean",
-            marks=pytest.mark.xfail(
-                reason="numeric_only=False not implemented", strict=False
-            ),
+            "mean", marks=pytest.mark.xfail(reason="numeric_only=False not implemented")
         ),
         pytest.param(
-            "std",
-            marks=pytest.mark.xfail(
-                reason="numeric_only=False not implemented", strict=False
-            ),
+            "std", marks=pytest.mark.xfail(reason="numeric_only=False not implemented")
         ),
     ],
 )
@@ -2814,20 +2788,19 @@ def test_groupby_sort_true_split_out():
 @pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])
 @pytest.mark.parametrize("observed", [True, False], ids=["observed", "unobserved"])
 def test_groupby_aggregate_categorical_observed(
-    known_cats, ordered_cats, agg_func, groupby, observed
+    xfail, agg_func, known_cats, ordered_cats, groupby, observed
 ):
-    if agg_func in ["cov", "corr", "nunique"]:
-        pytest.skip("Not implemented for DataFrameGroupBy yet.")
-    if agg_func == "median" and isinstance(groupby, str):
-        pytest.skip("Can't calculate median over categorical")
-    if agg_func == "median":
-        pytest.skip("Can't deal with unobserved cats in median at the moment")
-    if agg_func in ["sum", "count", "prod"] and groupby != "cat_1":
-        pytest.skip("Gives zeros rather than nans.")
-    if agg_func in ["std", "var"] and observed:
-        pytest.skip("Can't calculate observed with all nans")
-    if agg_func in ["sum", "prod"]:
-        pytest.xfail("Not implemented for category type with pandas 2.0")
+    if agg_func in ("cov", "corr", "nunique"):
+        xfail("Not implemented for DataFrameGroupBy yet.")
+    elif (
+        agg_func in ("mean", "median", "std", "sum", "var", "prod")
+        and groupby == "cat_1"
+    ):
+        xfail("Can't calculate over categorical")
+    elif agg_func == "median" and not observed:
+        xfail("Unknown issue")
+    elif agg_func == "prod" and not observed and not PANDAS_GE_300:
+        xfail("Fixed in Pandas 3")
 
     pdf = pd.DataFrame(
         {

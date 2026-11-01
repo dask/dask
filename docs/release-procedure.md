@@ -8,7 +8,6 @@ Releasing dask and distributed:
     are any remaining blockers. If not, comment on the issue signalling that you
     are starting the release
 
-
 *   Update release notes in docs/source/changelog.rst
     Start by using this script to autogenerate some of the changelog entries:
 
@@ -23,11 +22,28 @@ Releasing dask and distributed:
     Add any new contributors' github links to the end of the file
     (``gh pr view --json author <PR>`` is helpful for getting their usernames).
 
-*   Update the versions in all pyproject.toml
-    *   distributed version in pyproject.toml of dask/dask
-    *   dask version in distributed/pyproject.toml
-    *   pins should be >= the current version but < the next version to allow 
+*   Update dependency bounds in all pyproject.toml files
+    *   In `dask/pyproject.toml`, set the optional Distributed extra. For
+        example, for a `2026.6.0` release:
+
+            [project.optional-dependencies]
+            distributed = ["distributed >=2026.6.0,<2026.6.1"]
+
+    *   In `distributed/pyproject.toml`, set the required Dask dependency. For
+        example, for a `2026.6.0` release:
+
+            dependencies = [
+                "dask >=2026.6.0,<2026.6.1",
+                ...
+            ]
+
+    *   pins should be >= the current version but < the next version to allow
         for development installs to resolve correctly
+
+    Dask can be released while its optional `distributed` extra points at the
+    not-yet-published matching Distributed release. Distributed cannot be
+    published before the matching Dask release is available, because Dask is a
+    required dependency.
 
 *   Commit
 
@@ -37,17 +53,57 @@ Releasing dask and distributed:
 
         git tag -a YYYY.M.X -m 'Version YYYY.M.X'
 
-*   Push to GitHub
+*   Push the Dask and Distributed commits and tags to GitHub. You may push both
+    tags together; the Distributed workflow waits until the matching Dask
+    release is available on PyPI before smoke-testing and publishing.
 
         git push https://github.com/dask/dask main --tags
         git push https://github.com/dask/distributed main --tags
 
-*   Upload to PyPI
+*   Wait for the Dask `Release Publisher` workflow to complete successfully.
+    This workflow builds the wheel and source distribution, verifies that
+    `pyproject.toml` points the `distributed` extra at the matching Distributed
+    release, smoke-tests both artifacts on supported Python versions, publishes
+    them to PyPI with Trusted Publishing, and publishes the GitHub Release.
 
-        git clean -xfd
-        python -m pip install build twine
-        pyproject-build
-        twine upload dist/*
+    GitHub Actions pauses at the `pypi` environment for manual approval. Open
+    the Dask `Release Publisher` workflow at
+    https://github.com/dask/dask/actions/workflows/release-publish.yml, select
+    the active release run, and use the `Review deployments` button to approve
+    the PyPI publishing job after the build, checks, and smoke tests are green.
+    This approval gate is configured explicitly by the `publish_pypi` job's
+    `environment: pypi` setting.
+
+*   Wait for the Distributed `Release Publisher` workflow to complete
+    successfully. The Distributed workflow builds and checks artifacts, waits
+    until both `dask==YYYY.M.X` PyPI artifacts are available, verifies that
+    `distributed/pyproject.toml` points at the matching Dask release,
+    smoke-tests both artifacts, publishes them to PyPI with Trusted Publishing,
+    and publishes the GitHub Release.
+
+    GitHub Actions pauses at the `pypi` environment for manual approval. Open
+    the Distributed `Release Publisher` workflow at
+    https://github.com/dask/distributed/actions/workflows/release-publish.yml,
+    select the active release run, and use the `Review deployments` button to
+    approve the PyPI publishing job after the build, checks, PyPI wait, and
+    smoke tests are green.
+
+    During the interval between the Dask and Distributed uploads,
+    `dask[distributed]` for the new version may not resolve from PyPI because
+    the matching Distributed package is not available yet. The Distributed
+    workflow keeps this window short by waiting on PyPI before publishing. If
+    the PyPI wait times out or the Distributed publish fails, rerun it after
+    fixing the issue and before announcing the release or proceeding to
+    conda-forge.
+
+    The Dask workflow deliberately checks only the `dask[distributed]`
+    dependency bound; it does not install that extra before Distributed has
+    been published.
+
+    PyPI publishing uses `skip-existing`, so rerunning the workflow after PyPI
+    succeeds can skip the already-uploaded wheel and source distribution and
+    continue to the GitHub Release step. Inspect the PyPI publish logs on reruns
+    to distinguish expected skipped files from unexpected duplicate uploads.
 
 *   AUTOMATED PATH: Wait for [conda-forge](https://conda-forge.github.io) bots to track the
     change to PyPI. This will typically happen in an hour or two.

@@ -435,8 +435,6 @@ def test_fillna():
 @pytest.mark.parametrize("how", ("ffill", "bfill"))
 @pytest.mark.parametrize("axis", ("index", 0))
 def test_ffill_and_bfill(limit, axis, how):
-    if limit is None:
-        pytest.xfail("Need to determine partition size for Fill.before <= frame size")
     pdf = pd.DataFrame({"x": [1, 2, None, None, 5, 6]})
     df = from_pandas(pdf, npartitions=2)
     actual = getattr(df, how)(axis=axis, limit=limit)
@@ -463,9 +461,9 @@ def test_reset_index_projections(pdf):
 @pytest.mark.parametrize("periods", (1, 2))
 @pytest.mark.parametrize("freq", (None, "1h", timedelta(hours=1)))
 @pytest.mark.parametrize("axis", ("index", 0, "columns", 1))
-def test_shift(pdf, df, periods, freq, axis):
+def test_shift(xfail, pdf, df, periods, freq, axis):
     if freq and axis in ("columns", 1):
-        pytest.skip(reason="Neither dask or pandas supports freq w/ axis 1 shift")
+        xfail(reason="Neither dask or pandas supports freq w/ axis 1 shift")
 
     if freq is not None:
         pdf["time"] = pd.date_range("2000-01-01", "2000-01-02", periods=len(pdf))
@@ -1657,7 +1655,9 @@ def test_repartition_partition_size(df):
     assert all(div is not None for div in df2.divisions)
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/12275", strict=False)
+@pytest.mark.xfail(
+    reason="Very flaky https://github.com/dask/dask/issues/12275", strict=False
+)
 def test_len(df, pdf):
     df2 = df[["x"]] + 1
     assert len(df2) == len(pdf)

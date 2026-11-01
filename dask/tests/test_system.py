@@ -44,8 +44,7 @@ def test_cpu_affinity_psutil(affinity):
 @pytest.mark.parametrize(("affinity"), [{0}, {1}, {0, 1}, {0, 2}])
 def test_cpu_affinity_taskset(affinity):
     """Test that cpu_count() respects the taskset command line tool"""
-    count = len(affinity)
-    if (os.cpu_count() or 1) < count:
+    if (os.cpu_count() or 1) < max(affinity) + 1:
         raise pytest.skip("Not enough CPUs")  # pragma: no cover
 
     subprocess.check_call(
@@ -55,7 +54,7 @@ def test_cpu_affinity_taskset(affinity):
             ",".join(str(i) for i in sorted(affinity)),
             sys.executable,
             "-c",
-            f"from dask.system import CPU_COUNT; assert CPU_COUNT == {count}",
+            f"from dask.system import CPU_COUNT; assert CPU_COUNT == {len(affinity)}",
         ]
     )
 

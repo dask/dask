@@ -4,14 +4,13 @@ import warnings
 
 import pytest
 
-from dask.array.numpy_compat import NUMPY_GE_200
-
 pd = pytest.importorskip("pandas")
 
 import numpy as np
 
 import dask.array as da
 import dask.dataframe as dd
+from dask._pandas_compat import PANDAS_GE_230, PANDAS_GE_300
 from dask.dataframe.utils import assert_eq
 
 if da._array_expr_enabled():
@@ -159,7 +158,12 @@ def test_ufunc(pandas_input, ufunc):
         "real",
         "imag",
         "angle",
-        "fix",
+        pytest.param(
+            "fix",
+            marks=pytest.mark.xfail(
+                reason="fix calls floor in a way that we do not yet support"
+            ),
+        ),
         "i0",
         "sinc",
         "nan_to_num",
@@ -176,9 +180,6 @@ def test_ufunc_wrapped(ufunc):
     - np.ufunc(pd.Series) => np.ndarray
     """
     from dask.array.utils import assert_eq as da_assert_eq
-
-    if ufunc == "fix":
-        pytest.skip("fix calls floor in a way that we do not yet support")
 
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
@@ -517,30 +518,19 @@ def test_2args_with_array(ufunc, pandas, darray):
         ),
     ],
 )
-def test_ufunc_with_reduction(redfunc, ufunc, pandas):
+def test_ufunc_with_reduction(xfail, redfunc, ufunc, pandas):
     dask = dd.from_pandas(pandas, 3)
 
     np_redfunc = getattr(np, redfunc)
     np_ufunc = getattr(np, ufunc)
 
-    if (
-        NUMPY_GE_200
-        and redfunc == "prod"
-        and ufunc in ("floor", "ceil", "trunc")
-        and isinstance(pandas, pd.DataFrame)
-    ):
-        pytest.skip("Numpy started overflowing while we are casting to float")
-
-    if (
-        redfunc == "prod"
-        and ufunc in ["conj", "square", "negative", "absolute"]
-        and isinstance(pandas, pd.DataFrame)
-    ):
-        # TODO(pandas) follow pandas behaviour?
-        # starting with pandas 1.2.0, the ufunc is applied column-wise, and therefore
-        # applied on the integer columns separately, overflowing for those columns
-        # (instead of being applied on 2D ndarray that was converted to float)
-        pytest.xfail("'prod' overflowing with integer columns in pandas 1.2.0")
+    if redfunc == "prod" and isinstance(pandas, pd.DataFrame):
+        if not PANDAS_GE_300 and ufunc in ("conj", "square", "negative", "absolute"):
+            xfail("'prod' overflowing with integer columns")
+        elif (
+            PANDAS_GE_230 and not PANDAS_GE_300 and ufunc in ("ceil", "floor", "trunc")
+        ):
+            xfail("?")
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)

@@ -44,12 +44,14 @@ class MyAccessor:
     [
         (dd.Series, dd.extensions.register_series_accessor),
         (dd.DataFrame, dd.extensions.register_dataframe_accessor),
-        (dd.Index, dd.extensions.register_index_accessor),
+        pytest.param(
+            dd.Index,
+            dd.extensions.register_index_accessor,
+            marks=pytest.mark.xfail(reason="from_pandas doesn't support Index"),
+        ),
     ],
 )
 def test_register(obj, registrar):
-    if obj is dd.Index:
-        pytest.skip("from_pandas doesn't support Index")
     with ensure_removed(obj, "mine"):
         before = set(dir(obj))
         registrar("mine")(MyAccessor)

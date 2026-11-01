@@ -753,7 +753,7 @@ def test_default_search_paths():
 
 def test_config_files_order(tmp_path, monkeypatch):
     """Test that config files in different directories are read in priority order, while
-    within the the same directory are read in alphabetical order, regardless of what
+    within the same directory are read in alphabetical order, regardless of what
     order the syscalls return them in. os.listdir _typically_ returns results in
     alphabetical order but there is no guarantee in POSIX for it.
     """

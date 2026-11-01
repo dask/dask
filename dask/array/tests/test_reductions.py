@@ -1152,9 +1152,9 @@ def test_quantile_dask_q(np_func, da_func):
 @pytest.mark.parametrize("axis", [-1, 0])
 @pytest.mark.parametrize("rechunk", [True, False])
 @quantile_nanquantile
-def test_quantile_nd_q(np_func, da_func, axis, rechunk):
+def test_quantile_nd_q(xfail, np_func, da_func, axis, rechunk):
     if not NUMPY_GE_200 and np_func is np.nanquantile and axis == -1:
-        pytest.xfail("Incorrect outputs on numpy<2")
+        xfail("Incorrect outputs on numpy<2")
 
     shape = 10, 15, 20, 15
     arr = np.random.randn(*shape)

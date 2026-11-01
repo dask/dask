@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 import warnings
 
 import numpy as np
@@ -1894,34 +1895,24 @@ def test_concat5():
         )
 
 
+X86 = platform.machine().lower() in ("x86_64", "amd64")
+xfail_10558 = pytest.mark.xfail(
+    # Always fails on Pandas >=2.2 x86 (not on ARM).
+    # Mildly flaky on Pandas 2.0 and 2.1.
+    (PANDAS_GE_220 and X86) or not PANDAS_GE_220,
+    reason="https://github.com/dask/dask/issues/10558",
+    strict=PANDAS_GE_220 and X86,
+)
+
+
 @pytest.mark.parametrize(
     "known, cat_index, divisions",
     [
         (True, True, False),
-        pytest.param(
-            True,
-            False,
-            True,
-            marks=pytest.mark.xfail(
-                PANDAS_GE_220,
-                reason="https://github.com/dask/dask/issues/10558",
-                raises=AssertionError,
-                strict=False,
-            ),
-        ),
+        pytest.param(True, False, True, marks=xfail_10558),
         (True, False, False),
         (False, True, False),
-        pytest.param(
-            False,
-            False,
-            True,
-            marks=pytest.mark.xfail(
-                PANDAS_GE_220,
-                reason="https://github.com/dask/dask/issues/10558",
-                raises=AssertionError,
-                strict=False,
-            ),
-        ),
+        pytest.param(False, False, True, marks=xfail_10558),
         (False, False, False),
     ],
 )

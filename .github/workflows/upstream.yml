@@ -31,23 +31,29 @@ jobs:
     
     steps:
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Invalidate pixi lock
-        run: rm -f pixi.lock
+      - name: Reconfigure pytest-timeout
+        # No SIGALRM available on Windows
+        # Note: all changes to the source code must happen before `pixi install`
+        # or we'll build the package twice
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
 
-      - uses: prefix-dev/setup-pixi@v0
+      - uses: prefix-dev/setup-pixi@v0.10.0
         with:
-          pixi-version: v0.68.1
-          environments: ${{ matrix.environment }}
+          pixi-version: v0.72.1
+          run-install: false
           cache: false
           locked: false
 
-      - name: Reconfigure pytest-timeout
-        # No SIGALRM available on Windows
-        run: sed -i.bak 's/timeout_method = "thread"/timeout_method = "signal"/' pyproject.toml
+      - name: pixi update
+        run: pixi update -e ${{ matrix.environment }}
+
+      - name: pixi install
+        run: pixi install -e ${{ matrix.environment }}
 
       - name: Run tests
         id: run_tests
@@ -59,11 +65,11 @@ jobs:
           && github.event_name != 'pull_request'
           && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: scientific-python/issue-from-pytest-log-action@v1.5.0
+        uses: scientific-python/issue-from-pytest-log-action@v1.6.1
         with:
           log-path: output-log.jsonl
           issue-title: ⚠️ Upstream CI failed ⚠️
           issue-label: upstream
 
       - name: Coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7

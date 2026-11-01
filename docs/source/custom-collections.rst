@@ -251,7 +251,7 @@ add corresponding method versions of these, you can subclass from
 Expressions to define computation
 ---------------------------------
 
-It is recommended to define dask graphs using the :class:`dask.expr.Expr` class.
+It is recommended to define dask graphs using the :class:`dask.Expr` class.
 To get started, a minimal set of methods have to be implemented.
 
 .. autoclass:: dask.Expr
@@ -272,7 +272,7 @@ elements of ``dask.delayed``:
 
     import dask
     from dask.base import DaskMethodsMixin, replace_name_in_key
-    from dask.expr import Expr, LLGExpr
+    from dask._expr import Expr, LLGExpr
     from dask.typing import Key
     from dask.task_spec import Task, DataNode, Alias
 

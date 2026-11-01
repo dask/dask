@@ -50,7 +50,7 @@ def _drop_mean(df, col=None):
         df.at["mean", col] = np.nan
         df.dropna(how="all", inplace=True)
     elif isinstance(df, pd.Series):
-        df.drop(labels=["mean"], inplace=True, errors="ignore")
+        df = df.drop(labels=["mean"], errors="ignore")
     else:
         raise NotImplementedError("Expected Series or DataFrame with mean")
     return df

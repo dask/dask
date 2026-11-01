@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import os
 import re
-import sys
 from functools import partial
 from operator import add, neg
 
@@ -230,11 +229,6 @@ def test_to_graphviz_with_unconnected_node():
         ("svg", SVG),
     ],
 )
-@pytest.mark.xfail(
-    sys.platform == "win32",
-    reason="graphviz/pango on conda-forge currently broken for windows",
-    strict=False,
-)
 def test_dot_graph(tmpdir, format, typ):
     # Use a name that the shell would interpret specially to ensure that we're
     # not vulnerable to shell injection when interacting with `dot`.
@@ -262,11 +256,6 @@ def test_dot_graph(tmpdir, format, typ):
         ("svg", SVG),
     ],
 )
-@pytest.mark.xfail(
-    sys.platform == "win32",
-    reason="graphviz/pango on conda-forge currently broken for windows",
-    strict=False,
-)
 def test_dot_graph_no_filename(tmpdir, format, typ):
     before = tmpdir.listdir()
     result = dot_graph(dsk, filename=None, format=format)
@@ -276,11 +265,6 @@ def test_dot_graph_no_filename(tmpdir, format, typ):
     assert isinstance(result, typ)
 
 
-@pytest.mark.xfail(
-    sys.platform == "win32",
-    reason="graphviz/pango on conda-forge currently broken for windows",
-    strict=False,
-)
 def test_dot_graph_defaults():
     # Test with default args.
     default_name = "mydask"
@@ -316,11 +300,6 @@ def test_cytoscape_graph(tmpdir):
         ("mydaskpdf", None, "mydaskpdf.png", Image),
         ("mydask.pdf.svg", None, "mydask.pdf.svg", SVG),
     ],
-)
-@pytest.mark.xfail(
-    sys.platform == "win32",
-    reason="graphviz/pango on conda-forge currently broken for windows",
-    strict=False,
 )
 def test_filenames_and_formats(tmpdir, filename, format, target, expected_result_type):
     result = dot_graph(dsk, filename=str(tmpdir.join(filename)), format=format)

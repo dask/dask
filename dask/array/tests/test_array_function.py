@@ -98,18 +98,15 @@ def test_array_notimpl_function_dask(func):
         func(y)
 
 
-@pytest.mark.parametrize(
-    "func", [lambda x: np.real(x), lambda x: np.imag(x), lambda x: np.transpose(x)]
-)
-def test_array_function_sparse(func):
+@pytest.mark.parametrize("func", [np.real, np.imag, np.transpose])
+def test_array_function_sparse(xfail, func):
     sparse = pytest.importorskip("sparse")
-    if Version(sparse.__version__) == Version("0.15.2"):
-        pytest.skip(reason="https://github.com/pydata/sparse/issues/682")
+    if Version(sparse.__version__) == Version("0.15.2") and func in (np.real, np.imag):
+        xfail(reason="https://github.com/pydata/sparse/issues/682")
+
     x = da.random.default_rng().random((500, 500), chunks=(100, 100))
     x[x < 0.9] = 0
-
     y = x.map_blocks(sparse.COO)
-
     assert_eq(func(x), func(y))
 
 

@@ -2208,9 +2208,9 @@ def test_unravel_index():
         ([1, [2, 3], [[1, 2], [3, 4], [5, 6], [7, 8]]], None, dict(dims=(8, 9, 10))),
     ],
 )
-def test_ravel_multi_index(asarray, arr, chunks, kwargs):
+def test_ravel_multi_index(xfail, asarray, arr, chunks, kwargs):
     if any(np.isscalar(x) for x in arr) and asarray in (np.asarray, da.from_array):
-        pytest.skip()
+        xfail("?")
 
     if asarray is da.from_array:
         arr = np.asarray(arr)

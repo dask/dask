@@ -209,7 +209,7 @@ Finally, we create and use the aggregation
    a  2
    b  4
 
-To apply :py:class:`dask.dataframe.groupby.SeriesGroupBy.nunique` to more than one
+To apply :py:meth:`dask.dataframe.api.SeriesGroupBy.nunique` to more than one
 column you can use:
 
 .. code-block:: python

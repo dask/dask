@@ -161,6 +161,10 @@ experimental configurations::
    pixi run -e py314t test-ci
    pixi run -e nightly test-ci
 
+Note that, besides Python versions, these variant environments also test a
+matrix of different versions of NumPy, Pandas, and PyArrow. See ``pixi.toml``
+for details.
+
 There are also specialty test tasks::
 
    pixi run test-spark
@@ -397,10 +401,20 @@ We encourage the use of AI and automated tools to assist in code development,
 documentation, and testing. However, we ask that contributors disclose these tools and
 use them in a way that aligns with Dask's community guidelines. In particular:
 
-- do not use tools to think or speak for you in discussions, code reviews, or any other 
+- Do not use tools to think or speak for you in discussions, code reviews, or any other
   interactions within the Dask community.
-- Before you open a PR, you (the human) must fully review, understand, and approve
-  everything that the AI agent wrote.
+- The AI agent can exclusively open _draft_ PRs that are clearly tagged as being written
+  by unsupervised AI. There is a `open-pr` agent skill that explains how.
+- You (the human) **must fully review, understand, and approve** everything that the AI
+  agent wrote. You must replace all AI-generated prose with your own human thoughts.
+- Only after your personal review and cleanup happened, you can remove the disclaimer
+  and mark the PR as ready to be reviewed.
+
+TL;DR version
+^^^^^^^^^^^^^
+
+**Maintainers will close, without reading it, any issue or PR that looks written by
+AI.** First draft written by AI is OK. Final PR is not.
 
 
 .. _Sphinx: https://www.sphinx-doc.org/

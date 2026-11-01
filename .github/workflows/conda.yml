@@ -18,13 +18,13 @@ jobs:
     name: Build (and upload)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: prefix-dev/setup-pixi@v0
+      - uses: prefix-dev/setup-pixi@v0.10.0
         with:
-          pixi-version: v0.68.1
+          pixi-version: v0.72.1
           environments: build
           cache: true
           locked: true

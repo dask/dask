@@ -60,7 +60,7 @@ dataframe = [
     "pandas >= 2.0",
     "pyarrow >= 16.0",
 ]
-distributed = ["distributed >= 2026.3.0,<2026.3.1"]
+distributed = ["distributed >= 2026.8.0,<2026.8.1"]
 diagnostics = [
     "bokeh >= 3.1.0",
     "jinja2 >= 2.10.3",
@@ -170,6 +170,13 @@ filterwarnings = [
     "error",
     # With no network access, distributed raises a warning when detecting local IP address
     "ignore:Couldn't detect a suitable IP address:RuntimeWarning:distributed",
+    # This distributed warning makes sense in production; much less so in GitHub actions
+    "ignore:Creating scratch directories is taking a surprisingly long time.*:UserWarning",
+    # NumPy nightly (2.6.0.dev0+) deprecated the 'generic' unit for Timedelta.
+    # pandas internally triggers this warning when constructing Timedeltas.
+    "ignore:The 'generic' unit for NumPy timedelta is deprecated:DeprecationWarning:",
+    # PyArrow nightly triggers deprecation in Pandas 3.1 nightly
+    "ignore:Series.values returning an ndarray that drops timezone information:DeprecationWarning",
     # FIXME spurious shutdown of distributed workers and/or sqlite3
     "module:Exception ignored:pytest.PytestUnraisableExceptionWarning::",
     "module:unclosed database in <sqlite3.Connection:ResourceWarning::",

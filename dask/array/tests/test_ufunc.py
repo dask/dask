@@ -151,9 +151,10 @@ unary_ufuncs = [
 
 
 @pytest.mark.parametrize("ufunc", unary_ufuncs)
-def test_unary_ufunc(ufunc):
+def test_unary_ufunc(xfail, ufunc):
     if ufunc == "fix":
-        pytest.skip("fix calls floor in a way that we do not yet support")
+        xfail("fix calls floor in a way that we do not yet support")
+
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 

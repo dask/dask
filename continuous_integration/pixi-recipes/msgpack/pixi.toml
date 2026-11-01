@@ -1,6 +1,0 @@
-[workspace]
-channels = ["https://prefix.dev/conda-forge"]
-preview = ["pixi-build"]
-
-[package.build]
-backend = { name = "pixi-build-rattler-build", version = "*" }
