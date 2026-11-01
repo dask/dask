@@ -5,6 +5,27 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2026.8.0:
+
+2026.8.0
+--------
+
+Highlights
+^^^^^^^^^^
+
+- Compatibility with Bokeh 3.10 (:pr:`9351`)
+
+.. dropdown:: Additional changes
+
+   - docs: fix duplicated-word typos in docstrings (:pr:`12516) \`Sreekant Baheti\`_
+   - Bump scientific-python/issue-from-pytest-log-action from 1.6.0 to 1.6.1 (:pr:`12524) \`dependabot[bot]\`_
+   - docs: fix broken cross-references in expr-system docs (:pr:`12494) \`Ritika shrestha\`_
+   - Suppress Pandas4Warning in nightly CI caused by PyArrow (:pr:`12498) \`Guido Imperiale\`_
+   - Fix pixi compatibility with upstream distributed (:pr:`12497) \`Guido Imperiale\`_
+   - Update guidance on AI-assisted PRs (:pr:`12496) \`Guido Imperiale\`_
+   - Bump scientific-python/issue-from-pytest-log-action from 1.5.0 to 1.6.0 (:pr:`12490) \`dependabot[bot]\`_
+   - Bump astral-sh/setup-uv from 8.2.0 to 8.3.0 (:pr:`12491) \`dependabot[bot]\`_
+
 .. _v2026.7.0:
 
 2026.7.0
