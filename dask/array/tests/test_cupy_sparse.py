@@ -80,10 +80,12 @@ def test_sparse_concatenate(axis):
 def test_sparse_dot(sp_format, input_sizes):
     pytest.importorskip("cupyx")
 
-    if sp_format == "csr":
-        sp_matrix = cupyx.scipy.sparse.csr_matrix
-    elif sp_format == "csc":
-        sp_matrix = cupyx.scipy.sparse.csc_matrix
+    sp_matrices = {
+        "csr": cupyx.scipy.sparse.csr_matrix,
+        "csc": cupyx.scipy.sparse.csc_matrix,
+    }
+    sp_matrix = sp_matrices[sp_format]
+
     dtype = "f"
     density = 0.3
     rng = cupy.random.default_rng()

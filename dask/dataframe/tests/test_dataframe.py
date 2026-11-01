@@ -388,23 +388,7 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-@pytest.mark.parametrize(
-    "include,exclude,percentiles,subset",
-    [
-        (None, None, None, ["c", "d"]),  # numeric
-        (None, None, None, ["c", "d", "f"]),  # numeric + timedelta
-        (None, None, None, ["c", "d", "g"]),  # numeric + bool
-        (None, None, None, ["c", "d", "f", "g"]),  # numeric + bool + timedelta
-        (None, None, None, ["f", "g"]),  # bool + timedelta
-        ("all", None, None, None),
-        (["number"], None, [0.25, 0.5], None),
-        ([np.timedelta64], None, None, None),
-        (["number", get_string_dtype()], None, [0.25, 0.75], None),
-        (None, ["number", get_string_dtype()], None, None),
-        ([get_string_dtype(), "datetime", "bool"], None, None, None),
-    ],
-)
-def test_describe(include, exclude, percentiles, subset):
+def _make_describe_df():
     data = {
         "a": ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
         "c": [None, 0, 1, 2, 3, 4] * 2,
@@ -429,49 +413,77 @@ def test_describe(include, exclude, percentiles, subset):
         * 2,
         "g": [True, False, True] * 4,
     }
-
-    # Arrange
     df = pd.DataFrame(data)
     df["a"] = df["a"].astype(get_string_dtype())
+    return df
 
-    if subset is not None:
-        df = df.loc[:, subset]
 
+def _describe_expected_df(df, include=None, exclude=None, percentiles=None):
+    expected = df.describe(include=include, exclude=exclude, percentiles=percentiles)
+    if "e" in expected:
+        expected = _drop_mean(expected, "e")
+    return expected
+
+
+def _describe_series_pair(df, ddf, col, include=None, exclude=None):
+    series_kwargs = {} if PANDAS_GE_310 else {"include": include, "exclude": exclude}
+    expected = df[col].describe(**series_kwargs)
+    if col == "e":
+        expected = _drop_mean(expected)
+    actual = ddf[col].describe(**series_kwargs)
+    return expected, actual
+
+
+@pytest.mark.parametrize(
+    "subset",
+    [
+        ["c", "d"],  # numeric
+        ["c", "d", "f"],  # numeric + timedelta
+        ["c", "d", "g"],  # numeric + bool
+        ["c", "d", "f", "g"],  # numeric + bool + timedelta
+        ["f", "g"],  # bool + timedelta
+    ],
+)
+def test_describe_subset(subset):
+    df = _make_describe_df().loc[:, subset]
     ddf = dd.from_pandas(df, 2)
 
-    # Act
+    actual = ddf.describe()
+    expected = _describe_expected_df(df)
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "include,exclude,percentiles",
+    [
+        ("all", None, None),
+        (["number"], None, [0.25, 0.5]),
+        ([np.timedelta64], None, None),
+        (["number", get_string_dtype()], None, [0.25, 0.75]),
+        (None, ["number", get_string_dtype()], None),
+        ([get_string_dtype(), "datetime", "bool"], None, None),
+    ],
+)
+@pytest.mark.parametrize("col", ["a", "c", "e", "g"])
+def test_describe(include, exclude, percentiles, col):
+    df = _make_describe_df()
+    ddf = dd.from_pandas(df, 2)
+
     actual = ddf.describe(
         include=include,
         exclude=exclude,
         percentiles=percentiles,
     )
-    expected = df.describe(
+    expected = _describe_expected_df(
+        df,
         include=include,
         exclude=exclude,
         percentiles=percentiles,
     )
-
-    if "e" in expected:
-        expected = _drop_mean(expected, "e")
-
     assert_eq(actual, expected)
 
-    if PANDAS_GE_310:
-        # The 'include' and 'exclude' arguments are deprecated for Series.describe and
-        # will be removed in a future version. These arguments have no effect on Series
-        # and will be removed.
-        series_kwargs = {}
-    else:
-        series_kwargs = {"include": include, "exclude": exclude}
-
-    # Check series
-    if subset is None:
-        for col in ["a", "c", "e", "g"]:
-            expected = df[col].describe(**series_kwargs)
-            if col == "e":
-                expected = _drop_mean(expected)
-            actual = ddf[col].describe(**series_kwargs)
-            assert_eq(expected, actual)
+    expected_s, actual_s = _describe_series_pair(df, ddf, col, include, exclude)
+    assert_eq(expected_s, actual_s)
 
 
 def test_describe_without_datetime_is_numeric():

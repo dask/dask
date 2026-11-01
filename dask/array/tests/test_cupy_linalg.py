@@ -191,75 +191,64 @@ def test_tsqr(m, n, chunks, error_type):
         ),  # tall-skinny regular thin layers; recursion_depth=4
     ],
 )
-def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
+def _make_uncertain_data(m_min, n_max, chunks, vary_rows, vary_cols):
     mat = cupy.random.default_rng().random((m_min * 2, n_max))
-    m, n = m_min * 2, n_max
     mat[0:m_min, 0] += 1
     _c0 = mat[:, 0]
     _r0 = mat[0, :]
     c0 = da.from_array(_c0, chunks=m_min, name="c", asarray=False)
     r0 = da.from_array(_r0, chunks=n_max, name="r", asarray=False)
     data = da.from_array(mat, chunks=chunks, name="A", asarray=False)
+
     if vary_rows:
         data = data[c0 > 0.5, :]
         mat = mat[_c0 > 0.5, :]
-        m = mat.shape[0]
     if vary_cols:
         data = data[:, r0 > 0.5]
         mat = mat[:, _r0 > 0.5]
-        n = mat.shape[1]
 
-    # qr
-    m_q = m
-    n_q = min(m, n)
-    m_r = n_q
-    n_r = n
+    return data, mat, mat.shape[0], mat.shape[1]
 
-    # svd
-    m_u = m
-    n_u = min(m, n)
-    n_s = n_q
-    m_vh = n_q
-    n_vh = n
-    d_vh = max(m_vh, n_vh)  # full matrix returned
 
-    if error_type is None:
-        # test QR
-        q, r = da.linalg.tsqr(data)
-        q = q.compute()  # because uncertainty
-        r = r.compute()
-        assert_eq((m_q, n_q), q.shape)  # shape check
-        assert_eq((m_r, n_r), r.shape)  # shape check
-        assert_eq(mat, np.dot(q, r))  # accuracy check
-        assert_eq(
-            np.eye(n_q, n_q), np.dot(q.T, q), check_type=False
-        )  # q must be orthonormal
-        assert_eq(r, np.triu(r))  # r must be upper triangular
+def test_tsqr_uncertain_qr(m_min, n_max, chunks, vary_rows, vary_cols):
+    data, mat, m, n = _make_uncertain_data(m_min, n_max, chunks, vary_rows, vary_cols)
+    k = min(m, n)
 
-        # test SVD
-        u, s, vh = da.linalg.tsqr(data, compute_svd=True)
-        u = u.compute()  # because uncertainty
-        s = s.compute()
-        vh = vh.compute()
-        s_exact = np.linalg.svd(mat)[1]
-        assert_eq(s, s_exact)  # s must contain the singular values
-        assert_eq((m_u, n_u), u.shape)  # shape check
-        assert_eq((n_s,), s.shape)  # shape check
-        assert_eq((d_vh, d_vh), vh.shape)  # shape check
-        assert_eq(
-            np.eye(n_u, n_u), np.dot(u.T, u), check_type=False
-        )  # u must be orthonormal
-        assert_eq(
-            np.eye(d_vh, d_vh), np.dot(vh, vh.T), check_type=False
-        )  # vh must be orthonormal
-        assert_eq(
-            mat, np.dot(np.dot(u, np.diag(s)), vh[:n_q]), check_type=False
-        )  # accuracy check
-    else:
-        with pytest.raises(error_type):
-            q, r = da.linalg.tsqr(data)
-        with pytest.raises(error_type):
-            u, s, vh = da.linalg.tsqr(data, compute_svd=True)
+    q, r = da.linalg.tsqr(data)
+    q, r = q.compute(), r.compute()
+
+    assert_eq((m, k), q.shape)
+    assert_eq((k, n), r.shape)
+    assert_eq(mat, np.dot(q, r))
+    assert_eq(np.eye(k, k), np.dot(q.T, q), check_type=False)
+    assert_eq(r, np.triu(r))
+
+
+def test_tsqr_uncertain_svd(m_min, n_max, chunks, vary_rows, vary_cols):
+    data, mat, m, n = _make_uncertain_data(m_min, n_max, chunks, vary_rows, vary_cols)
+    k = min(m, n)
+    d_vh = max(k, n)
+
+    u, s, vh = da.linalg.tsqr(data, compute_svd=True)
+    u, s, vh = u.compute(), s.compute(), vh.compute()
+    s_exact = np.linalg.svd(mat)[1]
+
+    assert_eq(s, s_exact)
+    assert_eq((m, k), u.shape)
+    assert_eq((k,), s.shape)
+    assert_eq((d_vh, d_vh), vh.shape)
+    assert_eq(np.eye(k, k), np.dot(u.T, u), check_type=False)
+    assert_eq(np.eye(d_vh, d_vh), np.dot(vh, vh.T), check_type=False)
+    assert_eq(mat, np.dot(np.dot(u, np.diag(s)), vh[:k]), check_type=False)
+
+
+def test_tsqr_uncertain_error(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
+    data, _, _, _ = _make_uncertain_data(m_min, n_max, chunks, vary_rows, vary_cols)
+
+    with pytest.raises(error_type):
+        da.linalg.tsqr(data)
+    with pytest.raises(error_type):
+        da.linalg.tsqr(data, compute_svd=True)
 
 
 @pytest.mark.parametrize(

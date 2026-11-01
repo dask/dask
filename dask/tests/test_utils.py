@@ -520,8 +520,7 @@ def test_ensure_set():
     s = {1}
     assert ensure_set(s) is s
 
-    class myset(set):
-        pass
+    myset = type("myset", (set,), {})
 
     s2 = ensure_set(s, copy=True)
     s3 = ensure_set(myset(s))

@@ -229,21 +229,18 @@ def test_to_graphviz_with_unconnected_node():
         ("svg", SVG),
     ],
 )
-def test_dot_graph(tmpdir, format, typ):
-    # Use a name that the shell would interpret specially to ensure that we're
-    # not vulnerable to shell injection when interacting with `dot`.
-    filename = str(tmpdir.join("$(touch should_not_get_created.txt)"))
+def test_dot_graph(tmp_path, monkeypatch, format, typ):
+    monkeypatch.chdir(tmp_path)
+ 
+    filename = str(tmp_path / "$(touch should_not_get_created.txt)")
+    target = f"{filename}.{format}"
+ 
+    result = dot_graph(dsk, filename=filename, format=format)
+ 
+    assert not os.path.exists("should_not_get_created.txt")
+    assert os.path.isfile(target)
+    assert isinstance(result, typ)
 
-    target = ".".join([filename, format])
-    ensure_not_exists(target)
-    try:
-        result = dot_graph(dsk, filename=filename, format=format)
-
-        assert not os.path.exists("should_not_get_created.txt")
-        assert os.path.isfile(target)
-        assert isinstance(result, typ)
-    finally:
-        ensure_not_exists(target)
 
 
 @pytest.mark.parametrize(

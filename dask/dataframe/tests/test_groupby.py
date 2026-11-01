@@ -1082,21 +1082,7 @@ def test_bfill(group_keys, limit):
     )
 
 
-@pytest.mark.flaky(reruns=5)  # See https://github.com/dask/dask/issues/9793
-@pytest.mark.parametrize(
-    "grouper_id,grouper",
-    [
-        (0, lambda df: ["a"]),
-        (1, lambda df: ["a", "b"]),
-        (2, lambda df: df["a"]),
-        (3, lambda df: [df["a"], df["b"]]),
-        (4, lambda df: [df["a"] > 2, df["b"] > 1]),
-    ],
-)
-@pytest.mark.parametrize("split_out", [1, 2])
-def test_dataframe_aggregations_multilevel(
-    xfail, grouper_id, grouper, agg_func, split_out
-):
+def _check_multilevel_agg(xfail, grouper_id, grouper, agg_func, split_out, pdf, ddf):
     if agg_func in ("cov", "corr") and split_out == 1 and grouper_id == 4:
         xfail("Unknown issue")
     elif agg_func in ("cov", "corr") and split_out > 1:
@@ -1106,18 +1092,6 @@ def test_dataframe_aggregations_multilevel(
 
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
-
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
-            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
-            "d": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
-            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
-        },
-        columns=["c", "b", "a", "d"],
-    )
-
-    ddf = dd.from_pandas(pdf, npartitions=10)
 
     # covariance only works with N+1 columns
     if agg_func not in ("cov", "corr"):
@@ -1168,6 +1142,35 @@ def test_dataframe_aggregations_multilevel(
                     split_every=2,
                 ),
             )
+
+
+@pytest.mark.flaky(reruns=5)  # See https://github.com/dask/dask/issues/9793
+@pytest.mark.parametrize(
+    "grouper_id,grouper",
+    [
+        (0, lambda df: ["a"]),
+        (1, lambda df: ["a", "b"]),
+        (2, lambda df: df["a"]),
+        (3, lambda df: [df["a"], df["b"]]),
+        (4, lambda df: [df["a"] > 2, df["b"] > 1]),
+    ],
+)
+@pytest.mark.parametrize("split_out", [1, 2])
+def test_dataframe_aggregations_multilevel(
+    xfail, grouper_id, grouper, agg_func, split_out
+):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+            "d": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+
+    ddf = dd.from_pandas(pdf, npartitions=10)
+    _check_multilevel_agg(xfail, grouper_id, grouper, agg_func, split_out, pdf, ddf)
 
 
 @pytest.mark.parametrize(

@@ -240,47 +240,40 @@ def test_flip(funcname, kwargs, shape):
         assert_eq(np_r, da_r)
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        {},
-        {"axes": (1, 0)},
-        {"axes": (2, 3)},
-        {"axes": (0, 1, 2)},
-    ],
-)
-@pytest.mark.parametrize(
-    "shape",
-    [
-        tuple(),
-        (4,),
-        (4, 6),
-        (4, 6, 8),
-    ],
-)
-def test_rot90(kwargs, shape):
-    axes = kwargs.get("axes", (0, 1))
+@pytest.mark.parametrize("kwargs", [{}, {"axes": (1, 0)}])
+@pytest.mark.parametrize("shape", [(4, 6), (4, 6, 8)])
+@pytest.mark.parametrize("k", range(-3, 9))
+def test_rot90(kwargs, shape, k):
     np_a = np.random.default_rng().random(shape)
     da_a = da.from_array(np_a, chunks=2)
 
-    np_func = np.rot90
-    da_func = da.rot90
+    np_r = np.rot90(np_a, k=k, **kwargs)
+    da_r = da.rot90(da_a, k=k, **kwargs)
+    assert_eq(np_r, da_r)
 
-    try:
-        for axis in axes[:2]:
-            range(np_a.ndim)[axis]
-    except IndexError:
-        with pytest.raises(ValueError):
-            da_func(da_a, **kwargs)
-    else:
-        if len(axes) != 2 or axes[0] == axes[1]:
-            with pytest.raises(ValueError):
-                da_func(da_a, **kwargs)
-        else:
-            for k in range(-3, 9):
-                np_r = np_func(np_a, k=k, **kwargs)
-                da_r = da_func(da_a, k=k, **kwargs)
-                assert_eq(np_r, da_r)
+
+@pytest.mark.parametrize(
+    "kwargs,shape",
+    [
+        ({}, tuple()),
+        ({}, (4,)),
+        ({"axes": (1, 0)}, tuple()),
+        ({"axes": (1, 0)}, (4,)),
+        ({"axes": (2, 3)}, tuple()),
+        ({"axes": (2, 3)}, (4,)),
+        ({"axes": (2, 3)}, (4, 6)),
+        ({"axes": (2, 3)}, (4, 6, 8)),
+        ({"axes": (0, 1, 2)}, tuple()),
+        ({"axes": (0, 1, 2)}, (4,)),
+        ({"axes": (0, 1, 2)}, (4, 6)),
+        ({"axes": (0, 1, 2)}, (4, 6, 8)),
+    ],
+)
+def test_rot90_invalid(kwargs, shape):
+    np_a = np.random.default_rng().random(shape)
+    da_a = da.from_array(np_a, chunks=2)
+    with pytest.raises(ValueError):
+        da.rot90(da_a, **kwargs)
 
 
 @pytest.mark.parametrize(
