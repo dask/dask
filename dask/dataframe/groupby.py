@@ -1056,9 +1056,10 @@ def _agg_finalize(
     )
 
     # and finalize the result
-    if len({result_column for result_column, _, _ in finalize_funcs}) == len(
-        finalize_funcs
-    ):
+    duplicated_result_columns = len(
+        {result_column for result_column, _, _ in finalize_funcs}
+    ) != len(finalize_funcs)
+    if not duplicated_result_columns:
         result = collections.OrderedDict()
         for result_column, func, finalize_kwargs in finalize_funcs:
             result[result_column] = func(df, **finalize_kwargs)
@@ -1072,10 +1073,21 @@ def _agg_finalize(
         parts = []
         for result_column, func, finalize_kwargs in finalize_funcs:
             part = func(df, **finalize_kwargs)
-            part.name = result_column
-            parts.append(part)
+            # rename on a copy: the finalizer may return an object that
+            # is shared with another finalizer or with the caller
+            parts.append(part.rename(result_column))
         result = concat(parts, axis=1)
-    if columns is not None:
+    if columns is not None and not (
+        duplicated_result_columns
+        and isinstance(columns, (list, tuple, pd.Index, np.ndarray))
+        and len(set(columns)) != len(columns)
+    ):
+        # With duplicated result columns, a name-based projection whose
+        # requested labels are duplicated as well (e.g. from a duplicated
+        # column slice) would expand the result: every requested label
+        # matches every result column with that label. The positionally
+        # assembled result is already in spec order, so skip the
+        # projection in that case.
         try:
             result = result[columns]
         except KeyError:
