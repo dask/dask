@@ -1953,6 +1953,17 @@ class GroupBy:
         )
         if relabeling and result is not None:
             if order is not None:
+                if len(set(result.columns)) != len(result.columns):
+                    # The result columns are not unique, e.g. when the same
+                    # aggregation is assigned to two different output names,
+                    # so the positional reorder below cannot be expressed
+                    # with a name-based projection. Relabel the columns to
+                    # the (unique) output names in spec order first; the
+                    # reorder then only has to permute unique names.
+                    spec_order_columns = [None] * len(columns)
+                    for output_position, spec_position in enumerate(order):
+                        spec_order_columns[spec_position] = columns[output_position]
+                    result.columns = spec_order_columns
                 result = result.iloc[:, order]
             result.columns = columns
         return result

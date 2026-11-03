@@ -933,6 +933,51 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
     assert len(with_mean_finalizers) == len(with_mean_spec)
 
 
+def test_aggregate_build_agg_args__duplicated_aggregation():
+    """Repeating the identical aggregation is not a conflict, but two
+    different aggregations with the same name still are."""
+    from dask.dataframe.groupby import Aggregation, _build_agg_args
+
+    spec = [(("b", "mean"), "mean", "b"), (("b", "mean"), "mean", "b")]
+    chunks, aggs, finalizers = _build_agg_args(spec)
+
+    # the intermediates are generated only once, but every spec entry
+    # gets its own finalizer
+    assert len(chunks) == len(_build_agg_args(spec[:1])[0])
+    assert len(aggs) == len(_build_agg_args(spec[:1])[1])
+    assert len(finalizers) == len(spec)
+
+    agg1 = Aggregation("agg", lambda x: x.sum(), lambda x: x.sum())
+    agg2 = Aggregation("agg", lambda x: x.sum(), lambda x: x.mean())
+    with pytest.raises(ValueError, match="conflicting aggregation functions"):
+        _build_agg_args([(("b", "agg"), agg1, "b"), (("b", "agg"), agg2, "b")])
+
+
+def test_groupby_agg_same_aggregation_different_output_names():
+    # https://github.com/dask/dask/issues/11612
+    pdf = pd.DataFrame({"a": [1, 1, 2], "b": [4, 5, 6], "e": [7, 8, 9]})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    assert_eq(
+        pdf.groupby("a").agg(c=("b", "mean"), d=("b", "mean")),
+        ddf.groupby("a").agg(c=("b", "mean"), d=("b", "mean")),
+    )
+    # interleaved columns: the output order differs from the spec order
+    assert_eq(
+        pdf.groupby("a").agg(c=("b", "mean"), d=("e", "mean"), f=("b", "mean")),
+        ddf.groupby("a").agg(c=("b", "mean"), d=("e", "mean"), f=("b", "mean")),
+    )
+    # duplicated aggregations without new output names keep both columns
+    assert_eq(
+        pdf.groupby("a").agg({"b": ["mean", "mean"]}),
+        ddf.groupby("a").agg({"b": ["mean", "mean"]}),
+    )
+    assert_eq(
+        pdf.groupby("a")["b"].agg(["mean", "mean"]),
+        ddf.groupby("a")["b"].agg(["mean", "mean"]),
+    )
+
+
 @pytest.mark.parametrize("split_every", [1, 8])
 @pytest.mark.parametrize("split_out", [2, 32])
 def test_shuffle_aggregate(shuffle_method, split_out, split_every):

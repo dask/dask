@@ -727,11 +727,17 @@ def _build_agg_args(spec):
         np.var: "var",
     }
 
-    # check that there are no name conflicts for a single input column
+    # check that there are no name conflicts for a single input column;
+    # repeating the identical aggregation (e.g. under two different output
+    # names) is not a conflict: the intermediates are only generated once
+    # and every spec entry gets its own finalizer below
     by_name = {}
     for _, func, input_column in spec:
         key = funcname(known_np_funcs.get(func, func)), input_column
-        by_name.setdefault(key, []).append((func, input_column))
+        entry = known_np_funcs.get(func, func), input_column
+        entries = by_name.setdefault(key, [])
+        if entry not in entries:
+            entries.append(entry)
 
     for funcs in by_name.values():
         if len(funcs) != 1:
@@ -1050,11 +1056,25 @@ def _agg_finalize(
     )
 
     # and finalize the result
-    result = collections.OrderedDict()
-    for result_column, func, finalize_kwargs in finalize_funcs:
-        result[result_column] = func(df, **finalize_kwargs)
+    if len({result_column for result_column, _, _ in finalize_funcs}) == len(
+        finalize_funcs
+    ):
+        result = collections.OrderedDict()
+        for result_column, func, finalize_kwargs in finalize_funcs:
+            result[result_column] = func(df, **finalize_kwargs)
 
-    result = df.__class__(result)
+        result = df.__class__(result)
+    else:
+        # The same result column may appear multiple times, e.g. when the
+        # same aggregation is assigned to two different output names. A
+        # dict would silently drop all but one of them, so assemble the
+        # finalized columns positionally instead.
+        parts = []
+        for result_column, func, finalize_kwargs in finalize_funcs:
+            part = func(df, **finalize_kwargs)
+            part.name = result_column
+            parts.append(part)
+        result = concat(parts, axis=1)
     if columns is not None:
         try:
             result = result[columns]
