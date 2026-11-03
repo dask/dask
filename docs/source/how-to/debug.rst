@@ -178,6 +178,8 @@ inspecting these pages.  By default, these are available at
 scheduler. See `diagnosing performance docs
 <https://distributed.dask.org/en/latest/diagnosing-performance.html>`_ for more information.
 
+.. _debugging-logs:
+
 Logs
 ~~~~
 
