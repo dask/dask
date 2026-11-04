@@ -5155,6 +5155,7 @@ def read_parquet(
     filesystem="fsspec",
     engine=None,
     arrow_to_pandas=None,
+    dtypes=None,
     **kwargs,
 ):
     """
@@ -5334,6 +5335,16 @@ def read_parquet(
     arrow_to_pandas: dict, default None
         Dictionary of options to use when converting from ``pyarrow.Table`` to
         a pandas ``DataFrame`` object. Only used by the "arrow" engine.
+    dtypes : dict, default None
+        Dictionary whose keys are column names and whose values are the dtype
+        to assign the corresponding columns. Columns not present in the
+        dictionary keep the dtype inferred from the parquet metadata. This is
+        equivalent to calling ``.astype(dtypes)`` on the result, and is
+        provided as a convenience so callers can request dtypes directly on
+        read::
+
+            >>> import pandas as pd
+            >>> dd.read_parquet('data/', dtypes={"a": "int32", "b": "category"})  # doctest: +SKIP
     **kwargs: dict (of dicts)
         Options to pass through to ``engine.read_partitions`` as stand-alone
         key-word arguments. Note that these options will be ignored by the
@@ -5357,6 +5368,12 @@ def read_parquet(
 
     if not isinstance(path, str):
         path = stringify_path(path)
+
+    if dtypes is not None and not isinstance(dtypes, dict):
+        raise TypeError(
+            "dtypes must be a dict mapping column names to dtypes, "
+            f"got {type(dtypes).__name__!r} instead."
+        )
 
     kwargs["dtype_backend"] = dtype_backend
     if arrow_to_pandas:
@@ -5398,7 +5415,7 @@ def read_parquet(
                 "engine is not supported when using the pyarrow filesystem."
             )
 
-        return new_collection(
+        result = new_collection(
             ReadParquetPyarrowFS(
                 path,
                 columns=_convert_to_list(columns),
@@ -5415,8 +5432,9 @@ def read_parquet(
                 _series=isinstance(columns, str),
             )
         )
+        return result.astype(dtypes) if dtypes is not None else result
 
-    return new_collection(
+    result = new_collection(
         ReadParquetFSSpec(
             path,
             columns=_convert_to_list(columns),
@@ -5437,6 +5455,7 @@ def read_parquet(
             _series=isinstance(columns, str),
         )
     )
+    return result.astype(dtypes) if dtypes is not None else result
 
 
 def concat(
