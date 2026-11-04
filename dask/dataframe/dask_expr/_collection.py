@@ -21,6 +21,7 @@ from pandas.api.types import (
 )
 from pandas.api.types import is_scalar as pd_is_scalar
 from pandas.core.dtypes.common import is_extension_array_dtype
+from pandas.errors import MergeError
 from pyarrow import fs as pa_fs
 from tlz import first
 
@@ -2867,6 +2868,7 @@ class DataFrame(FrameBase):
         right_index=False,
         suffixes=("_x", "_y"),
         indicator=False,
+        validate=None,
         shuffle_method=None,
         npartitions=None,
         broadcast=None,
@@ -2920,6 +2922,22 @@ class DataFrame(FrameBase):
             whose merge key only appears in `left` DataFrame, "right_only" for
             observations whose merge key only appears in `right` DataFrame,
             and "both" if the observation’s merge key is found in both.
+        validate : str, optional
+            If specified, checks if merge is of specified type.
+
+            * "one_to_one" or "1:1": check if merge keys are unique in both
+              left and right datasets.
+            * "one_to_many" or "1:m": check if merge keys are unique in
+              left dataset.
+            * "many_to_one" or "m:1": check if merge keys are unique in
+              right dataset.
+            * "many_to_many" or "m:m": allowed, but does not result in checks.
+
+            Unlike in pandas, the check cannot be performed when the merge
+            is defined, because the merge keys are distributed across
+            partitions. It is evaluated as part of the graph when the
+            result is computed, and raises a ``pandas.errors.MergeError``
+            at that point if the merge keys are not unique as required.
         npartitions: int or None, optional
             The ideal number of output partitions. This is only utilised when
             performing a hash_join (merging on columns only). If ``None`` then
@@ -2974,6 +2992,7 @@ class DataFrame(FrameBase):
             right_index,
             suffixes,
             indicator,
+            validate,
             shuffle_method,
             npartitions=npartitions,
             broadcast=broadcast,
@@ -5590,6 +5609,85 @@ def melt(
     )
 
 
+# The valid ``validate`` arguments for ``merge``, mirroring pandas: each one
+# maps to the spelling pandas uses for the merge kind in its error messages
+# and to whether the merge keys of the left and of the right frame have to
+# be unique.
+_MERGE_VALIDATE_OPTIONS = {
+    "one_to_one": ("one-to-one", True, True),
+    "1:1": ("one-to-one", True, True),
+    "one_to_many": ("one-to-many", True, False),
+    "1:m": ("one-to-many", True, False),
+    "many_to_one": ("many-to-one", False, True),
+    "m:1": ("many-to-one", False, True),
+    "many_to_many": ("many-to-many", False, False),
+    "m:m": ("many-to-many", False, False),
+}
+
+
+def _validate_merge_specification(validate):
+    """Check the ``validate`` argument of a merge, mirroring pandas.
+
+    Returns the ``_MERGE_VALIDATE_OPTIONS`` entry for the argument, or None
+    if no validation was requested.
+    """
+    if validate is None:
+        return None
+    if not isinstance(validate, str) or validate not in _MERGE_VALIDATE_OPTIONS:
+        raise ValueError(
+            f'"{validate}" is not a valid argument. Valid arguments are:\n'
+            '- "1:1"\n'
+            '- "1:m"\n'
+            '- "m:1"\n'
+            '- "m:m"\n'
+            '- "one_to_one"\n'
+            '- "one_to_many"\n'
+            '- "many_to_one"\n'
+            '- "many_to_many"'
+        )
+    return _MERGE_VALIDATE_OPTIONS[validate]
+
+
+def _merge_keys(frame, on, use_index):
+    """Extract the merge keys of one side of a merge as a DataFrame."""
+    if use_index:
+        return frame.index.to_frame()
+    on = _convert_to_list(on)
+    if all(name in frame.columns for name in on):
+        return frame[on]
+    # Some of the names refer to index levels rather than columns
+    return frame.reset_index()[on]
+
+
+def _merge_keys_have_duplicates(keys):
+    """A lazy scalar that is True if the merge keys contain duplicates.
+
+    Rows whose key contains a missing value form a group of their own
+    (``dropna=False``), so repeated missing keys count as duplicates,
+    mirroring pandas.
+    """
+    counts = keys.groupby(list(keys.columns), dropna=False).size()
+    return (counts > 1).any()
+
+
+def _check_merge_keys(partition, left_duplicates, right_duplicates, kind):
+    """Partition function raising MergeError if a uniqueness check failed."""
+    if left_duplicates and right_duplicates:
+        raise MergeError(
+            "Merge keys are not unique in either left or right dataset; "
+            f"not a {kind} merge."
+        )
+    if left_duplicates:
+        raise MergeError(
+            f"Merge keys are not unique in left dataset; not a {kind} merge."
+        )
+    if right_duplicates:
+        raise MergeError(
+            f"Merge keys are not unique in right dataset; not a {kind} merge."
+        )
+    return partition
+
+
 @wraps(pd.merge)
 def merge(
     left,
@@ -5602,10 +5700,13 @@ def merge(
     right_index=False,
     suffixes=("_x", "_y"),
     indicator=False,
+    validate=None,
     shuffle_method=None,
     npartitions=None,
     broadcast=None,
 ):
+    validate_spec = _validate_merge_specification(validate)
+
     for o in [on, left_on, right_on]:
         if isinstance(o, FrameBase):
             raise NotImplementedError()
@@ -5677,6 +5778,34 @@ def merge(
             broadcast=broadcast,
         )
     )
+    if validate_spec is not None:
+        kind, check_left, check_right = validate_spec
+        if check_left or check_right:
+            # The uniqueness of the merge keys can only be decided from
+            # the data, which is distributed across partitions, so the
+            # check is added to the graph as a pair of lazy scalars that
+            # every output partition depends on. It is evaluated when the
+            # result is computed and raises there, mirroring the
+            # pandas.errors.MergeError that pandas raises eagerly.
+            left_duplicates = (
+                _merge_keys_have_duplicates(_merge_keys(left, left_on, left_index))
+                if check_left
+                else False
+            )
+            right_duplicates = (
+                _merge_keys_have_duplicates(_merge_keys(right, right_on, right_index))
+                if check_right
+                else False
+            )
+            result = result.map_partitions(
+                _check_merge_keys,
+                left_duplicates,
+                right_duplicates,
+                kind,
+                meta=result._meta,
+                enforce_metadata=False,
+                clear_divisions=True,
+            )
     if left._meta.index.name != right._meta.index.name:
         return result.rename_axis(index=result._meta.index.name)
     else:

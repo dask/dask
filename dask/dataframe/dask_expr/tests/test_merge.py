@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 import pytest
+from pandas.errors import MergeError
 
 from dask import delayed
 from dask.dataframe._compat import PANDAS_GE_220
@@ -1108,3 +1109,209 @@ def test_merged_partitions_filtered():
     # Check result
     expect = a.compute().merge(b.compute(), left_on=["y"], right_on=["yy"], how="inner")
     assert_eq(result, expect, check_index=False)
+
+
+def test_merge_validate_invalid():
+    pdf = pd.DataFrame({"x": [1, 2]})
+    df = from_pandas(pdf, 2)
+
+    with pytest.raises(ValueError, match="is not a valid argument"):
+        df.merge(df, on="x", validate="one_to_three")
+    with pytest.raises(ValueError, match="is not a valid argument"):
+        merge(df, df, on="x", validate="one_to_three")
+    # Non-string arguments are rejected the same way as in pandas
+    with pytest.raises(ValueError, match="is not a valid argument"):
+        df.merge(df, on="x", validate=5)
+
+
+@pytest.mark.parametrize("validate", ["one_to_one", "1:1"])
+def test_merge_validate_one_to_one(validate):
+    pdf_left = pd.DataFrame({"x": [1, 2, 3], "y": range(3)})
+    pdf_right = pd.DataFrame({"x": [1, 2, 3], "z": range(3)})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 2)
+
+    assert_eq(
+        df_left.merge(df_right, on="x", validate=validate),
+        pdf_left.merge(pdf_right, on="x", validate=validate),
+        check_index=False,
+    )
+
+    pdf_dup = pd.DataFrame({"x": [1, 1, 2], "y": range(3)})
+    df_dup = from_pandas(pdf_dup, 2)
+
+    # The check is lazy: defining the merge does not raise, computing it does
+    result = df_dup.merge(df_right, on="x", validate=validate)
+    with pytest.raises(
+        MergeError,
+        match="Merge keys are not unique in left dataset; not a one-to-one merge",
+    ):
+        result.compute()
+
+    with pytest.raises(
+        MergeError,
+        match="Merge keys are not unique in right dataset; not a one-to-one merge",
+    ):
+        df_left.merge(df_dup, on="x", validate=validate).compute()
+
+    with pytest.raises(
+        MergeError,
+        match="Merge keys are not unique in either left or right dataset; "
+        "not a one-to-one merge",
+    ):
+        df_dup.merge(df_dup, on="x", validate=validate).compute()
+
+
+@pytest.mark.parametrize(
+    "validate, checked_side",
+    [
+        ("one_to_many", "left"),
+        ("1:m", "left"),
+        ("many_to_one", "right"),
+        ("m:1", "right"),
+    ],
+)
+def test_merge_validate_one_to_many_and_many_to_one(validate, checked_side):
+    pdf_unique = pd.DataFrame({"x": [1, 2, 3], "y": range(3)})
+    pdf_dup = pd.DataFrame({"x": [1, 1, 2], "y": range(3)})
+    df_unique = from_pandas(pdf_unique, 2)
+    df_dup = from_pandas(pdf_dup, 2)
+
+    kind = "one-to-many" if checked_side == "left" else "many-to-one"
+    if checked_side == "left":
+        checked, unchecked = df_dup, df_unique
+        p_checked, p_unchecked = pdf_dup, pdf_unique
+    else:
+        checked, unchecked = df_unique, df_dup
+        p_checked, p_unchecked = pdf_unique, pdf_dup
+
+    # Duplicated keys on the checked side fail
+    with pytest.raises(
+        MergeError,
+        match=f"Merge keys are not unique in {checked_side} dataset; "
+        f"not a {kind} merge",
+    ):
+        checked.merge(unchecked, on="x", validate=validate).compute()
+
+    # Duplicated keys on the unchecked side are fine
+    assert_eq(
+        unchecked.merge(checked, on="x", validate=validate),
+        p_unchecked.merge(p_checked, on="x", validate=validate),
+        check_index=False,
+    )
+
+
+@pytest.mark.parametrize("validate", ["many_to_many", "m:m"])
+def test_merge_validate_many_to_many(validate):
+    pdf = pd.DataFrame({"x": [1, 1, 2], "y": range(3)})
+    df = from_pandas(pdf, 2)
+    assert_eq(
+        df.merge(df, on="x", validate=validate),
+        pdf.merge(pdf, on="x", validate=validate),
+        check_index=False,
+    )
+
+
+def test_merge_validate_keys_spanning_partitions():
+    # The duplicated key values live in different partitions, so the check
+    # has to consider the whole dataset, not individual partitions
+    pdf_left = pd.DataFrame({"x": [1, 2, 3, 1], "y": range(4)})
+    pdf_right = pd.DataFrame({"x": [1, 2, 3], "z": range(3)})
+    df_left = from_pandas(pdf_left, 3)
+    df_right = from_pandas(pdf_right, 1)
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_left.merge(df_right, on="x", validate="one_to_many").compute()
+
+
+def test_merge_validate_index():
+    pdf_left = pd.DataFrame({"y": range(3)}, index=[1, 2, 3])
+    pdf_right = pd.DataFrame({"z": range(3)}, index=[1, 2, 3])
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 2)
+    assert_eq(
+        df_left.merge(
+            df_right, left_index=True, right_index=True, validate="one_to_one"
+        ),
+        pdf_left.merge(
+            pdf_right, left_index=True, right_index=True, validate="one_to_one"
+        ),
+    )
+
+    pdf_dup = pd.DataFrame({"y": range(3)}, index=[1, 1, 2])
+    df_dup = from_pandas(pdf_dup, 2)
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_dup.merge(
+            df_right, left_index=True, right_index=True, validate="one_to_many"
+        ).compute()
+
+
+def test_merge_validate_left_on_right_on():
+    pdf_left = pd.DataFrame({"a": [1, 1, 2], "y": range(3)})
+    pdf_right = pd.DataFrame({"b": [1, 2], "z": range(2)})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 1)
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_left.merge(
+            df_right, left_on="a", right_on="b", validate="one_to_many"
+        ).compute()
+
+    pdf_left = pd.DataFrame({"a": [1, 2], "y": range(2)})
+    df_left = from_pandas(pdf_left, 2)
+    assert_eq(
+        df_left.merge(df_right, left_on="a", right_on="b", validate="one_to_one"),
+        pdf_left.merge(pdf_right, left_on="a", right_on="b", validate="one_to_one"),
+        check_index=False,
+    )
+
+
+def test_merge_validate_multiple_keys():
+    pdf_left = pd.DataFrame({"a": [1, 1, 1], "b": [1, 1, 2], "y": range(3)})
+    pdf_right = pd.DataFrame({"a": [1], "b": [1], "z": [0]})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 1)
+    # The composite key (1, 1) is duplicated even though "b" alone is not
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_left.merge(df_right, on=["a", "b"], validate="one_to_many").compute()
+
+    pdf_left = pd.DataFrame({"a": [1, 1], "b": [1, 2], "y": range(2)})
+    df_left = from_pandas(pdf_left, 2)
+    assert_eq(
+        df_left.merge(df_right, on=["a", "b"], validate="one_to_many"),
+        pdf_left.merge(pdf_right, on=["a", "b"], validate="one_to_many"),
+        check_index=False,
+    )
+
+
+def test_merge_validate_nan_keys():
+    # Mirroring pandas, repeated missing keys count as duplicates
+    pdf_left = pd.DataFrame({"x": [1.0, np.nan, np.nan], "y": range(3)})
+    pdf_right = pd.DataFrame({"x": [1.0], "z": [0]})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 1)
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_left.merge(df_right, on="x", validate="one_to_many").compute()
+
+    pdf_left = pd.DataFrame({"x": [1.0, np.nan], "y": range(2)})
+    df_left = from_pandas(pdf_left, 2)
+    assert_eq(
+        df_left.merge(df_right, on="x", validate="one_to_many"),
+        pdf_left.merge(pdf_right, on="x", validate="one_to_many"),
+        check_index=False,
+    )
+
+
+def test_merge_validate_with_indicator():
+    # The example from the original report of the missing argument
+    pdf_left = pd.DataFrame({"id": ["foo", "bar", "baz", "foo"], "value": [1, 2, 3, 5]})
+    pdf_right = pd.DataFrame(
+        {"id": ["foo", "bar", "baz", "foo"], "value": [5, 6, 7, 8]}
+    )
+    result = merge(
+        from_pandas(pdf_left, 2),
+        from_pandas(pdf_right, 2),
+        on=["id"],
+        indicator=True,
+        validate="one_to_one",
+    )
+    with pytest.raises(MergeError, match="not unique in either left or right dataset"):
+        result.compute()
