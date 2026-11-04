@@ -454,8 +454,7 @@ Expr={expr}"""
 
     def __bool__(self):
         raise ValueError(
-            f"The truth value of a {self.__class__.__name__} is ambiguous. "
-            "Use a.any() or a.all()."
+            f"The truth value of a {self.__class__.__name__} is ambiguous. Use a.any() or a.all()."
         )
 
     def __array__(self, dtype=None, **kwargs):
@@ -722,8 +721,7 @@ Expr={expr}"""
         """
         if deep is not False:
             raise ValueError(
-                "The `deep` value must be False. This is strictly a shallow copy "
-                "of the underlying computational graph."
+                "The `deep` value must be False. This is strictly a shallow copy of the underlying computational graph."
             )
         return new_collection(self.expr)
 
@@ -1374,8 +1372,7 @@ Expr={expr}"""
             != 1
         ):
             raise ValueError(
-                "Please provide exactly one of the ``npartitions=`` or "
-                "``divisions=`` keyword arguments."
+                "Please provide exactly one of the ``npartitions=`` or ``divisions=`` keyword arguments."
             )
         if divisions is not None:
             check_divisions(divisions)
@@ -2836,8 +2833,7 @@ class DataFrame(FrameBase):
                     raise ValueError("Array assignment only supports 1-D arrays")
                 if v.npartitions != result.npartitions:
                     raise ValueError(
-                        "Number of partitions do not match "
-                        f"({v.npartitions} != {result.npartitions})"
+                        f"Number of partitions do not match ({v.npartitions} != {result.npartitions})"
                     )
                 v = from_dask_array(v, index=result.index, meta=result._meta)
             else:
@@ -3114,8 +3110,7 @@ class DataFrame(FrameBase):
     def map(self, func, na_action=None, meta=None):
         if not PANDAS_GE_210:
             raise NotImplementedError(
-                f"DataFrame.map requires pandas>=2.1.0, but pandas={PANDAS_VERSION} is "
-                "installed."
+                f"DataFrame.map requires pandas>=2.1.0, but pandas={PANDAS_VERSION} is installed."
             )
         if meta is None:
             meta = expr.emulate(M.map, self, func, na_action=na_action, udf=True)
@@ -3244,10 +3239,7 @@ class DataFrame(FrameBase):
         """
         axis = self._validate_axis(axis)
         if axis == 0:
-            msg = (
-                "Dask DataFrame.apply only supports axis=1\n"
-                "  Try: df.apply(func, axis=1)"
-            )
+            msg = "Dask DataFrame.apply only supports axis=1\n  Try: df.apply(func, axis=1)"
             raise NotImplementedError(msg)
         if meta is no_default:
             meta = expr.emulate(
@@ -3489,8 +3481,7 @@ class DataFrame(FrameBase):
 
         if (sorted or not sort) and npartitions is not None:
             raise ValueError(
-                "Specifying npartitions with sort=False or sorted=True is not "
-                "supported. Call `repartition` afterwards."
+                "Specifying npartitions with sort=False or sorted=True is not supported. Call `repartition` afterwards."
             )
 
         if sorted:
@@ -5345,6 +5336,7 @@ def read_parquet(
 
             >>> import pandas as pd
             >>> dd.read_parquet('data/', dtypes={"a": "int32", "b": "category"})  # doctest: +SKIP
+
     **kwargs: dict (of dicts)
         Options to pass through to ``engine.read_partitions`` as stand-alone
         key-word arguments. Note that these options will be ignored by the
@@ -5371,8 +5363,7 @@ def read_parquet(
 
     if dtypes is not None and not isinstance(dtypes, dict):
         raise TypeError(
-            "dtypes must be a dict mapping column names to dtypes, "
-            f"got {type(dtypes).__name__!r} instead."
+            f"dtypes must be a dict mapping column names to dtypes, got {type(dtypes).__name__!r} instead."
         )
 
     kwargs["dtype_backend"] = dtype_backend
@@ -5644,8 +5635,7 @@ def merge(
     supported_how = ("left", "right", "outer", "inner", "leftsemi")
     if how not in supported_how:
         raise ValueError(
-            f"dask.dataframe.merge does not support how='{how}'."
-            f"Options are: {supported_how}."
+            f"dask.dataframe.merge does not support how='{how}'.Options are: {supported_how}."
         )
 
     if how == "leftsemi":
@@ -5721,8 +5711,7 @@ def merge_asof(
 ):
     if direction not in ["backward", "forward", "nearest"]:
         raise ValueError(
-            "Invalid merge_asof direction. Choose from 'backward'"
-            " 'forward', or 'nearest'"
+            "Invalid merge_asof direction. Choose from 'backward' 'forward', or 'nearest'"
         )
 
     kwargs = {
@@ -5750,8 +5739,7 @@ def merge_asof(
     if on is not None:
         if left_on is not None or right_on is not None:
             raise ValueError(
-                "Can only pass argument 'on' OR 'left_on' and 'right_on', not a "
-                "combination of both."
+                "Can only pass argument 'on' OR 'left_on' and 'right_on', not a combination of both."
             )
         left_on = right_on = on
         kwargs["left_on"] = left_on
@@ -6155,8 +6143,7 @@ def to_datetime(arg, meta=None, **kwargs):
                 )
         elif not (is_dataframe_like(arg) or is_series_like(arg)):
             raise NotImplementedError(
-                "dask.dataframe.to_datetime does not support "
-                "non-index-able arguments (like scalars)"
+                "dask.dataframe.to_datetime does not support non-index-able arguments (like scalars)"
             )
         else:
             meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
@@ -6347,8 +6334,7 @@ def map_overlap(
 
         if not is_datetime64_any_dtype(inferred_type):
             raise TypeError(
-                "Must have a `DatetimeIndex` when using string offset "
-                "for `before` and `after`"
+                "Must have a `DatetimeIndex` when using string offset for `before` and `after`"
             )
 
     elif not (
@@ -6466,8 +6452,7 @@ def handle_out(out, result):
 
     if out is not None and out.__class__ != result.__class__:
         raise TypeError(
-            "Mismatched types between result and out parameter. "
-            f"out={type(out)}, result={type(result)}"
+            f"Mismatched types between result and out parameter. out={type(out)}, result={type(result)}"
         )
 
     if isinstance(out, DataFrame):

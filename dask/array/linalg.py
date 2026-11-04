@@ -870,16 +870,15 @@ def qr(a, mode="reduced"):
 
     if mode not in {"reduced", "complete", "r", "raw"}:
         raise ValueError(
-            f"invalid qr mode {mode!r}. Expected one of "
-            "\"reduced\", \"complete\", \"r\", or \"raw\"."
+            f'invalid qr mode {mode!r}. Expected one of "reduced", "complete", "r", or "raw".'
         )
 
     if mode in {"complete", "raw"}:
         raise NotImplementedError(
             f"qr mode {mode!r} is not yet supported by Dask. Only the "
-            "\"reduced\" and \"r\" modes are implemented, since Dask's "
+            '"reduced" and "r" modes are implemented, since Dask\'s '
             "distributed tsqr/sfqr algorithms compute the reduced "
-            "factorization. Use mode=\"reduced\" (the default) or mode=\"r\"."
+            'factorization. Use mode="reduced" (the default) or mode="r".'
         )
 
     if len(a.chunks[1]) == 1 and len(a.chunks[0]) > 1:

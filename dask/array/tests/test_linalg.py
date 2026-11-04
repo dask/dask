@@ -422,14 +422,17 @@ def test_qr(m, n, chunks, error_type):
             q, r = qr(data)
 
 
-@pytest.mark.parametrize("m,n,chunks,mode", [
-    (10, 3, (3, 3), "reduced"),
-    (10, 3, (3, 3), "r"),
-    (3, 10, (3, 4), "reduced"),
-    (3, 10, (3, 4), "r"),
-    (6, 6, (3, 6), "reduced"),
-    (6, 6, (3, 6), "r"),
-])
+@pytest.mark.parametrize(
+    "m,n,chunks,mode",
+    [
+        (10, 3, (3, 3), "reduced"),
+        (10, 3, (3, 3), "r"),
+        (3, 10, (3, 4), "reduced"),
+        (3, 10, (3, 4), "r"),
+        (6, 6, (3, 6), "reduced"),
+        (6, 6, (3, 6), "r"),
+    ],
+)
 def test_qr_mode(m, n, chunks, mode):
     rng = np.random.default_rng(42)
     mat = rng.random((m, n))
