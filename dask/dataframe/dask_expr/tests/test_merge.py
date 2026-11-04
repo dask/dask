@@ -1237,6 +1237,15 @@ def test_merge_validate_index():
         ),
     )
 
+    # The validated merge keeps the divisions of the unvalidated one:
+    # the guard around the checked inputs does not clear them
+    unvalidated = df_left.merge(df_right, left_index=True, right_index=True)
+    validated = df_left.merge(
+        df_right, left_index=True, right_index=True, validate="one_to_one"
+    )
+    assert validated.known_divisions
+    assert validated.divisions == unvalidated.divisions
+
     pdf_dup = pd.DataFrame({"y": range(3)}, index=[1, 1, 2])
     df_dup = from_pandas(pdf_dup, 2)
     with pytest.raises(MergeError, match="not unique in left dataset"):
@@ -1528,3 +1537,202 @@ def test_merge_validate_ambiguous_key_name():
     df_right = from_pandas(pdf_right, 1)
     with pytest.raises(ValueError, match="is both an index level and a column label"):
         df_left.merge(df_right, on="k", validate="one_to_many")
+
+
+def test_merge_validate_invalid_key_combinations():
+    # Invalid key combinations are rejected by the merge itself; asking
+    # for validation must not mask that error with an internal one from
+    # the key extraction. Whatever the unvalidated call raises, the
+    # validated call raises the same type with the same message.
+    pdf_left = pd.DataFrame({"x": [1, 2], "y": range(2)})
+    pdf_right = pd.DataFrame({"x": [1, 2], "y": [3, 4], "z": range(2)})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 2)
+
+    calls = [
+        # left_on without right_on, and the mirror image
+        lambda validate: df_left.merge(df_right, left_on="x", validate=validate),
+        lambda validate: df_left.merge(df_right, right_on="x", validate=validate),
+        # on combined with left_on
+        lambda validate: df_left.merge(
+            df_right, on="x", left_on="y", validate=validate
+        ),
+        # the module-level entry point behaves the same
+        lambda validate: merge(df_left, df_right, left_on="x", validate=validate),
+    ]
+    for call in calls:
+        with pytest.raises(MergeError) as unvalidated:
+            call(None)
+        with pytest.raises(MergeError) as validated:
+            call("one_to_one")
+        assert str(validated.value) == str(unvalidated.value)
+
+    # A merge kind that only checks the well-defined side does not
+    # change the error either
+    with pytest.raises(MergeError, match='Must pass "right_on"'):
+        df_left.merge(df_right, left_on="x", validate="one_to_many")
+
+
+def test_merge_validate_multiindex_level_with_colliding_column():
+    # The left frame has a MultiIndex whose second level is named like
+    # an unrelated column. Joining on the first level is legal (the
+    # merge itself handles it); the key extraction must not materialize
+    # the unrelated level and collide with that column.
+    from dask.dataframe import from_map
+
+    index = pd.MultiIndex.from_tuples(
+        [(1, "a"), (2, "b"), (3, "c")], names=["k", "junk"]
+    )
+    pdf_left = pd.DataFrame({"junk": [100, 200, 300], "y": range(3)}, index=index)
+    pdf_right = pd.DataFrame({"k": [1, 2, 3], "z": range(3)})
+    df_left = from_map(lambda part: part, [pdf_left])
+    df_right = from_pandas(pdf_right, 2)
+    assert_eq(
+        df_left.merge(df_right, on="k", validate="one_to_one"),
+        pdf_left.merge(pdf_right, on="k", validate="one_to_one"),
+        check_index=False,
+    )
+
+    # Duplicated values in the joined-on level are still detected
+    pdf_dup = pd.DataFrame(
+        {"junk": [100, 200, 300], "y": range(3)},
+        index=pd.MultiIndex.from_tuples(
+            [(1, "a"), (1, "b"), (3, "c")], names=["k", "junk"]
+        ),
+    )
+    df_dup = from_map(lambda part: part, [pdf_dup])
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_dup.merge(df_right, on="k", validate="one_to_many").compute()
+
+
+def test_merge_validate_multiindex_unnamed_level_with_level_0_column():
+    # An unnamed MultiIndex level would be called "level_0" if it were
+    # materialized, and the frame already has a column of that name.
+    # Joining on the named level is legal and must not collide with it.
+    from dask.dataframe import from_map
+
+    index = pd.MultiIndex.from_tuples([(9, 1), (8, 2), (7, 3)], names=[None, "k"])
+    pdf_left = pd.DataFrame({"level_0": [100, 200, 300], "y": range(3)}, index=index)
+    pdf_right = pd.DataFrame({"k": [1, 2, 3], "z": range(3)})
+    df_left = from_map(lambda part: part, [pdf_left])
+    df_right = from_pandas(pdf_right, 2)
+    assert_eq(
+        df_left.merge(df_right, on="k", validate="one_to_one"),
+        pdf_left.merge(pdf_right, on="k", validate="one_to_one"),
+        check_index=False,
+    )
+
+
+def test_merge_validate_duplicate_key_names():
+    # The merge itself accepts a repeated key name; the check treats
+    # the composite key as the single repeated column
+    pdf_left = pd.DataFrame({"x": [1, 2, 3], "y": range(3)})
+    pdf_right = pd.DataFrame({"x": [1, 2, 3], "z": range(3)})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 2)
+    assert_eq(
+        df_left.merge(df_right, on=["x", "x"], validate="one_to_one"),
+        pdf_left.merge(pdf_right, on="x", validate="one_to_one"),
+        check_index=False,
+    )
+
+    pdf_dup = pd.DataFrame({"x": [1, 1, 2], "y": range(3)})
+    df_dup = from_pandas(pdf_dup, 2)
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_dup.merge(df_right, on=["x", "x"], validate="one_to_many").compute()
+
+
+def test_merge_validate_composite_categorical_keys():
+    # Unobserved category combinations produce zero-sized groups; they
+    # must not affect the uniqueness verdict for composite keys
+    categories_a = [f"a{i}" for i in range(10)]
+    categories_b = [f"b{i}" for i in range(10)]
+    pdf_left = pd.DataFrame(
+        {
+            "a": pd.Categorical(["a0", "a0", "a1"], categories=categories_a),
+            "b": pd.Categorical(["b0", "b0", "b1"], categories=categories_b),
+            "y": range(3),
+        }
+    )
+    pdf_right = pd.DataFrame(
+        {
+            "a": pd.Categorical(["a0", "a1"], categories=categories_a),
+            "b": pd.Categorical(["b0", "b1"], categories=categories_b),
+            "z": range(2),
+        }
+    )
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 2)
+    # Merging on categorical columns emits a dtype-mismatch warning that
+    # is unrelated to the validation being tested here
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        result = df_left.merge(df_right, on=["a", "b"], validate="one_to_many")
+        pdf_unique = pdf_left.iloc[[0, 2]]
+        df_unique = from_pandas(pdf_unique, 2)
+        unique_result = df_unique.merge(df_right, on=["a", "b"], validate="one_to_one")
+    # The (a0, b0) combination appears twice in the left dataset
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        result.compute()
+    assert_eq(
+        unique_result,
+        pdf_unique.merge(pdf_right, on=["a", "b"], validate="one_to_one"),
+        check_index=False,
+    )
+
+
+def test_merge_validate_left_on_right_index():
+    # One side joins on a column, the other on its (named) index
+    pdf_left = pd.DataFrame({"a": [1, 2, 3], "y": range(3)})
+    pdf_right = pd.DataFrame({"z": range(3)}, index=pd.Index([1, 2, 3], name="idx"))
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 2)
+    assert_eq(
+        df_left.merge(df_right, left_on="a", right_index=True, validate="one_to_one"),
+        pdf_left.merge(pdf_right, left_on="a", right_index=True, validate="one_to_one"),
+    )
+
+    # Duplicated keys on the column side are detected
+    pdf_dup = pd.DataFrame({"a": [1, 1, 3], "y": range(3)})
+    df_dup = from_pandas(pdf_dup, 2)
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_dup.merge(
+            df_right, left_on="a", right_index=True, validate="one_to_many"
+        ).compute()
+
+    # Duplicated keys on the index side are detected
+    pdf_dup_index = pd.DataFrame({"z": range(3)}, index=pd.Index([1, 1, 3], name="idx"))
+    df_dup_index = from_pandas(pdf_dup_index, 2)
+    with pytest.raises(MergeError, match="not unique in right dataset"):
+        df_left.merge(
+            df_dup_index, left_on="a", right_index=True, validate="one_to_one"
+        ).compute()
+
+
+def test_merge_validate_left_index_right_on():
+    # The mirror image: the left side joins on its (named) index, the
+    # right side on a column
+    pdf_left = pd.DataFrame({"y": range(3)}, index=pd.Index([1, 2, 3], name="idx"))
+    pdf_right = pd.DataFrame({"b": [1, 2, 3], "z": range(3)})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 2)
+    assert_eq(
+        df_left.merge(df_right, left_index=True, right_on="b", validate="one_to_one"),
+        pdf_left.merge(pdf_right, left_index=True, right_on="b", validate="one_to_one"),
+    )
+
+    # Duplicated keys on the index side are detected
+    pdf_dup_index = pd.DataFrame({"y": range(3)}, index=pd.Index([1, 1, 3], name="idx"))
+    df_dup_index = from_pandas(pdf_dup_index, 2)
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_dup_index.merge(
+            df_right, left_index=True, right_on="b", validate="one_to_one"
+        ).compute()
+
+    # Duplicated keys on the column side are detected
+    pdf_dup = pd.DataFrame({"b": [1, 1, 3], "z": range(3)})
+    df_dup = from_pandas(pdf_dup, 2)
+    with pytest.raises(MergeError, match="not unique in right dataset"):
+        df_left.merge(
+            df_dup, left_index=True, right_on="b", validate="many_to_one"
+        ).compute()

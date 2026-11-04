@@ -5649,11 +5649,32 @@ def _validate_merge_specification(validate):
     return _MERGE_VALIDATE_OPTIONS[validate]
 
 
+def _drop_index(partition):
+    return partition.reset_index(drop=True)
+
+
+def _reset_index_levels(partition, levels):
+    return partition.reset_index(level=levels)
+
+
 def _merge_keys(frame, on, use_index):
     """Extract the merge keys of one side of a merge as a DataFrame."""
     if use_index:
-        return frame.index.to_frame()
-    on = _convert_to_list(on)
+        keys = frame.index.to_frame()
+        # The key frame keeps the merged-on index as its own index, whose
+        # name duplicates a key column; drop it so that grouping by a key
+        # column cannot be mistaken for grouping by an index level of the
+        # same name. The frame's own index carries no information for the
+        # uniqueness check.
+        return keys.map_partitions(
+            _drop_index,
+            meta=keys._meta.reset_index(drop=True),
+            clear_divisions=True,
+        )
+    # A repeated key name carries no extra information for the uniqueness
+    # of the composite key; drop the repetitions so that the names can be
+    # used as groupby keys (the merge itself accepts repeated names).
+    on = list(dict.fromkeys(_convert_to_list(on)))
     for name in on:
         if name in frame.columns and name in frame._meta.index.names:
             # The merge itself rejects a key that is both a column and an
@@ -5663,10 +5684,23 @@ def _merge_keys(frame, on, use_index):
                 f"'{name}' is both an index level and a column label, "
                 "which is ambiguous."
             )
-    if all(name in frame.columns for name in on):
+    columns = [name for name in on if name in frame.columns]
+    levels = [name for name in on if name not in frame.columns]
+    if not levels:
         return frame[on]
-    # Some of the names refer to index levels rather than columns
-    return frame.reset_index()[on]
+    # Some of the names refer to index levels rather than columns. Crop
+    # the frame to the key columns and materialize only the levels that
+    # are joined on: materializing every level of every column could make
+    # an unrelated level collide with a column of the same name (which
+    # the merge itself handles fine) and builds a far wider intermediate
+    # frame than the keys need.
+    keys = frame[columns].map_partitions(
+        _reset_index_levels,
+        levels,
+        meta=frame._meta[columns].reset_index(level=levels),
+        clear_divisions=True,
+    )
+    return keys[on]
 
 
 def _merge_keys_have_duplicates(keys):
@@ -5789,17 +5823,25 @@ def merge(
             # before the scalars are known: if a check fails, the
             # pandas.errors.MergeError is raised instead of the join
             # materializing its (potentially huge) result.
+            # A checked side whose keys the normalization above left
+            # undefined (e.g. left_on given without right_on) is an
+            # invalid combination that the merge itself rejects when it
+            # is built below. Do not extract keys for such a side, so
+            # that the original error is raised unchanged instead of an
+            # internal error from the key extraction masking it.
+            left_keys_defined = left_index or bool(_convert_to_list(left_on))
+            right_keys_defined = right_index or bool(_convert_to_list(right_on))
             left_duplicates = (
                 _merge_keys_have_duplicates(_merge_keys(left, left_on, left_index))
-                if check_left
+                if check_left and left_keys_defined
                 else False
             )
             right_duplicates = (
                 _merge_keys_have_duplicates(_merge_keys(right, right_on, right_index))
-                if check_right
+                if check_right and right_keys_defined
                 else False
             )
-            if check_left:
+            if check_left and left_keys_defined:
                 left = left.map_partitions(
                     _check_merge_keys,
                     left_duplicates,
@@ -5809,7 +5851,7 @@ def merge(
                     enforce_metadata=False,
                     clear_divisions=False,
                 )
-            if check_right:
+            if check_right and right_keys_defined:
                 right = right.map_partitions(
                     _check_merge_keys,
                     left_duplicates,
