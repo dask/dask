@@ -838,6 +838,27 @@ def test_to_datetime():
         to_datetime(1490195805)
 
 
+def test_to_datetime_meta_is_empty_series():
+    # https://github.com/dask/dask/issues/12665
+    # The to_datetime meta keeps its inferred unit but must be zero-length
+    # like every other Series meta, so binary ops against it don't compare
+    # mismatched index lengths.
+    df = pd.DataFrame({"c0": [1], "c1": ["2000-01-01"]})
+    ddf = from_pandas(df, npartitions=1)
+
+    result = to_datetime(ddf.c1)
+    assert len(result._meta) == 0
+    assert_eq(result, pd.to_datetime(df.c1), check_names=False)
+
+    # Comparisons and other binary ops must not raise during meta evaluation
+    expected = df.c0 >= pd.to_datetime(df.c1).dt.dayofweek
+    assert_eq(ddf.c0 >= to_datetime(ddf.c1).dt.dayofweek, expected)
+    assert_eq(
+        ddf.c0 <= to_datetime(ddf.c1).dt.dayofweek,
+        df.c0 <= pd.to_datetime(df.c1).dt.dayofweek,
+    )
+
+
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_to_numeric(pdf, df):
     import dask.array as da
