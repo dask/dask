@@ -851,11 +851,12 @@ def test_to_datetime_meta_is_empty_series():
     assert_eq(result, pd.to_datetime(df.c1), check_names=False)
 
     # Comparisons and other binary ops must not raise during meta evaluation
-    expected = df.c0 >= pd.to_datetime(df.c1).dt.dayofweek
-    assert_eq(ddf.c0 >= to_datetime(ddf.c1).dt.dayofweek, expected)
+    # Use day_of_week (not deprecated dayofweek) so pandas 3.1+/4 warnings-as-errors CI passes.
+    expected = df.c0 >= pd.to_datetime(df.c1).dt.day_of_week
+    assert_eq(ddf.c0 >= to_datetime(ddf.c1).dt.day_of_week, expected)
     assert_eq(
-        ddf.c0 <= to_datetime(ddf.c1).dt.dayofweek,
-        df.c0 <= pd.to_datetime(df.c1).dt.dayofweek,
+        ddf.c0 <= to_datetime(ddf.c1).dt.day_of_week,
+        df.c0 <= pd.to_datetime(df.c1).dt.day_of_week,
     )
 
 
