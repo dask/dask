@@ -5710,7 +5710,7 @@ def _merge_keys_have_duplicates(keys):
     (``dropna=False``), so repeated missing keys count as duplicates,
     mirroring pandas.
     """
-    counts = keys.groupby(list(keys.columns), dropna=False).size()
+    counts = keys.groupby(list(keys.columns), dropna=False, observed=False).size()
     return (counts > 1).any()
 
 
