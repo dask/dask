@@ -404,23 +404,39 @@ def _cov_finalizer(df, cols, std=False):
         y = col_idx_mapping[j]
         idx = x + num_cols * y
         mul_col = f"{i}{j}"
-        ni = df[f"{i}-count"]
-        nj = df[f"{j}-count"]
+        if i == j:
+            # Diagonal: the per-column sums and counts already come
+            # from the same (complete) rows.
+            n = df[f"{i}-count"]
+            si = df[i]
+            sj = df[j]
+            sii = df[mul_col]
+            sjj = df[mul_col]
+        else:
+            # Off-diagonal: the sums, sums of squares, and counts must
+            # all come from the rows where both columns are present,
+            # matching pandas' pairwise-complete behaviour.
+            # See https://github.com/dask/dask/issues/12705
+            n = df[f"{mul_col}-n"]
+            si = df[f"{mul_col}-si"]
+            sj = df[f"{mul_col}-sj"]
+            sii = df[f"{mul_col}-sii"]
+            sjj = df[f"{mul_col}-sjj"]
 
-        n = np.sqrt(ni * nj)
         div = n - 1
         div[div < 0] = 0
-        val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
-        if std:
-            ii = f"{i}{i}"
-            jj = f"{j}{j}"
-            std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
-            std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
-            sqrt_val = np.sqrt(std_val_i * std_val_j)
-            if sqrt_val == 0:
-                val = np.nan
-            else:
-                val = val / sqrt_val
+        # Groups with fewer than 2 complete pairs have undefined
+        # covariance/correlation (NaN); silence the 0/0 warnings.
+        with np.errstate(invalid="ignore", divide="ignore"):
+            val = (df[mul_col] - si * sj / n).values[0] / div.values[0]
+            if std:
+                std_val_i = (sii - si**2 / n).values[0] / div.values[0]
+                std_val_j = (sjj - sj**2 / n).values[0] / div.values[0]
+                sqrt_val = np.sqrt(std_val_i * std_val_j)
+                if sqrt_val == 0:
+                    val = np.nan
+                else:
+                    val = val / sqrt_val
 
         vals[idx] = val
         if i != j:
@@ -442,6 +458,17 @@ def _mul_cols(df, cols):
     for i, j in it.combinations_with_replacement(cols, 2):
         col = f"{i}{j}"
         _df[col] = df[i] * df[j]
+        if i != j:
+            # Pairwise-complete aggregates: for covariance/correlation
+            # pandas only uses rows where both columns are present, so
+            # the sums, sums of squares, and counts must all come from
+            # those same rows. See https://github.com/dask/dask/issues/12705
+            both = df[i].notna() & df[j].notna()
+            _df[f"{col}-n"] = both.astype(np.int64)
+            _df[f"{col}-si"] = df[i].where(both, 0)
+            _df[f"{col}-sj"] = df[j].where(both, 0)
+            _df[f"{col}-sii"] = (df[i] ** 2).where(both, 0)
+            _df[f"{col}-sjj"] = (df[j] ** 2).where(both, 0)
 
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137

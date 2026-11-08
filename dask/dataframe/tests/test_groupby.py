@@ -1918,6 +1918,44 @@ def test_groupby_cov(columns):
         assert_eq(expected, result)
 
 
+@pytest.mark.parametrize("func", ["cov", "corr"])
+@pytest.mark.parametrize("npartitions", [2, 3])
+def test_groupby_cov_corr_missing_values(func, npartitions):
+    # https://github.com/dask/dask/issues/12705
+    # Pairwise stats must only use rows where both columns are present.
+    df = pd.DataFrame(
+        {
+            "g": [0, 0, 0, 0, 1, 1, 1, 1],
+            "x": [1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0],
+            "y": [1.0, None, 3.0, 4.0, 2.0, 4.0, None, 8.0],
+            "z": [None, 2.0, 3.0, 4.0, 1.0, 3.0, 5.0, None],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=npartitions)
+
+    expected = getattr(df.groupby("g"), func)()
+    result = getattr(ddf.groupby("g"), func)()
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize("func", ["cov", "corr"])
+def test_groupby_cov_corr_missing_values_single_pair(func):
+    # https://github.com/dask/dask/issues/12705
+    # A group with a single complete pair has undefined cov/corr (NaN).
+    df = pd.DataFrame(
+        {
+            "g": [0, 0, 0, 1, 1, 1],
+            "x": [1.0, 2.0, 3.0, 1.0, 2.0, 4.0],
+            "y": [1.0, None, None, 1.0, 2.0, None],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    expected = getattr(df.groupby("g"), func)()
+    result = getattr(ddf.groupby("g"), func)()
+    assert_eq(expected, result)
+
+
 def test_df_groupby_idxmin():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
@@ -2790,7 +2828,14 @@ def test_groupby_sort_true_split_out():
 def test_groupby_aggregate_categorical_observed(
     xfail, agg_func, known_cats, ordered_cats, groupby, observed
 ):
-    if agg_func in ("cov", "corr", "nunique"):
+    if agg_func in ("cov", "nunique"):
+        xfail("Not implemented for DataFrameGroupBy yet.")
+    elif agg_func == "corr" and (groupby == "cat_1" or not observed):
+        # Grouping by a single categorical leaves the other categorical
+        # column in the frame, which pandas itself rejects for corr,
+        # and unobserved groupings still mismatch.
+        # corr with observed=True grouped by both categoricals works
+        # since https://github.com/dask/dask/issues/12705.
         xfail("Not implemented for DataFrameGroupBy yet.")
     elif (
         agg_func in ("mean", "median", "std", "sum", "var", "prod")
