@@ -146,6 +146,27 @@ def test_sample_return_bag():
     assert isinstance(random.sample(sut, k=2), db.Bag)
 
 
+@pytest.mark.parametrize("func", [random.sample, random.choices])
+@pytest.mark.parametrize("split_every", [None, 2])
+def test_zero_size_sample_returns_empty_bag(func, split_every):
+    # https://github.com/dask/dask/issues/12691
+    seq = range(20)
+    sut = db.from_sequence(seq, npartitions=3)
+    result = func(sut, k=0, split_every=split_every)
+    assert isinstance(result, db.Bag)
+    assert list(result.compute()) == []
+
+
+@pytest.mark.parametrize("func", [random.sample, random.choices])
+@pytest.mark.parametrize("split_every", [None, 2])
+def test_zero_size_sample_empty_population(func, split_every):
+    # https://github.com/dask/dask/issues/12691
+    sut = db.from_sequence([], npartitions=3)
+    result = func(sut, k=0, split_every=split_every)
+    assert isinstance(result, db.Bag)
+    assert list(result.compute()) == []
+
+
 def test_partitions_are_coerced_to_lists():
     # https://github.com/dask/dask/issues/6906
     A = db.from_sequence([[1, 2], [3, 4, 5], [6], [7]])
