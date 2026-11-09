@@ -479,7 +479,7 @@ def _mul_cols(df, cols):
     return _df
 
 
-def _cov_chunk(df, *by, numeric_only=no_default):
+def _cov_chunk(df, *by, numeric_only=no_default, observed=None):
     """Covariance Chunk Logic
 
     Parameters
@@ -516,7 +516,11 @@ def _cov_chunk(df, *by, numeric_only=no_default):
         by = [col_mapping[k] for k in by]
         cols = cols.difference(pd.Index(by))
 
-    g = _groupby_raise_unaligned(df, by=by)
+    # Pass observed through (like _mean_chunk): without it, grouping by
+    # categorical keys materializes every unobserved combination as a
+    # zero row in the intermediates, and no downstream observed=True
+    # can drop them again, so the result would not match pandas.
+    g = _groupby_raise_unaligned(df, by=by, observed=observed)
     x = g.sum(**numeric_only_kwargs)
 
     include_groups = {"include_groups": False} if PANDAS_GE_220 else {}
@@ -524,11 +528,46 @@ def _cov_chunk(df, *by, numeric_only=no_default):
         level=-1, drop=True
     )
 
+    # groupby().apply() prunes unused categories from the result index,
+    # so per-partition intermediates would carry different categories
+    # and fail to concat for ordered categoricals. Restore the full
+    # categories (as in the sums index) so all partitions align.
+    if isinstance(mul.index, pd.MultiIndex):
+        mul.index = mul.index.set_levels(
+            [
+                level.astype(x.index.levels[i].dtype)
+                if isinstance(level, pd.CategoricalIndex)
+                else level
+                for i, level in enumerate(mul.index.levels)
+            ]
+        )
+    elif isinstance(mul.index, pd.CategoricalIndex):
+        mul.index = mul.index.astype(x.index.dtype)
+
     n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return (x, mul, n, col_mapping)
 
 
-def _cov_agg(_t, levels, ddof, std=False, sort=False):
+def _remove_unused_categories(index):
+    """Remove unused categories from the levels of an index.
+
+    ``MultiIndex`` has no ``remove_unused_categories`` method, so rebuild
+    it from its (pruned) level values.
+    """
+    if isinstance(index, pd.MultiIndex):
+        arrays = []
+        for i in range(index.nlevels):
+            level = index.get_level_values(i)
+            if isinstance(level, pd.CategoricalIndex):
+                level = level.remove_unused_categories()
+            arrays.append(level)
+        return pd.MultiIndex.from_arrays(arrays, names=index.names)
+    if isinstance(index, pd.CategoricalIndex):
+        return index.remove_unused_categories()
+    return index
+
+
+def _cov_agg(_t, levels, ddof, std=False, sort=False, observed=False):
     # sometime we get a series back from concat combiner
     t = list(_t)
 
@@ -536,14 +575,24 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     cols = sums[0].columns
     col_mapping = col_mappings[-1]
 
-    total_sums = concat(sums).groupby(level=levels, sort=sort).sum()
-    total_muls = concat(muls).groupby(level=levels, sort=sort).sum()
-    total_counts = concat(counts).groupby(level=levels).sum()
+    # Pass observed through (like _mean_agg/_var_combine): grouping by
+    # categorical index levels without it raises a FutureWarning on
+    # pandas < 3, and defaults to unobserved combinations, which would
+    # not match the requested observed=True result.
+    total_sums = concat(sums).groupby(level=levels, sort=sort, observed=observed).sum()
+    total_muls = concat(muls).groupby(level=levels, sort=sort, observed=observed).sum()
+    total_counts = concat(counts).groupby(level=levels, observed=observed).sum()
     result = (
         concat([total_sums, total_muls, total_counts], axis=1)
-        .groupby(level=levels)
+        .groupby(level=levels, observed=observed)
         .apply(_cov_finalizer, cols=cols, std=std)
     )
+
+    if observed and not PANDAS_GE_300:
+        # pandas < 3 drops unused categories from the result index of
+        # groupby(corr/cov) with observed=True, while pandas 3 keeps
+        # the full categories. Match pandas < 3 here.
+        result.index = _remove_unused_categories(result.index)
 
     inv_col_mapping = {v: k for k, v in col_mapping.items()}
     idx_vals = result.index.names

@@ -2830,10 +2830,15 @@ def test_groupby_aggregate_categorical_observed(
 ):
     if agg_func in ("cov", "nunique"):
         xfail("Not implemented for DataFrameGroupBy yet.")
-    elif agg_func == "corr" and (groupby == "cat_1" or not observed):
+    elif agg_func == "corr" and (
+        groupby == "cat_1" or (not observed and not PANDAS_GE_300)
+    ):
         # Grouping by a single categorical leaves the other categorical
-        # column in the frame, which pandas itself rejects for corr,
-        # and unobserved groupings still mismatch.
+        # column in the frame, which pandas itself rejects for corr.
+        # corr with observed=False grouped by both categoricals works
+        # on pandas 3, where groupby(corr/cov) honours observed=False;
+        # pandas < 3 ignores observed=False there and returns observed
+        # groups only, so it still mismatches.
         # corr with observed=True grouped by both categoricals works
         # since https://github.com/dask/dask/issues/12705.
         xfail("Not implemented for DataFrameGroupBy yet.")
