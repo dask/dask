@@ -535,9 +535,11 @@ def _cov_chunk(df, *by, numeric_only=no_default, observed=None):
     if isinstance(mul.index, pd.MultiIndex):
         mul.index = mul.index.set_levels(
             [
-                level.astype(x.index.levels[i].dtype)
-                if isinstance(level, pd.CategoricalIndex)
-                else level
+                (
+                    level.astype(x.index.levels[i].dtype)
+                    if isinstance(level, pd.CategoricalIndex)
+                    else level
+                )
                 for i, level in enumerate(mul.index.levels)
             ]
         )
