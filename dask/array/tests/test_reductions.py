@@ -872,6 +872,40 @@ def test_object_reduction(method):
     assert result == 1
 
 
+@pytest.mark.parametrize("func", ["min", "max", "nanmin", "nanmax", "ptp"])
+@pytest.mark.parametrize(
+    "chunks",
+    [((2, 0), (3,)), ((0, 1, 1), (3,)), ((2,), (1, 0, 2)), ((1, 0, 1), (0, 2, 1))],
+)
+@pytest.mark.parametrize("axis", [0, 1, None, (0, 1)])
+def test_min_max_empty_chunks_nd(func, chunks, axis):
+    x = np.arange(6.0).reshape(2, 3)
+    d = da.from_array(x, chunks=chunks)
+    assert_eq(getattr(da, func)(d, axis=axis), getattr(np, func)(x, axis=axis))
+    if func != "ptp":
+        assert_eq(
+            getattr(da, func)(d, axis=axis, keepdims=True, split_every=2),
+            getattr(np, func)(x, axis=axis, keepdims=True),
+        )
+
+
+@pytest.mark.parametrize("func", ["min", "max", "nanmin", "nanmax", "ptp"])
+@pytest.mark.parametrize("shape, axis", [((0, 3), 1), ((2, 0), 0), ((3, 0, 4), 2)])
+def test_min_max_empty_along_other_axis(func, shape, axis):
+    x = np.ones(shape)
+    d = da.from_array(x, chunks=2)
+    assert_eq(getattr(da, func)(d, axis=axis), getattr(np, func)(x, axis=axis))
+
+
+def test_min_max_filtered_rows():
+    x = np.arange(12.0).reshape(4, 3)
+    d = da.from_array(x, chunks=2)
+    d = d[d[:, 0] > 5].compute_chunk_sizes()
+    assert 0 in d.chunks[0]
+    assert_eq(d.max(axis=0), x[x[:, 0] > 5].max(axis=0))
+    assert_eq(da.nanmin(d, axis=1), np.nanmin(x[x[:, 0] > 5], axis=1))
+
+
 @pytest.mark.parametrize("func", ["nanmin", "nanmax"])
 def test_empty_chunk_nanmin_nanmax(func):
     # see https://github.com/dask/dask/issues/8352
