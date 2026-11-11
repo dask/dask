@@ -757,8 +757,8 @@ class ArrowDatasetEngine(Engine):
                         "The divisions of the appended dataframe overlap with "
                         "previously written divisions. If this is desired, set "
                         "``ignore_divisions=True`` to append anyway.\n"
-                        "- End of last written partition: {old_end}\n"
-                        "- Start of first new partition: {divisions[0]}"
+                        f"- End of last written partition: {old_end}\n"
+                        f"- Start of first new partition: {divisions[0]}"
                     )
 
         extra_write_kwargs = {"schema": schema, "index_cols": index_cols}
