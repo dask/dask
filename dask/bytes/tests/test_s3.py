@@ -12,8 +12,9 @@ from functools import partial
 
 import pytest
 
-# Tests in this module are not concurrent-safe.
-# Force them to run sequentially in pytest-xdist.
+# Tests in this module are not concurrent-safe: each of them uses the same
+# bucket. Force them to run sequentially in pytest-xdist. The fixtures are also
+# isolated per worker (see _worker_s3_port), so they do not rely on this mark.
 pytestmark = pytest.mark.xdist_group(name="s3")
 
 s3fs = pytest.importorskip("s3fs")
@@ -70,12 +71,22 @@ def ensure_safe_environment_variables():
         os.environ.update(saved_environ)
 
 
+def _worker_s3_port() -> int:
+    # pytest-xdist names its workers gw0, gw1, ...; outside of xdist this
+    # process behaves as gw0. Every worker runs its own moto server, as
+    # concurrent workers would otherwise trample each other's buckets.
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
+    index = worker.removeprefix("gw")
+    return 5555 + int(index) if index.isdigit() else 5555
+
+
+s3_port = _worker_s3_port()
+endpoint_uri = f"http://127.0.0.1:{s3_port}/"
+
+
 @pytest.fixture
 def s3so():
-    return dict(client_kwargs={"endpoint_url": "http://127.0.0.1:5555/"})
-
-
-endpoint_uri = "http://127.0.0.1:5555/"
+    return dict(client_kwargs={"endpoint_url": endpoint_uri})
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +100,7 @@ def s3_base():
 
         # pipe to null to avoid logging in terminal
         proc = subprocess.Popen(
-            shlex.split("moto_server s3 -p 5555"), stdout=subprocess.DEVNULL
+            shlex.split(f"moto_server s3 -p {s3_port}"), stdout=subprocess.DEVNULL
         )
 
         timeout = time.perf_counter() + 8
@@ -128,9 +139,7 @@ def s3_context(bucket=test_bucket_name, files=files):
     client.create_bucket(Bucket=bucket, ACL="public-read-write")
     for f, data in files.items():
         client.put_object(Bucket=bucket, Key=f, Body=data)
-    fs = s3fs.S3FileSystem(
-        anon=True, client_kwargs={"endpoint_url": "http://127.0.0.1:5555/"}
-    )
+    fs = s3fs.S3FileSystem(anon=True, client_kwargs={"endpoint_url": endpoint_uri})
     s3fs.S3FileSystem.clear_instance_cache()
     fs.invalidate_cache()
     try:
@@ -217,7 +226,7 @@ def s3_with_yellow_tripdata(s3):
     df.to_csv(sfile, index=False)
 
     key = "nyc-taxi/2015/yellow_tripdata_2015-01.csv"
-    client = boto3.client("s3", endpoint_url="http://127.0.0.1:5555/")
+    client = boto3.client("s3", endpoint_url=endpoint_uri)
     client.put_object(Bucket=test_bucket_name, Key=key, Body=file)
     key = "nyc-taxi/2014/yellow_tripdata_2014-{:0>2d}.csv"
 
