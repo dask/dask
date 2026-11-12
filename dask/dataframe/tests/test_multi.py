@@ -76,8 +76,8 @@ def test_sequential_joins():
     df2 = pd.DataFrame({"key": list(range(4)), "B": ["B0", "B1", "B2", "B3"]})
     df3 = pd.DataFrame({"key": list(range(1, 5)), "C": ["C0", "C1", "C2", "C3"]})
 
-    join_pd = df1.join(df2, how="inner", lsuffix="_l", rsuffix="_r")
-    multi_join_pd = join_pd.join(df3, how="inner", lsuffix="_l", rsuffix="_r")
+    join_pd = df1.join(df2, how="inner", suffixes=("_l", "_r"))
+    multi_join_pd = join_pd.join(df3, how="inner", suffixes=("_l", "_r"))
 
     # Dask version of multiple inner joins
     ddf1 = dd.from_pandas(df1, npartitions=3)
@@ -1262,7 +1262,7 @@ def test_join_by_index_patterns(how, shuffle_method):
                     shuffle_method=shuffle_method,
                 ),
                 fix_index(
-                    pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
+                    pdl.join(pdr, how=how, suffixes=("l", "r")), pdl.index.dtype
                 ),
             )
             assert_eq(
@@ -1274,7 +1274,7 @@ def test_join_by_index_patterns(how, shuffle_method):
                     shuffle_method=shuffle_method,
                 ),
                 fix_index(
-                    pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
+                    pdr.join(pdl, how=how, suffixes=("l", "r")), pdl.index.dtype
                 ),
             )
 
@@ -1284,12 +1284,12 @@ def test_join_by_index_patterns(how, shuffle_method):
 
             list_eq(
                 ddl.join(ddr, how=how, on="a", lsuffix="l", rsuffix="r"),
-                pdl.join(pdr, how=how, on="a", lsuffix="l", rsuffix="r"),
+                pdl.join(pdr, how=how, on="a", suffixes=("l", "r")),
             )
 
             list_eq(
                 ddr.join(ddl, how=how, on="c", lsuffix="l", rsuffix="r"),
-                pdr.join(pdl, how=how, on="c", lsuffix="l", rsuffix="r"),
+                pdr.join(pdl, how=how, on="c", suffixes=("l", "r")),
             )
 
             # merge with index and columns
