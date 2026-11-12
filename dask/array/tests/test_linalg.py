@@ -1015,6 +1015,37 @@ def test_svd_full_matrices_raises():
         da.linalg.svd(x, full_matrices=True)
 
 
+def test_qr_mode_complete_raises():
+    x = da.random.default_rng().random((10, 5), chunks=(5, 5))
+    with pytest.raises(NotImplementedError, match="mode='complete'"):
+        da.linalg.qr(x, mode="complete")
+
+
+def test_qr_unknown_mode_raises():
+    x = da.random.default_rng().random((10, 5), chunks=(5, 5))
+    with pytest.raises(ValueError, match="Unknown mode"):
+        da.linalg.qr(x, mode="not-a-mode")
+
+
+@pytest.mark.parametrize("shape,chunks", [((20, 10), (10, 10)), ((10, 20), (10, 20))])
+def test_qr_mode_reduced_matches_numpy(shape, chunks):
+    x = np.random.default_rng(42).random(shape)
+    dx = da.from_array(x, chunks=chunks)
+    dq, dr = da.linalg.qr(dx, mode="reduced")
+    nq, nr = np.linalg.qr(x, mode="reduced")
+    assert dq.shape == nq.shape
+    assert dr.shape == nr.shape
+    assert_eq(dq @ dr, x)
+
+
+def test_qr_mode_reduced_is_default():
+    x = da.random.default_rng().random((20, 10), chunks=(10, 10))
+    default_q, default_r = da.linalg.qr(x)
+    reduced_q, reduced_r = da.linalg.qr(x, mode="reduced")
+    assert_eq(default_q, reduced_q)
+    assert_eq(default_r, reduced_r)
+
+
 @pytest.mark.parametrize("shape", [(10, 20), (20, 10), (10, 10)])
 def test_svd_full_matrices_false(shape):
     x = np.random.default_rng().random(shape)
