@@ -538,7 +538,11 @@ def moment_agg(
     totals = _concatenate2(deepmap(lambda pair: pair["total"], pairs), axes=axis)
     Ms = _concatenate2(deepmap(lambda pair: pair["M"], pairs), axes=axis)
 
-    mu = divide(totals.sum(axis=axis, **keepdim_kw), n)
+    # ``n`` is zero for an empty or all-nan slice and equals ``ddof`` for a
+    # single sample with the default ``ddof=1``. Both quotients are ``nan``,
+    # which is what pandas returns, but the divisions themselves warn.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mu = divide(totals.sum(axis=axis, **keepdim_kw), n)
 
     with np.errstate(divide="ignore", invalid="ignore"):
         if np.issubdtype(totals.dtype, np.complexfloating):
@@ -557,7 +561,11 @@ def moment_agg(
     elif denominator is not np.ma.masked:
         denominator[denominator < 0] = np.nan
 
-    return divide(M, denominator, dtype=dtype)
+    # A zero denominator means ``n == ddof`` (a single sample with the default
+    # ``ddof=1``, for example). The quotient is then ``nan``, which is what
+    # pandas returns, but the division itself emits a RuntimeWarning.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return divide(M, denominator, dtype=dtype)
 
 
 def moment(

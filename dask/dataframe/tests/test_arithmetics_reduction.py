@@ -1449,6 +1449,30 @@ def test_std_raises_with_arrow_string_ea():
 
 
 @pytest.mark.parametrize(
+    "values",
+    [
+        pytest.param([1.0], id="single-sample"),
+        pytest.param([], id="empty"),
+        pytest.param([float("nan")], id="all-nan"),
+    ],
+)
+def test_var_std_do_not_warn_on_degenerate_inputs(values):
+    """``n == ddof`` and ``n == 0`` give ``nan`` like pandas, without a warning.
+
+    A single sample with the default ``ddof=1`` divides zero by zero, and an
+    empty slice divides by zero as well. Both results are ``nan`` in pandas,
+    so the arithmetic is right; the RuntimeWarning it used to emit is not.
+    """
+    ser = pd.Series(values, dtype="float64")
+    dser = dd.from_pandas(ser, npartitions=1)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        assert_eq(dser.var(), ser.var())
+        assert_eq(dser.std(), ser.std())
+
+
+@pytest.mark.parametrize(
     "dtype",
     [
         pytest.param(
