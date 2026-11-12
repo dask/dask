@@ -28,10 +28,10 @@ def slowadd(a, b, delay=0.1):
 
 
 def xdist_worker_port(base_port: int) -> int:
-    """Pick a TCP port that does not clash with the other xdist workers.
+    """Pick a TCP port that does not clash with the other pytest-xdist workers.
 
-    Test modules that bind a fixed port, e.g. to talk to a local server, cannot
-    run in parallel unless every worker uses a port of its own.
+    Test modules that bind a fixed port, e.g. to talk to a local server, cannot run in
+    parallel unless every worker uses a port of its own.
 
     Outside of pytest-xdist, or when the worker id does not end with a number,
     ``base_port`` is returned unchanged.

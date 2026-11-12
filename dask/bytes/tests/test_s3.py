@@ -75,7 +75,7 @@ endpoint_uri = f"http://127.0.0.1:{s3_port}/"
 
 @pytest.fixture
 def s3so():
-    return dict(client_kwargs={"endpoint_url": endpoint_uri})
+    return {"client_kwargs": {"endpoint_url": endpoint_uri}}
 
 
 @pytest.fixture(scope="module")

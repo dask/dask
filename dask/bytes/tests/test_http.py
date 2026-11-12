@@ -17,8 +17,8 @@ from dask.utils_test import xdist_worker_port
 aiohttp = pytest.importorskip("aiohttp")
 requests = pytest.importorskip("requests")
 
-# Each worker serves the same files from its own tmpdir and its own port, so
-# tests may run in parallel.
+# Each pytest-xdist worker serves the same files from its own tmpdir and its own port,
+# so tests may run in parallel.
 port = xdist_worker_port(8999)
 root = f"http://localhost:{port}/"
 
@@ -138,33 +138,28 @@ def test_ops_blocksize(dir_server):
 
 def test_errors(dir_server):
     f = open_files(root + "doesnotexist")[0]
-    with pytest.raises(errs):
-        with f as f:
-            f.read()
+    with pytest.raises(errs), f as f:
+        f.read()
     f = open_files("http://nohost/")[0]
 
     expected = FileNotFoundError
 
-    with pytest.raises(expected):
-        with f as f:
-            f.read()
+    with pytest.raises(expected), f as f:
+        f.read()
     fn = files[0]
     f = open_files(root + fn, mode="wb")[0]
-    with pytest.raises(NotImplementedError):
-        with f:
-            pass
+    with pytest.raises(NotImplementedError), f:
+        pass
     f = open_files(root + fn)[0]
-    with f as f:
-        with pytest.raises(ValueError):
-            f.seek(-1)
+    with pytest.raises(ValueError), f as f:
+        f.seek(-1)
 
 
 def test_files(dir_server):
     fs = open_files([f"{root}{f}" for f in files])
     for f, f2 in zip(fs, files):
-        with f as f:
-            with open(os.path.join(dir_server, f2), "rb") as expected:
-                assert f.read() == expected.read()
+        with open(os.path.join(dir_server, f2), "rb") as expected, f as f:
+            assert f.read() == expected.read()
 
 
 def test_open_glob(dir_server):
