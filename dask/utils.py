@@ -355,24 +355,24 @@ def tmpfile(extension="", dir=None):
 
     Notes
     -----
+    The file does not exist on entry and lives inside a fresh private (0o700)
+    temporary directory, so another local user cannot observe or claim the path
+    before the caller creates it. The directory and its contents are removed on
+    exit.
+
     This context manager is particularly useful on Windows for opening temporary files multiple times.
     """
     extension = extension.lstrip(".")
     if extension:
         extension = f".{extension}"
-    handle, filename = tempfile.mkstemp(extension, dir=dir)
-    os.close(handle)
-    os.remove(filename)
+    parent = tempfile.mkdtemp(dir=dir)
+    filename = os.path.join(parent, f"tmpfile{extension}")
 
     try:
         yield filename
     finally:
-        if os.path.exists(filename):
-            with suppress(OSError):  # sometimes we can't remove a generated temp file
-                if os.path.isdir(filename):
-                    shutil.rmtree(filename)
-                else:
-                    os.remove(filename)
+        with suppress(OSError):  # sometimes we can't remove a generated temp file
+            shutil.rmtree(parent)
 
 
 @contextmanager
