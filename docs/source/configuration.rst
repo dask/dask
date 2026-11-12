@@ -272,6 +272,14 @@ your own configuration items below to convert back and forth.
    >>> dask.config.set({"distributed.workers.memory.terminate": 0.98})
    </textarea>
 
+Logging
+-------
+
+Dask's distributed scheduler, workers, and client use Python's standard
+``logging`` module. See :ref:`debugging-logs` for configuration examples that set
+log levels for individual components and assign file and console handlers.
+
+
 Updating Configuration
 ----------------------
 
