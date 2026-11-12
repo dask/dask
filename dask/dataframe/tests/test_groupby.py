@@ -20,6 +20,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_220,
     PANDAS_GE_230,
     PANDAS_GE_300,
+    PANDAS_GE_310,
     check_observed_deprecation,
     tm,
 )
@@ -659,7 +660,8 @@ def test_split_apply_combine_on_series(empty):
     pytest.raises(KeyError, lambda: ddf.groupby("x"))
     pytest.raises(KeyError, lambda: ddf.groupby(["a", "x"]))
     pytest.raises(KeyError, lambda: ddf.groupby("a")["x"])
-    pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
+    # pandas rejects tuples with more than one element (pandas GH 23566)
+    pytest.raises(ValueError, lambda: ddf.groupby("a")["b", "x"])
     pytest.raises(KeyError, lambda: ddf.groupby("a")[["b", "x"]])
 
 
@@ -3029,7 +3031,13 @@ def test_groupby_iter_fails():
         3,
         "value",
         ["value"],
-        ("value",),
+        pytest.param(
+            ("value",),
+            marks=pytest.mark.skipif(
+                PANDAS_GE_310,
+                reason="pandas>=3.1 deprecates tuple keys in GroupBy.__getitem__",
+            ),
+        ),
         pd.Index(["value"]),
         pd.Series(["value"]),
     ],
@@ -3045,11 +3053,28 @@ def test_groupby_slice_getitem(by, slice_key):
     )
 
     ddf = dd.from_pandas(pdf, npartitions=3)
-    # pandas deprecated passing a tuple to GroupBy.__getitem__ in favour of a list.
-    # Dask still supports tuple keys, so only the pandas expectation is adapted.
-    pd_slice_key = list(slice_key) if isinstance(slice_key, tuple) else slice_key
-    expect = pdf.groupby(by)[pd_slice_key].count()
+    expect = pdf.groupby(by)[slice_key].count()
     got = ddf.groupby(by)[slice_key].count()
+    assert_eq(expect, got)
+
+
+def test_groupby_slice_getitem_tuple_key():
+    # Dask must not pre-empt pandas' handling of tuple keys. pandas>=3.1
+    # deprecates them, so the warning must surface instead of being swallowed
+    # by silently converting the tuple to a list.
+    pdf = pd.DataFrame({"key1": ["a", "b", "a"], "value": [1, 2, 3]})
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    if PANDAS_GE_310:
+        from pandas.errors import Pandas4Warning
+
+        ctx = pytest.warns(Pandas4Warning, match="Passing a tuple to __getitem__")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        expect = pdf.groupby("key1")[["value"]].count()
+        got = ddf.groupby("key1")[("value",)].count().compute()
     assert_eq(expect, got)
 
 
