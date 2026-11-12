@@ -2195,6 +2195,7 @@ def test_shape(df, pdf):
 
 def test_size(df, pdf):
     assert_eq(df.size, pdf.size)
+    assert_eq(df[[]].size, pdf[[]].size)
 
 
 def test_drop_duplicates_groupby(pdf):
