@@ -2552,6 +2552,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             categories,
             dtype_backend=None,
             convert_string=False,
+            ignore_metadata=False,
             **kwargs,
         ) -> pd.DataFrame:
             fixed_arrow_table = cls.clamp_arrow_datetimes(arrow_table)
@@ -2560,6 +2561,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
                 categories,
                 dtype_backend=dtype_backend,
                 convert_string=convert_string,
+                ignore_metadata=ignore_metadata,
                 **kwargs,
             )
 
@@ -3907,6 +3909,41 @@ def test_dtype_backend(tmp_path, dtype_backend, engine):
 
     ddf2 = dd.read_parquet(tmp_path, engine=engine, dtype_backend=dtype_backend)
     assert_eq(df, ddf2, check_index=False)
+
+
+@PYARROW_MARK
+def test_dtype_backend_preserved_when_shuffling_nested_arrow_dtype(tmp_path):
+    member_type = pa.list_(
+        pa.struct(
+            [
+                ("type", pa.string()),
+                ("ref", pa.int64()),
+                ("role", pa.string()),
+            ]
+        )
+    )
+    df = pd.DataFrame(
+        {
+            "id": pd.array([1, 1, 2, 2, 2, 3], dtype="int64[pyarrow]"),
+            "members": pd.array(
+                [
+                    [{"type": "way", "ref": 10, "role": "outer"}],
+                    None,
+                    [{"type": "node", "ref": 12, "role": ""}],
+                    None,
+                    None,
+                    None,
+                ],
+                dtype=pd.ArrowDtype(member_type),
+            ),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmp_path, write_metadata_file=False)
+
+    result = dd.read_parquet(tmp_path, dtype_backend="pyarrow").set_index("id")
+    expected = df.set_index("id")
+    pd.testing.assert_frame_equal(result.compute(), expected)
 
 
 @PYARROW_MARK
