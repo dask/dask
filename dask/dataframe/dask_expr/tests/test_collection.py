@@ -1655,9 +1655,16 @@ def test_repartition_partition_size(df):
     assert all(div is not None for div in df2.divisions)
 
 
-@pytest.mark.xfail(
-    reason="Very flaky https://github.com/dask/dask/issues/12275", strict=False
-)
+def test_len_of_partition_after_len_of_frame(df, pdf):
+    # https://github.com/dask/dask/issues/12275
+    # Taking the length of the frame must not leave concrete, unfiltered length
+    # statistics behind on the ``FromPandas`` expression: they used to be
+    # inherited by the partition-filtered expression built afterwards.
+    assert len(df) == len(pdf)
+    df2 = df[["x"]] + 1
+    assert len(df2.partitions[0]) == len(df2.partitions[0].compute())
+
+
 def test_len(df, pdf):
     df2 = df[["x"]] + 1
     assert len(df2) == len(pdf)
