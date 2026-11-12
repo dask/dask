@@ -37,7 +37,7 @@ def _calc_maybe_new_divisions(df, periods, freq):
     if isinstance(freq, str):
         freq = pd.tseries.frequencies.to_offset(freq)
 
-    is_offset = isinstance(freq, pd.DateOffset)
+    is_offset = isinstance(freq, pd.offsets.BaseOffset)
     if is_offset:
         if not isinstance(freq, (pd.offsets.Tick, pd.offsets.Day)):
             # Can't infer divisions on relative or anchored offsets, as
