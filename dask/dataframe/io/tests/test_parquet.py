@@ -984,7 +984,7 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 
     fns = glob.glob(os.path.join(tmp, "*.parquet"))
     df2 = dd.read_parquet(fns, columns=["i32"], engine=engine).compute()
-    df2.sort_values("i32", inplace=True)
+    df2 = df2.sort_values("i32")
     assert_eq(df[["i32"]], df2, check_index=False, check_divisions=False)
 
     df3 = dd.read_parquet(

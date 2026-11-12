@@ -112,13 +112,13 @@ def _write_partitioned(
     fs.mkdirs(root_path, exist_ok=True)
 
     if preserve_index:
-        df.reset_index(inplace=True)
+        df = df.reset_index()
     df = df[table.schema.names]
 
     index_cols = list(index_cols) if index_cols else []
     preserve_index = False
     if index_cols:
-        df.set_index(index_cols, inplace=True)
+        df = df.set_index(index_cols)
         preserve_index = True
 
     partition_keys = [df[col] for col in partition_cols]
@@ -616,15 +616,15 @@ class ArrowDatasetEngine(Engine):
             if index_in_columns_and_parts:
                 # User does not want to set index and a desired
                 # column/partition has been set to the index
-                df.reset_index(drop=False, inplace=True)
+                df = df.reset_index(drop=False)
             else:
                 # User does not want to set index and an
                 # "unwanted" column has been set to the index
-                df.reset_index(drop=True, inplace=True)
+                df = df.reset_index(drop=True)
         elif set(df.index.names) != set(index) and index_in_columns_and_parts:
             # The wrong index has been set and it contains
             # one or more desired columns/partitions
-            df.reset_index(drop=False, inplace=True)
+            df = df.reset_index(drop=False)
         elif index_in_columns_and_parts:
             # The correct index has already been set
             index = False
@@ -816,7 +816,7 @@ class ArrowDatasetEngine(Engine):
         _meta = None
         preserve_index = False
         if _index_in_schema(index_cols, schema):
-            df.set_index(index_cols, inplace=True)
+            df = df.set_index(index_cols)
             preserve_index = True
         else:
             index_cols = []
@@ -1153,7 +1153,7 @@ class ArrowDatasetEngine(Engine):
         column_names = list(meta.columns)
         if index_names and index_names != [None]:
             # Reset the index if non-null index name
-            meta.reset_index(inplace=True)
+            meta = meta.reset_index()
 
         # Use index specified in the pandas metadata if
         # the index column was not specified by the user
@@ -1171,7 +1171,7 @@ class ArrowDatasetEngine(Engine):
         # Set proper index for meta
         index_cols = index or ()
         if index_cols and index_cols != [None]:
-            meta.set_index(index_cols, inplace=True)
+            meta = meta.set_index(index_cols)
 
         # Ensure that there is no overlap between partition columns
         # and explicit column storage
