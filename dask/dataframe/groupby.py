@@ -727,11 +727,17 @@ def _build_agg_args(spec):
         np.var: "var",
     }
 
-    # check that there are no name conflicts for a single input column
+    # check that there are no name conflicts for a single input column;
+    # repeating the identical aggregation (e.g. under two different output
+    # names) is not a conflict: the intermediates are only generated once
+    # and every spec entry gets its own finalizer below
     by_name = {}
     for _, func, input_column in spec:
         key = funcname(known_np_funcs.get(func, func)), input_column
-        by_name.setdefault(key, []).append((func, input_column))
+        entry = known_np_funcs.get(func, func), input_column
+        entries = by_name.setdefault(key, [])
+        if entry not in entries:
+            entries.append(entry)
 
     for funcs in by_name.values():
         if len(funcs) != 1:
@@ -1050,12 +1056,38 @@ def _agg_finalize(
     )
 
     # and finalize the result
-    result = collections.OrderedDict()
-    for result_column, func, finalize_kwargs in finalize_funcs:
-        result[result_column] = func(df, **finalize_kwargs)
+    duplicated_result_columns = len(
+        {result_column for result_column, _, _ in finalize_funcs}
+    ) != len(finalize_funcs)
+    if not duplicated_result_columns:
+        result = collections.OrderedDict()
+        for result_column, func, finalize_kwargs in finalize_funcs:
+            result[result_column] = func(df, **finalize_kwargs)
 
-    result = df.__class__(result)
-    if columns is not None:
+        result = df.__class__(result)
+    else:
+        # The same result column may appear multiple times, e.g. when the
+        # same aggregation is assigned to two different output names. A
+        # dict would silently drop all but one of them, so assemble the
+        # finalized columns positionally instead.
+        parts = []
+        for result_column, func, finalize_kwargs in finalize_funcs:
+            part = func(df, **finalize_kwargs)
+            # rename on a copy: the finalizer may return an object that
+            # is shared with another finalizer or with the caller
+            parts.append(part.rename(result_column))
+        result = concat(parts, axis=1)
+    if columns is not None and not (
+        duplicated_result_columns
+        and isinstance(columns, (list, tuple, pd.Index, np.ndarray))
+        and len(set(columns)) != len(columns)
+    ):
+        # With duplicated result columns, a name-based projection whose
+        # requested labels are duplicated as well (e.g. from a duplicated
+        # column slice) would expand the result: every requested label
+        # matches every result column with that label. The positionally
+        # assembled result is already in spec order, so skip the
+        # projection in that case.
         try:
             result = result[columns]
         except KeyError:
