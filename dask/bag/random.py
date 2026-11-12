@@ -33,6 +33,10 @@ def sample(population, k, split_every=None):
     >>> list(random.sample(b, 3).compute())  # doctest: +SKIP
     [1, 3, 5]
     """
+    if k == 0:
+        # Sampling zero elements never touches the population; return an
+        # empty bag like random.sample(population, k=0) returns [].
+        return population.map_partitions(lambda _: [])
     res = _sample(population=population, k=k, split_every=split_every)
     return res.map_partitions(_finalize_sample, k)
 
@@ -59,6 +63,10 @@ def choices(population, k=1, split_every=None):
     >>> list(random.choices(b, 3).compute())  # doctest: +SKIP
     [1, 1, 5]
     """
+    if k == 0:
+        # Choosing zero elements never touches the population; return an
+        # empty bag like random.choices(population, k=0) returns [].
+        return population.map_partitions(lambda _: [])
     res = _sample_with_replacement(population=population, k=k, split_every=split_every)
     return res.map_partitions(_finalize_sample, k)
 
