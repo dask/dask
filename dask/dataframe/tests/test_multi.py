@@ -1261,9 +1261,7 @@ def test_join_by_index_patterns(how, shuffle_method):
                     rsuffix="r",
                     shuffle_method=shuffle_method,
                 ),
-                fix_index(
-                    pdl.join(pdr, how=how, suffixes=("l", "r")), pdl.index.dtype
-                ),
+                fix_index(pdl.join(pdr, how=how, suffixes=("l", "r")), pdl.index.dtype),
             )
             assert_eq(
                 ddr.join(
@@ -1273,9 +1271,7 @@ def test_join_by_index_patterns(how, shuffle_method):
                     rsuffix="r",
                     shuffle_method=shuffle_method,
                 ),
-                fix_index(
-                    pdr.join(pdl, how=how, suffixes=("l", "r")), pdl.index.dtype
-                ),
+                fix_index(pdr.join(pdl, how=how, suffixes=("l", "r")), pdl.index.dtype),
             )
 
             # temporary disabled because pandas may incorrectly raise
