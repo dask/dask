@@ -11,7 +11,7 @@ from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
 from dask.array.numpy_compat import NUMPY_GE_125, NUMPY_GE_200
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_230
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_230, PANDAS_GE_310
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
 
 try:
@@ -1466,7 +1466,7 @@ def test_reductions_with_pandas_and_arrow_ea(xfail, dtype, func):
         pytest.importorskip("scipy")
         if "pyarrow" in dtype and func == "skew" and not PANDAS_GE_220:
             xfail("skew not implemented for arrow dtypes")
-        if "pyarrow" in dtype and func == "kurtosis":
+        if "pyarrow" in dtype and func == "kurtosis" and not PANDAS_GE_310:
             xfail("kurtosis not implemented for arrow dtypes")
 
     ser = pd.Series([1, 2, 3, 4], dtype=dtype)
