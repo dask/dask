@@ -120,7 +120,7 @@ def _can_apply_blockwise(collection) -> bool:
     """Return True if _map_blocks can be sped up via blockwise operations; False
     otherwise.
 
-    FIXME this returns False for collections that wrap around around da.Array, such as
+    FIXME this returns False for collections that wrap around da.Array, such as
           pint.Quantity, xarray DataArray, Dataset, and Variable.
     """
     try:
