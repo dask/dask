@@ -101,14 +101,26 @@ class Linspace(Arange):
     def _layer(self) -> dict:
         dsk = {}
         blockstart = self.start
-        func = partial(_linspace, endpoint=self.endpoint, dtype=self.dtype)
+        last_index = len(self.chunks[0]) - 1
 
         for i, bs in enumerate(self.chunks[0]):
             bs_space = bs - 1 if self.endpoint else bs
-            blockstop = blockstart + (bs_space * self.step)
+            is_last_block = i == last_index
+            if self.endpoint and is_last_block:
+                # NumPy pins the last sample to ``stop`` instead of
+                # accumulating it from ``start``; with an infinite range the
+                # accumulated value is ``nan`` while the endpoint is exact.
+                blockstop = self.stop
+            else:
+                blockstop = blockstart + (bs_space * self.step)
             task = Task(
                 (self._name, i),
-                func,
+                partial(
+                    _linspace,
+                    endpoint=self.endpoint,
+                    dtype=self.dtype,
+                    pin_last=self.endpoint and is_last_block and self.num_rows > 1,
+                ),
                 blockstart,
                 blockstop,
                 bs,

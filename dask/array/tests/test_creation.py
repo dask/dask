@@ -188,6 +188,32 @@ def test_linspace(endpoint):
     assert_eq(darr, nparr)
 
 
+@pytest.mark.parametrize("num", [1, 2, 3, 10])
+@pytest.mark.parametrize("chunks", ["auto", 1, 3])
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_linspace_matches_numpy_when_the_range_is_unbounded(num, chunks):
+    """An infinite range still pins the endpoint, as NumPy does.
+
+    ``-inf + inf`` is ``nan``, so a block whose bounds were accumulated from
+    the start cannot recover ``stop`` by itself. NumPy sidesteps this by
+    assigning ``stop`` to the last sample, and dask has to do the same.
+
+    Both libraries emit ``RuntimeWarning: invalid value encountered`` along
+    the way; that arithmetic is expected, so the warning is not surfaced.
+    """
+    if isinstance(chunks, int) and chunks > num:
+        pytest.skip("a block larger than the array is not a valid chunking")
+
+    assert_eq(
+        da.linspace(-np.inf, 0, num=num, chunks=chunks),
+        np.linspace(-np.inf, 0, num=num),
+    )
+    assert_eq(
+        da.linspace(-np.inf, np.inf, num=num, chunks=chunks),
+        np.linspace(-np.inf, np.inf, num=num),
+    )
+
+
 def test_arange():
     darr = da.arange(77, chunks=13)
     nparr = np.arange(77)

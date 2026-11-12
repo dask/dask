@@ -364,10 +364,22 @@ def linspace(
 
     for i, bs in enumerate(chunks[0]):
         bs_space = bs - 1 if endpoint else bs
-        blockstop = blockstart + (bs_space * step)
+        is_last_block = i == len(chunks[0]) - 1
+        if endpoint and is_last_block:
+            # NumPy pins the last sample to ``stop`` instead of accumulating
+            # from ``start``. With an infinite range the accumulated value is
+            # ``nan`` (``-inf + inf``), while the endpoint is still exact.
+            blockstop = stop
+        else:
+            blockstop = blockstart + (bs_space * step)
         task = Task(
             (name, i),
-            partial(chunk.linspace, endpoint=endpoint, dtype=dtype),
+            partial(
+                chunk.linspace,
+                endpoint=endpoint,
+                dtype=dtype,
+                pin_last=endpoint and is_last_block and num > 1,
+            ),
             blockstart,
             blockstop,
             bs,
