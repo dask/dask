@@ -1123,6 +1123,27 @@ def test_sort_values_single_partition(nelem, by, ascending):
     dd.assert_eq(got, expect, check_index=False)
 
 
+def test_sort_values_rejects_inplace():
+    """pandas sorts in place; a dask collection cannot, so the request is refused.
+
+    ``inplace`` has no slot in the signature, so it used to fall into
+    ``**options`` and be dropped: the caller received a sorted collection with no
+    hint that the pandas semantics were not honoured.
+    """
+    df = pd.DataFrame({"c0": [10]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    with pytest.raises(NotImplementedError, match="inplace=True"):
+        ddf.sort_values(by="c0", inplace=True)
+
+    # The explicit ``False`` pandas also accepts keeps working.
+    dd.assert_eq(
+        ddf.sort_values(by="c0", inplace=False),
+        df.sort_values(by="c0"),
+        check_index=False,
+    )
+
+
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])

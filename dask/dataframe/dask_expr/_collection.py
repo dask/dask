@@ -3575,6 +3575,15 @@ class DataFrame(FrameBase):
         --------
         >>> df2 = df.sort_values('x')  # doctest: +SKIP
         """
+        # pandas returns ``None`` and sorts in place; a dask collection cannot be
+        # mutated, so ``inplace`` used to land in ``**options`` and get dropped,
+        # leaving the caller with a sorted collection and no sign that the request
+        # was ignored. Pop it so it cannot reach the expression's token either.
+        if options.pop("inplace", False):
+            raise NotImplementedError(
+                "sort_values with inplace=True is not supported: dask collections are "
+                "immutable, so the sorted collection is returned instead"
+            )
         if na_position not in ("first", "last"):
             raise ValueError("na_position must be either 'first' or 'last'")
         if not isinstance(by, list):
