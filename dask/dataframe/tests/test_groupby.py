@@ -3045,7 +3045,10 @@ def test_groupby_slice_getitem(by, slice_key):
     )
 
     ddf = dd.from_pandas(pdf, npartitions=3)
-    expect = pdf.groupby(by)[slice_key].count()
+    # pandas deprecated passing a tuple to GroupBy.__getitem__ in favour of a list.
+    # Dask still supports tuple keys, so only the pandas expectation is adapted.
+    pd_slice_key = list(slice_key) if isinstance(slice_key, tuple) else slice_key
+    expect = pdf.groupby(by)[pd_slice_key].count()
     got = ddf.groupby(by)[slice_key].count()
     assert_eq(expect, got)
 
