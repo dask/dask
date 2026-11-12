@@ -2902,3 +2902,45 @@ def test_pickle_vectorized_routines():
     assert_eq(c, [[0], [1]], check_dtype=False)
     c2 = pickle.loads(pickle.dumps(c))
     assert_eq(c2, [[0], [1]], check_dtype=False)
+
+
+def test_simpson():
+    si = pytest.importorskip("scipy.integrate")
+    rng = np.random.default_rng(42)
+
+    shapes = [(3,), (4,), (5,), (6,), (7,), (2,), (2, 7), (4, 5), (3, 6, 4)]
+    for shape in shapes:
+        y = rng.random(shape)
+        dy = da.from_array(y, chunks=tuple(max(1, c // 2) for c in shape))
+        for axis in range(-len(shape), len(shape)):
+            # Equally spaced samples (dx).
+            assert_eq(da.simpson(dy, axis=axis), si.simpson(y, axis=axis))
+            assert_eq(
+                da.simpson(dy, dx=0.5, axis=axis), si.simpson(y, dx=0.5, axis=axis)
+            )
+            # Non-uniformly spaced samples (x), as numpy and dask arrays.
+            x = np.sort(rng.random(shape[axis])) * 3
+            assert_eq(da.simpson(dy, x=x, axis=axis), si.simpson(y, x=x, axis=axis))
+            dxarr = da.from_array(x, chunks=2)
+            assert_eq(da.simpson(dy, x=dxarr, axis=axis), si.simpson(y, x=x, axis=axis))
+
+
+def test_simpson_parabola():
+    # The integral of x**2 over [0, 10] with 10 equally spaced intervals is
+    # exactly 1000 / 3.
+    y = da.arange(11, chunks=3) ** 2
+    assert allclose(da.simpson(y).compute(), 1000 / 3)
+
+    x = da.linspace(0, 10, 11, chunks=4)
+    assert allclose(da.simpson(y, x=x).compute(), 1000 / 3)
+
+
+def test_simpson_errors():
+    pytest.importorskip("scipy.integrate")
+    a = da.from_array(np.ones(5), chunks=2)
+    with pytest.raises(ValueError, match="At least two"):
+        da.simpson(a[:1])
+    with pytest.raises(ValueError, match="one-dimensional"):
+        da.simpson(a, x=da.ones((2, 2), chunks=1))
+    with pytest.raises(ValueError, match="same length"):
+        da.simpson(a, x=da.arange(3, chunks=2))
