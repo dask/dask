@@ -2469,10 +2469,15 @@ Expr={expr}"""
         if isinstance(lengths, Sequence):
             lengths = tuple(lengths)
 
-            if len(lengths) != self.npartitions:
+            # The collection backing ``arr`` may have been fused into fewer
+            # partitions by the optimizer (e.g. FusedIO after a column
+            # projection on a parquet read), so validate against the actual
+            # chunk structure of the produced array instead of the
+            # unoptimized expression's partition count.
+            if len(lengths) != len(arr.chunks[0]):
                 raise ValueError(
                     "The number of items in 'lengths' does not match the number of "
-                    f"partitions. {len(lengths)} != {self.npartitions}"
+                    f"partitions. {len(lengths)} != {len(arr.chunks[0])}"
                 )
 
             if self.ndim == 1:

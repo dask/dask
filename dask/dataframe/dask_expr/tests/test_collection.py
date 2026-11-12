@@ -857,6 +857,25 @@ def test_to_numeric(pdf, df):
     da.assert_eq(result, expected)
 
 
+def test_to_dask_array_lengths_after_io_fusion(tmp_path):
+    # https://github.com/dask/dask/issues/12411
+    # A column projection on a parquet read lets the optimizer fuse the IO
+    # layer into fewer partitions; chunk lengths must be validated against
+    # the optimized partition structure, not the unoptimized expression's.
+    pytest.importorskip("pyarrow")
+    from dask.dataframe import read_parquet
+
+    pdf = pd.DataFrame({c: [i] * 20 for i, c in enumerate("abcd")})
+    from_pandas(pdf, npartitions=2).to_parquet(tmp_path)
+    ddf = read_parquet(tmp_path)
+
+    arr = ddf[["a", "c"]].to_dask_array(lengths=True)
+    da.assert_eq(arr, pdf[["a", "c"]].to_numpy())
+
+    rec = ddf[["a", "c"]].to_records(lengths=True)
+    assert len(rec.compute()) == 20
+
+
 def test_to_timedelta(pdf, df):
     expected = pd.to_timedelta(pdf.x)
     result = to_timedelta(df.x)
