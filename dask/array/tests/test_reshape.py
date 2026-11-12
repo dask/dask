@@ -6,6 +6,7 @@ import pytest
 import dask.array as da
 from dask.array import from_array
 from dask.array.reshape import (
+    _reshape_block,
     _smooth_chunks,
     contract_tuple,
     expand_tuple,
@@ -89,6 +90,28 @@ def test_reshape_unknown_sizes():
         a.reshape((60, -1, -1))
     with pytest.raises(ValueError):
         A.reshape((60, -1, -1))
+
+
+def test_reshape_copy():
+    array = np.arange(12)
+
+    copied = _reshape_block(array, (3, 4), copy=True)
+    assert not np.shares_memory(array, copied)
+
+    view = _reshape_block(array, (3, 4), copy=False)
+    assert np.shares_memory(array, view)
+
+    with pytest.raises(ValueError, match="Unable to avoid"):
+        _reshape_block(array.reshape((3, 4)).T, (12,), copy=False)
+
+    dask_array = da.from_array(array, chunks=4)
+    assert_eq(dask_array.reshape((3, 4), copy=False), array.reshape((3, 4)))
+    assert_eq(dask_array.reshape((3, 4), copy=True), array.reshape((3, 4)))
+    assert_eq(da.asarray(False).reshape((1,), copy=False), np.array([False]))
+    assert_eq(da.zeros((0,), chunks=(0,)).reshape((0,), copy=False), np.zeros(0))
+
+    with pytest.raises(ValueError, match="Unable to avoid"):
+        da.from_array(array.reshape((3, 4)), chunks=(2, 2)).reshape((12,), copy=False)
 
 
 @pytest.mark.parametrize(
