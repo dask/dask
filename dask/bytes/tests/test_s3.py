@@ -71,11 +71,7 @@ def ensure_safe_environment_variables():
 # tests may share bucket names and run in parallel.
 s3_port = xdist_worker_port(5555)
 endpoint_uri = f"http://127.0.0.1:{s3_port}/"
-
-
-@pytest.fixture
-def s3so():
-    return {"client_kwargs": {"endpoint_url": endpoint_uri}}
+s3so = {"client_kwargs": {"endpoint_url": endpoint_uri}}
 
 
 @pytest.fixture(scope="module")
@@ -240,7 +236,7 @@ def test_get_s3():
         DaskS3FileSystem(secret="key", password="key")
 
 
-def test_open_files_write(s3, s3so):
+def test_open_files_write(s3):
     paths = [f"s3://{test_bucket_name}/more/{f}" for f in files]
     fils = open_files(paths, mode="wb", **s3so)
     for fil, data in zip(fils, files.values()):
@@ -251,7 +247,7 @@ def test_open_files_write(s3, s3so):
     assert set(files.values()) == set(results)
 
 
-def test_read_bytes(s3, s3so):
+def test_read_bytes(s3):
     sample, values = read_bytes(f"s3://{test_bucket_name}/test/accounts.*", **s3so)
     assert isinstance(sample, bytes)
     assert sample[:5] == files[sorted(files)[0]][:5]
@@ -266,7 +262,7 @@ def test_read_bytes(s3, s3so):
     assert set(results) == set(files.values())
 
 
-def test_read_bytes_sample_delimiter(s3, s3so):
+def test_read_bytes_sample_delimiter(s3):
     sample, values = read_bytes(
         f"s3://{test_bucket_name}/test/accounts.*",
         sample=80,
@@ -290,19 +286,19 @@ def test_read_bytes_sample_delimiter(s3, s3so):
     assert sample.endswith(b"\n")
 
 
-def test_read_bytes_non_existing_glob(s3, s3so):
+def test_read_bytes_non_existing_glob(s3):
     with pytest.raises(IOError):
         read_bytes(f"s3://{test_bucket_name}/non-existing/*", **s3so)
 
 
-def test_read_bytes_blocksize_none(s3, s3so):
+def test_read_bytes_blocksize_none(s3):
     _, values = read_bytes(
         f"s3://{test_bucket_name}/test/accounts.*", blocksize=None, **s3so
     )
     assert sum(map(len, values)) == len(files)
 
 
-def test_read_bytes_blocksize_on_large_data(s3_with_yellow_tripdata, s3so):
+def test_read_bytes_blocksize_on_large_data(s3_with_yellow_tripdata):
     _, L = read_bytes(
         f"s3://{test_bucket_name}/nyc-taxi/2015/yellow_tripdata_2015-01.csv",
         blocksize=None,
@@ -321,7 +317,7 @@ def test_read_bytes_blocksize_on_large_data(s3_with_yellow_tripdata, s3so):
 
 
 @pytest.mark.parametrize("blocksize", [5, 15, 45, 1500])
-def test_read_bytes_block(s3, blocksize, s3so):
+def test_read_bytes_block(s3, blocksize):
     _, vals = read_bytes(
         f"s3://{test_bucket_name}/test/account*", blocksize=blocksize, **s3so
     )
@@ -338,7 +334,7 @@ def test_read_bytes_block(s3, blocksize, s3so):
 
 
 @pytest.mark.parametrize("blocksize", [5, 15, 45, 1500])
-def test_read_bytes_delimited(s3, blocksize, s3so):
+def test_read_bytes_delimited(s3, blocksize):
     _, values = read_bytes(
         f"s3://{test_bucket_name}/test/accounts*",
         blocksize=blocksize,
@@ -379,7 +375,7 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
 
 @pytest.mark.parametrize("blocksize", [None, 10])
 @pytest.mark.parametrize("fmt", compr)
-def test_compression(s3, fmt, blocksize, s3so):
+def test_compression(s3, fmt, blocksize):
     if fmt not in compress:
         pytest.skip("compression function not provided")
     s3._cache.clear()
@@ -407,7 +403,7 @@ def test_compression(s3, fmt, blocksize, s3so):
 
 
 @pytest.mark.parametrize("mode", ["rt", "rb"])
-def test_open_files(s3, mode, s3so):
+def test_open_files(s3, mode):
     myfiles = open_files(f"s3://{test_bucket_name}/test/accounts.*", mode=mode, **s3so)
     assert len(myfiles) == len(files)
     for lazy_file, path in zip(myfiles, sorted(files)):
@@ -420,7 +416,7 @@ def test_open_files(s3, mode, s3so):
 double = lambda x: x * 2
 
 
-def test_modification_time_read_bytes(s3, s3so):
+def test_modification_time_read_bytes(s3):
     with s3_context("compress", files):
         _, a = read_bytes("s3://compress/test/accounts.*", anon=True, **s3so)
         _, b = read_bytes("s3://compress/test/accounts.*", anon=True, **s3so)
@@ -442,7 +438,7 @@ def engine(request):
 
 @pytest.mark.filterwarnings("ignore:Dask annotations")
 @pytest.mark.parametrize("metadata_file", [True, False])
-def test_parquet(s3, engine, s3so, metadata_file):
+def test_parquet(s3, engine, metadata_file):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
@@ -538,7 +534,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     dd.utils.assert_eq(data, df4)
 
 
-def test_parquet_append(s3, engine, s3so):
+def test_parquet_append(s3, engine):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
@@ -591,7 +587,7 @@ def test_parquet_append(s3, engine, s3so):
     )
 
 
-def test_parquet_wstoragepars(s3, s3so, engine):
+def test_parquet_wstoragepars(s3, engine):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
