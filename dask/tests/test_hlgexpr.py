@@ -4,7 +4,7 @@ import pickle
 
 import pytest
 
-from dask._expr import HLGExpr, _ExprSequence
+from dask._expr import HLGExpr, _ExprSequence, _HLGExprSequence
 from dask._task_spec import (
     DataNode,
     DependenciesMapping,
@@ -132,6 +132,30 @@ def test_hlg_expr_sequence_finalize():
     # both are fusing x
     assert "x" not in dskyz2
     assert len(dskyz2) == 2
+
+
+def test_hlg_expr_group_finalize_uses_all_output_layers():
+    exprs = []
+    for layer_name, key in (("xlayer", "x"), ("ylayer", "y")):
+        hlg = HighLevelGraph(
+            {layer_name: MaterializedLayer({key: DataNode(key, 1)})},
+            {layer_name: set()},
+        )
+        exprs.append(
+            HLGExpr(
+                hlg,
+                low_level_optimizer=optimizer,
+                output_keys=[key],
+                output_layers=(layer_name,),
+                postcompute=(func, ()),
+            )
+        )
+
+    grouped = _HLGExprSequence(*exprs)._tune_down()
+    assert grouped is not None
+
+    finalizer = grouped.finalize_compute().operands[0]
+    assert finalizer.hlg.dependencies[finalizer._name] == {"xlayer", "ylayer"}
 
 
 def test_hlg_expr_sequence_nested_keys():
