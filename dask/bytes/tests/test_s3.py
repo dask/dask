@@ -12,11 +12,6 @@ from functools import partial
 
 import pytest
 
-# Tests in this module are not concurrent-safe: each of them uses the same
-# bucket. Force them to run sequentially in pytest-xdist. The fixtures are also
-# isolated per worker (see _worker_s3_port), so they do not rely on this mark.
-pytestmark = pytest.mark.xdist_group(name="s3")
-
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
 moto = pytest.importorskip("moto", minversion="1.3.14")
@@ -35,6 +30,7 @@ except ImportError:
 from dask import compute
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
+from dask.utils_test import xdist_worker_port
 
 compute = partial(compute, scheduler="sync")
 
@@ -71,16 +67,9 @@ def ensure_safe_environment_variables():
         os.environ.update(saved_environ)
 
 
-def _worker_s3_port() -> int:
-    # pytest-xdist names its workers gw0, gw1, ...; outside of xdist this
-    # process behaves as gw0. Every worker runs its own moto server, as
-    # concurrent workers would otherwise trample each other's buckets.
-    worker = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
-    index = worker.removeprefix("gw")
-    return 5555 + int(index) if index.isdigit() else 5555
-
-
-s3_port = _worker_s3_port()
+# Each worker runs its own moto server, and therefore has its own S3 state, so
+# tests may share bucket names and run in parallel.
+s3_port = xdist_worker_port(5555)
 endpoint_uri = f"http://127.0.0.1:{s3_port}/"
 
 
