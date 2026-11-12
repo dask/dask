@@ -12,13 +12,15 @@ from packaging.version import Version
 
 import dask.bag as db
 from dask.utils import tmpdir
+from dask.utils_test import xdist_worker_port
 
 aiohttp = pytest.importorskip("aiohttp")
 requests = pytest.importorskip("requests")
 
-# Tests in this module are not concurrent-safe.
-# Force them to run sequentially in pytest-xdist.
-pytestmark = pytest.mark.xdist_group(name="http")
+# Each pytest-xdist worker serves the same files from its own tmpdir and its own port,
+# so tests may run in parallel.
+port = xdist_worker_port(8999)
+root = f"http://localhost:{port}/"
 
 files = ["a", "b"]
 
@@ -36,12 +38,12 @@ def dir_server():
             with open(os.path.join(d, fn), "wb") as f:
                 f.write(b"a" * 10000)
 
-        cmd = [sys.executable, "-m", "http.server", "8999"]
+        cmd = [sys.executable, "-m", "http.server", str(port)]
         p = subprocess.Popen(cmd, cwd=d)
         timeout = 10
         while True:
             try:
-                requests.get("http://localhost:8999")
+                requests.get(root)
                 break
             except requests.exceptions.ConnectionError as e:
                 time.sleep(0.1)
@@ -50,10 +52,14 @@ def dir_server():
                     raise RuntimeError("Server did not appear") from e
         yield d
         p.terminate()
+        try:
+            # reap the child, lest it keep the port bound for the next run
+            p.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            p.kill()
 
 
 def test_simple(dir_server):
-    root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn)[0]
     with f as f:
@@ -63,7 +69,6 @@ def test_simple(dir_server):
 
 
 def test_loc(dir_server):
-    root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn)[0]
     with open(os.path.join(dir_server, fn), "rb") as expected:
@@ -81,7 +86,6 @@ def test_loc(dir_server):
 
 def test_fetch_range_with_headers(dir_server):
     # https://github.com/dask/dask/issues/4479
-    root = "http://localhost:8999/"
     fn = files[0]
     headers = {"Date": "Wed, 21 Oct 2015 07:28:00 GMT"}
     f = open_files(root + fn, headers=headers)[0]
@@ -93,7 +97,6 @@ def test_fetch_range_with_headers(dir_server):
 
 @pytest.mark.parametrize("block_size", [None, 99999])
 def test_ops(dir_server, block_size):
-    root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn)[0]
     with open(os.path.join(dir_server, fn), "rb") as expected:
@@ -109,7 +112,6 @@ def test_ops(dir_server, block_size):
 
 
 def test_ops_blocksize(dir_server):
-    root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn, block_size=2)[0]
     with open(os.path.join(dir_server, fn), "rb") as expected:
@@ -135,40 +137,32 @@ def test_ops_blocksize(dir_server):
 
 
 def test_errors(dir_server):
-    f = open_files("http://localhost:8999/doesnotexist")[0]
-    with pytest.raises(errs):
-        with f as f:
-            f.read()
+    f = open_files(root + "doesnotexist")[0]
+    with pytest.raises(errs), f as f:
+        f.read()
     f = open_files("http://nohost/")[0]
 
     expected = FileNotFoundError
 
-    with pytest.raises(expected):
-        with f as f:
-            f.read()
-    root = "http://localhost:8999/"
+    with pytest.raises(expected), f as f:
+        f.read()
     fn = files[0]
     f = open_files(root + fn, mode="wb")[0]
-    with pytest.raises(NotImplementedError):
-        with f:
-            pass
+    with pytest.raises(NotImplementedError), f:
+        pass
     f = open_files(root + fn)[0]
-    with f as f:
-        with pytest.raises(ValueError):
-            f.seek(-1)
+    with pytest.raises(ValueError), f as f:
+        f.seek(-1)
 
 
 def test_files(dir_server):
-    root = "http://localhost:8999/"
     fs = open_files([f"{root}{f}" for f in files])
     for f, f2 in zip(fs, files):
-        with f as f:
-            with open(os.path.join(dir_server, f2), "rb") as expected:
-                assert f.read() == expected.read()
+        with open(os.path.join(dir_server, f2), "rb") as expected, f as f:
+            assert f.read() == expected.read()
 
 
 def test_open_glob(dir_server):
-    root = "http://localhost:8999/"
     fs = open_files(f"{root}*")
     assert fs[0].path == f"{root}a"
     assert fs[1].path == f"{root}b"

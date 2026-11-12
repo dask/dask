@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import os
 import time
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,20 @@ def add(x, y):
 def slowadd(a, b, delay=0.1):
     time.sleep(delay)
     return a + b
+
+
+def xdist_worker_port(base_port: int) -> int:
+    """Pick a TCP port that does not clash with the other pytest-xdist workers.
+
+    Test modules that bind a fixed port, e.g. to talk to a local server, cannot run in
+    parallel unless every worker uses a port of its own.
+
+    Outside of pytest-xdist, or when the worker id does not end with a number,
+    ``base_port`` is returned unchanged.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+    index = worker.removeprefix("gw")
+    return base_port + int(index) if index.isdigit() else base_port
 
 
 class GetFunctionTestMixin:

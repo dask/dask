@@ -189,10 +189,8 @@ def test_read_bytes_delimited():
             assert ours == test
 
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
-
-
-@pytest.mark.parametrize("fmt,blocksize", fmt_bs)
+@pytest.mark.parametrize("blocksize", [None, 10])
+@pytest.mark.parametrize("fmt", compr)
 def test_compression(fmt, blocksize):
     if fmt not in compress:
         pytest.skip("compression function not provided")

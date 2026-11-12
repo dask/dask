@@ -36,6 +36,24 @@ def test_hlg_layer_topological():
     assert utils_test.hlg_layer_topological(hg, 1) in (hg.layers["b"], hg.layers["c"])
 
 
+@pytest.mark.parametrize(
+    "worker,expected",
+    [
+        (None, 5555),  # not running under xdist
+        ("gw0", 5555),
+        ("gw3", 5558),
+        ("gw", 5555),
+        ("unexpected", 5555),
+    ],
+)
+def test_xdist_worker_port(monkeypatch, worker, expected):
+    if worker is None:
+        monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
+    else:
+        monkeypatch.setenv("PYTEST_XDIST_WORKER", worker)
+    assert utils_test.xdist_worker_port(5555) == expected
+
+
 def test__check_warning():
     class MyWarning(Warning):
         pass
