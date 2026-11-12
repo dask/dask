@@ -9,7 +9,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, tm
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_310, tm
 from dask.dataframe.methods import concat
 from dask.dataframe.utils import (
     assert_divisions,
@@ -17,6 +17,14 @@ from dask.dataframe.utils import (
     check_meta,
     has_known_categories,
 )
+
+
+def _pandas_join(left, right, suffixes, **kwargs):
+    """Mirror ``pandas.DataFrame.join`` across the lsuffix/rsuffix deprecation."""
+    if PANDAS_GE_310:
+        return left.join(right, suffixes=suffixes, **kwargs)
+    # pandas < 3.1 has no `suffixes` keyword for DataFrame.join
+    return left.join(right, lsuffix=suffixes[0], rsuffix=suffixes[1], **kwargs)
 
 
 def test_merge_indexed_dataframe_to_indexed_dataframe():
@@ -76,8 +84,8 @@ def test_sequential_joins():
     df2 = pd.DataFrame({"key": list(range(4)), "B": ["B0", "B1", "B2", "B3"]})
     df3 = pd.DataFrame({"key": list(range(1, 5)), "C": ["C0", "C1", "C2", "C3"]})
 
-    join_pd = df1.join(df2, how="inner", suffixes=("_l", "_r"))
-    multi_join_pd = join_pd.join(df3, how="inner", suffixes=("_l", "_r"))
+    join_pd = _pandas_join(df1, df2, ("_l", "_r"), how="inner")
+    multi_join_pd = _pandas_join(join_pd, df3, ("_l", "_r"), how="inner")
 
     # Dask version of multiple inner joins
     ddf1 = dd.from_pandas(df1, npartitions=3)
@@ -1261,7 +1269,9 @@ def test_join_by_index_patterns(how, shuffle_method):
                     rsuffix="r",
                     shuffle_method=shuffle_method,
                 ),
-                fix_index(pdl.join(pdr, how=how, suffixes=("l", "r")), pdl.index.dtype),
+                fix_index(
+                    _pandas_join(pdl, pdr, ("l", "r"), how=how), pdl.index.dtype
+                ),
             )
             assert_eq(
                 ddr.join(
@@ -1271,7 +1281,9 @@ def test_join_by_index_patterns(how, shuffle_method):
                     rsuffix="r",
                     shuffle_method=shuffle_method,
                 ),
-                fix_index(pdr.join(pdl, how=how, suffixes=("l", "r")), pdl.index.dtype),
+                fix_index(
+                    _pandas_join(pdr, pdl, ("l", "r"), how=how), pdl.index.dtype
+                ),
             )
 
             # temporary disabled because pandas may incorrectly raise
@@ -1280,12 +1292,12 @@ def test_join_by_index_patterns(how, shuffle_method):
 
             list_eq(
                 ddl.join(ddr, how=how, on="a", lsuffix="l", rsuffix="r"),
-                pdl.join(pdr, how=how, on="a", suffixes=("l", "r")),
+                _pandas_join(pdl, pdr, ("l", "r"), how=how, on="a"),
             )
 
             list_eq(
                 ddr.join(ddl, how=how, on="c", lsuffix="l", rsuffix="r"),
-                pdr.join(pdl, how=how, on="c", suffixes=("l", "r")),
+                _pandas_join(pdr, pdl, ("l", "r"), how=how, on="c"),
             )
 
             # merge with index and columns
