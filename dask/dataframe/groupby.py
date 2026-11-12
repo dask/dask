@@ -394,7 +394,13 @@ def _var_agg(
     return result
 
 
-def _cov_finalizer(df, cols, std=False):
+def _mul_col_name(i, j):
+    # The separator and the sort keep this unambiguous and order independent:
+    # plain concatenation names both ("1", "12") and ("11", "2") "112".
+    return "*".join(sorted((i, j)))
+
+
+def _cov_finalizer(df, cols, std=False, ddof=1):
     num_elements = len(list(it.product(cols, repeat=2)))
     num_cols = len(cols)
     vals = list(range(num_elements))
@@ -403,17 +409,17 @@ def _cov_finalizer(df, cols, std=False):
         x = col_idx_mapping[i]
         y = col_idx_mapping[j]
         idx = x + num_cols * y
-        mul_col = f"{i}{j}"
+        mul_col = _mul_col_name(i, j)
         ni = df[f"{i}-count"]
         nj = df[f"{j}-count"]
 
         n = np.sqrt(ni * nj)
-        div = n - 1
+        div = n - ddof
         div[div < 0] = 0
-        val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
+        val = ((df[mul_col] - df[i] * df[j] / n) / div).values[0]
         if std:
-            ii = f"{i}{i}"
-            jj = f"{j}{j}"
+            ii = _mul_col_name(i, i)
+            jj = _mul_col_name(j, j)
             std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
             std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
             sqrt_val = np.sqrt(std_val_i * std_val_j)
@@ -440,7 +446,7 @@ def _mul_cols(df, cols):
     """
     _df = df.__class__()
     for i, j in it.combinations_with_replacement(cols, 2):
-        col = f"{i}{j}"
+        col = _mul_col_name(i, j)
         _df[col] = df[i] * df[j]
 
     # Fix index in a groupby().apply() context
@@ -515,33 +521,26 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     result = (
         concat([total_sums, total_muls, total_counts], axis=1)
         .groupby(level=levels)
-        .apply(_cov_finalizer, cols=cols, std=std)
+        .apply(_cov_finalizer, cols=cols, std=std, ddof=ddof)
     )
 
     inv_col_mapping = {v: k for k, v in col_mapping.items()}
     idx_vals = result.index.names
-    idx_mapping = list()
 
     # when index is None we probably have selected a particular column
     # df.groupby('a')[['b']].cov()
     if len(idx_vals) == 1 and all(n is None for n in idx_vals):
         idx_vals = list(inv_col_mapping.keys() - set(total_sums.columns))
 
-    for val in idx_vals:
-        idx_name = inv_col_mapping.get(val, val)
-        idx_mapping.append(idx_name)
+    idx_mapping = [inv_col_mapping.get(val, val) for val in idx_vals]
 
-        if len(result.columns.levels[0]) < len(col_mapping):
-            # removing index from col_mapping (produces incorrect multiindexes)
-            try:
-                col_mapping.pop(idx_name)
-            except KeyError:
-                # when slicing the col_map will not have the index
-                pass
-
-    keys = list(col_mapping.keys())
+    # Look the labels up by name: MultiIndex levels are sorted, so their order
+    # stops matching the column order once there are more than ten columns.
     for level in range(len(result.columns.levels)):
-        result.columns = result.columns.set_levels(keys, level=level)
+        result.columns = result.columns.set_levels(
+            [inv_col_mapping.get(v, v) for v in result.columns.levels[level]],
+            level=level,
+        )
 
     result.index.set_names(idx_mapping, inplace=True)
 
@@ -554,6 +553,8 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
         kwargs = {"dropna": False}
     s_result = result.stack(**kwargs)
     assert is_dataframe_like(s_result)
+    # pandas < 2.2 stack orders columns by the sorted level, not by position
+    s_result = s_result[[inv_col_mapping.get(c, c) for c in cols]]
     return s_result
 
 
