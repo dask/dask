@@ -4163,13 +4163,27 @@ def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
     meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
     if parent_meta is None and dfs:
         parent_meta = dfs[0]._meta
+    scalar_pipeline = all(isinstance(arg, Expr) and arg.ndim == 0 for arg in args)
+
     if meta is no_default:
         # Use non-normalized kwargs here, as we want the real values (not
         # delayed values)
         a = [meta_nonempty(arg._meta) if isinstance(arg, Expr) else arg for arg in args]
         meta = emulate(func, *a, udf=True, **kwargs)
         meta_is_emulated = True
+        if scalar_pipeline:
+            # The pipeline holds no pandas object, so make_meta's
+            # parent_meta dispatch (keyed on the Scalar's numpy-scalar
+            # meta) would raise; normalize with the default backend
+            # instead. This also upcasts plain Python scalars (e.g. a
+            # bottleneck-computed ``std``) to their numpy equivalents,
+            # matching what a pandas-parented pipeline produces.
+            return make_meta(meta, index=meta_index)
     else:
+        if scalar_pipeline:
+            # Same for a caller-supplied value: it is the output value, not a
+            # pandas object to normalize against the Scalar's parent meta.
+            return make_meta(meta, index=meta_index)
         meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
         meta_is_emulated = False
 

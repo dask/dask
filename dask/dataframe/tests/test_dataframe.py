@@ -4709,6 +4709,41 @@ def test_scalar_with_array():
     da.utils.assert_eq(df.x.values + df.x.mean(), ddf.x.values + ddf.x.mean())
 
 
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_scalar_apply_keeps_the_value_lazy():
+    """A Scalar can be transformed without computing it first.
+
+    ``dd.Series.std()`` yields a Scalar, and the standard "guard against nan
+    or zero" decision on it used to require a ``compute()`` in the middle of
+    a graph. ``Scalar.apply`` (plus the pure-Scalar branch in
+    ``map_partitions``' meta handling) keeps that decision lazy.
+    """
+
+    def fix_std(v):
+        return 1.0 if pd.isna(v) or v == 0.0 else v
+
+    single = dd.from_pandas(pd.Series([1.0]), npartitions=1)  # std -> nan
+    constant = dd.from_pandas(pd.Series([2.0, 2.0]), npartitions=1)  # std -> 0
+    varied = dd.from_pandas(pd.Series([1.0, 3.0]), npartitions=1)
+
+    assert float(single.std().apply(fix_std, meta=1.0).compute()) == 1.0
+    assert float(constant.std().apply(fix_std, meta=1.0).compute()) == 1.0
+    assert (
+        abs(
+            float(varied.std().apply(fix_std, meta=1.0).compute())
+            - float(varied.std().compute())
+        )
+        < 1e-12
+    )
+    # A caller that omits ``meta`` gets the value emulated instead.
+    assert float(single.std().apply(fix_std).compute()) == 1.0
+
+    # The workaround from the issue used to die in make_meta with
+    # "No dispatch for float" because the pipeline holds no pandas object.
+    std = single.std()
+    assert float(dd.map_partitions(fix_std, std, meta=1.0).compute()) == 1.0
+
+
 def test_has_parallel_type():
     assert has_parallel_type(pd.DataFrame())
     assert has_parallel_type(pd.Series(dtype=float))

@@ -4850,6 +4850,40 @@ class Scalar(FrameBase):
     def to_series(self, index=0) -> Series:
         return new_collection(expr.ScalarToSeries(self, index=index))
 
+    def apply(self, function, *args, meta=no_default, **kwargs):
+        """Apply a function to this scalar's value.
+
+        The function receives the scalar's value as its first argument; extra
+        ``args`` and keyword arguments are forwarded to it. This is a thin
+        convenience over ``map_partitions`` for the single-partition ``Scalar``
+        expression, so a derived value can stay lazy instead of being pulled
+        out with ``compute()`` just to make one decision.
+
+        Parameters
+        ----------
+        function : callable
+            Called with the scalar's value as the first argument.
+        $META
+        args : tuple
+            Positional arguments to pass to ``function`` after the value.
+
+        Additional keyword arguments are passed through to ``function``.
+
+        Returns
+        -------
+        Scalar
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> s = dd.from_pandas(pd.Series([1.0, 2.0, 3.0]), npartitions=1)
+        >>> std = s.std()
+        >>> float(std.apply(lambda v: 1.0 if pd.isna(v) or v == 0 else v, meta=1.0).compute())
+        1.0
+        """
+        return self.map_partitions(function, *args, meta=meta, **kwargs)
+
     def __array__(self):
         # array interface is required to support pandas instance + Scalar
         # Otherwise, above op results in pd.Series of Scalar (object dtype)
