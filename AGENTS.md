@@ -129,7 +129,7 @@ pixi run test
 pixi run --environment mindeps-optional test
 
 # Array-expr (experimental)
-pixi run --environment py314 test-array-expr
+pixi run --environment py315 test-array-expr
 
 # Run arbitrary Python commands
 pixi run -- python -c 'print("Hello world!")'
@@ -312,9 +312,9 @@ from dask.typing import Key     # local submodules
 
 ### Matrix Coverage
 
-- Python 3.10, 3.11, 3.12, 3.13, 3.14
+- Python 3.10, 3.11, 3.12, 3.13, 3.14, 3.15
 - OS: Ubuntu (x86_64 & arm64), macOS, Windows
-- Environments: default, mindeps-{array,dataframe,distributed,non-optional,optional}, nightly, spark, py314t (free-threaded)
+- Environments: default, mindeps-{array,dataframe,distributed,non-optional,optional}, nightly, spark, py314t (free-threaded), py315t (free-threaded)
 - Scheduled: Twice daily for flaky test detection
 
 ### Codecov
@@ -341,7 +341,10 @@ See `docs/release-procedure.md` for full details. Key steps:
 
 1. **Import cycles**: `dask.dataframe` imports from `dask.array._array_expr` for dispatch registration. Be mindful of import ordering.
 2. **Query planning flag**: `array.query-planning` and `dataframe.query-planning` must be set before first import of `dask.array` / `dask.dataframe`. Cannot be changed mid-session.
-3. **Free-threaded Python (3.14t)**: Several dependencies (matplotlib, pytables, zarr) lack free-threaded builds. Use `optional-gil` feature for these.
+3. **Free-threaded Python (3.14t / 3.15t)**: Several dependencies (ipykernel, moto,
+   zarr) lack usable free-threaded builds. Use the `optional-gil` feature for these.
+   Free-threaded 3.15 (3.15t) currently has no builds for most optional dependencies, so
+   `py315t` only runs the core tests.
 4. **Pyarrow string conversion**: `dataframe.convert-string` can cause test failures. Use `skip_with_pyarrow_strings` / `xfail_with_pyarrow_strings` markers.
 5. **Distributed version pins**: The `pyproject.toml` pins a specific `distributed` version. Ensure this stays in sync with the `distributed` repo during releases.
 6. **pixi vs pip**: The project is designed to be installable via both conda (pixi) and pip. Ensure `pyproject.toml` and `pixi.toml` have matching dependency versions.

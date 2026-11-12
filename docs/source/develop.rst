@@ -159,6 +159,8 @@ experimental configurations::
    pixi run -e py313 test-ci
    pixi run -e py314 test-ci
    pixi run -e py314t test-ci
+   pixi run -e py315 test-ci
+   pixi run -e py315t test-ci
    pixi run -e nightly test-ci
 
 Note that, besides Python versions, these variant environments also test a

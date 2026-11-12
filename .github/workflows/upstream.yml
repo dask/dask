@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [py314, nightly]
+        environment: [py315, nightly]
     
     steps:
       - name: Checkout source
