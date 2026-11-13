@@ -301,6 +301,31 @@ _WARN_ANNOTATIONS = True
 #
 
 
+def _wrapped_numpy_funcname() -> str:
+    """Return the name of the NumPy function that delegated to ``__array_wrap__``.
+
+    NumPy reaches ``__array_wrap__`` through a chain of private helpers
+    (``_wrapfunc`` -> ``_wrapit``), and the length of that chain varies between
+    NumPy versions and between the ufunc and array-function dispatch paths.
+    Skipping NumPy's private helpers and returning the first remaining frame
+    finds the function the caller actually invoked (e.g. ``repeat``) in every
+    case.
+    """
+    import sys
+    from types import FrameType
+
+    # The first two frames are this helper and __array_wrap__ itself; NumPy's
+    # private wrapping helpers (_wrapfunc, _wrapit) may follow. The first frame
+    # whose name is not private is the public NumPy function the caller invoked.
+    frame: FrameType | None = sys._getframe(2)
+    while frame is not None:
+        name = frame.f_code.co_name
+        if not name.startswith("_"):
+            return name
+        frame = frame.f_back
+    return "This method"
+
+
 class FrameBase(DaskMethodsMixin):
     """Base class for Expr-backed Collections"""
 
@@ -2786,12 +2811,7 @@ class DataFrame(FrameBase):
             else:
                 index = context[1][0].index
         else:
-            try:
-                import inspect
-
-                method_name = f"`{inspect.stack()[3][3]}`"
-            except IndexError:
-                method_name = "This method"
+            method_name = f"`{_wrapped_numpy_funcname()}`"
 
             raise NotImplementedError(
                 f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
@@ -4208,12 +4228,7 @@ class Series(FrameBase):
             else:
                 index = context[1][0].index
         else:
-            try:
-                import inspect
-
-                method_name = f"`{inspect.stack()[3][3]}`"
-            except IndexError:
-                method_name = "This method"
+            method_name = f"`{_wrapped_numpy_funcname()}`"
             raise NotImplementedError(
                 f"{method_name} is not implemented for `dask.dataframe.Series`."
             )
