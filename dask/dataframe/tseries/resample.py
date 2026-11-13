@@ -95,10 +95,10 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
         else:
             setter = lambda a, val: a.__setitem__(-1, val)
         setter(newdivs, divisions[-1] + res)
-        if outdivs[-1] > divisions[-1]:
+        if outdivs[-1] >= divisions[-1]:
             setter(outdivs, outdivs[-1])
         elif outdivs[-1] < divisions[-1]:
-            setter(outdivs, temp.index[-1])
+            setter(outdivs, max(outdivs[-1], temp.index[-1]))
 
     return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
 
@@ -123,7 +123,7 @@ class ResampleReduction(Expr):
 
     @functools.cached_property
     def npartitions(self):
-        return self.frame.npartitions
+        return len(self._resample_divisions[1]) - 1
 
     def _divisions(self):
         return self._resample_divisions[1]
