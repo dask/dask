@@ -6221,9 +6221,28 @@ def map_partitions(
         # aligned with `self.expr`.
         raise NotImplementedError()
     args = [_DelayedExpr(a) if isinstance(a, Delayed) else a for a in args]
+    token = kwargs.pop("token", None)
+    if meta is no_default and any(isinstance(v, FrameBase) for v in kwargs.values()):
+        # Infer metadata before replacing dataframe keywords with delayed
+        # results. Keywords are broadcast in full to every output partition.
+        meta_args = [a.expr if isinstance(a, FrameBase) else a for a in args]
+        meta = expr._get_meta_map_partitions(
+            meta_args,
+            [
+                a
+                for a in meta_args
+                if isinstance(a, expr.Expr) and not isinstance(a, _DelayedExpr)
+            ],
+            func,
+            kwargs,
+            meta,
+            parent_meta,
+        )
     newkwargs = {}
     delayed_kwargs = []
     for k, v in kwargs.items():
+        if isinstance(v, FrameBase):
+            v = delayed(v, pure=True)
         if isinstance(v, Delayed):
             dexpr = _DelayedExpr(v)
             delayed_kwargs.append(dexpr)
@@ -6242,7 +6261,7 @@ def map_partitions(
         align_dataframes,
         parent_meta,
         required_columns,
-        newkwargs.pop("token", None),
+        token,
         Dict(newkwargs),
         len(args) - 1,
         *args[1:],
