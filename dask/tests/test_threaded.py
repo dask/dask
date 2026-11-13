@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import contextvars
-import signal
+import inspect
+import subprocess
 import sys
 import threading
 import warnings
@@ -153,20 +154,21 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-@pytest.mark.parametrize(
-    "use_barrier",
-    [
-        True,
-        pytest.param(
-            False,
-            marks=pytest.mark.skipif(
-                sys.version_info >= (3, 13) and not sys._is_gil_enabled(),
-                reason="hangs on free-threading python/cpython#150873",
-            ),
-        ),
-    ],
-)
-def test_interrupt(use_barrier):
+def _interrupted_get(use_barrier: bool) -> None:
+    """Run a graph that SIGINTs its own main thread while the scheduler waits.
+
+    Exits with status 0 if ``get()`` raised ``KeyboardInterrupt``, 1 otherwise.
+
+    This must run in a subprocess, see :func:`test_interrupt`.
+    """
+    import os
+    import signal
+    import sys
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from dask.threaded import get
+
     # Windows implements `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.
     # Python 3 on other platforms requires sending SIGINT to the main thread.
@@ -191,15 +193,58 @@ def test_interrupt(use_barrier):
             barrier.wait()
         interrupt_main()
 
-    dsk = {("f", i): (f,) for i in range(19)}
-    dsk["interrupt"] = (interrupt,)
+    dsk: dict[tuple[str, int], object] = {("f", i): (f,) for i in range(19)}
+    dsk[("interrupt", 0)] = (interrupt,)
 
-    # Use explicitly created ThreadPoolExecutor to avoid leaking threads after
-    # the KeyboardInterrupt
-    with ThreadPoolExecutor(20) as pool:
-        with pytest.raises(KeyboardInterrupt):
-            get(dsk, list(dsk), pool=pool)
+    pool = ThreadPoolExecutor(20)
+    interrupted = False
+    try:
+        get(dsk, list(dsk), pool=pool)
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
         tasks_can_end.set()
+
+    # Deliberately do not call pool.shutdown(): see test_interrupt.
+    os._exit(0 if interrupted else 1)
+
+
+@pytest.mark.parametrize(
+    "use_barrier",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.skipif(
+                sys.version_info >= (3, 13) and not sys._is_gil_enabled(),
+                reason="hangs on free-threading python/cpython#150873",
+            ),
+        ),
+    ],
+)
+def test_interrupt(use_barrier):
+    """A SIGINT sent while the scheduler is waiting for tasks must be raised even if
+    the tasks are still running.
+
+    The workload runs in a subprocess. On free-threaded CPython a signal handled in an
+    unlucky spot can leak an internal lock of the interpreter, e.g. the one held by
+    ``queue.Queue`` or by ``concurrent.futures.Future``, which then makes
+    ``ThreadPoolExecutor.shutdown()`` - and with it this test - block forever.
+    Free-threaded builds handle signals far more eagerly than GIL ones, so they hit
+    this window often enough to make the test flaky when run in-process.
+    This is https://github.com/python/cpython/issues/148874, still open for both 3.14
+    and 3.15. Isolating the process keeps a leaked lock from wedging the test session.
+    """
+    script = (
+        inspect.getsource(_interrupted_get) + f"\n_interrupted_get({use_barrier})\n"
+    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, timeout=60
+        )
+    except subprocess.TimeoutExpired as e:
+        pytest.fail(f"Child process did not react to SIGINT: {e.stdout!r} {e.stderr!r}")
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
 
 
 def warm_up_thread_pool(num_workers: int | None) -> None:
