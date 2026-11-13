@@ -514,7 +514,7 @@ def apply_infer_dtype(
             if suggest_dtype
             else ""
         )
-        msg = (
+        msg: str | None = (
             f"`dtype` inference failed in `{funcname}`.\n\n"
             f"{suggest}"
             "Original error is below:\n"
