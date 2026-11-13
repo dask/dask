@@ -187,6 +187,9 @@ filterwarnings = [
     "ignore:`product` is deprecated as of NumPy 1.25.0:DeprecationWarning:",
     "ignore:Starting with ImageIO v3:DeprecationWarning:skimage",
     "ignore:TileDB is a multithreading library and deadlocks are likely if fork\\(\\) is called after a TileDB context has been created:UserWarning:",
+    # SciPy is deprecating the sparse matrix classes and constructors in favor of
+    # the sparse array API. See https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html
+    "ignore:.*is being replaced by.*:DeprecationWarning",
 ]
 log_cli_level = "INFO"
 xfail_strict = true
