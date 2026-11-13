@@ -1380,6 +1380,8 @@ def topk(a, k, axis=-1, split_every=None):
     >>> d.topk(-2).compute()
     array([1, 3])
     """
+    if not isinstance(axis, Integral):
+        raise TypeError(f"axis must be an integer, not {type(axis).__name__}")
     axis = validate_axis(axis, a.ndim)
 
     # chunk and combine steps of the reduction, which recursively invoke
@@ -1436,6 +1438,8 @@ def argtopk(a, k, axis=-1, split_every=None):
     >>> d.argtopk(-2).compute()
     array([1, 2])
     """
+    if not isinstance(axis, Integral):
+        raise TypeError(f"axis must be an integer, not {type(axis).__name__}")
     axis = validate_axis(axis, a.ndim)
 
     # Generate nodes where every chunk is a tuple of (a, original index of a)
