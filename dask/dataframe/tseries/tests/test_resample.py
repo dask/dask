@@ -246,3 +246,21 @@ def test_rule_deprecated():
 
     with ctx:
         assert_eq(res, expected, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "freq,end", [(ME, "2023-01-31"), ("QE" if PANDAS_GE_220 else "Q", "2023-03-31")]
+)
+@pytest.mark.parametrize("time", ["00:00", "23:58"])
+@pytest.mark.parametrize("duplicate", [False, True])
+@pytest.mark.parametrize("npartitions", [1, 2])
+def test_resample_period_end_boundary(freq, end, time, duplicate, npartitions):
+    # GH#10607 and GH#10655: the final output division must not move backwards.
+    index = pd.DatetimeIndex(["2023-01-01 00:00", f"{end} {time}"])
+    if duplicate:
+        index = index.repeat(2)
+    pdf = pd.DataFrame({"value": range(len(index))}, index=index)
+    ddf = dd.from_pandas(pdf, npartitions=npartitions)
+    result = ddf.resample(freq).size()
+    assert result.divisions == tuple(sorted(result.divisions))
+    assert_eq(result, pdf.resample(freq).size())
