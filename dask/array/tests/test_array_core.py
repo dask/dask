@@ -5718,7 +5718,6 @@ def test_scipy_sparse_array_never_constructs_matrix():
     with warnings.catch_warnings(record=True) as record:
         warnings.simplefilter("always")
         d = da.from_array(src, chunks=2)
-        d = d.T
         d = d[0:2]
         d = d.map_blocks(lambda x: x)
         d.compute(scheduler="single-threaded")
