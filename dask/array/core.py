@@ -3467,14 +3467,14 @@ def _get_chunk_shape(a):
 
 def from_array(
     x,
-    chunks="auto",
-    name=None,
-    lock=False,
-    asarray=None,
-    fancy=True,
+    chunks: int | str | tuple | list | dict | None = "auto",
+    name: str | None = None,
+    lock: Any = False,
+    asarray: Any = None,
+    fancy: Any = True,
     getitem=None,
     meta=None,
-    inline_array=False,
+    inline_array: Any = False,
 ):
     """Create dask array from something that looks like an array.
 
@@ -3674,20 +3674,20 @@ def from_array(
         token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
         name = name or f"array-{token}"
     elif name is False:
-        name = f"array-{uuid.uuid1()}"
+        name = f"array-{uuid.uuid1()}"  # type: ignore[unreachable]
 
     if lock is True:
         lock = SerializableLock()
 
     is_ndarray = type(x) in (np.ndarray, np.ma.core.MaskedArray)
-    is_single_block = all(len(c) == 1 for c in chunks)
+    is_single_block = all(len(c) == 1 for c in chunks)  # type: ignore[union-attr]
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
     if is_ndarray and not is_single_block and not lock:
         # eagerly slice numpy arrays to prevent memory blowup
         # GH5367, GH5601
         slices = slices_from_chunks(chunks)
-        keys = product([name], *(range(len(bds)) for bds in chunks))
+        keys = product([name], *(range(len(bds)) for bds in chunks))    # type: ignore[union-attr]
         values = [x[slc] for slc in slices]
         dsk = dict(zip(keys, values))
 
@@ -3701,7 +3701,7 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
-        dsk = graph_from_arraylike(
+        dsk = graph_from_arraylike(   # type: ignore[assignment]
             x,
             chunks,
             x.shape,
