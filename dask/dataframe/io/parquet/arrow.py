@@ -651,11 +651,20 @@ class ArrowDatasetEngine(Engine):
     ):
         if schema == "infer" or isinstance(schema, dict):
             # Start with schema from _meta_nonempty
-            inferred_schema = pyarrow_schema_dispatch(
+            meta = (
                 df._meta_nonempty.set_index(index_cols)
                 if index_cols
                 else df._meta_nonempty
-            ).remove_metadata()
+            )
+            try:
+                inferred_schema = pyarrow_schema_dispatch(meta).remove_metadata()
+            except pa.ArrowInvalid:
+                # Object-dtype columns get placeholder values in _meta_nonempty
+                # that pyarrow cannot type-infer. Fall back to the empty meta,
+                # which infers them as null-typed fields instead.
+                inferred_schema = pyarrow_schema_dispatch(
+                    meta.head(0)
+                ).remove_metadata()
 
             # Use dict to update our inferred schema
             if isinstance(schema, dict):
