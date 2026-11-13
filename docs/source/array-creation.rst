@@ -165,7 +165,7 @@ There are several ways to create a Dask array from a Dask DataFrame. Dask DataFr
 
 .. code-block:: python
 
-   >>> df = dask.dataframes.from_pandas(...)
+   >>> df = dask.dataframe.from_pandas(...)
    >>> df.to_dask_array()
    dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3), chunktype=numpy.ndarray>
 
@@ -395,7 +395,7 @@ assignment like ``h5py.Dataset``:
 .. code-block:: Python
 
    >>> import h5py
-   >>> f = h5py.File('myfile.hdf5')
+   >>> f = h5py.File('myfile.hdf5', 'a')
    >>> d = f.require_dataset('/data', shape=x.shape, dtype=x.dtype)
    >>> da.store(x, d)
 
@@ -455,8 +455,9 @@ or your own custom zarr Array:
 
 .. code-block:: Python
 
-   >>> z = zarr.create((10,), dtype=float, store=zarr.ZipStore("output.zarr"))
-   >>> arr.to_zarr(z)
+   >>> with zarr.storage.ZipStore("output.zarr", mode="w") as store:
+   ...     z = zarr.create((10,), dtype=float, store=store)
+   ...     arr.to_zarr(z)
 
 To retrieve those data, you would do ``da.from_zarr`` with exactly the same arguments. The
 chunking of the resultant Dask array is defined by how the files were saved, unless
@@ -466,21 +467,21 @@ Compression options
 -------------------
 
 Zarr supports a variety of compression algorithms and compression levels.
-When writing Dask arrays to Zarr, compression can be configured by passing
-a Zarr-compatible compressor via ``storage_options``.
+When writing Dask arrays to Zarr, pass compression settings as array-creation
+keyword arguments to ``to_zarr``, not via ``storage_options`` (which configures
+the filesystem).
 
-For example, using ``numcodecs`` to configure Blosc compression:
+For example, with Zarr 3, use ``compressors`` and a Zarr codec:
 
 .. code-block:: Python
 
-   >>> from numcodecs import Blosc
+   >>> from zarr.codecs import BloscCodec
    >>> import dask.array as da
    >>> arr = da.ones((10, 10), chunks=(5, 5))
-   >>> compressor = Blosc(cname="zstd", clevel=1)
-   >>> arr.to_zarr(
-   ...     "output.zarr",
-   ...     storage_options={"compressor": compressor},
-   ... )
+   >>> compressor = BloscCodec(cname="zstd", clevel=1)
+   >>> arr.to_zarr("output.zarr", compressors=compressor)
+
+With Zarr 2, use ``compressor=`` with a ``numcodecs`` codec instead.
 
 The available compressors and compression settings depend on the Zarr
 backend being used. See the [Zarr documentation on compressors](https://zarr.readthedocs.io/en/stable/user-guide/arrays.html#compressors) for details:
