@@ -187,6 +187,8 @@ filterwarnings = [
     "ignore:`product` is deprecated as of NumPy 1.25.0:DeprecationWarning:",
     "ignore:Starting with ImageIO v3:DeprecationWarning:skimage",
     "ignore:TileDB is a multithreading library and deadlocks are likely if fork\\(\\) is called after a TileDB context has been created:UserWarning:",
+    # pandas 3.2 deprecated DataFrame.iterrows in favor of itertuples
+    "ignore:DataFrame.iterrows is deprecated:DeprecationWarning",
 ]
 log_cli_level = "INFO"
 xfail_strict = true
