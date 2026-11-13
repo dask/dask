@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import sys
 import threading
-import time
 from timeit import default_timer
 
 from dask.callbacks import Callback
@@ -96,6 +95,7 @@ class ProgressBar(Callback):
         self._start_time = default_timer()
         # Start background thread
         self._running = True
+        self._stop = threading.Event()
         self._timer = threading.Thread(target=self._timer_func)
         self._timer.daemon = True
         self._timer.start()
@@ -107,6 +107,7 @@ class ProgressBar(Callback):
 
     def _finish(self, dsk, state, errored):
         self._running = False
+        self._stop.set()
         self._timer.join()
         elapsed = default_timer() - self._start_time
         self.last_duration = elapsed
@@ -126,7 +127,7 @@ class ProgressBar(Callback):
             elapsed = default_timer() - self._start_time
             if elapsed > self._minimum:
                 self._update_bar(elapsed)
-            time.sleep(self._dt)
+            self._stop.wait(self._dt)
 
     def _update_bar(self, elapsed):
         s = self._state

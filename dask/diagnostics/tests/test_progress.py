@@ -49,6 +49,13 @@ def test_minimum_time(capsys):
     assert out == "" and err == ""
 
 
+def test_finish_does_not_wait_for_dt():
+    with ProgressBar(minimum=1000, dt=5) as pbar:
+        get_threaded(dsk, "e")
+    assert pbar.last_duration < 2
+    assert not pbar._timer.is_alive()
+
+
 @pytest.mark.parametrize("get", [get_threaded, get_sync])
 def test_clean_exit(get):
     dsk = {"a": (lambda: 1 / 0,)}
