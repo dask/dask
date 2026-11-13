@@ -26,6 +26,7 @@ from dask._task_spec import (
     resolve_aliases,
 )
 from dask.core import keys_in_tasks, reverse_dict
+from dask.local import get_sync
 from dask.sizeof import sizeof
 from dask.tokenize import tokenize
 from dask.utils import funcname
@@ -956,6 +957,64 @@ def test_linear_fusion_multiple_outputs():
     assert isinstance(result["fourth"], Alias)
     assert isinstance(result["first-second"], Task)
     assert isinstance(result["third-fourth"], Task)
+
+
+@pytest.mark.parametrize("tuple_keys", [False, True], ids=["str", "tuple"])
+def test_linear_fusion_renamed_key_collision(
+    monkeypatch: pytest.MonkeyPatch, tuple_keys: bool
+) -> None:
+    def key(name: str) -> str | tuple[str, int]:
+        return (name, 0) if tuple_keys else name
+
+    tasks = [
+        left := DataNode(key("left"), "left"),
+        Task(key("left_out"), func, left.ref(), "done"),
+        right := DataNode(key("right"), "right"),
+        Task(key("right_out"), func, right.ref(), "done"),
+    ]
+    dsk = {t.key: t for t in tasks}
+    outputs = [key("left_out"), key("right_out")]
+    assert get_sync(dsk, outputs) == ("left-done", "right-done")
+
+    def rename(_keys: list[str | tuple[str, int]]) -> str | tuple[str, int]:
+        return key("collision")
+
+    monkeypatch.setattr("dask.optimization.default_fused_keys_renamer", rename)
+    result = fuse_linear_task_spec(dsk, outputs)
+
+    assert set(outputs) <= result.keys()
+    assert get_sync(result, outputs) == ("left-done", "right-done")
+
+
+@pytest.mark.parametrize("collision_first", [False, True])
+@pytest.mark.parametrize("tuple_keys", [False, True], ids=["str", "tuple"])
+def test_linear_fusion_renamed_key_collision_with_input(
+    monkeypatch: pytest.MonkeyPatch, collision_first: bool, tuple_keys: bool
+) -> None:
+    def key(name: str) -> str | tuple[str, int]:
+        return (name, 0) if tuple_keys else name
+
+    tasks = [
+        source := DataNode(key("source"), "chain"),
+        Task(key("out"), func, source.ref(), "done"),
+    ]
+    collision = DataNode(key("collision"), "original")
+    if collision_first:
+        tasks.insert(0, collision)
+    else:
+        tasks.append(collision)
+    dsk = {t.key: t for t in tasks}
+    outputs = [key("out"), key("collision")]
+    assert get_sync(dsk, outputs) == ("chain-done", "original")
+
+    def rename(_keys: list[str | tuple[str, int]]) -> str | tuple[str, int]:
+        return key("collision")
+
+    monkeypatch.setattr("dask.optimization.default_fused_keys_renamer", rename)
+    result = fuse_linear_task_spec(dsk, outputs)
+
+    assert set(outputs) <= result.keys()
+    assert get_sync(result, outputs) == ("chain-done", "original")
 
 
 def test_nested_containers():
