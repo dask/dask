@@ -92,7 +92,7 @@ def visualize(
     The completed bokeh plot object.
     """
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
-    from bokeh.io import state
+    from bokeh.io.state import curstate
 
     if "file_path" in kwargs:
         warnings.warn(
@@ -105,7 +105,7 @@ def visualize(
         filename = kwargs.pop("file_path")
 
     if save is None:
-        save = not state.curstate().notebook
+        save = not curstate().notebook
 
     if not isinstance(profilers, list):
         profilers = [profilers]
