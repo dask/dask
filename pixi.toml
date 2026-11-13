@@ -118,7 +118,7 @@ jinja2 = "*"
 lz4 = "*"
 mmh3 = "*"
 # python-cityhash = "*"  # Temporarily in feature.optional-problematic below
-# python-snappy = "*"  # Temporarily in feature.optional-gil below
+python-snappy = "*"
 python-xxhash = "*"
 
 # Other optional dependencies
@@ -128,11 +128,11 @@ numba = "*"
 numbagg = "*"
 flask = "*"
 h5py = "*"
-# pytables = "*"  # Temporarily in feature.optional-gil below
+pytables = "*"
 # zarr = "*"  # Temporarily in feature.optional-gil below
 # tiledb-py = "*"  # Temporarily in feature.optional-problematic below
 xarray = "*"
-# sqlalchemy = "*"  # Temporarily in feature.optional-gil below
+sqlalchemy = "*"
 jsonschema = "*"
 httpretty = "*"
 aiohttp = "*"
@@ -144,41 +144,35 @@ ipywidgets = "*"
 # ipykernel = "*"  # Temporarily in feature.optional-gil below
 psutil = "*"
 requests = "*"  # Optional dependency of fsspec
-scikit-image = "*"
+# scikit-image = "*"  # Temporarily in feature.optional-problematic below
 scikit-learn = "*"
 scipy = "*"
 sparse = "*"
 cachey = "*"
 python-graphviz = "*"
-# matplotlib = "*"  # Temporarily in feature.optional-gil below
+matplotlib = "*"
 
 # Optional dependencies that don't work yet in free-threading
 [feature.optional-gil.dependencies]
 ipykernel = "*"  # No 3.14t build for Windows yet
-matplotlib ="*"  # Not available for 3.14t
 moto = "<5"  # Not available for 3.14t on Windows
-pytables = "*"  # Not available for 3.14t
-python-snappy = "*"  # dependency cramjam does not release the GIL
-sqlalchemy = "*"  # Not available for 3.14t
-zarr = "*"  # Dependency numcodecs not available for 3.14t
+zarr = "*"  # Dependency google-crc32c does not release the GIL
+
+# Optional dependencies with even patchier compatibility
+[feature.optional-problematic.dependencies]
+scikit-image = "*"  # Not availiable for 3.15
+tiledb-py = "*"  # Not available for 3.14t and 3.15
 
 [feature.optional-problematic.target.linux-64.dependencies]
-python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
-crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
-tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
-
-[feature.optional-problematic.target.linux-aarch64.dependencies]
-tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
+python-cityhash = "*"  # Not available for 3.14t, 3.15, and linux-aarch64
+crick = "*"  # Not available for >=3.14 and linux-aarch64
 
 [feature.optional-problematic.target.win-64.dependencies]
-python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
+python-cityhash = "*"  # Not available for 3.14t, 3.15, and linux-aarch64
 crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
-tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
-
 [feature.optional-problematic.target.osx-arm64.dependencies]
-python-cityhash = "*"  # Not available for 3.14t and linux-aarch64
+python-cityhash = "*"  # Not available for 3.14t, 3.15, and linux-aarch64
 crick = "*"  # Not available for 3.14, 3.14t, and linux-aarch64
-tiledb-py = "*"  # Not available for 3.14t; pins pandas<3
 
 [feature.py310.dependencies]
 python = "=3.10"
@@ -199,27 +193,41 @@ pyarrow = "=20.0"
 
 [feature.py312.dependencies]
 python = "=3.12"
+numpy = "=2.2"
+pandas = "=2.3"
+pyarrow = "=22.0"
 # tiledb 2.30.1 links libaws-c-s3.so.1.1 but does not declare aws-c-s3 as a
 # dependency, so the solver can pick aws-c-s3 1.0.0 (which ships .so.1.0) and break
 # `import tiledb`. Pin the 1.1 series (conda-forge/tiledb-feedstock#514).
 aws-c-s3 = ">=1.1.3,<1.2"
-numpy = "=2.2"
-pandas = "=2.3"
-pyarrow = "=22.0"
 
 [feature.py313.dependencies]
 python = "=3.13"
 numpy = "=2.4"
 pandas = "=3.0"
 pyarrow = "=24.0"
+# See note above for py312
+aws-c-s3 = ">=1.1.3,<1.2"
 
 [feature.py314.dependencies]
 python = "=3.14"
+numpy = "=2.5"
+pandas = "=3.1"
+pyarrow = "=26.0"
 
 [feature.py314t.dependencies]
 python-freethreading = "=3.14"
+numpy = "=2.5"
+pandas = "=3.1"
+pyarrow = "=26.0"
 # see continuous_integration/pixi-recipes/README.md
 brotli-python = { path = "continuous_integration/pixi-recipes/brotli" }
+
+[feature.py315.dependencies]
+python = "=3.15"
+
+[feature.py315t.dependencies]
+python-freethreading = "=3.15"
 
 [feature.nightly]
 platforms = ["linux-64", "osx-arm64"]
@@ -305,7 +313,7 @@ cmd = "anaconda upload --label dev noarch/*.conda"
 description = "Upload to anaconda.org. Requires ANACONDA_API_TOKEN env variable to be set."
 
 [environments]
-default = ["py314", "optional", "optional-gil", "test", "distributed"]  # Same as py314
+default = ["py315", "optional", "optional-gil", "test", "distributed"]  # Same as py315
 mindeps-non-optional = ["mindeps-non-optional", "test"]
 mindeps-array = ["mindeps-non-optional", "mindeps-array", "test"]
 mindeps-dataframe = ["mindeps-non-optional", "mindeps-dataframe", "test"]
@@ -314,9 +322,11 @@ mindeps-optional = ["mindeps-non-optional", "mindeps-optional", "test", "distrib
 py310 = ["py310", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
 py311 = ["py311", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
 py312 = ["py312", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
-py313 = ["py313", "optional", "test", "distributed", "optional-gil"]
+py313 = ["py313", "optional", "test", "distributed", "optional-gil", "optional-problematic"]
 py314 = ["py314", "optional", "test", "distributed", "optional-gil"]
+py315 = ["py315", "optional", "test", "distributed", "optional-gil"]
 py314t = ["py314t", "optional", "test", "distributed"]
+py315t = ["py315t", "test"]  # Many dependencies still missing
 nightly = ["nightly", "test", "distributed"]
 spark = ["spark", "test"]
 lint = { features = ["lint"], no-default-feature = true }

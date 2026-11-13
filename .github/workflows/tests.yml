@@ -34,12 +34,12 @@ jobs:
         # Note: after adding/removing builds here, update
         # codecov.yml to match.
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
-        environment: [py310, py311, py312, py313, py314]
+        environment: [py310, py311, py312, py313, py314, py315]
         task: [test-ci]
         include:
-          # MacOS CI does not have many hosts available; run it on 3.14 only
+          # MacOS CI does not have many hosts available; run it only once
           - os: macos-latest
-            environment: py314
+            environment: py315
             task: test-ci
           # Minimum dependencies
           - os: ubuntu-latest
@@ -59,13 +59,16 @@ jobs:
             task: test-ci
           # Experimental setups
           - os: ubuntu-latest
-            environment: py314
+            environment: py315
             task: test-array-expr
           - os: ubuntu-latest
             environment: mindeps-array
             task: test-array-expr
           - os: ubuntu-latest
             environment: py314t
+            task: test-ci
+          - os: ubuntu-latest
+            environment: py315t
             task: test-ci
           - os: ubuntu-latest
             environment: spark

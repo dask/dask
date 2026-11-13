@@ -245,6 +245,9 @@ def check_for_pytest():
 @pytest.mark.skipif(
     sys.platform == "win32", reason="Windows doesn't support different contexts"
 )
+@pytest.mark.filterwarnings(
+    "ignore:This process .* is multi-threaded:DeprecationWarning"
+)
 def test_custom_context_used_python3_posix():
     """The 'multiprocessing.context' config is used to create the pool.
 
