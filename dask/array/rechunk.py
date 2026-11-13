@@ -13,6 +13,7 @@ import math
 from functools import reduce
 from itertools import chain, count, product
 from operator import add, itemgetter, mul
+from typing import Any
 from warnings import warn
 
 import numpy as np
@@ -269,7 +270,7 @@ def _validate_rechunk(old_chunks, new_chunks):
 
 def rechunk(
     x,
-    chunks="auto",
+    chunks: Any = "auto",
     threshold=None,
     block_size_limit=None,
     balance=False,
