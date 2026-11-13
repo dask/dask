@@ -7,6 +7,7 @@ import dask.array as da
 from dask.array.core import Array
 from dask.array.utils import assert_eq, meta_from_array
 from dask.local import get_sync
+from dask.utils_test import _check_warning, scipy_sparse_matrix_deprecated
 
 asarrays = [np.asarray]
 
@@ -88,18 +89,25 @@ def test_meta_from_array_scipy_sparse():
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    # Note: csr_matrix can exclusively have ndim=2
-    x = scipy.sparse.csr_matrix([[2, 3]])
-    meta = meta_from_array(x)
-    assert isinstance(meta, type(x))
+    # Note: csr_matrix can exclusively have ndim=2.
+    # The test explicitly asks for the deprecated matrix container, so SciPy must
+    # be allowed to emit its warning; dask must not swallow it.
+    with _check_warning(
+        scipy_sparse_matrix_deprecated(),
+        DeprecationWarning,
+        "is being replaced by",
+    ):
+        x = scipy.sparse.csr_matrix([[2, 3]])
+        meta = meta_from_array(x)
+        assert isinstance(meta, type(x))
 
-    meta = meta_from_array(x, ndim=2)
-    assert isinstance(meta, type(x))
-    assert meta.shape == (0, 0)
+        meta = meta_from_array(x, ndim=2)
+        assert isinstance(meta, type(x))
+        assert meta.shape == (0, 0)
 
-    meta = meta_from_array(x, dtype=np.float32)
-    assert isinstance(meta, type(x))
-    assert meta.dtype == np.float32
+        meta = meta_from_array(x, dtype=np.float32)
+        assert isinstance(meta, type(x))
+        assert meta.dtype == np.float32
 
 
 @pytest.mark.parametrize(

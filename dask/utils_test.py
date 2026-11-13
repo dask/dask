@@ -177,3 +177,21 @@ def _check_warning(condition: bool, category: type[Warning], message: str):
     else:
         with contextlib.nullcontext() as ctx:
             yield ctx
+
+
+def scipy_sparse_matrix_deprecated() -> bool:
+    """Whether the installed SciPy deprecates the sparse matrix API.
+
+    SciPy 2.0 deprecates the sparse matrix classes (``csr_matrix``, ``csc_matrix``,
+    ``coo_matrix``, ...) and the ``eye``, ``rand``, ``diags``, ... constructors in
+    favor of the sparse array API. See the spmatrix to sparray migration guide:
+    https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html
+    """
+    try:
+        import scipy
+    except ImportError:
+        return False
+
+    from packaging.version import Version
+
+    return Version(scipy.__version__) >= Version("2.0.0.dev0")

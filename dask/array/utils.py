@@ -439,6 +439,24 @@ def arange_safe(*args, like, **kwargs):
             return np.arange(*args, **kwargs)
 
 
+_SPARSE_CONTAINER_MODULES = ("scipy.sparse", "cupyx.scipy.sparse")
+
+
+def _is_sparse_container(obj) -> bool:
+    """Whether ``obj`` is a SciPy or CuPy sparse container.
+
+    Both the sparse matrix (``*_matrix``) and the sparse array (``*_array``)
+    families are recognized. The check is done on the type's module so that it
+    also covers formats whose concrete class lives in a submodule, e.g.
+    ``scipy.sparse._csr.csr_array``.
+    """
+    module = type(obj).__module__
+    return any(
+        module == prefix or module.startswith(f"{prefix}.")
+        for prefix in _SPARSE_CONTAINER_MODULES
+    )
+
+
 def _array_like_safe(np_func, da_func, a, like, **kwargs):
     from dask.array import Array
 
@@ -454,8 +472,11 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if hasattr(like, "__array_function__"):
         return np_func(a, like=like, **kwargs)
 
-    if type(like).__module__.startswith("scipy.sparse"):
-        # e.g. scipy.sparse.csr_matrix
+    if _is_sparse_container(like):
+        # Construct the container type the user explicitly asked for: a sparse
+        # matrix stays a matrix (SciPy warns about its deprecation) and a sparse
+        # array stays an array. dask never silently promotes an array to a
+        # matrix or vice versa.
         kwargs.pop("order", None)
         if np.isscalar(a):
             a = np.array([[a]])

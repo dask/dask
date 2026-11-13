@@ -23,7 +23,11 @@ from dask._compatibility import PY_VERSION
 from dask.core import flatten, literal
 from dask.tokenize import TokenizationError, normalize_token, tokenize
 from dask.utils import tmpfile
-from dask.utils_test import import_or_none
+from dask.utils_test import (
+    _check_warning,
+    import_or_none,
+    scipy_sparse_matrix_deprecated,
+)
 
 da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")
@@ -1060,26 +1064,33 @@ def test_tokenize_numpy_matrix():
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
-    a = sp.rand(10, 100, random_state=rng).asformat(cls_name)
-    b = a.copy()
+    # This test deliberately uses the deprecated sparse matrix API, so SciPy must
+    # be allowed to emit its warning; dask must not swallow it.
+    with _check_warning(
+        scipy_sparse_matrix_deprecated(),
+        DeprecationWarning,
+        "is being replaced by",
+    ):
+        a = sp.rand(10, 100, random_state=rng).asformat(cls_name)
+        b = a.copy()
 
-    assert check_tokenize(a) == check_tokenize(b)
+        assert check_tokenize(a) == check_tokenize(b)
 
-    # modifying the data values
-    if hasattr(b, "data"):
-        b.data[:10] = 1
-    elif cls_name == "dok":
-        b[3, 3] = 1
-    else:
-        raise ValueError
-    check_tokenize(b)
-    assert check_tokenize(a) != check_tokenize(b)
+        # modifying the data values
+        if hasattr(b, "data"):
+            b.data[:10] = 1
+        elif cls_name == "dok":
+            b[3, 3] = 1
+        else:
+            raise ValueError
+        check_tokenize(b)
+        assert check_tokenize(a) != check_tokenize(b)
 
-    # modifying the data indices
-    b = a.copy().asformat("coo")
-    b.row[:10] = np.arange(10)
-    b = b.asformat(cls_name)
-    assert check_tokenize(a) != check_tokenize(b)
+        # modifying the data indices
+        b = a.copy().asformat("coo")
+        b.row[:10] = np.arange(10)
+        b = b.asformat(cls_name)
+        assert check_tokenize(a) != check_tokenize(b)
 
 
 def test_tokenize_circular_recursion():
