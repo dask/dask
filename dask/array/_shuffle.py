@@ -218,7 +218,9 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
 
     intermediates = dict()
     merges = dict()
-    dtype = np.min_scalar_type(max(*chunks[axis], chunk_size_limit))
+    # The taker indices and argsort positions can range over the whole axis
+    # length, not just a single chunk, so the dtype must cover the total size.
+    dtype = np.min_scalar_type(sum(chunks[axis]))
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)
     split_name_suffixes = count()
