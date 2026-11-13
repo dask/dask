@@ -422,6 +422,47 @@ def test_qr(m, n, chunks, error_type):
             q, r = qr(data)
 
 
+@pytest.mark.parametrize(
+    "m,n,chunks,mode",
+    [
+        (10, 3, (3, 3), "reduced"),
+        (10, 3, (3, 3), "r"),
+        (3, 10, (3, 4), "reduced"),
+        (3, 10, (3, 4), "r"),
+        (6, 6, (3, 6), "reduced"),
+        (6, 6, (3, 6), "r"),
+    ],
+)
+def test_qr_mode(m, n, chunks, mode):
+    rng = np.random.default_rng(42)
+    mat = rng.random((m, n))
+    data = da.from_array(mat, chunks=chunks)
+
+    if mode == "reduced":
+        dq, dr = qr(data, mode=mode)
+        # A = Q R, Q orthonormal, R upper-triangular.
+        assert_eq(mat, da.dot(dq, dr))
+        assert_eq(np.eye(min(m, n)), da.dot(dq.T, dq))
+        assert_eq(dr, da.triu(dr.rechunk(dr.shape[0])))
+    else:
+        dr = qr(data, mode=mode)
+        # mode="r" must be identical to the R of the default factorization.
+        dq, dr_reduced = qr(data)
+        assert_eq(dr, dr_reduced)
+
+
+def test_qr_mode_errors():
+    rng = np.random.default_rng(42)
+    data = da.from_array(rng.random((10, 3)), chunks=(3, 3))
+
+    with pytest.raises(NotImplementedError, match="not yet supported"):
+        qr(data, mode="complete")
+    with pytest.raises(NotImplementedError, match="not yet supported"):
+        qr(data, mode="raw")
+    with pytest.raises(ValueError, match="invalid qr mode"):
+        qr(data, mode="bogus")
+
+
 def test_linalg_consistent_names():
     m, n = 20, 10
     mat = np.random.default_rng().random((m, n))
