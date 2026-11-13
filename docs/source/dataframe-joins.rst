@@ -82,3 +82,17 @@ maintains that index, like Parquet.
         right_one, how="left", left_index=True, right_index=True)
     result = result.merge(
         right_two, how="left", left_index=True, right_index=True)
+
+A Note on the Index
+-------------------
+
+When you join or merge on a column rather than on the index, the index of the
+result is not meaningful and is reset within each partition.  Because Dask does
+not know the sizes of the partitions ahead of time, it cannot produce a single
+consecutive index across the whole result without computing the data.  As a
+consequence the resulting index may contain duplicate values, with each
+partition starting its index over from ``0``.
+
+If you need a unique, consecutive index you can call ``reset_index`` on the
+result, but be aware that this requires Dask to compute the partition sizes and
+is therefore not free.
