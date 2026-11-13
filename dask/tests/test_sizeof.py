@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import warnings
 from array import array
 
 import pytest
@@ -98,6 +99,8 @@ def test_pandas_repeated_column():
 
 def test_sparse_matrix():
     sparse = pytest.importorskip("scipy.sparse")
+    # This test deliberately uses the deprecated sparse matrix API, so SciPy must
+    # be allowed to emit its warning; dask must not swallow it.
     with _check_warning(
         scipy_sparse_matrix_deprecated(),
         DeprecationWarning,
@@ -105,6 +108,26 @@ def test_sparse_matrix():
     ):
         sp = sparse.eye(10)
         # These are the 32-bit Python 2.7 values.
+        assert sizeof(sp.todia()) >= 152
+        assert sizeof(sp.tobsr()) >= 232
+        assert sizeof(sp.tocoo()) >= 240
+        assert sizeof(sp.tocsc()) >= 232
+        assert sizeof(sp.tocsr()) >= 232
+        assert sizeof(sp.todok()) >= 184
+        assert sizeof(sp.tolil()) >= 204
+
+
+def test_sparse_array():
+    """sizeof() must handle the sparse array API, not just sparse matrices."""
+    sparse = pytest.importorskip("scipy.sparse")
+    if not hasattr(sparse, "csr_array"):
+        pytest.skip("scipy<1.11 has no sparray")
+
+    # The user explicitly asks for the sparse array API: dask must dispatch to
+    # the sparray registration and must not emit a deprecation warning.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        sp = sparse.eye_array(10)
         assert sizeof(sp.todia()) >= 152
         assert sizeof(sp.tobsr()) >= 232
         assert sizeof(sp.tocoo()) >= 240

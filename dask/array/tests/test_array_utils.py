@@ -89,7 +89,9 @@ def test_meta_from_array_scipy_sparse():
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    # Note: csr_matrix can exclusively have ndim=2
+    # Note: csr_matrix can exclusively have ndim=2.
+    # The test explicitly asks for the deprecated matrix container, so SciPy must
+    # be allowed to emit its warning; dask must not swallow it.
     with _check_warning(
         scipy_sparse_matrix_deprecated(),
         DeprecationWarning,

@@ -5522,14 +5522,18 @@ def test_dask_array_holds_scipy_sparse_containers(container):
     cls = scipy.sparse.csr_matrix if container == "matrix" else scipy.sparse.csr_array
     kind = scipy.sparse.spmatrix if container == "matrix" else scipy.sparse.sparray
 
+    x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
+    x[x < 0.9] = 0
+    xx = x.compute()
+
+    # The user explicitly asks dask to build matrix containers; SciPy warns about
+    # it and dask must not swallow the warning. The sparse array variant must be
+    # silent, which also proves that dask itself never falls back to a matrix.
     with _check_warning(
         container == "matrix" and scipy_sparse_matrix_deprecated(),
         DeprecationWarning,
         "is being replaced by",
     ):
-        x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
-        x[x < 0.9] = 0
-        xx = x.compute()
         y = x.map_blocks(cls)
 
         vs = y.to_delayed().flatten().tolist()
@@ -5558,25 +5562,23 @@ def test_dask_array_setitem_singleton_sparse(container, format):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    cls = (
-        getattr(scipy.sparse, f"{format}_matrix")
-        if container == "matrix"
-        else getattr(scipy.sparse, f"{format}_array")
-    )
+    if container == "matrix":
+        cls = getattr(scipy.sparse, f"{format}_matrix")
+        eye = scipy.sparse.eye
+    else:
+        cls = getattr(scipy.sparse, f"{format}_array")
+        eye = scipy.sparse.eye_array
 
-    with _check_warning(
-        scipy_sparse_matrix_deprecated(),
-        DeprecationWarning,
-        "is being replaced by",
-    ):
-        x = cls(scipy.sparse.eye(100))
-        x_dask = da.from_array(x)
-    x[slice(10), slice(10)] = 0
+    # The matrix variant explicitly asks for the deprecated container and must
+    # surface the SciPy warning; the sparse array variant must stay silent.
     with _check_warning(
         container == "matrix" and scipy_sparse_matrix_deprecated(),
         DeprecationWarning,
         "is being replaced by",
     ):
+        x = cls(eye(100))
+        x_dask = da.from_array(x)
+        x[slice(10), slice(10)] = 0
         x_dask[slice(10), slice(10)] = 0
         np.testing.assert_almost_equal(
             x_dask.compute(scheduler="single-threaded").toarray(), x.toarray()
@@ -5611,6 +5613,11 @@ def test_scipy_sparse_indexing(index, sparse_module_path, container):
         backend = "numpy"
 
     with dask.config.set({"array.backend": backend}):
+        x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        # Only an explicit request for the deprecated matrix container may warn.
+        # Slicing the resulting dask array re-instantiates the user's matrix type
+        # inside SciPy, so the comparison stays within the guarded block too.
         with _check_warning(
             sparse_module_path == "scipy.sparse"
             and container == "csr_matrix"
@@ -5618,8 +5625,6 @@ def test_scipy_sparse_indexing(index, sparse_module_path, container):
             DeprecationWarning,
             "is being replaced by",
         ):
-            x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
-            x[x < 0.9] = 0
             y = x.map_blocks(getattr(sp, container))
 
             assert not (
@@ -5640,21 +5645,21 @@ def test_scipy_sparse_concatenate(axis, container):
 
     rng = da.random.default_rng()
 
+    xs = []
+    for _ in range(2):
+        x = rng.random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        xs.append(x)
+
+    # The matrix variant explicitly asks for the deprecated container and must
+    # surface the SciPy warning; the sparse array variant must stay silent.
     with _check_warning(
         container == "matrix" and scipy_sparse_matrix_deprecated(),
         DeprecationWarning,
         "is being replaced by",
     ):
-        xs = []
-        ys = []
-        for _ in range(2):
-            x = rng.random((1000, 10), chunks=(100, 10))
-            x[x < 0.9] = 0
-            xs.append(x)
-            ys.append(x.map_blocks(cls))
-
-        z = da.concatenate(ys, axis=axis)
-        z = z.compute()
+        ys = [x.map_blocks(cls) for x in xs]
+        z = da.concatenate(ys, axis=axis).compute()
 
         if axis == 0:
             sp_concatenate = scipy.sparse.vstack
@@ -5674,6 +5679,8 @@ def test_scipy_sparse_asarray_like(src, func):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
+    # The user explicitly asks for the deprecated matrix container; SciPy warns
+    # about it and dask must pass that warning through unfiltered.
     with _check_warning(
         scipy_sparse_matrix_deprecated(),
         DeprecationWarning,
@@ -5692,6 +5699,32 @@ def test_scipy_sparse_asarray_like(src, func):
         assert a.compute().dtype == np.float32
         assert isinstance(a._meta, type(mtx))
         assert isinstance(a.compute(), type(mtx))
+
+
+def test_scipy_sparse_array_never_constructs_matrix():
+    """Dask must not construct a deprecated sparse matrix on its own.
+
+    A dask workflow built from a sparse *array* must not emit the SciPy spmatrix
+    deprecation warning. Only the user's explicit request for a matrix container
+    may trigger it.
+    """
+    pytest.importorskip("scipy.sparse")
+    import scipy.sparse
+
+    if not hasattr(scipy.sparse, "csr_array"):
+        pytest.skip("scipy<1.11 has no sparray")
+
+    src = scipy.sparse.csr_array(np.eye(4))
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        d = da.from_array(src, chunks=2)
+        d = d.T
+        d = d[0:2]
+        d = d.map_blocks(lambda x: x)
+        d.compute(scheduler="single-threaded")
+        da.concatenate([d, d]).compute(scheduler="single-threaded")
+
+    assert not [w for w in record if "is being replaced by" in str(w.message)]
 
 
 def test_3851():
