@@ -46,6 +46,7 @@ from dask.dataframe.utils import (
     pyarrow_strings_enabled,
 )
 from dask.utils import M, is_dataframe_like, is_series_like
+from dask.utils_test import _check_warning, scipy_sparse_matrix_deprecated
 
 try:
     import crick
@@ -4613,16 +4614,21 @@ def test_dask_dataframe_holds_scipy_sparse_containers(container):
         pytest.skip("scipy<1.11 has no sparray")
     cls = sparse.csr_matrix if container == "matrix" else sparse.csr_array
 
-    x = da.random.random((1000, 10), chunks=(100, 10))
-    x[x < 0.9] = 0
-    df = dd.from_dask_array(x)
-    y = df.map_partitions(cls)
+    with _check_warning(
+        container == "matrix" and scipy_sparse_matrix_deprecated(),
+        DeprecationWarning,
+        "is being replaced by",
+    ):
+        x = da.random.random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        df = dd.from_dask_array(x)
+        y = df.map_partitions(cls)
 
-    assert isinstance(y, da.Array)
+        assert isinstance(y, da.Array)
 
-    vs = y.to_delayed().flatten().tolist()
-    values = dask.compute(*vs, scheduler="single-threaded")
-    assert all(isinstance(v, cls) for v in values)
+        vs = y.to_delayed().flatten().tolist()
+        values = dask.compute(*vs, scheduler="single-threaded")
+        assert all(isinstance(v, cls) for v in values)
 
 
 @pytest.mark.xfail(reason="we can't do this yet")

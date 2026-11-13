@@ -6,6 +6,8 @@ import os
 import time
 from typing import TYPE_CHECKING
 
+from packaging.version import Version
+
 if TYPE_CHECKING:
     from dask.highlevelgraph import HighLevelGraph, Layer
 
@@ -164,6 +166,21 @@ def hlg_layer(hlg: HighLevelGraph, prefix: str) -> Layer:
 def hlg_layer_topological(hlg: HighLevelGraph, i: int) -> Layer:
     "Get the layer from a HighLevelGraph at position ``i``, topologically"
     return hlg.layers[hlg._toposort_layers()[i]]
+
+
+def scipy_sparse_matrix_deprecated() -> bool:
+    """Whether the installed scipy deprecates the sparse matrix API.
+
+    scipy 2.0 deprecates the sparse matrix classes (``csr_matrix``, ``csc_matrix``,
+    ``coo_matrix``, ...) and constructors (``eye``, ``rand``, ...) in favor of the
+    sparse array API. See the spmatrix to sparray migration guide:
+    https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html
+    """
+    try:
+        import scipy
+    except ImportError:
+        return False
+    return Version(scipy.__version__) >= Version("2.0.0.dev0")
 
 
 @contextlib.contextmanager
