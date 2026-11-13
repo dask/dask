@@ -304,23 +304,17 @@ _WARN_ANNOTATIONS = True
 
 
 def _wrapped_numpy_funcname() -> str | None:
-    """Return the name of the NumPy function that delegated to ``__array_wrap__``.
+    """Return the name of the public NumPy function that called ``__array_wrap__``,
+    or None if the caller is not NumPy.
 
-    NumPy reaches ``__array_wrap__`` through a chain of private helpers
-    (``_wrapfunc`` -> ``_wrapit``), and the length of that chain varies between
-    NumPy versions and between the ufunc and array-function dispatch paths.
-    Skipping NumPy's private helpers and returning the first remaining frame
-    finds the function the caller actually invoked (e.g. ``repeat``) in every
-    case.
-
-    Returns ``None`` when no non-private frame is left.
+    Depending on the NumPy version, private helpers (``_wrapfunc``, ``_wrapit``)
+    may sit between the public function and ``__array_wrap__``; skip them.
     """
-    # Start at the caller of __array_wrap__: this helper's grandparent frame.
-    # NumPy's private wrapping helpers (_wrapfunc, _wrapit) may follow; the
-    # first frame whose name is not private is the public function the caller
-    # invoked.
+    # Caller of __array_wrap__
     frame: FrameType | None = sys._getframe(1).f_back
-    while frame is not None:
+    while frame is not None and frame.f_globals.get("__name__", "").startswith(
+        "numpy."
+    ):
         name = frame.f_code.co_name
         if not name.startswith("_"):
             return name
