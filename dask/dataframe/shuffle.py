@@ -78,7 +78,7 @@ def partitioning_index(df, npartitions, cast_dtype=None):
     npartitions : int
         The number of partitions to group into.
     cast_dtype : dtype, optional
-        The dtype to cast to to avoid nullability issues
+        The dtype to cast to avoid nullability issues
 
     Returns
     -------
