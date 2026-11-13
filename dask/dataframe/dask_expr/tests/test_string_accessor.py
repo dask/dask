@@ -140,6 +140,22 @@ def test_str_split_(index):
     assert_eq(dd_a, pd_a)
 
 
+def test_str_split_expand_preserves_dtype():
+    # GH#11884: ``str.split(..., expand=True)`` dropped the input string dtype
+    # and coerced the result to ``object`` in the lazy metadata.
+    pytest.importorskip("pyarrow")
+    ser = pd.Series(["a,b,c", "d,e,f"], dtype="string[pyarrow]")
+    dser = from_pandas(ser, npartitions=1)
+
+    result = dser.str.split(",", n=1, expand=True)
+
+    # the lazy meta must agree with the materialized result ...
+    assert list(result.dtypes) == list(result.compute().dtypes)
+    # ... and must not collapse back to ``object``
+    assert not (result.dtypes == object).any()
+    assert_eq(result, ser.str.split(",", n=1, expand=True))
+
+
 def test_str_accessor_not_available():
     pdf = pd.DataFrame({"a": [1, 2, 3]})
     df = from_pandas(pdf, npartitions=2)
