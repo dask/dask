@@ -4614,14 +4614,18 @@ def test_dask_dataframe_holds_scipy_sparse_containers(container):
         pytest.skip("scipy<1.11 has no sparray")
     cls = sparse.csr_matrix if container == "matrix" else sparse.csr_array
 
+    x = da.random.random((1000, 10), chunks=(100, 10))
+    x[x < 0.9] = 0
+    df = dd.from_dask_array(x)
+
+    # The user explicitly asks dask to build matrix containers; SciPy warns
+    # about it and dask must not swallow the warning. The array variant must be
+    # silent, which also proves dask never falls back to a matrix.
     with _check_warning(
         container == "matrix" and scipy_sparse_matrix_deprecated(),
         DeprecationWarning,
         "is being replaced by",
     ):
-        x = da.random.random((1000, 10), chunks=(100, 10))
-        x[x < 0.9] = 0
-        df = dd.from_dask_array(x)
         y = df.map_partitions(cls)
 
         assert isinstance(y, da.Array)

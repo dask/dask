@@ -1064,6 +1064,8 @@ def test_tokenize_numpy_matrix():
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
+    # This test deliberately uses the deprecated sparse matrix API, so SciPy must
+    # be allowed to emit its warning; dask must not swallow it.
     with _check_warning(
         scipy_sparse_matrix_deprecated(),
         DeprecationWarning,
