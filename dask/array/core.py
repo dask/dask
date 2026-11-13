@@ -440,7 +440,15 @@ def _concatenate2(arrays, axes=None):
         return concatenate(arrays, axis=axes[0])
 
 
-def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=None):
+def apply_infer_dtype(
+    func,
+    args,
+    kwargs,
+    funcname,
+    suggest_dtype="dtype",
+    nout=None,
+    input_shapes: Sequence[tuple[int, ...]] | None = None,
+):
     """
     Tries to infer output dtype of ``func`` for a small set of input arguments.
 
@@ -467,6 +475,10 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
         ``None`` if function returns single output, integer if many.
         Defaults to ``None``.
 
+    input_shapes: List of tuple, optional
+        Shapes of small sample arrays used for dtype inference. By default,
+        each axis of an array argument has length one.
+
     Returns
     -------
     : dtype or List of dtype
@@ -477,11 +489,15 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     # make sure that every arg is an evaluated array
     args = [
         (
-            np.zeros_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+            np.zeros_like(
+                meta_from_array(x),
+                shape=input_shapes[i] if input_shapes is not None else (1,) * x.ndim,
+                dtype=x.dtype,
+            )
             if is_arraylike(x)
             else x
         )
-        for x in args
+        for i, x in enumerate(args)
     ]
     try:
         with np.errstate(all="ignore"):
