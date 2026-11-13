@@ -313,7 +313,7 @@ def _wrapped_numpy_funcname() -> str | None:
     try:
         frame = sys._getframe(1)
     except AttributeError:  # Not CPython
-        frame = inspect.stack()[0].frame  # pragma: nocover
+        frame = inspect.stack()[1].frame  # pragma: nocover
     assert frame.f_back is not None
     frame = frame.f_back
 
