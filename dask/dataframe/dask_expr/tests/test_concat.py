@@ -403,3 +403,16 @@ def test_concat_optimize_project(axis, interleave_partitions):
     assert (
         optimized_project.optimize()._name == concatenated[["a", "c"]].optimize()._name
     )
+
+
+def test_concat_nan_in_divisions():
+    # https://github.com/dask/dask/issues/12653
+    pdf1 = pd.DataFrame({"a": range(3)}, index=pd.Index([1.0, 2.0, np.nan]))
+    pdf2 = pd.DataFrame({"a": range(3)}, index=pd.Index([1.5, 2.5, np.nan]))
+    df1 = from_pandas(pdf1, npartitions=1)
+    df2 = from_pandas(pdf2, npartitions=1)
+
+    result = concat([df1, df2], interleave_partitions=True)
+    expected = pd.concat([pdf1, pdf2]).sort_index()
+    assert_eq(result, expected, check_index=True)
+    assert_eq(result.optimize(), expected, check_index=True)

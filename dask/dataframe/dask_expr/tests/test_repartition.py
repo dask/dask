@@ -142,3 +142,25 @@ def test_repartition_unknown_divisions():
         ValueError, match="Cannot repartition on divisions with unknown divisions"
     ):
         df.repartition(divisions=(0, 100)).compute()
+
+
+def test_repartition_force_nan_in_divisions():
+    # https://github.com/dask/dask/issues/12653
+    pdf = pd.DataFrame({"a": range(5)}, index=pd.Index([1.0, 2.0, 3.0, 4.0, np.nan]))
+    df = from_pandas(pdf, npartitions=2)
+    assert df.divisions[:2] == (1.0, 4.0)
+    assert np.isnan(df.divisions[-1])
+
+    result = df.repartition(divisions=[1, 2, 4], force=True)
+    expected = pdf.loc[1:4]
+    assert_eq(result, expected, check_index=True)
+    assert_eq(result.optimize(), expected, check_index=True)
+
+
+def test_repartition_nan_in_divisions_roundtrip():
+    # https://github.com/dask/dask/issues/12653
+    pdf = pd.DataFrame({"a": range(4)}, index=pd.Index([1.0, np.nan, 2.0, np.nan]))
+    df = from_pandas(pdf, npartitions=2)
+
+    result = df.repartition(divisions=df.divisions)
+    assert_eq(result, df.compute(), check_index=True)
