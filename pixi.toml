@@ -193,19 +193,21 @@ pyarrow = "=20.0"
 
 [feature.py312.dependencies]
 python = "=3.12"
+numpy = "=2.2"
+pandas = "=2.3"
+pyarrow = "=22.0"
 # tiledb 2.30.1 links libaws-c-s3.so.1.1 but does not declare aws-c-s3 as a
 # dependency, so the solver can pick aws-c-s3 1.0.0 (which ships .so.1.0) and break
 # `import tiledb`. Pin the 1.1 series (conda-forge/tiledb-feedstock#514).
 aws-c-s3 = ">=1.1.3,<1.2"
-numpy = "=2.2"
-pandas = "=2.3"
-pyarrow = "=22.0"
 
 [feature.py313.dependencies]
 python = "=3.13"
 numpy = "=2.4"
 pandas = "=3.0"
 pyarrow = "=24.0"
+# See note above for py312
+aws-c-s3 = ">=1.1.3,<1.2"
 
 [feature.py314.dependencies]
 python = "=3.14"
