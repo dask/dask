@@ -242,6 +242,27 @@ def test_ufunc_wrapped_not_implemented():
         np.repeat(ddf, 10)
 
 
+def test_ufunc_wrapped_not_implemented_skips_private_helpers():
+    # The reported name must be the public function the caller invoked, however
+    # many private helpers of NumPy's dispatch machinery sit in between (#12720).
+    def repeat(obj):
+        def _wrapfunc(obj):
+            def _wrapit(obj):
+                return obj.__array_wrap__(np.array([1, 2, 3]), context=None)
+
+            return _wrapit(obj)
+
+        return _wrapfunc(obj)
+
+    ds = dd.from_pandas(pd.Series([1, 2, 3]), npartitions=1)
+    with pytest.raises(NotImplementedError, match="`repeat` is not implemented"):
+        repeat(ds)
+
+    ddf = dd.from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=1)
+    with pytest.raises(NotImplementedError, match="`repeat` is not implemented"):
+        repeat(ddf)
+
+
 _UFUNCS_2ARG = [
     "logaddexp",
     "logaddexp2",
