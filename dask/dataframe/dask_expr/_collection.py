@@ -3,10 +3,12 @@ from __future__ import annotations
 import datetime
 import functools
 import inspect
+import sys
 import warnings
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from functools import wraps
 from numbers import Integral, Number
+from types import FrameType
 from typing import Any, ClassVar, Literal
 
 import numpy as np
@@ -301,7 +303,7 @@ _WARN_ANNOTATIONS = True
 #
 
 
-def _wrapped_numpy_funcname() -> str:
+def _wrapped_numpy_funcname() -> str | None:
     """Return the name of the NumPy function that delegated to ``__array_wrap__``.
 
     NumPy reaches ``__array_wrap__`` through a chain of private helpers
@@ -310,20 +312,20 @@ def _wrapped_numpy_funcname() -> str:
     Skipping NumPy's private helpers and returning the first remaining frame
     finds the function the caller actually invoked (e.g. ``repeat``) in every
     case.
-    """
-    import sys
-    from types import FrameType
 
-    # The first two frames are this helper and __array_wrap__ itself; NumPy's
-    # private wrapping helpers (_wrapfunc, _wrapit) may follow. The first frame
-    # whose name is not private is the public NumPy function the caller invoked.
-    frame: FrameType | None = sys._getframe(2)
+    Returns ``None`` when no non-private frame is left.
+    """
+    # Start at the caller of __array_wrap__: this helper's grandparent frame.
+    # NumPy's private wrapping helpers (_wrapfunc, _wrapit) may follow; the
+    # first frame whose name is not private is the public function the caller
+    # invoked.
+    frame: FrameType | None = sys._getframe(1).f_back
     while frame is not None:
         name = frame.f_code.co_name
         if not name.startswith("_"):
             return name
         frame = frame.f_back
-    return "This method"
+    return None
 
 
 class FrameBase(DaskMethodsMixin):
@@ -2811,7 +2813,8 @@ class DataFrame(FrameBase):
             else:
                 index = context[1][0].index
         else:
-            method_name = f"`{_wrapped_numpy_funcname()}`"
+            funcname = _wrapped_numpy_funcname()
+            method_name = f"`{funcname}`" if funcname else "This method"
 
             raise NotImplementedError(
                 f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
@@ -4228,7 +4231,8 @@ class Series(FrameBase):
             else:
                 index = context[1][0].index
         else:
-            method_name = f"`{_wrapped_numpy_funcname()}`"
+            funcname = _wrapped_numpy_funcname()
+            method_name = f"`{funcname}`" if funcname else "This method"
             raise NotImplementedError(
                 f"{method_name} is not implemented for `dask.dataframe.Series`."
             )
