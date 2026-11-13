@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -405,6 +406,25 @@ def test_calculate_divisions_no_index(tmpdir, write_engine, read_engine):
     df = dd.read_parquet(fn, engine=read_engine, index=False)
     assert df.index.name is None
     assert not df.known_divisions
+
+
+@pytest.mark.parametrize("index_names", [["color", "shape"], ["shape", "color"]])
+@pytest.mark.parametrize("npartitions", [1, 2])
+def test_multi_index_roundtrip_order(
+    tmp_path: Path, engine: str, index_names: list[str], npartitions: int
+) -> None:
+    raw = pd.DataFrame(
+        {"color": ["red", "blue", "red"], "shape": ["square", "circle", "circle"]}
+    )
+    expected = raw.groupby(index_names).size().to_frame("count")
+    ddf = dd.from_pandas(raw, npartitions=npartitions)
+    grouped = ddf.groupby(index_names).size().to_frame("count")
+
+    grouped.to_parquet(tmp_path, engine=engine, write_index=True)
+    result = dd.read_parquet(tmp_path, engine=engine)
+
+    assert result._meta.index.names == index_names
+    assert_eq(result, expected)
 
 
 def test_columns_index_with_multi_index(tmpdir, engine):
