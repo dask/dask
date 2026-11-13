@@ -119,15 +119,16 @@ def test_sparse_matrix():
 
 def test_sparse_array():
     """sizeof() must handle the sparse array API, not just sparse matrices."""
+    np = pytest.importorskip("numpy")
     sparse = pytest.importorskip("scipy.sparse")
-    if not hasattr(sparse, "csr_array"):
-        pytest.skip("scipy<1.11 has no sparray")
+    if not hasattr(sparse, "sparray") or not hasattr(sparse, "csr_array"):
+        pytest.skip("scipy has no sparse array API")
 
     # The user explicitly asks for the sparse array API: dask must dispatch to
     # the sparray registration and must not emit a deprecation warning.
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
-        sp = sparse.eye_array(10)
+        sp = sparse.csr_array(np.eye(10))
         assert sizeof(sp.todia()) >= 152
         assert sizeof(sp.tobsr()) >= 232
         assert sizeof(sp.tocoo()) >= 240
