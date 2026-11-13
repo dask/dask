@@ -8,7 +8,6 @@ import warnings
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from functools import wraps
 from numbers import Integral, Number
-from types import FrameType
 from typing import Any, ClassVar, Literal
 
 import numpy as np
@@ -311,13 +310,19 @@ def _wrapped_numpy_funcname() -> str | None:
     may sit between the public function and ``__array_wrap__``; skip them.
     """
     # Caller of __array_wrap__
-    frame: FrameType | None = sys._getframe(1).f_back
-    while frame is not None and frame.f_globals.get("__name__", "").startswith(
-        "numpy."
-    ):
+    try:
+        frame = sys._getframe(1)
+    except AttributeError:  # Not CPython
+        frame = inspect.stack()[0].frame  # pragma: nocover
+    assert frame.f_back is not None
+    frame = frame.f_back
+
+    while frame.f_globals.get("__name__", "").startswith("numpy."):
         name = frame.f_code.co_name
         if not name.startswith("_"):
             return name
+        if frame.f_back is None:
+            return None
         frame = frame.f_back
     return None
 
