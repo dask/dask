@@ -23,7 +23,7 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@v0.10.1
         with:
-          pixi-version: v0.72.1
+          pixi-version: v0.84.2
           environments: default
           cache: true
           locked: true
