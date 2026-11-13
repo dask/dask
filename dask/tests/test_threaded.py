@@ -155,7 +155,7 @@ def test_thread_safety():
 
 @pytest.mark.skipif(
     sys.version_info >= (3, 13) and not sys._is_gil_enabled(),
-    reason="hangs on python/cpython#150873 and python/cpython#148874"),
+    reason="hangs on python/cpython#150873 and python/cpython#148874",
 )
 @pytest.mark.parametrize("use_barrier", [True, False])
 def test_interrupt(use_barrier):
