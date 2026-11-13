@@ -66,7 +66,13 @@ from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
 from dask.utils import SerializableLock, key_split, tmpdir, tmpfile
-from dask.utils_test import dec, hlg_layer_topological, inc
+from dask.utils_test import (
+    _check_warning,
+    dec,
+    hlg_layer_topological,
+    inc,
+    scipy_sparse_matrix_deprecated,
+)
 
 try:
     from distributed import futures_of
@@ -5516,23 +5522,28 @@ def test_dask_array_holds_scipy_sparse_containers(container):
     cls = scipy.sparse.csr_matrix if container == "matrix" else scipy.sparse.csr_array
     kind = scipy.sparse.spmatrix if container == "matrix" else scipy.sparse.sparray
 
-    x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
-    x[x < 0.9] = 0
-    xx = x.compute()
-    y = x.map_blocks(cls)
+    with _check_warning(
+        container == "matrix" and scipy_sparse_matrix_deprecated(),
+        DeprecationWarning,
+        "is being replaced by",
+    ):
+        x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        xx = x.compute()
+        y = x.map_blocks(cls)
 
-    vs = y.to_delayed().flatten().tolist()
-    values = dask.compute(*vs, scheduler="single-threaded")
-    assert all(isinstance(v, cls) for v in values)
+        vs = y.to_delayed().flatten().tolist()
+        values = dask.compute(*vs, scheduler="single-threaded")
+        assert all(isinstance(v, cls) for v in values)
 
-    yy = y.compute(scheduler="single-threaded")
-    assert isinstance(yy, kind)
-    assert (yy == xx).all()
+        yy = y.compute(scheduler="single-threaded")
+        assert isinstance(yy, kind)
+        assert (yy == xx).all()
 
-    z = x.T.map_blocks(cls)
-    zz = z.compute(scheduler="single-threaded")
-    assert isinstance(zz, kind)
-    assert (zz == xx.T).all()
+        z = x.T.map_blocks(cls)
+        zz = z.compute(scheduler="single-threaded")
+        assert isinstance(zz, kind)
+        assert (zz == xx.T).all()
 
 
 @pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
@@ -5553,13 +5564,23 @@ def test_dask_array_setitem_singleton_sparse(container, format):
         else getattr(scipy.sparse, f"{format}_array")
     )
 
-    x = cls(scipy.sparse.eye(100))
-    x_dask = da.from_array(x)
+    with _check_warning(
+        scipy_sparse_matrix_deprecated(),
+        DeprecationWarning,
+        "is being replaced by",
+    ):
+        x = cls(scipy.sparse.eye(100))
+        x_dask = da.from_array(x)
     x[slice(10), slice(10)] = 0
-    x_dask[slice(10), slice(10)] = 0
-    np.testing.assert_almost_equal(
-        x_dask.compute(scheduler="single-threaded").toarray(), x.toarray()
-    )
+    with _check_warning(
+        container == "matrix" and scipy_sparse_matrix_deprecated(),
+        DeprecationWarning,
+        "is being replaced by",
+    ):
+        x_dask[slice(10), slice(10)] = 0
+        np.testing.assert_almost_equal(
+            x_dask.compute(scheduler="single-threaded").toarray(), x.toarray()
+        )
 
 
 @pytest.mark.parametrize(
@@ -5590,14 +5611,21 @@ def test_scipy_sparse_indexing(index, sparse_module_path, container):
         backend = "numpy"
 
     with dask.config.set({"array.backend": backend}):
-        x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
-        x[x < 0.9] = 0
-        y = x.map_blocks(getattr(sp, container))
+        with _check_warning(
+            sparse_module_path == "scipy.sparse"
+            and container == "csr_matrix"
+            and scipy_sparse_matrix_deprecated(),
+            DeprecationWarning,
+            "is being replaced by",
+        ):
+            x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
+            x[x < 0.9] = 0
+            y = x.map_blocks(getattr(sp, container))
 
-    assert not (
-        x[index, :].compute(scheduler="single-threaded")
-        != y[index, :].compute(scheduler="single-threaded")
-    ).sum()
+            assert not (
+                x[index, :].compute(scheduler="single-threaded")
+                != y[index, :].compute(scheduler="single-threaded")
+            ).sum()
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -5612,24 +5640,29 @@ def test_scipy_sparse_concatenate(axis, container):
 
     rng = da.random.default_rng()
 
-    xs = []
-    ys = []
-    for _ in range(2):
-        x = rng.random((1000, 10), chunks=(100, 10))
-        x[x < 0.9] = 0
-        xs.append(x)
-        ys.append(x.map_blocks(cls))
+    with _check_warning(
+        container == "matrix" and scipy_sparse_matrix_deprecated(),
+        DeprecationWarning,
+        "is being replaced by",
+    ):
+        xs = []
+        ys = []
+        for _ in range(2):
+            x = rng.random((1000, 10), chunks=(100, 10))
+            x[x < 0.9] = 0
+            xs.append(x)
+            ys.append(x.map_blocks(cls))
 
-    z = da.concatenate(ys, axis=axis)
-    z = z.compute()
+        z = da.concatenate(ys, axis=axis)
+        z = z.compute()
 
-    if axis == 0:
-        sp_concatenate = scipy.sparse.vstack
-    elif axis == 1:
-        sp_concatenate = scipy.sparse.hstack
-    z_expected = sp_concatenate([cls(e.compute()) for e in xs])
+        if axis == 0:
+            sp_concatenate = scipy.sparse.vstack
+        elif axis == 1:
+            sp_concatenate = scipy.sparse.hstack
+        z_expected = sp_concatenate([cls(e.compute()) for e in xs])
 
-    assert (z != z_expected).nnz == 0
+        assert (z != z_expected).nnz == 0
 
 
 @pytest.mark.parametrize("func", [da.asarray, da.asanyarray])
@@ -5641,19 +5674,24 @@ def test_scipy_sparse_asarray_like(src, func):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    mtx = scipy.sparse.csr_matrix([[3, 4, 5], [6, 7, 8]])
-    like = da.from_array(mtx)
+    with _check_warning(
+        scipy_sparse_matrix_deprecated(),
+        DeprecationWarning,
+        "is being replaced by",
+    ):
+        mtx = scipy.sparse.csr_matrix([[3, 4, 5], [6, 7, 8]])
+        like = da.from_array(mtx)
 
-    a = func(src, like=like)
-    assert isinstance(a._meta, type(mtx))
-    assert isinstance(a.compute(), type(mtx))
+        a = func(src, like=like)
+        assert isinstance(a._meta, type(mtx))
+        assert isinstance(a.compute(), type(mtx))
 
-    # Respect dtype; quietly disregard order
-    a = func(src, dtype=np.float32, order="C", like=like)
-    assert a.dtype == np.float32
-    assert a.compute().dtype == np.float32
-    assert isinstance(a._meta, type(mtx))
-    assert isinstance(a.compute(), type(mtx))
+        # Respect dtype; quietly disregard order
+        a = func(src, dtype=np.float32, order="C", like=like)
+        assert a.dtype == np.float32
+        assert a.compute().dtype == np.float32
+        assert isinstance(a._meta, type(mtx))
+        assert isinstance(a.compute(), type(mtx))
 
 
 def test_3851():

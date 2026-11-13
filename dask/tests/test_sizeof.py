@@ -9,6 +9,7 @@ import pytest
 from dask.multiprocessing import get_context
 from dask.sizeof import sizeof
 from dask.utils import funcname, tmpdir
+from dask.utils_test import _check_warning, scipy_sparse_matrix_deprecated
 
 try:
     import pandas as pd
@@ -97,15 +98,20 @@ def test_pandas_repeated_column():
 
 def test_sparse_matrix():
     sparse = pytest.importorskip("scipy.sparse")
-    sp = sparse.eye(10)
-    # These are the 32-bit Python 2.7 values.
-    assert sizeof(sp.todia()) >= 152
-    assert sizeof(sp.tobsr()) >= 232
-    assert sizeof(sp.tocoo()) >= 240
-    assert sizeof(sp.tocsc()) >= 232
-    assert sizeof(sp.tocsr()) >= 232
-    assert sizeof(sp.todok()) >= 184
-    assert sizeof(sp.tolil()) >= 204
+    with _check_warning(
+        scipy_sparse_matrix_deprecated(),
+        DeprecationWarning,
+        "is being replaced by",
+    ):
+        sp = sparse.eye(10)
+        # These are the 32-bit Python 2.7 values.
+        assert sizeof(sp.todia()) >= 152
+        assert sizeof(sp.tobsr()) >= 232
+        assert sizeof(sp.tocoo()) >= 240
+        assert sizeof(sp.tocsc()) >= 232
+        assert sizeof(sp.tocsr()) >= 232
+        assert sizeof(sp.todok()) >= 184
+        assert sizeof(sp.tolil()) >= 204
 
 
 @requires_pandas
