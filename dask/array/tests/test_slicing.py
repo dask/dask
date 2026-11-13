@@ -698,6 +698,35 @@ def test_index_with_int_dask_array_indexerror(chunks):
         a[idx].compute()
 
 
+@pytest.mark.parametrize("x_chunks", [2, 4])
+@pytest.mark.parametrize("idx_chunks", [1, 2])
+@pytest.mark.parametrize("unknown_chunks", [False, True])
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("indices", [[0, 4], [4, 0], [0, -5], [-5, 0], [4], [-5]])
+def test_index_with_int_dask_array_out_of_bounds(
+    x_chunks: int,
+    idx_chunks: int,
+    unknown_chunks: bool,
+    axis: int,
+    indices: list[int],
+) -> None:
+    x = np.arange(8).reshape(2, 4)
+    if axis == 0:
+        x = x.T
+    a = da.from_array(x, chunks=x_chunks)
+    idx = da.from_array(indices, chunks=idx_chunks)
+    if unknown_chunks:
+        idx = idx[da.ones_like(idx, dtype=bool)]
+
+    index = [slice(None), slice(None)]
+    index[axis] = idx
+    result = a[tuple(index)]
+    invalid_index = next(i for i in indices if i < -4 or i >= 4)
+    msg = f"index {invalid_index} is out of bounds for axis {axis} with size 4"
+    with pytest.raises(IndexError, match=msg):
+        result.compute()
+
+
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]
 )
@@ -705,6 +734,12 @@ def test_index_with_int_dask_array_dtypes(dtype):
     a = da.from_array([10, 20, 30, 40], chunks=-1)
     idx = da.from_array(np.array([1, 2]).astype(dtype), chunks=1)
     assert_eq(a[idx], np.array([20, 30]))
+
+    idx = da.from_array(np.array([0, 4], dtype=dtype), chunks=2)
+    with pytest.raises(
+        IndexError, match="index 4 is out of bounds for axis 0 with size 4"
+    ):
+        a[idx].compute()
 
 
 def test_index_with_int_dask_array_nocompute():
