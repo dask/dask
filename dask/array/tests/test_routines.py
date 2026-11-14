@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import itertools
+import math
 import pickle
 import sys
 import warnings
@@ -1583,6 +1584,76 @@ def test_expand_dims(axis):
 
         assert_eq(d_e, a_e)
         assert same_keys(d_e, da.expand_dims(d, axis=axis))
+
+
+@pytest.mark.parametrize("axis", [0, -1, (0, -1)])
+def test_expand_dims_lazy_graph(axis: int | tuple[int, ...]) -> None:
+    a = da.ones((20, 30), chunks=1)
+
+    result = da.expand_dims(a, axis=axis)
+
+    assert not result.dask.layers[result.name].is_materialized()
+    assert result.npartitions == a.npartitions
+
+
+@pytest.mark.parametrize(
+    "shape, chunks",
+    [
+        ((), ()),
+        ((0,), 1),
+        ((7,), 3),
+        ((4, 7), (3, 4)),
+        ((0, 7), (1, 3)),
+        ((2, 3, 4), (1, 2, 3)),
+    ],
+)
+@pytest.mark.parametrize("axis", [0, -1, (0, -1)])
+def test_expand_dims_preserves_chunks(
+    shape: tuple[int, ...], chunks: int | tuple[int, ...], axis: int | tuple[int, ...]
+) -> None:
+    a = np.arange(math.prod(shape), dtype="int16").reshape(shape)
+    d = da.from_array(a, chunks=chunks)
+
+    result = da.expand_dims(d, axis=axis)
+
+    assert_eq(result, np.expand_dims(a, axis=axis))
+    if axis == 0:
+        expected_chunks = ((1,),) + d.chunks
+    elif axis == -1:
+        expected_chunks = d.chunks + ((1,),)
+    else:
+        expected_chunks = ((1,),) + d.chunks + ((1,),)
+    assert result.chunks == expected_chunks
+
+
+@pytest.mark.parametrize("axis", [1, (3, 0), [2, 0], ()])
+def test_expand_dims_axis_order(axis: int | tuple[int, ...] | list[int]) -> None:
+    a = np.arange(28).reshape((4, 7))
+    d = da.from_array(a, chunks=(3, 4))
+
+    result = da.expand_dims(d, axis=axis)
+
+    assert_eq(result, np.expand_dims(a, axis=axis))
+    assert same_keys(result, da.expand_dims(d, axis=axis))
+
+
+@pytest.mark.parametrize("array_type", ["numpy", "masked", "sparse"])
+@pytest.mark.parametrize("axis", [0, -1, (2, 0)])
+def test_expand_dims_array_type(array_type: str, axis: int | tuple[int, ...]) -> None:
+    a = np.arange(12, dtype="float32").reshape((3, 4))
+    if array_type == "masked":
+        a = np.ma.masked_array(a, mask=a % 2 == 0)
+    elif array_type == "sparse":
+        sparse = pytest.importorskip("sparse")
+        a = sparse.COO.from_numpy(a)
+    d = da.from_array(a, chunks=(2, 3))
+
+    result = da.expand_dims(d, axis=axis)
+
+    assert type(result._meta) is type(a)
+    assert type(result.compute()) is type(a)
+    expected = a.todense() if array_type == "sparse" else a
+    assert_eq(result, np.expand_dims(expected, axis=axis))
 
 
 @pytest.mark.parametrize("is_func", [True, False])
