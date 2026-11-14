@@ -1036,6 +1036,33 @@ def test_merge_suffix_projections():
     assert_eq(result, expected)
 
 
+def test_merge_projection_preserves_right_suffix_for_join_key():
+    pdf_left = pd.DataFrame({"c0": [1], "c1": [2]})
+    pdf_middle = pd.DataFrame({"c0": [1]})
+    pdf_right = pd.DataFrame({"c0": [2]})
+
+    left = from_pandas(pdf_left, npartitions=1)
+    middle = from_pandas(pdf_middle, npartitions=1)
+    right = from_pandas(pdf_right, npartitions=1)
+
+    expected = pdf_left.merge(pdf_middle, on="c0", how="right").merge(
+        pdf_right,
+        left_on="c1",
+        right_on="c0",
+        how="left",
+        suffixes=("", "_2"),
+    )[["c0_2"]]
+    result = left.merge(middle, on="c0", how="right").merge(
+        right,
+        left_on="c1",
+        right_on="c0",
+        how="left",
+        suffixes=("", "_2"),
+    )[["c0_2"]]
+
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("index", [True, False])
 def test_merge_after_rename(index):
     pleft = pd.Series(range(10))
