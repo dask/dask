@@ -1111,6 +1111,19 @@ def lu(a):
     return p, l, u
 
 
+def _lstsq_triangular(a, b):
+    """Solve one triangular block, falling back to a min-norm least squares solve.
+
+    ``lstsq`` only uses this when ``R`` is a single block. A zero diagonal makes
+    the triangular solve raise; NumPy's ``lstsq`` returns the minimum-norm
+    solution instead.
+    """
+    try:
+        return solve_triangular_safe(a, b)
+    except np.linalg.LinAlgError:
+        return np.linalg.lstsq(a, b, rcond=None)[0]
+
+
 def solve_triangular(a, b, lower=False):
     """
     Solve the equation `a x = b` for `x`, assuming a is a triangular matrix.
@@ -1130,6 +1143,15 @@ def solve_triangular(a, b, lower=False):
     x : (M,) or (M, N) array
         Solution to the system `a x = b`. Shape of return matches `b`.
     """
+    return _solve_triangular(a, b, lower, solve_triangular_safe)
+
+
+def _solve_triangular(a, b, lower, upper_solver):
+    """Build the ``solve_triangular`` graph.
+
+    ``upper_solver`` solves each diagonal block of an upper triangular ``a``;
+    ``lstsq`` passes one that tolerates a singular ``R``.
+    """
 
     if a.ndim != 2:
         raise ValueError("a must be 2 dimensional")
@@ -1144,7 +1166,7 @@ def solve_triangular(a, b, lower=False):
 
     vchunks = len(a.chunks[1])
     hchunks = 1 if b.ndim == 1 else len(b.chunks[1])
-    token = tokenize(a, b, lower)
+    token = tokenize(a, b, lower, upper_solver)
     name = f"solve-triangular-{token}"
 
     # for internal calculation
@@ -1187,11 +1209,7 @@ def solve_triangular(a, b, lower=False):
                         dsk[prev] = (np.dot, (a.name, i, k), _key(k, j))
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
-                dsk[_key(i, j)] = (
-                    solve_triangular_safe,
-                    (a.name, i, i),
-                    target,
-                )
+                dsk[_key(i, j)] = (upper_solver, (a.name, i, i), target)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
 
@@ -1441,7 +1459,16 @@ def lstsq(a, b):
         Singular values of `a`.
     """
     q, r = qr(a)
-    x = solve_triangular(r, q.T.conj().dot(b))
+    # One R block is the whole reduced system, so a singular diagonal can be
+    # solved as a small least-squares problem. Chunked R keeps the raising
+    # triangular solve.
+    rhs = q.T.conj().dot(b)
+    solver = (
+        _lstsq_triangular
+        if len(r.chunks[0]) == 1 and len(r.chunks[1]) == 1
+        else solve_triangular_safe
+    )
+    x = _solve_triangular(r, rhs, False, solver)
     residuals = b - a.dot(x)
     residuals = abs(residuals**2).sum(axis=0, keepdims=b.ndim == 1)
 
