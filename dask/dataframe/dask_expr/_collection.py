@@ -6143,8 +6143,7 @@ def to_datetime(arg, meta=None, **kwargs):
             meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
-    else:
-        meta = make_meta(meta)
+    meta = make_meta(meta)
 
     kwargs.pop("infer_datetime_format", None)
 
