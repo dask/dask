@@ -224,6 +224,34 @@ def test_str_accessor_getitem(df_ddf):
     assert_eq(ddf.str_col.str[1], df.str_col.str[1])
 
 
+@pytest.mark.parametrize("npartitions", [1, 2])
+@pytest.mark.parametrize("split_method", ["split", "rsplit"])
+@pytest.mark.parametrize("get_method", ["__getitem__", "get"])
+@pytest.mark.parametrize("position", [0, -1])
+def test_str_accessor_split_get_compare(
+    npartitions, split_method, get_method, position
+):
+    pdf = pd.DataFrame({"c0": pd.Series(["a/b", "c/d", "e"], dtype="string[pyarrow]")})
+    ddf = dd.from_pandas(pdf, npartitions=npartitions)
+
+    expected = getattr(getattr(pdf.c0.str, split_method)("/").str, get_method)(position)
+    actual = getattr(getattr(ddf.c0.str, split_method)("/").str, get_method)(position)
+
+    assert actual.dtype == expected.dtype
+    assert_eq(actual.le(ddf.c0), expected.le(pdf.c0))
+
+
+def test_str_accessor_split_get_out_of_range():
+    pdf = pd.Series(["a/b", "c/d"], dtype="string[pyarrow]")
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    expected = pdf.str.split("/").str[2]
+    actual = ddf.str.split("/").str[2]
+
+    assert actual.dtype == expected.dtype
+    assert_eq(actual, expected)
+
+
 def test_str_accessor_extractall(df_ddf):
     df, ddf = df_ddf
     assert_eq(

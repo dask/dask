@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import functools
 
+from pandas.api.types import is_object_dtype
+
 from dask.dataframe.dask_expr._accessor import Accessor, FunctionMap
 from dask.dataframe.dask_expr._expr import Blockwise
 from dask.dataframe.dask_expr._reductions import Reduction
@@ -75,6 +77,27 @@ class StringAccessor(Accessor):
     )
     _accessor_properties = ()
 
+    def _function_map(self, attr, *args, **kwargs):
+        from dask.dataframe.dask_expr import Index, new_collection
+
+        frame = self._series.expr
+        if (
+            attr in ("__getitem__", "get")
+            and args
+            and isinstance(args[0], int)
+            and args[0] in (0, -1)
+            and not isinstance(self._series, Index)
+            and isinstance(frame, FunctionMap)
+            and frame.accessor == "str"
+            and frame.attr in ("split", "rsplit")
+            and not frame.kwargs.get("expand", False)
+            and is_object_dtype(frame._meta.dtype)
+        ):
+            return new_collection(
+                SplitGetItem(self._series, self._accessor_name, attr, args, kwargs)
+            )
+        return super()._function_map(attr, *args, **kwargs)
+
     def _split(self, method, pat=None, n=-1, expand=False):
         from dask.dataframe.dask_expr import new_collection
 
@@ -134,6 +157,14 @@ class CatBlockwise(Blockwise):
     @staticmethod
     def operation(ser, *args, **kwargs):
         return ser.str.cat(list(args), **kwargs)
+
+
+class SplitGetItem(FunctionMap):
+    @functools.cached_property
+    def _meta(self):
+        # An empty object Series cannot retain the list elements produced by
+        # split, so evaluating str.get on its synthetic values infers float.
+        return self.frame._meta
 
 
 class Cat(Reduction):
