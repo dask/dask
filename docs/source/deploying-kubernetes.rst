@@ -44,7 +44,7 @@ This is a good choice if you want to do the following:
 3. Integrate Dask with other tools and workloads running on Kubernetes.
 4. Compose Dask clusters as part of a larger Kubernetes application.
 
-Learn more at `kubernetes.dask.org <https://kubernetes.dask.org/en/latest/operator.html>`_.
+Learn more at `kubernetes.dask.org <https://kubernetes.dask.org/en/stable/>`_.
 
 
 Dask Gateway

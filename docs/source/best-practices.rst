@@ -199,7 +199,7 @@ For example:
     are optimized for random access, metadata storage, and binary encoding like
     `Parquet <https://parquet.apache.org/>`_, `ORC <https://orc.apache.org/>`_,
     `Zarr <https://zarr.readthedocs.io/en/stable/>`_,
-    `HDF5 <https://portal.hdfgroup.org/display/HDF5/HDF5>`_, and
+    `HDF5 <https://support.hdfgroup.org/documentation/>`_, and
     `GeoTIFF <https://en.wikipedia.org/wiki/GeoTIFF>`_.
 -   When working on the cloud you may find that some older formats like HDF5 may
     not work as well.
