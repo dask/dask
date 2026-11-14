@@ -1652,10 +1652,8 @@ def test_expand_dims_array_type(array_type: str, axis: int | tuple[int, ...]) ->
 
     assert type(result._meta) is type(a)
     assert type(result.compute()) is type(a)
-    expected = np.expand_dims(a, axis=axis)
-    if array_type == "sparse":
-        expected = expected.todense()
-    assert_eq(result, expected)
+    expected = a.todense() if array_type == "sparse" else a
+    assert_eq(result, np.expand_dims(expected, axis=axis))
 
 
 @pytest.mark.parametrize("is_func", [True, False])

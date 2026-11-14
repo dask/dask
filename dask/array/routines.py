@@ -5,6 +5,7 @@ import warnings
 from collections.abc import Iterable
 from functools import partial, reduce, wraps
 from numbers import Integral, Real
+from typing import Any
 
 import numpy as np
 from tlz import concat, interleave, sliding_window
@@ -1985,7 +1986,13 @@ def expand_dims(a, axis):
         return a
 
     # Avoid materializing one reshape task per chunk just to add axes.
-    return a.map_blocks(np.expand_dims, axis=axis, new_axis=axis)
+    return a.map_blocks(_expand_dims, axis=axis, new_axis=axis)
+
+
+def _expand_dims(a: Any, axis: tuple[int, ...]) -> Any:
+    shape_it = iter(a.shape)
+    shape = [1 if ax in axis else next(shape_it) for ax in range(a.ndim + len(axis))]
+    return a.reshape(shape)
 
 
 @derived_from(np)
