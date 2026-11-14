@@ -1981,10 +1981,11 @@ def expand_dims(a, axis):
     out_ndim = len(axis) + a.ndim
     axis = validate_axis(axis, out_ndim)
 
-    shape_it = iter(a.shape)
-    shape = [1 if ax in axis else next(shape_it) for ax in range(out_ndim)]
+    if not axis:
+        return a
 
-    return a.reshape(shape)
+    # Avoid materializing one reshape task per chunk just to add axes.
+    return a.map_blocks(np.expand_dims, axis=axis, new_axis=axis)
 
 
 @derived_from(np)
