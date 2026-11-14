@@ -417,6 +417,9 @@ def test_qr(m, n, chunks, error_type):
         assert_eq(mat, da.dot(q, r))  # accuracy check
         assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
         assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
+
+        with pytest.raises(NotImplementedError):
+            qr(data, mode="complete")
     else:
         with pytest.raises(error_type):
             q, r = qr(data)
