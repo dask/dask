@@ -438,6 +438,43 @@ def test_sort_head_nlargest(df, pdf):
     assert a.optimize()._name == b.optimize()._name
 
 
+@pytest.mark.parametrize("npartitions", [1, 2])
+@pytest.mark.parametrize("sort_key", ["constant", "varying"])
+def test_sort_head_after_dropping_sort_column(npartitions, sort_key):
+    pdf = pd.DataFrame({"c0": [1, 2]})
+    df = from_pandas(pdf, npartitions=npartitions)
+
+    if sort_key == "constant":
+        expected = pdf.assign(c1=0)
+        result = df.assign(c1=0)
+    else:
+        expected = pdf.assign(c1=lambda frame: -frame.c0)
+        result = df.assign(c1=lambda frame: -frame.c0)
+
+    expected = expected.sort_values("c1").drop(columns="c1").head(1)
+    result = (
+        result.sort_values("c1")
+        .drop(columns="c1")
+        .head(1, npartitions=-1, compute=False)
+    )
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("method", ["nlargest", "nsmallest", "tail"])
+def test_top_n_after_dropping_sort_column(method):
+    pdf = pd.DataFrame({"x": [3, 1, 2], "y": [30, 10, 20]})
+    df = from_pandas(pdf, npartitions=2)
+
+    if method == "tail":
+        expected = pdf.sort_values("x").drop(columns="x").tail(1)
+        result = df.sort_values("x").drop(columns="x").tail(1, compute=False)
+    else:
+        expected = getattr(pdf, method)(1, "x").drop(columns="x")
+        result = getattr(df, method)(1, "x").drop(columns="x")
+
+    assert_eq(result, expected)
+
+
 def test_sort_tail_nsmallest(df, pdf):
     a = df.sort_values("x", ascending=False).tail(10, compute=False)
     b = NLast(df, 10, _columns=["x"], ascending=False)

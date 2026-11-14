@@ -1353,6 +1353,13 @@ class NLargest(ReductionConstantDim):
     reduction_chunk = M.nlargest
     reduction_aggregate = M.nlargest
 
+    def _simplify_up(self, parent, dependents):
+        if isinstance(parent, Projection) and self._columns is not None:
+            return plain_column_projection(
+                self, parent, dependents, additional_columns=[self._columns]
+            )
+        return super()._simplify_up(parent, dependents)
+
     def _columns_kwarg(self):
         if self._columns is None:
             return {}
