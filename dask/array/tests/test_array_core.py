@@ -3166,6 +3166,47 @@ def test_from_func():
     assert same_keys(d, from_func(f, (10,), x.dtype, kwargs={"n": 2}))
 
 
+def test_concatenate3_promotes_dtype_across_blocks():
+    # each block has its own dtype; the output must not inherit the first one
+    a = np.array(["ab"], dtype="<U4")
+    b = np.array(["abcdefgh"], dtype="<U8")
+    result = concatenate3([a, b])
+    assert result.dtype == np.result_type(a.dtype, b.dtype) == np.dtype("<U8")
+    assert_eq(result, np.concatenate([a, b]))
+
+    # ... and the other way around
+    result = concatenate3([b, a])
+    assert result.dtype == np.dtype("<U8")
+    assert_eq(result, np.concatenate([b, a]))
+
+
+def test_concatenate3_keeps_first_dtype_when_promotion_is_undefined():
+    # differing structured dtypes cannot be combined, so fall back to allocating
+    # with the first block's dtype instead of raising
+    a = np.array([(1,)], dtype=[("a", "i4")])
+    b = np.array([(2,)], dtype=[("b", "i4")])
+    assert_eq(concatenate3([a, b]), np.array([(1,), (2,)], dtype=[("a", "i4")]))
+
+
+def _zfill_each_block(block):
+    # a block-wise function may size its output from its own data, so block 0 can
+    # come back as <U4 while block 1 is <U8 even though the array declares <U8
+    text = block[0]
+    return np.array([text.zfill(4)], dtype=f"<U{max(4, len(text))}")
+
+
+def test_compute_keeps_string_values_longer_than_first_block():
+    # https://github.com/dask/dask/issues/12684
+    x = da.from_array(np.array(["ab", "abcdefgh"]), chunks=1)
+    y = x.map_blocks(_zfill_each_block, dtype="<U8")
+
+    blocks = [block.compute() for block in y.blocks]
+    assert blocks[0].dtype == np.dtype("<U4")
+    assert blocks[1].dtype == np.dtype("<U8")
+
+    assert_eq(y.compute(), np.array(["00ab", "abcdefgh"], dtype="<U8"))
+
+
 def test_concatenate3_2():
     x = np.array([1, 2])
     assert_eq(concatenate3([x, x, x]), np.array([1, 2, 1, 2, 1, 2]))

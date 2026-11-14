@@ -5684,7 +5684,27 @@ def concatenate3(arrays):
         except AttributeError:
             return type(x)
 
-    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
+    # Do not trust the first block alone for the output dtype. Blocks of the same
+    # array may disagree on the width of a string dtype (e.g. ``np.strings.zfill``
+    # returns ``<U4`` for one chunk and ``<U8`` for another), and allocating with
+    # the first one would silently truncate the longer values. ``np.concatenate``
+    # promotes across all of them, so do the same here.
+    dtype_ = dtype(deepfirst(arrays))
+    leaves = list(flatten(arrays, container=(list, tuple)))
+    if leaves and all(hasattr(arr, "dtype") for arr in leaves):
+        first = leaves[0].dtype
+        # only promote when the blocks actually disagree; np.result_type rebuilds
+        # structured dtypes and would drop field offsets that way
+        if any(arr.dtype != first for arr in leaves[1:]):
+            try:
+                dtype_ = np.result_type(*(arr.dtype for arr in leaves))
+            except TypeError:
+                # Promotion is not defined for every mix of dtypes (structured
+                # dtypes with different fields, for instance). Keep allocating
+                # with the first block's dtype, as we did before.
+                pass
+
+    result = np.empty(shape=shape, dtype=dtype_)
 
     for idx, arr in zip(
         slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))
