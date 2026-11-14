@@ -2585,6 +2585,27 @@ def test_astype_filter_pushdown(df, pdf):
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize("npartitions", [1, 2])
+@pytest.mark.parametrize("assign_column", [None, "x", "z"])
+def test_astype_filter_predicate(npartitions: int, assign_column: str | None) -> None:
+    pdf = pd.DataFrame({"x": [-1, 0, 1, 2], "y": [10, 20, 30, 40]})
+    df = from_pandas(pdf, npartitions=npartitions)
+    result = df[df.x.astype(bool)]
+    expected = pdf[pdf.x.astype(bool)]
+    if assign_column is not None:
+        result = result.assign(**{assign_column: lambda frame: frame.x.ge(0)})
+        expected = expected.assign(**{assign_column: lambda frame: frame.x.ge(0)})
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("npartitions", [1, 2])
+def test_astype_filter_self(npartitions: int) -> None:
+    ps = pd.Series([-1, 0, 1, 2], name="x").astype(bool)
+    ds = from_pandas(pd.Series([-1, 0, 1, 2], name="x"), npartitions=npartitions)
+    ds = ds.astype(bool)
+    assert_eq(ds[ds], ps[ps])
+
+
 @pytest.mark.filterwarnings("error")
 def test_warn_annotations():
     from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
