@@ -310,8 +310,8 @@ def test_avoid_broker_nodes(abcde):
     assert o[(a, 1)] < o[(b, 0)] or (o[(b, 1)] < o[(a, 0)] and o[(b, 2)] < o[(a, 0)])
 
 
-@pytest.mark.parametrize("data_root", [True, False])
-def test_base_of_reduce_preferred(abcde, data_root):
+@pytest.mark.parametrize("c_val", [1, (f, 1)])
+def test_base_of_reduce_preferred(abcde, c_val):
     r"""
                a3
               /|
@@ -328,13 +328,17 @@ def test_base_of_reduce_preferred(abcde, data_root):
     We really want to run b0 quickly
     """
     a, b, c, d, e = abcde
-    dsk = {(a, i): (f, (a, i - 1), (b, i)) for i in [1, 2, 3]}
-    dsk[(a, 0)] = (f, (b, 0))
-    dsk.update({(b, i): (f, c, 1) for i in [0, 1, 2, 3]})
-    if data_root:
-        dsk[c] = 1
-    else:
-        dsk[c] = (f, 1)
+    dsk = {
+        (a, 0): (f, (b, 0)),
+        (a, 1): (f, (a, 0), (b, 1)),
+        (a, 2): (f, (a, 1), (b, 2)),
+        (a, 3): (f, (a, 2), (b, 3)),
+        (b, 0): (f, c, 1),
+        (b, 1): (f, c, 1),
+        (b, 2): (f, c, 1),
+        (b, 3): (f, c, 1),
+        c: c_val,
+    }
 
     o = order(dsk)
     assert_topological_sort(dsk, o)

@@ -1245,12 +1245,12 @@ def test_from_delayed_iterator():
     ) == (25, 25, 50)
 
 
-def test_range():
-    for npartitions in [1, 7, 10, 28]:
-        b = db.range(100, npartitions=npartitions)
-        assert len(b.dask) == npartitions
-        assert b.npartitions == npartitions
-        assert list(b) == list(range(100))
+@pytest.mark.parametrize("npartitions", [1, 7, 10, 28])
+def test_range(npartitions):
+    b = db.range(100, npartitions=npartitions)
+    assert len(b.dask) == npartitions
+    assert b.npartitions == npartitions
+    assert list(b) == list(range(100))
 
 
 @pytest.mark.parametrize("npartitions", [1, 7, 10, 28])

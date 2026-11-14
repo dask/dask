@@ -139,23 +139,21 @@ def test_exceptions_propagate():
         def __init__(self, a, b):
             self.a = a
             self.b = b
-
+ 
         def __str__(self):
             return "My Exception!"
-
+ 
     def f():
         raise MyException(1, 2)
 
     from dask.threaded import get
-
-    try:
+ 
+    with pytest.raises(MyException, match="My Exception!") as exc_info:
         get({"x": (f,)}, "x")
-        assert False
-    except MyException as e:
-        assert "My Exception!" in str(e)
-        assert "a" in dir(e)
-        assert e.a == 1
-        assert e.b == 2
+ 
+    assert exc_info.value.a == 1
+    assert exc_info.value.b == 2
+
 
 
 def test_ordering():

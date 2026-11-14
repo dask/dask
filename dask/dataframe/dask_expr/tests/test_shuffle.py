@@ -546,7 +546,6 @@ def test_set_index_head_nlargest(df, pdf):
 def test_set_index_head_nlargest_string(pdf):
     pdf["z"] = "a" + pdf.x.map(str)
     df = from_pandas(pdf, npartitions=5)
-    print(df.dtypes)
 
     a = df.set_index("z").head(10, compute=False)
     assert_eq(a, pdf.set_index("z").sort_index().head(10))

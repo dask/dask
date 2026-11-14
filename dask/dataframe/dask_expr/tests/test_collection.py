@@ -833,7 +833,6 @@ def test_to_datetime():
 
     expected = pd.to_datetime(ps.index)
     result = to_datetime(ds.index)
-    print(expected)
     assert_eq(result, expected, check_divisions=False)
 
     with pytest.raises(NotImplementedError, match="non-index-able arguments"):
