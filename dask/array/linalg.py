@@ -1399,27 +1399,51 @@ def _cholesky(a):
     return lower, upper
 
 
-def _reverse(x):
-    return x[::-1]
+def _lstsq_svd(r: np.ndarray, maxdim: int) -> tuple[np.ndarray, ...]:
+    if r.shape[0] < r.shape[1]:
+        raise ValueError("lstsq requires at least as many rows as columns")
+    u, s, vh = np.linalg.svd(r, full_matrices=False)
+    cutoff = maxdim * np.finfo(s.dtype).eps * (s[0] if s.size else 0)
+    return u, s, vh, s > cutoff
+
+
+def _lstsq_solve(factors: tuple[np.ndarray, ...], b: np.ndarray) -> np.ndarray:
+    u, s, vh, keep = factors
+    projected = u.T.conj().dot(b)
+    if b.ndim == 2:
+        s = s[:, None]
+        keep = keep[:, None]
+    # Divide after projecting instead of forming reciprocals, which can overflow
+    # for small singular values even when the solution is representable.
+    denominator = np.where(keep, s, 1)
+    scaled = np.empty_like(projected)
+    if np.iscomplexobj(projected):
+        # Complex division may form 1 / s internally, overflowing for subnormals.
+        np.divide(projected.real, denominator, out=scaled.real)
+        np.divide(projected.imag, denominator, out=scaled.imag)
+    else:
+        np.divide(projected, denominator, out=scaled)
+    return vh.T.conj().dot(np.where(keep, scaled, 0))
 
 
 def lstsq(a, b):
     """
     Return the least-squares solution to a linear matrix equation using
-    QR decomposition.
+    QR decomposition and a singular value decomposition of the small R factor.
 
     Solves the equation `a x = b` by computing a vector `x` that
-    minimizes the Euclidean 2-norm `|| b - a x ||^2`.  The equation may
-    be under-, well-, or over- determined (i.e., the number of
-    linearly independent rows of `a` can be less than, equal to, or
-    greater than its number of linearly independent columns).  If `a`
-    is square and of full rank, then `x` (but for round-off error) is
-    the "exact" solution of the equation.
+    minimizes the Euclidean 2-norm `|| b - a x ||^2`. If `a` is square
+    and of full rank, then `x` (but for round-off error) is the "exact"
+    solution of the equation. For rank-deficient inputs, the solution with
+    the smallest 2-norm is returned. Singular values at most machine precision
+    of the QR factor times ``max(M, N)`` times the largest singular value are
+    ignored.
 
     Parameters
     ----------
     a : (M, N) array_like
-        "Coefficient" matrix.
+        "Coefficient" matrix, with M >= N and a single column of chunks.
+        The number of columns must be known.
     b : {(M,), (M, K)} array_like
         Ordinate or "dependent variable" values. If `b` is two-dimensional,
         the least-squares solution is calculated for each of the `K` columns
@@ -1440,34 +1464,64 @@ def lstsq(a, b):
     s : (min(M, N),) Array
         Singular values of `a`.
     """
-    q, r = qr(a)
-    x = solve_triangular(r, q.T.conj().dot(b))
+    if a.ndim != 2:
+        raise ValueError("a must be 2 dimensional")
+    if b.ndim not in (1, 2):
+        raise ValueError("b must be 1 or 2 dimensional")
+    if a.numblocks[1] != 1 or np.isnan(a.shape[1]):
+        raise NotImplementedError(
+            "lstsq requires a single column chunk with known size"
+        )
+    if a.shape[0] < a.shape[1]:
+        raise ValueError("lstsq requires at least as many rows as columns")
+
+    q, r = tsqr(a) if np.isnan(a.shape[0]) else qr(a)
+    qtb = q.T.conj().dot(b)
+    token = tokenize(a, b)
+    svdname = f"lstsq-svd-{token}"
+    maxdim = max(a.shape)
+    dependencies = [r]
+    svddsk = {}
+    if np.isnan(a.shape[0]):
+        # Determine the original row count lazily, without gathering the matrix.
+        shapename = f"lstsq-nrows-{token}"
+        for i in range(a.numblocks[0]):
+            svddsk[(shapename, i)] = (
+                operator.getitem,
+                (getattr, (a.name, i, 0), "shape"),
+                0,
+            )
+        nrows = (sum, [(shapename, i) for i in range(a.numblocks[0])])
+        maxdim = (max, nrows, a.shape[1])
+        dependencies.append(a)
+    svddsk[(svdname,)] = (_lstsq_svd, (r.name, 0, 0), maxdim)
+    graph = HighLevelGraph.from_collections(svdname, svddsk, dependencies=dependencies)
+    graph = HighLevelGraph.merge(graph, qtb.dask)
+    layers = graph.layers.copy()
+    layer_dependencies = graph.dependencies.copy()
+    dsk = {}
+
+    xname = f"lstsq-{token}"
+    for j in range(1 if b.ndim == 1 else b.numblocks[1]):
+        index = (0,) if b.ndim == 1 else (0, j)
+        dsk[(xname, *index)] = (_lstsq_solve, (svdname,), (qtb.name, *index))
+    rname = f"lstsq-rank-{token}"
+    layers[xname] = dsk
+    layer_dependencies[xname] = {svdname, *qtb.__dask_layers__()}
+    layers[rname] = {
+        (rname,): (np.sum, (operator.getitem, (svdname,), 3), None, np.int64)
+    }
+    layer_dependencies[rname] = {svdname}
+    sname = f"lstsq-singular-{token}"
+    layers[sname] = {(sname, 0): (operator.getitem, (svdname,), 1)}
+    layer_dependencies[sname] = {svdname}
+    graph = HighLevelGraph(layers, layer_dependencies)
+
+    x = Array(graph, xname, chunks=(r.chunks[1], *b.chunks[1:]), meta=qtb._meta)
+    rank = Array(graph, rname, chunks=(), dtype=np.int64)
+    s = Array(graph, sname, chunks=(r.chunks[1],), meta=r._meta.real)
     residuals = b - a.dot(x)
     residuals = abs(residuals**2).sum(axis=0, keepdims=b.ndim == 1)
-
-    token = tokenize(a, b)
-
-    # r must be a triangular with single block
-
-    # rank
-    rname = f"lstsq-rank-{token}"
-    rdsk = {(rname,): (np.linalg.matrix_rank, (r.name, 0, 0))}
-    graph = HighLevelGraph.from_collections(rname, rdsk, dependencies=[r])
-    # rank must be an integer
-    rank = Array(graph, rname, shape=(), chunks=(), dtype=int)
-
-    # singular
-    sname = f"lstsq-singular-{token}"
-    rt = r.T.conj()
-    sdsk = {
-        (sname, 0): (
-            _reverse,
-            (np.sqrt, (np.linalg.eigvalsh, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
-        )
-    }
-    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt, r])
-    meta = meta_from_array(residuals, 1)
-    s = Array(graph, sname, shape=(r.shape[0],), chunks=r.shape[0], meta=meta)
 
     return x, residuals, rank, s
 
