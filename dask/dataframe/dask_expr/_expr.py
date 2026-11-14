@@ -1578,7 +1578,17 @@ class ToDatetime(Elemwise):
 
     @functools.cached_property
     def _meta(self):
-        return self.operand("meta")
+        # The meta carried by this expression is allowed to be nonempty (see
+        # the unit inference in ``_collection.to_datetime``). Trim it back to
+        # zero length while preserving dtypes, so downstream meta evaluations
+        # (for example, binary comparisons against another Series) operate on
+        # metas with a consistent, empty index.
+        meta = self.operand("meta")
+        if is_series_like(meta):
+            return meta.iloc[:0]
+        if is_index_like(meta):
+            return meta[:0]
+        return meta
 
     @staticmethod
     def operation(*args, **kwargs):
