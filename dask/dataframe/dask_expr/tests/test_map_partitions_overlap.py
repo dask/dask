@@ -47,6 +47,81 @@ def test_map_partitions_broadcast(df):
     assert_eq(df2.optimize(), df + df["x"].sum() + 123)
 
 
+@pytest.mark.parametrize("kind", ["dataframe", "series", "index"])
+@pytest.mark.parametrize("npartitions", [1, 3])
+@pytest.mark.parametrize("provide_meta", [False, True])
+@pytest.mark.parametrize("optimize", [False, True])
+def test_map_partitions_frame_keyword(
+    kind: str, npartitions: int, provide_meta: bool, optimize: bool
+) -> None:
+    # https://github.com/dask/dask/issues/11829
+    pdf = pd.DataFrame({"x": range(6)})
+    df = from_pandas(pdf, npartitions=2)
+    other = from_pandas(pdf, npartitions=npartitions)
+    expected_type = type(pdf)
+    if kind == "series":
+        other = other.x
+        expected_type = type(pdf.x)
+    elif kind == "index":
+        other = other.index
+        expected_type = type(pdf.index)
+
+    def add_length(
+        part: pd.DataFrame, *, other: pd.DataFrame | pd.Series | pd.Index
+    ) -> pd.DataFrame:
+        assert isinstance(other, expected_type)
+        return part + len(other)
+
+    kwargs = {"meta": pdf} if provide_meta else {}
+    result = df.map_partitions(add_length, other=other, **kwargs)
+    assert result._name == df.map_partitions(add_length, other=other, **kwargs)._name
+    if optimize:
+        result = result.optimize()
+
+    assert result.npartitions == df.npartitions
+    assert result.divisions == df.divisions
+    assert_eq(result, pdf + len(pdf))
+
+
+def test_map_partitions_frame_keyword_lazy() -> None:
+    pdf = pd.DataFrame({"x": range(6)})
+    df = from_pandas(pdf, npartitions=2)
+    calls: list[str] = []
+
+    @dask.delayed
+    def load_other() -> pd.DataFrame:
+        calls.append("load")
+        return pdf
+
+    other = dask.dataframe.from_delayed(load_other(), meta=pdf)
+
+    def add_sum(
+        part: pd.DataFrame, *, other: pd.DataFrame, offset: int, scale: int
+    ) -> pd.DataFrame:
+        assert isinstance(other, type(pdf))
+        return part + other.x.sum() + offset * scale
+
+    result = df.map_partitions(
+        add_sum, other=other, offset=dask.delayed(2), scale=3, meta=pdf
+    ).optimize()
+    assert calls == []
+    actual = result.compute(scheduler="sync")
+    assert calls == ["load"]
+    assert_eq(actual, pdf + pdf.x.sum() + 6)
+
+
+def test_map_partitions_scalar_keyword() -> None:
+    pdf = pd.DataFrame({"x": range(6)})
+    df = from_pandas(pdf, npartitions=2)
+
+    def add_scalar(part: pd.DataFrame, *, scalar: int) -> pd.DataFrame:
+        return part + scalar
+
+    result = df.map_partitions(add_scalar, scalar=df.x.sum(), token="add-sum")
+    assert result._name.startswith("add-sum-")
+    assert_eq(result, pdf + pdf.x.sum())
+
+
 @pytest.mark.parametrize("opt", [True, False])
 def test_map_partitions_merge(opt):
     # Make simple left & right dfs
