@@ -231,10 +231,9 @@ def register_spmatrix():
     def sizeof_spmatrix(s):
         return sum(sizeof(v) for v in s.__dict__.values())
 
-    if hasattr(sparse, "sparray"):
-        # scipy.sparse.sparray is not a subclass of scipy.sparse.spmatrix, so it
-        # needs its own registration. The sparse array API exists since scipy
-        # 1.11; the deprecated sparse matrix API is not involved here.
+    if hasattr(sparse, "sparray"):  # scipy >=1.11
+        # scipy.sparse.sparray is not a subclass of scipy.sparse.spmatrix,
+        # so it needs its own registration.
         @sizeof.register(sparse.sparray)
         def sizeof_sparray(s):
             return sum(sizeof(v) for v in s.__dict__.values())

@@ -473,10 +473,6 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
         return np_func(a, like=like, **kwargs)
 
     if _is_sparse_container(like):
-        # Construct the container type the user explicitly asked for: a sparse
-        # matrix stays a matrix (SciPy warns about its deprecation) and a sparse
-        # array stays an array. dask never silently promotes an array to a
-        # matrix or vice versa.
         kwargs.pop("order", None)
         if np.isscalar(a):
             a = np.array([[a]])
