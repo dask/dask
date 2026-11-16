@@ -377,8 +377,16 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
     # Needed when idx is unsigned
     idx = idx.astype(np.int64)
 
+    x_size = sum(x_chunks)
+    out_of_bounds = (idx < -x_size) | (idx >= x_size)
+    if out_of_bounds.any():
+        bad_index = idx[out_of_bounds][0]
+        raise IndexError(
+            f"index {bad_index} is out of bounds for axis {axis} with size {x_size}"
+        )
+
     # Normalize negative indices
-    idx = np.where(idx < 0, idx + sum(x_chunks), idx)
+    idx = np.where(idx < 0, idx + x_size, idx)
 
     x_chunk_offset = 0
     chunk_output_offset = 0
