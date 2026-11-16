@@ -615,7 +615,12 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
 
     r = a
     for _ in range(n):
-        r = r[sl_1] - r[sl_2]
+        if r.dtype == np.bool_:
+            # Like NumPy, take the logical XOR of neighbouring booleans, since
+            # subtraction is not defined for them.
+            r = r[sl_1] != r[sl_2]
+        else:
+            r = r[sl_1] - r[sl_2]
 
     return r
 
