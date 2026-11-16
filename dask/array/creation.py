@@ -107,7 +107,9 @@ def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     # if shape is nan we cannot rely on regular empty function, we use
     # generic map_blocks.
     if np.isnan(shape).any():
-        return a.map_blocks(partial(np.empty_like, dtype=(dtype or a.dtype)))
+        return a.map_blocks(
+            partial(np.empty_like, dtype=(dtype or a.dtype))
+        )._with_result_order(order)
 
     return empty(
         shape,
@@ -162,7 +164,9 @@ def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     # if shape is nan we cannot rely on regular ones function, we use
     # generic map_blocks.
     if np.isnan(shape).any():
-        return a.map_blocks(partial(np.ones_like, dtype=(dtype or a.dtype)))
+        return a.map_blocks(
+            partial(np.ones_like, dtype=(dtype or a.dtype))
+        )._with_result_order(order)
 
     return ones(
         shape,
@@ -217,7 +221,9 @@ def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     # if shape is nan we cannot rely on regular zeros function, we use
     # generic map_blocks.
     if np.isnan(shape).any():
-        return a.map_blocks(partial(np.zeros_like, dtype=(dtype or a.dtype)))
+        return a.map_blocks(
+            partial(np.zeros_like, dtype=(dtype or a.dtype))
+        )._with_result_order(order)
 
     return zeros(
         shape,
@@ -276,7 +282,9 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
     # if shape is nan we cannot rely on regular full function, we use
     # generic map_blocks.
     if np.isnan(shape).any():
-        return a.map_blocks(partial(np.full_like, dtype=(dtype or a.dtype)), fill_value)
+        return a.map_blocks(
+            partial(np.full_like, dtype=(dtype or a.dtype)), fill_value
+        )._with_result_order(order)
 
     return full(
         shape,

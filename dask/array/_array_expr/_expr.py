@@ -11,15 +11,19 @@ import toolz
 from tlz import accumulate
 
 from dask._expr import FinalizeCompute, SingletonExpr
-from dask._task_spec import List, Task, TaskRef
+from dask._task_spec import Alias, List, Task, TaskRef
 from dask.array.chunk import getitem
-from dask.array.core import T_IntOrNaN, common_blockdim, unknown_chunk_message
+from dask.array.core import T_IntOrNaN, common_blockdim, finalize, unknown_chunk_message
 from dask.blockwise import broadcast_dimensions
 from dask.layers import ArrayBlockwiseDep
 from dask.utils import cached_cumsum
 
 
 class ArrayExpr(SingletonExpr):
+
+    @property
+    def _result_order(self) -> str | None:
+        return None
 
     def _operands_for_repr(self):
         return []
@@ -278,6 +282,8 @@ class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
         return (self.arr.shape,)
 
     def _simplify_down(self):
+        if self.arr._result_order is not None:
+            return FinalizeOrderedArray(self.arr)
         if self.arr.numblocks in ((), (1,)):
             return self.arr
         else:
@@ -288,3 +294,45 @@ class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
                 tuple(-1 for _ in range(self.arr.ndim)),
                 method="tasks",
             )
+
+
+class FinalizeOrderedArray(ArrayExpr):
+    """Assemble creation blocks without changing their compressed representation."""
+
+    _parameters = ["arr"]
+
+    @property
+    def chunks(self):
+        return tuple((size,) for size in self.arr.shape)
+
+    @property
+    def _meta(self):
+        return self.arr._meta
+
+    def _layer(self) -> dict:
+        key = (self._name,) + (0,) * self.arr.ndim
+        return {key: Task(key, finalize, self.arr._cached_keys, self.arr._result_order)}
+
+
+class ResultOrder(ArrayExpr):
+    """Keep a creation result's assembly order in the expression identity."""
+
+    _parameters = ["arr", "result_order"]
+
+    @property
+    def _result_order(self) -> str | None:
+        return self.operand("result_order")
+
+    @property
+    def chunks(self):
+        return self.arr.chunks
+
+    @property
+    def _meta(self):
+        return self.arr._meta
+
+    def _layer(self) -> dict:
+        return {
+            (self._name, *index): Alias((self._name, *index), (self.arr._name, *index))
+            for index in product(*(range(n) for n in self.numblocks))
+        }
