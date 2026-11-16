@@ -23,11 +23,7 @@ from dask._compatibility import PY_VERSION
 from dask.core import flatten, literal
 from dask.tokenize import TokenizationError, normalize_token, tokenize
 from dask.utils import tmpfile
-from dask.utils_test import (
-    _check_warning,
-    import_or_none,
-    scipy_sparse_matrix_deprecated,
-)
+from dask.utils_test import assert_scipy_sparse_matrix_deprecated, import_or_none
 
 da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")
@@ -1064,13 +1060,7 @@ def test_tokenize_numpy_matrix():
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
-    # This test deliberately uses the deprecated sparse matrix API, so SciPy must
-    # be allowed to emit its warning; dask must not swallow it.
-    with _check_warning(
-        scipy_sparse_matrix_deprecated(),
-        DeprecationWarning,
-        "is being replaced by",
-    ):
+    with assert_scipy_sparse_matrix_deprecated():
         a = sp.rand(10, 100, random_state=rng).asformat(cls_name)
         b = a.copy()
 

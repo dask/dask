@@ -47,7 +47,7 @@ from dask.dataframe.utils import (
     pyarrow_strings_enabled,
 )
 from dask.utils import M, is_dataframe_like, is_series_like
-from dask.utils_test import _check_warning, scipy_sparse_matrix_deprecated
+from dask.utils_test import assert_scipy_sparse_matrix_deprecated
 
 try:
     import crick
@@ -4629,14 +4629,7 @@ def test_dask_dataframe_holds_scipy_sparse_containers(container):
     x[x < 0.9] = 0
     df = dd.from_dask_array(x)
 
-    # The user explicitly asks dask to build matrix containers; SciPy warns
-    # about it and dask must not swallow the warning. The array variant must be
-    # silent, which also proves dask never falls back to a matrix.
-    with _check_warning(
-        container == "matrix" and scipy_sparse_matrix_deprecated(),
-        DeprecationWarning,
-        "is being replaced by",
-    ):
+    with assert_scipy_sparse_matrix_deprecated(container == "matrix"):
         y = df.map_partitions(cls)
 
         assert isinstance(y, da.Array)

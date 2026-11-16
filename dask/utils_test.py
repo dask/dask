@@ -6,8 +6,19 @@ import os
 import time
 from typing import TYPE_CHECKING
 
+from packaging.version import Version
+
 if TYPE_CHECKING:
     from dask.highlevelgraph import HighLevelGraph, Layer
+
+try:
+    import scipy
+except ImportError:
+    SCIPY_GE_111 = False
+    SCIPY_GE_200 = False
+else:
+    SCIPY_GE_111 = Version(scipy.__version__) >= Version("1.11")
+    SCIPY_GE_200 = Version(scipy.__version__) >= Version("2.0.0.dev0")
 
 
 def inc(x):
@@ -179,19 +190,12 @@ def _check_warning(condition: bool, category: type[Warning], message: str):
             yield ctx
 
 
-def scipy_sparse_matrix_deprecated() -> bool:
-    """Whether the installed SciPy deprecates the sparse matrix API.
-
-    SciPy 2.0 deprecates the sparse matrix classes (``csr_matrix``, ``csc_matrix``,
-    ``coo_matrix``, ...) and the ``eye``, ``rand``, ``diags``, ... constructors in
-    favor of the sparse array API. See the spmatrix to sparray migration guide:
-    https://docs.scipy.org/doc/scipy/reference/sparse.migration_to_sparray.html
+def assert_scipy_sparse_matrix_deprecated(extra_condition: bool = True):
+    """Context manager that conditionally checks for the SciPy sparse matrix deprecation
+    warning.
     """
-    try:
-        import scipy
-    except ImportError:
-        return False
-
-    from packaging.version import Version
-
-    return Version(scipy.__version__) >= Version("2.0.0.dev0")
+    return _check_warning(
+        extra_condition and SCIPY_GE_200,
+        DeprecationWarning,
+        "is being replaced by",
+    )

@@ -39,11 +39,10 @@ from dask.delayed import Delayed
 from dask.typing import Graph
 from dask.utils import filetexts, tmpdir, tmpfile
 from dask.utils_test import (
-    _check_warning,
     add,
+    assert_scipy_sparse_matrix_deprecated,
     hlg_layer,
     inc,
-    scipy_sparse_matrix_deprecated,
 )
 
 dsk: Graph = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
@@ -1470,13 +1469,7 @@ def test_reduction_with_sparse_matrices(container):
         pytest.skip("scipy<1.11 has no sparray")
     cls = sp.csr_matrix if container == "matrix" else sp.csr_array
 
-    # The matrix variant explicitly asks for the deprecated container, so SciPy
-    # must be allowed to emit its warning; the array variant must stay silent.
-    with _check_warning(
-        container == "matrix" and scipy_sparse_matrix_deprecated(),
-        DeprecationWarning,
-        "is being replaced by",
-    ):
+    with assert_scipy_sparse_matrix_deprecated(container == "matrix"):
         values = [cls([0]) for x in range(4)]
 
     b = db.from_sequence(values, partition_size=2)
@@ -1484,11 +1477,7 @@ def test_reduction_with_sparse_matrices(container):
     def sp_reduce(a, b):
         return sp.vstack([a, b])
 
-    with _check_warning(
-        container == "matrix" and scipy_sparse_matrix_deprecated(),
-        DeprecationWarning,
-        "is being replaced by",
-    ):
+    with assert_scipy_sparse_matrix_deprecated(container == "matrix"):
         assert b.fold(sp_reduce, sp_reduce).compute(scheduler="sync").shape == (4, 1)
 
 
@@ -1825,13 +1814,7 @@ def test_empty_safe_apply_with_scipy_sparse(sparse_type):
         "coo": sp.coo_matrix,
     }[sparse_type]
 
-    # This test deliberately uses the deprecated sparse matrix containers, so
-    # SciPy must be allowed to emit its warning; dask must not swallow it.
-    with _check_warning(
-        scipy_sparse_matrix_deprecated(),
-        DeprecationWarning,
-        "is being replaced by",
-    ):
+    with assert_scipy_sparse_matrix_deprecated():
         # Empty sparse matrix (no stored elements)
         empty_mat = sparse_constructor((0, 0))
         assert empty_safe_apply(f, empty_mat, is_last=False) is no_result
