@@ -55,6 +55,7 @@ from dask.array.core import (
 )
 from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_210
 from dask.array.reshape import _not_implemented_message
+from dask.array.scipy_compat import SCIPY_GE_111
 from dask.array.utils import assert_eq, same_keys
 from dask.base import collections_to_expr, compute_as_if_collection, tokenize
 from dask.blockwise import (
@@ -67,7 +68,6 @@ from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
 from dask.utils import SerializableLock, key_split, tmpdir, tmpfile
 from dask.utils_test import (
-    SCIPY_GE_111,
     assert_scipy_sparse_matrix_deprecated,
     dec,
     hlg_layer_topological,

@@ -6,19 +6,8 @@ import os
 import time
 from typing import TYPE_CHECKING
 
-from packaging.version import Version
-
 if TYPE_CHECKING:
     from dask.highlevelgraph import HighLevelGraph, Layer
-
-try:
-    import scipy
-except ImportError:
-    SCIPY_GE_111 = False
-    SCIPY_GE_200 = False
-else:
-    SCIPY_GE_111 = Version(scipy.__version__) >= Version("1.11")
-    SCIPY_GE_200 = Version(scipy.__version__) >= Version("2.0.0.dev0")
 
 
 def inc(x):
@@ -194,6 +183,8 @@ def assert_scipy_sparse_matrix_deprecated(extra_condition: bool = True):
     """Context manager that conditionally checks for the SciPy sparse matrix deprecation
     warning.
     """
+    from dask.array.scipy_compat import SCIPY_GE_200
+
     return _check_warning(
         extra_condition and SCIPY_GE_200,
         DeprecationWarning,

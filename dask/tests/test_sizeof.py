@@ -9,7 +9,7 @@ import pytest
 from dask.multiprocessing import get_context
 from dask.sizeof import sizeof
 from dask.utils import funcname, tmpdir
-from dask.utils_test import SCIPY_GE_111, assert_scipy_sparse_matrix_deprecated
+from dask.utils_test import assert_scipy_sparse_matrix_deprecated
 
 try:
     import pandas as pd
@@ -110,13 +110,18 @@ def test_sparse_matrix():
         assert sizeof(sp.tolil()) >= 204
 
 
-@pytest.mark.skipif(not SCIPY_GE_111, reason="scipy.sparse.sparray required")
 def test_sparse_array():
     """sizeof() must handle the sparse array API, not just sparse matrices."""
-    import numpy as np
-    import scipy.sparse
+    sparse = pytest.importorskip("scipy.sparse")
 
-    sp = scipy.sparse.csr_array(np.eye(10))
+    from dask.array.scipy_compat import SCIPY_GE_111
+
+    if not SCIPY_GE_111:
+        pytest.skip(reason="scipy.sparse.sparray required")
+
+    import numpy as np
+
+    sp = sparse.csr_array(np.eye(10))
     assert sizeof(sp.todia()) >= 152
     assert sizeof(sp.tobsr()) >= 232
     assert sizeof(sp.tocoo()) >= 240
