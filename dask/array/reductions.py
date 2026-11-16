@@ -1219,6 +1219,14 @@ def cumreduction(
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 
+    if (
+        func is np.cumsum
+        and type(x._meta) is np.ndarray
+        and np.dtype(dtype).kind in "fc"
+        and x.numblocks[axis] > 1
+    ):
+        return handle_out(out, _cumsum_sequential(x, axis, dtype))
+
     use_dtype = False
     try:
         func_params = inspect.signature(func).parameters
@@ -1278,6 +1286,40 @@ def cumreduction(
     return handle_out(out, result)
 
 
+def _cumsum_chunk(x, initial, axis, dtype):
+    last = (slice(None),) * axis + (slice(-1, None),)
+    if initial is None or initial.shape[axis] == 0:
+        result = np.cumsum(x, axis=axis, dtype=dtype)
+        return result, result[last].copy()
+
+    # Put the running total first so NumPy adds the new values in order.
+    # Accumulate in place to avoid a second allocation for the whole block.
+    result = np.concatenate((initial, x), axis=axis, dtype=dtype, casting="unsafe")
+    np.cumsum(result, axis=axis, out=result)
+    rest = (slice(None),) * axis + (slice(1, None),)
+    return result[rest], result[last].copy()
+
+
+def _cumsum_sequential(x, axis, dtype):
+    name = f"cumsum-{tokenize(x, axis, dtype)}"
+    numblocks = x.numblocks
+    dsk = {}
+    for index in product(*map(range, numblocks)):
+        block = (name, "block") + index
+        if index[axis] == 0:
+            initial = None
+        else:
+            previous = index[:axis] + (index[axis] - 1,) + index[axis + 1 :]
+            initial = (name, "carry") + previous
+        dsk[block] = (_cumsum_chunk, (x.name,) + index, initial, axis, dtype)
+        dsk[(name,) + index] = (operator.getitem, block, 0)
+        if index[axis] + 1 < numblocks[axis]:
+            dsk[(name, "carry") + index] = (operator.getitem, block, 1)
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+    return Array(graph, name, x.chunks, dtype, meta=x._meta)
+
+
 def _cumsum_merge(a, b):
     if isinstance(a, np.ma.masked_array) or isinstance(b, np.ma.masked_array):
         values = np.ma.getdata(a) + np.ma.getdata(b)
@@ -1300,6 +1342,9 @@ def cumsum(x, axis=None, dtype=None, out=None, method="sequential"):
         Choose which method to use to perform the cumsum.  Default is 'sequential'.
 
         * 'sequential' performs the cumsum of each prior block before the current block.
+          For NumPy chunks with a floating-point or complex accumulator, it follows
+          NumPy's addition order across chunk boundaries, which serializes work along
+          the scan axis.
         * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
           first taking the sum of each block and combines the sums via a binary tree.
           This method may be faster or more memory efficient depending on workload,
