@@ -153,19 +153,11 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-@pytest.mark.parametrize(
-    "use_barrier",
-    [
-        True,
-        pytest.param(
-            False,
-            marks=pytest.mark.skipif(
-                sys.version_info >= (3, 13) and not sys._is_gil_enabled(),
-                reason="hangs on free-threading python/cpython#150873",
-            ),
-        ),
-    ],
+@pytest.mark.skipif(
+    sys.version_info >= (3, 13) and not sys._is_gil_enabled(),
+    reason="hangs on python/cpython#150873 and python/cpython#148874",
 )
+@pytest.mark.parametrize("use_barrier", [True, False])
 def test_interrupt(use_barrier):
     # Windows implements `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.
