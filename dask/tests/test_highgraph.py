@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 import dask
+from dask._task_spec import DataNode
 from dask.base import collections_to_expr, tokenize
 from dask.blockwise import Blockwise
 from dask.delayed import Delayed
@@ -101,12 +102,28 @@ def test_cull():
     a = {"x": 1, "y": (inc, "x")}
     hg = HighLevelGraph({"a": a}, {"a": set()})
 
+    assert not hg.cull([])
+
     culled_by_x = hg.cull({"x"})
     assert dict(culled_by_x) == {"x": 1}
 
     # parameter is the raw output of __dask_keys__()
     culled_by_y = hg.cull([[["y"]]])
     assert dict(culled_by_y) == a
+
+
+@pytest.mark.parametrize("task_spec", [False, True])
+def test_cull_filters_same_cardinality_foreign_keys(task_spec):
+    def value(key):
+        return DataNode(key, 1) if task_spec else 1
+
+    layers = {
+        name: {(name, i): value((name, i)) for i in range(2)} for name in ("a", "b")
+    }
+    hg = HighLevelGraph(layers, {name: set() for name in layers})
+    requested = {("a", 0), ("b", 0)}
+
+    assert set(hg.cull(requested)) == requested
 
 
 def test_cull_layers():

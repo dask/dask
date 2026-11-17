@@ -1193,7 +1193,9 @@ def cull(
             f"Expected list, set or tuple for keys, got {type(keys).__name__}"
         )
     if len(keys) == len(dsk):
-        return dsk
+        keys_set = keys if isinstance(keys, set) else set(keys)
+        if keys_set == dsk.keys():
+            return dsk
     work = set(keys)
     seen: set[KeyType] = set()
     dsk2 = {}
