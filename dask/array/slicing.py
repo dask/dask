@@ -1015,7 +1015,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     # Tamper with the declared chunks of offset to make blockwise align it with
     # x[axis]
     offset = Array(
-        offset.dask, offset.name, (x.chunks[axis],), offset.dtype, meta=x._meta
+        offset.dask, offset.name, (x.chunks[axis],), offset.dtype, meta=offset._meta
     )
 
     # Define axis labels for blockwise
