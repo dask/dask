@@ -596,8 +596,7 @@ def test_map_overlap_trim_false_chunking():
         return x[20:-20]
 
     d = da.map_overlap(f, c, depth={0: 20}, boundary=0, trim=False)
-    print(d.shape)
-    print(d.compute().shape)
+    assert d.shape == d.compute().shape
 
 
 def test_nearest_overlap():

@@ -149,19 +149,21 @@ class FooExpr(Expr):
         return {"foo": DataNode("foo", 42)}
 
 
-def test_prohibit_reuse():
+def test_prohibit_reuse(monkeypatch):
     once = FooExpr()
-    ProhibitReuse._ALLOWED_TYPES.append(FooExpr)
-    try:
-        dsk = _ExprSequence(once, ProhibitReuse(once)).optimize().__dask_graph__()
+    monkeypatch.setattr(
+        ProhibitReuse,
+        "_ALLOWED_TYPES",
+        ProhibitReuse._ALLOWED_TYPES + [FooExpr],
+    )
 
-        assert len(dsk) == 2
-        first = dsk.pop("foo")()
-        key, val = dsk.popitem()
-        assert key.startswith("foo") and key != "foo"
-        # We don't want to chain anything but actually _hide_ the task
-        assert not val.dependencies
-        # Task is wrapped
-        assert val() is first
-    finally:
-        ProhibitReuse._ALLOWED_TYPES.remove(FooExpr)
+    dsk = _ExprSequence(once, ProhibitReuse(once)).optimize().__dask_graph__()
+
+    assert len(dsk) == 2
+    first = dsk.pop("foo")()
+    key, val = dsk.popitem()
+    assert key.startswith("foo") and key != "foo"
+    # We don't want to chain anything but actually _hide_ the task
+    assert not val.dependencies
+    # Task is wrapped
+    assert val() is first

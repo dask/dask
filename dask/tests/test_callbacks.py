@@ -47,20 +47,16 @@ def test_finish_always_called():
     dsk = {"x": (lambda: 1 / 0,)}
 
     # `raise_on_exception=True`
-    try:
+    with pytest.raises(ZeroDivisionError):
         with MyCallback():
             get_sync(dsk, "x")
-    except Exception as e:
-        assert isinstance(e, ZeroDivisionError)
     assert flag[0]
 
     # `raise_on_exception=False`
     flag[0] = False
-    try:
+    with pytest.raises(ZeroDivisionError):
         with MyCallback():
             get_threaded(dsk, "x")
-    except Exception as e:
-        assert isinstance(e, ZeroDivisionError)
     assert flag[0]
 
     # KeyboardInterrupt

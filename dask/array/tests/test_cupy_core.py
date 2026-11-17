@@ -588,6 +588,76 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         x[[True, True, True, False], 0] = [2, 3]
 
+
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        (([True, True, False, False], 0), [2, 3, 4]),
+        (([True, True, True, False], 0), [2, 3]),
+        ((0, [True, True, True, False]), [2, 3]),
+        ((0, [True, True, True, False]), [1, 2, 3, 4, 5]),
+        ((da.from_array([True, True, True, False]), 0), [1, 2, 3, 4, 5]),
+        ((0, da.from_array([True, False, False, True])), [1, 2, 3, 4, 5]),
+        ((slice(None), 0), [2, 3, 4]),
+        ((0, slice(None)), [1, 2, 3, 4, 5]),
+    ],
+)
+def test_setitem_shape_mismatch_errs(index, value):
+    x = da.ones_like(cupy.array(()), shape=(4, 4), chunks=(2, 2))
+    with pytest.raises(ValueError):
+        x[index] = value
+
+
+def test_setitem_boolean_and_broadcast_value_errs():
+    x = da.ones_like(cupy.array(()), shape=(4, 4), chunks=(2, 2))
+    with pytest.raises(ValueError):
+        x[x > 1] = x
+
+    # RHS has non-broadcastable extra leading dimensions
+    arr = cupy.arange(12).reshape((3, 4))
+    dx = da.from_array(arr, chunks=(2, 2))
+    with pytest.raises(ValueError):
+        dx[...] = cupy.arange(24).reshape((2, 1, 3, 4))
+
+
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        ((slice(None), slice(None), slice(None)), 2),
+        (([[True, True, False, False]], 0), 5),
+        ([True, True, False], 5),
+        ([False, True, True, True, False], 5),
+        (([[1, 2, 3]], 0), 5),
+    ],
+)
+def test_setitem_index_errs(index, value):
+    x = da.ones((4, 4), chunks=(2, 2))
+    with pytest.raises(IndexError):
+        x[index] = value
+
+
+def test_setitem_scalar_index_err():
+    y = da.from_array(cupy.array(1))
+    with pytest.raises(IndexError):
+        y[:] = 2
+
+
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        (([1, 2], [2, 3]), 6),
+        (([True, True, False, False], [2, 3]), 5),
+        (([True, True, False, False], [False, True, False, False]), 7),
+        (True, 5),
+        (cupy.array(True), 5),
+        ((0, da.from_array(True)), 5),
+    ],
+)
+def test_setitem_not_implemented_errs(index, value):
+    x = da.ones((4, 4), chunks=(2, 2))
+    with pytest.raises(NotImplementedError):
+        x[index] = value
+
     with pytest.raises(ValueError):
         x[0, [True, True, True, False]] = [2, 3]
 

@@ -33,10 +33,8 @@ def contains(a, b):
     """
     return all(a.get(k) == v for k, v in b.items())
 
-
 def test_ishashable():
-    class C:
-        pass
+    C = type("C", (), {})
 
     assert ishashable("x")
     assert ishashable(1)

@@ -80,27 +80,32 @@ def test_pool_kwarg(pool_typ):
         assert get(dsk, "x", pool=pool) == 3
 
 
-def test_threaded_within_thread():
-    L = []
-
-    def f(i):
-        result = get({"x": (lambda: i,)}, "x", num_workers=2)
-        L.append(result)
-
-    before = threading.active_count()
-
-    for _ in range(20):
-        t = threading.Thread(target=f, args=(1,))
+def _spawn_and_join_worker_threads(target, count):
+    results = []
+    for _ in range(count):
+        t = threading.Thread(target=target, args=(1, results))
         t.daemon = True
         t.start()
         t.join()
-        assert L == [1]
-        del L[:]
+        assert results == [1]
+        results.clear()
 
-    start = time()  # wait for most threads to join
-    while threading.active_count() > before + 10:
+
+def _wait_for_thread_cleanup(max_active, timeout=5):
+    start = time()
+    while threading.active_count() > max_active:
         sleep(0.01)
-        assert time() < start + 5
+        assert time() < start + timeout
+
+
+def test_threaded_within_thread():
+    def f(i, out):
+        result = get({"x": (lambda: i,)}, "x", num_workers=2)
+        out.append(result)
+
+    before = threading.active_count()
+    _spawn_and_join_worker_threads(f, 20)
+    _wait_for_thread_cleanup(before + 10)
 
 
 def test_dont_spawn_too_many_threads():

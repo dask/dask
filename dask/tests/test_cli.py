@@ -71,18 +71,9 @@ def tmp_conf_dir(tmpdir, monkeypatch):
         dask.config.__dict__.update(originals)
 
 
-@pytest.mark.parametrize("value", ("333MiB", 2, [1, 2], {"foo": "bar"}, None))
-@pytest.mark.parametrize("empty_config", (True, False))
-@pytest.mark.parametrize("file", (None, "bar.yaml", "foo/bar.yaml"))
-@pytest.mark.parametrize("existing_key_config_file", (True, False))
-def test_config_set_value(
-    tmp_conf_dir,
-    value,
-    empty_config,
-    file,
-    existing_key_config_file,
+def _setup_config_set_scenario(
+    tmp_conf_dir, value, empty_config, file, existing_key_config_file
 ):
-    # Potentially custom file location, CLI defaulting to the default dir / 'dask.yaml'
     config_file = tmp_conf_dir / (file or "dask.yaml")
 
     if not empty_config:
@@ -94,22 +85,33 @@ def test_config_set_value(
         assert not config_file.exists()
 
     cmd = ["fizz.buzz", str(value)]
-
-    # default dask config location when file not specified or first file containing key
     if file:
         cmd.extend(["--file", str(config_file)])
 
     runner = CliRunner()
-
     if existing_key_config_file and not file:
-        # Now we want to ensure the config file being used is this one b/c it already
-        # has this key and hasn't explicitly provided a different file to use.
         config_file = pathlib.Path(tmp_conf_dir) / "existing_conf.yaml"
         cmd_ = ["fizz.buzz", "foobar", "--file", str(config_file)]
         runner.invoke(dask.cli.config_set, cmd_, catch_exceptions=False)
-
-        # Expected config is now just what's in this file, not the default file
         expected_conf = {"fizz": {"buzz": "foobar"}}
+
+    return runner, cmd, config_file, expected_conf
+
+
+@pytest.mark.parametrize("value", ("333MiB", 2, [1, 2], {"foo": "bar"}, None))
+@pytest.mark.parametrize("empty_config", (True, False))
+@pytest.mark.parametrize("file", (None, "bar.yaml", "foo/bar.yaml"))
+@pytest.mark.parametrize("existing_key_config_file", (True, False))
+def test_config_set_value(
+    tmp_conf_dir,
+    value,
+    empty_config,
+    file,
+    existing_key_config_file,
+):
+    runner, cmd, config_file, expected_conf = _setup_config_set_scenario(
+        tmp_conf_dir, value, empty_config, file, existing_key_config_file
+    )
 
     result = runner.invoke(dask.cli.config_set, cmd, catch_exceptions=False)
 
