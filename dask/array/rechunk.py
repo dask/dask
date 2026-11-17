@@ -384,7 +384,7 @@ def rechunk(
             threshold=threshold,
             block_size_limit=block_size_limit,
             balance=balance,
-        )
+        )._with_result_order(x._result_order)
 
     else:
         raise NotImplementedError(f"Unknown rechunking method '{method}'")
@@ -747,7 +747,7 @@ def _compute_rechunk(x, chunks):
 
     layer = toolz.merge(x2, intermediates)
     graph = HighLevelGraph.from_collections(merge_name, layer, dependencies=[x])
-    return Array(graph, merge_name, chunks, meta=x)
+    return Array(graph, merge_name, chunks, meta=x, _result_order=x._result_order)
 
 
 class _PrettyBlocks:

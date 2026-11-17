@@ -78,7 +78,16 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
         numblocks={},
     )
 
-    return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
+    meta = kwargs.get("meta", None)
+    result_order = None
+    if (
+        kwargs.get("order") == "F"
+        and type(meta_from_array(meta, dtype=dtype)) is np.ndarray
+    ):
+        result_order = "F"
+    return Array(
+        graph, name, chunks, dtype=dtype, meta=meta, _result_order=result_order
+    )
 
 
 def wrap_func_like(func, *args, **kwargs):
