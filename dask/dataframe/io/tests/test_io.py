@@ -988,3 +988,17 @@ def test_sorted_division_locations_duplicates(backend):
     divisions, locations = sorted_division_locations(seq, npartitions=2)
     assert divisions == [0, 1, 2]
     assert locations == [0, 2, 4]
+
+
+def test_sorted_division_locations_nan():
+    seq = pd.Series([1.0, 2.0, 3.0, 4.0, np.nan])
+    divisions, locations = sorted_division_locations(seq, npartitions=2)
+    assert divisions[:-1] == [1.0, 4.0]
+    assert np.isnan(divisions[-1])
+    assert locations == [0, 3, 5]
+
+    seq = pd.Series([1.0, 2.0, np.nan, np.nan])
+    divisions, locations = sorted_division_locations(seq, npartitions=2)
+    assert divisions[0] == 1.0
+    assert all(np.isnan(d) for d in divisions[1:])
+    assert locations == [0, 2, 4]

@@ -9,7 +9,7 @@ import pandas as pd
 
 from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe.dispatch import meta_lib_from_array, tolist
-from dask.dataframe.utils import pyarrow_strings_enabled
+from dask.dataframe.utils import is_nan_label, pyarrow_strings_enabled
 from dask.highlevelgraph import HighLevelGraph
 from dask.tokenize import tokenize
 from dask.utils import ensure_dict, is_series_like
@@ -283,12 +283,22 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     # any divisions we extract from seq are plain Python scalars.
     seq = tolist(seq)
     # we use bisect later, so we need sorted.
-    seq_unique = sorted(set(seq))
+    # NaN sorts after all real labels (its pandas sort position) and is
+    # deduplicated explicitly, since NaN != NaN defeats set/bisect logic.
+    has_nan = any(is_nan_label(x) for x in seq)
+    seq_unique = sorted({x for x in seq if not is_nan_label(x)})
+    if has_nan:
+        seq_unique.append(float("nan"))
     duplicates = len(seq_unique) < len(seq)
     enforce_exact = False
 
     if duplicates:
-        offsets = [bisect.bisect_left(seq, x) for x in seq_unique]
+        # First NaN position; seq is sorted, so NaNs trail the real labels
+        nan_offset = sum(1 for x in seq if not is_nan_label(x))
+        offsets = [
+            bisect.bisect_left(seq, x) if not is_nan_label(x) else nan_offset
+            for x in seq_unique
+        ]
         enforce_exact = npartitions and len(offsets) >= npartitions
     else:
         offsets = seq_unique = None
@@ -325,7 +335,11 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         if duplicates:
             # Note: cupy requires casts to `int` below
             if ind is None:
-                ind = bisect.bisect_left(seq_unique, seq[i])
+                ind = (
+                    len(seq_unique) - 1
+                    if is_nan_label(seq[i])
+                    else bisect.bisect_left(seq_unique, seq[i])
+                )
             if enforce_exact:
                 # Avoid "over-stepping" too many unique
                 # values when npartitions is approximately
@@ -338,7 +352,10 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
             pos = int(offsets[ind])
         else:
             pos = i
-        if div <= divisions[-1]:
+        div_leq_last = (
+            is_nan_label(div) and is_nan_label(divisions[-1])
+        ) or div <= divisions[-1]
+        if div_leq_last:
             # pos overlaps with divisions.
             # Try the next element on the following pass
             if duplicates:

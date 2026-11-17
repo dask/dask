@@ -1108,3 +1108,34 @@ def test_merged_partitions_filtered():
     # Check result
     expect = a.compute().merge(b.compute(), left_on=["y"], right_on=["yy"], how="inner")
     assert_eq(result, expect, check_index=False)
+
+
+@pytest.mark.parametrize("how", ["left", "inner", "outer"])
+def test_join_nan_in_float_index(how):
+    # https://github.com/dask/dask/issues/12653
+    left = pd.DataFrame({"a": range(4)}, index=pd.Index([1.0, np.nan, 2.0, np.nan]))
+    right = pd.DataFrame({"b": range(2)}, index=pd.Index([1.0, 2.0]))
+    dleft = from_pandas(left, npartitions=2)
+    dright = from_pandas(right, npartitions=2)
+
+    result = dleft.join(dright, how=how)
+    expected = left.join(right, how=how)
+    assert_eq(result, expected, check_index=True)
+    assert_eq(result.optimize(), expected, check_index=True)
+
+
+def test_join_nan_in_float_index_both_sides():
+    # https://github.com/dask/dask/issues/12653
+    left = pd.DataFrame(
+        {"a": range(5)}, index=pd.Index([1.0, np.nan, 2.0, np.nan, 3.0])
+    )
+    right = pd.DataFrame(
+        {"b": range(5)}, index=pd.Index([1.0, np.nan, 2.0, np.nan, 3.0])
+    )
+
+    result = from_pandas(left, npartitions=2).join(
+        from_pandas(right, npartitions=2), how="inner"
+    )
+    expected = left.join(right, how="inner")
+    assert_eq(result, expected, check_index=True)
+    assert_eq(result.optimize(), expected, check_index=True)

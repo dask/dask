@@ -59,6 +59,34 @@ def is_scalar(x):
     return not isinstance(x, Expr)
 
 
+def is_nan_label(x) -> bool:
+    """Whether an index or division label is a float NaN.
+
+    pandas sorts NaN after all other values, so a float index that
+    contains NaN always has it as its largest label.
+    """
+    return isinstance(x, float) and math.isnan(x)
+
+
+def sort_labels_nan_last(labels):
+    """Sort division labels ascending, keeping NaN after all real labels.
+
+    Plain ``sorted`` scatters NaN unpredictably because every comparison
+    with NaN is False.  NaN labels are also deduplicated, since NaN != NaN
+    defeats set- and equality-based deduplication.
+    """
+    labels = list(labels)
+    real = sorted(x for x in labels if not is_nan_label(x))
+    if any(is_nan_label(x) for x in labels):
+        real.append(float("nan"))
+    return real
+
+
+def labels_with_nan_as_inf(labels):
+    """Map NaN division labels to +inf for comparison walks."""
+    return [math.inf if is_nan_label(x) else x for x in labels]
+
+
 def is_integer_na_dtype(t):
     dtype = getattr(t, "dtype", t)
     types = (

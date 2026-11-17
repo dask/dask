@@ -28,7 +28,12 @@ from dask.dataframe.dispatch import (  # noqa: F401
     tolist_dispatch,
     union_categoricals,
 )
-from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
+from dask.dataframe.utils import (
+    is_dataframe_like,
+    is_index_like,
+    is_nan_label,
+    is_series_like,
+)
 from dask.utils import _deprecated_kwarg
 
 # cuDF may try to import old dispatch functions
@@ -111,16 +116,22 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True):
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
         # If it's not, `df.loc[start:stop]` raises when `start` is missing
-        if start is not None:
+        # NaN sorts after every other label, so a slice reaching a NaN
+        # stop includes the NaN bucket and a NaN start selects only it.
+        if start is not None and is_nan_label(start):
+            df = df[df.index.isna()] if left_boundary else df.iloc[0:0]
+        elif start is not None:
             if left_boundary:
-                df = df[df.index >= start]
+                df = df[(df.index >= start) | (df.index.isna() & is_nan_label(stop))]
             else:
                 df = df[df.index > start]
-        if stop is not None:
+        if stop is not None and not is_nan_label(stop):
             if right_boundary:
                 df = df[df.index <= stop]
             else:
                 df = df[df.index < stop]
+        elif is_nan_label(stop) and not right_boundary:
+            df = df[~df.index.isna()]
         return df
 
     result = df.loc[start:stop]

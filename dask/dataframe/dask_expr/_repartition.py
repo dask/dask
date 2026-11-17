@@ -21,7 +21,11 @@ from dask.dataframe.dask_expr._expr import (
 )
 from dask.dataframe.dask_expr._reductions import TotalMemoryUsageFrame
 from dask.dataframe.dask_expr._util import LRU
-from dask.dataframe.utils import is_series_like
+from dask.dataframe.utils import (
+    is_nan_label,
+    is_series_like,
+    labels_with_nan_as_inf,
+)
 from dask.tokenize import tokenize
 from dask.utils import iter_chunks, parse_bytes
 
@@ -265,24 +269,29 @@ class RepartitionDivisions(Repartition):
             # minimum division is 2 elements, like [0, 0]
             raise ValueError("New division must be longer than 2 elements")
 
+        # NaN compares False against everything; walk with NaN as +inf
+        # (its pandas sort position) but keep raw labels as slice bounds.
+        am = labels_with_nan_as_inf(a)
+        bm = labels_with_nan_as_inf(b)
+
         if force:
-            if a[0] < b[0]:
+            if am[0] < bm[0]:
                 msg = (
                     "left side of the new division must be equal or smaller "
                     "than old division"
                 )
                 raise ValueError(msg)
-            if a[-1] > b[-1]:
+            if am[-1] > bm[-1] and not is_nan_label(a[-1]):
                 msg = (
                     "right side of the new division must be equal or larger "
                     "than old division"
                 )
                 raise ValueError(msg)
         else:
-            if a[0] != b[0]:
+            if am[0] != bm[0]:
                 msg = "left side of old and new divisions are different"
                 raise ValueError(msg)
-            if a[-1] != b[-1]:
+            if am[-1] != bm[-1]:
                 msg = "right side of old and new divisions are different"
                 raise ValueError(msg)
 
@@ -302,27 +311,30 @@ class RepartitionDivisions(Repartition):
         # process through old division
         # left part of new division can be processed in this loop
         while i < len(a) and j < len(b):
-            if a[i] < b[j]:
+            if am[i] < bm[j]:
                 # tuple is something like:
                 # (methods.boundary_slice, ('from_pandas-#', 0), 3, 4, False))
                 d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, a[i], False)
                 low = a[i]
                 i += 1
-            elif a[i] > b[j]:
+            elif am[i] > bm[j]:
                 d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, b[j], False)
                 low = b[j]
                 j += 1
             else:
                 d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, b[j], False)
                 low = b[j]
-                if len(a) == i + 1 or a[i] < a[i + 1]:
+                # Don't let j run past the end of b while a continues into
+                # a NaN tail: partition i+1 may hold leading rows == b[j].
+                b_ends_here = bm[j] == bm[-1] and am[-1] > bm[-1]
+                if len(a) == i + 1 or (am[i] < am[i + 1] and not b_ends_here):
                     j += 1
                 i += 1
             c.append(low)
             k += 1
 
         # right part of new division can remain
-        if a[-1] < b[-1] or b[-1] == b[-2]:
+        if am[-1] < bm[-1] or bm[-1] == bm[-2]:
             for _j in range(j, len(b)):
                 # always use right-most of old division
                 # because it may contain last element
@@ -350,17 +362,21 @@ class RepartitionDivisions(Repartition):
 
         i, j = 0, 1
 
-        last_elem = _is_single_last_div(c)
+        cm = labels_with_nan_as_inf(c)
+        # a trailing NaN only terminates c; the single-label check
+        # concerns the last real split boundary
+        cm_tail = cm[:-1] if is_nan_label(c[-1]) else cm
+        last_elem = len(cm_tail) >= 2 and cm_tail[-1] == cm_tail[-2]
 
         while j < len(b):
             tmp = []
-            while c[i] < b[j]:
+            while cm[i] < bm[j]:
                 tmp.append((out1, i))
                 i += 1
             while (
                 last_elem
-                and c[i] == b[-1]
-                and (b[-1] != b[-2] or j == len(b) - 1)
+                and cm[i] == bm[-1]
+                and (bm[-1] != bm[-2] or j == len(b) - 1)
                 and i < k
             ):
                 # append if last split is not included
