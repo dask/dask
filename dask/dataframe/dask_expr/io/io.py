@@ -434,15 +434,19 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
     @functools.cached_property
     def frame(self):
         frame = self.operand("frame")._data
+        if self.pyarrow_strings_enabled:
+            # Convert on the full frame so that columns whose object dtype
+            # holds non-string values (e.g. mixed str/int) are detected
+            # reliably and every partition agrees on the result.
+            frame = to_pyarrow_string(frame, check_values=True)
         if self.sort and not frame.index.is_monotonic_increasing:
             frame = frame.sort_index()
-            return _BackendData(frame)
-        return self.operand("frame")
+        return _BackendData(frame)
 
     @functools.cached_property
     def _meta(self):
         if self.pyarrow_strings_enabled:
-            meta = make_meta(to_pyarrow_string(self.frame.head(1)))
+            meta = make_meta(self.frame.head(1))
         else:
             meta = self.frame.head(0)
 
@@ -532,8 +536,6 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
     def _filtered_task(self, name: Key, index: int) -> DataNode:  # type: ignore[override]
         start, stop = self._locations()[index : index + 2]
         part = self.frame.iloc[start:stop]
-        if self.pyarrow_strings_enabled:
-            part = to_pyarrow_string(part)
         if self.operand("columns") is not None:
             return DataNode(
                 name, part[self.columns[0]] if self._series else part[self.columns]
