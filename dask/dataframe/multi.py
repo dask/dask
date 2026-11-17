@@ -352,6 +352,10 @@ def _split_partition(df, on, nsplits):
 def _concat_wrapper(dfs):
     """Concat and remove temporary "_partitions" column"""
     df = _concat(dfs, False)
+
+    if len(df) == 0 and len(dfs) > 0:
+        df.index.names = dfs[0].index.names
+
     if "_partitions" in df.columns:
         del df["_partitions"]
     return df
