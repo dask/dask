@@ -310,8 +310,23 @@ def apply_gufunc(
                 tempfunc = np.vectorize(func, signature=signature)
             else:
                 tempfunc = func
+            sample_shapes = None
+            if any(
+                dim.isdecimal() for core_dims in input_coredimss for dim in core_dims
+            ):
+                sample_shapes = [
+                    (1,) * max(0, np.ndim(arg) - len(core_dims))
+                    + tuple(int(dim) if dim.isdecimal() else 1 for dim in core_dims)
+                    for arg, core_dims in zip(args, input_coredimss)
+                ]
             output_dtypes = apply_infer_dtype(
-                tempfunc, args, kwargs, "apply_gufunc", "output_dtypes", nout
+                tempfunc,
+                args,
+                kwargs,
+                "apply_gufunc",
+                "output_dtypes",
+                nout,
+                input_shapes=sample_shapes,
             )
 
         ## Turn `output_dtypes` into `meta`
