@@ -7,6 +7,7 @@ import textwrap
 from collections import defaultdict
 from datetime import datetime
 from functools import reduce
+from urllib.parse import quote
 
 import numpy as np
 import pandas as pd
@@ -342,9 +343,12 @@ def _need_filtering(filters, partition_keys):
 def _hive_dirname(name, val):
     # Simple utility to produce hive directory name.
     # Note that "__HIVE_DEFAULT_PARTITION__" is the
-    # conventional "null" label in other platforms
+    # conventional "null" label in other platforms.
+    # The value is percent-encoded so that it always stays a single
+    # path segment, matching the "uri" segment encoding that pyarrow
+    # uses when it writes and reads hive-partitioned datasets.
     val = "__HIVE_DEFAULT_PARTITION__" if pd.isna(val) else val
-    return f"{name}={val}"
+    return f"{name}={quote(str(val), safe='')}"
 
 
 def _process_kwargs(partitioning=None, **kwargs):
