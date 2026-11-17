@@ -903,6 +903,228 @@ def test_lstsq(nrow, ncol, chunk, iscomplex):
     assert_eq(ds, s)
 
 
+@pytest.mark.parametrize("deficiency", ["zero-column", "duplicate-column", "zero-rank"])
+@pytest.mark.parametrize("iscomplex", [False, True])
+@pytest.mark.parametrize("multiple_rhs", [False, True])
+def test_lstsq_rank_deficient(deficiency, iscomplex, multiple_rhs):
+    rng = np.random.default_rng(42)
+    a = rng.normal(size=(20, 3))
+    b = rng.normal(size=(20, 4) if multiple_rhs else 20)
+    if iscomplex:
+        a = a + 1j * rng.normal(size=a.shape)
+        b = b + 1j * rng.normal(size=b.shape)
+    if deficiency == "zero-column":
+        a[:, -1] = 0
+    elif deficiency == "duplicate-column":
+        a[:, -1] = a[:, 0]
+    else:
+        a[:] = 0
+    ad = da.from_array(a, chunks=(5, 3))
+    bd = da.from_array(b, chunks=(5, 2) if multiple_rhs else 5)
+
+    x, residuals, rank, singular = da.linalg.lstsq(ad, bd)
+    expected_x, _, expected_rank, expected_singular = np.linalg.lstsq(a, b, rcond=None)
+    assert_eq(x, expected_x)
+    assert_eq(
+        residuals,
+        np.sum(abs(b - a @ expected_x) ** 2, axis=0, keepdims=not multiple_rhs),
+    )
+    assert_eq(rank, np.array(expected_rank, dtype=np.int64))
+    assert_eq(singular, expected_singular, atol=1e-14)
+    if multiple_rhs:
+        assert x.chunks[1] == bd.chunks[1]
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.complex64, np.complex128])
+@pytest.mark.parametrize("promote_rhs", [False, True])
+@pytest.mark.parametrize("unknown_rows", [False, True])
+def test_lstsq_rank_cutoff(dtype, promote_rhs, unknown_rows):
+    # The cutoff uses the original matrix dimensions and the precision of QR,
+    # even when b promotes the dtype of the solution.
+    eps = np.finfo(dtype).eps
+    a = np.zeros((100, 3), dtype=dtype)
+    a[:3] = np.diag([1, 400 * eps, 20 * eps])
+    if np.issubdtype(dtype, np.complexfloating):
+        a *= 1j
+    b = a @ np.ones((3, 4), dtype=dtype)
+    if promote_rhs:
+        b = b.astype(np.complex128 if np.iscomplexobj(a) else np.float64)
+    ad = da.from_array(a, chunks=(25, 3))
+    bd = da.from_array(b, chunks=(25, 2))
+    if unknown_rows:
+        ad._chunks = ((np.nan,) * 4, (3,))
+        bd._chunks = ((np.nan,) * 4, (2, 2))
+    x, residuals, rank, singular = da.linalg.lstsq(ad, bd)
+    expected = np.tile([[1], [1], [0]], (1, 4)).astype(b.dtype)
+    assert_eq(x, expected)
+    assert_eq(rank, np.array(2, dtype=np.int64))
+    assert_eq(singular, np.array([1, 400 * eps, 20 * eps], dtype=a.real.dtype))
+    assert_eq(residuals, np.sum(abs(b - a @ expected) ** 2, axis=0))
+    assert x.dtype == b.dtype
+    assert rank.dtype == np.dtype("int64")
+    assert rank.shape == ()
+    assert singular.dtype == a.real.dtype
+
+
+@pytest.mark.parametrize("scale", [1e-150, 1, 1e150])
+@pytest.mark.parametrize("iscomplex", [False, True])
+def test_lstsq_singular_values_stability(scale, iscomplex):
+    a = np.zeros((20, 3))
+    a[:3] = np.diag([1, 1e-10, 0])
+    a *= scale
+    if iscomplex:
+        a = a * (1 + 1j)
+    b = a @ np.array([1, 2, 3])
+    x, _, rank, singular = da.linalg.lstsq(
+        da.from_array(a, chunks=(5, 3)), da.from_array(b, chunks=5)
+    )
+    assert_eq(x, np.array([1, 2, 0], dtype=a.dtype))
+    assert_eq(rank, np.array(2, dtype=np.int64))
+    assert_eq(singular, np.linalg.svd(a, compute_uv=False), atol=0)
+
+
+@pytest.mark.parametrize("optimize_graph", [False, True])
+@pytest.mark.parametrize("unknown_rows", [False, True])
+@pytest.mark.parametrize("multiple_rhs", [False, True])
+def test_lstsq_shared_graph(optimize_graph, unknown_rows, multiple_rhs):
+    from dask import compute, delayed
+    from dask.callbacks import Callback
+
+    reads = []
+    svd_calls = []
+    rng = np.random.default_rng(42)
+    a = rng.normal(size=(12, 3))
+    a[:, 2] = a[:, 0]
+    b = rng.normal(size=(12, 4) if multiple_rhs else 12)
+
+    def load(block, label):
+        reads.append(label)
+        return block
+
+    ad = da.concatenate(
+        [
+            da.from_delayed(
+                delayed(load)(a[i : i + 4], ("a", i)), shape=(4, 3), dtype=a.dtype
+            )
+            for i in range(0, 12, 4)
+        ]
+    )
+    bd = da.concatenate(
+        [
+            da.from_delayed(
+                delayed(load)(b[i : i + 4], ("b", i)),
+                shape=(4, 4) if multiple_rhs else (4,),
+                dtype=b.dtype,
+            )
+            for i in range(0, 12, 4)
+        ]
+    )
+    if multiple_rhs:
+        bd = bd.rechunk({1: 2})
+    if unknown_rows:
+        ad._chunks = ((np.nan,) * 3, (3,))
+        bd._chunks = ((np.nan,) * 3, *bd.chunks[1:])
+    results = da.linalg.lstsq(ad, bd)
+    assert not reads
+    if multiple_rhs:
+        assert results[0].chunks[1] == (2, 2)
+
+    def pretask(key, dsk, state):
+        if isinstance(key, tuple) and key[0].startswith("lstsq-svd-"):
+            svd_calls.append(key)
+
+    with Callback(pretask=pretask):
+        x, residuals, rank, singular = compute(
+            *results, scheduler="synchronous", optimize_graph=optimize_graph
+        )
+    assert sorted(reads) == [
+        (label, i) for label in ["a", "b"] for i in range(0, 12, 4)
+    ]
+    assert len(svd_calls) == 1
+    expected_x, _, expected_rank, expected_singular = np.linalg.lstsq(a, b, rcond=None)
+    np.testing.assert_allclose(x, expected_x)
+    np.testing.assert_allclose(
+        residuals, np.sum(abs(b - a @ x) ** 2, axis=0, keepdims=not multiple_rhs)
+    )
+    assert rank == expected_rank
+    np.testing.assert_allclose(singular, expected_singular, atol=1e-14)
+
+
+@pytest.mark.parametrize(
+    "shape,chunks,error",
+    [
+        ((10,), (5,), ValueError),
+        ((4, 8), (4, 8), ValueError),
+        ((8, 4), (4, 2), NotImplementedError),
+        ((4, 8), (4, 4), NotImplementedError),
+    ],
+)
+def test_lstsq_unsupported_layout(shape, chunks, error):
+    a = da.ones(shape, chunks=chunks)
+    with pytest.raises(error):
+        da.linalg.lstsq(a, da.ones(shape[0], chunks=shape[0]))
+
+
+def test_lstsq_unknown_rows_svd_dependencies():
+    from dask.core import get_dependencies
+
+    a = da.ones((12, 3), chunks=(4, 3))
+    b = da.ones(12, chunks=4)
+    a._chunks = ((np.nan,) * 3, (3,))
+    b._chunks = ((np.nan,) * 3,)
+    x, _, _, _ = da.linalg.lstsq(a, b)
+    graph = x.dask.to_dict()
+    svd_key = next(
+        k for k in graph if isinstance(k, tuple) and k[0].startswith("lstsq-svd-")
+    )
+    # Only the small R factor and scalar row counts belong on the SVD worker.
+    assert not (
+        set(a.__dask_keys__()[i][0] for i in range(a.numblocks[0]))
+        & get_dependencies(graph, svd_key)
+    )
+
+
+@pytest.mark.parametrize("nrows", [0, 2])
+def test_lstsq_unknown_rows_underdetermined(nrows):
+    a = da.zeros((nrows, 4), chunks=(1, 4))
+    b = da.ones(nrows, chunks=1)
+    a._chunks = ((np.nan,) * a.numblocks[0], (4,))
+    b._chunks = ((np.nan,) * b.numblocks[0],)
+    result = da.linalg.lstsq(a, b)
+    with pytest.raises(ValueError, match="at least as many rows as columns"):
+        result[0].compute()
+
+
+def test_lstsq_single_unknown_row_chunk():
+    a = np.arange(24, dtype=float).reshape(8, 3)
+    b = np.arange(8, dtype=float)
+    ad = da.from_array(a, chunks=a.shape)
+    bd = da.from_array(b, chunks=b.shape)
+    ad._chunks = ((np.nan,), (3,))
+    bd._chunks = ((np.nan,),)
+    x, residuals, rank, singular = da.linalg.lstsq(ad, bd)
+    expected_x, _, expected_rank, expected_singular = np.linalg.lstsq(a, b, rcond=None)
+    assert_eq(x, expected_x)
+    assert_eq(rank, np.array(expected_rank, dtype=np.int64))
+    assert_eq(singular, expected_singular, atol=1e-14)
+    assert_eq(residuals, np.sum(abs(b - a @ expected_x) ** 2, keepdims=True))
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.complex64, np.complex128])
+def test_lstsq_subnormal_scale(dtype):
+    scale = np.finfo(dtype).tiny / 32
+    a = np.zeros((10, 3), dtype=dtype)
+    a[0, 0] = scale
+    a[1, 1] = scale
+    b = a @ np.ones(3, dtype=dtype)
+    x, _, rank, singular = da.linalg.lstsq(
+        da.from_array(a, chunks=(5, 3)), da.from_array(b, chunks=5)
+    )
+    assert_eq(x, np.array([1, 1, 0], dtype=dtype))
+    assert_eq(rank, np.array(2, dtype=np.int64))
+    assert_eq(singular, np.array([scale, scale, 0], dtype=a.real.dtype), atol=0)
+
+
 def test_no_chunks_svd():
     x = np.random.default_rng().random((100, 10))
     u, s, v = np.linalg.svd(x, full_matrices=False)
