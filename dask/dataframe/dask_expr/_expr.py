@@ -3973,6 +3973,9 @@ def plain_column_projection(expr, parent, dependents, additional_columns=None):
 
 
 def is_filter_pushdown_available(expr, parent, dependents, allow_reduction=True):
+    if expr._name == parent.predicate._name:
+        # Push filters through their frame, not through the predicate itself.
+        return False
     parents = [x() for x in dependents[expr._name] if x() is not None]
     filters = {e._name for e in parents if isinstance(e, Filter)}
     if len(filters) != 1:
