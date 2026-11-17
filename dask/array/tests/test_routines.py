@@ -363,7 +363,21 @@ def test_tensordot():
 
 
 @pytest.mark.parametrize(
-    "axes", [0, 1, (0, 1), (1, 0), ((1, 0), (2, 1)), ((1, 2), (2, 0)), ((2, 0), (1, 2))]
+    "axes",
+    [
+        0,
+        1,
+        (0, 1),
+        (1, 0),
+        ((1, 0), (2, 1)),
+        ((1, 2), (2, 0)),
+        ((2, 0), (1, 2)),
+        (-1, -1),
+        (-2, 0),
+        (0, -2),
+        ((-1, 0), (-2, 2)),
+        ((-3, -1), (1, -3)),
+    ],
 )
 def test_tensordot_2(axes):
     x = np.arange(4 * 4 * 4).reshape((4, 4, 4))
@@ -395,6 +409,18 @@ def test_tensordot_double_contraction_ngt2():
     v = da.from_array(y)
 
     assert_eq(da.tensordot(u, v, axes=2), np.tensordot(x, y, axes=2))
+
+
+@pytest.mark.parametrize("axes", [(-1, -1), (-2, -2), (-3, 0), ((-1, -2), (-1, -2))])
+def test_tensordot_negative_axes_ndim_gt2(axes):
+    # Negative contraction axes on arrays with more than two dimensions used to
+    # insert the contracted axis at the wrong position in every block, so the
+    # result was summed over the wrong axis.
+    x = np.arange(2 * 5 * 3).reshape((2, 5, 3))
+    y = np.arange(2 * 5 * 3).reshape((2, 5, 3)) - 7
+    a = da.from_array(x, chunks=(1, 2, 3))
+    b = da.from_array(y, chunks=(2, 3, 1))
+    assert_eq(da.tensordot(a, b, axes=axes), np.tensordot(x, y, axes=axes))
 
 
 def test_tensordot_more_than_26_dims():

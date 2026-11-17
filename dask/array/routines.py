@@ -311,6 +311,10 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
+    # Normalize negative axes: ``_tensordot`` inserts the contracted axes back
+    # into each block by position, which is wrong for negative indices.
+    left_axes = tuple(ax + lhs.ndim if ax < 0 else ax for ax in left_axes)
+    right_axes = tuple(ax + rhs.ndim if ax < 0 else ax for ax in right_axes)
     is_sparse = _tensordot_is_sparse(lhs) or _tensordot_is_sparse(rhs)
     if is_sparse and len(left_axes) == 1:
         concatenate = True
@@ -344,7 +348,6 @@ def tensordot(lhs, rhs, axes=2):
     if concatenate:
         return intermediate
     else:
-        left_axes = [ax if ax >= 0 else lhs.ndim + ax for ax in left_axes]
         return intermediate.sum(axis=left_axes)
 
 
