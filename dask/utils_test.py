@@ -177,3 +177,16 @@ def _check_warning(condition: bool, category: type[Warning], message: str):
     else:
         with contextlib.nullcontext() as ctx:
             yield ctx
+
+
+def assert_scipy_sparse_matrix_deprecated(extra_condition: bool = True):
+    """Context manager that conditionally checks for the SciPy sparse matrix deprecation
+    warning.
+    """
+    from dask.array.scipy_compat import SCIPY_GE_200
+
+    return _check_warning(
+        extra_condition and SCIPY_GE_200,
+        DeprecationWarning,
+        "is being replaced by",
+    )
