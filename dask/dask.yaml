@@ -11,6 +11,7 @@ dataframe:
   shuffle:
     method: null
     compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY
+    hash-key: null  # Hash key for shuffle partitioning. Set to a random string to mitigate HashDoS.
   parquet:
     metadata-task-size-local: 512  # Number of files per local metadata-processing task
     metadata-task-size-remote: 1  # Number of files per remote metadata-processing task
