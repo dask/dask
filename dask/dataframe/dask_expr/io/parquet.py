@@ -576,7 +576,7 @@ def to_parquet(
         if none_index:
             rename_columns = {c: NONE_LABEL for c in df.columns if c in reserved_names}
             df = df.rename(columns=rename_columns)
-        index_cols = [c for c in set(df.columns) - real_cols]
+        index_cols = [c for c in df.columns if c not in real_cols]
     else:
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
