@@ -132,7 +132,8 @@ Dask starts to compute.
 By providing just a column name for the index argument, you imply that the
 column is numeric, and Dask guesses a reasonable partitioning by evenly
 splitting the space between minimum and maximum values into ``npartitions``
-intervals. You can also provide the max/min that you would like to
+intervals. Integer boundaries are calculated exactly, even for large IDs.
+You can also provide the max/min that you would like to
 consider so that Dask doesn't need to query for these. Alternatively,
 you can have Dask fetch the first few row (5 by default) and use
 them to guess the typical bytes/row, and base the partitioning size on
