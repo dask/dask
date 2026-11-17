@@ -903,6 +903,36 @@ def test_lstsq(nrow, ncol, chunk, iscomplex):
     assert_eq(ds, s)
 
 
+def test_lstsq_rank_deficient_minimum_norm():
+    """A zero column makes R singular. NumPy still returns the min-norm solution.
+
+    https://github.com/dask/dask/issues/12610
+    """
+    a = np.zeros((100, 2))
+    a[:, 0] = 1.0
+    b = np.arange(100, dtype=float)
+    expected = np.linalg.lstsq(a, b, rcond=None)[0]
+
+    da_ = da.from_array(a, chunks=(50, 2))
+    db = da.from_array(b, chunks=50)
+    got = da.linalg.lstsq(da_, db)[0].compute()
+
+    np.testing.assert_allclose(got, expected)
+
+
+def test_solve_triangular_key_depends_on_solver():
+    # The lstsq fallback solver must not share task keys with the default one.
+    from dask.array.linalg import _lstsq_triangular, _solve_triangular
+    from dask.array.utils import solve_triangular_safe
+
+    a = da.from_array(np.triu(np.ones((4, 4))), chunks=4)
+    b = da.from_array(np.ones(4), chunks=4)
+    default = _solve_triangular(a, b, False, solve_triangular_safe)
+    fallback = _solve_triangular(a, b, False, _lstsq_triangular)
+    assert default.name != fallback.name
+    assert da.linalg.solve_triangular(a, b).name == default.name
+
+
 def test_no_chunks_svd():
     x = np.random.default_rng().random((100, 10))
     u, s, v = np.linalg.svd(x, full_matrices=False)
