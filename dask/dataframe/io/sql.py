@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import operator
 import warnings
 
 import numpy as np
@@ -145,7 +146,8 @@ def read_sql_query(
                 sa.sql.func.max(index), sa.sql.func.min(index)
             ).select_from(sql.subquery())
             minmax = pd.read_sql(q, engine)
-            maxi, mini = minmax.iloc[0]
+            # Selecting the row can coerce mixed signed/unsigned bounds to float.
+            maxi, mini = minmax.iat[0, 0], minmax.iat[0, 1]
             dtype = minmax.dtypes["max_1"]
         else:
             mini, maxi = limits
@@ -168,6 +170,14 @@ def read_sql_query(
             )
             divisions[0] = mini
             divisions[-1] = maxi
+        elif pd.api.types.is_integer(mini) and pd.api.types.is_integer(maxi):
+            # Float interpolation loses large integer IDs. Python ints also
+            # avoid overflow when the range spans the full width of the dtype.
+            mini, maxi = int(mini), int(maxi)
+            npartitions = operator.index(npartitions)
+            span = maxi - mini
+            divisions = [mini + span * i // npartitions for i in range(npartitions)]
+            divisions.append(maxi)
         elif dtype.kind in ["i", "u", "f"]:
             divisions = np.linspace(mini, maxi, npartitions + 1, dtype=dtype).tolist()
         else:
