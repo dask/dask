@@ -748,6 +748,10 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
         npfunc(npb, axis=-1)[:, :, -k:][:, :, ::-1],
         daskfunc(b, k, axis=-1, split_every=split_every),
     )
+    assert_eq(
+        npfunc(npb, axis=-1)[:, :, -k:][:, :, ::-1],
+        daskfunc(b, k, axis=np.int64(-1), split_every=split_every),
+    )
     with pytest.raises(ValueError):
         daskfunc(b, k, axis=3, split_every=split_every)
 
@@ -791,6 +795,17 @@ def test_topk_argtopk3():
     assert_eq(
         a.argtopk(5, axis=1, split_every=2), da.argtopk(a, 5, axis=1, split_every=2)
     )
+
+
+@pytest.mark.parametrize("func", ["topk", "argtopk"])
+@pytest.mark.parametrize("axis", [(), (0,), (0, 1), [], [0], [0, 1]])
+def test_topk_argtopk_invalid_axis(func: str, axis: object) -> None:
+    a = da.ones((10, 20), chunks=(5, 10))
+    message = f"axis must be an integer, not {type(axis).__name__}"
+    with pytest.raises(TypeError, match=message):
+        getattr(da, func)(a, 1, axis=axis)
+    with pytest.raises(TypeError, match=message):
+        getattr(a, func)(1, axis=axis)
 
 
 @pytest.mark.parametrize(
