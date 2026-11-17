@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 import numbers
 from enum import Enum
@@ -417,11 +418,11 @@ def default_fused_keys_renamer(keys, max_fused_key_length=120):
     typ = type(first_key)
 
     if max_fused_key_length:  # Take into account size of hash suffix
-        max_fused_key_length -= 5
+        max_fused_key_length -= 9
 
     def _enforce_max_key_limit(key_name):
         if max_fused_key_length and len(key_name) > max_fused_key_length:
-            name_hash = f"{hash(key_name):x}"[:4]
+            name_hash = hashlib.sha1(key_name.encode()).hexdigest()[:8]
             key_name = f"{key_name[:max_fused_key_length]}-{name_hash}"
         return key_name
 
