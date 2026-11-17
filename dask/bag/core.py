@@ -1740,8 +1740,10 @@ def accumulate_part(binop, seq, initial, is_first=False):
         res = list(accumulate(binop, seq))
     else:
         res = list(accumulate(binop, seq, initial=initial))
-    if is_first:
-        return res, res[-1] if res else [], initial
+    # Empty leading partitions have no carry until a value or seed exists.
+    # Preserve no_default rather than introducing a real empty-list value.
+    if is_first or initial is no_default:
+        return res, res[-1] if res else no_default
     return res[1:], res[-1]
 
 
