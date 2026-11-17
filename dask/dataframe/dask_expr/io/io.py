@@ -440,11 +440,20 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         return self.operand("frame")
 
     @functools.cached_property
-    def _meta(self):
+    def _pandas_with_pyarrow_strings(self):
+        """Full pandas payload with string-like object columns converted once.
+
+        Conversion must use the full frame (not ``head(1)``) so mixed object
+        columns are detected consistently for meta and every partition.
+        """
+        data = self.frame._data
         if self.pyarrow_strings_enabled:
-            meta = make_meta(to_pyarrow_string(self.frame.head(1)))
-        else:
-            meta = self.frame.head(0)
+            return to_pyarrow_string(data)
+        return data
+
+    @functools.cached_property
+    def _meta(self):
+        meta = make_meta(self._pandas_with_pyarrow_strings.head(0))
 
         if self.operand("columns") is not None:
             return meta[self.columns[0]] if self._series else meta[self.columns]
@@ -531,9 +540,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
 
     def _filtered_task(self, name: Key, index: int) -> DataNode:  # type: ignore[override]
         start, stop = self._locations()[index : index + 2]
-        part = self.frame.iloc[start:stop]
-        if self.pyarrow_strings_enabled:
-            part = to_pyarrow_string(part)
+        part = self._pandas_with_pyarrow_strings.iloc[start:stop]
         if self.operand("columns") is not None:
             return DataNode(
                 name, part[self.columns[0]] if self._series else part[self.columns]
