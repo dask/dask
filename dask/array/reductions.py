@@ -1798,7 +1798,7 @@ def nanquantile(
     q_arr = asarray_safe(q, like=a)
     if (
         HAS_NUMBAGG
-        and (a.dtype.kind in "ui" or a.dtype == np.float64)
+        and (a.dtype.kind in "ui" or a.dtype in (np.float32, np.float64))
         and q_arr.dtype == np.float64
         and weights is None
         and method == "linear"
