@@ -147,6 +147,20 @@ def test_repr_html_hlg_layers():
         assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
+def test_repr_html_hlg_layers_escapes_keys():
+    pytest.importorskip("jinja2")
+    payload = "<img src=x onerror=alert(1)>"
+    layer = MaterializedLayer({("x", 0): 1}, annotations={payload: "v"})
+    hg = HighLevelGraph(
+        {payload: layer, "dep": MaterializedLayer({("y", 0): 1})},
+        {payload: {"dep"}, "dep": set()},
+    )
+    html = hg._repr_html_()
+    assert payload not in html
+    assert "&lt;img src=x onerror=alert(1)&gt;" in html
+    assert xml.etree.ElementTree.fromstring(html) is not None
+
+
 def annot_map_fn(key):
     return key[1:]
 
