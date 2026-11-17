@@ -107,6 +107,15 @@ class Concat(Expr):
             if len(divisions) == 1:  # single value for index
                 divisions = (divisions[0], divisions[0])
             return divisions
+        elif (
+            self._all_known_divisions
+            and not self._division_order_is_valid
+            and self._division_ranges_are_disjoint
+        ):
+            raise ValueError(
+                "All inputs have known divisions which cannot be concatenated "
+                "in order. Specify interleave_partitions=True to ignore order"
+            )
         return [None] * (sum(df.npartitions for df in dfs) + 1)
 
     @functools.cached_property
@@ -131,6 +140,23 @@ class Concat(Expr):
                 for i in range(len(dfs) - 1)
             )
         return False
+
+    @functools.cached_property
+    def _division_order_is_valid(self):
+        dfs = self._frames
+        for left, right in zip(dfs, dfs[1:]):
+            if left.divisions == right.divisions:
+                continue
+            if left.divisions[-1] > right.divisions[0]:
+                return False
+        return True
+
+    @functools.cached_property
+    def _division_ranges_are_disjoint(self):
+        divisions = sorted(df.divisions for df in self._frames)
+        return all(
+            left[-1] <= right[0] for left, right in zip(divisions, divisions[1:])
+        )
 
     @functools.cached_property
     def _are_co_aligned_or_single_partition(self):
