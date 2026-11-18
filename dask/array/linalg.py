@@ -832,22 +832,34 @@ def svd_compressed(
     return u, s, v
 
 
-def qr(a):
+def qr(a, mode="reduced"):
     """
     Compute the qr factorization of a matrix.
 
     Parameters
     ----------
     a : Array
+    mode : {"reduced", "complete", "r", "raw"}, optional
+        The factorization mode, following ``numpy.linalg.qr``. Defaults to
+        ``"reduced"``, which returns ``(q, r)`` where ``q`` has shape
+        ``(M, K)`` and ``r`` has shape ``(K, N)`` with ``K = min(M, N)``.
+
+        - ``"reduced"``: returns a tuple ``(q, r)`` with ``q`` orthonormal and
+          the minimal ``K = min(M, N)`` columns (or rows).
+        - ``"r"``: returns only ``r``, identical to the ``r`` of the
+          ``"reduced"`` factorization.
+        - ``"complete"`` and ``"raw"`` are not currently supported by Dask and
+          raise ``NotImplementedError``.
 
     Returns
     -------
-    q:  Array, orthonormal
+    q:  Array, orthonormal (for mode ``"reduced"``)
     r:  Array, upper-triangular
 
     Examples
     --------
     >>> q, r = da.linalg.qr(x)  # doctest: +SKIP
+    >>> r = da.linalg.qr(x, mode="r")  # doctest: +SKIP
 
     See Also
     --------
@@ -856,10 +868,23 @@ def qr(a):
     dask.array.linalg.sfqr: Implementation for short-and-fat arrays
     """
 
+    if mode not in {"reduced", "complete", "r", "raw"}:
+        raise ValueError(
+            f'invalid qr mode {mode!r}. Expected one of "reduced", "complete", "r", or "raw".'
+        )
+
+    if mode in {"complete", "raw"}:
+        raise NotImplementedError(
+            f"qr mode {mode!r} is not yet supported by Dask. Only the "
+            '"reduced" and "r" modes are implemented, since Dask\'s '
+            "distributed tsqr/sfqr algorithms compute the reduced "
+            'factorization. Use mode="reduced" (the default) or mode="r".'
+        )
+
     if len(a.chunks[1]) == 1 and len(a.chunks[0]) > 1:
-        return tsqr(a)
+        q, r = tsqr(a)
     elif len(a.chunks[0]) == 1:
-        return sfqr(a)
+        q, r = sfqr(a)
     else:
         raise NotImplementedError(
             "qr currently supports only tall-and-skinny (single column chunk/block; see tsqr)\n"
@@ -869,6 +894,11 @@ def qr(a):
             "which rechunk one shorter axis to a single chunk, while allowing\n"
             "the other axis to automatically grow/shrink appropriately."
         )
+
+    if mode == "reduced":
+        return q, r
+    # mode == "r"
+    return r
 
 
 def svd(a, coerce_signs=True, full_matrices=False):
