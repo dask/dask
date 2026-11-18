@@ -1984,7 +1984,7 @@ def key_split(s):
             result = words[0]
         for word in words[1:]:
             if word.isalpha() and not (
-                len(word) == 8 and hex_pattern.match(word) is not None
+                len(word) == 8 and hex_pattern.fullmatch(word) is not None
             ):
                 result += f"-{word}"
             else:

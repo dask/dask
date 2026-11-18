@@ -34,6 +34,7 @@ from dask.utils import (
     is_empty,
     itemgetter,
     iter_chunks,
+    key_split,
     memory_repr,
     methodcaller,
     ndeepmap,
@@ -722,6 +723,13 @@ def test_is_arraylike():
     assert is_arraylike(np.empty(())) is True
     assert is_arraylike(np.empty((0,))) is True
     assert is_arraylike(np.empty((0, 0))) is True
+
+
+def test_key_split_eight_letter_word():
+    # Only an 8-letter word made entirely of hex letters is a token
+    assert key_split("file-download-1") == "file-download"
+    assert key_split("read-database-0") == "read-database"
+    assert key_split("x-abcdefab") == "x"
 
 
 def test_iter_chunks():
