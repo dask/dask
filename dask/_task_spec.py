@@ -901,17 +901,6 @@ class NestedContainer(Task, Iterable):
             )
         )
 
-    def __dask_tokenize__(self):
-        from dask.tokenize import tokenize
-
-        return (
-            type(self).__name__,
-            self.klass,
-            sorted(tokenize(a) for a in self.args),
-        )
-
-        return super().__dask_tokenize__()
-
     @staticmethod
     def to_container(*args, constructor):
         return constructor(args)
@@ -930,6 +919,15 @@ class Tuple(NestedContainer):
 
 class Set(NestedContainer):
     constructor = klass = set
+
+    def __dask_tokenize__(self) -> tuple[str, type, list[str]]:
+        from dask.tokenize import tokenize
+
+        return (
+            type(self).__name__,
+            self.klass,
+            sorted(tokenize(a) for a in self.args),
+        )
 
 
 class Dict(NestedContainer, Mapping):
@@ -963,6 +961,15 @@ class Dict(NestedContainer, Mapping):
     def __repr__(self):
         values = ", ".join(f"{k}: {v}" for k, v in batched(self.args, 2, strict=True))
         return f"Dict({values})"
+
+    def __dask_tokenize__(self) -> tuple[str, type, list[str]]:
+        from dask.tokenize import tokenize
+
+        return (
+            type(self).__name__,
+            self.klass,
+            sorted(tokenize(pair) for pair in batched(self.args, 2, strict=True)),
+        )
 
     def substitute(
         self, subs: dict[KeyType, KeyType | GraphNode], key: KeyType | None = None

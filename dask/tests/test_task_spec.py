@@ -967,6 +967,53 @@ def test_nested_containers():
     assert t({"b": "b"}) == ["a-b", "c-d"]
 
 
+@pytest.mark.parametrize("container", [List, Tuple])
+@pytest.mark.parametrize(
+    "values",
+    [
+        (1, 2),
+        (TaskRef("a"), TaskRef("b")),
+        (Task("a", identity, 1), Task("b", identity, 2)),
+    ],
+)
+def test_sequence_tokenize_order(
+    container: type[List] | type[Tuple], values: tuple[object, object]
+) -> None:
+    first = container(*values)
+    second = container(*reversed(values))
+    assert tokenize(first) != tokenize(second)
+    assert tokenize(Task("key", identity, first)) != tokenize(
+        Task("key", identity, second)
+    )
+
+
+def test_set_tokenize_order() -> None:
+    first = Set(TaskRef("a"), Task("b", identity, 2))
+    second = Set(Task("b", identity, 2), TaskRef("a"))
+    assert tokenize(first) == tokenize(second)
+
+
+@pytest.mark.parametrize(
+    "left, right",
+    [
+        ({"a": True, "b": False}, {"a": False, "b": True}),
+        ({"a": 1, "b": 2}, {"a": 2, "b": 1}),
+        ({"a": "b"}, {"b": "a"}),
+        ({("a", 1): 1, 2: 2}, {("a", 1): 2, 2: 1}),
+        (
+            {"a": TaskRef("x"), "b": TaskRef("y")},
+            {"a": TaskRef("y"), "b": TaskRef("x")},
+        ),
+        ({"a": List(1, 2)}, {"a": List(2, 1)}),
+        ({"a": Tuple(1, 2)}, {"a": Tuple(2, 1)}),
+    ],
+)
+def test_dict_tokenize_key_value_pairs(
+    left: dict[object, object], right: dict[object, object]
+) -> None:
+    assert tokenize(Dict(left)) != tokenize(Dict(right))
+
+
 def test_dict_class():
     t = Dict(k=Task("key-1", func, "a", "b"), v=Task("key-2", func, "c", "d"))
     assert not t.dependencies
