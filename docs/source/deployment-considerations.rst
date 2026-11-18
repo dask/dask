@@ -45,7 +45,7 @@ Most non-commercial deployment libraries rely on the user launching the cluster 
 
 Most Dask deployment options set reasonable defaults for access (i.e. not making your cluster accessible to anyone on the Internet), but you still should make sure that your clusters (or your users' clusters) aren't accessible to unauthorized users.
 
-Additionally, if you're connecting to a cluster over the Internet, you should ensure that that connection is encrypted, since sensitive information, such as credentials or proprietary data, may flow over it. You might do this by port-forwarding your connection over SSH, using :doc:`TLS <tls>`, or using `Dask-gateway <https://gateway.dask.org/>`_ or a commercial offering that manages this automatically.
+Additionally, if you're connecting to a cluster over the Internet, you should ensure that that connection is encrypted, since sensitive information, such as credentials or proprietary data, may flow over it. You might do this by port-forwarding your connection over SSH, using :doc:`TLS <distributed:tls>`, or using `Dask-gateway <https://gateway.dask.org/>`_ or a commercial offering that manages this automatically.
 
 
 Controlling cost
@@ -74,7 +74,7 @@ The Dask client needs to be able to talk to the scheduler, which is potentially 
 
 You may also have other systems on restricted networks that workers need to access to read and write data, or call APIs. Connecting to those networks could add additional complexity.
 
-Some organizations may have additional network security policies, such as requiring all traffic to be encrypted. Dask supports this with :doc:`TLS <tls>`. Some deployment systems enable this automatically using self-signed certificates; others may require additional configuration, especially if using certificates from your organization.
+Some organizations may have additional network security policies, such as requiring all traffic to be encrypted. Dask supports this with :doc:`TLS <distributed:tls>`. Some deployment systems enable this automatically using self-signed certificates; others may require additional configuration, especially if using certificates from your organization.
 
 
 Observability

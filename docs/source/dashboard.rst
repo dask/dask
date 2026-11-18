@@ -92,7 +92,7 @@ indicate the following.
 
 The different levels of transparency on these plots are related to the type of memory
 (Managed, Unmanaged and Unmanaged recent), and you can find a detailed explanation of them in the
-:doc:`Worker Memory management documentation <worker-memory>`
+:doc:`Worker Memory management documentation <distributed:worker-memory>`
 
 
 .. _dashboard.proc-cpu-occ:
@@ -104,7 +104,7 @@ Task Processing/CPU Utilization/Occupancy/Data Transfer
 
 The *Processing* tab in the figure shows the number of tasks that have been assigned to each worker. Not all of these
 tasks are necessarily *executing* at the moment: a worker only executes as many tasks at once as it has threads. Any
-extra tasks assigned to the worker will wait to run, depending on their :doc:`priority <priority>` and whether their
+extra tasks assigned to the worker will wait to run, depending on their :doc:`priority <distributed:priority>` and whether their
 dependencies are in memory on the worker.
 
 The scheduler will try to ensure that the workers are processing about the same number of tasks. If one of the bars is

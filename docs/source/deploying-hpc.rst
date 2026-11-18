@@ -191,7 +191,7 @@ following :doc:`configuration value <../../configuration>`:
 
 However, not all HPC systems have local storage.  If this is the case then you
 may want to turn off Dask's ability to spill to disk altogether.
-See :doc:`this page <worker-memory>` for more information on Dask's memory policies.
+See :doc:`this page <distributed:worker-memory>` for more information on Dask's memory policies.
 Consider changing the following values in your ``~/.config/dask/distributed.yaml`` file
 to disable spilling data to disk:
 

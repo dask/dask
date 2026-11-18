@@ -318,6 +318,8 @@ extlinks = {
     "pr": ("https://github.com/dask/dask/pull/%s", "dask#%s"),
     "pr-distributed": ("https://github.com/dask/distributed/pull/%s", "distributed#%s"),
     "pr-expr": ("https://github.com/dask/dask-expr/pull/%s", "dask-expr#%s"),
+    # used by docstrings copied from scipy, e.g. dask.array.stats.f_oneway
+    "doi": ("https://doi.org/%s", "doi:%s"),
 }
 
 #  --Options for sphinx extensions -----------------------------------------------
