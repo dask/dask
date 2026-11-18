@@ -935,6 +935,140 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
     assert len(with_mean_finalizers) == len(with_mean_spec)
 
 
+def test_aggregate_build_agg_args__duplicated_aggregation():
+    """Repeating the identical aggregation is not a conflict, but two
+    different aggregations with the same name still are."""
+    from dask.dataframe.groupby import Aggregation, _build_agg_args
+
+    spec = [(("b", "mean"), "mean", "b"), (("b", "mean"), "mean", "b")]
+    chunks, aggs, finalizers = _build_agg_args(spec)
+
+    # the intermediates are generated only once, but every spec entry
+    # gets its own finalizer
+    assert len(chunks) == len(_build_agg_args(spec[:1])[0])
+    assert len(aggs) == len(_build_agg_args(spec[:1])[1])
+    assert len(finalizers) == len(spec)
+
+    agg1 = Aggregation("agg", lambda x: x.sum(), lambda x: x.sum())
+    agg2 = Aggregation("agg", lambda x: x.sum(), lambda x: x.mean())
+    with pytest.raises(ValueError, match="conflicting aggregation functions"):
+        _build_agg_args([(("b", "agg"), agg1, "b"), (("b", "agg"), agg2, "b")])
+
+    # the very same Aggregation object repeated under two output names is
+    # a repetition, not a conflict
+    spec = [(("b", "agg"), agg1, "b"), (("b", "agg"), agg1, "b")]
+    chunks, aggs, finalizers = _build_agg_args(spec)
+    assert len(chunks) == len(_build_agg_args(spec[:1])[0])
+    assert len(aggs) == len(_build_agg_args(spec[:1])[1])
+    assert len(finalizers) == len(spec)
+
+
+def test_groupby_agg_same_aggregation_different_output_names():
+    # https://github.com/dask/dask/issues/11612
+    pdf = pd.DataFrame({"a": [1, 1, 2], "b": [4, 5, 6], "e": [7, 8, 9]})
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    assert_eq(
+        pdf.groupby("a").agg(c=("b", "mean"), d=("b", "mean")),
+        ddf.groupby("a").agg(c=("b", "mean"), d=("b", "mean")),
+    )
+    # interleaved columns: the output order differs from the spec order
+    assert_eq(
+        pdf.groupby("a").agg(c=("b", "mean"), d=("e", "mean"), f=("b", "mean")),
+        ddf.groupby("a").agg(c=("b", "mean"), d=("e", "mean"), f=("b", "mean")),
+    )
+    # duplicated aggregations without new output names keep both columns
+    assert_eq(
+        pdf.groupby("a").agg({"b": ["mean", "mean"]}),
+        ddf.groupby("a").agg({"b": ["mean", "mean"]}),
+    )
+    assert_eq(
+        pdf.groupby("a")["b"].agg(["mean", "mean"]),
+        ddf.groupby("a")["b"].agg(["mean", "mean"]),
+    )
+    # named aggregation on a SeriesGroupBy
+    assert_eq(
+        pdf.groupby("a")["b"].agg(c="mean", d="mean"),
+        ddf.groupby("a")["b"].agg(c="mean", d="mean"),
+    )
+    # var/std are assembled from several intermediates
+    assert_eq(
+        pdf.groupby("a").agg(c=("b", "var"), d=("b", "var")),
+        ddf.groupby("a").agg(c=("b", "var"), d=("b", "var")),
+    )
+    assert_eq(
+        pdf.groupby("a").agg(c=("b", "std"), d=("b", "mean"), f=("b", "std")),
+        ddf.groupby("a").agg(c=("b", "std"), d=("b", "mean"), f=("b", "std")),
+    )
+    # the issue case through a tree reduction with split_out
+    assert_eq(
+        pdf.groupby("a").agg(c=("b", "mean"), d=("b", "mean")),
+        ddf.groupby("a").agg(c=("b", "mean"), d=("b", "mean"), split_out=2),
+    )
+    # a duplicated column slice must not expand the finalized columns:
+    # the aggregation is only finalized once per function
+    single = pdf.groupby("a").agg({"b": ["mean"]})
+    assert_eq(
+        pd.concat([single, single], axis=1),
+        ddf.groupby("a")[["b", "b"]].agg(["mean", "mean"]),
+    )
+
+
+def test_agg_finalize_duplicated_result_columns():
+    """Duplicated result columns are assembled positionally, and a
+    projection request with duplicated labels must not expand them."""
+    from operator import itemgetter
+
+    from dask.dataframe.groupby import M, _agg_finalize, _apply_func_to_column
+
+    df = pd.DataFrame({"b": [4.0, 5.0, 6.0]}, index=pd.Index([1, 1, 2], name="a"))
+    aggregate_funcs = [
+        ("intermediate", _apply_func_to_column, {"column": "b", "func": M.mean})
+    ]
+    finalize_funcs = [
+        ("b", itemgetter("intermediate"), {}),
+        ("b", itemgetter("intermediate"), {}),
+    ]
+    single = pd.DataFrame({"b": [4.5, 6.0]}, index=pd.Index([1, 2], name="a"))
+    expected = pd.concat([single, single], axis=1)
+
+    for columns in (None, ["b", "b"]):
+        result = _agg_finalize(
+            df,
+            aggregate_funcs=aggregate_funcs,
+            finalize_funcs=finalize_funcs,
+            level=0,
+            columns=columns,
+        )
+        pd.testing.assert_frame_equal(expected, result)
+
+
+def test_agg_finalize_duplicated_result_columns_shared_object():
+    """Naming the finalized columns must not mutate the object returned
+    by a finalizer: a finalizer may return an object that another
+    finalizer returns as well, under a different result column."""
+    from dask.dataframe.groupby import _agg_finalize
+
+    df = pd.DataFrame({"b": [4.0, 5.0, 6.0]}, index=pd.Index([1, 1, 2], name="a"))
+    index = pd.Index([1, 2], name="a")
+    shared = pd.Series([4.5, 6.0], index=index, name="orig")
+    other = pd.Series([7.0, 8.0], index=index, name="other")
+    finalize_funcs = [
+        ("b", lambda df: shared, {}),
+        ("b", lambda df: other, {}),
+        ("c", lambda df: shared, {}),
+    ]
+    result = _agg_finalize(
+        df, aggregate_funcs=[], finalize_funcs=finalize_funcs, level=0
+    )
+    assert list(result.columns) == ["b", "b", "c"]
+    pd.testing.assert_series_equal(result.iloc[:, 0], shared.rename("b"))
+    pd.testing.assert_series_equal(result.iloc[:, 1], other.rename("b"))
+    pd.testing.assert_series_equal(result.iloc[:, 2], shared.rename("c"))
+    # the shared object keeps its own name
+    assert shared.name == "orig"
+
+
 @pytest.mark.parametrize("split_every", [1, 8])
 @pytest.mark.parametrize("split_out", [2, 32])
 def test_shuffle_aggregate(shuffle_method, split_out, split_every):
