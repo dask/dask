@@ -5148,6 +5148,35 @@ def test_zarr_irregular_chunks(shape, chunks, expect_rechunk):
 
 
 @pytest.mark.parametrize(
+    "dask_chunks, zarr_chunks, expect_rechunk",
+    [
+        ((2, 2), (4, 4), True),  # several Dask blocks per Zarr chunk -> corrupts
+        ((2, 2), (3, 3), True),  # not a whole multiple -> corrupts
+        ((4, 4), (2, 2), False),  # each Dask block covers whole Zarr chunks -> safe
+        ((2, 2), (2, 2), False),  # exact match -> safe
+    ],
+)
+def test_to_zarr_aligns_misaligned_user_chunks(
+    dask_chunks, zarr_chunks, expect_rechunk
+):
+    # Passing `chunks` overrides the Dask chunking, so unless the Dask chunks are a whole
+    # multiple of it several blocks write into the same Zarr chunk and silently corrupt it.
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        a = da.arange(100).reshape((10, 10)).rechunk(dask_chunks)
+        if expect_rechunk:
+            with pytest.warns(
+                UserWarning, match="do not align with the requested Zarr"
+            ):
+                a.to_zarr(d, component="test", chunks=zarr_chunks, overwrite=True)
+        else:
+            a.to_zarr(d, component="test", chunks=zarr_chunks, overwrite=True)
+
+        # The data that lands on disk must round-trip regardless of the requested chunking.
+        assert_eq(a, da.from_zarr(d, component="test"))
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [(), True],
