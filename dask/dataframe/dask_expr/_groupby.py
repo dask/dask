@@ -659,7 +659,9 @@ class Cov(SingleAggregation):
 
     @property
     def chunk_kwargs(self) -> dict:  # type: ignore[override]
-        return self.operand("chunk_kwargs")
+        kwargs = dict(self.operand("chunk_kwargs") or {})
+        kwargs["observed"] = self.observed
+        return kwargs
 
     @property
     def aggregate_kwargs(self) -> dict:  # type: ignore[override]
@@ -667,6 +669,7 @@ class Cov(SingleAggregation):
         kwargs["sort"] = self.sort
         kwargs["std"] = self.std
         kwargs["levels"] = self.levels
+        kwargs["observed"] = self.observed
         return kwargs
 
     @property

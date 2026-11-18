@@ -404,23 +404,39 @@ def _cov_finalizer(df, cols, std=False):
         y = col_idx_mapping[j]
         idx = x + num_cols * y
         mul_col = f"{i}{j}"
-        ni = df[f"{i}-count"]
-        nj = df[f"{j}-count"]
+        if i == j:
+            # Diagonal: the per-column sums and counts already come
+            # from the same (complete) rows.
+            n = df[f"{i}-count"]
+            si = df[i]
+            sj = df[j]
+            sii = df[mul_col]
+            sjj = df[mul_col]
+        else:
+            # Off-diagonal: the sums, sums of squares, and counts must
+            # all come from the rows where both columns are present,
+            # matching pandas' pairwise-complete behaviour.
+            # See https://github.com/dask/dask/issues/12705
+            n = df[f"{mul_col}-n"]
+            si = df[f"{mul_col}-si"]
+            sj = df[f"{mul_col}-sj"]
+            sii = df[f"{mul_col}-sii"]
+            sjj = df[f"{mul_col}-sjj"]
 
-        n = np.sqrt(ni * nj)
         div = n - 1
         div[div < 0] = 0
-        val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
-        if std:
-            ii = f"{i}{i}"
-            jj = f"{j}{j}"
-            std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
-            std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
-            sqrt_val = np.sqrt(std_val_i * std_val_j)
-            if sqrt_val == 0:
-                val = np.nan
-            else:
-                val = val / sqrt_val
+        # Groups with fewer than 2 complete pairs have undefined
+        # covariance/correlation (NaN); silence the 0/0 warnings.
+        with np.errstate(invalid="ignore", divide="ignore"):
+            val = (df[mul_col] - si * sj / n).values[0] / div.values[0]
+            if std:
+                std_val_i = (sii - si**2 / n).values[0] / div.values[0]
+                std_val_j = (sjj - sj**2 / n).values[0] / div.values[0]
+                sqrt_val = np.sqrt(std_val_i * std_val_j)
+                if sqrt_val == 0:
+                    val = np.nan
+                else:
+                    val = val / sqrt_val
 
         vals[idx] = val
         if i != j:
@@ -442,6 +458,17 @@ def _mul_cols(df, cols):
     for i, j in it.combinations_with_replacement(cols, 2):
         col = f"{i}{j}"
         _df[col] = df[i] * df[j]
+        if i != j:
+            # Pairwise-complete aggregates: for covariance/correlation
+            # pandas only uses rows where both columns are present, so
+            # the sums, sums of squares, and counts must all come from
+            # those same rows. See https://github.com/dask/dask/issues/12705
+            both = df[i].notna() & df[j].notna()
+            _df[f"{col}-n"] = both.astype(np.int64)
+            _df[f"{col}-si"] = df[i].where(both, 0)
+            _df[f"{col}-sj"] = df[j].where(both, 0)
+            _df[f"{col}-sii"] = (df[i] ** 2).where(both, 0)
+            _df[f"{col}-sjj"] = (df[j] ** 2).where(both, 0)
 
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137
@@ -452,7 +479,7 @@ def _mul_cols(df, cols):
     return _df
 
 
-def _cov_chunk(df, *by, numeric_only=no_default):
+def _cov_chunk(df, *by, numeric_only=no_default, observed=None):
     """Covariance Chunk Logic
 
     Parameters
@@ -489,7 +516,11 @@ def _cov_chunk(df, *by, numeric_only=no_default):
         by = [col_mapping[k] for k in by]
         cols = cols.difference(pd.Index(by))
 
-    g = _groupby_raise_unaligned(df, by=by)
+    # Pass observed through (like _mean_chunk): without it, grouping by
+    # categorical keys materializes every unobserved combination as a
+    # zero row in the intermediates, and no downstream observed=True
+    # can drop them again, so the result would not match pandas.
+    g = _groupby_raise_unaligned(df, by=by, observed=observed)
     x = g.sum(**numeric_only_kwargs)
 
     include_groups = {"include_groups": False} if PANDAS_GE_220 else {}
@@ -497,11 +528,48 @@ def _cov_chunk(df, *by, numeric_only=no_default):
         level=-1, drop=True
     )
 
+    # groupby().apply() prunes unused categories from the result index,
+    # so per-partition intermediates would carry different categories
+    # and fail to concat for ordered categoricals. Restore the full
+    # categories (as in the sums index) so all partitions align.
+    if isinstance(mul.index, pd.MultiIndex):
+        mul.index = mul.index.set_levels(
+            [
+                (
+                    level.astype(x.index.levels[i].dtype)
+                    if isinstance(level, pd.CategoricalIndex)
+                    else level
+                )
+                for i, level in enumerate(mul.index.levels)
+            ]
+        )
+    elif isinstance(mul.index, pd.CategoricalIndex):
+        mul.index = mul.index.astype(x.index.dtype)
+
     n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return (x, mul, n, col_mapping)
 
 
-def _cov_agg(_t, levels, ddof, std=False, sort=False):
+def _remove_unused_categories(index):
+    """Remove unused categories from the levels of an index.
+
+    ``MultiIndex`` has no ``remove_unused_categories`` method, so rebuild
+    it from its (pruned) level values.
+    """
+    if isinstance(index, pd.MultiIndex):
+        arrays = []
+        for i in range(index.nlevels):
+            level = index.get_level_values(i)
+            if isinstance(level, pd.CategoricalIndex):
+                level = level.remove_unused_categories()
+            arrays.append(level)
+        return pd.MultiIndex.from_arrays(arrays, names=index.names)
+    if isinstance(index, pd.CategoricalIndex):
+        return index.remove_unused_categories()
+    return index
+
+
+def _cov_agg(_t, levels, ddof, std=False, sort=False, observed=False):
     # sometime we get a series back from concat combiner
     t = list(_t)
 
@@ -509,14 +577,24 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     cols = sums[0].columns
     col_mapping = col_mappings[-1]
 
-    total_sums = concat(sums).groupby(level=levels, sort=sort).sum()
-    total_muls = concat(muls).groupby(level=levels, sort=sort).sum()
-    total_counts = concat(counts).groupby(level=levels).sum()
+    # Pass observed through (like _mean_agg/_var_combine): grouping by
+    # categorical index levels without it raises a FutureWarning on
+    # pandas < 3, and defaults to unobserved combinations, which would
+    # not match the requested observed=True result.
+    total_sums = concat(sums).groupby(level=levels, sort=sort, observed=observed).sum()
+    total_muls = concat(muls).groupby(level=levels, sort=sort, observed=observed).sum()
+    total_counts = concat(counts).groupby(level=levels, observed=observed).sum()
     result = (
         concat([total_sums, total_muls, total_counts], axis=1)
-        .groupby(level=levels)
+        .groupby(level=levels, observed=observed)
         .apply(_cov_finalizer, cols=cols, std=std)
     )
+
+    if observed and not PANDAS_GE_300:
+        # pandas < 3 drops unused categories from the result index of
+        # groupby(corr/cov) with observed=True, while pandas 3 keeps
+        # the full categories. Match pandas < 3 here.
+        result.index = _remove_unused_categories(result.index)
 
     inv_col_mapping = {v: k for k, v in col_mapping.items()}
     idx_vals = result.index.names
