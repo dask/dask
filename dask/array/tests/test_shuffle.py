@@ -152,3 +152,29 @@ def test_dtype_taker(arr, darr):
         for k, v in dict(result.dask).items()
         if "shuffle-taker" in k
     )
+
+
+@pytest.mark.parametrize("group_size", [256, 257, 300, 65537])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_shuffle_large_groups(group_size: int, axis: int) -> None:
+    arr = np.arange(4 * group_size).reshape(2 * group_size, 2)
+    chunks = (20 if group_size < 1000 else 32768, 1)
+    if axis == 1:
+        arr = arr.T
+        chunks = chunks[::-1]
+    darr = da.from_array(arr, chunks=chunks)
+    indexer = [
+        list(range(0, 2 * group_size, 2)),
+        list(range(1, 2 * group_size, 2)),
+    ]
+    result = darr.shuffle(indexer, axis=axis)
+    expected = np.take(arr, list(flatten(indexer)), axis=axis)
+    assert_eq(result, expected)
+
+
+def test_shuffle_large_group_repeated_indices() -> None:
+    arr = np.arange(40)
+    darr = da.from_array(arr, chunks=20)
+    indexer = [list(range(40)) * 8]
+    result = darr.shuffle(indexer, axis=0)
+    assert_eq(result, arr[list(flatten(indexer))])
