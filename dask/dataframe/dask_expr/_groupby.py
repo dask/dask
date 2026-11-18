@@ -719,11 +719,15 @@ class GroupByReduction(Reduction, GroupByBase):
 
     @functools.cached_property
     def combine_kwargs(self):
-        return {"levels": self.levels, "observed": self.observed, "dropna": self.dropna}
+        return {
+            "levels": self.levels,
+            "observed": self.observed,
+            **_as_dict("dropna", self.dropna),
+        }
 
     @functools.cached_property
     def chunk_kwargs(self):
-        return {"observed": self.observed, "dropna": self.dropna}
+        return {"observed": self.observed, **_as_dict("dropna", self.dropna)}
 
     @functools.cached_property
     def aggregate_kwargs(self):
@@ -731,7 +735,7 @@ class GroupByReduction(Reduction, GroupByBase):
             "levels": self.levels,
             "sort": self.sort,
             "observed": self.observed,
-            "dropna": self.dropna,
+            **_as_dict("dropna", self.dropna),
         }
 
 
@@ -789,7 +793,7 @@ class Std(Var):
         )
 
 
-def _mean_chunk(df, *by, observed=None, dropna=None):
+def _mean_chunk(df, *by, observed=None, dropna=True):
     if is_series_like(df):
         df = df.to_frame()
 
@@ -799,7 +803,7 @@ def _mean_chunk(df, *by, observed=None, dropna=None):
     return concat([x, n], axis=1)
 
 
-def _mean_combine(g, levels, sort=False, observed=None, dropna=None):
+def _mean_combine(g, levels, sort=False, observed=None, dropna=True):
     return g.groupby(level=levels, sort=sort, observed=observed, dropna=dropna).sum()
 
 
