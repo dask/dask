@@ -56,6 +56,7 @@ should contain the dependencies of the task.
 """
 import functools
 import itertools
+import operator
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Container, Iterable, Mapping, MutableMapping
@@ -765,7 +766,19 @@ class Task(GraphNode):
         if self.kwargs:
             kwargs = {k: _eval(kw) for k, kw in self.kwargs.items()}
             return self.func(*new_argspec, **kwargs)
-        return self.func(*new_argspec)
+        try:
+            return self.func(*new_argspec)
+        except (TypeError, IndexError):
+            if self.func is operator.getitem:
+                offending_func = ", ".join(str(d) for d in self.dependencies)
+                obj, idx = new_argspec
+                raise TypeError(
+                    f"A delayed function '{offending_func}' was expected to return at least "
+                    f"{idx + 1} output(s), but got a {type(obj).__name__!r}. "
+                    f"Check your function returns the correct number of outputs "
+                    f"(nout mismatch)."
+                ) from None
+            raise
 
     def __setstate__(self, state):
         slots = self.__class__.get_all_slots()
