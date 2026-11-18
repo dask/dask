@@ -293,6 +293,21 @@ def test_sort_values():
     )
 
 
+def test_as_known_with_p2p_shuffle():
+    expected = pd.Series([1, 2, 1, 0, 2], name="qid", dtype="category")
+    series = from_pandas(expected, npartitions=3).cat.as_unknown()
+
+    with (
+        LocalCluster(processes=False, dashboard_address=":0") as cluster,
+        Client(cluster),
+        dask.config.set({"dataframe.shuffle.method": "p2p"}),
+    ):
+        result = series.cat.as_known()
+
+    assert result.cat.categories.dtype == expected.cat.categories.dtype
+    dd.assert_eq(result, expected, check_categorical=False)
+
+
 @pytest.mark.parametrize("add_repartition", [True, False])
 def test_merge_combine_similar_squash_merges(add_repartition):
     with LocalCluster(processes=False, n_workers=2, dashboard_address=":0") as cluster:

@@ -13,6 +13,7 @@ from dask.dataframe.dask_expr._accessor import Accessor, PropertyMap
 from dask.dataframe.dask_expr._expr import Blockwise, Elemwise, Projection
 from dask.dataframe.dask_expr._reductions import ApplyConcatApply
 from dask.dataframe.utils import (
+    UNKNOWN_CATEGORIES,
     AttributeNotImplementedError,
     clear_known_categories,
     has_known_categories,
@@ -82,6 +83,7 @@ class CategoricalAccessor(Accessor):
             .unique()
             .compute()
         )
+        categories = categories[categories != UNKNOWN_CATEGORIES]
         return self.set_categories(categories.values)
 
     def as_unknown(self):
