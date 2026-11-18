@@ -4,6 +4,7 @@ import contextlib
 import copy
 import re
 import xml.etree.ElementTree
+from collections.abc import Callable
 from typing import Literal
 
 import pytest
@@ -1175,6 +1176,29 @@ def test_elemwise_with_ndarrays():
     # Error on shape mismatch
     pytest.raises(ValueError, lambda: a + y.T)
     pytest.raises(ValueError, lambda: a + np.arange(2))
+
+
+@pytest.mark.parametrize(
+    "op", [operator.add, operator.sub, operator.mul, operator.truediv]
+)
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("scalar_dtype", ["int64", "float32", "float64"])
+def test_elemwise_copies_numpy_scalar_array(
+    op: Callable, reverse: bool, scalar_dtype: str
+) -> None:
+    x = np.array([2.0, 4.0])
+    scalar = np.array(10, dtype=scalar_dtype)
+    a = from_array(x, chunks=1)
+    expected = op(scalar, x) if reverse else op(x, scalar)
+    result = op(scalar, a) if reverse else op(a, scalar)
+
+    scalar[...] = 5
+
+    assert_eq(result, expected)
+    # A later expression must observe the updated value without changing the first one.
+    updated = op(scalar, a) if reverse else op(a, scalar)
+    assert_eq(updated, op(scalar, x) if reverse else op(x, scalar))
+    assert result.name != updated.name
 
 
 def test_elemwise_differently_chunked():
