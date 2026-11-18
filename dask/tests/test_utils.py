@@ -3,7 +3,10 @@ from __future__ import annotations
 import datetime
 import functools
 import operator
+import os
 import pickle
+import stat
+import tempfile
 from array import array
 
 import pytest
@@ -908,6 +911,23 @@ def test_tmpfile_naming():
     with tmpfile(extension=".jpg") as fn:
         assert fn[-4:] == ".jpg"
         assert fn[-5] != "."
+
+
+def test_tmpfile_private_directory():
+    # The yielded name must not be a free name directly in the shared temp
+    # directory, where another local user could claim it before the caller
+    # creates the file (mktemp pattern); it lives in a fresh private
+    # directory that is removed on exit.
+    with tmpfile() as fn:
+        assert not os.path.exists(fn)
+        parent = os.path.dirname(os.path.realpath(fn))
+        assert parent != os.path.realpath(tempfile.gettempdir())
+        if os.name == "posix":
+            assert stat.S_IMODE(os.stat(parent).st_mode) == 0o700
+        with open(fn, "w") as f:
+            f.write("data")
+    assert not os.path.exists(fn)
+    assert not os.path.exists(parent)
 
 
 def test_get_meta_library():
