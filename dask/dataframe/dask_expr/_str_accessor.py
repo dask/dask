@@ -181,11 +181,22 @@ class SplitMap(FunctionMap):
 
     @functools.cached_property
     def _meta(self):
+        import pandas as pd
+
         delimiter = " " if self.pat is None else self.pat
         meta = meta_nonempty(self.frame._meta)
+        # Preserve the original dtype so split/rsplit keep e.g. string[pyarrow]
+        # instead of silently downgrading to object. Categorical dtypes are
+        # excluded: the synthetic probe value below is virtually never one of
+        # the fixed categories, which would coerce it to NaN and corrupt the
+        # inferred column count.
+        dtype = self.frame._meta.dtype
+        if isinstance(dtype, pd.CategoricalDtype):
+            dtype = None
         meta = self.frame._meta._constructor(
             [delimiter.join(["a"] * (self.n + 1))],
             index=meta.iloc[:1].index,
+            dtype=dtype,
         )
         return make_meta(
             getattr(meta.str, self.attr)(n=self.n, expand=self.expand, pat=self.pat)
