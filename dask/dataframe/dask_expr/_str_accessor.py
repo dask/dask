@@ -181,11 +181,18 @@ class SplitMap(FunctionMap):
 
     @functools.cached_property
     def _meta(self):
+        import pandas as pd
+
         delimiter = " " if self.pat is None else self.pat
+        dtype = self.frame._meta.dtype
+        if isinstance(dtype, pd.CategoricalDtype):
+            # ``str`` operations on a categorical operate on the categories
+            dtype = dtype.categories.dtype
         meta = meta_nonempty(self.frame._meta)
         meta = self.frame._meta._constructor(
             [delimiter.join(["a"] * (self.n + 1))],
             index=meta.iloc[:1].index,
+            dtype=dtype,
         )
         return make_meta(
             getattr(meta.str, self.attr)(n=self.n, expand=self.expand, pat=self.pat)
