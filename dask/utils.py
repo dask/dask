@@ -868,12 +868,13 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0, inconsistencies=None)
             more = [indent, extra.rstrip("\n") + "\n\n"]
         else:
             more = []
-        if inconsistencies is not None:
-            l3 = f"Known inconsistencies: \n {inconsistencies}"
-            bits = [head, indent, l1, l2, "\n\n", l3, "\n\n"] + more + [tail]
-        else:
-            bits = [head, indent, l1, indent, l2, "\n\n"] + more + [tail]
-        doc = "".join(bits)
+        bits = [head, indent, l1, indent, l2, "\n\n"]
+        if inconsistencies:
+            if isinstance(inconsistencies, str):
+                inconsistencies = [inconsistencies]
+            items = "".join(f"{indent}- {item}\n" for item in inconsistencies)
+            bits += [indent, "Known inconsistencies:\n\n", items, "\n"]
+        doc = "".join(bits + more + [tail])
 
     return doc
 
@@ -980,9 +981,10 @@ def derived_from(
     skipblocks : int
         How many text blocks (paragraphs) to skip from the start of the
         docstring. Useful for cases where the target has extra front-matter.
-    inconsistencies: list
-        List of known inconsistencies with method whose docstrings are being
-        copied.
+    inconsistencies: str or list of str
+        Known inconsistencies between the Dask method and the original one.
+        Each entry is rendered as a bullet under a "Known inconsistencies"
+        heading in the copied docstring.
     """
     ua_args = ua_args or []
 
