@@ -1015,6 +1015,12 @@ def test_svd_full_matrices_raises():
         da.linalg.svd(x, full_matrices=True)
 
 
+def test_qr_mode_complete_raises():
+    x = da.random.default_rng().random((10, 10), chunks=(-1, -1))
+    with pytest.raises(NotImplementedError, match="mode"):
+        da.linalg.qr(x, mode="complete")
+
+
 @pytest.mark.parametrize("shape", [(10, 20), (20, 10), (10, 10)])
 def test_svd_full_matrices_false(shape):
     x = np.random.default_rng().random(shape)
