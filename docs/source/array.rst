@@ -69,7 +69,7 @@ New duck array chunk types (types below Dask on
 not registered will be deferred to in binary operations and NumPy
 ufuncs/functions (that is, Dask will return ``NotImplemented``). Note, however,
 that *any* ndarray-like type can be inserted into a Dask Array using
-:func:`~dask.array.Array.from_array`.
+:func:`~dask.array.from_array`.
 
 Common Uses
 -----------
