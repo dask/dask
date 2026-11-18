@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import warnings
 from functools import cache
 from time import sleep
 
@@ -616,6 +617,34 @@ def test_read_hdf(data, compare):
         assert a.npartitions == 2
 
         compare(a.compute(), sorted_data)
+
+
+_unpickle_calls = []
+
+
+def _record_unpickle():
+    _unpickle_calls.append(True)
+    return "payload"
+
+
+class _ExecOnUnpickle:
+    def __reduce__(self):
+        return (_record_unpickle, ())
+
+
+def test_read_hdf_fixed_format_not_deserialized():
+    # 'fixed'-format stores pickle object columns, so reading one runs the
+    # embedded pickle. read_hdf only supports 'table' format, and must reject
+    # a fixed-format file before touching its contents.
+    pytest.importorskip("tables")
+    _unpickle_calls.clear()
+    with tmpfile("h5") as fn:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            pd.DataFrame({"x": [_ExecOnUnpickle()]}).to_hdf(fn, key="/data")
+        with pytest.raises(TypeError, match="format='table'"):
+            dd.read_hdf(fn, "/data", mode="r")
+    assert not _unpickle_calls
 
 
 def test_read_hdf_multiply_open():
