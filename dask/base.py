@@ -861,7 +861,10 @@ def visualize(
     """
     args, _ = unpack_collections(*args, traverse=traverse)
 
-    dsk = collections_to_expr(args, optimize_graph=optimize_graph).__dask_graph__()
+    expr = collections_to_expr(args, optimize_graph=optimize_graph)
+    if optimize_graph:
+        expr = expr.optimize()
+    dsk = expr.__dask_graph__()
 
     return visualize_dsk(
         dsk=dsk,
