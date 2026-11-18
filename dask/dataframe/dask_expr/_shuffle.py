@@ -800,7 +800,7 @@ class BaseSetIndexSortValues(Expr):
 
     @property
     def npartitions(self):
-        return self.operand("npartitions") or len(self._divisions()) - 1
+        return len(self._divisions()) - 1
 
 
 class SetIndex(BaseSetIndexSortValues):
