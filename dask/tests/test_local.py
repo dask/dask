@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
 import dask
 from dask._task_spec import Task, TaskRef
 from dask.local import finish_task, get_sync, sortkey, start_state_from_dask
 from dask.order import order
+from dask.threaded import get as get_threaded
 from dask.utils_test import GetFunctionTestMixin, add, inc
 
 fib_dask = {"f0": 0, "f1": 1, "f2": 1, "f3": 2, "f4": 3, "f5": 5, "f6": 8}
@@ -220,3 +223,35 @@ def test_detect_malformed_graph():
     with pytest.raises(ValueError, match="Missing dependency"):
         get_sync(dsk, "y")
     assert get_sync(dsk, "y", cache={"x": 1}) == 1
+
+
+@pytest.mark.parametrize("get", [get_sync, get_threaded], ids=["sync", "threads"])
+@pytest.mark.parametrize(
+    "value",
+    [0, False, None, "", [], {}, set()],
+    ids=[
+        "zero",
+        "false",
+        "none",
+        "empty-string",
+        "empty-list",
+        "empty-dict",
+        "empty-set",
+    ],
+)
+def test_cached_dependency_with_falsey_value(
+    get: Callable[..., object], value: object
+) -> None:
+    dsk = {"y": Task("y", lambda x: x, TaskRef("x"))}
+    assert get(dsk, "y", cache={"x": value}) is value
+
+
+@pytest.mark.parametrize("get", [get_sync, get_threaded], ids=["sync", "threads"])
+def test_cached_dependency_without_truth_value(get: Callable[..., object]) -> None:
+    class NoTruthValue:
+        def __bool__(self) -> bool:
+            raise ValueError("Cached data must not be truth-tested")
+
+    value = NoTruthValue()
+    dsk = {"y": Task("y", lambda x: x, TaskRef("x"))}
+    assert get(dsk, "y", cache={"x": value}) is value
