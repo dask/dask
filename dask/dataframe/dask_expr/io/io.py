@@ -493,15 +493,20 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
             _division_info_cache[key] = divisions, locations
         return _division_info_cache[key]
 
+    @functools.cached_property
+    def _length_stats(self) -> tuple:
+        stats = self.operand("_pd_length_stats")
+        if stats is not None:
+            return stats
+        locations = self._locations()
+        return tuple(
+            offset - locations[i]
+            for i, offset in enumerate(locations[1:])
+            if not self._filtered or i in self._partitions
+        )
+
     def _get_lengths(self) -> tuple | None:
-        if self._pd_length_stats is None:
-            locations = self._locations()
-            self._pd_length_stats = tuple(
-                offset - locations[i]
-                for i, offset in enumerate(locations[1:])
-                if not self._filtered or i in self._partitions
-            )
-        return self._pd_length_stats
+        return self._length_stats
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Lengths):
