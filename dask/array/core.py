@@ -3461,16 +3461,16 @@ def _get_chunk_shape(a):
 
 
 def from_array(
-    x,
-    chunks="auto",
-    name=None,
-    lock=False,
-    asarray=None,
-    fancy=True,
-    getitem=None,
-    meta=None,
-    inline_array=False,
-):
+    x: Any,
+    chunks: str | tuple = "auto",
+    name: str | bool | None = None,
+    lock: bool | SerializableLock = False,
+    asarray: bool | None = None,
+    fancy: bool = True,
+    getitem: Any | None = None,
+    meta: Any | None = None,
+    inline_array: bool = False,
+) -> Array:
     """Create dask array from something that looks like an array.
 
     Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
@@ -3684,6 +3684,7 @@ def from_array(
         slices = slices_from_chunks(chunks)
         keys = product([name], *(range(len(bds)) for bds in chunks))
         values = [x[slc] for slc in slices]
+        dsk: HighLevelGraph | dict[tuple[int | str | None, ...], Any]
         dsk = dict(zip(keys, values))
 
     elif is_ndarray and is_single_block:
