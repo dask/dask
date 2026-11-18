@@ -621,7 +621,7 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
             else:
                 t = Task(key, np.zeros, (vchunk, hchunk), dtype)
             dsk[t.key] = t
-    return Array(dsk, name_eye, shape=(N, M), chunks=(chunks, chunks), dtype=dtype)
+    return Array(dsk, name_eye, shape=(N, M), chunks=(vchunks, hchunks), dtype=dtype)
 
 
 @derived_from(np)
