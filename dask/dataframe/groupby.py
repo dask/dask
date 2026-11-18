@@ -1029,7 +1029,7 @@ def _compute_sum_of_squares(grouped, column):
         else:
             # Handle CuDF groupby object (different from pandas)
             keys = grouped.grouping.keys
-    df = grouped.obj[column].pow(2) if column else grouped.obj.pow(2)
+    df = grouped.obj[column].pow(2) if column is not None else grouped.obj.pow(2)
     return df.groupby(keys).sum()
 
 
