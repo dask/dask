@@ -800,7 +800,10 @@ class BaseSetIndexSortValues(Expr):
 
     @property
     def npartitions(self):
-        return self.operand("npartitions") or len(self._divisions()) - 1
+        # _calculate_divisions collapses duplicate quantile boundaries, so we can
+        # end up with fewer partitions than were requested. The lowered graph
+        # follows divisions, so npartitions has to as well.
+        return len(self.divisions) - 1
 
 
 class SetIndex(BaseSetIndexSortValues):
