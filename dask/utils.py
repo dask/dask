@@ -1863,7 +1863,7 @@ def parse_timedelta(s, default="seconds"):
     if isinstance(s, Number):
         s = str(s)
     s = s.replace(" ", "")
-    if not s[0].isdigit():
+    if not any(char.isdigit() for char in s):
         s = f"1{s}"
 
     for i in range(len(s) - 1, -1, -1):
