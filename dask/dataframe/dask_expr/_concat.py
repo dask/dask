@@ -269,7 +269,7 @@ class Concat(Expr):
                     else frame
                 )
                 for frame, cols in zip(self._frames, columns_frame)
-                if len(cols) > 0
+                if len(cols) > 0 or self.axis == 0
             ]
             result = type(self)(
                 self.join,
