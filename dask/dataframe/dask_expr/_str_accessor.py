@@ -181,11 +181,21 @@ class SplitMap(FunctionMap):
 
     @functools.cached_property
     def _meta(self):
+        import pandas as pd
+
         delimiter = " " if self.pat is None else self.pat
         meta = meta_nonempty(self.frame._meta)
+        dtype = self.frame._meta.dtype
+        if isinstance(dtype, pd.CategoricalDtype):
+            # splitting categorical values produces non-categorical output,
+            # so let pandas infer the output dtype instead
+            dtype = None
         meta = self.frame._meta._constructor(
             [delimiter.join(["a"] * (self.n + 1))],
             index=meta.iloc[:1].index,
+            # pass the dtype explicitly so the metadata preserves the dtype
+            # of the original series (GH#11884)
+            dtype=dtype,
         )
         return make_meta(
             getattr(meta.str, self.attr)(n=self.n, expand=self.expand, pat=self.pat)
