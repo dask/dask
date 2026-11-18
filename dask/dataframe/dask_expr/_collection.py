@@ -1208,7 +1208,7 @@ Expr={expr}"""
         transform_divisions : bool, default True
             Whether to apply the function onto the divisions and apply those
             transformed divisions to the output.
-        align_dataframes : bool, default True
+        align_dataframes : bool, default False
             Whether to repartition DataFrame- or Series-like args
             (both dask and pandas) so their divisions align before applying
             the function. This requires all inputs to have known divisions.
@@ -6214,7 +6214,7 @@ def map_partitions(
     transform_divisions : bool, default True
         Whether to apply the function onto the divisions and apply those
         transformed divisions to the output.
-    align_dataframes : bool, default True
+    align_dataframes : bool, default False
         Whether to repartition DataFrame- or Series-like args
         (both dask and pandas) so their divisions align before applying
         the function. This requires all inputs to have known divisions.
@@ -6318,7 +6318,7 @@ def map_overlap(
     transform_divisions : bool, default True
         Whether to apply the function onto the divisions and apply those
         transformed divisions to the output.
-    align_dataframes : bool, default True
+    align_dataframes : bool, default False
         Whether to repartition DataFrame- or Series-like args
         (both dask and pandas) so their divisions align before applying
         the function. This requires all inputs to have known divisions.
