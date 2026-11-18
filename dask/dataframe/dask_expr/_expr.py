@@ -2001,7 +2001,14 @@ class Assign(Elemwise):
 
     @functools.cached_property
     def _meta(self):
-        args = [op._meta if isinstance(op, Expr) else op for op in self._args]
+        # Operate on non-empty metas: assigning a non-empty series into the
+        # empty meta frame makes pandas align on the index and fill the other
+        # columns with NaN, which silently upcasts their dtypes (e.g. int64
+        # -> float64) even though real partitions would not do that.
+        args = [
+            meta_nonempty(op._meta) if isinstance(op, Expr) else op
+            for op in self._args
+        ]
         return make_meta(self.operation(*args, **self._kwargs))
 
     def _tree_repr_argument_construction(self, i, op, header):
