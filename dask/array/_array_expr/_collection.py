@@ -927,7 +927,7 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     # TODO(expr-soon): We should probably go through blockwise here
     args = [asanyarray(a) for a in args]
 
-    return new_collection(Elemwise(op, dtype, name, where, *args))
+    return new_collection(Elemwise(op, dtype, name, where, kwargs, *args))
 
 
 def rechunk(

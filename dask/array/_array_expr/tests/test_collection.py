@@ -7,7 +7,7 @@ import pytest
 
 import dask.array as da
 from dask import is_dask_collection
-from dask.array import Array, assert_eq
+from dask.array import Array, _array_expr_enabled, assert_eq
 from dask.array._array_expr._rechunk import Rechunk
 
 
@@ -132,3 +132,17 @@ def test_stack_promote_type():
     df = da.from_array(f, chunks=5)
     res = da.stack([di, df])
     assert_eq(res, np.stack([i, f]))
+
+
+@pytest.mark.array_expr
+def test_nan_to_num_kwargs():
+    if not _array_expr_enabled():
+        pytest.skip("array expr disabled")
+
+    arr = np.array([np.nan, np.inf, -np.inf, 1.5])
+    darr = da.from_array(arr, chunks=2)
+
+    assert_eq(
+        da.nan_to_num(darr, nan=-1.0, posinf=7.5, neginf=-8.5),
+        np.nan_to_num(arr, nan=-1.0, posinf=7.5, neginf=-8.5),
+    )
