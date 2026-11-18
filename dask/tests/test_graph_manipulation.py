@@ -9,6 +9,7 @@ import pytest
 import dask
 import dask.bag as db
 from dask import delayed
+from dask._task_spec import Task, TaskRef
 from dask.base import clone_key
 from dask.blockwise import Blockwise
 from dask.graph_manipulation import bind, checkpoint, chunks, clone, wait_on
@@ -200,6 +201,43 @@ def test_clone(layers):
     c8 = out["x"][0]
     assert_no_common_keys(c8, t2, omit=t1, layers=layers)
     assert_no_common_keys(c8, t3, layers=layers)
+
+
+@pytest.mark.parametrize("layers", [False, True])
+def test_clone_task_spec(layers):
+    """https://github.com/dask/dask/issues/12455
+
+    clone() on a MaterializedLayer whose values are ``Task`` objects must rename the
+    embedded ``Task.key`` and any ``TaskRef`` references, otherwise the cloned graph
+    becomes internally inconsistent (the dict key is renamed while ``Task.key`` still
+    points at the original key) and the task-spec fuser raises ``ValueError: Cannot
+    fuse tasks with multiple outputs``.
+    """
+    ka = ("a", 0)
+    kb = ("b", 0)
+    dsk1 = {ka: Task(ka, add, 1, 2)}
+    dsk2 = {kb: Task(kb, add, TaskRef(ka), 3)}
+    if layers:
+        dsk1 = HighLevelGraph.from_collections("a", dsk1)
+        dsk2 = HighLevelGraph(
+            {"a": dsk1, "b": dsk2}, dependencies={"a": set(), "b": {"a"}}
+        )
+    else:
+        dsk2 = {**dsk1, **dsk2}
+
+    t = Tuple(dsk2, [kb])
+    c = clone(t, seed=1, assume_layers=layers)
+
+    assert_no_common_keys(c, t, layers=layers)
+    assert dask.compute(t, c) == ((6,), (6,))
+
+    # The cloned graph must be internally consistent: every Task.key matches its dict
+    # key and every TaskRef points at a key that exists in the cloned graph.
+    cdsk = c.__dask_graph__()
+    for key, value in cdsk.items():
+        assert isinstance(value, Task)
+        assert value.key == key
+        assert value.dependencies <= cdsk.keys()
 
 
 @pytest.mark.skipif("not da")

@@ -248,6 +248,15 @@ class Layer(Graph):
                 return [clone_value(i) for i in o]
             elif typ is dict:
                 return {k: clone_value(v) for k, v in o.items()}
+            elif isinstance(o, GraphNode):
+                # Task-spec node (Task, Alias, DataNode, ...). Substitute references
+                # to replaced keys and, when the node itself is being cloned, rename
+                # its embedded key so it stays consistent with the renamed dict key.
+                subs = {dep: clone_key(dep, seed) for dep in o.dependencies & keys}
+                if subs:
+                    is_leaf = False
+                new_key = clone_key(o.key, seed) if o.key in keys else o.key
+                return o.substitute(subs, key=new_key)
             else:
                 try:
                     if o not in keys:
