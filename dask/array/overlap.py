@@ -721,7 +721,7 @@ def map_overlap(
         assert all(type(c) is int for x in xs for cc in x.chunks for c in cc)
 
     assert_int_chunksize(args)
-    if not trim and "chunks" not in kwargs:
+    if not trim and kwargs.get("chunks") is None:
         if allow_rechunk:
             # Adjust chunks based on the rechunking result
             kwargs["chunks"] = _get_overlap_rechunked_chunks(
