@@ -25,6 +25,8 @@ Highlights
    - Update guidance on AI-assisted PRs (:pr:`12496) \`Guido Imperiale\`_
    - Bump scientific-python/issue-from-pytest-log-action from 1.5.0 to 1.6.0 (:pr:`12490) \`dependabot[bot]\`_
    - Bump astral-sh/setup-uv from 8.2.0 to 8.3.0 (:pr:`12491) \`dependabot[bot]\`_
+   - Added ``mode`` parameter to ``dask.array.linalg.qr`` (:pr:`12699`) `DeviousCardi`_
+   - Added ``dtypes`` option to ``read_parquet`` (:pr:`12700`) `DeviousCardi`_
 
 .. _v2026.7.0:
 
@@ -10180,3 +10182,4 @@ Other
 .. _`Zeus Almightee`: https://github.com/ernestprovo23
 .. _`Ernest Provo`: https://github.com/ernestprovo23
 .. _`Kevin Ziroldi`: https://github.com/kevinziroldi
+.. _`DeviousCardi`: https://github.com/DeviousCardi
