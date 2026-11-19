@@ -2792,10 +2792,8 @@ def test_groupby_sort_true_split_out():
 def test_groupby_aggregate_categorical_observed(
     xfail, agg_func, known_cats, ordered_cats, groupby, observed
 ):
-    if agg_func in ("cov", "nunique") or (agg_func == "corr" and groupby == "cat_1"):
+    if agg_func in ("cov", "corr", "nunique"):
         xfail("Not implemented for DataFrameGroupBy yet.")
-    elif agg_func == "corr" and not observed:
-        xfail("observed=False is not supported for corr")
     elif (
         agg_func in ("mean", "median", "std", "sum", "var", "prod")
         and groupby == "cat_1"
