@@ -1329,7 +1329,8 @@ def test_merge_validate_with_indicator():
 def test_merge_validate_positional_arguments():
     # Before `validate` existed, the arguments after `indicator` were
     # shuffle_method, npartitions and broadcast. `validate` was appended
-    # after them so that calls passing them positionally are unchanged.
+    # after them so that calls passing them positionally are unchanged,
+    # and it is itself reachable as the next positional argument.
     pdf_left = pd.DataFrame({"x": [1, 2, 3], "y": range(3)})
     pdf_right = pd.DataFrame({"x": [1, 2, 3], "z": range(3)})
     df_left = from_pandas(pdf_left, 2)
@@ -1348,7 +1349,7 @@ def test_merge_validate_positional_arguments():
         "tasks",
         2,
         None,
-        validate="one_to_one",
+        "one_to_one",
     )
     assert_eq(
         result,
@@ -1424,6 +1425,15 @@ def test_merge_validate_check_precedes_join():
         and any(isinstance(inner, Any) for inner in walk(node))
     ]
     assert len(guarded) == 2
+    # Both guards depend on the same two uniqueness scalars: the
+    # groupby-size reduction for each side is built once, not once per
+    # guard, so a validated merge does not pay for the check twice.
+    guarded_scalars = [
+        {inner._name for inner in walk(node) if isinstance(inner, Any)}
+        for node in guarded
+    ]
+    assert guarded_scalars[0] == guarded_scalars[1]
+    assert len(guarded_scalars[0]) == 2
 
 
 def test_merge_validate_index_level_name():
@@ -1535,8 +1545,18 @@ def test_merge_validate_ambiguous_key_name():
     )
     df_left = from_pandas(pdf_left, 2)
     df_right = from_pandas(pdf_right, 1)
-    with pytest.raises(ValueError, match="is both an index level and a column label"):
+    # The merge itself rejects the ambiguous name eagerly; asking for
+    # validation must raise the same error, of the same type with the
+    # same message, at the same time.
+    with pytest.raises(
+        ValueError, match="is both an index level and a column label"
+    ) as unvalidated:
+        df_left.merge(df_right, on="k")
+    with pytest.raises(
+        ValueError, match="is both an index level and a column label"
+    ) as validated:
         df_left.merge(df_right, on="k", validate="one_to_many")
+    assert str(validated.value) == str(unvalidated.value)
 
 
 def test_merge_validate_invalid_key_combinations():
