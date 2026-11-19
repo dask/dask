@@ -2792,8 +2792,12 @@ def test_groupby_sort_true_split_out():
 def test_groupby_aggregate_categorical_observed(
     xfail, agg_func, known_cats, ordered_cats, groupby, observed
 ):
-    if agg_func in ("cov", "corr", "nunique"):
+    if agg_func in ("cov", "nunique"):
         xfail("Not implemented for DataFrameGroupBy yet.")
+    elif agg_func == "corr" and (groupby == "cat_1" or not observed):
+        # Categorical columns still can't be summed; unobserved groups have no
+        # rows to pair up, and pandas only keeps the observed combinations.
+        xfail("Not implemented for categorical/unobserved corr")
     elif (
         agg_func in ("mean", "median", "std", "sum", "var", "prod")
         and groupby == "cat_1"
