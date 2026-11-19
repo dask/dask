@@ -22,6 +22,7 @@ from pandas.api.types import (
 )
 from pandas.api.types import is_scalar as pd_is_scalar
 from pandas.core.dtypes.common import is_extension_array_dtype
+from pandas.errors import MergeError
 from pyarrow import fs as pa_fs
 from tlz import first
 
@@ -2892,6 +2893,7 @@ class DataFrame(FrameBase):
         shuffle_method=None,
         npartitions=None,
         broadcast=None,
+        validate=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -2959,6 +2961,27 @@ class DataFrame(FrameBase):
             within the simple heuristic (a large number makes Dask more likely
             to choose the ``broadcast_join`` code path). See ``broadcast_join``
             for more information.
+        validate : str, optional
+            If specified, checks if merge is of specified type.
+
+            * "one_to_one" or "1:1": check if merge keys are unique in both
+              left and right datasets.
+            * "one_to_many" or "1:m": check if merge keys are unique in
+              left dataset.
+            * "many_to_one" or "m:1": check if merge keys are unique in
+              right dataset.
+            * "many_to_many" or "m:m": allowed, but does not result in checks.
+
+            Unlike in pandas, the check cannot be performed when the merge
+            is defined, because the merge keys are distributed across
+            partitions. It is evaluated as part of the graph when the
+            result is computed: the checked inputs depend on the check, so
+            it raises a ``pandas.errors.MergeError`` before the join itself
+            is evaluated if the merge keys are not unique as required.
+            Key-validity errors (an invalid ``validate`` argument, an
+            ambiguous key name, or an invalid key combination) are still
+            raised eagerly when the merge is defined, exactly as without
+            ``validate``.
 
         Notes
         -----
@@ -2999,6 +3022,7 @@ class DataFrame(FrameBase):
             shuffle_method,
             npartitions=npartitions,
             broadcast=broadcast,
+            validate=validate,
         )
 
     @derived_from(pd.DataFrame)
@@ -5608,6 +5632,150 @@ def melt(
     )
 
 
+# The valid ``validate`` arguments for ``merge``, mirroring pandas: each one
+# maps to the spelling pandas uses for the merge kind in its error messages
+# and to whether the merge keys of the left and of the right frame have to
+# be unique.
+_MERGE_VALIDATE_OPTIONS = {
+    # Listed in the same order pandas lists them in its ValueError for
+    # an invalid argument, so the message below can be derived from
+    # this table and stay identical to pandas'.
+    "1:1": ("one-to-one", True, True),
+    "1:m": ("one-to-many", True, False),
+    "m:1": ("many-to-one", False, True),
+    "m:m": ("many-to-many", False, False),
+    "one_to_one": ("one-to-one", True, True),
+    "one_to_many": ("one-to-many", True, False),
+    "many_to_one": ("many-to-one", False, True),
+    "many_to_many": ("many-to-many", False, False),
+}
+
+
+def _validate_merge_specification(validate):
+    """Check the ``validate`` argument of a merge, mirroring pandas.
+
+    Returns the ``_MERGE_VALIDATE_OPTIONS`` entry for the argument, or None
+    if no validation was requested.
+    """
+    if validate is None:
+        return None
+    if not isinstance(validate, str) or validate not in _MERGE_VALIDATE_OPTIONS:
+        options = "\n".join(f'- "{option}"' for option in _MERGE_VALIDATE_OPTIONS)
+        raise ValueError(
+            f'"{validate}" is not a valid argument. Valid arguments are:\n{options}'
+        )
+    return _MERGE_VALIDATE_OPTIONS[validate]
+
+
+def _drop_index(partition):
+    return partition.reset_index(drop=True)
+
+
+def _reset_index_levels(partition, levels):
+    return partition.reset_index(level=levels)
+
+
+def _merge_keys(frame, on, use_index):
+    """Extract the merge keys of one side of a merge as a DataFrame.
+
+    Returns None when a requested key name is neither a column nor an
+    index level of the frame: the merge itself rejects such a name, so
+    the caller skips the check for that side instead of raising a
+    key-extraction error here.
+    """
+    if use_index:
+        keys = frame.index.to_frame()
+        # The key frame keeps the merged-on index as its own index, whose
+        # name duplicates a key column; drop it so that grouping by a key
+        # column cannot be mistaken for grouping by an index level of the
+        # same name. The frame's own index carries no information for the
+        # uniqueness check.
+        return keys.map_partitions(
+            _drop_index,
+            meta=keys._meta.reset_index(drop=True),
+            clear_divisions=True,
+        )
+    # A repeated key name carries no extra information for the uniqueness
+    # of the composite key; drop the repetitions so that the names can be
+    # used as groupby keys (the merge itself accepts repeated names).
+    on = list(dict.fromkeys(_convert_to_list(on)))
+    for name in on:
+        if name in frame.columns and name in frame._meta.index.names:
+            # The merge itself rejects a key that is both a column and an
+            # index level (as does pandas); mirror that here instead of
+            # silently resolving the name to the column.
+            raise ValueError(
+                f"'{name}' is both an index level and a column label, "
+                "which is ambiguous."
+            )
+    columns = [name for name in on if name in frame.columns]
+    levels = [name for name in on if name not in frame.columns]
+    if any(name not in frame._meta.index.names for name in levels):
+        # A name that is neither a column nor an index level: the merge
+        # itself rejects it with its own error, so report that no keys
+        # could be extracted instead of raising a key-extraction error
+        # here. The caller skips the check for this side and lets the
+        # merge raise unchanged.
+        return None
+    if not levels:
+        return frame[on]
+    # Some of the names refer to index levels rather than columns. Crop
+    # the frame to the key columns and materialize only the levels that
+    # are joined on: materializing every level of every column could make
+    # an unrelated level collide with a column of the same name (which
+    # the merge itself handles fine) and builds a far wider intermediate
+    # frame than the keys need.
+    keys = frame[columns].map_partitions(
+        _reset_index_levels,
+        levels,
+        meta=frame._meta[columns].reset_index(level=levels),
+        clear_divisions=True,
+    )
+    return keys[on]
+
+
+def _merge_keys_have_duplicates(keys):
+    """A lazy scalar that is True if the merge keys contain duplicates.
+
+    Rows whose key contains a missing value form a group of their own
+    (``dropna=False``), so repeated missing keys count as duplicates,
+    mirroring pandas. ``observed=True`` is sufficient here: a duplicate
+    needs two rows sharing a key, so only observed combinations can
+    ever count; ``observed=False`` would additionally materialize the
+    full cartesian product of unobserved category combinations (all
+    zero-sized) for categorical keys. Passing it explicitly also keeps
+    pandas from warning about the ``observed`` default.
+    """
+    counts = keys.groupby(list(keys.columns), dropna=False, observed=True).size()
+    return (counts > 1).any()
+
+
+def _check_merge_keys(partition, left_duplicates, right_duplicates, kind):
+    """Partition function raising MergeError if a uniqueness check failed.
+
+    The partition itself is returned unchanged; the function is applied to
+    the checked inputs of a validated merge so that the join depends on the
+    uniqueness scalars and cannot produce output before they are known.
+    The scalars arrive as computed booleans: map_partitions broadcasts
+    each scalar to every partition task, so every partition re-checks the
+    same values and the error message is identical wherever it surfaces.
+    """
+    if left_duplicates and right_duplicates:
+        raise MergeError(
+            "Merge keys are not unique in either left or right dataset; "
+            f"not a {kind} merge."
+        )
+    if left_duplicates:
+        raise MergeError(
+            f"Merge keys are not unique in left dataset; not a {kind} merge."
+        )
+    if right_duplicates:
+        raise MergeError(
+            f"Merge keys are not unique in right dataset; not a {kind} merge."
+        )
+    return partition
+
+
 @wraps(pd.merge)
 def merge(
     left,
@@ -5623,7 +5791,10 @@ def merge(
     shuffle_method=None,
     npartitions=None,
     broadcast=None,
+    validate=None,
 ):
+    validate_spec = _validate_merge_specification(validate)
+
     for o in [on, left_on, right_on]:
         if isinstance(o, FrameBase):
             raise NotImplementedError()
@@ -5678,6 +5849,73 @@ def merge(
     assert is_dataframe_like(right._meta)
     if left_on and right_on:
         warn_dtype_mismatch(left, right, left_on, right_on)
+
+    if validate_spec is not None:
+        kind, check_left, check_right = validate_spec
+        if check_left or check_right:
+            # The uniqueness of the merge keys can only be decided from
+            # the data, which is distributed across partitions, so the
+            # check is added to the graph as a pair of lazy scalars. The
+            # checked frames are wrapped in a pass-through layer that
+            # depends on the scalars before the merge is built on top of
+            # them, so the join cannot produce any output partition
+            # before the scalars are known: if a check fails, the
+            # pandas.errors.MergeError is raised instead of the join
+            # materializing its (potentially huge) result.
+            # A checked side whose keys the normalization above left
+            # undefined (e.g. left_on given without right_on), or whose
+            # key names resolve to neither a column nor an index level,
+            # is an invalid combination that the merge itself rejects
+            # when it is built below. Do not extract keys for such a
+            # side, so that the original error is raised unchanged
+            # instead of an internal error from the key extraction
+            # masking it.
+            # These predicates only gate key extraction, never
+            # validation: the Merge built below is the authority on
+            # whether the key combination is legal, so they must stay
+            # in sync with the merge's own key-resolution rules.
+            left_keys_defined = left_index or bool(_convert_to_list(left_on))
+            right_keys_defined = right_index or bool(_convert_to_list(right_on))
+            left_keys = (
+                _merge_keys(left, left_on, left_index)
+                if check_left and left_keys_defined
+                else None
+            )
+            right_keys = (
+                _merge_keys(right, right_on, right_index)
+                if check_right and right_keys_defined
+                else None
+            )
+            left_duplicates = (
+                _merge_keys_have_duplicates(left_keys)
+                if left_keys is not None
+                else False
+            )
+            right_duplicates = (
+                _merge_keys_have_duplicates(right_keys)
+                if right_keys is not None
+                else False
+            )
+            if check_left and left_keys is not None:
+                left = left.map_partitions(
+                    _check_merge_keys,
+                    left_duplicates,
+                    right_duplicates,
+                    kind,
+                    meta=left._meta,
+                    enforce_metadata=False,
+                    clear_divisions=False,
+                )
+            if check_right and right_keys is not None:
+                right = right.map_partitions(
+                    _check_merge_keys,
+                    left_duplicates,
+                    right_duplicates,
+                    kind,
+                    meta=right._meta,
+                    enforce_metadata=False,
+                    clear_divisions=False,
+                )
 
     result = new_collection(
         Merge(
