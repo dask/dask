@@ -1119,6 +1119,13 @@ def test_merge_validate_invalid():
         df.merge(df, on="x", validate="one_to_three")
     with pytest.raises(ValueError, match="is not a valid argument"):
         merge(df, df, on="x", validate="one_to_three")
+    # The error message is identical to pandas', including the full
+    # list of valid arguments
+    with pytest.raises(ValueError) as excinfo:
+        df.merge(df, on="x", validate="one_to_three")
+    with pytest.raises(ValueError) as pandas_excinfo:
+        pdf.merge(pdf, on="x", validate="one_to_three")
+    assert str(excinfo.value) == str(pandas_excinfo.value)
     # Non-string arguments are rejected the same way as in pandas
     with pytest.raises(ValueError, match="is not a valid argument"):
         df.merge(df, on="x", validate=5)
@@ -1205,11 +1212,39 @@ def test_merge_validate_one_to_many_and_many_to_one(validate, checked_side):
 def test_merge_validate_many_to_many(validate):
     pdf = pd.DataFrame({"x": [1, 1, 2], "y": range(3)})
     df = from_pandas(pdf, 2)
+    result = df.merge(df, on="x", validate=validate)
     assert_eq(
-        df.merge(df, on="x", validate=validate),
+        result,
         pdf.merge(pdf, on="x", validate=validate),
         check_index=False,
     )
+    # m:m performs no check: no guard layer is added to the graph
+    from dask._expr import Expr
+    from dask.dataframe.dask_expr._expr import MapPartitions
+    from dask.dataframe.dask_expr._reductions import Any
+
+    def walk(expr):
+        seen = set()
+        stack = [expr]
+        while stack:
+            node = stack.pop()
+            if id(node) in seen:
+                continue
+            seen.add(id(node))
+            yield node
+            stack.extend(
+                operand for operand in node.operands if isinstance(operand, Expr)
+            )
+
+    merges = [node for node in walk(result._expr) if isinstance(node, Merge)]
+    assert len(merges) == 1
+    guarded = [
+        node
+        for node in walk(merges[0])
+        if isinstance(node, MapPartitions)
+        and any(isinstance(inner, Any) for inner in walk(node))
+    ]
+    assert len(guarded) == 0
 
 
 def test_merge_validate_keys_spanning_partitions():
@@ -1491,6 +1526,23 @@ def test_merge_validate_check_precedes_join():
     ]
     assert guarded_scalars[0] == guarded_scalars[1]
     assert len(guarded_scalars[0]) == 2
+
+
+def test_merge_validate_check_survives_optimization():
+    # The guard must survive the expression optimizer and downstream
+    # projection: optimizing the validated merge, or selecting columns
+    # out of it, must not drop the uniqueness check. The guard is a
+    # pass-through, so validation also leaves the result meta unchanged.
+    pdf_left = pd.DataFrame({"x": [1, 1, 2], "y": range(3)})
+    pdf_right = pd.DataFrame({"x": [1, 2], "z": range(2)})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 1)
+    validated = df_left.merge(df_right, on="x", validate="one_to_many")
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        validated.optimize().compute()
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        validated[["x", "y"]].compute()
+    assert validated._meta.equals(df_left.merge(df_right, on="x")._meta)
 
 
 def test_merge_validate_index_level_name():

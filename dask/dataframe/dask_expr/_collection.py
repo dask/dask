@@ -5637,14 +5637,17 @@ def melt(
 # and to whether the merge keys of the left and of the right frame have to
 # be unique.
 _MERGE_VALIDATE_OPTIONS = {
-    "one_to_one": ("one-to-one", True, True),
+    # Listed in the same order pandas lists them in its ValueError for
+    # an invalid argument, so the message below can be derived from
+    # this table and stay identical to pandas'.
     "1:1": ("one-to-one", True, True),
-    "one_to_many": ("one-to-many", True, False),
     "1:m": ("one-to-many", True, False),
-    "many_to_one": ("many-to-one", False, True),
     "m:1": ("many-to-one", False, True),
-    "many_to_many": ("many-to-many", False, False),
     "m:m": ("many-to-many", False, False),
+    "one_to_one": ("one-to-one", True, True),
+    "one_to_many": ("one-to-many", True, False),
+    "many_to_one": ("many-to-one", False, True),
+    "many_to_many": ("many-to-many", False, False),
 }
 
 
@@ -5657,16 +5660,9 @@ def _validate_merge_specification(validate):
     if validate is None:
         return None
     if not isinstance(validate, str) or validate not in _MERGE_VALIDATE_OPTIONS:
+        options = "\n".join(f'- "{option}"' for option in _MERGE_VALIDATE_OPTIONS)
         raise ValueError(
-            f'"{validate}" is not a valid argument. Valid arguments are:\n'
-            '- "1:1"\n'
-            '- "1:m"\n'
-            '- "m:1"\n'
-            '- "m:m"\n'
-            '- "one_to_one"\n'
-            '- "one_to_many"\n'
-            '- "many_to_one"\n'
-            '- "many_to_many"'
+            f'"{validate}" is not a valid argument. Valid arguments are:\n{options}'
         )
     return _MERGE_VALIDATE_OPTIONS[validate]
 
