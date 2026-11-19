@@ -33,6 +33,8 @@ def sample(population, k, split_every=None):
     >>> list(random.sample(b, 3).compute())  # doctest: +SKIP
     [1, 3, 5]
     """
+    if k == 0:
+        return _empty_bag(population)
     res = _sample(population=population, k=k, split_every=split_every)
     return res.map_partitions(_finalize_sample, k)
 
@@ -59,8 +61,25 @@ def choices(population, k=1, split_every=None):
     >>> list(random.choices(b, 3).compute())  # doctest: +SKIP
     [1, 1, 5]
     """
+    if k == 0:
+        return _empty_bag(population)
     res = _sample_with_replacement(population=population, k=k, split_every=split_every)
     return res.map_partitions(_finalize_sample, k)
+
+
+def _empty_partition(partition):
+    """The only partition of a zero-size sample: empty, without reading the input."""
+    return []
+
+
+def _empty_bag(population):
+    """A zero-size sample of *population*: same partitioning, no reservoir reduction.
+
+    ``k=0`` divides by zero in the reservoir map step and calls ``min`` on an
+    empty reservoir schedule in the with-replacement reduce step. Python's
+    ``random.sample``/``random.choices`` return an empty result for it instead.
+    """
+    return population.map_partitions(_empty_partition)
 
 
 def _sample_reduce(reduce_iter, k, replace):
