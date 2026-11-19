@@ -9,6 +9,7 @@ import pytest
 from dask.multiprocessing import get_context
 from dask.sizeof import sizeof
 from dask.utils import funcname, tmpdir
+from dask.utils_test import assert_scipy_sparse_matrix_deprecated
 
 try:
     import pandas as pd
@@ -97,8 +98,30 @@ def test_pandas_repeated_column():
 
 def test_sparse_matrix():
     sparse = pytest.importorskip("scipy.sparse")
-    sp = sparse.eye(10)
-    # These are the 32-bit Python 2.7 values.
+    with assert_scipy_sparse_matrix_deprecated():
+        sp = sparse.eye(10)
+        # These are the 32-bit Python 2.7 values.
+        assert sizeof(sp.todia()) >= 152
+        assert sizeof(sp.tobsr()) >= 232
+        assert sizeof(sp.tocoo()) >= 240
+        assert sizeof(sp.tocsc()) >= 232
+        assert sizeof(sp.tocsr()) >= 232
+        assert sizeof(sp.todok()) >= 184
+        assert sizeof(sp.tolil()) >= 204
+
+
+def test_sparse_array():
+    """sizeof() must handle the sparse array API, not just sparse matrices."""
+    sparse = pytest.importorskip("scipy.sparse")
+
+    from dask.array.scipy_compat import SCIPY_GE_111
+
+    if not SCIPY_GE_111:
+        pytest.skip(reason="scipy.sparse.sparray required")
+
+    import numpy as np
+
+    sp = sparse.csr_array(np.eye(10))
     assert sizeof(sp.todia()) >= 152
     assert sizeof(sp.tobsr()) >= 232
     assert sizeof(sp.tocoo()) >= 240

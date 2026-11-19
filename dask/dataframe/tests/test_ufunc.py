@@ -242,6 +242,16 @@ def test_ufunc_wrapped_not_implemented():
         np.repeat(ddf, 10)
 
 
+@pytest.mark.parametrize(
+    "pdobj", [pd.Series([1, 2, 3]), pd.DataFrame({"a": [1, 2, 3]})]
+)
+def test_ufunc_wrapped_not_implemented_non_numpy_caller(pdobj):
+    """The error message never names a function that doesn't belong to NumPy"""
+    dobj = dd.from_pandas(pdobj, npartitions=1)
+    with pytest.raises(NotImplementedError, match="This method is not implemented"):
+        dobj.__array_wrap__(np.array([1, 2, 3]))
+
+
 _UFUNCS_2ARG = [
     "logaddexp",
     "logaddexp2",

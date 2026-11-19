@@ -23,6 +23,20 @@ def BOKEH_VERSION():
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
 
 
+def _bokeh_in_notebook():
+    """Whether bokeh output is bound to a running notebook kernel."""
+    if BOKEH_VERSION().major >= 4:
+        # Bokeh 4 removed the bokeh.io.state module; notebook mode is now
+        # inferred from the runtime environment instead.
+        from bokeh.io.notebook import notebook_environment
+
+        return notebook_environment()
+
+    from bokeh.io.state import curstate
+
+    return curstate().notebook
+
+
 def unquote(expr):
     if istask(expr):
         if expr[0] in (tuple, list, set):
@@ -82,7 +96,8 @@ def visualize(
     save : boolean, optional
         If True (default when not in notebook), the plot is saved to disk.
     mode : str, optional
-        Mode passed to bokeh.output_file()
+        BokehJS resource mode. Passed to ``bokeh.io.output_file()`` on Bokeh 3
+        and to ``bokeh.io.save()`` on Bokeh 4 and later.
     **kwargs
         Other keyword arguments, passed to bokeh.figure. These will override
         all defaults set by visualize.
@@ -92,7 +107,6 @@ def visualize(
     The completed bokeh plot object.
     """
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
-    from bokeh.io import state
 
     if "file_path" in kwargs:
         warnings.warn(
@@ -105,7 +119,7 @@ def visualize(
         filename = kwargs.pop("file_path")
 
     if save is None:
-        save = not state.curstate().notebook
+        save = not _bokeh_in_notebook()
 
     if not isinstance(profilers, list):
         profilers = [profilers]
@@ -131,8 +145,13 @@ def visualize(
     if show:
         bp.show(p)
     if save:
-        bp.output_file(filename, mode=mode)
-        bp.save(p)
+        if BOKEH_VERSION().major >= 4:
+            # Bokeh 4 removed bokeh.io.output_file along with the global output
+            # state; the destination is passed to save() instead.
+            bp.save(p, filename=filename, resources=mode)
+        else:
+            bp.output_file(filename, mode=mode)
+            bp.save(p)
     return p
 
 
