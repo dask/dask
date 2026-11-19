@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import fnmatch
 import io
 import operator
@@ -20,6 +21,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_220,
     PANDAS_GE_300,
     PANDAS_GE_310,
+    PANDAS_GE_320,
 )
 from dask.dataframe.dask_expr import (
     DataFrame,
@@ -1371,8 +1373,18 @@ def test_series_iter(df, pdf):
 
 
 def test_dataframe_iterrows(df, pdf):
-    for a, b in zip(df.iterrows(), pdf.iterrows()):
-        pd.testing.assert_series_equal(a[1], b[1])
+    if PANDAS_GE_320:
+        # pandas 3.2 deprecated DataFrame.iterrows. Dask yields from the pandas
+        # implementation, so the warning must surface rather than be suppressed.
+        from pandas.errors import Pandas4Warning
+
+        ctx = pytest.warns(Pandas4Warning, match="iterrows is deprecated")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        for a, b in zip(df.iterrows(), pdf.iterrows()):
+            pd.testing.assert_series_equal(a[1], b[1])
 
 
 def test_dataframe_itertuples(df, pdf):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import functools
 import inspect
+import sys
 import warnings
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from functools import wraps
@@ -299,6 +300,31 @@ _WARN_ANNOTATIONS = True
 #
 # Collection classes
 #
+
+
+def _wrapped_numpy_funcname() -> str | None:
+    """Return the name of the public NumPy function that called ``__array_wrap__``,
+    or None if the caller is not NumPy.
+
+    Depending on the NumPy version, private helpers (``_wrapfunc``, ``_wrapit``)
+    may sit between the public function and ``__array_wrap__``; skip them.
+    """
+    # Caller of __array_wrap__
+    try:
+        frame = sys._getframe(1)
+    except AttributeError:  # Not CPython
+        frame = inspect.stack()[1].frame  # pragma: nocover
+    assert frame.f_back is not None
+    frame = frame.f_back
+
+    while frame.f_globals.get("__name__", "").startswith("numpy."):
+        name = frame.f_code.co_name
+        if not name.startswith("_"):
+            return name
+        if frame.f_back is None:
+            return None
+        frame = frame.f_back
+    return None
 
 
 class FrameBase(DaskMethodsMixin):
@@ -2786,12 +2812,8 @@ class DataFrame(FrameBase):
             else:
                 index = context[1][0].index
         else:
-            try:
-                import inspect
-
-                method_name = f"`{inspect.stack()[3][3]}`"
-            except IndexError:
-                method_name = "This method"
+            funcname = _wrapped_numpy_funcname()
+            method_name = f"`{funcname}`" if funcname else "This method"
 
             raise NotImplementedError(
                 f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
@@ -4208,12 +4230,8 @@ class Series(FrameBase):
             else:
                 index = context[1][0].index
         else:
-            try:
-                import inspect
-
-                method_name = f"`{inspect.stack()[3][3]}`"
-            except IndexError:
-                method_name = "This method"
+            funcname = _wrapped_numpy_funcname()
+            method_name = f"`{funcname}`" if funcname else "This method"
             raise NotImplementedError(
                 f"{method_name} is not implemented for `dask.dataframe.Series`."
             )
