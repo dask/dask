@@ -87,9 +87,9 @@ def test_arr_like(
             assert da_r.name == name
 
         if "order" == "F":  # FIXME: this is clearly a bug!  # noqa: PLR0133
-            assert np.isfortran(da_r.compute())
+            assert da_r.compute().flags.fnc
         else:
-            assert not np.isfortran(da_r.compute())
+            assert not da_r.compute().flags.fnc
 
 
 @pytest.mark.parametrize(

@@ -1565,8 +1565,6 @@ class GroupBy:
             **_as_dict("dropna", dropna),
         )
         if slice is not None:
-            if isinstance(slice, tuple):
-                slice = list(slice)
             self._meta = self._meta[slice]
 
     def _numeric_only_kwargs(self, numeric_only):
