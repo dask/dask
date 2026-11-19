@@ -361,6 +361,24 @@ def test_saves_file_path_deprecated():
 
 
 @pytest.mark.skipif("not bokeh")
+def test_saves_file_in_notebook(monkeypatch, tmp_path):
+    from dask.diagnostics import profile_visualize
+
+    monkeypatch.setattr(profile_visualize, "_bokeh_in_notebook", lambda: True)
+    fn = str(tmp_path / "profile.html")
+    with prof:
+        get(dsk, "e")
+
+    # save defaults to False, and nothing is written to disk
+    prof.visualize(show=False, filename=fn)
+    assert not os.path.exists(fn)
+
+    # an explicit save=True takes precedence over the notebook detection
+    prof.visualize(show=False, save=True, filename=fn)
+    assert os.path.exists(fn)
+
+
+@pytest.mark.skipif("not bokeh")
 def test_get_colors():
     from bokeh.palettes import Blues5, Blues256, Viridis
 

@@ -27,7 +27,7 @@ again, due to lack of pixi-build support for SCM versioning in fsspec; the s3fs 
 pins the fsspec version which fails to match the current fsspec recipe. This s3fs recipe
 works around the problem by removing the fsspec pin.
 
-## Recipes used by the `py314t` environment
+## Recipes used by the free-threading environments
 ### brotli
 Creates non-importable conda-package `brotli-python=1.2.0`.
 brotli is an optional dependency of urllib3, which is in turn a dependency of requests,
