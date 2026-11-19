@@ -1309,6 +1309,35 @@ def test_merge_validate_nan_keys():
     )
 
 
+def test_merge_validate_missing_keys_object_dtype():
+    # None and np.nan spelled differently in an object column are the
+    # same missing key for the merge (and for the groupby check): two
+    # missing keys are a duplicate
+    pdf_left = pd.DataFrame(
+        {"x": pd.array([None, np.nan], dtype=object), "y": range(2)}
+    )
+    pdf_right = pd.DataFrame({"x": pd.array([1.0, 2.0], dtype=object), "z": range(2)})
+    df_left = from_pandas(pdf_left, 1)
+    df_right = from_pandas(pdf_right, 1)
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_left.merge(df_right, on="x", validate="one_to_many").compute()
+
+
+def test_merge_validate_nonexistent_key():
+    # A key naming neither a column nor an index level is rejected by
+    # the merge itself; validation must not mask that error with one
+    # from the key extraction
+    pdf_left = pd.DataFrame({"x": [1, 2], "y": range(2)})
+    pdf_right = pd.DataFrame({"x": [1, 2], "z": range(2)})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 2)
+    with pytest.raises(KeyError) as unvalidated:
+        df_left.merge(df_right, on="nonexistent")
+    with pytest.raises(KeyError) as validated:
+        df_left.merge(df_right, on="nonexistent", validate="one_to_one")
+    assert str(validated.value) == str(unvalidated.value)
+
+
 def test_merge_validate_with_indicator():
     # The example from the original report of the missing argument
     pdf_left = pd.DataFrame({"id": ["foo", "bar", "baz", "foo"], "value": [1, 2, 3, 5]})

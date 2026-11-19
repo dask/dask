@@ -2978,6 +2978,10 @@ class DataFrame(FrameBase):
             result is computed: the checked inputs depend on the check, so
             it raises a ``pandas.errors.MergeError`` before the join itself
             is evaluated if the merge keys are not unique as required.
+            Key-validity errors (an invalid ``validate`` argument, an
+            ambiguous key name, or an invalid key combination) are still
+            raised eagerly when the merge is defined, exactly as without
+            ``validate``.
 
         Notes
         -----
@@ -5676,7 +5680,13 @@ def _reset_index_levels(partition, levels):
 
 
 def _merge_keys(frame, on, use_index):
-    """Extract the merge keys of one side of a merge as a DataFrame."""
+    """Extract the merge keys of one side of a merge as a DataFrame.
+
+    Returns None when a requested key name is neither a column nor an
+    index level of the frame: the merge itself rejects such a name, so
+    the caller skips the check for that side instead of raising a
+    key-extraction error here.
+    """
     if use_index:
         keys = frame.index.to_frame()
         # The key frame keeps the merged-on index as its own index, whose
@@ -5704,6 +5714,13 @@ def _merge_keys(frame, on, use_index):
             )
     columns = [name for name in on if name in frame.columns]
     levels = [name for name in on if name not in frame.columns]
+    if any(name not in frame._meta.index.names for name in levels):
+        # A name that is neither a column nor an index level: the merge
+        # itself rejects it with its own error, so report that no keys
+        # could be extracted instead of raising a key-extraction error
+        # here. The caller skips the check for this side and lets the
+        # merge raise unchanged.
+        return None
     if not levels:
         return frame[on]
     # Some of the names refer to index levels rather than columns. Crop
@@ -5743,6 +5760,9 @@ def _check_merge_keys(partition, left_duplicates, right_duplicates, kind):
     The partition itself is returned unchanged; the function is applied to
     the checked inputs of a validated merge so that the join depends on the
     uniqueness scalars and cannot produce output before they are known.
+    The scalars arrive as computed booleans: map_partitions broadcasts
+    each scalar to every partition task, so every partition re-checks the
+    same values and the error message is identical wherever it surfaces.
     """
     if left_duplicates and right_duplicates:
         raise MergeError(
@@ -5847,28 +5867,40 @@ def merge(
             # pandas.errors.MergeError is raised instead of the join
             # materializing its (potentially huge) result.
             # A checked side whose keys the normalization above left
-            # undefined (e.g. left_on given without right_on) is an
-            # invalid combination that the merge itself rejects when it
-            # is built below. Do not extract keys for such a side, so
-            # that the original error is raised unchanged instead of an
-            # internal error from the key extraction masking it.
+            # undefined (e.g. left_on given without right_on), or whose
+            # key names resolve to neither a column nor an index level,
+            # is an invalid combination that the merge itself rejects
+            # when it is built below. Do not extract keys for such a
+            # side, so that the original error is raised unchanged
+            # instead of an internal error from the key extraction
+            # masking it.
             # These predicates only gate key extraction, never
             # validation: the Merge built below is the authority on
             # whether the key combination is legal, so they must stay
             # in sync with the merge's own key-resolution rules.
             left_keys_defined = left_index or bool(_convert_to_list(left_on))
             right_keys_defined = right_index or bool(_convert_to_list(right_on))
-            left_duplicates = (
-                _merge_keys_have_duplicates(_merge_keys(left, left_on, left_index))
+            left_keys = (
+                _merge_keys(left, left_on, left_index)
                 if check_left and left_keys_defined
+                else None
+            )
+            right_keys = (
+                _merge_keys(right, right_on, right_index)
+                if check_right and right_keys_defined
+                else None
+            )
+            left_duplicates = (
+                _merge_keys_have_duplicates(left_keys)
+                if left_keys is not None
                 else False
             )
             right_duplicates = (
-                _merge_keys_have_duplicates(_merge_keys(right, right_on, right_index))
-                if check_right and right_keys_defined
+                _merge_keys_have_duplicates(right_keys)
+                if right_keys is not None
                 else False
             )
-            if check_left and left_keys_defined:
+            if check_left and left_keys is not None:
                 left = left.map_partitions(
                     _check_merge_keys,
                     left_duplicates,
@@ -5878,7 +5910,7 @@ def merge(
                     enforce_metadata=False,
                     clear_divisions=False,
                 )
-            if check_right and right_keys_defined:
+            if check_right and right_keys is not None:
                 right = right.map_partitions(
                     _check_merge_keys,
                     left_duplicates,
