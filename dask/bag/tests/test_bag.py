@@ -38,7 +38,12 @@ from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.typing import Graph
 from dask.utils import filetexts, tmpdir, tmpfile
-from dask.utils_test import add, hlg_layer, inc
+from dask.utils_test import (
+    add,
+    assert_scipy_sparse_matrix_deprecated,
+    hlg_layer,
+    inc,
+)
 
 dsk: Graph = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -1464,12 +1469,16 @@ def test_reduction_with_sparse_matrices(container):
         pytest.skip("scipy<1.11 has no sparray")
     cls = sp.csr_matrix if container == "matrix" else sp.csr_array
 
-    b = db.from_sequence([cls([0]) for x in range(4)], partition_size=2)
+    with assert_scipy_sparse_matrix_deprecated(container == "matrix"):
+        values = [cls([0]) for x in range(4)]
+
+    b = db.from_sequence(values, partition_size=2)
 
     def sp_reduce(a, b):
         return sp.vstack([a, b])
 
-    assert b.fold(sp_reduce, sp_reduce).compute(scheduler="sync").shape == (4, 1)
+    with assert_scipy_sparse_matrix_deprecated(container == "matrix"):
+        assert b.fold(sp_reduce, sp_reduce).compute(scheduler="sync").shape == (4, 1)
 
 
 def test_empty():
@@ -1805,13 +1814,16 @@ def test_empty_safe_apply_with_scipy_sparse(sparse_type):
         "coo": sp.coo_matrix,
     }[sparse_type]
 
-    # Empty sparse matrix (no stored elements)
-    empty_mat = sparse_constructor((0, 0))
-    assert empty_safe_apply(f, empty_mat, is_last=False) is no_result
+    with assert_scipy_sparse_matrix_deprecated():
+        # Empty sparse matrix (no stored elements)
+        empty_mat = sparse_constructor((0, 0))
+        assert empty_safe_apply(f, empty_mat, is_last=False) is no_result
 
-    # Non-empty sparse matrix
-    data = np.array([1, 2, 3])
-    row = np.array([0, 1, 2])
-    col = np.array([0, 1, 2])
-    non_empty = sp.coo_matrix((data, (row, col)), shape=(3, 3)).asformat(sparse_type)
-    assert empty_safe_apply(f, non_empty, is_last=False) == "ok"
+        # Non-empty sparse matrix
+        data = np.array([1, 2, 3])
+        row = np.array([0, 1, 2])
+        col = np.array([0, 1, 2])
+        non_empty = sp.coo_matrix((data, (row, col)), shape=(3, 3)).asformat(
+            sparse_type
+        )
+        assert empty_safe_apply(f, non_empty, is_last=False) == "ok"

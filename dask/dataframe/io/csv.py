@@ -450,7 +450,7 @@ def read_pandas(
     ):
         raise ValueError(
             "Keywords 'index' and 'index_col' not supported, except for "
-            "'index_col=False'. Use dd.{reader_name}(...).set_index('my-index') instead"
+            f"'index_col=False'. Use dd.{reader_name}(...).set_index('my-index') instead"
         )
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
