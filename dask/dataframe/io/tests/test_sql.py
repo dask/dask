@@ -262,8 +262,9 @@ def test_npartitions(db):
         index_col="number",
         head_rows=1,
     )
+    # Note: free-threaded builds have a larger per-object overhead
     assert (
-        (data.memory_usage_per_partition(deep=True, index=True) < 400).compute().all()
+        (data.memory_usage_per_partition(deep=True, index=True) < 500).compute().all()
     )
     assert (data.name.compute() == df.name).all()
 
