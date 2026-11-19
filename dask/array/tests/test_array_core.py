@@ -55,6 +55,7 @@ from dask.array.core import (
 )
 from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_210
 from dask.array.reshape import _not_implemented_message
+from dask.array.scipy_compat import SCIPY_GE_111
 from dask.array.utils import assert_eq, same_keys
 from dask.base import collections_to_expr, compute_as_if_collection, tokenize
 from dask.blockwise import (
@@ -66,7 +67,12 @@ from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
 from dask.utils import SerializableLock, key_split, tmpdir, tmpfile
-from dask.utils_test import dec, hlg_layer_topological, inc
+from dask.utils_test import (
+    assert_scipy_sparse_matrix_deprecated,
+    dec,
+    hlg_layer_topological,
+    inc,
+)
 
 try:
     from distributed import futures_of
@@ -77,15 +83,9 @@ if da._array_expr_enabled():
     pytest.skip("parametrize using unsupported functions", allow_module_level=True)
 
 
-def skip_if_no_sparray():
-    try:
-        import scipy
-    except ImportError:
-        skip = True
-    else:
-        skip = Version(scipy.__version__) < Version("1.11")
-
-    return pytest.mark.skipif(skip, reason="scipy<1.11 has no sparray")
+skip_if_no_sparray = pytest.mark.skipif(
+    not SCIPY_GE_111, reason="scipy.sparse.sparray required"
+)
 
 
 def assert_has_persisted_data(arr):
@@ -5513,26 +5513,34 @@ def test_dask_array_holds_scipy_sparse_containers(container):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    cls = scipy.sparse.csr_matrix if container == "matrix" else scipy.sparse.csr_array
-    kind = scipy.sparse.spmatrix if container == "matrix" else scipy.sparse.sparray
+    if container == "matrix":
+        cls = scipy.sparse.csr_matrix
+        kind = scipy.sparse.spmatrix
+        warn_deprecated = True
+    else:
+        cls = scipy.sparse.csr_array
+        kind = scipy.sparse.sparray
+        warn_deprecated = False
 
     x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
     xx = x.compute()
-    y = x.map_blocks(cls)
 
-    vs = y.to_delayed().flatten().tolist()
-    values = dask.compute(*vs, scheduler="single-threaded")
-    assert all(isinstance(v, cls) for v in values)
+    with assert_scipy_sparse_matrix_deprecated(warn_deprecated):
+        y = x.map_blocks(cls)
 
-    yy = y.compute(scheduler="single-threaded")
-    assert isinstance(yy, kind)
-    assert (yy == xx).all()
+        vs = y.to_delayed().flatten().tolist()
+        values = dask.compute(*vs, scheduler="single-threaded")
+        assert all(isinstance(v, cls) for v in values)
 
-    z = x.T.map_blocks(cls)
-    zz = z.compute(scheduler="single-threaded")
-    assert isinstance(zz, kind)
-    assert (zz == xx.T).all()
+        yy = y.compute(scheduler="single-threaded")
+        assert isinstance(yy, kind)
+        assert (yy == xx).all()
+
+        z = x.T.map_blocks(cls)
+        zz = z.compute(scheduler="single-threaded")
+        assert isinstance(zz, kind)
+        assert (zz == xx.T).all()
 
 
 @pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
@@ -5547,19 +5555,23 @@ def test_dask_array_setitem_singleton_sparse(container, format):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    cls = (
-        getattr(scipy.sparse, f"{format}_matrix")
-        if container == "matrix"
-        else getattr(scipy.sparse, f"{format}_array")
-    )
+    if container == "matrix":
+        cls = getattr(scipy.sparse, f"{format}_matrix")
+        eye = scipy.sparse.eye
+        warn_deprecated = True
+    else:
+        cls = getattr(scipy.sparse, f"{format}_array")
+        eye = scipy.sparse.eye_array
+        warn_deprecated = False
 
-    x = cls(scipy.sparse.eye(100))
-    x_dask = da.from_array(x)
-    x[slice(10), slice(10)] = 0
-    x_dask[slice(10), slice(10)] = 0
-    np.testing.assert_almost_equal(
-        x_dask.compute(scheduler="single-threaded").toarray(), x.toarray()
-    )
+    with assert_scipy_sparse_matrix_deprecated(warn_deprecated):
+        x = cls(eye(100))
+        x_dask = da.from_array(x)
+        x[slice(10), slice(10)] = 0
+        x_dask[slice(10), slice(10)] = 0
+        np.testing.assert_almost_equal(
+            x_dask.compute(scheduler="single-threaded").toarray(), x.toarray()
+        )
 
 
 @pytest.mark.parametrize(
@@ -5592,12 +5604,15 @@ def test_scipy_sparse_indexing(index, sparse_module_path, container):
     with dask.config.set({"array.backend": backend}):
         x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
-        y = x.map_blocks(getattr(sp, container))
+        with assert_scipy_sparse_matrix_deprecated(
+            sparse_module_path == "scipy.sparse" and container == "csr_matrix"
+        ):
+            y = x.map_blocks(getattr(sp, container))
 
-    assert not (
-        x[index, :].compute(scheduler="single-threaded")
-        != y[index, :].compute(scheduler="single-threaded")
-    ).sum()
+            assert not (
+                x[index, :].compute(scheduler="single-threaded")
+                != y[index, :].compute(scheduler="single-threaded")
+            ).sum()
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -5613,23 +5628,22 @@ def test_scipy_sparse_concatenate(axis, container):
     rng = da.random.default_rng()
 
     xs = []
-    ys = []
     for _ in range(2):
         x = rng.random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
         xs.append(x)
-        ys.append(x.map_blocks(cls))
 
-    z = da.concatenate(ys, axis=axis)
-    z = z.compute()
+    with assert_scipy_sparse_matrix_deprecated(container == "matrix"):
+        ys = [x.map_blocks(cls) for x in xs]
+        z = da.concatenate(ys, axis=axis).compute()
 
-    if axis == 0:
-        sp_concatenate = scipy.sparse.vstack
-    elif axis == 1:
-        sp_concatenate = scipy.sparse.hstack
-    z_expected = sp_concatenate([cls(e.compute()) for e in xs])
+        if axis == 0:
+            sp_concatenate = scipy.sparse.vstack
+        elif axis == 1:
+            sp_concatenate = scipy.sparse.hstack
+        z_expected = sp_concatenate([cls(e.compute()) for e in xs])
 
-    assert (z != z_expected).nnz == 0
+        assert (z != z_expected).nnz == 0
 
 
 @pytest.mark.parametrize("func", [da.asarray, da.asanyarray])
@@ -5641,19 +5655,42 @@ def test_scipy_sparse_asarray_like(src, func):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    mtx = scipy.sparse.csr_matrix([[3, 4, 5], [6, 7, 8]])
-    like = da.from_array(mtx)
+    with assert_scipy_sparse_matrix_deprecated():
+        mtx = scipy.sparse.csr_matrix([[3, 4, 5], [6, 7, 8]])
+        like = da.from_array(mtx)
 
-    a = func(src, like=like)
-    assert isinstance(a._meta, type(mtx))
-    assert isinstance(a.compute(), type(mtx))
+        a = func(src, like=like)
+        assert isinstance(a._meta, type(mtx))
+        assert isinstance(a.compute(), type(mtx))
 
-    # Respect dtype; quietly disregard order
-    a = func(src, dtype=np.float32, order="C", like=like)
-    assert a.dtype == np.float32
-    assert a.compute().dtype == np.float32
-    assert isinstance(a._meta, type(mtx))
-    assert isinstance(a.compute(), type(mtx))
+        # Respect dtype; quietly disregard order
+        a = func(src, dtype=np.float32, order="C", like=like)
+        assert a.dtype == np.float32
+        assert a.compute().dtype == np.float32
+        assert isinstance(a._meta, type(mtx))
+        assert isinstance(a.compute(), type(mtx))
+
+
+@skip_if_no_sparray
+def test_scipy_sparse_array_never_constructs_matrix():
+    """Dask must not construct a deprecated sparse matrix on its own.
+
+    A dask workflow built from a sparse *array* must not emit the SciPy spmatrix
+    deprecation warning. Only the user's explicit request for a matrix container
+    may trigger it.
+    """
+    import scipy.sparse
+
+    src = scipy.sparse.csr_array(np.eye(4))
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        d = da.from_array(src, chunks=2)
+        d = d[0:2]
+        d = d.map_blocks(lambda x: x)
+        d.compute(scheduler="single-threaded")
+        da.concatenate([d, d]).compute(scheduler="single-threaded")
+
+    assert not [w for w in record if "is being replaced by" in str(w.message)]
 
 
 def test_3851():

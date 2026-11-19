@@ -231,6 +231,13 @@ def register_spmatrix():
     def sizeof_spmatrix(s):
         return sum(sizeof(v) for v in s.__dict__.values())
 
+    if hasattr(sparse, "sparray"):  # scipy >=1.11
+        # scipy.sparse.sparray is not a subclass of scipy.sparse.spmatrix,
+        # so it needs its own registration.
+        @sizeof.register(sparse.sparray)
+        def sizeof_sparray(s):
+            return sum(sizeof(v) for v in s.__dict__.values())
+
 
 @sizeof.register_lazy("pyarrow")
 def register_pyarrow():

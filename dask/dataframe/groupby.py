@@ -344,7 +344,7 @@ def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
     if is_series_like(df) or columns is None:
         return func(g, **kwargs)
     else:
-        if isinstance(columns, (tuple, list, set, pd.Index)):
+        if isinstance(columns, (list, set, pd.Index)):
             columns = list(columns)
         return func(g[columns], **kwargs)
 
