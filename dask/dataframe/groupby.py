@@ -403,24 +403,36 @@ def _cov_finalizer(df, cols, std=False):
         x = col_idx_mapping[i]
         y = col_idx_mapping[j]
         idx = x + num_cols * y
-        mul_col = f"{i}{j}"
-        ni = df[f"{i}-count"]
-        nj = df[f"{j}-count"]
+        if i == j:
+            n = df[f"{i}-count"].values[0]
+            sum_i = df[i].values[0]
+            sum_j = sum_i
+            sum_ii = df[f"{i}{i}"].values[0]
+            sum_jj = sum_ii
+        else:
+            n = df[f"n|{i}|{j}"].values[0]
+            sum_i = df[f"{i}|{j}"].values[0]
+            sum_j = df[f"{j}|{i}"].values[0]
+            sum_ii = df[f"{i}{i}|{j}"].values[0]
+            sum_jj = df[f"{j}{j}|{i}"].values[0]
+        sum_ij = df[f"{i}{j}"].values[0]
 
-        n = np.sqrt(ni * nj)
-        div = n - 1
-        div[div < 0] = 0
-        val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
+        div = max(n - 1, 0)
+        if div == 0:
+            val = np.nan
+        else:
+            val = (sum_ij - sum_i * sum_j / n) / div
         if std:
-            ii = f"{i}{i}"
-            jj = f"{j}{j}"
-            std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
-            std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
-            sqrt_val = np.sqrt(std_val_i * std_val_j)
-            if sqrt_val == 0:
+            if div == 0:
                 val = np.nan
             else:
-                val = val / sqrt_val
+                std_val_i = (sum_ii - sum_i**2 / n) / div
+                std_val_j = (sum_jj - sum_j**2 / n) / div
+                sqrt_val = np.sqrt(std_val_i * std_val_j)
+                if sqrt_val == 0 or np.isnan(sqrt_val):
+                    val = np.nan
+                else:
+                    val = val / sqrt_val
 
         vals[idx] = val
         if i != j:
@@ -442,6 +454,18 @@ def _mul_cols(df, cols):
     for i, j in it.combinations_with_replacement(cols, 2):
         col = f"{i}{j}"
         _df[col] = df[i] * df[j]
+        if i != j:
+            # pandas computes pairwise statistics from the rows where both
+            # columns are present. Sums taken over each column's own non-null
+            # rows give a different answer when the missing values differ
+            # (GH#12705), so collect the pair-restricted sums as well.
+            mask_j = df[j].notna()
+            mask_i = df[i].notna()
+            _df[f"{i}|{j}"] = df[i] * mask_j
+            _df[f"{j}|{i}"] = df[j] * mask_i
+            _df[f"{i}{i}|{j}"] = df[i] ** 2 * mask_j
+            _df[f"{j}{j}|{i}"] = df[j] ** 2 * mask_i
+            _df[f"n|{i}|{j}"] = (mask_i & mask_j).astype("int64")
 
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137
