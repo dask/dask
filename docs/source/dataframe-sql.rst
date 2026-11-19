@@ -236,6 +236,26 @@ clause. The ``known_types`` here is used to transform the dataframe partition an
 a ``meta``, to help for consistency and avoid Dask having to analyse one partition
 up front to guess the columns/types; you may also want to explicitly set the index.
 
+For a third-party Redis reader, `adbc-driver-redis`_ provides
+``adbc_driver_redis.dask.read_query``, which uses
+:func:`dask.dataframe.from_map` with worker-local ADBC (Arrow Database
+Connectivity) connections. The caller supplies a parameterized SELECT query,
+one parameter sequence per partition, and the exact Arrow result schema.
+Partition predicates must cover the intended data without overlap; the helper
+does not infer or validate that coverage. Results use pandas Arrow dtypes and
+have unknown Dask index divisions.
+
+Each query partition is materialized in worker memory, and reads across tasks
+have no shared snapshot. Size partitions to fit worker memory and use an
+immutable source when consistent results are required. Redis must provide the
+Query Engine (Search), and the driver must be installed on every worker.
+The driver's `Redis integration guide`_ covers installation, table setup,
+a runnable distributed example, and partitioning and consistency limitations.
+This helper is separate from Dask's SQLAlchemy-based SQL readers.
+
+.. _adbc-driver-redis: https://github.com/redis/redis-adbc-driver
+.. _Redis integration guide: https://github.com/redis/redis-adbc-driver/blob/f78bcb7/docs/integrations/dask.md
+
 Stream via client
 ^^^^^^^^^^^^^^^^^
 
