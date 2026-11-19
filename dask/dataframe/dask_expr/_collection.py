@@ -5726,9 +5726,14 @@ def _merge_keys_have_duplicates(keys):
 
     Rows whose key contains a missing value form a group of their own
     (``dropna=False``), so repeated missing keys count as duplicates,
-    mirroring pandas.
+    mirroring pandas. ``observed=True`` is sufficient here: a duplicate
+    needs two rows sharing a key, so only observed combinations can
+    ever count; ``observed=False`` would additionally materialize the
+    full cartesian product of unobserved category combinations (all
+    zero-sized) for categorical keys. Passing it explicitly also keeps
+    pandas from warning about the ``observed`` default.
     """
-    counts = keys.groupby(list(keys.columns), dropna=False, observed=False).size()
+    counts = keys.groupby(list(keys.columns), dropna=False, observed=True).size()
     return (counts > 1).any()
 
 
@@ -5847,6 +5852,10 @@ def merge(
             # is built below. Do not extract keys for such a side, so
             # that the original error is raised unchanged instead of an
             # internal error from the key extraction masking it.
+            # These predicates only gate key extraction, never
+            # validation: the Merge built below is the authority on
+            # whether the key combination is legal, so they must stay
+            # in sync with the merge's own key-resolution rules.
             left_keys_defined = left_index or bool(_convert_to_list(left_on))
             right_keys_defined = right_index or bool(_convert_to_list(right_on))
             left_duplicates = (

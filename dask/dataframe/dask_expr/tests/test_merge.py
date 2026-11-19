@@ -1388,6 +1388,34 @@ def test_merge_validate_positional_arguments_module_level():
     )
 
 
+def test_merge_validate_with_broadcast_and_shuffle_method():
+    # The pass-through guards must not perturb shuffle selection or the
+    # broadcast join path: validated merges on those paths match pandas,
+    # and a failing check still raises.
+    pdf_left = pd.DataFrame({"x": [1, 2, 3], "y": range(3)})
+    pdf_right = pd.DataFrame({"x": [1, 2, 3], "z": range(3)})
+    df_left = from_pandas(pdf_left, 2)
+    df_right = from_pandas(pdf_right, 2)
+    assert_eq(
+        df_left.merge(df_right, on="x", validate="one_to_one", broadcast=True),
+        pdf_left.merge(pdf_right, on="x", validate="one_to_one"),
+        check_index=False,
+    )
+    assert_eq(
+        df_left.merge(df_right, on="x", validate="one_to_one", shuffle_method="tasks"),
+        pdf_left.merge(pdf_right, on="x", validate="one_to_one"),
+        check_index=False,
+    )
+    pdf_dup = pd.DataFrame({"x": [1, 1, 2], "y": range(3)})
+    df_dup = from_pandas(pdf_dup, 2)
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_dup.merge(df_right, on="x", validate="one_to_many", broadcast=True).compute()
+    with pytest.raises(MergeError, match="not unique in left dataset"):
+        df_dup.merge(
+            df_right, on="x", validate="one_to_many", shuffle_method="tasks"
+        ).compute()
+
+
 def test_merge_validate_check_precedes_join():
     # The uniqueness scalars must be dependencies of the merge itself,
     # through the guarded inputs, and not only of a wrapper around its
