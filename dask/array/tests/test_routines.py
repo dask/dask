@@ -362,6 +362,14 @@ def test_tensordot():
         assert not same_keys(da.tensordot(a, b, axes=0), da.tensordot(a, b, axes=1))
 
 
+@pytest.mark.parametrize("dtype", [np.bool_, np.int8, np.int32, np.float32])
+def test_tensordot_preserves_input_dtype(dtype):
+    # Regression test for https://github.com/dask/dask/issues/11985
+    x = np.ones((2, 2), dtype=dtype)
+    a = da.from_array(x, chunks=(1, 2))
+    assert_eq(da.tensordot(a, a, axes=1), np.tensordot(x, x, axes=1))
+
+
 @pytest.mark.parametrize(
     "axes", [0, 1, (0, 1), (1, 0), ((1, 0), (2, 1)), ((1, 2), (2, 0)), ((2, 0), (1, 2))]
 )
