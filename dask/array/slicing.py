@@ -576,8 +576,6 @@ def issorted(seq):
 class SlicingNoop(Exception):
     """This indicates that a slicing operation is a no-op. The caller has to handle this"""
 
-    pass
-
 
 def take(outname, inname, chunks, index, axis=0):
     """Index array with an iterable of index
@@ -700,7 +698,7 @@ def _expander(where):
         left = "".join(left)
         decl = decl.format(**locals())
         ns = {}
-        exec(compile(decl, "<dynamic>", "exec"), ns, ns)
+        exec(compile(decl, "<dynamic>", "exec"), ns, ns)  # noqa: S102
         return ns["expand"]
 
 

@@ -1538,7 +1538,7 @@ class Bag(DaskMethodsMixin):
         Bag.foldby
         """
         if method is not None:
-            raise Exception("The method= keyword has been moved to shuffle=")
+            raise ValueError("The method= keyword has been moved to shuffle=")
         if shuffle is None:
             try:
                 shuffle = get_default_shuffle_method()

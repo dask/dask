@@ -216,7 +216,7 @@ def normalize_object(o):
         return uuid.uuid4().hex
 
 
-_seen_objects = set()
+_seen_objects: set[object] = set()
 
 
 def _normalize_pure_object(o: object) -> tuple[str, int]:

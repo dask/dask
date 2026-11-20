@@ -47,9 +47,9 @@ class FromGraph(IO):
             orig = dsk[k]
             if not istask(orig):
                 del dsk[k]
-                dsk[(self._name, *k[1:])] = orig
+                dsk[(self._name,) + tuple(k[1:])] = orig
             else:
-                dsk[(self._name, *k[1:])] = k
+                dsk[(self._name,) + tuple(k[1:])] = k
         return dsk
 
 

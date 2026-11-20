@@ -50,18 +50,18 @@ def _distributed_available() -> bool:
 __all__ = (
     "DaskMethodsMixin",
     "annotate",
-    "get_annotations",
-    "is_dask_collection",
+    "clone_key",
     "compute",
-    "persist",
-    "optimize",
-    "visualize",
-    "tokenize",
-    "normalize_token",
+    "get_annotations",
     "get_collection_names",
     "get_name_from_key",
+    "is_dask_collection",
+    "normalize_token",
+    "optimize",
+    "persist",
     "replace_name_in_key",
-    "clone_key",
+    "tokenize",
+    "visualize",
 )
 
 # Backwards compat

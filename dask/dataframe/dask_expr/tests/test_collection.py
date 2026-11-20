@@ -2294,7 +2294,7 @@ def test_combine():
     first = lambda a, b: a
 
     # You can add series with strings and nans but you can't add scalars 'a' + np.nan
-    str_add = lambda a, b: a + b if a is not np.nan else a
+    str_add = lambda a, b: a + b if a is not np.nan else a  # noqa: PLW0177
 
     # DataFrame
     for dda, ddb, a, b, runs in [

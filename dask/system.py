@@ -11,7 +11,7 @@ except ImportError:
 
 from dask._compatibility import LINUX
 
-__all__ = ("cpu_count", "CPU_COUNT")
+__all__ = ("CPU_COUNT", "cpu_count")
 
 
 def _try_extract_cgroup_cpu_quota():
