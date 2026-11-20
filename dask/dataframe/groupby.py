@@ -525,7 +525,7 @@ def _cov_chunk(df, *by, numeric_only=no_default):
     return (x, mul, n, col_mapping)
 
 
-def _cov_agg(_t, levels, ddof, std=False, sort=False):
+def _cov_agg(_t, levels, ddof, std=False, sort=False, observed=None):
     # sometime we get a series back from concat combiner
     t = list(_t)
 
@@ -533,12 +533,13 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     cols = sums[0].columns
     col_mapping = col_mappings[-1]
 
-    total_sums = concat(sums).groupby(level=levels, sort=sort).sum()
-    total_muls = concat(muls).groupby(level=levels, sort=sort).sum()
-    total_counts = concat(counts).groupby(level=levels).sum()
+    observed = {"observed": observed} if observed is not None else {}
+    total_sums = concat(sums).groupby(level=levels, sort=sort, **observed).sum()
+    total_muls = concat(muls).groupby(level=levels, sort=sort, **observed).sum()
+    total_counts = concat(counts).groupby(level=levels, **observed).sum()
     result = (
         concat([total_sums, total_muls, total_counts], axis=1)
-        .groupby(level=levels)
+        .groupby(level=levels, **observed)
         .apply(_cov_finalizer, cols=cols, std=std)
     )
 
