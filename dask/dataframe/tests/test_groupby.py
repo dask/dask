@@ -2792,8 +2792,12 @@ def test_groupby_sort_true_split_out():
 def test_groupby_aggregate_categorical_observed(
     xfail, agg_func, known_cats, ordered_cats, groupby, observed
 ):
-    if agg_func in ("cov", "corr", "nunique"):
+    if agg_func in ("cov", "nunique"):
         xfail("Not implemented for DataFrameGroupBy yet.")
+    elif agg_func == "corr" and (groupby == "cat_1" or not PANDAS_GE_300):
+        # Categorical columns still can't be summed, and pandas < 3 does not
+        # keep the observed combinations when grouping by several keys.
+        xfail("Not implemented for categorical corr")
     elif (
         agg_func in ("mean", "median", "std", "sum", "var", "prod")
         and groupby == "cat_1"
@@ -2832,6 +2836,21 @@ def test_groupby_aggregate_categorical_observed(
         agg(pdf.groupby(groupby, observed=observed)),
         agg(ddf.groupby(groupby, observed=observed)),
     )
+
+
+def test_groupby_cov_corr_missing_values():
+    # https://github.com/dask/dask/issues/12705
+    df = pd.DataFrame(
+        {
+            "g": [0] * 6,
+            "x": [1.0, 2.0, 3.0, 4.0, 5.0, np.nan],
+            "y": [2.0, np.nan, 6.0, 8.0, np.nan, 12.0],
+            "z": [1.0, 1.0, 2.0, 3.0, 5.0, 7.0],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert_eq(ddf.groupby("g").cov(), df.groupby("g").cov())
+    assert_eq(ddf.groupby("g").corr(), df.groupby("g").corr())
 
 
 def test_groupby_cov_non_numeric_grouping_column():

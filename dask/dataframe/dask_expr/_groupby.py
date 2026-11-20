@@ -667,6 +667,7 @@ class Cov(SingleAggregation):
         kwargs["sort"] = self.sort
         kwargs["std"] = self.std
         kwargs["levels"] = self.levels
+        kwargs["observed"] = self.observed
         return kwargs
 
     @property
