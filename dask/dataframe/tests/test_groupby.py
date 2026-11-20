@@ -2794,8 +2794,9 @@ def test_groupby_aggregate_categorical_observed(
 ):
     if agg_func in ("cov", "nunique"):
         xfail("Not implemented for DataFrameGroupBy yet.")
-    elif agg_func == "corr" and groupby == "cat_1":
-        # Categorical columns still can't be summed.
+    elif agg_func == "corr" and (groupby == "cat_1" or not PANDAS_GE_300):
+        # Categorical columns still can't be summed, and pandas < 3 does not
+        # keep the observed combinations when grouping by several keys.
         xfail("Not implemented for categorical corr")
     elif (
         agg_func in ("mean", "median", "std", "sum", "var", "prod")
