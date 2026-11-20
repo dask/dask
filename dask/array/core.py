@@ -1962,13 +1962,12 @@ class Array(DaskMethodsMixin):
 
         token = tokenize(self, key, value)
         out = f"setitem-{token}"
-        dsk = setitem_array(out, self, key, value)
+        graph = setitem_array(out, self, key, value)
 
         meta = meta_from_array(self._meta)
         if np.isscalar(meta):
             meta = np.array(meta)
 
-        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
         y = Array(graph, out, chunks=self.chunks, dtype=self.dtype, meta=meta)
 
         self._meta = y._meta
