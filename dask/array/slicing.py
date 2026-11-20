@@ -1461,7 +1461,7 @@ def concatenate_array_chunks(x):
     return Array(graph, name, chunks=(chunks,), dtype=x.dtype)
 
 
-def setitem_array(out_name, array, indices, value):
+def setitem_array(out_name, array, indices, value) -> HighLevelGraph:
     """Master function for array assignment.
 
     This function, that is intended to be called by
@@ -1470,9 +1470,9 @@ def setitem_array(out_name, array, indices, value):
     unchanged.
 
     Each block that overlaps the indices is assigned from the
-    appropriate part of the assignment value. The dasks of these value
-    parts are included in the output dask dictionary, as are the dasks
-    of any 1-d dask array indices. This ensures that the dask array
+    appropriate part of the assignment value. The graphs of these value
+    parts and any 1-d dask array indices are included as dependencies.
+    This ensures that the dask array
     assignment value and any dask array indices are not computed until
     the `Array.__setitem__` operation is computed.
 
@@ -1493,8 +1493,8 @@ def setitem_array(out_name, array, indices, value):
 
     Returns
     -------
-    dsk : `dict`
-        A dictionary where the keys are new unique tokens for each
+    graph : HighLevelGraph
+        A graph with an assignment layer whose keys are new unique tokens for each
         block of the form
 
             (out_name, dim_index[, dim_index[, ...]])
@@ -1518,10 +1518,8 @@ def setitem_array(out_name, array, indices, value):
         that corresponds to the block; and block_indices are the
         assignment indices that apply to the block.
 
-        The dictionary also includes any additional key/value pairs
-        needed to define v_key, as well as any any additional
-        key/value pairs needed to define dask keys contained in the
-        block_indices list as references to dask array indices.
+        The assignment layer depends on the input array, the slices of the
+        assignment value, and any dask array indices used by its tasks.
 
     """
 
@@ -1532,9 +1530,6 @@ def setitem_array(out_name, array, indices, value):
         The index is the input assignment index that is defined in the
         namespace of the caller. It is assumed that negative elements
         of an integer array have already been posified.
-
-        The non-hashable dsk is the output dask dictionary that is
-        defined in the namespace of the caller.
 
         Parameters
         ----------
@@ -1550,13 +1545,10 @@ def setitem_array(out_name, array, indices, value):
 
         Returns
         -------
-        numpy array or `str`
-            If index is a numpy array then a numpy array is
-            returned.
-
-            If index is a dask array then the dask of the block index
-            is inserted into the output dask dictionary, and its
-            unique top-layer key is returned.
+        tuple
+            The block index and its optional Dask collection. For a NumPy
+            index, the collection is None. For a Dask index, the first item
+            is the key of the block index.
 
         """
         if is_bool:
@@ -1583,12 +1575,10 @@ def setitem_array(out_name, array, indices, value):
             i = index[i] - loc0
 
         if is_dask_collection(i):
-            # Return dask key instead of dask array
             i = concatenate_array_chunks(i)
-            dsk.update(dict(i.dask))
-            i = next(flatten(i.__dask_keys__()))
+            return next(flatten(i.__dask_keys__())), i
 
-        return i
+        return i, None
 
     @functools.lru_cache
     def block_index_shape_from_1d_bool_index(dim, loc0, loc1):
@@ -1842,7 +1832,7 @@ def setitem_array(out_name, array, indices, value):
 
     # Create a new "setitem" dask entry for each block in the array
     dsk = {}
-    out_name = (out_name,)
+    dependencies = [array]
     for in_key, locations in zip(in_keys, array_locations):
         # Now loop round each block dimension.
         #
@@ -1865,6 +1855,7 @@ def setitem_array(out_name, array, indices, value):
         block_indices = []
         block_indices_shape = []
         block_preceding_sizes = []
+        block_dependencies = []
 
         local_offset = offset
 
@@ -1917,7 +1908,11 @@ def setitem_array(out_name, array, indices, value):
             else:
                 # Index is a 1-d array
                 is_bool = index.dtype == bool
-                block_index = block_index_from_1d_index(dim, loc0, loc1, is_bool)
+                block_index, index_collection = block_index_from_1d_index(
+                    dim, loc0, loc1, is_bool
+                )
+                if index_collection is not None:
+                    block_dependencies.append(index_collection)
                 if is_bool:
                     block_index_size = block_index_shape_from_1d_bool_index(
                         dim, loc0, loc1
@@ -1952,7 +1947,7 @@ def setitem_array(out_name, array, indices, value):
                 block_preceding_sizes.append(n_preceding)
 
         # The new dask key
-        out_key = out_name + in_key[1:]
+        out_key = (out_name,) + in_key[1:]
 
         if not overlaps:
             # This block does not overlap the indices for all
@@ -2011,10 +2006,8 @@ def setitem_array(out_name, array, indices, value):
         v = concatenate_array_chunks(v)
         v_key = next(flatten(v.__dask_keys__()))
 
-        # Insert into the output dask dictionary the dask of the part
-        # of assignment value for this block (not minding when we
-        # overwrite any existing keys as the values will be the same).
-        dsk = merge(dict(v.dask), dsk)
+        dependencies.extend(block_dependencies)
+        dependencies.append(v)
 
         # Define the assignment function for this block.
         dsk[out_key] = (setitem, in_key, v_key, block_indices)
@@ -2024,7 +2017,7 @@ def setitem_array(out_name, array, indices, value):
     n_preceding_from_1d_bool_index.cache_clear()
     value_indices_from_1d_int_index.cache_clear()
 
-    return dsk
+    return HighLevelGraph.from_collections(out_name, dsk, dependencies=dependencies)
 
 
 def setitem(x, v, indices):
