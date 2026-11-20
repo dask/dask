@@ -1455,7 +1455,7 @@ def concatenate_array_chunks(x):
     return Array(graph, name, chunks=(chunks,), dtype=x.dtype)
 
 
-def setitem_array(out_name, array, indices, value) -> HighLevelGraph:
+def setitem_array(out_name, array, indices, value):
     """Master function for array assignment.
 
     This function, that is intended to be called by
