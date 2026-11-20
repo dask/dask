@@ -589,8 +589,7 @@ class Expr:
             seen.add(expr._name)
 
             layers.append(expr._layer())
-            for operand in expr.dependencies():
-                stack.append(operand)
+            stack.extend(expr.dependencies())
 
         return toolz.merge(layers)
 
@@ -745,8 +744,7 @@ class Expr:
             seen.add(expr._name)
 
             dependencies[expr] = set(expr.dependencies())
-            for dep in expr.dependencies():
-                stack.append(dep)
+            stack.extend(expr.dependencies())
 
         cache = {}
         for expr in dependencies:
@@ -815,8 +813,7 @@ class Expr:
                 continue
             seen.add(node._name)
 
-            for dep in node.dependencies():
-                stack.append(dep)
+            stack.extend(node.dependencies())
 
             yield node
 

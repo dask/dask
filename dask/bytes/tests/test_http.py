@@ -180,9 +180,11 @@ def test_parquet():
 
     df = dd.read_parquet(
         [
-            "https://github.com/Parquet/parquet-compatibility/raw/"
-            "master/parquet-testdata/impala/1.1.1-NONE/"
-            "nation.impala.parquet"
+            (
+                "https://github.com/Parquet/parquet-compatibility/raw/"
+                "master/parquet-testdata/impala/1.1.1-NONE/"
+                "nation.impala.parquet"
+            )
         ],
         engine="pyarrow",
     ).compute()
@@ -198,8 +200,10 @@ def test_parquet():
 def test_bag():
     # This test pulls from different hosts
     urls = [
-        "https://raw.githubusercontent.com/weierophinney/pastebin/"
-        "master/public/js-src/dojox/data/tests/stores/patterns.csv",
+        (
+            "https://raw.githubusercontent.com/weierophinney/pastebin/"
+            "master/public/js-src/dojox/data/tests/stores/patterns.csv"
+        ),
         "https://en.wikipedia.org",
     ]
     b = db.read_text(urls)

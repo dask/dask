@@ -68,7 +68,7 @@ class RepartitionQuantiles(Expr):
             merge_dsk = {
                 (self._name, 2, 0): (
                     merge_and_compress_summaries,
-                    [list(percentiles_dsk)[0]],
+                    [next(iter(percentiles_dsk))],
                 )
             }
 

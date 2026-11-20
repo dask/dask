@@ -5105,12 +5105,12 @@ def test_zarr_group():
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d, component="test")
         with pytest.raises((OSError, ValueError)):
-            a.to_zarr(d, component="test", **{"overwrite": False})
-        a.to_zarr(d, component="test", **{"overwrite": True})
+            a.to_zarr(d, component="test", overwrite=False)
+        a.to_zarr(d, component="test", overwrite=True)
 
         # second time is fine, group exists
-        a.to_zarr(d, component="test2", **{"overwrite": False})
-        a.to_zarr(d, component="nested/test", **{"overwrite": False})
+        a.to_zarr(d, component="test2", overwrite=False)
+        a.to_zarr(d, component="nested/test", overwrite=False)
 
         group = zarr.open_group(store=d, mode="r")
         assert set(group) == {"nested", "test", "test2"}

@@ -85,7 +85,7 @@ def _append_row_groups(metadata, md):
                 '`to_parquet(..., schema={"column1": pa.string()})`'
             ) from err
         else:
-            raise err
+            raise
 
 
 def _write_partitioned(
@@ -164,13 +164,12 @@ def _index_in_schema(index, schema):
     """Simple utility to check if all `index` columns are included
     in the known `schema`.
     """
-    if index and schema is not None:
-        # Make sure all index columns are in user-defined schema
-        return len(set(index).intersection(schema.names)) == len(index)
-    elif index:
-        return True  # Schema is not user-specified, all good
-    else:
+    if not index:
         return False  # No index to check
+    if schema is None:
+        return True  # Schema is not user-specified, all good
+    # Make sure all index columns are in user-defined schema
+    return len(set(index).intersection(schema.names)) == len(index)
 
 
 class PartitionObj:
@@ -383,7 +382,7 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
         field = pa_ds.field(col)
 
         # Handle null-value comparison
-        if val is None or (nan_is_null and val is np.nan):
+        if val is None or (nan_is_null and val is np.nan):  # noqa: PLW0177
             if op == "is":
                 return field.is_null(nan_is_null=nan_is_null)
             elif op == "is not":

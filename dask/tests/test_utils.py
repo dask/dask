@@ -586,7 +586,6 @@ def test_derived_from():
         @derived_from(Foo)
         def f(a, c):
             "extra docstring"
-            pass
 
     assert Bar.f.__doc__.strip().startswith("A super docstring")
     assert "Foo.f" in Bar.f.__doc__
@@ -633,7 +632,6 @@ def test_derived_from_func():
     @derived_from(builtins)
     def sum():
         "extra docstring"
-        pass
 
     assert "extra docstring\n\n" in sum.__doc__
     assert "Return the sum of" in sum.__doc__

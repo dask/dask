@@ -16,12 +16,12 @@ from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
 
 __all__ = [
+    "ColumnSpec",
+    "DatasetSpec",
+    "DatetimeIndexSpec",
+    "RangeIndexSpec",
     "make_timeseries",
     "with_spec",
-    "ColumnSpec",
-    "RangeIndexSpec",
-    "DatetimeIndexSpec",
-    "DatasetSpec",
 ]
 
 default_int_args: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {

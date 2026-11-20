@@ -13,9 +13,9 @@ import uuid
 import warnings
 from bisect import bisect
 from collections import defaultdict
-from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from functools import lru_cache, partial, reduce, wraps
-from itertools import product, zip_longest
+from itertools import pairwise, product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
@@ -173,7 +173,7 @@ def getter_inline(a, b, asarray=True, lock=None):
 from dask.array.optimization import fuse_slice, optimize
 
 # __array_function__ dict for mapping aliases and mismatching names
-_HANDLED_FUNCTIONS = {}
+_HANDLED_FUNCTIONS: dict[Callable, Callable] = {}
 
 
 def implements(*numpy_functions):
@@ -1221,7 +1221,7 @@ def store(
                 slices = ArraySliceDep(s.chunks)
                 arrays.append(
                     s.map_blocks(
-                        load_chunk,  # type: ignore[arg-type]
+                        load_chunk,
                         # Note: slices / BlockwiseDep have to be passed by arg, not by kwarg
                         slices,
                         lock=lock,
@@ -1321,7 +1321,9 @@ class Array(DaskMethodsMixin):
     dask.array.from_array
     """
 
-    __slots__ = "dask", "__name", "_cached_keys", "__chunks", "_meta", "__dict__"
+    __slots__ = "__chunks", "__dict__", "__name", "_cached_keys", "_meta", "dask"
+
+    _cached_keys: NestedKeys | None
 
     def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
         self = super().__new__(cls)
@@ -2017,23 +2019,24 @@ class Array(DaskMethodsMixin):
             if isinstance(i, Array):
                 dependencies.add(i.name)
 
+        arr = self
         if any(isinstance(i, Array) and i.dtype.kind in "iu" for i in index2):
-            self, index2 = slice_with_int_dask_array(self, index2)
+            arr, index2 = slice_with_int_dask_array(arr, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
-            self, index2 = slice_with_bool_dask_array(self, index2)
+            arr, index2 = slice_with_bool_dask_array(arr, index2)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
-            return self
+            return arr
 
-        out = "getitem-" + tokenize(self, index2)
+        out = "getitem-" + tokenize(arr, index2)
         try:
-            dsk, chunks = slice_array(out, self.name, self.chunks, index2)
+            dsk, chunks = slice_array(out, arr.name, arr.chunks, index2)
         except SlicingNoop:
-            return self
+            return arr
 
-        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[arr])
 
-        meta = meta_from_array(self._meta, ndim=len(chunks))
+        meta = meta_from_array(arr._meta, ndim=len(chunks))
         if np.isscalar(meta):
             meta = np.array(meta)
 
@@ -3854,7 +3857,7 @@ def _write_dask_to_existing_zarr(
     ):
         if len(dw) >= 1:
             nominal_dask_chunk_size = dw[0]
-            if not nominal_dask_chunk_size % zw == 0:
+            if nominal_dask_chunk_size % zw != 0:
                 safe_chunk_size = np.prod(zarr_write_chunks) * max(1, z.dtype.itemsize)
                 msg = (
                     f"The input Dask array will be rechunked along axis {ax} with chunk size "
@@ -5957,9 +5960,7 @@ def _vindex_array(x, dict_indexes):
         for okey in other_blocks:
             merge_inputs = defaultdict(list)
             merge_indexer = defaultdict(list)
-            for i, (start, stop) in enumerate(
-                zip(key_bounds[:-1], key_bounds[1:], strict=True)
-            ):
+            for i, (start, stop) in enumerate(pairwise(key_bounds)):
                 slicer = slice(start, stop)
                 key = sorted_keys[start]
                 outblock, *input_blocks = np.unravel_index(key, ravel_shape)

@@ -234,7 +234,7 @@ def test_dot_graph(tmpdir, format, typ):
     # not vulnerable to shell injection when interacting with `dot`.
     filename = str(tmpdir.join("$(touch should_not_get_created.txt)"))
 
-    target = ".".join([filename, format])
+    target = f"{filename}.{format}"
     ensure_not_exists(target)
     try:
         result = dot_graph(dsk, filename=filename, format=format)
@@ -269,7 +269,7 @@ def test_dot_graph_defaults():
     # Test with default args.
     default_name = "mydask"
     default_format = "png"
-    target = ".".join([default_name, default_format])
+    target = f"{default_name}.{default_format}"
 
     ensure_not_exists(target)
     try:

@@ -1027,7 +1027,7 @@ def test_emscripten_default_scheduler(params):
     pytest.importorskip("numpy")
     pytest.importorskip("dask.array")
     pytest.importorskip("pandas")
-    proc = subprocess.run(
+    subprocess.check_call(
         [
             sys.executable,
             "-c",
@@ -1037,4 +1037,3 @@ def test_emscripten_default_scheduler(params):
             ),
         ]
     )
-    proc.check_returncode()

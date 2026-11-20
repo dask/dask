@@ -205,9 +205,10 @@ def _cov_corr_combine(data_in, corr=False):
     if corr:
         data["m"] = None
 
-    for k in data.keys():
-        data[k] = [d[k] for d in data_in]
-        data[k] = np.concatenate(data[k]).reshape((len(data[k]),) + data[k][0].shape)
+    data = {k: [d[k] for d in data_in] for k in data}
+    data = {
+        k: np.concatenate(v).reshape((len(v),) + v[0].shape) for k, v in data.items()
+    }
 
     sums = np.nan_to_num(data["sum"])
     counts = data["count"]

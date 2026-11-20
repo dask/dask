@@ -119,8 +119,7 @@ def getmaskarray(a):
 
 
 def _masked_array(data, mask=np.ma.nomask, masked_dtype=None, **kwargs):
-    if "chunks" in kwargs:
-        del kwargs["chunks"]  # A Dask kwarg, not NumPy.
+    kwargs.pop("chunks", None)  # A Dask kwarg, not NumPy.
     return np.ma.masked_array(data, mask=mask, dtype=masked_dtype, **kwargs)
 
 

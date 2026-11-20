@@ -481,12 +481,12 @@ class ApplyConcatApply(Expr):
     @functools.cached_property
     def need_to_shuffle(self):
         split_by = self.split_by or self.frame.columns
-        if any(
+        # all(set(split_by) < cols) is not equivalent to not any(set(split_by) >= cols):
+        # disjoint column sets still require a shuffle.
+        return not any(
             set(split_by) >= (set(cols) if isinstance(cols, tuple) else {cols})
             for cols in self.frame.unique_partition_mapping_columns_from_shuffle
-        ):
-            return False
-        return True
+        )
 
     @functools.cached_property
     def unique_partition_mapping_columns_from_shuffle(self):

@@ -3315,8 +3315,8 @@ def test_custom_metadata(tmpdir, engine):
         files += [os.path.join(path, "_metadata")]
         for fn in files:
             _md = pq.ParquetFile(fn).metadata.metadata
-            for k in custom_metadata.keys():
-                assert _md[k] == custom_metadata[k]
+            for k, v in custom_metadata.items():
+                assert _md[k] == v
 
     # Make sure we raise an error if the custom metadata
     # includes a b"pandas" key

@@ -647,7 +647,7 @@ class Unique(SingleAggregation):
 
 class Cov(SingleAggregation):
     chunk = staticmethod(_cov_chunk)
-    std = False
+    std = False  # type: ignore[assignment]
 
     @classmethod
     def combine(cls, g, levels):
@@ -761,7 +761,7 @@ class Var(GroupByReduction):
     }
     reduction_aggregate = staticmethod(_var_agg)
     reduction_combine = staticmethod(_var_combine)
-    chunk = staticmethod(_var_chunk)
+    chunk = staticmethod(_var_chunk)  # type: ignore[assignment]
 
     @functools.cached_property
     def aggregate_kwargs(self):
@@ -816,7 +816,7 @@ class Mean(GroupByReduction):
     _defaults = SingleAggregation._defaults
     reduction_aggregate = staticmethod(_mean_agg)
     reduction_combine = staticmethod(_mean_combine)
-    chunk = staticmethod(_mean_chunk)
+    chunk = staticmethod(_mean_chunk)  # type: ignore[assignment]
 
 
 def nunique_df_combine(dfs, *args, **kwargs):
@@ -833,7 +833,7 @@ def nunique_df_aggregate(dfs, levels, name, sort=False):
 
 
 class NUnique(SingleAggregation):
-    aggregate = staticmethod(nunique_df_aggregate)
+    aggregate = staticmethod(nunique_df_aggregate)  # type: ignore[assignment]
     combine = staticmethod(nunique_df_combine)
 
     @staticmethod

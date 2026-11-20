@@ -1377,7 +1377,7 @@ def _calculate_divisions(
             ) from e
         # For numeric types there shouldn't be problems with nulls, so we raise as-it-is this particular TypeError
         else:
-            raise e
+            raise
 
     sizes = []  # type: ignore[var-annotated]
 

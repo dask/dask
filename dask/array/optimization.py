@@ -104,7 +104,7 @@ def _optimize_slices(dsk):
     """
     fancy_ind_types = (list, np.ndarray)
     dsk = dsk.copy()
-    for _, v in dsk.items():
+    for v in dsk.values():
         if not (isinstance(v, Task) and v.func is _execute_subgraph):
             continue
 
