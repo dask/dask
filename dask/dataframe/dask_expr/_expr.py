@@ -154,7 +154,6 @@ class Expr(core.SingletonExpr):
         try:
             return super().__getattr__(key)
         except AttributeError:
-
             if is_dataframe_like(self._meta) and key in self._meta.columns:
                 return self[key]
             raise
@@ -167,8 +166,7 @@ class Expr(core.SingletonExpr):
 
     def __bool__(self):
         raise ValueError(
-            f"The truth value of a {self.__class__.__name__} is ambiguous. "
-            "Use a.any() or a.all()."
+            f"The truth value of a {self.__class__.__name__} is ambiguous. Use a.any() or a.all()."
         )
 
     def __add__(self, other):
@@ -2719,6 +2717,10 @@ class BlockwiseTail(Tail, Blockwise):
     """
 
     _preserves_partitioning_information = True
+
+    def _simplify_down(self) -> None:
+        # Keep the concrete tail after lowering, as for BlockwiseHead.
+        return
 
     def _divisions(self):
         return self.frame.divisions
