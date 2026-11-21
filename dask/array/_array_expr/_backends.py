@@ -87,25 +87,27 @@ def get_collection_type_array(_):
     return create_array_collection
 
 
-if sparse_installed:  # type: ignore[misc]
+def _register_optional_array_backends() -> None:
+    if sparse_installed:
 
-    @get_collection_type.register(sparse.COO)
-    def get_collection_type_array(_):
-        return create_array_collection
+        @get_collection_type.register(sparse.COO)
+        def get_collection_type_sparse(_):
+            return create_array_collection
+
+    if scipy_installed:
+
+        @get_collection_type.register(sp.csr_matrix)
+        def get_collection_type_scipy(_):
+            return create_array_collection
+
+    if scipy_installed and hasattr(sp, "sparray"):
+
+        @get_collection_type.register(sp.csr_array)
+        def get_collection_type_sparray(_):
+            return create_array_collection
 
 
-if scipy_installed:  # type: ignore[misc]
-
-    @get_collection_type.register(sp.csr_matrix)
-    def get_collection_type_array(_):
-        return create_array_collection
-
-
-if scipy_installed and hasattr(sp, "sparray"):  # type: ignore[misc]
-
-    @get_collection_type.register(sp.csr_array)
-    def get_collection_type_array(_):
-        return create_array_collection
+_register_optional_array_backends()
 
 
 @get_collection_type.register(object)

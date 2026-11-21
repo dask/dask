@@ -20,6 +20,14 @@ from dask.utils import ensure_dict, funcname, import_required
 if TYPE_CHECKING:
     from dask.highlevelgraph import HighLevelGraph
 
+    try:
+        from graphviz import Digraph
+    except ModuleNotFoundError:
+
+        class Digraph:  # type: ignore[no-redef]
+            pass
+
+
 OptimizerStage: TypeAlias = Literal[
     "logical",
     "simplified-logical",
@@ -114,7 +122,9 @@ class Expr:
     def tree_repr(self):
         return os.linesep.join(self._tree_repr_lines())
 
-    def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+    def analyze(
+        self, filename: str | None = None, format: str | None = None
+    ) -> Digraph:
         from dask.dataframe.dask_expr._expr import Expr as DFExpr
         from dask.dataframe.dask_expr.diagnostics import analyze
 
@@ -579,8 +589,7 @@ class Expr:
             seen.add(expr._name)
 
             layers.append(expr._layer())
-            for operand in expr.dependencies():
-                stack.append(operand)
+            stack.extend(expr.dependencies())
 
         return toolz.merge(layers)
 
@@ -735,8 +744,7 @@ class Expr:
             seen.add(expr._name)
 
             dependencies[expr] = set(expr.dependencies())
-            for dep in expr.dependencies():
-                stack.append(dep)
+            stack.extend(expr.dependencies())
 
         cache = {}
         for expr in dependencies:
@@ -805,8 +813,7 @@ class Expr:
                 continue
             seen.add(node._name)
 
-            for dep in node.dependencies():
-                stack.append(dep)
+            stack.extend(node.dependencies())
 
             yield node
 

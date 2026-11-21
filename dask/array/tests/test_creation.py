@@ -1059,12 +1059,12 @@ def test_from_array_getitem_fused():
     result = darr[slice(1, 5), :][slice(1, 3), :]
     dsk = collections_to_expr([result]).__dask_graph__()
     # Ensure that slices are merged properly
-    key = [k for k in dsk if "array-getitem" in k[0]][0]
-    key_2 = [
+    key = next(k for k in dsk if "array-getitem" in k[0])
+    key_2 = next(
         k
         for k, v in dsk[key].args[0].items()
         if "getitem" in k[0] and not isinstance(v, Alias)
-    ][0]
+    )
     assert dsk[key].args[0][key_2].args[1] == ((slice(2, 4), slice(0, None)))
     assert_eq(result, arr[slice(1, 5), :][slice(1, 3), :])
 

@@ -308,7 +308,7 @@ def graphviz_to_file(g, filename, format):
     if filename is None:
         return display_cls(data=data)
 
-    full_filename = ".".join([filename, format])
+    full_filename = f"{filename}.{format}"
     with open(full_filename, "wb") as f:
         f.write(data)
 

@@ -8,7 +8,7 @@ import warnings
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from functools import wraps
 from numbers import Integral, Number
-from typing import Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
@@ -152,10 +152,17 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-#
+if TYPE_CHECKING:
+    try:
+        from graphviz import Digraph
+    except ModuleNotFoundError:
+
+        class Digraph:  # type: ignore[no-redef]
+            pass
+
+
 # Utilities to wrap Expr API
 # (Helps limit boiler-plate code in collection APIs)
-#
 
 
 def _wrap_expr_api(*args, wrap_api=None, **kwargs):
@@ -491,7 +498,9 @@ Expr={expr}"""
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
 
-    def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+    def analyze(
+        self, filename: str | None = None, format: str | None = None
+    ) -> Digraph:
         """Outputs statistics about every node in the expression.
 
         analyze optimizes the expression and triggers a computation. It records statistics
@@ -510,8 +519,7 @@ Expr={expr}"""
 
         Returns
         -------
-            None, but writes a graph representation of the expression enriched with
-            statistics to disk.
+            The graphviz.Digraph written to disk, enriched with expression statistics.
         """
         out = self
         if not isinstance(out, Scalar):
@@ -3691,7 +3699,7 @@ class DataFrame(FrameBase):
     @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False, numeric_only=False):
         modes = []
-        for _, col in self.items():
+        for _, col in self.items():  # noqa: PERF102
             if numeric_only and not pd.api.types.is_numeric_dtype(col.dtype):
                 continue
             modes.append(col.mode(dropna=dropna, split_every=split_every))
@@ -3891,7 +3899,7 @@ class DataFrame(FrameBase):
             frame = self
 
         collections = []
-        for _, col in frame.items():
+        for _, col in frame.items():  # noqa: PERF102
             collections.append(col.quantile(q=q, method=method))
 
         if len(collections) > 0 and isinstance(collections[0], Scalar):

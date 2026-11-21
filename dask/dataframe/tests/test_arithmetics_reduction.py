@@ -1271,7 +1271,7 @@ def test_series_agg_with_min_count(method, min_count):
     if min_count == 0:
         assert result == 1
     else:
-        assert result is np.nan or pd.isna(result)
+        assert pd.isna(result)
 
 
 # Default absolute tolerance of 2000 nanoseconds

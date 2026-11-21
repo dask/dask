@@ -611,12 +611,12 @@ def test_set_index_with_dask_dt_index(freq):
 
 def test_set_index_sort_values_shuffle_options(df, pdf):
     q = df.set_index("x", shuffle_method="tasks", max_branch=10)
-    shuffle = list(q.optimize().find_operations(TaskShuffle))[0]
+    shuffle = next(iter(q.optimize().find_operations(TaskShuffle)))
     assert shuffle.options == {"max_branch": 10}
     assert_eq(q, pdf.set_index("x"))
 
     q = df.sort_values("x", shuffle_method="tasks", max_branch=10)
-    sorter = list(q.optimize().find_operations(TaskShuffle))[0]
+    sorter = next(iter(q.optimize().find_operations(TaskShuffle)))
     assert sorter.options == {"max_branch": 10}
     assert_eq(q, pdf)
 

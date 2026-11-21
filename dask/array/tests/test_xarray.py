@@ -199,5 +199,5 @@ def test_tokenize_without_pyarrow() -> None:
         y['foo'] = y.foo.dims, y.foo.data + 1
         dask.optimize(y)
         """)
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True)
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, check=False)
     assert out.stderr == b""

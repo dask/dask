@@ -169,7 +169,7 @@ def test_works_with_highlevel_graph():
             self.x = x
 
         def __getitem__(self, key):
-            raise Exception("Oh no!")
+            raise AssertionError("Oh no!")
 
     x = delayed(lambda x: x)(NoIndex(1))
     (res,) = get(x.dask, x.__dask_keys__())

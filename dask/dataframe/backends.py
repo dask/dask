@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import warnings
 from collections.abc import Iterable
 
@@ -578,7 +579,7 @@ def group_split_pandas(df, c, k, ignore_index=False):
     locations = locations.cumsum()
     parts = [
         df2.iloc[a:b].reset_index(drop=True) if ignore_index else df2.iloc[a:b]
-        for a, b in zip(locations[:-1], locations[1:])
+        for a, b in itertools.pairwise(locations)
     ]
     return ShuffleGroupResult(zip(range(k), parts))
 

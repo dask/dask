@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import itertools
 import math
 import operator
 
@@ -167,7 +168,7 @@ class FusedIO(BlockwiseIO):
 
         buckets = [
             partitions[start:end]
-            for (start, end) in zip(partition_boundaries, partition_boundaries[1:])
+            for (start, end) in itertools.pairwise(partition_boundaries)
         ]
         return buckets
 

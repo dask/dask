@@ -23,7 +23,6 @@ CONTEXT_SETTINGS = {
 @click.version_option(__version__)
 def cli():
     """Dask command line interface."""
-    pass
 
 
 @cli.command()
@@ -37,7 +36,6 @@ def docs():
 @cli.group()
 def info():
     """Information about your dask installation."""
-    pass
 
 
 @info.command()
@@ -51,7 +49,6 @@ def versions():
 @cli.group()
 def config():
     """Dask config settings"""
-    pass
 
 
 @config.command(name="get")

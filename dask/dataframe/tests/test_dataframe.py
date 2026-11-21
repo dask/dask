@@ -1822,7 +1822,7 @@ def test_combine():
     first = lambda a, b: a
 
     # You can add series with strings and nans but you can't add scalars 'a' + np.nan
-    str_add = lambda a, b: a + b if a is not np.nan else a
+    str_add = lambda a, b: a + b if a is not np.nan else a  # noqa: PLW0177
 
     # DataFrame
     for dda, ddb, a, b, runs in [
@@ -4524,7 +4524,7 @@ def test_map_partition_array(func):
     for pre in [lambda a: a, lambda a: a.x, lambda a: a.y, lambda a: a.index]:
         try:
             expected = func(pre(df))
-        except Exception:
+        except Exception:  # noqa: S112
             continue
         x = pre(ddf).map_partitions(func)
         assert_eq(x, expected, check_type=False)  # TODO: make check_type pass
