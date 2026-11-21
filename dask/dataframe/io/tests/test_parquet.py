@@ -131,6 +131,40 @@ def test_local(tmpdir, write_engine, read_engine, has_metadata):
         assert (data[column] == out[column]).all()
 
 
+def test_read_parquet_dtypes(tmpdir, write_engine, read_engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(40, dtype=np.int64),
+            "b": np.arange(40, dtype=np.float64),
+            "c": np.random.choice(["x", "y", "z"], size=40).astype("O"),
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    ddf.to_parquet(fn, write_index=False, engine=write_engine, write_metadata_file=True)
+
+    # Downcast an integer column.
+    out = dd.read_parquet(fn, engine=read_engine, dtypes={"a": "int32"})
+    assert out["a"].dtype == np.dtype("int32")
+    assert out["b"].dtype == np.dtype("float64")
+    assert_eq(out, pdf.astype({"a": "int32"}), check_index=False)
+
+    # Convert a column to categorical.
+    out = dd.read_parquet(fn, engine=read_engine, dtypes={"c": "category"})
+    assert isinstance(out["c"].dtype, pd.CategoricalDtype)
+    assert set(out["c"].compute().cat.categories) == {"x", "y", "z"}
+    assert_eq(
+        out.astype({"c": "object"}),
+        pdf.astype({"c": "object"}),
+        check_index=False,
+    )
+
+    # dtypes must be a dict.
+    with pytest.raises(TypeError, match="dtypes must be a dict"):
+        dd.read_parquet(fn, engine=read_engine, dtypes="int32")
+
+
 @pytest.mark.parametrize("index", [False, True])
 def test_empty(tmpdir, write_engine, read_engine, index):
     fn = str(tmpdir)
