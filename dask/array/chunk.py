@@ -272,7 +272,7 @@ def arange(start, stop, step, length, dtype, like=None):
     return res[:-1] if len(res) > length else res
 
 
-def linspace(start, stop, num, endpoint=True, dtype=None):
+def linspace(start, stop, num, endpoint=True, dtype=None, pin_last=False):
     from dask.array.core import Array
 
     if isinstance(start, Array):
@@ -281,7 +281,13 @@ def linspace(start, stop, num, endpoint=True, dtype=None):
     if isinstance(stop, Array):
         stop = stop.compute()
 
-    return np.linspace(start, stop, num, endpoint=endpoint, dtype=dtype)
+    out = np.linspace(start, stop, num, endpoint=endpoint, dtype=dtype)
+    if pin_last:
+        # NumPy pins the final sample to ``stop`` rather than accumulating it
+        # from ``start``. A block whose start was accumulated through an
+        # infinite value is ``nan``, so only an explicit pin recovers ``stop``.
+        out[-1] = stop
+    return out
 
 
 def astype(x, astype_dtype=None, **kwargs):
