@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import contextlib
+from datetime import timedelta, timezone, tzinfo
 
 import numpy as np
 import pytest
 
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
+from dask import delayed
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_300
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.utils import assert_eq, pyarrow_strings_enabled
@@ -134,6 +136,60 @@ def test_dt_accessor_not_available(df_ddf):
     with pytest.raises(AttributeError) as exc:
         ddf.str_col.dt
     assert ".dt accessor" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "tz",
+    [
+        None,
+        "UTC",
+        "Asia/Almaty",
+        "Europe/Paris",
+        timezone(timedelta(hours=5, minutes=30)),
+    ],
+)
+@pytest.mark.parametrize("as_index", [False, True])
+@pytest.mark.parametrize("data", ["values", "all_nat", "empty"])
+def test_dt_accessor_tz(tz: str | tzinfo | None, as_index: bool, data: str) -> None:
+    # Include a daylight-saving transition for Europe/Paris.
+    dates = pd.date_range("2024-03-30", periods=4, freq="12h", tz=tz, name="dates")
+    if data == "all_nat":
+        dates = pd.DatetimeIndex([pd.NaT] * len(dates), dtype=dates.dtype)
+    elif data == "empty":
+        dates = dates[:0]
+    df = pd.DataFrame({"dates": dates})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    if as_index:
+        ddf.index = ddf.dates
+        assert ddf.index.dt.tz == dates.tz
+    else:
+        assert ddf.dates.dt.tz == df.dates.dt.tz
+
+
+def test_dt_accessor_tz_does_not_compute() -> None:
+    @delayed
+    def load_partition() -> pd.DataFrame:
+        raise AssertionError("Timezone access must not compute partitions")
+
+    dates = pd.date_range("2024-01-01", periods=2, tz="UTC")
+    df = pd.DataFrame({"dates": dates}, index=dates)
+    ddf = dd.from_delayed([load_partition()], meta=df.iloc[:0])
+
+    assert ddf.dates.dt.tz == df.dates.dt.tz
+    assert ddf.index.dt.tz == df.index.tz
+
+
+@pytest.mark.parametrize("kind", ["period", "timedelta"])
+def test_dt_accessor_tz_not_available(kind: str) -> None:
+    if kind == "period":
+        dates = pd.period_range("2024-01-01", periods=2, freq="D")
+    else:
+        dates = pd.timedelta_range("0 days", periods=2, freq="D")
+    dser = dd.from_pandas(pd.Series(dates), npartitions=2)
+
+    with pytest.raises(AttributeError):
+        dser.dt.tz
 
 
 def test_str_accessor(df_ddf):

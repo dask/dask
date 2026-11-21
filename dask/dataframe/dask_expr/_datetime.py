@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import tzinfo
+
 from dask.dataframe.dask_expr._accessor import Accessor
 
 
@@ -66,9 +68,24 @@ class DatetimeAccessor(Accessor):
         "start_time",
         "time",
         "timetz",
-        "tz",
         "week",
         "weekday",
         "weekofyear",
         "year",
     )
+
+    @property
+    def tz(self) -> tzinfo | None:
+        """The timezone of the datetime values, or None if timezone-naive.
+
+        This property is read from metadata without computing the data.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> dates = pd.Series(pd.date_range("2024-01-01", periods=2, tz="UTC"))
+        >>> str(dd.from_pandas(dates, npartitions=2).dt.tz)
+        'UTC'
+        """
+        return self._meta.tz
