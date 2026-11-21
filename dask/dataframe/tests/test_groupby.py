@@ -2094,6 +2094,149 @@ def test_series_groupby_idxmax_skipna(skipna):
         assert_eq(result_pd, result_dd)
 
 
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+@pytest.mark.parametrize("npartitions", [2, 4, 8])
+@pytest.mark.parametrize("split_every", [2, 8])
+def test_groupby_idxminmax_across_partitions(func, npartitions, split_every):
+    # The label of the extreme value must be picked across partitions, not
+    # taken from the first partition that has the group
+    pdf = pd.DataFrame(
+        {
+            "g": [4, 4, 5, 5, 5, 4, 5, 4, 6, 6, 4, 5],
+            "a": [1, 2, 3, 4, 1, 9, 0, 9, 5, 5, 2, 7],
+            "b": [0.5, 7.0, 2.0, 1.0, 3.0, 6.0, 4.0, 8.0, 1.0, 0.0, 9.0, 9.0],
+        },
+        index=list("abcdefghijkl"),
+    )
+    ddf = dd.from_pandas(pdf, npartitions=npartitions, sort=False)
+
+    assert_eq(
+        getattr(ddf.groupby("g"), func)(split_every=split_every),
+        getattr(pdf.groupby("g"), func)(),
+    )
+    assert_eq(
+        getattr(ddf.groupby("g").a, func)(split_every=split_every),
+        getattr(pdf.groupby("g").a, func)(),
+    )
+    assert_eq(
+        getattr(ddf.groupby(["g", "a"]).b, func)(split_every=split_every),
+        getattr(pdf.groupby(["g", "a"]).b, func)(),
+    )
+
+
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+def test_groupby_idxminmax_split_out(func):
+    # a shuffle does not keep partition order, so the values have no ties
+    pdf = pd.DataFrame(
+        {"g": [4, 4, 5, 5, 5, 4, 5, 4, 6, 6, 4, 5], "b": np.arange(12.0)[::-1] ** 2},
+        index=list("abcdefghijkl"),
+    )
+    ddf = dd.from_pandas(pdf, npartitions=4, sort=False)
+    assert_eq(
+        getattr(ddf.groupby("g").b, func)(split_out=2),
+        getattr(pdf.groupby("g").b, func)(),
+    )
+
+
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+@pytest.mark.parametrize("sort", [None, True, False])
+def test_groupby_idxminmax_group_order(func, sort):
+    # assert_eq sorts the index, so compare the order of the groups directly
+    pdf = pd.DataFrame(
+        {
+            "g": [3, 1, 2, 3, 1, 2, 4, 4],
+            "v": [1.0, 9.0, 5.0, 0.0, 2.0, 8.0, -5.0, 50.0],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2, sort=False)
+    kwargs = {} if sort is None else {"sort": sort}
+    for ddf_obj, pdf_obj in [
+        (ddf.groupby("g", **kwargs).v, pdf.groupby("g", **kwargs).v),
+        (ddf.groupby("g", **kwargs), pdf.groupby("g", **kwargs)),
+    ]:
+        result = getattr(ddf_obj, func)().compute()
+        # same group order as any other aggregation of dask
+        pd.testing.assert_index_equal(result.index, ddf_obj.max().compute().index)
+        assert_eq(result, getattr(pdf_obj, func)())
+
+
+def test_groupby_idxminmax_label_and_value_from_same_row():
+    # the NaN label of the extreme row is the result, not a label of another row
+    pdf = pd.DataFrame(
+        {"g": [0, 0, 0, 0], "v": [1.0, 9.0, 2.0, 3.0]},
+        index=[0.0, np.nan, 2.0, 3.0],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2, sort=False)
+    assert_eq(ddf.groupby("g").v.idxmax(), pdf.groupby("g").v.idxmax())
+    assert_eq(ddf.groupby("g").idxmax(), pdf.groupby("g").idxmax())
+    assert_eq(ddf.groupby("g").v.idxmin(), pdf.groupby("g").v.idxmin())
+
+
+@pytest.mark.skipif(PANDAS_GE_300, reason="pandas 3 raises on all-NA groups")
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+def test_groupby_idxminmax_all_na_group(func):
+    pdf = pd.DataFrame({"g": [0, 1, 0, 1, 2, 2], "v": [np.nan, 1.0, np.nan, 3.0, 4, 2]})
+    ddf = dd.from_pandas(pdf, npartitions=3, sort=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        expected = getattr(pdf.groupby("g").v, func)()
+    assert_eq(getattr(ddf.groupby("g").v, func)(), expected)
+
+
+@pytest.mark.skipif(PANDAS_GE_300, reason="pandas 3 raises with skipna=False and NaN")
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+@pytest.mark.parametrize("nan_at", [1, 2])
+def test_groupby_idxminmax_skipna_false_across_partitions(func, nan_at):
+    values = [1.0, 9.0, 5.0, 0.0]
+    values[nan_at] = np.nan
+    pdf = pd.DataFrame({"g": [0, 0, 0, 0], "v": values})
+    ddf = dd.from_pandas(pdf, npartitions=2, sort=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        expected = getattr(pdf.groupby("g").v, func)(skipna=False)
+        expected_df = getattr(pdf.groupby("g"), func)(skipna=False)
+        assert_eq(getattr(ddf.groupby("g").v, func)(skipna=False), expected)
+        assert_eq(getattr(ddf.groupby("g"), func)(skipna=False), expected_df)
+
+
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+def test_groupby_idxminmax_column_labels(func):
+    pdf = pd.DataFrame(
+        {
+            0: [0, 1, 0, 1, 0, 1],
+            1: [1.0, 2.0, 9.0, 0.0, 3.0, 5.0],
+            2: [3.0, 1.0, 2.0, 5.0, 7.0, 0.0],
+        }
+    )
+    pdf.columns.name = "cols"
+    ddf = dd.from_pandas(pdf, npartitions=3, sort=False)
+    assert_eq(getattr(ddf.groupby(0), func)(), getattr(pdf.groupby(0), func)())
+    assert_eq(getattr(ddf.groupby(0)[1], func)(), getattr(pdf.groupby(0)[1], func)())
+    assert getattr(ddf.groupby(0), func)().compute().columns.name == "cols"
+
+    pdf.columns = pd.MultiIndex.from_tuples([("k", "g"), ("x", "a"), ("x", "b")])
+    ddf = dd.from_pandas(pdf, npartitions=3, sort=False)
+    by = [("k", "g")]
+    assert_eq(getattr(ddf.groupby(by), func)(), getattr(pdf.groupby(by), func)())
+
+
+@pytest.mark.parametrize("func", ["idxmin", "idxmax"])
+def test_groupby_idxminmax_flat_tuple_columns(func):
+    pdf = pd.DataFrame(
+        {
+            ("a", "min"): [1.0, 2.0, 0.5, 4.0, 3.0, 1.5],
+            ("a", "max"): [5.0, 1.0, 7.0, 0.0, 2.0, 6.0],
+            "g": [0, 1, 0, 1, 0, 1],
+        }
+    )
+    pdf.columns = pdf.columns.to_flat_index()
+    ddf = dd.from_pandas(pdf, npartitions=3, sort=False)
+    expected = getattr(pdf.groupby("g"), func)()
+    result = getattr(ddf.groupby("g"), func)()
+    assert_eq(result, expected)
+    assert not isinstance(result.compute().columns, pd.MultiIndex)
+
+
 @pytest.mark.skip_with_pyarrow_strings  # has to be array to explode
 @pytest.mark.parametrize("int_dtype", ["uint8", "int32", "int64"])
 def test_groupby_unique(int_dtype):
@@ -3088,13 +3231,14 @@ def test_groupby_slice_getitem_tuple_key():
         "first",
         "last",
         "median",
+        # pandas 2.0 raises for object columns, dask converts them to pyarrow
         pytest.param(
             "idxmax",
-            marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
+            marks=pytest.mark.skipif(not PANDAS_GE_210, reason="needs pandas 2.1"),
         ),
         pytest.param(
             "idxmin",
-            marks=pytest.mark.skip(reason="https://github.com/dask/dask/issues/9882"),
+            marks=pytest.mark.skipif(not PANDAS_GE_210, reason="needs pandas 2.1"),
         ),
     ],
 )

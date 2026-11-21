@@ -615,14 +615,132 @@ class Size(SingleAggregation):
         return type(self)(self.frame[by_columns], *ops[1:])
 
 
+def _idxmaxmin_chunk(g, ismax, skipna=True, **kwargs):
+    # Keep the extreme value next to its index label: labels from different
+    # partitions can only be compared through the values they point at.
+    idx = (g.idxmax if ismax else g.idxmin)(skipna=skipna, **kwargs)
+    val = (g.max if ismax else g.min)(**kwargs)
+    if not skipna and not PANDAS_GE_300:
+        # max/min skip NaN, but with skipna=False a group holding NaN has to
+        # stay NaN when the partitions are combined (pandas 3 raises instead)
+        has_na = g.count().lt(g.size(), axis=0 if idx.ndim == 2 else None)
+        if idx.ndim == 2:
+            has_na = has_na.reindex(columns=val.columns)
+        val = val.mask(has_na)
+    if idx.ndim == 1:
+        idx, val = idx.to_frame(0), val.to_frame(0)
+    return _idxmaxmin_frame(idx, val, idx.columns)
+
+
+def _idxmaxmin_frame(idx, val, labels):
+    # Flat labels, a MultiIndex would break the shuffle of split_out
+    out = pd.concat([idx, val], axis=1, ignore_index=True)
+    out.columns = pd.Index(
+        [("idx", c) for c in labels] + [("val", c) for c in labels],
+        tupleize_cols=False,
+    )
+    return out
+
+
+def _idxmaxmin_combine(
+    df, levels, ismax, skipna=True, sort=False, observed=None, dropna=None
+):
+    n = df.shape[1] // 2
+    idx, val = df.iloc[:, :n], df.iloc[:, n:]
+    keys = [df.index.get_level_values(level) for level in _convert_to_list(levels)]
+    # Position of the extreme value of each group. Rows are in partition
+    # order, so the first position among ties is the earliest partition, which
+    # is the label pandas returns.
+    grouped = val.set_axis(pd.RangeIndex(len(df)), axis=0).groupby(
+        keys, sort=sort, **_as_dict("observed", observed), **_as_dict("dropna", dropna)
+    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*all-NA.*", category=FutureWarning)
+        # pandas 3.0 returns NaN for skipna=False even without NA; NA already
+        # raised in the chunks
+        pos = (grouped.idxmax if ismax else grouped.idxmin)(
+            skipna=skipna or PANDAS_GE_300
+        )
+    idx_out, val_out = {}, {}
+    for j in range(pos.shape[1]):
+        # NaN positions (all-NA groups) become -1, which take fills with NaN
+        take = pos.iloc[:, j].fillna(-1).to_numpy().astype(np.intp)
+        # take whole rows, so a label and its value always stay together
+        for out, src in ((idx_out, idx), (val_out, val)):
+            out[j] = src.iloc[:, j].array.take(take, allow_fill=True)
+    idx_out = pd.DataFrame(idx_out, index=pos.index)
+    val_out = pd.DataFrame(val_out, index=pos.index)
+    labels = [c for _, c in df.columns[:n]]
+    return _idxmaxmin_frame(idx_out, val_out, labels)
+
+
+def _idxmaxmin_aggregate(df, series=False, name=None, names=None, **kwargs):
+    res = _idxmaxmin_combine(df, **kwargs)
+    n = res.shape[1] // 2
+    res = res.iloc[:, :n]
+    if series:
+        return res.iloc[:, 0].rename(name)
+    res.columns = pd.Index(
+        [c for _, c in res.columns], tupleize_cols=len(names or []) > 1
+    )
+    if names is not None and res.columns.nlevels == len(names):
+        res.columns.names = names
+    return res
+
+
 class IdxMin(SingleAggregation):
-    groupby_chunk = M.idxmin
-    groupby_aggregate = M.first
+    ismax = False
+    groupby_chunk = staticmethod(_idxmaxmin_chunk)
+
+    @classmethod
+    def combine(cls, g, levels, **kwargs):
+        return _idxmaxmin_combine(_concat(g), levels, **kwargs)
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        return _idxmaxmin_aggregate(_concat(inputs), **kwargs)
+
+    @property
+    def chunk_kwargs(self) -> dict:  # type: ignore[override]
+        return {**super().chunk_kwargs, "ismax": self.ismax}
+
+    @functools.cached_property
+    def _series_name(self):
+        meta = self.frame._meta
+        if meta.ndim == 1:
+            return True, meta.name
+        if self._slice is not None and not isinstance(self._slice, list):
+            return True, meta[self._slice].name
+        return False, None
+
+    @functools.cached_property
+    def _column_names(self):
+        return list(self.frame._meta.columns.names)
+
+    @property
+    def combine_kwargs(self) -> dict:  # type: ignore[override]
+        return {
+            "levels": self.levels,
+            "ismax": self.ismax,
+            "skipna": (self.operand("chunk_kwargs") or {}).get("skipna", True),
+            "sort": self.sort,
+            **_as_dict("observed", self.observed),
+            **_as_dict("dropna", self.dropna),
+        }
+
+    @property
+    def aggregate_kwargs(self) -> dict:  # type: ignore[override]
+        series, name = self._series_name
+        return {
+            **self.combine_kwargs,
+            "series": series,
+            "name": name,
+            "names": None if series else self._column_names,
+        }
 
 
 class IdxMax(IdxMin):
-    groupby_chunk = M.idxmax
-    groupby_aggregate = M.first
+    ismax = True
 
 
 class ValueCounts(SingleAggregation):
