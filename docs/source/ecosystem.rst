@@ -34,6 +34,9 @@ DataFrame
   GPU-enabled dataframes which can be used as partitions in Dask Dataframes.
 - `dask-geopandas <https://github.com/geopandas/dask-geopandas>`_: Early-stage subproject of
   geopandas, enabling parallelization of geopandas dataframes.
+- `Modin <https://modin.readthedocs.io/en/latest/development/using_pandas_on_dask.html>`_: Scale your
+  pandas workflows by changing one line of code. Modin transparently distributes the data and computation
+  using different execution engines such as Ray, Dask or MPI.
 
 SQL
 ~~~
