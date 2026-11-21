@@ -27,6 +27,26 @@ This code opts out of the default (``"numpy"``) backend for dispatchable Dask-Ar
 
 The Dask-Array API can also dispatch the backend ``RandomState`` class to be used for random-number generation. This means all creation functions in ``dask.array.random`` are also dispatchable.
 
+With ``array.query-planning`` disabled and ``array.backend`` set to ``cupy``, the
+chunk type depends on the operation and its inputs.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Operation
+     - Chunk type
+   * - ``da.zeros((2, 2))``
+     - CuPy, from the configured backend.
+   * - ``da.zeros_like(x)`` and other ``*_like`` creation functions
+     - The chunk type of the reference array ``x``.
+   * - ``da.from_array(x)`` with a NumPy array
+     - NumPy, from the input array.
+   * - ``da.atleast_1d(x)`` with a Python scalar
+     - NumPy, from the scalar conversion.
+
+To create a Dask Array from in-memory values with CuPy chunks, pass a CuPy array
+to ``da.from_array``, for example ``da.from_array(cupy.asarray([1, 2]), chunks=2)``.
+
 The current set of dispatchable creation functions for Dask-Dataframe is:
 
 - ``from_dict``
