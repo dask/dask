@@ -2180,7 +2180,7 @@ def test_groupby_idxminmax_all_na_group(func):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
         expected = getattr(pdf.groupby("g").v, func)()
-    assert_eq(getattr(ddf.groupby("g").v, func)(), expected)
+        assert_eq(getattr(ddf.groupby("g").v, func)(), expected)
 
 
 @pytest.mark.skipif(PANDAS_GE_300, reason="pandas 3 raises with skipna=False and NaN")
