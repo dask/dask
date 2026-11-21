@@ -4017,16 +4017,23 @@ def _get_predicate_components(predicate, components, type_=Or):
 
 
 def _convert_mapping(components):
+    if not all(isinstance(c, BaseExpr) for c in components):
+        # e.g. a literal `False` in `False | (df.x == 1)` has no name to map
+        return None
     return dict(zip([e._name for e in components], components))
 
 
 def _replace_common_or_components(expr, or_components):
     and_component = _get_predicate_components(expr, [], type_=And)
     mapping = _convert_mapping(and_component)
+    if mapping is None:
+        return None
     and_components = [
         _get_predicate_components(c, [], type_=And) for c in or_components
     ]
-    and_components = list(map(_convert_mapping, and_components))
+    and_components = [_convert_mapping(c) for c in and_components]
+    if any(c is None for c in and_components):
+        return None
 
     replacements = []
     for c in mapping.keys():
