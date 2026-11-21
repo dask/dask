@@ -20,6 +20,14 @@ from dask.utils import ensure_dict, funcname, import_required
 if TYPE_CHECKING:
     from dask.highlevelgraph import HighLevelGraph
 
+    try:
+        from graphviz import Digraph
+    except ModuleNotFoundError:
+
+        class Digraph:  # type: ignore[no-redef]
+            pass
+
+
 OptimizerStage: TypeAlias = Literal[
     "logical",
     "simplified-logical",
@@ -114,7 +122,9 @@ class Expr:
     def tree_repr(self):
         return os.linesep.join(self._tree_repr_lines())
 
-    def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+    def analyze(
+        self, filename: str | None = None, format: str | None = None
+    ) -> Digraph:
         from dask.dataframe.dask_expr._expr import Expr as DFExpr
         from dask.dataframe.dask_expr.diagnostics import analyze
 

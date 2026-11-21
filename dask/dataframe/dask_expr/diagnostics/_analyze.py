@@ -22,6 +22,13 @@ if TYPE_CHECKING:
         Statistics,
     )
 
+    try:
+        from graphviz import Digraph
+    except ModuleNotFoundError:
+
+        class Digraph:  # type: ignore[no-redef]
+            pass
+
 
 def inject_analyze(expr: Expr, id: str, injected: dict) -> Expr:
     if expr._name in injected:
@@ -40,7 +47,7 @@ def inject_analyze(expr: Expr, id: str, injected: dict) -> Expr:
 
 def analyze(
     expr: Expr, filename: str | None = None, format: str | None = None, **kwargs: Any
-) -> None:
+) -> Digraph:
     import_required(
         "distributed",
         "distributed is a required dependency for using the analyze method.",

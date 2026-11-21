@@ -8,7 +8,7 @@ import warnings
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from functools import wraps
 from numbers import Integral, Number
-from typing import Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
@@ -152,10 +152,17 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-#
+if TYPE_CHECKING:
+    try:
+        from graphviz import Digraph
+    except ModuleNotFoundError:
+
+        class Digraph:  # type: ignore[no-redef]
+            pass
+
+
 # Utilities to wrap Expr API
 # (Helps limit boiler-plate code in collection APIs)
-#
 
 
 def _wrap_expr_api(*args, wrap_api=None, **kwargs):
@@ -491,7 +498,9 @@ Expr={expr}"""
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
 
-    def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+    def analyze(
+        self, filename: str | None = None, format: str | None = None
+    ) -> Digraph:
         """Outputs statistics about every node in the expression.
 
         analyze optimizes the expression and triggers a computation. It records statistics
@@ -510,8 +519,7 @@ Expr={expr}"""
 
         Returns
         -------
-            None, but writes a graph representation of the expression enriched with
-            statistics to disk.
+            The graphviz.Digraph written to disk, enriched with expression statistics.
         """
         out = self
         if not isinstance(out, Scalar):
