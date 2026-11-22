@@ -11,6 +11,7 @@ from functools import reduce
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 # Check PyArrow version for feature support
@@ -374,7 +375,9 @@ def _process_kwargs(partitioning=None, **kwargs):
     }
 
 
-def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
+def _filters_to_expression(
+    filters, propagate_null=False, nan_is_null=True, schema=None
+):
     # Mostly copied from: pq.filters_to_expression
     # TODO: Use pq.filters_to_expression if/when null-value
     # handling is resolved.
@@ -393,7 +396,14 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
             filters = [filters]
 
     def convert_single_predicate(col, op, val):
-        field = pa_ds.field(col)
+        if schema is not None and _is_nested_column(col) and col not in schema.names:
+            # A dotted name that is not a top-level field selects a field
+            # nested inside a struct column; translate it to a nested field
+            # reference the same way pyarrow resolves dotted names in
+            # read_parquet(columns=...).
+            field = pc.field(*col.split("."))
+        else:
+            field = pa_ds.field(col)
 
         # Handle null-value comparison
         if val is None or (nan_is_null and val is np.nan):
@@ -1357,7 +1367,7 @@ class ArrowDatasetEngine(Engine):
         # Get/translate filters
         ds_filters = None
         if filters is not None:
-            ds_filters = _filters_to_expression(filters)
+            ds_filters = _filters_to_expression(filters, schema=schema)
 
         # Define subset of `dataset_info` required by _collect_file_parts
         dataset_info_kwargs = {
@@ -1713,7 +1723,9 @@ class ArrowDatasetEngine(Engine):
                 use_threads=False,
                 schema=schema,
                 columns=cols,
-                filter=_filters_to_expression(filters) if filters else None,
+                filter=(
+                    _filters_to_expression(filters, schema=schema) if filters else None
+                ),
             )
         else:
             arrow_table = _read_table_from_path(

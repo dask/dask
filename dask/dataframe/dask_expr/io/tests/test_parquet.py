@@ -711,6 +711,14 @@ def test_parquet_nested_columns_projection(tmpdir, filesystem):
     result = read_parquet(fn, columns=["a.b", "a.c"], filesystem=filesystem)["c"]
     assert_eq(result, expected)
 
+    # The projection is pushed down into the read: the read itself
+    # only requests "a.b".
+    df = read_parquet(fn, columns=["a.b", "a.c"], filesystem=filesystem)[["b"]]
+    rps = list(df.expr.simplify().find_operations(ReadParquet))
+    assert rps
+    for rp in rps:
+        assert rp.operand("columns") == ["a.b"]
+
 
 def test_parquet_nested_columns_deep(tmpdir, filesystem):
     # https://github.com/dask/dask/issues/11938
@@ -743,4 +751,181 @@ def test_parquet_nested_columns_with_index(tmpdir, filesystem):
     fn = _make_nested_file(tmpdir)
     expected = pd.read_parquet(fn, columns=["a.b", "x"]).set_index("x")
     result = read_parquet(fn, columns=["a.b"], index="x", filesystem=filesystem)
+    assert_eq(result, expected)
+
+
+def test_parquet_nested_columns_filters(tmpdir, filesystem):
+    # A filter on a nested column is translated to a nested field
+    # reference for the reader.
+    # https://github.com/dask/dask/issues/11938
+    fn = _make_nested_file(tmpdir)
+    expected = pd.read_parquet(fn, columns=["a.b"])
+    expected = expected[expected["b"] > 1]
+    result = read_parquet(
+        fn, columns=["a.b"], filters=[("a.b", ">", 1)], filesystem=filesystem
+    )
+    # A pushed-down filter returns only matching rows with a fresh index.
+    assert_eq(result, expected, check_index=False)
+
+    # A filter on the leaf column after a nested read is pushed down
+    # to the reader on the pyarrow-filesystem engine.
+    df = read_parquet(fn, columns=["a.b"], filesystem=filesystem)
+    result = df[df.b > 1]
+    assert_eq(result, expected, check_index=False)
+    if filesystem == "arrow":
+        rps = list(result.expr.simplify().find_operations(ReadParquet))
+        assert rps
+        for rp in rps:
+            assert rp.operand("filters") == [[("a.b", ">", 1)]]
+
+
+def test_parquet_nested_columns_aggregate_files(tmpdir):
+    # The duplicate-leaf branch of _concat_tables is only reached when
+    # several files are read in one task; aggregate_files fuses them.
+    # https://github.com/dask/dask/issues/11938
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    for i in range(3):
+        table = pa.table(
+            {
+                "a": pa.array(
+                    [{"b": i, "c": float(i)}, {"b": i + 10, "c": float(i + 10)}]
+                ),
+                "d": pa.array([{"b": i * 100}, {"b": i * 100 + 10}]),
+                "x": [i, i + 1],
+            }
+        )
+        pq.write_table(table, os.path.join(str(tmpdir), f"part.{i}.parquet"))
+    expected = pd.concat(
+        [
+            pd.read_parquet(
+                os.path.join(str(tmpdir), f"part.{i}.parquet"),
+                columns=["a.b", "d.b"],
+            )
+            for i in range(3)
+        ],
+        ignore_index=True,
+    )
+    result = read_parquet(
+        str(tmpdir),
+        columns=["a.b", "d.b"],
+        filesystem="fsspec",
+        aggregate_files=True,
+    )
+    assert result.npartitions == 1
+    assert_eq(result, expected, check_index=False)
+
+
+def test_parquet_nested_columns_multi_file_arrow(tmpdir):
+    # Several files read on the arrow engine are fused into one task,
+    # which concatenates the per-file tables in _concat_tables; the
+    # duplicate leaf names must survive that.
+    # https://github.com/dask/dask/issues/11938
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    for i in range(3):
+        table = pa.table(
+            {
+                "a": pa.array(
+                    [{"b": i, "c": float(i)}, {"b": i + 10, "c": float(i + 10)}]
+                ),
+                "d": pa.array([{"b": i * 100}, {"b": i * 100 + 10}]),
+                "x": [i, i + 1],
+            }
+        )
+        pq.write_table(table, os.path.join(str(tmpdir), f"part.{i}.parquet"))
+    expected = pd.concat(
+        [
+            pd.read_parquet(
+                os.path.join(str(tmpdir), f"part.{i}.parquet"),
+                columns=["a.b", "d.b"],
+            )
+            for i in range(3)
+        ],
+        ignore_index=True,
+    )
+    result = read_parquet(str(tmpdir), columns=["a.b", "d.b"], filesystem="arrow")
+    # The fused read does not preserve file order, so sort both sides
+    # by the two leaf columns before comparing.
+    result = result.compute()
+    result.columns = ["a_b", "d_b"]
+    expected.columns = ["a_b", "d_b"]
+    assert_eq(
+        result.sort_values(["a_b", "d_b"]).reset_index(drop=True),
+        expected.sort_values(["a_b", "d_b"]).reset_index(drop=True),
+    )
+
+
+def test_parquet_nested_columns_concat_tables():
+    # _concat_tables concatenates tables with duplicate column names
+    # by position, and refuses tables with different schemas.
+    # https://github.com/dask/dask/issues/11938
+    import pyarrow as pa
+
+    from dask.dataframe.dask_expr.io.io import _concat_tables
+
+    t1 = pa.Table.from_arrays([pa.array([1, 2]), pa.array([10, 20])], names=["b", "b"])
+    t2 = pa.Table.from_arrays([pa.array([3]), pa.array([30])], names=["b", "b"])
+    result = _concat_tables([t1, t2])
+    assert result.schema.names == ["b", "b"]
+    assert result.column(0).to_pylist() == [1, 2, 3]
+    assert result.column(1).to_pylist() == [10, 20, 30]
+
+    # A single table is returned unchanged.
+    assert _concat_tables([t1]) is t1
+
+    # Tables with different schemas are refused instead of silently
+    # concatenated by position.
+    t3 = pa.Table.from_arrays(
+        [pa.array([1]), pa.array([2]), pa.array([3])], names=["b", "b", "c"]
+    )
+    with pytest.raises(ValueError, match="same columns"):
+        _concat_tables([t1, t3])
+
+
+def test_parquet_nested_columns_literal_dot(tmpdir, filesystem):
+    # A top-level column literally named "a.b" reads as-is, not as a
+    # nested selection.
+    # https://github.com/dask/dask/issues/11938
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    fn = os.path.join(str(tmpdir), "literal.parquet")
+    pq.write_table(pa.table({"a.b": [1, 2], "x": [5, 6]}), fn)
+    expected = pd.read_parquet(fn, columns=["a.b"])
+    result = read_parquet(fn, columns=["a.b"], filesystem=filesystem)
+    assert_eq(result, expected)
+
+
+def test_parquet_nested_columns_leaf_shadowing(tmpdir, filesystem):
+    # A struct field leaf shadows a real top-level column: "a.b" selects
+    # the struct field, "b" selects the top-level column.
+    # https://github.com/dask/dask/issues/11938
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    fn = os.path.join(str(tmpdir), "shadow.parquet")
+    pq.write_table(
+        pa.table(
+            {
+                "a": pa.array([{"b": 1}, {"b": 2}]),
+                "b": [10, 20],
+                "x": [5, 6],
+            }
+        ),
+        fn,
+    )
+    expected = pd.read_parquet(fn, columns=["a.b"])
+    result = read_parquet(fn, columns=["a.b"], filesystem=filesystem)
+    assert_eq(result, expected)
+
+    expected = pd.read_parquet(fn, columns=["b"])
+    result = read_parquet(fn, columns=["b"], filesystem=filesystem)
+    assert_eq(result, expected)
+
+    # Both at once: two columns named "b", matching pandas.
+    expected = pd.read_parquet(fn, columns=["a.b", "b"])
+    result = read_parquet(fn, columns=["a.b", "b"], filesystem=filesystem)
     assert_eq(result, expected)

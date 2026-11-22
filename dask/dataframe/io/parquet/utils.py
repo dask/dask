@@ -80,9 +80,20 @@ def _select_columns(df, columns):
     requested name, so with duplicate column names it selects the same
     columns more than once. Nested parquet selections can produce
     duplicate names (for example ``columns=["a.b", "d.b"]`` yields two
-    columns named ``"b"``), so select positionally instead: each
+    columns named ``"b"``), so select positionally in that case: each
     requested name takes the next not-yet-selected column with that name.
+    When all requested names are unique (and the frame itself has no
+    duplicate columns), plain label selection is used instead: it is the
+    path third-party engines document on these shared paths, and it
+    preserves the previous behavior for the common case.
     """
+    if len(set(columns)) == len(columns) and len(set(df.columns)) == len(df.columns):
+        # Raise the same KeyError as the positional path for a
+        # missing column, instead of pandas' label-selection error.
+        for column in columns:
+            if column not in df.columns:
+                raise KeyError(column)
+        return df[columns]
     positions = []
     taken = {}
     all_columns = list(df.columns)

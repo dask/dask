@@ -189,6 +189,14 @@ def _concat_tables(tables):
     schema = tables[0].schema
     if len(set(schema.names)) == len(schema.names):
         return pa.concat_tables(tables, promote_options="permissive")
+    # Positional concat is only valid if every table has the same columns
+    # in the same order; verify instead of trusting tables[0].
+    for table in tables[1:]:
+        if table.schema.names != schema.names:
+            raise ValueError(
+                "Cannot concatenate tables by position: all tables must "
+                "have the same columns in the same order."
+            )
     arrays = []
     for i in range(tables[0].num_columns):
         chunks = []

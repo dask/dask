@@ -5227,7 +5227,9 @@ def read_parquet(
         metadata, if present). Provide a single field name instead of a list to
         read in the data as a Series. Dotted names such as ``"a.b"`` select a
         field nested inside a struct column, the same way pandas and pyarrow
-        do; the output column is named after the leaf field (``"b"``).
+        do; the output column is named after the leaf field (``"b"``). Note
+        that ``columns=["a.b", "b"]`` where ``"b"`` is also a real top-level
+        column yields two columns both named ``"b"``, matching pandas.
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
         List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
         Using this argument will result in row-wise filtering of the final partitions.
@@ -5240,6 +5242,9 @@ def read_parquet(
         Predicates can also be expressed as a ``List[Tuple]``. These are evaluated
         as an AND conjunction. To express OR in predicates, one must use the
         (preferred for "pyarrow") ``List[List[Tuple]]`` notation.
+
+        Dotted column names such as ``"a.b"`` select a field nested inside a
+        struct column, the same way they do in ``columns``.
     index : str, list or False, default None
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata, if present. Use ``False``
