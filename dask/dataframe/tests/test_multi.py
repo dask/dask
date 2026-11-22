@@ -2123,6 +2123,22 @@ def test_dtype_equality_warning():
     assert not record
 
 
+def test_dtype_mismatch_warning_shows_string_storage():
+    # https://github.com/dask/dask/issues/11978
+    pytest.importorskip("pyarrow")
+    df1 = pd.DataFrame({"a": pd.Series(["x"], dtype="string[python]")})
+    df2 = pd.DataFrame({"a": pd.Series(["x"], dtype="string[pyarrow]")})
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
+
+    assert len(record) == 1
+    message = str(record[0].message)
+    assert "string[python]" in message
+    assert "string[pyarrow]" in message
+
+
 @pytest.mark.parametrize(
     "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
 )
