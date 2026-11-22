@@ -175,6 +175,29 @@ class FusedIO(BlockwiseIO):
         return
 
 
+def _concat_tables(tables):
+    """Concat pyarrow tables, supporting duplicate field names.
+
+    ``pa.concat_tables`` cannot unify schemas with duplicate field names,
+    which nested parquet selections can produce (for example
+    ``columns=["a.b", "d.b"]`` yields two columns named ``"b"``). In that
+    case, concat column-wise by position instead. Otherwise, keep the
+    default behavior, which also unifies slightly different types.
+    """
+    if len(tables) == 1:
+        return tables[0]
+    schema = tables[0].schema
+    if len(set(schema.names)) == len(schema.names):
+        return pa.concat_tables(tables, promote_options="permissive")
+    arrays = []
+    for i in range(tables[0].num_columns):
+        chunks = []
+        for table in tables:
+            chunks.extend(table.column(i).chunks)
+        arrays.append(pa.chunked_array(chunks))
+    return pa.Table.from_arrays(arrays, schema=schema)
+
+
 class FusedParquetIO(FusedIO):
     _parameters = ["_expr"]
 
@@ -192,7 +215,7 @@ class FusedParquetIO(FusedIO):
     ):
         from dask.dataframe.dask_expr.io.parquet import ReadParquetPyarrowFS
 
-        tables = (
+        tables = [
             ReadParquetPyarrowFS._fragment_to_table(
                 frag,
                 filter,
@@ -200,8 +223,8 @@ class FusedParquetIO(FusedIO):
                 schema,
             )
             for frag, filter in frag_filters
-        )
-        table = pa.concat_tables(tables, promote_options="permissive")
+        ]
+        table = _concat_tables(tables)
         return ReadParquetPyarrowFS._table_to_pandas(table, **to_pandas_kwargs)
 
     def _task(self, name: str, index: int) -> Task:  # type: ignore[override]

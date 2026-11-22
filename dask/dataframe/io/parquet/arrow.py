@@ -26,9 +26,13 @@ from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
     _infer_split_row_groups,
+    _is_nested_column,
     _normalize_index_columns,
+    _output_column_names,
     _process_open_file_options,
+    _project_nested_table_columns,
     _row_groups_to_parts,
+    _select_columns,
     _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
@@ -259,20 +263,29 @@ def _read_table_from_path(
         **open_file_options,
     )[0] as fil:
         if row_groups == [None]:
-            return pq.ParquetFile(fil, **pre_buffer).read(
+            arrow_table = pq.ParquetFile(fil, **pre_buffer).read(
                 columns=columns,
                 use_threads=False,
                 use_pandas_metadata=True,
                 **read_kwargs,
             )
         else:
-            return pq.ParquetFile(fil, **pre_buffer).read_row_groups(
+            arrow_table = pq.ParquetFile(fil, **pre_buffer).read_row_groups(
                 row_groups,
                 columns=columns,
                 use_threads=False,
                 use_pandas_metadata=True,
                 **read_kwargs,
             )
+
+    if columns and any(_is_nested_column(column) for column in columns):
+        # ParquetFile.read returns the top-level struct column for a
+        # nested selection (e.g. "a.b" reads column "a"). Project the
+        # requested fields out so the result has one leaf-named column
+        # per requested column, like pandas and pyarrow return.
+        arrow_table = _project_nested_table_columns(arrow_table, columns)
+
+    return arrow_table
 
 
 def _get_rg_statistics(row_group, col_names):
@@ -629,7 +642,12 @@ class ArrowDatasetEngine(Engine):
             # The correct index has already been set
             index = False
             columns_and_parts = list(set(columns_and_parts) - set(df.index.names))
-        df = df[list(columns_and_parts)]
+        # Nested selections (e.g. "a.b") come back from the reader under
+        # their leaf name ("b"), so select by the name they have in the
+        # result. Select positionally: duplicate leaf names must not
+        # match more than once.
+        columns_and_parts = _output_column_names(df, columns_and_parts)
+        df = _select_columns(df, columns_and_parts)
 
         if index:
             df = df.set_index(index)

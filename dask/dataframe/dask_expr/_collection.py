@@ -5225,7 +5225,9 @@ def read_parquet(
         Field name(s) to read in as columns in the output. By default all
         non-index fields will be read (as determined by the pandas parquet
         metadata, if present). Provide a single field name instead of a list to
-        read in the data as a Series.
+        read in the data as a Series. Dotted names such as ``"a.b"`` select a
+        field nested inside a struct column, the same way pandas and pyarrow
+        do; the output column is named after the leaf field (``"b"``).
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
         List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
         Using this argument will result in row-wise filtering of the final partitions.

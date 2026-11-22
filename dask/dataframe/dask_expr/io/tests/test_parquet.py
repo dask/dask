@@ -649,3 +649,98 @@ def test_tune_optimization_disabled(tmpdir):
         assert len(full_lens) == n_partitions
         assert len(col_lens) == n_partitions
         assert_eq(full_lens, col_lens)
+
+
+def _make_nested_file(dir, filename="nested.parquet"):
+    """Write a parquet file with struct columns for nested selection tests."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    fn = os.path.join(str(dir), filename)
+    table = pa.table(
+        {
+            "a": pa.array([{"b": 1, "c": 1.0}, {"b": 2, "c": 2.0}]),
+            "d": pa.array([{"b": 10}, {"b": 20}]),
+            "x": [5, 6],
+        }
+    )
+    pq.write_table(table, fn)
+    return fn
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        ["a.b"],
+        ["a.b", "a.c"],
+        ["a.b", "x"],
+        ["a.b", "d.b"],
+        ["a", "a.b"],
+    ],
+)
+def test_parquet_nested_columns(tmpdir, filesystem, columns):
+    # https://github.com/dask/dask/issues/11938
+    fn = _make_nested_file(tmpdir)
+    expected = pd.read_parquet(fn, columns=columns)
+    result = read_parquet(fn, columns=columns, filesystem=filesystem)
+    assert_eq(result, expected)
+
+
+def test_parquet_nested_columns_series(tmpdir, filesystem):
+    # https://github.com/dask/dask/issues/11938
+    if filesystem == "arrow":
+        # Pre-existing gap, unrelated to nested columns: a series read
+        # with filesystem="arrow" returns a DataFrame. Plain columns
+        # fail the same way.
+        pytest.xfail("series read with filesystem='arrow' returns a DataFrame")
+    fn = _make_nested_file(tmpdir)
+    expected = pd.read_parquet(fn, columns=["a.b"])["b"]
+    result = read_parquet(fn, columns="a.b", filesystem=filesystem)
+    assert_eq(result, expected)
+
+
+def test_parquet_nested_columns_projection(tmpdir, filesystem):
+    # Selecting a leaf column after a nested read pushes the projection down
+    # https://github.com/dask/dask/issues/11938
+    fn = _make_nested_file(tmpdir)
+    expected = pd.read_parquet(fn, columns=["a.b"])
+    result = read_parquet(fn, columns=["a.b", "a.c"], filesystem=filesystem)[["b"]]
+    assert_eq(result, expected)
+
+    expected = pd.read_parquet(fn, columns=["a.c"])["c"]
+    result = read_parquet(fn, columns=["a.b", "a.c"], filesystem=filesystem)["c"]
+    assert_eq(result, expected)
+
+
+def test_parquet_nested_columns_deep(tmpdir, filesystem):
+    # https://github.com/dask/dask/issues/11938
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    fn = os.path.join(str(tmpdir), "deep.parquet")
+    pq.write_table(pa.table({"a": pa.array([{"b": {"c": 1}}, {"b": {"c": 2}}])}), fn)
+    expected = pd.read_parquet(fn, columns=["a.b.c"])
+    result = read_parquet(fn, columns=["a.b.c"], filesystem=filesystem)
+    assert_eq(result, expected)
+
+
+def test_parquet_nested_columns_missing(tmpdir, filesystem):
+    # https://github.com/dask/dask/issues/11938
+    fn = _make_nested_file(tmpdir)
+    with pytest.raises(KeyError):
+        read_parquet(fn, columns=["a.zzz"], filesystem=filesystem)
+    with pytest.raises(KeyError):
+        read_parquet(fn, columns=["x.y"], filesystem=filesystem)
+
+
+def test_parquet_nested_columns_with_index(tmpdir, filesystem):
+    # https://github.com/dask/dask/issues/11938
+    if filesystem == "arrow":
+        # Pre-existing gap, unrelated to nested columns: an explicit
+        # index is ignored with filesystem="arrow". Plain columns fail
+        # the same way.
+        pytest.xfail("explicit index is ignored with filesystem='arrow'")
+    fn = _make_nested_file(tmpdir)
+    expected = pd.read_parquet(fn, columns=["a.b", "x"]).set_index("x")
+    result = read_parquet(fn, columns=["a.b"], index="x", filesystem=filesystem)
+    assert_eq(result, expected)

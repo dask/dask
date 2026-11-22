@@ -4,12 +4,210 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
 from fsspec.core import expand_paths_if_needed, get_fs_token_paths, stringify_path
 from fsspec.spec import AbstractFileSystem
 
 from dask import config
 from dask.dataframe.io.utils import _is_local_fs
 from dask.utils import natural_sort_key, parse_bytes
+
+
+def _is_nested_column(column) -> bool:
+    """Whether a column name selects a field nested inside a struct column.
+
+    Both pandas and pyarrow resolve dotted names such as ``"a.b"`` in
+    ``read_parquet(columns=...)`` to the field ``b`` of the top-level
+    struct column ``a``. A name is only a nested selection if every
+    dot-separated part is non-empty, so a top-level column literally
+    named ``"."`` is not mistaken for one.
+    """
+    return (
+        isinstance(column, str)
+        and "." in column
+        and all(part != "" for part in column.split("."))
+    )
+
+
+def _leaf_column_name(column):
+    """The output column name for a (possibly nested) column selection.
+
+    Nested selections produce a column named after the leaf field, so
+    ``"a.b"`` becomes ``"b"``, matching pandas and pyarrow behavior.
+    Top-level column names are returned unchanged.
+    """
+    if _is_nested_column(column):
+        return column.rsplit(".", 1)[-1]
+    return column
+
+
+def _output_column_name(schema, column):
+    """The output column name for a requested column in a parquet schema.
+
+    A nested selection produces a column named after the leaf field, but
+    a name that matches a top-level field exactly keeps its name, the
+    same way pyarrow resolves ``columns`` in ``read_parquet``.
+    """
+    if _is_nested_column(column) and column not in schema.names:
+        return _leaf_column_name(column)
+    return column
+
+
+def _output_column_names(df, columns):
+    """Map requested column names to the names they have in a read result.
+
+    Nested selections like ``"a.b"`` come back under their leaf name
+    (``"b"``), while a top-level column literally named ``"a.b"`` keeps
+    its name. Pick whichever name is actually in the result, so both
+    shapes are handled; anything else is left unchanged, so a missing
+    column still raises a KeyError downstream.
+    """
+    names = list(df.columns)
+    resolved = []
+    for column in columns:
+        if _is_nested_column(column) and column not in names:
+            resolved.append(_leaf_column_name(column))
+        else:
+            resolved.append(column)
+    return resolved
+
+
+def _select_columns(df, columns):
+    """Select columns from a DataFrame, in order, handling duplicate names.
+
+    Plain label selection (``df[columns]``) matches every column with a
+    requested name, so with duplicate column names it selects the same
+    columns more than once. Nested parquet selections can produce
+    duplicate names (for example ``columns=["a.b", "d.b"]`` yields two
+    columns named ``"b"``), so select positionally instead: each
+    requested name takes the next not-yet-selected column with that name.
+    """
+    positions = []
+    taken = {}
+    all_columns = list(df.columns)
+    for column in columns:
+        try:
+            position = all_columns.index(column, taken.get(column, 0))
+        except ValueError:
+            raise KeyError(column) from None
+        positions.append(position)
+        taken[column] = position + 1
+    return df.iloc[:, positions]
+
+
+def _map_leaf_columns_to_nested(source_columns, columns):
+    """Map requested output column names back to nested selections.
+
+    ``source_columns`` are the columns a parquet read was asked for, which
+    may contain nested selections like ``"a.b"``. ``columns`` are column
+    names of the read result, where nested selections appear under their
+    leaf name (``"b"``). Return ``columns`` with every leaf name replaced
+    by the nested selection(s) that produce it, so a pushed-down column
+    projection keeps reading the right data. Names that do not come from a
+    nested selection are returned unchanged.
+    """
+    if isinstance(columns, str):
+        columns = [columns]
+    nested_by_leaf = {}
+    for source in source_columns:
+        if _is_nested_column(source):
+            nested_by_leaf.setdefault(_leaf_column_name(source), []).append(source)
+    mapped = []
+    for column in columns:
+        mapped.extend(nested_by_leaf.get(column, [column]))
+    return mapped
+
+
+def _resolve_nested_field(schema, column):
+    """Resolve a (possibly nested) column name against a pyarrow schema.
+
+    Returns the pyarrow field for the column. A name that matches a
+    top-level field exactly is returned as-is, even if it contains a dot.
+    Otherwise a dotted name is resolved as a path through struct fields,
+    the same way pyarrow resolves ``columns`` in ``read_parquet``.
+
+    Raises
+    ------
+    KeyError
+        If the column (or one of its nested fields) does not exist.
+    """
+    if column in schema.names:
+        return schema.field(column)
+    parts = column.split(".")
+    try:
+        field = schema.field(parts[0])
+    except KeyError:
+        raise KeyError(
+            f"None of [Index(['{column}'], dtype='object')] are in the [columns]"
+        ) from None
+    field_type = field.type
+    for part in parts[1:]:
+        if not pa.types.is_struct(field_type):
+            raise KeyError(
+                f"None of [Index(['{column}'], dtype='object')] are in the [columns]"
+            ) from None
+        try:
+            field = field_type.field(part)
+        except KeyError:
+            raise KeyError(
+                f"None of [Index(['{column}'], dtype='object')] are in the [columns]"
+            ) from None
+        field_type = field.type
+    return field
+
+
+def _projected_nested_table(schema, columns):
+    """Build an empty pyarrow table for a nested column selection.
+
+    Returns an empty table with one column per requested column, named
+    after the leaf field for nested selections, with the leaf field types
+    taken from ``schema``. Used to build metadata for ``read_parquet``
+    without reading any data.
+    """
+    fields = []
+    arrays = []
+    for column in columns:
+        if column is None:
+            continue
+        field = _resolve_nested_field(schema, column)
+        fields.append(
+            pa.field(
+                _output_column_name(schema, column),
+                field.type,
+                nullable=field.nullable,
+            )
+        )
+        arrays.append(pa.array([], type=field.type))
+    return pa.Table.from_arrays(arrays, schema=pa.schema(fields))
+
+
+def _project_nested_table_columns(table, columns):
+    """Project nested struct fields out of a table read with dotted columns.
+
+    ``pyarrow.parquet.ParquetFile.read(columns=["a.b"])`` returns the
+    top-level struct column ``a`` (holding only the requested fields),
+    while the dataset API returns the leaf column ``b`` directly. This
+    converts the former shape into the latter, so the result matches what
+    pandas and pyarrow return for the same selection: one column per
+    requested column, named after the leaf field, in the requested order.
+    """
+    fields = []
+    arrays = []
+    for column in columns:
+        if column is None:
+            continue
+        if _is_nested_column(column) and column not in table.schema.names:
+            parts = column.split(".")
+            array = table[parts[0]]
+            for part in parts[1:]:
+                array = pc.struct_field(array, part)
+            fields.append(pa.field(_leaf_column_name(column), array.type))
+            arrays.append(array)
+        else:
+            arrays.append(table[column])
+            fields.append(table.schema.field(column))
+    return pa.Table.from_arrays(arrays, schema=pa.schema(fields))
 
 
 class Engine:
