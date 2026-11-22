@@ -47,25 +47,30 @@ def read_sql_query(
         ``npartitions`` or ``bytes_per_chunk``; otherwise must supply explicit
         ``divisions``.
     divisions: sequence
-        Values of the index column to split the table by. If given, this will
-        override ``npartitions`` and ``bytes_per_chunk``. The divisions are the value
-        boundaries of the index column used to define the partitions. For
-        example, ``divisions=list('acegikmoqsuwz')`` could be used to partition
-        a string column lexicographically into 12 partitions, with the implicit
-        assumption that each partition contains similar numbers of records.
+        Explicit partition boundaries for the index column. Cannot be specified
+        together with ``npartitions``; providing both raises a ``TypeError``.
+        For example, ``divisions=list('acegikmoqsuwz')`` could be used to
+        partition a string column lexicographically into 12 partitions, with the
+        implicit assumption that each partition contains similar numbers of records.
     npartitions : int
         Number of partitions, if ``divisions`` is not given. Will split the values
         of the index column linearly between ``limits``, if given, or the column
         max/min. The index column must be numeric or time for this to work
     limits: 2-tuple or None
-        Manually give upper and lower range of values for use with ``npartitions``;
-        if None, first fetches max/min from the DB. Upper limit, if
-        given, is inclusive.
+        Lower and upper index bounds used to generate partition boundaries when
+        ``divisions`` is not provided. If omitted, the bounds are inferred from
+        the minimum and maximum index values; explicit ``divisions`` bypasses
+        this inference.
+        Upper limit, if given, is inclusive.
     bytes_per_chunk : str or int
-        If both ``divisions`` and ``npartitions`` is None, this is the target size of
-        each partition, in bytes
+        Target partition size used to estimate ``npartitions`` from sampled
+        memory usage per row and the count of non-null index values when
+        neither ``divisions`` nor ``npartitions`` is provided. This is not a
+        strict upper bound on partition size.
     head_rows : int
-        How many rows to load for inferring the data-types, and memory per row
+        How many rows to load for inferring the data-types, and memory per row.
+        Disabling row sampling requires ``meta`` and either ``divisions`` or
+        ``npartitions`` to be provided.
     meta : empty DataFrame or None
         If provided, do not attempt to infer dtypes, but use these, coercing
         all chunks on load
@@ -232,25 +237,30 @@ def read_sql_table(
         Pass this to sqlalchemy to select which DB schema to use within the
         URI connection
     divisions: sequence
-        Values of the index column to split the table by. If given, this will
-        override ``npartitions`` and ``bytes_per_chunk``. The divisions are the value
-        boundaries of the index column used to define the partitions. For
-        example, ``divisions=list('acegikmoqsuwz')`` could be used to partition
-        a string column lexicographically into 12 partitions, with the implicit
-        assumption that each partition contains similar numbers of records.
+        Explicit partition boundaries for the index column. Cannot be specified
+        together with ``npartitions``; providing both raises a ``TypeError``.
+        For example, ``divisions=list('acegikmoqsuwz')`` could be used to
+        partition a string column lexicographically into 12 partitions, with the
+        implicit assumption that each partition contains similar numbers of records.
     npartitions : int
         Number of partitions, if ``divisions`` is not given. Will split the values
         of the index column linearly between ``limits``, if given, or the column
         max/min. The index column must be numeric or time for this to work
     limits: 2-tuple or None
-        Manually give upper and lower range of values for use with ``npartitions``;
-        if None, first fetches max/min from the DB. Upper limit, if
-        given, is inclusive.
+        Lower and upper index bounds used to generate partition boundaries when
+        ``divisions`` is not provided. If omitted, the bounds are inferred from
+        the minimum and maximum index values; explicit ``divisions`` bypasses
+        this inference.
+        Upper limit, if given, is inclusive.
     bytes_per_chunk : str or int
-        If both ``divisions`` and ``npartitions`` is None, this is the target size of
-        each partition, in bytes
+        Target partition size used to estimate ``npartitions`` from sampled
+        memory usage per row and the count of non-null index values when
+        neither ``divisions`` nor ``npartitions`` is provided. This is not a
+        strict upper bound on partition size.
     head_rows : int
-        How many rows to load for inferring the data-types, and memory per row
+        How many rows to load for inferring the data-types, and memory per row.
+        Disabling row sampling requires ``meta`` and either ``divisions`` or
+        ``npartitions`` to be provided.
     meta : empty DataFrame or None
         If provided, do not attempt to infer dtypes, but use these, coercing
         all chunks on load
