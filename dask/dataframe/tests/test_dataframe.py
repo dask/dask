@@ -1652,7 +1652,8 @@ def test_assign_transformed_index(as_callable: bool) -> None:
 
     assert result.divisions == ddf.divisions
     assert_eq(result, expected)
-    assert_eq(result.loc["bb":"cc"], expected.loc["bb":"cc"])
+    label_slice = slice("bb", "cc")
+    assert_eq(result.loc[label_slice], expected.loc[label_slice])
 
 
 def test_assign_callable():
