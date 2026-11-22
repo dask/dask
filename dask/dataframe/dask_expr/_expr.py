@@ -586,11 +586,13 @@ class Blockwise(Expr):
         return dep.npartitions == 1 and dep.ndim < self.ndim
 
     def _divisions(self):
+        return self._matching_divisions(self.dependencies())
+
+    def _matching_divisions(self, dependencies: list[Expr]) -> tuple[AnyType, ...]:
         # This is an issue.  In normal Dask we re-divide everything in a step
         # which combines divisions and graph.
         # We either have to create a new Align layer (ok) or combine divisions
         # and graph into a single operation.
-        dependencies = self.dependencies()
         for arg in dependencies:
             if not self._broadcast_dep(arg):
                 assert arg.divisions == dependencies[0].divisions, (
@@ -2015,6 +2017,15 @@ class Assign(Elemwise):
 
     _parameters: ClassVar[list[str]] = ["frame"]
     operation = staticmethod(assign)
+
+    def _divisions(self) -> tuple[AnyType, ...]:
+        # Index values are assigned by position within corresponding partitions.
+        dependencies = [
+            dep
+            for dep in self.dependencies()
+            if not is_index_like(dep._meta) or dep.npartitions != self.frame.npartitions
+        ]
+        return self._matching_divisions(dependencies)
 
     @functools.cached_property
     def unique_partition_mapping_columns_from_shuffle(self):

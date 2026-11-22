@@ -1638,6 +1638,23 @@ def test_assign():
     assert_eq(df, ddf)
 
 
+@pytest.mark.parametrize("as_callable", [False, True])
+def test_assign_transformed_index(as_callable: bool) -> None:
+    pdf = pd.DataFrame({"a": range(6)}, index=["aa", "aa", "bb", "bb", "cc", "cc"])
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    expected = pdf.assign(b=pdf.index.str.slice(0, 1))
+
+    def transform_index(frame: dd.DataFrame) -> dd.Index:
+        return frame.index.str.slice(0, 1)
+
+    value = transform_index if as_callable else transform_index(ddf)
+    result = ddf.assign(b=value)
+
+    assert result.divisions == ddf.divisions
+    assert_eq(result, expected)
+    assert_eq(result.loc["bb":"cc"], expected.loc["bb":"cc"])
+
+
 def test_assign_callable():
     df = dd.from_pandas(pd.DataFrame({"A": range(10)}), npartitions=2)
     a = df.assign(B=df.A.shift())
