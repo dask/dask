@@ -259,7 +259,7 @@ def rot90(m, k=1, axes=(0, 1)):
     if k == 2:
         return flip(flip(m, axes[0]), axes[1])
 
-    axes_list = list(range(0, m.ndim))
+    axes_list = list(range(m.ndim))
     axes_list[axes[0]], axes_list[axes[1]] = (axes_list[axes[1]], axes_list[axes[0]])
 
     if k == 1:
@@ -302,7 +302,7 @@ def tensordot(lhs, rhs, axes=2):
         left_axes, right_axes = axes
     else:
         left_axes = tuple(range(lhs.ndim - axes, lhs.ndim))
-        right_axes = tuple(range(0, axes))
+        right_axes = tuple(range(axes))
     if isinstance(left_axes, Integral):
         left_axes = (left_axes,)
     if isinstance(right_axes, Integral):
