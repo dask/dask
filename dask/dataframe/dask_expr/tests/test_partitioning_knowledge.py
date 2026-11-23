@@ -46,6 +46,26 @@ def test_groupby_avoid_shuffle():
     assert_eq(q, expected, check_index=False)
 
 
+def test_reduction_shuffles_when_split_by_differs_from_partitioning():
+    pdf1 = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4] * 3,
+            "b": [1, 1, 2, 2] * 3,
+            "c": range(12),
+        }
+    )
+    pdf2 = pd.DataFrame({"a": [1, 2, 3, 4], "d": [10, 20, 30, 40]})
+
+    df1 = from_pandas(pdf1, npartitions=4)
+    df2 = from_pandas(pdf2, npartitions=2)
+    q = df1.merge(df2).drop_duplicates(subset=["b"])
+
+    assert q.expr.need_to_shuffle
+    result = q["b"]
+    expected = pdf1.merge(pdf2).drop_duplicates(subset=["b"])["b"]
+    assert_eq(result, expected, check_index=False)
+
+
 @pytest.mark.parametrize(
     "func",
     [
