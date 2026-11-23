@@ -344,6 +344,26 @@ def test_matmul(x_shape, y_shape, x_chunks, y_chunks):
             assert_eq(expected, da.matmul(d1, d2))
 
 
+@pytest.mark.parametrize(
+    "left_shape, right_shape", [((1,), (3,)), ((4, 1), (3, 2)), ((2, 4), (1,))]
+)
+def test_matmul_mismatched_core_dimensions(
+    left_shape: tuple[int, ...], right_shape: tuple[int, ...]
+) -> None:
+    a = da.ones(left_shape)
+    b = da.ones(right_shape)
+
+    with pytest.raises(ValueError, match="core dimension"):
+        da.matmul(a, b)
+
+
+def test_matmul_unknown_core_dimension() -> None:
+    a = da.from_array(np.array([-1, 2, 3], dtype=np.int64))
+    filtered = a[a > 0]
+
+    assert_eq(da.matmul(filtered, filtered), np.int64(13))
+
+
 def test_tensordot():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 4))
