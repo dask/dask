@@ -740,9 +740,7 @@ class ArrowDatasetEngine(Engine):
                 for row_group in row_groups:
                     column = row_group.column(index_col_i)
                     if column.statistics:
-                        if old_end is None:
-                            old_end = column.statistics.max
-                        elif column.statistics.max > old_end:
+                        if old_end is None or column.statistics.max > old_end:
                             old_end = column.statistics.max
                         else:
                             # Existing column on disk isn't sorted, set

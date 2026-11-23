@@ -2157,9 +2157,9 @@ class Filter(Blockwise):
                 # We can't push Projections through filters if the preceding operation
                 # allows us to push filters further down the graph because Projections
                 # block filter pushdown
-                if not isinstance(self.frame, (FilterAlign, Filter)):
-                    return
-                elif is_filter_pushdown_available(
+                if not isinstance(
+                    self.frame, (FilterAlign, Filter)
+                ) or is_filter_pushdown_available(
                     self.frame, self, dependents, allow_reduction=False
                 ):
                     return
