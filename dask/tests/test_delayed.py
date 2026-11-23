@@ -70,8 +70,7 @@ def test_to_task_dask():
     assert dict(dask) == merge(a.dask, b.dask)
 
     # Issue https://github.com/dask/dask/issues/2107
-    class MyClass(dict):
-        pass
+    MyClass = type("MyClass", (dict,), {})
 
     task, dask = to_task_dask(MyClass())
     assert type(task) is MyClass
@@ -736,13 +735,15 @@ def test_finalize_name():
     v = delayed([x])
     assert set(x.dask).issubset(v.dask)
 
-    def key(s):
-        if isinstance(s, tuple):
-            s = s[0]
+    def is_valid_key(s):
         # Ignore _ in 'ones_like'
-        return s.split("-")[0].replace("_", "")
+        return s.split("-")[0].replace("_", "").isalpha()
 
-    assert all(key(k).isalpha() for k in v.dask)
+    tuple_keys = map(lambda k: k[0], x.dask)
+    string_keys = set(v.dask) - set(x.dask)
+
+    assert all(map(is_valid_key, tuple_keys))
+    assert all(map(is_valid_key, string_keys))
 
 
 def test_keys_from_array():

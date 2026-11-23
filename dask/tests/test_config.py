@@ -376,9 +376,12 @@ def test_set_nested():
 def test_set_hard_to_copyables():
     import threading
 
-    with dask.config.set(x=threading.Lock()):
+    lock = threading.Lock()
+
+    with dask.config.set(x=lock):
         with dask.config.set(y=1):
-            pass
+            assert dask.config.get("x") is lock
+            assert dask.config.get("y") == 1
 
 
 @pytest.mark.parametrize("mkdir", [True, False])
@@ -398,22 +401,19 @@ def test_ensure_file_directory(mkdir, tmp_path):
     assert (dest / "source.yaml").exists()
 
 
-def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmp_path):
+def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmp_path, monkeypatch):
     a = {"x": 1, "y": {"a": 1}}
     source = tmp_path / "source.yaml"
     source.write_text(yaml.dump(a))
-
+ 
     destination = tmp_path / "dask"
-    PATH = dask.config.PATH
-    try:
-        dask.config.PATH = destination
-        ensure_file(source=source)
-    finally:
-        dask.config.PATH = PATH
-
+    monkeypatch.setattr(dask.config, "PATH", destination)
+ 
+    ensure_file(source=source)
+ 
     assert destination.is_dir()
-    [fn] = os.listdir(destination)
-    assert os.path.split(fn)[1] == os.path.split(source)[1]
+    assert os.listdir(destination) == [source.name]
+
 
 
 def test_pop():

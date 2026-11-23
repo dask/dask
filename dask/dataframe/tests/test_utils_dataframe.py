@@ -283,74 +283,67 @@ def test_meta_nonempty_empty_categories():
         assert res.name == s.name
 
 
-def test_meta_nonempty_index():
-    idx = pd.RangeIndex(1, name="foo")
-    res = meta_nonempty(idx)
-    assert type(res) is pd.RangeIndex
-    assert res.name == idx.name
-
-    idx = pd.Index([1], name="foo", dtype="int")
+@pytest.mark.parametrize(
+    "idx,expected_attrs",
+    [
+        (pd.RangeIndex(1, name="foo"), ("name",)),
+        (pd.Index([1], name="foo", dtype="int"), ("dtype", "name")),
+        (pd.Index(["a"], name="foo"), ("name",)),
+        (
+            pd.DatetimeIndex(
+                ["1970-01-01"], freq="D", tz="America/New_York", name="foo"
+            ),
+            ("tz", "freq", "name"),
+        ),
+        (pd.PeriodIndex(["1970-01-01"], freq="D", name="foo"), ("freq", "name")),
+        (
+            pd.TimedeltaIndex([pd.Timedelta(1, "D")], freq="D", name="foo"),
+            ("freq", "name"),
+        ),
+        (
+            pd.CategoricalIndex(["xyx"], ["xyx", "zzz"], ordered=True, name="foo"),
+            ("ordered", "name"),
+        ),
+        (
+            pd.CategoricalIndex([], [UNKNOWN_CATEGORIES], ordered=True, name="foo"),
+            ("ordered", "name"),
+        ),
+    ],
+)
+def test_meta_nonempty_index(idx, expected_attrs):
     res = meta_nonempty(idx)
     assert type(res) is type(idx)
-    assert res.dtype == np.int_
-    assert res.name == idx.name
+    for attr in expected_attrs:
+        assert getattr(res, attr) == getattr(idx, attr)
 
-    idx = pd.Index(["a"], name="foo")
-    res = meta_nonempty(idx)
-    assert type(res) is pd.Index
-    assert res.name == idx.name
 
-    idx = pd.DatetimeIndex(["1970-01-01"], freq="D", tz="America/New_York", name="foo")
-    res = meta_nonempty(idx)
-    assert type(res) is pd.DatetimeIndex
-    assert res.tz == idx.tz
-    assert res.freq == idx.freq
-    assert res.name == idx.name
-
-    idx = pd.PeriodIndex(["1970-01-01"], freq="D", name="foo")
-    res = meta_nonempty(idx)
-    assert type(res) is pd.PeriodIndex
-    assert res.freq == idx.freq
-    assert res.name == idx.name
-
-    idx = pd.TimedeltaIndex([pd.Timedelta(1, "D")], freq="D", name="foo")
-    res = meta_nonempty(idx)
-    assert type(res) is pd.TimedeltaIndex
-    assert res.freq == idx.freq
-    assert res.name == idx.name
-
+def test_meta_nonempty_categorical_index_categories():
     idx = pd.CategoricalIndex(["xyx"], ["xyx", "zzz"], ordered=True, name="foo")
     res = meta_nonempty(idx)
-    assert type(res) is pd.CategoricalIndex
     assert (res.categories == idx.categories).all()
-    assert res.ordered == idx.ordered
-    assert res.name == idx.name
 
-    idx = pd.CategoricalIndex([], [UNKNOWN_CATEGORIES], ordered=True, name="foo")
-    res = meta_nonempty(idx)
-    assert type(res) is pd.CategoricalIndex
-    assert res.ordered == idx.ordered
-    assert res.name == idx.name
 
-    levels = [pd.Index([1], name="a"), pd.Index([1.0], name="b")]
-    codes = [[0], [0]]
-    idx = pd.MultiIndex(levels=levels, names=["a", "b"], codes=codes)
-    res = meta_nonempty(idx)
-    assert type(res) is pd.MultiIndex
-    for idx1, idx2 in zip(idx.levels, res.levels):
-        assert type(idx1) is type(idx2)
-        assert idx1.name == idx2.name
-    assert res.names == idx.names
-
-    levels = [
-        pd.Index([1], name="a"),
-        pd.CategoricalIndex(data=["xyx"], categories=["xyx"], name="b"),
-        pd.TimedeltaIndex([np.timedelta64(1, "D")], name="timedelta"),
-    ]
-
-    codes = [[0], [0], [0]]
-
-    idx = pd.MultiIndex(levels=levels, names=["a", "b", "timedelta"], codes=codes)
+@pytest.mark.parametrize(
+    "levels,codes,names",
+    [
+        (
+            [pd.Index([1], name="a"), pd.Index([1.0], name="b")],
+            [[0], [0]],
+            ["a", "b"],
+        ),
+        (
+            [
+                pd.Index([1], name="a"),
+                pd.CategoricalIndex(data=["xyx"], categories=["xyx"], name="b"),
+                pd.TimedeltaIndex([np.timedelta64(1, "D")], name="timedelta"),
+            ],
+            [[0], [0], [0]],
+            ["a", "b", "timedelta"],
+        ),
+    ],
+)
+def test_meta_nonempty_multiindex(levels, codes, names):
+    idx = pd.MultiIndex(levels=levels, names=names, codes=codes)
     res = meta_nonempty(idx)
     assert type(res) is pd.MultiIndex
     for idx1, idx2 in zip(idx.levels, res.levels):

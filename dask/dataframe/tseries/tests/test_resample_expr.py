@@ -28,45 +28,44 @@ def pdf():
 def df(pdf):
     yield from_pandas(pdf, npartitions=4)
 
+_RESAMPLE_SERIES_APIS = [
+    "count",
+    "prod",
+    "mean",
+    "sum",
+    "min",
+    "max",
+    "first",
+    "last",
+    "var",
+    "std",
+    "nunique",
+    "median",
+    "quantile",
+    "sem",
+]
 
 @pytest.mark.parametrize("kwargs", [{}, {"closed": "left"}])
-@pytest.mark.parametrize(
-    "api",
-    [
-        "count",
-        "prod",
-        "mean",
-        "sum",
-        "min",
-        "max",
-        "first",
-        "last",
-        "var",
-        "std",
-        "size",
-        "nunique",
-        "median",
-        "quantile",
-        "ohlc",
-        "sem",
-    ],
-)
+@pytest.mark.parametrize("api", [*_RESAMPLE_SERIES_APIS, "size", "ohlc"])
 def test_resample_apis(df, pdf, api, kwargs):
     result = getattr(df.resample("2min", **kwargs), api)()
     expected = getattr(pdf.resample("2min", **kwargs), api)()
     assert_eq(result, expected)
 
-    # No column output
-    if api != "size":
-        result = getattr(df.resample("2min"), api)()["foo"]
-        expected = getattr(pdf.resample("2min"), api)()["foo"]
-        assert_eq(result, expected)
 
-        if api != "ohlc":
-            # ohlc actually gives back a DataFrame, so this doesn't work
-            q = result.simplify()
-            eq = getattr(df["foo"].resample("2min"), api)().simplify()
-            assert q._name == eq._name
+@pytest.mark.parametrize("api", [*_RESAMPLE_SERIES_APIS, "ohlc"])
+def test_resample_apis_column_selection(df, pdf, api):
+    result = getattr(df.resample("2min"), api)()["foo"]
+    expected = getattr(pdf.resample("2min"), api)()["foo"]
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("api", _RESAMPLE_SERIES_APIS)
+def test_resample_apis_simplify(df, api):
+    result = getattr(df.resample("2min"), api)()["foo"]
+    q = result.simplify()
+    eq = getattr(df["foo"].resample("2min"), api)().simplify()
+    assert q._name == eq._name
 
 
 @pytest.mark.parametrize(

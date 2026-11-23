@@ -482,30 +482,23 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
 
 
 @pytest.mark.parametrize(
-    "io",
+    "io,extra_args",
     [
-        "ones",
-        "zeros",
-        "full",
+        ("ones", ()),
+        ("zeros", ()),
+        ("full", (10,)),
     ],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
-def test_blockwise_array_creation(c, io, fuse):
+def test_blockwise_array_creation(c, io, extra_args, fuse):
     np = pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
 
     chunks = (5, 2)
     shape = (10, 4)
 
-    if io == "ones":
-        darr = da.ones(shape, chunks=chunks)
-        narr = np.ones(shape)
-    elif io == "zeros":
-        darr = da.zeros(shape, chunks=chunks)
-        narr = np.zeros(shape)
-    elif io == "full":
-        darr = da.full(shape, 10, chunks=chunks)
-        narr = np.full(shape, 10)
+    darr = getattr(da, io)(shape, *extra_args, chunks=chunks)
+    narr = getattr(np, io)(shape, *extra_args)
 
     darr += 2
     narr += 2
@@ -965,43 +958,39 @@ def test_write_single_hdf(c, lock_param):
         ddf.to_hdf(str(f), key="/ds_*", lock=lock_param)
 
 
+def _assert_client_scheduler(s_address, set_as_default, expected_scheduler):
+    client = Client(s_address, set_as_default=set_as_default)
+    try:
+        expected = client.get if expected_scheduler == "client" else expected_scheduler
+        assert dask.base.get_scheduler() == expected
+    finally:
+        client.close()
+
+
 def test_get_scheduler_default_client_config_interleaving(s):
-    # This test is using context managers intentionally. We should not refactor
-    # this to use it in more places to make the client closing cleaner.
     s_address = s["address"]
     with dask.config.set(scheduler="sync"):
         assert dask.base.get_scheduler() == dask.local.get_sync
         with dask.config.set(scheduler="threads"):
             assert dask.base.get_scheduler() == dask.threaded.get
-            client = Client(s_address, set_as_default=False)
-            try:
-                assert dask.base.get_scheduler() == dask.threaded.get
-            finally:
-                client.close()
-
-            client = Client(s_address, set_as_default=True)
-            try:
-                assert dask.base.get_scheduler() == client.get
-            finally:
-                client.close()
+            _assert_client_scheduler(s_address, False, dask.threaded.get)
+            _assert_client_scheduler(s_address, True, "client")
             assert dask.base.get_scheduler() == dask.threaded.get
-
-            # FIXME: As soon as async with uses as_current this will be true as well
-            # async with Client(s_address, set_as_default=False, asynchronous=True) as c:
-            #     assert dask.base.get_scheduler() == c.get
-            # assert dask.base.get_scheduler() == dask.threaded.get
 
             client = Client(s_address, set_as_default=False)
             try:
                 assert dask.base.get_scheduler() == dask.threaded.get
                 with client.as_current():
-                    sc = dask.base.get_scheduler()
-                    assert sc == client.get
+                    assert dask.base.get_scheduler() == client.get
                 assert dask.base.get_scheduler() == dask.threaded.get
             finally:
                 client.close()
 
-            # If it comes to a race between default and current, current wins
+
+def test_get_scheduler_client_race_and_config_override(s):
+    s_address = s["address"]
+    with dask.config.set(scheduler="sync"):
+        with dask.config.set(scheduler="threads"):
             client = Client(s_address, set_as_default=True)
             client2 = Client(s_address, set_as_default=False)
             try:
@@ -1011,7 +1000,6 @@ def test_get_scheduler_default_client_config_interleaving(s):
             finally:
                 client.close()
                 client2.close()
-
             assert dask.base.get_scheduler() == dask.threaded.get
 
         assert dask.base.get_scheduler() == dask.local.get_sync

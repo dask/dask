@@ -62,6 +62,10 @@ _BASE_UFUNCS = [
 ]
 
 
+def _expected_ufunc_type(npfunc, dask_cls, pandas_cls):
+    return dask_cls if isinstance(npfunc, np.ufunc) else pandas_cls
+
+
 @pytest.mark.parametrize(
     "pandas_input",
     [
@@ -97,29 +101,46 @@ def test_ufunc(pandas_input, ufunc):
     pandas_type = pandas_input.__class__
     dask_type = dask_input.__class__
 
-    # applying Dask ufunc doesn't trigger computation
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
-        # Some cause warnings (arcsine)
         assert isinstance(dafunc(dask_input), dask_type)
         assert_eq(dafunc(dask_input), npfunc(pandas_input))
 
-        # applying NumPy ufunc is lazy
-        if isinstance(npfunc, np.ufunc):
-            assert isinstance(npfunc(dask_input), dask_type)
-        else:
-            assert isinstance(npfunc(dask_input), pandas_type)
+        expected_type = _expected_ufunc_type(npfunc, dask_type, pandas_type)
+        assert isinstance(npfunc(dask_input), expected_type)
         assert_eq(npfunc(dask_input), npfunc(pandas_input))
 
-        # applying Dask ufunc to normal Series triggers computation
         assert isinstance(dafunc(pandas_input), pandas_type)
         assert_eq(dafunc(dask_input), npfunc(pandas_input))
 
-    # Index
-    if pandas_input.index.dtype.name in ["object", "str"]:
-        return
-    if ufunc in ("logical_not", "signbit", "isnan", "isinf", "isfinite"):
-        return
+
+_INDEX_UFUNCS = [
+    u
+    for u in _BASE_UFUNCS
+    if u not in ("logical_not", "signbit", "isnan", "isinf", "isfinite")
+]
+
+
+@pytest.mark.parametrize(
+    "pandas_input",
+    [
+        pd.Series(np.random.randint(1, 100, size=20)),
+        pd.Series(np.abs(np.random.randn(100))),
+        pd.DataFrame(
+            {
+                "A": np.random.randint(1, 100, size=20),
+                "B": np.random.randint(1, 100, size=20),
+                "C": np.abs(np.random.randn(20)),
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize("ufunc", _INDEX_UFUNCS)
+def test_ufunc_index(pandas_input, ufunc):
+    dafunc = getattr(da, ufunc)
+    npfunc = getattr(np, ufunc)
+    dask_input = dd.from_pandas(pandas_input, 3)
+    check_divs = ufunc != "spacing"
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
@@ -127,25 +148,17 @@ def test_ufunc(pandas_input, ufunc):
         assert_eq(
             dafunc(dask_input.index),
             npfunc(pandas_input.index),
-            check_divisions=ufunc != "spacing",
+            check_divisions=check_divs,
         )
 
-        # applying NumPy ufunc is lazy
-        if isinstance(npfunc, np.ufunc):
-            assert isinstance(npfunc(dask_input.index), dd.Index)
-        else:
-            assert isinstance(npfunc(dask_input.index), pd.Index)
-
+        expected_type = _expected_ufunc_type(npfunc, dd.Index, pd.Index)
+        assert isinstance(npfunc(dask_input.index), expected_type)
         assert_eq(
             npfunc(dask_input.index),
             npfunc(dask_input.index),
-            check_divisions=ufunc != "spacing",
+            check_divisions=check_divs,
         )
 
-    # applying Dask ufunc to normal Series triggers computation
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        # some (da.log) cause warnings
         assert isinstance(dafunc(pandas_input.index), pd.Index)
         assert_eq(dafunc(pandas_input), npfunc(pandas_input))
 

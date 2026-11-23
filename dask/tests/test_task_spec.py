@@ -858,53 +858,72 @@ def test_fused_dont_hold_in_memory_too_long():
     assert OnlyTwice.total == 10
 
 
-def test_linear_fusion():
-    tasks = [
-        io := Task("foo", func, 1),
-        second := Task("second", func, io.ref()),
-        Task("third", func, second.ref()),
-    ]
+def fuse(tasks, keys):
     dsk = {t.key: t for t in tasks}
-    result = fuse_linear_task_spec(dsk, {"third"})
+    return fuse_linear_task_spec(dsk, keys)
+ 
+ 
+def assert_is_fused_subgraph(task):
+    assert isinstance(task, Task)
+    assert funcname(task.func) == "_execute_subgraph"
+ 
+ 
+@pytest.fixture
+def task_chain():
+    """foo -> second -> third, todos Task."""
+    foo = Task("foo", func, 1)
+    second = Task("second", func, foo.ref())
+    third = Task("third", func, second.ref())
+    return [foo, second, third]
+ 
+ 
+@pytest.fixture
+def datanode_chain():
+    """foo (DataNode) -> second -> third -> fourth."""
+    foo = DataNode("foo", 1)
+    second = Task("second", func, foo.ref())
+    third = Task("third", func, second.ref())
+    fourth = Task("fourth", func, third.ref())
+    return {"foo": foo, "second": second, "third": third, "fourth": fourth}
+ 
+ 
+def test_linear_chain_is_fused_into_single_subgraph(task_chain):
+    result = fuse(task_chain, {"third"})
+ 
     assert len(result) == 2
     assert isinstance(result["third"], Alias)
-    assert (
-        isinstance(result["foo-second-third"], Task)
-        and funcname(result["foo-second-third"].func) == "_execute_subgraph"
-    )
-
-    # Data Nodes don't get fused
-
-    tasks = [
-        io := DataNode("foo", 1),
-        second := Task("second", func, io.ref()),
-        third := Task("third", func, second.ref()),
-        Task("fourth", func, third.ref()),
-    ]
-    dsk = {t.key: t for t in tasks}
-    result = fuse_linear_task_spec(dsk, {"fourth"})
+    assert_is_fused_subgraph(result["foo-second-third"])
+ 
+ 
+def test_data_nodes_are_not_fused(datanode_chain):
+    result = fuse(datanode_chain.values(), {"fourth"})
+ 
     assert len(result) == 2
     assert isinstance(result["fourth"], Alias)
-    assert (
-        isinstance(result["foo-second-third-fourth"], Task)
-        and funcname(result["foo-second-third-fourth"].func) == "_execute_subgraph"
-    )
+    assert_is_fused_subgraph(result["foo-second-third-fourth"])
     assert "foo" not in result
-
-    # Branch, so no fusion
-    tasks.append(Task("branch", func, third.ref()))
-    dsk = {t.key: t for t in tasks}
-    result = fuse_linear_task_spec(dsk, {"fourth"})
+ 
+ 
+def test_branch_after_third_stops_fusion_at_branch_point(datanode_chain):
+    branch = Task("branch", func, datanode_chain["third"].ref())
+ 
+    result = fuse([*datanode_chain.values(), branch], {"fourth"})
+ 
     assert len(result) == 4
     assert "foo-second-third" in result
     assert isinstance(result["third"], Alias)
-
-    # Branch, so no fusion at all
-    tasks.append(Task("branch2", func, second.ref()))
-    dsk = {t.key: t for t in tasks}
-    result = fuse_linear_task_spec(dsk, {"fourth"})
+ 
+ 
+def test_branches_after_second_and_third_prevent_any_fusion(datanode_chain):
+    extra = [
+        Task("branch", func, datanode_chain["third"].ref()),
+        Task("branch2", func, datanode_chain["second"].ref()),
+    ]
+ 
+    result = fuse([*datanode_chain.values(), *extra], {"fourth"})
+ 
     assert len(result) == 6
-    assert not any("-" in k for k in dsk)
+    assert not any("-" in key for key in result)
 
 
 def test_linear_fusion_intermediate_branch():
@@ -967,68 +986,104 @@ def test_nested_containers():
     assert t({"b": "b"}) == ["a-b", "c-d"]
 
 
-def test_dict_class():
-    t = Dict(k=Task("key-1", func, "a", "b"), v=Task("key-2", func, "c", "d"))
-    assert not t.dependencies
-    assert t() == {"k": "a-b", "v": "c-d"}
-    t2 = Dict({"k": Task("key-1", func, "a", "b"), "v": Task("key-2", func, "c", "d")})
-    assert t == t2
-    assert t() == t2()
+@pytest.fixture
+def simple_dict():
+    return Dict(k=Task("key-1", func, "a", "b"), v=Task("key-2", func, "c", "d"))
+ 
+ 
+def test_dict_without_refs_has_no_dependencies(simple_dict):
+    assert not simple_dict.dependencies
+ 
+ 
+def test_dict_call_returns_computed_values(simple_dict):
+    assert simple_dict() == {"k": "a-b", "v": "c-d"}
+ 
+ 
+def test_dict_from_kwargs_equals_dict_from_mapping(simple_dict):
+    from_mapping = Dict(
+        {"k": Task("key-1", func, "a", "b"), "v": Task("key-2", func, "c", "d")}
+    )
+ 
+    assert simple_dict == from_mapping
+    assert simple_dict() == from_mapping()
+ 
+ 
+def test_dict_with_task_ref_exposes_dependencies_and_resolves_them():
     t = Dict(k=Task("key-1", func, "a", TaskRef("b")), v=Task("key-2", func, "c", "d"))
+ 
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == {"k": "a-b", "v": "c-d"}
-
+ 
+ 
+def test_dict_accepts_non_string_hashable_keys():
     t = Dict(
         {
             "k": Task("key-1", func, "a", TaskRef("b")),
-            # Use a hashable key that isn't a string. This cannot be used as
-            # kwargs, for instance
             ("v", 1): Task("key-2", func, "c", "d"),
         }
     )
+ 
     assert t.dependencies == {"b"}
     assert t({"b": "b"}) == {"k": "a-b", ("v", 1): "c-d"}
-
-    t = Dict(
-        k=Task("key-1", func, "a", "b"),
-        v=Task("key-2", func, "c", "d"),
-    )
-    t2 = Dict(
-        v=Task("key-2", func, "c", "d"),
-        k=Task("key-1", func, "a", "b"),
-    )
-    assert t == t2
-    assert tokenize(t) == tokenize(t2)
-
+ 
+ 
+def test_dict_equality_and_token_ignore_kwargs_order():
+    t1 = Dict(k=Task("key-1", func, "a", "b"), v=Task("key-2", func, "c", "d"))
+    t2 = Dict(v=Task("key-2", func, "c", "d"), k=Task("key-1", func, "a", "b"))
+ 
+    assert t1 == t2
+    assert tokenize(t1) == tokenize(t2)
+ 
+ 
+def test_dict_from_list_of_pairs_collects_all_dependencies():
     d = Dict(
         [
             ["k", Task("key-1", func, "a", TaskRef("b"))],
             ["v", Task("key-2", func, TaskRef("c"), "d")],
         ]
     )
-    assert d.dependencies == {"c", "b"}
+ 
+    assert d.dependencies == {"b", "c"}
     assert d({"b": "b", "c": "c"}) == {"k": "a-b", "v": "c-d"}
-
-    d = Dict([("columns", ["a", "b"])])
-    assert d() == {"columns": ["a", "b"]}
-
-    d = Dict([["columns", ["a", "b"]]])
-    assert d() == {"columns": ["a", "b"]}
-    # Can be converted to a dict, e.g. also used as **kwargs
-    assert isinstance(t, Mapping)
-    assert dict(t) == {
+ 
+ 
+@pytest.mark.parametrize(
+    "pairs",
+    [
+        [("columns", ["a", "b"])], 
+        [["columns", ["a", "b"]]],  
+    ],
+    ids=["tuple-pairs", "list-pairs"],
+)
+def test_dict_from_pairs_keeps_plain_list_values(pairs):
+    assert Dict(pairs)() == {"columns": ["a", "b"]}
+ 
+ 
+def test_dict_is_a_mapping(simple_dict):
+    assert isinstance(simple_dict, Mapping)
+ 
+ 
+def test_dict_can_be_converted_to_builtin_dict(simple_dict):
+    assert dict(simple_dict) == {
         "k": Task("key-1", func, "a", "b"),
         "v": Task("key-2", func, "c", "d"),
     }
-    assert len(t) == len(dict(t)) == 2
-
+ 
+ 
+def test_dict_len(simple_dict):
+    assert len(simple_dict) == 2
+ 
+ 
+def test_dict_can_be_unpacked_as_kwargs(simple_dict):
     def as_kwargs(**kwargs):
-        return kwargs == {
-            "k": Task("key-1", func, "a", "b"),
-            "v": Task("key-2", func, "c", "d"),
-        }
+        return kwargs
+ 
+    assert as_kwargs(**simple_dict) == {
+        "k": Task("key-1", func, "a", "b"),
+        "v": Task("key-2", func, "c", "d"),
+    }
+ 
 
-    assert as_kwargs(**t)
 
 
 def test_block_io_fusion():

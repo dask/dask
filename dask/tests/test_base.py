@@ -103,60 +103,68 @@ def test_is_dask_collection_dask_expr_does_not_materialize():
     assert is_dask_collection(coll)
 
 
-def test_unpack_collections():
-    @dataclasses.dataclass
-    class ADataClass:
-        a: int  # type: ignore[annotation-unchecked]
+@dataclasses.dataclass
+class ADataClass:
+    a: int  # type: ignore[annotation-unchecked]
 
-    class ANamedTuple(NamedTuple):
-        a: int  # type: ignore[annotation-unchecked]
+class ANamedTuple(NamedTuple):
+    a: int  # type: ignore[annotation-unchecked]
 
+
+def _build_test_structure(a, b, c, iterator):
+    return (
+        a,
+        b,
+        {
+            "a": a,
+            a: b,
+            "b": [1, 2, [b]],
+            "c": 10,
+            "d": (c, 2),
+            "e": {a, 2, 3},
+            "f": OrderedDict([("a", a)]),
+            "g": ADataClass(a=a),
+            "h": (ADataClass, a),
+            "i": ANamedTuple(a=a),
+        },
+        iterator,
+    )
+
+
+def test_unpack_collections_standard():
     a = delayed(1) + 5
     b = a + 1
     c = a + 2
-
-    def build(a, b, c, iterator):
-        t = (
-            a,
-            b,  # Top-level collections
-            {
-                "a": a,  # dict
-                a: b,  # collections as keys
-                "b": [1, 2, [b]],  # list
-                "c": 10,  # other builtins pass through unchanged
-                "d": (c, 2),  # tuple
-                "e": {a, 2, 3},  # set
-                "f": OrderedDict([("a", a)]),
-                "g": ADataClass(a=a),  # dataclass instance
-                "h": (ADataClass, a),  # dataclass constructor
-                "i": ANamedTuple(a=a),  # namedtuple instance
-            },  # OrderedDict
-            iterator,
-        )  # Iterator
-
-        return t
-
-    args = build(a, b, c, (i for i in [a, b, c]))
+    args = _build_test_structure(a, b, c, (i for i in [a, b, c]))
 
     collections, repack = unpack_collections(*args)
     assert len(collections) == 3
 
-    # Replace collections with `'~a'` strings
     result = repack(["~a", "~b", "~c"])
-    sol = build("~a", "~b", "~c", ["~a", "~b", "~c"])
+    sol = _build_test_structure("~a", "~b", "~c", ["~a", "~b", "~c"])
     assert result == sol
 
-    # traverse=False
+
+def test_unpack_collections_no_traverse():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+    args = _build_test_structure(a, b, c, (i for i in [a, b, c]))
+
     collections, repack = unpack_collections(*args, traverse=False)
     assert len(collections) == 2  # just a and b
     assert repack(collections) == args
 
-    # No collections
+
+def test_unpack_collections_empty():
     collections, repack = unpack_collections(1, 2, {"a": 3})
     assert not collections
     assert repack(collections) == (1, 2, {"a": 3})
 
-    # Result that looks like a task
+
+def test_unpack_collections_task_literals():
+    a = delayed(1) + 5
+
     def fail(*args):
         raise ValueError("Shouldn't have been called")  # pragma: nocover
 
@@ -927,17 +935,20 @@ def test_callable_scheduler():
     assert called[0]
 
 
+def _hold_worker_slot(duration):
+    deadline = time.perf_counter() + duration
+    while time.perf_counter() < deadline:
+        pass
+
+
 @pytest.mark.flaky(reruns=10, reruns_delay=5)
 @pytest.mark.slow
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_num_workers_config(scheduler):
     # Regression test for issue #4082
-
-    f = delayed(pure=False)(time.sleep)
-    # Be generous with the initial sleep times, as process have been observed
-    # to take >0.5s to spin up
+    f = delayed(pure=False)(_hold_worker_slot)
     num_workers = 3
-    a = [f(1.0) for i in range(num_workers)]
+    a = [f(1.0), f(1.0), f(1.0)]
     with dask.config.set(num_workers=num_workers, chunksize=1), Profiler() as prof:
         compute(*a, scheduler=scheduler)
 

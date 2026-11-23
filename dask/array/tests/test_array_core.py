@@ -2086,58 +2086,66 @@ def test_store_kwargs():
     assert called[0]
 
 
-def test_store_delayed_target():
+@pytest.fixture
+def delayed_targets():
     from dask.delayed import delayed
 
     d = da.ones((4, 4), chunks=(2, 2))
     a, b = d + 1, d + 2
-
-    # empty buffers to be used as targets
     targs = {}
 
     def make_target(key):
-        a = np.empty((4, 4))
-        targs[key] = a
-        return a
+        targs[key] = np.empty((4, 4))
+        return targs[key]
 
-    # delayed calls to these targets
     atd = delayed(make_target)("at")
     btd = delayed(make_target)("bt")
+    return a, b, atd, btd, targs
 
-    # test not keeping result
+
+def test_store_delayed_target(delayed_targets):
+    a, b, atd, btd, targs = delayed_targets
     st = store([a, b], [atd, btd])
 
-    at = targs["at"]
-    bt = targs["bt"]
-
     assert st is None
-    assert_eq(at, a)
-    assert_eq(bt, b)
+    assert_eq(targs["at"], a)
+    assert_eq(targs["bt"], b)
 
-    # test keeping result
-    for st_compute in [False, True]:
-        targs.clear()
-        st = store([a, b], [atd, btd], return_stored=True, compute=st_compute)
-        if st_compute:
-            for arr in st:
-                assert_has_persisted_data(arr)
 
-        st = dask.compute(*st)
+@pytest.mark.parametrize("st_compute", [False, True])
+def test_store_delayed_target_return_stored(delayed_targets, st_compute):
+    a, b, atd, btd, targs = delayed_targets
+    st = store([a, b], [atd, btd], return_stored=True, compute=st_compute)
+    st = dask.compute(*st)
 
-        at = targs["at"]
-        bt = targs["bt"]
+    assert isinstance(st, tuple)
+    assert isinstance(st[0], np.ndarray)
+    assert isinstance(st[1], np.ndarray)
+    assert_eq(targs["at"], a)
+    assert_eq(targs["bt"], b)
+    assert_eq(st[0], a)
+    assert_eq(st[1], b)
 
-        assert st is not None
-        assert isinstance(st, tuple)
-        assert all([isinstance(v, np.ndarray) for v in st])
-        assert_eq(at, a)
-        assert_eq(bt, b)
-        assert_eq(st[0], a)
-        assert_eq(st[1], b)
 
-        pytest.raises(ValueError, lambda at=at, bt=bt: store([a], [at, bt]))
-        pytest.raises(ValueError, lambda at=at: store(at, at))
-        pytest.raises(ValueError, lambda at=at, bt=bt: store([at, bt], [at, bt]))
+def test_store_delayed_target_persisted(delayed_targets):
+    a, b, atd, btd, _ = delayed_targets
+    st = store([a, b], [atd, btd], return_stored=True, compute=True)
+
+    assert_has_persisted_data(st[0])
+    assert_has_persisted_data(st[1])
+
+
+def test_store_delayed_target_invalid_inputs(delayed_targets):
+    a, b, atd, btd, targs = delayed_targets
+    store([a, b], [atd, btd])
+    at, bt = targs["at"], targs["bt"]
+
+    with pytest.raises(ValueError):
+        store([a], [at, bt])
+    with pytest.raises(ValueError):
+        store(at, at)
+    with pytest.raises(ValueError):
+        store([at, bt], [at, bt])
 
 
 def test_store():
@@ -3029,8 +3037,7 @@ def test_from_array_dask_collection_warns():
 
 
 def test_from_array_inline():
-    class MyArray(np.ndarray):
-        pass
+    MyArray = type("MyArray", (np.ndarray,), {})
 
     a = np.array([1, 2, 3]).view(MyArray)
     dsk = dict(da.from_array(a, name="my-array", inline_array=False).dask)
