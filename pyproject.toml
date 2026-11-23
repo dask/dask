@@ -146,7 +146,6 @@ ignore = [
     "TRY004",  # Type check without TypeError (18 findings)
     "SIM114",  # If branches with identical arms (14 findings)
     "SIM118",  # key in dict.keys() instead of key in dict (14 findings)
-    "C419",    # Unnecessary comprehension in call (13 findings)
     "PIE808",  # Unnecessary range() start argument (13 findings)
     "FURB192", # Unnecessary sorted() in min()/max() (11 findings)
 ]

@@ -2129,7 +2129,7 @@ def test_store_delayed_target():
 
         assert st is not None
         assert isinstance(st, tuple)
-        assert all([isinstance(v, np.ndarray) for v in st])
+        assert all(isinstance(v, np.ndarray) for v in st)
         assert_eq(at, a)
         assert_eq(bt, b)
         assert_eq(st[0], a)
@@ -2168,10 +2168,10 @@ def test_store_regions():
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=region, compute=False)
-    assert all([isinstance(a, Array) for a in v])
+    assert all(isinstance(arr, Array) for arr in v)
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
-    assert all([ev.size == 0 for ev in results])
+    assert all(ev.size == 0 for ev in results)
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not (bt == 0).all()
     assert not (at == 2).all() and not (at == 0).all()
@@ -2182,7 +2182,7 @@ def test_store_regions():
     v = store([a, b], [at, bt], regions=[region, region], compute=False)
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
-    assert all([ev.size == 0 for ev in results])
+    assert all(ev.size == 0 for ev in results)
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not (bt == 0).all()
     assert not (at == 2).all() and not (at == 0).all()
@@ -2195,7 +2195,7 @@ def test_store_regions():
             [a, b], [at, bt], regions=region, compute=st_compute, return_stored=True
         )
         assert isinstance(v, tuple)
-        assert all([isinstance(e, da.Array) for e in v])
+        assert all(isinstance(e, da.Array) for e in v)
         if st_compute:
             for arr in v:
                 assert_has_persisted_data(arr)
@@ -2229,7 +2229,7 @@ def test_store_regions():
             return_stored=True,
         )
         assert isinstance(v, tuple)
-        assert all([isinstance(e, da.Array) for e in v])
+        assert all(isinstance(e, da.Array) for e in v)
         if st_compute:
             for arr in v:
                 assert_has_persisted_data(arr)
@@ -2263,7 +2263,7 @@ def test_store_compute_false():
 
     assert (at == 0).all() and (bt == 0).all()
     results = dask.compute(*v)
-    assert all([ev.size == 0 for ev in results])
+    assert all(ev.size == 0 for ev in results)
     assert (at == 2).all() and (bt == 3).all()
 
     at = np.zeros(shape=(4, 4))
