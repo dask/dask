@@ -715,13 +715,11 @@ def test_categorical_known():
 @pytest.mark.parametrize("compression", ["infer", "gzip"])
 def test_compression_multiple_files(compression):
     with tmpdir() as tdir:
-        f = gzip.open(os.path.join(tdir, "a.csv.gz"), "wb")
-        f.write(csv_text.encode())
-        f.close()
+        with gzip.open(os.path.join(tdir, "a.csv.gz"), "wb") as f:
+            f.write(csv_text.encode())
 
-        f = gzip.open(os.path.join(tdir, "b.csv.gz"), "wb")
-        f.write(csv_text.encode())
-        f.close()
+        with gzip.open(os.path.join(tdir, "b.csv.gz"), "wb") as f:
+            f.write(csv_text.encode())
 
         with pytest.warns(UserWarning):
             df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression=compression)

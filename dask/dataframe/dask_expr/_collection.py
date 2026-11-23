@@ -3699,7 +3699,7 @@ class DataFrame(FrameBase):
     @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False, numeric_only=False):
         modes = []
-        for _, col in self.items():
+        for _, col in self.items():  # noqa: PERF102
             if numeric_only and not pd.api.types.is_numeric_dtype(col.dtype):
                 continue
             modes.append(col.mode(dropna=dropna, split_every=split_every))
@@ -3899,7 +3899,7 @@ class DataFrame(FrameBase):
             frame = self
 
         collections = []
-        for _, col in frame.items():
+        for _, col in frame.items():  # noqa: PERF102
             collections.append(col.quantile(q=q, method=method))
 
         if len(collections) > 0 and isinstance(collections[0], Scalar):

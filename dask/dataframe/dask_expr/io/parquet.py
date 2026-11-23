@@ -203,7 +203,7 @@ class FragmentWrapper:
 
 def _control_cached_plan(key):
     if len(_cached_plan) > _CACHED_PLAN_SIZE and key not in _cached_plan:
-        key_to_pop = list(_cached_plan.keys())[0]
+        key_to_pop = next(iter(_cached_plan.keys()))
         _cached_plan.pop(key_to_pop)
 
 

@@ -73,14 +73,16 @@ from dask.dataframe.io import (
 from dask.dataframe.utils import assert_eq
 
 __all__ = [
+    "Aggregation",
     "DataFrame",
     "Index",
     "Scalar",
     "Series",
-    "Aggregation",
+    "assert_eq",
     "backends",
     "compute",
     "concat",
+    "demo",
     "dispatch",
     "from_array",
     "from_dask_array",
@@ -98,7 +100,6 @@ __all__ = [
     "merge",
     "merge_asof",
     "pivot_table",
-    "demo",
     "read_csv",
     "read_fwf",
     "read_hdf",
@@ -121,5 +122,4 @@ __all__ = [
     "to_records",
     "to_sql",
     "to_timedelta",
-    "assert_eq",
 ]

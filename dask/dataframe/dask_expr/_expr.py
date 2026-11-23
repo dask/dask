@@ -2605,7 +2605,7 @@ class Head(Expr):
                     Partitions(self.frame, partitions), self.n, safe=False
                 )
 
-            safe = True if npartitions == 1 and self.frame.npartitions != 1 else False
+            safe = npartitions == 1 and self.frame.npartitions != 1
             frame = BlockwiseHead(
                 Partitions(self.frame, partitions), self.n, npartitions, safe
             )
@@ -3464,7 +3464,7 @@ class Shift(MapOverlap):
     def clear_divisions(self):
         # TODO We can do better if freq is given, but this needs adjustments in
         #  map_partitions
-        return True if self._divisions()[0] is None or self.freq is not None else False
+        return self._divisions()[0] is None or self.freq is not None
 
     def _divisions(self):
         if self.freq is None:

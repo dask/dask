@@ -158,7 +158,7 @@ class BlockwiseDepDict(BlockwiseDep):
     def __getitem__(self, idx: tuple[int, ...]) -> Any:
         try:
             return self.mapping[idx]
-        except KeyError as err:
+        except KeyError:
             # If a DataFrame collection was converted
             # to an Array collection, the dimension of
             # `idx` may not agree with the keys in
@@ -168,7 +168,7 @@ class BlockwiseDepDict(BlockwiseDep):
             flat_idx = idx[: len(self.numblocks)]
             if flat_idx in self.mapping:
                 return self.mapping[flat_idx]
-            raise err
+            raise
 
     def __len__(self) -> int:
         return len(self.mapping)

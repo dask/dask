@@ -13,7 +13,7 @@ from dask.threaded import get
 cachey = pytest.importorskip("cachey")
 
 
-flag = []
+flag: list[int] = []
 
 
 def inc(x):

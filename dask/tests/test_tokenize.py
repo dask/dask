@@ -1235,8 +1235,7 @@ def test_tokenize_functions_main():
     result2 = tokenize(func)
     assert result != result2
     """
-    proc = subprocess.run([sys.executable, "-c", textwrap.dedent(script)])
-    proc.check_returncode()
+    subprocess.check_call([sys.executable, "-c", textwrap.dedent(script)])
 
 
 def test_tokenize_dataclass_field_no_repr():

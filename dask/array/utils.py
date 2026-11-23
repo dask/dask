@@ -116,7 +116,7 @@ def meta_from_array(x, ndim=None, dtype=None):
             ):
                 meta = np.array([]).astype(dtype)
             else:
-                raise e
+                raise
 
     return meta
 

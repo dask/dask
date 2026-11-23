@@ -8,7 +8,7 @@ _import_error_message = (
 )
 
 try:
-    from distributed import *  # noqa: F403
+    from distributed import *
 except ImportError as e:
     if e.msg == "No module named 'distributed'":
         raise type(e)(_import_error_message) from e

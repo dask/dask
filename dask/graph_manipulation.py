@@ -555,4 +555,3 @@ class chunks:
         """Dummy graph node of :func:`checkpoint`.
         Wait for all variadic args to complete; then return None.
         """
-        pass

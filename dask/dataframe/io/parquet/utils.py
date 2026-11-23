@@ -405,7 +405,7 @@ def _analyze_paths(file_list, fs, root=False):
                     else:
                         simpler.pop()
                 elif abs_prefix:
-                    raise Exception("can not get parent of root")
+                    raise ValueError("can not get parent of root")
                 else:
                     simpler.append(s)
             else:

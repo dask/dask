@@ -148,17 +148,18 @@ class Array(DaskMethodsMixin):
             if isinstance(i, Array):
                 dependencies.add(i.name)
 
+        arr = self
         if any(isinstance(i, Array) and i.dtype.kind in "iu" for i in index2):
-            self, index2 = slice_with_int_dask_array(self, index2)
+            arr, index2 = slice_with_int_dask_array(arr, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
             # TODO(expr-soon): This is simple but needs ravel which needs reshape,
             # which is not simple. Trivial to add after we have reshape
             raise NotImplementedError
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
-            return self
+            return arr
 
-        result = slice_array(self.expr, index2)
+        result = slice_array(arr.expr, index2)
         return new_collection(result)
 
     def __add__(self, other):

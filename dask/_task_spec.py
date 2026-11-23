@@ -208,7 +208,8 @@ def convert_legacy_task(
     if isinstance(task, GraphNode):
         return task
 
-    if type(task) is tuple and task and callable(task[0]):
+    # Note: redundant type check is to make mypy happy
+    if type(task) is tuple and isinstance(task, tuple) and task and callable(task[0]):
         func, args = task[0], task[1:]
         new_args = []
         new: object

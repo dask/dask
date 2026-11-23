@@ -346,7 +346,7 @@ def test_set_index_with_explicit_divisions():
     ddf = dd.from_pandas(df, npartitions=2)
 
     def throw(*args, **kwargs):
-        raise Exception()
+        raise RuntimeError()
 
     with dask.config.set(scheduler=throw):
         ddf2 = ddf.set_index("x", divisions=[1, 3, 5])
