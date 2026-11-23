@@ -2717,6 +2717,38 @@ def test_drop_axis_1():
     assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
 
 
+@pytest.mark.parametrize("multi_index", [False, True])
+@pytest.mark.parametrize("use_columns", [False, True])
+def test_drop_tuple_column(multi_index, use_columns):
+    labels = [("a", "x"), ("a", "y"), ("b", "z")]
+    columns = (
+        pd.MultiIndex.from_tuples(labels)
+        if multi_index
+        else pd.Index(labels, tupleize_cols=False)
+    )
+    df = pd.DataFrame([[1, 2, 3], [4, 5, 6]], columns=columns)
+    ddf = dd.from_pandas(df, npartitions=2)
+    drop_kwargs = (
+        {"columns": ("a", "x")} if use_columns else {"labels": ("a", "x"), "axis": 1}
+    )
+    assert_eq(ddf.drop(**drop_kwargs), df.drop(**drop_kwargs))
+
+
+def test_drop_partial_multiindex_column():
+    columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y"), ("b", "z")])
+    df = pd.DataFrame([[1, 2, 3], [4, 5, 6]], columns=columns)
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.drop(columns="a"), df.drop(columns="a"))
+
+
+def test_drop_preserves_duplicate_column_order():
+    labels = [("keep", 0), ("drop", 0), ("other", 0), ("keep", 0)]
+    columns = pd.Index(labels, tupleize_cols=False)
+    df = pd.DataFrame([[1, 2, 3, 4]], columns=columns)
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert_eq(ddf.drop(columns=("drop", 0)), df.drop(columns=("drop", 0)))
+
+
 @pytest.mark.parametrize("columns", [["b"], []])
 def test_drop_columns(columns):
     # Check both populated and empty list argument

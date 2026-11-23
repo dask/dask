@@ -1983,11 +1983,10 @@ class Drop(Elemwise):
     _preserves_partitioning_information = True
 
     def _simplify_down(self):
-        col_op = self.operand("columns")
-        if is_scalar(col_op):
-            col_op = [col_op]
-        columns = [col for col in self.frame.columns if col not in col_op]
-        return Projection(self.frame, columns)
+        # Projecting by label can repeat duplicate columns. For unique columns,
+        # the drop operation on metadata already resolves tuples and partial keys.
+        if self.frame._meta.columns.is_unique:
+            return Projection(self.frame, self.columns)
 
     @staticmethod
     def operation(df, columns, errors):
