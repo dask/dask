@@ -786,7 +786,7 @@ def _build_agg_args_single(result_column, func, func_args, func_kwargs, input_co
         ),  # No chunk func for median, we can only take it when aggregating
     }
 
-    if func in simple_impl.keys():
+    if func in simple_impl:
         return _build_agg_args_simple(
             result_column, func, input_column, simple_impl[func]
         )

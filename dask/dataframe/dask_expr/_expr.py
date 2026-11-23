@@ -4029,7 +4029,7 @@ def _replace_common_or_components(expr, or_components):
     and_components = list(map(_convert_mapping, and_components))
 
     replacements = []
-    for c in mapping.keys():
+    for c in mapping:
         if all(c in comp for comp in and_components):
             # We can pull this component out if it's part of all or components
             replacements.append(c)

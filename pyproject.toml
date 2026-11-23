@@ -148,7 +148,6 @@ ignore = [
     "C417",    # Unnecessary map() instead of comprehension (14 findings)
     "PT014",   # Duplicate parametrize test cases (14 findings)
     "SIM114",  # If branches with identical arms (14 findings)
-    "SIM118",  # key in dict.keys() instead of key in dict (14 findings)
     "C419",    # Unnecessary comprehension in call (13 findings)
     "PIE808",  # Unnecessary range() start argument (13 findings)
     "S110",    # try/except/pass (12 findings)

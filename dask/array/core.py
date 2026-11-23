@@ -5976,7 +5976,7 @@ def _vindex_array(x, dict_indexes):
                 merge_inputs[outblock].append(TaskRef(keyname(name, i, okey)))
                 merge_indexer[outblock].append(sorted_outblock_idx[slicer])
 
-            for i in merge_inputs.keys():
+            for i in merge_inputs:
                 k = keyname(vindex_merge_name, i, okey)
                 dsk[k] = Task(
                     k,

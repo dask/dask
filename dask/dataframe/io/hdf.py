@@ -499,7 +499,7 @@ def _expand_key(key, hdf):
     if not glob.has_magic(key):
         keys = [key]
     else:
-        keys = [k for k in hdf.keys() if fnmatch(k, key)]
+        keys = [k for k in hdf if fnmatch(k, key)]
         # https://github.com/dask/dask/issues/5934
         # TODO: remove this part if/when pandas copes with all keys
         keys.extend(

@@ -581,7 +581,7 @@ def to_parquet(
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
 
-    if custom_metadata and b"pandas" in custom_metadata.keys():
+    if custom_metadata and b"pandas" in custom_metadata:
         raise ValueError(
             "User-defined key/value metadata (custom_metadata) can not "
             "contain a b'pandas' key.  This key is reserved by Pandas, "
@@ -1811,7 +1811,7 @@ def _read_partition_stats_group(parts, fs, columns=None):
                 "min": column_stats[name]["min"],
                 "max": column_stats[name]["max"],
             }
-            for name in column_stats.keys()
+            for name in column_stats
         ]
         return {"num-rows": num_rows, "columns": column_stats_list}
 
