@@ -687,7 +687,7 @@ class ArrowDatasetEngine(Engine):
                 except OSError:
                     try:
                         with fs.open(
-                            sorted(ds.files, key=natural_sort_key)[-1], mode="rb"
+                            max(reversed(ds.files), key=natural_sort_key), mode="rb"
                         ) as fil:
                             tail_metadata = pq.read_metadata(fil)
                     except OSError:

@@ -1256,7 +1256,7 @@ def test_read_csv_arrow_engine():
 
 def test_robust_column_mismatch():
     files = csv_files.copy()
-    k = sorted(files)[-1]
+    k = max(files)
     files[k] = files[k].replace(b"name", b"Name")
     with filetexts(files, mode="b"):
         ddf = dd.read_csv(
@@ -1269,7 +1269,7 @@ def test_robust_column_mismatch():
 
 def test_different_columns_are_allowed():
     files = csv_files.copy()
-    k = sorted(files)[-1]
+    k = max(files)
     files[k] = files[k].replace(b"name", b"address")
     with filetexts(files, mode="b"):
         ddf = dd.read_csv("2014-01-*.csv")
