@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from collections import defaultdict
 from collections.abc import Collection, Iterable, Mapping, MutableMapping
 from typing import Any, Literal, TypeVar, cast, overload
@@ -333,11 +334,9 @@ def subs(task, key, val):
     """
     type_task = type(task)
     if not (type_task is tuple and task and callable(task[0])):  # istask(task):
-        try:
+        with contextlib.suppress(Exception):
             if type_task is type(key) and task == key:
                 return val
-        except Exception:
-            pass
         if type_task is list:
             return [subs(x, key, val) for x in task]
         return task

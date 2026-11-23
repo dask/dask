@@ -277,7 +277,7 @@ class _Tracker(Process):
                             mem2 = p.memory_info().rss
                             cpu2 = p.cpu_percent()
                         except Exception:  # could be a few different exceptions
-                            pass
+                            ...
                         else:
                             # Only increment if both were successful
                             mem += mem2

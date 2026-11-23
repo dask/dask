@@ -869,11 +869,10 @@ class UFuncElemwise(MapPartitions):
                 if isinstance(divisions, pd.Index):
                     divisions = methods.tolist(divisions)
             except Exception:
-                pass
-            else:
-                if not valid_divisions(divisions):
-                    divisions = [None] * (self._dfs[0].npartitions + 1)
-                return divisions
+                return self._dfs[0].divisions
+            if not valid_divisions(divisions):
+                divisions = [None] * (self._dfs[0].npartitions + 1)
+            return divisions
 
         return self._dfs[0].divisions
 
