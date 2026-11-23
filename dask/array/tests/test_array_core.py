@@ -4220,12 +4220,13 @@ def test_index_array_with_array_2d():
     # Test with unknown chunks
     dx._chunks = ((2, 2), (np.nan, np.nan, np.nan))
 
-    with pytest.warns(UserWarning, match="different ordering") as record:
-        results = [dx[dx % 2 == 0].compute(), dx[dx > 6].compute()]
+    with pytest.warns(UserWarning, match="different ordering"):
+        assert sorted(x[x % 2 == 0].tolist()) == sorted(
+            dx[dx % 2 == 0].compute().tolist()
+        )
 
-    assert sorted(x[x % 2 == 0].tolist()) == sorted(results[0].tolist())
-    assert sorted(x[x > 6].tolist()) == sorted(results[1].tolist())
-    assert len(record) == 2
+    with pytest.warns(UserWarning, match="different ordering"):
+        assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
 
 
 @pytest.mark.xfail(reason="Chunking does not align well")

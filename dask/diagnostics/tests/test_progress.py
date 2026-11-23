@@ -61,18 +61,19 @@ def test_clean_exit(get):
     assert not pbar._timer.is_alive()
 
 
-def test_format_time():
-    with pytest.warns(FutureWarning, match="dask.utils.format_time") as record:
-        results = [format_time(value) for value in (1.4, 10.4, 100.4, 1000.4, 10000.4)]
-
-    assert results == [
-        " 1.4s",
-        "10.4s",
-        " 1min 40.4s",
-        "16min 40.4s",
-        " 2hr 46min 40.4s",
-    ]
-    assert len(record) == 5
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (1.4, " 1.4s"),
+        (10.4, "10.4s"),
+        (100.4, " 1min 40.4s"),
+        (1000.4, "16min 40.4s"),
+        (10000.4, " 2hr 46min 40.4s"),
+    ],
+)
+def test_format_time(value, expected):
+    with pytest.warns(FutureWarning, match="dask.utils.format_time"):
+        assert format_time(value) == expected
 
 
 def test_register(capsys):

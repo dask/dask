@@ -56,8 +56,9 @@ def test_full_detects_da_dtype():
     # This shall not raise an NotImplementedError due to dtype detected as object.
     a = da.full(shape=(3, 3), fill_value=x)
     assert a.dtype == x.dtype
+    expect = np.full(shape=(3, 3), fill_value=100)
     with pytest.warns(FutureWarning, match="not implemented by Dask array") as record:
-        assert_eq(a, np.full(shape=(3, 3), fill_value=100))
+        assert_eq(a, expect)
     assert len(record) == 1
 
 
