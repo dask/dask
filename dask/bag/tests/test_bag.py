@@ -475,7 +475,7 @@ def test_foldby_tree_reduction():
             dsk.extend([d, e, f, g])
     results = dask.compute(dsk)
     first = results[0]
-    assert all([r == first for r in results])
+    assert all(r == first for r in results)
 
 
 def test_map_partitions():
