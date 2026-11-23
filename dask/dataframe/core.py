@@ -83,10 +83,9 @@ def _get_divisions_map_partitions(
             if isinstance(divisions, pd.Index):
                 divisions = methods.tolist(divisions)
         except Exception:
-            pass
-        else:
-            if not valid_divisions(divisions):
-                divisions = [None] * (dfs[0].npartitions + 1)
+            return divisions
+        if not valid_divisions(divisions):
+            divisions = [None] * (dfs[0].npartitions + 1)
     return divisions
 
 
