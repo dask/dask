@@ -111,11 +111,13 @@ def read_sql_query(
     engine_kwargs = {} if engine_kwargs is None else engine_kwargs
     engine = sa.create_engine(con, **engine_kwargs)
 
-    index = (
-        sa.Column(index_col)
-        if isinstance(index_col, str)
-        else sa.Column(index_col.name, index_col.type)
-    )
+    if isinstance(index_col, str):
+        selected_column = sql.selected_columns.get(index_col)
+        index = sa.Column(
+            index_col, selected_column.type if selected_column is not None else None
+        )
+    else:
+        index = sa.Column(index_col.name, index_col.type)
 
     kwargs["index_col"] = index.name
 
@@ -158,16 +160,22 @@ def read_sql_query(
                 round(count * bytes_per_row / parse_bytes(bytes_per_chunk)) or 1
             )
         if dtype.kind == "M":
-            freq = (maxi - mini).total_seconds() / npartitions
-            divisions = methods.tolist(
-                pd.date_range(
-                    start=mini,
-                    end=maxi,
-                    freq=f"{int(freq)}s",
-                )
-            )
-            divisions[0] = mini
-            divisions[-1] = maxi
+            if mini == maxi:
+                divisions = [mini, maxi]
+            else:
+                interior = pd.date_range(start=mini, end=maxi, periods=npartitions + 1)[
+                    1:-1
+                ].unique()
+                # Interpolation can round timestamps, so retain the database bounds.
+                divisions = [
+                    mini,
+                    *(
+                        point
+                        for point in methods.tolist(interior)
+                        if mini < point < maxi
+                    ),
+                    maxi,
+                ]
         elif dtype.kind in ["i", "u", "f"]:
             divisions = np.linspace(mini, maxi, npartitions + 1, dtype=dtype).tolist()
         else:
