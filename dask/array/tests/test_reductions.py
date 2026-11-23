@@ -984,11 +984,16 @@ def test_weighted_reduction():
         da.reduction(dx, w_sum, np.sum, weights=[[[2]]])
 
 
-def test_cumreduction_no_rechunk_on_1d_array():
-    x = da.ones((5,))
-    y = da.cumsum(x)
-    no_rechunk = "rechunk" not in str(dict(y.__dask_graph__()))
-    assert no_rechunk
+@pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
+@pytest.mark.parametrize("method", ["sequential", "blelloch"])
+def test_cumreduction_no_rechunk_on_1d_array(func: str, method: str) -> None:
+    a = np.arange(1, 6)
+    x = da.from_array(a, chunks=2)
+    y = getattr(da, func)(x, axis=None, method=method)
+
+    assert y.chunks == x.chunks
+    assert "rechunk" not in str(dict(y.__dask_graph__()))
+    assert_eq(y, getattr(np, func)(a))
 
 
 @pytest.mark.parametrize("axis", [3, 0, [1, 3]])
