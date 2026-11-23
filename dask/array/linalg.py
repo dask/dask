@@ -495,7 +495,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         d_vh = max(m_vh, n_vh)  # full matrix returned: but basically n
         graph = HighLevelGraph(layers, dependencies)
         u_meta = meta_from_array(data, len((m_u, n_u)), uu.dtype)
-        s_meta = meta_from_array(data, len((n_s,)), ss.dtype)
+        s_meta = meta_from_array(np.real(data._meta), ndim=1, dtype=ss.dtype)
         vh_meta = meta_from_array(data, len((d_vh, d_vh)), vvh.dtype)
         u = Array(
             graph,
