@@ -888,7 +888,10 @@ class SetIndex(BaseSetIndexSortValues):
             if self.frame.npartitions > 1:
                 expr = RepartitionToFewer(expr, 1)
 
-            index_set = SetIndexBlockwise(expr, self._other, self.drop, None)
+            divisions = self.user_divisions
+            if divisions is not None and len(divisions) != 2:
+                divisions = None
+            index_set = SetIndexBlockwise(expr, self._other, self.drop, divisions)
             return SortIndexBlockwise(index_set)
 
         if self.user_divisions is None:
