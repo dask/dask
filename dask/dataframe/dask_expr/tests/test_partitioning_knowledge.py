@@ -37,9 +37,7 @@ def test_groupby_avoid_shuffle():
     q = df1.merge(df2)
     q = q.groupby("a").sum(split_out=True)
     result = q.optimize(fuse=False)
-    assert (
-        len(list(node for node in result.walk() if isinstance(node, DiskShuffle))) == 2
-    )
+    assert len([node for node in result.walk() if isinstance(node, DiskShuffle)]) == 2
 
     expected = pdf1.merge(pdf2)
     expected = expected.groupby("a").sum()
@@ -148,9 +146,7 @@ def test_merge_avoid_shuffle():
     q = df.groupby("a").sum(split_out=True).reset_index()
     q = q.merge(df2)
     result = q.optimize(fuse=False)
-    assert (
-        len(list(node for node in result.walk() if isinstance(node, DiskShuffle))) == 2
-    )
+    assert len([node for node in result.walk() if isinstance(node, DiskShuffle)]) == 2
 
     expected = pdf.groupby("a").sum().reset_index()
     expected = expected.merge(pdf2)
@@ -160,9 +156,7 @@ def test_merge_avoid_shuffle():
     q = q.merge(df)
     result = q.optimize(fuse=False)
     # npartitions don't match in merge, so have to shuffle
-    assert (
-        len(list(node for node in result.walk() if isinstance(node, DiskShuffle))) == 3
-    )
+    assert len([node for node in result.walk() if isinstance(node, DiskShuffle)]) == 3
 
 
 def test_merge_shuffle_if_different_order():
@@ -174,9 +168,7 @@ def test_merge_shuffle_if_different_order():
     q = df.groupby(["a", "b"]).sum(split_out=True).reset_index()
     q = q.merge(df2, on=["b", "a"])
     result = q.optimize(fuse=False)
-    assert (
-        len(list(node for node in result.walk() if isinstance(node, DiskShuffle))) == 3
-    )
+    assert len([node for node in result.walk() if isinstance(node, DiskShuffle)]) == 3
 
 
 def test_shuffle_after_only_blockwise_merge():
@@ -195,16 +187,12 @@ def test_shuffle_after_only_blockwise_merge():
     result = df.merge(df2).optimize(fuse=False)
     result = result.groupby("a").sum(split_out=True)
     result = result.optimize(fuse=False)
-    assert (
-        len(list(node for node in result.walk() if isinstance(node, DiskShuffle))) == 1
-    )
+    assert len([node for node in result.walk() if isinstance(node, DiskShuffle)]) == 1
 
     result = df.merge(df2)
     result = result.groupby("a").sum(split_out=True)
     result = result.optimize(fuse=False)
-    assert (
-        len(list(node for node in result.walk() if isinstance(node, DiskShuffle))) == 1
-    )
+    assert len([node for node in result.walk() if isinstance(node, DiskShuffle)]) == 1
 
 
 def test_avoid_shuffle_on_top_of_lowered_shuffle():
@@ -224,9 +212,7 @@ def test_avoid_shuffle_on_top_of_lowered_shuffle():
     result = df.merge(df2).optimize(fuse=False)
     result = result.groupby("a").sum(split_out=True)
     result = result.optimize(fuse=False)
-    assert (
-        len(list(node for node in result.walk() if isinstance(node, DiskShuffle))) == 2
-    )
+    assert len([node for node in result.walk() if isinstance(node, DiskShuffle)]) == 2
 
 
 def test_merge_groupby_to_frame():

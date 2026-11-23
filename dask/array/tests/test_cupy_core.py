@@ -338,8 +338,6 @@ def test_setitem_extended_API_0d():
         ),
         [slice(3, None, 2), -5],
         [slice(-3, None, -2), -6],
-        [slice(1, None, -2), -4],
-        [slice(3, None, 2), -5],
         pytest.param(
             slice(3, None, 2),
             [10, 11, 12, 13],

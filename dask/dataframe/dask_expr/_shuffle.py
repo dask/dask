@@ -388,9 +388,9 @@ class TaskShuffle(SimpleShuffle):
 
         # Calculate number of stages and splits per stage
         npartitions = self.npartitions_out
-        stages = int(math.ceil(math.log(npartitions_input) / math.log(max_branch)))
+        stages = math.ceil(math.log(npartitions_input) / math.log(max_branch))
         if stages > 1:
-            nsplits = int(math.ceil(npartitions_input ** (1 / stages)))
+            nsplits = math.ceil(npartitions_input ** (1 / stages))
         else:
             nsplits = npartitions_input
 
