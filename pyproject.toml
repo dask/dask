@@ -145,7 +145,6 @@ ignore = [
     "PT031",   # pytest.warns with multiple statements (21 findings)
     "TRY004",  # Type check without TypeError (18 findings)
     "C400",    # Unnecessary generator passed to list() (16 findings)
-    "C417",    # Unnecessary map() instead of comprehension (14 findings)
     "PT014",   # Duplicate parametrize test cases (14 findings)
     "SIM114",  # If branches with identical arms (14 findings)
     "SIM118",  # key in dict.keys() instead of key in dict (14 findings)

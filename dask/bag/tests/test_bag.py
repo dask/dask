@@ -673,7 +673,7 @@ def test_take_npartitions_warn():
 
 
 def test_map_is_lazy():
-    assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
+    assert isinstance(map(str, [1, 2, 3]), Iterator)
 
 
 def test_can_use_dict_to_make_concrete():
