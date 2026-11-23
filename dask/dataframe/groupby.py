@@ -683,7 +683,7 @@ def _normalize_spec(spec, non_group_columns):
                 )
 
     else:
-        raise ValueError(f"unsupported agg spec of type {type(spec)}")
+        raise TypeError(f"unsupported agg spec of type {type(spec)}")
 
     compounds = (list, tuple, dict)
     use_flat_columns = not any(

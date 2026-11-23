@@ -3010,7 +3010,7 @@ def test_array_copy_noop(chunks):
 def test_from_array_dask_array():
     x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=(1, 2))
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         da.from_array(dx)
 
 

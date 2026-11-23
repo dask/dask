@@ -258,7 +258,7 @@ def _cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=N
 
 def check_divisions(divisions):
     if not isinstance(divisions, (list, tuple)):
-        raise ValueError("New division must be list or tuple")
+        raise TypeError("New division must be list or tuple")
     divisions = list(divisions)
     if len(divisions) == 0:
         raise ValueError("New division must not be empty")

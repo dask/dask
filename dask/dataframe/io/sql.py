@@ -85,7 +85,7 @@ def read_sql_query(
     import sqlalchemy as sa
 
     if isinstance(sql, str):
-        raise ValueError("`sql` must be a SQLAlchemy Selectable, not a string")
+        raise TypeError("`sql` must be a SQLAlchemy Selectable, not a string")
 
     if not isinstance(con, str):
         raise TypeError(
@@ -95,7 +95,7 @@ def read_sql_query(
     if index_col is None:
         raise ValueError("Must specify index column to partition on")
     if not isinstance(index_col, (str, sa.Column, sa.sql.elements.ColumnClause)):
-        raise ValueError(
+        raise TypeError(
             f"'index_col' must be of type str or sa.Column, not {type(index_col)}"
         )
     if not head_rows > 0:
@@ -545,7 +545,7 @@ def to_sql(
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
     if not isinstance(uri, str):
-        raise ValueError(f"Expected URI to be a string, got {type(uri)}.")
+        raise TypeError(f"Expected URI to be a string, got {type(uri)}.")
 
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(

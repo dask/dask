@@ -3064,9 +3064,7 @@ class DataFrame(FrameBase):
         from dask.dataframe.dask_expr._groupby import GroupBy
 
         if isinstance(by, FrameBase) and not isinstance(by, Series):
-            raise ValueError(
-                f"`by` must be a column name or list of columns, got {by}."
-            )
+            raise TypeError(f"`by` must be a column name or list of columns, got {by}.")
 
         return GroupBy(
             self,
@@ -5953,7 +5951,7 @@ def from_map(
     iterables = list(iterables)
     for i, iterable in enumerate(iterables):
         if not isinstance(iterable, Iterable):
-            raise ValueError(
+            raise TypeError(
                 f"All elements of `iterables` must be Iterable, got {type(iterable)}"
             )
         try:
