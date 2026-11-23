@@ -1726,7 +1726,7 @@ def _collect_pq_statistics(
     ]
 
     # Execute with delayed for large and remote datasets
-    parallel = int(False if _is_local_fs(fs) else 16)
+    parallel = 0 if _is_local_fs(fs) else 16
     if parallel:
         # Group parts corresponding to the same file.
         # A single task should always parse statistics

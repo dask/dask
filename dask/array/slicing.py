@@ -735,7 +735,7 @@ def new_blockdim(dim_shape, lengths, index):
     ]
     if isinstance(index, slice) and index.step and index.step < 0:
         slices.reverse()
-    return [int(math.ceil((1.0 * slc.stop - slc.start) / slc.step)) for slc in slices]
+    return [math.ceil((1.0 * slc.stop - slc.start) / slc.step) for slc in slices]
 
 
 def replace_ellipsis(n, index):

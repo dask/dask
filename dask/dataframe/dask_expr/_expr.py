@@ -869,11 +869,10 @@ class UFuncElemwise(MapPartitions):
                 if isinstance(divisions, pd.Index):
                     divisions = methods.tolist(divisions)
             except Exception:
-                pass
-            else:
-                if not valid_divisions(divisions):
-                    divisions = [None] * (self._dfs[0].npartitions + 1)
-                return divisions
+                return self._dfs[0].divisions
+            if not valid_divisions(divisions):
+                divisions = [None] * (self._dfs[0].npartitions + 1)
+            return divisions
 
         return self._dfs[0].divisions
 
@@ -3550,7 +3549,7 @@ class MaybeAlignPartitions(Expr):
                 dfs[0].divisions == df.divisions and df.known_divisions for df in dfs
             )
             or len(self.divisions) == 2
-            and max(map(lambda x: len(x.divisions), dfs)) == 2
+            and max(len(x.divisions) for x in dfs) == 2
         ):
             return self._expr_cls(*self.operands)
         elif self.divisions[0] is None:
@@ -3730,7 +3729,7 @@ class OpAlignPartitions(MaybeAlignPartitions):
             len(dfs) == 1
             or all(dfs[0].divisions == df.divisions for df in dfs)
             or len(self.divisions) == 2
-            and max(map(lambda x: len(x.divisions), dfs)) == 2
+            and max(len(x.divisions) for x in dfs) == 2
         ):
             return self._op(self.frame, self.op, self.other, *self.operands[3:])
 

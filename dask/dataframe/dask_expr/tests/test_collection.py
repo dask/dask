@@ -1014,7 +1014,7 @@ def test_clip_traverse_filters(df):
     assert result._name == expected._name
 
 
-@pytest.mark.parametrize("projection", ["zz", ["zz"], ["zz", "x"], "zz"])
+@pytest.mark.parametrize("projection", ["zz", ["zz"], ["zz", "x"]])
 @pytest.mark.parametrize("subset", ["x", ["x"]])
 def test_drop_duplicates_subset_simplify(pdf, subset, projection):
     pdf["zz"] = 1

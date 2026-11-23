@@ -95,7 +95,7 @@ def assert_has_persisted_data(arr):
     else:
         for layer in arr.dask.layers.values():
             if isinstance(layer, MaterializedLayer) and any(
-                map(lambda obj: isinstance(obj, np.ndarray), layer.mapping.values())
+                isinstance(obj, np.ndarray) for obj in layer.mapping.values()
             ):
                 has_persisted_data = True
                 break
@@ -4336,8 +4336,6 @@ def test_setitem_extended_API_0d():
         [slice(1, None, -2), [-40]],
         [slice(3, None, 2), -5],
         [slice(-3, None, -2), -6],
-        [slice(1, None, -2), -4],
-        [slice(3, None, 2), -5],
         [slice(3, None, 2), [10, 11, 12, 13]],
         [slice(-4, None, -2), [14, 15, 16, 17]],
     ],

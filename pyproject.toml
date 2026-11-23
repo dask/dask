@@ -144,15 +144,11 @@ ignore = [
     "SIM102",  # Collapsible if (36 findings)
     "PT031",   # pytest.warns with multiple statements (21 findings)
     "TRY004",  # Type check without TypeError (18 findings)
-    "C417",    # Unnecessary map() instead of comprehension (14 findings)
-    "PT014",   # Duplicate parametrize test cases (14 findings)
     "SIM114",  # If branches with identical arms (14 findings)
     "SIM118",  # key in dict.keys() instead of key in dict (14 findings)
     "C419",    # Unnecessary comprehension in call (13 findings)
     "PIE808",  # Unnecessary range() start argument (13 findings)
-    "S110",    # try/except/pass (12 findings)
     "FURB192", # Unnecessary sorted() in min()/max() (11 findings)
-    "RUF046",  # Unnecessary cast to int (11 findings)
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
