@@ -34,7 +34,11 @@ from dask.dataframe.io.parquet.utils import (
     _sort_and_analyze_paths,
 )
 from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
-from dask.dataframe.utils import clear_known_categories, pyarrow_strings_enabled
+from dask.dataframe.utils import (
+    clear_known_categories,
+    has_known_categories,
+    pyarrow_strings_enabled,
+)
 from dask.delayed import Delayed
 from dask.tokenize import normalize_token, tokenize
 from dask.utils import getargspec, natural_sort_key
@@ -651,6 +655,7 @@ class ArrowDatasetEngine(Engine):
         index_cols=None,
         **kwargs,
     ):
+        inferred_index_types: dict[str, pa.DataType] = {}
         if schema == "infer" or isinstance(schema, dict):
             # Start with schema from _meta_nonempty
             inferred_schema = pyarrow_schema_dispatch(
@@ -659,6 +664,26 @@ class ArrowDatasetEngine(Engine):
                 else df._meta_nonempty
             ).remove_metadata()
 
+            # The metadata placeholder does not reflect the number of categories
+            # that a partition can contain.
+            unknown_categories = {
+                name
+                for name, column in df._meta.items()
+                if isinstance(column.dtype, pd.CategoricalDtype)
+                and not has_known_categories(column)
+            }
+            for i, field in enumerate(inferred_schema):
+                if (
+                    field.name in unknown_categories
+                    and pa.types.is_dictionary(field.type)
+                    and field.type.index_type.bit_width < 32
+                ):
+                    inferred_index_types[field.name] = field.type.index_type
+                    wide_type = pa.dictionary(
+                        pa.int32(), field.type.value_type, ordered=field.type.ordered
+                    )
+                    inferred_schema = inferred_schema.set(i, field.with_type(wide_type))
+
             # Use dict to update our inferred schema
             if isinstance(schema, dict):
                 schema = pa.schema(schema)
@@ -666,6 +691,7 @@ class ArrowDatasetEngine(Engine):
                     i = inferred_schema.get_field_index(name)
                     j = schema.get_field_index(name)
                     inferred_schema = inferred_schema.set(i, schema.field(j))
+                    inferred_index_types.pop(name, None)
             schema = inferred_schema
 
         # Check that target directory exists
@@ -677,11 +703,13 @@ class ArrowDatasetEngine(Engine):
         tail_metadata = None  # metadata for at least the last file in the dataset
         i_offset = 0
         metadata_file_exists = False
+        existing_dataset_schema = None
         if append:
             # Extract metadata and get file offset if appending
             ds = pa_ds.dataset(path, filesystem=_wrapped_fs(fs), format="parquet")
             i_offset = len(ds.files)
             if i_offset > 0:
+                existing_dataset_schema = ds.schema
                 try:
                     with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
                         full_metadata = pq.read_metadata(fil)
@@ -760,6 +788,23 @@ class ArrowDatasetEngine(Engine):
                         f"- End of last written partition: {old_end}\n"
                         f"- Start of first new partition: {divisions[0]}"
                     )
+
+        if append and inferred_index_types:
+            # Use the schema readers see, even if the tail file uses wider indices.
+            for name, index_type in inferred_index_types.items():
+                if (
+                    existing_dataset_schema is not None
+                    and name in existing_dataset_schema.names
+                ):
+                    stored_type = existing_dataset_schema.field(name).type
+                    if pa.types.is_dictionary(stored_type):
+                        index_type = stored_type.index_type
+                field_index = schema.get_field_index(name)
+                field = schema.field(field_index)
+                dictionary_type = pa.dictionary(
+                    index_type, field.type.value_type, ordered=field.type.ordered
+                )
+                schema = schema.set(field_index, field.with_type(dictionary_type))
 
         extra_write_kwargs = {"schema": schema, "index_cols": index_cols}
         return i_offset, full_metadata, metadata_file_exists, extra_write_kwargs
