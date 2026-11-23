@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import functools
 import warnings
 
@@ -15,10 +16,8 @@ def _bind_method(cls, pd_cls, attr, min_version=None):
 
     func.__name__ = attr
     func.__qualname__ = f"{cls.__name__}.{attr}"
-    try:
+    with contextlib.suppress(Exception):
         func.__wrapped__ = getattr(pd_cls, attr)
-    except Exception:
-        pass
     setattr(cls, attr, derived_from(pd_cls, version=min_version)(func))
 
 
@@ -28,8 +27,9 @@ def _bind_property(cls, pd_cls, attr, min_version=None):
 
     func.__name__ = attr
     func.__qualname__ = f"{cls.__name__}.{attr}"
-    try:
-        # Attempt to determine the method we are wrapping
+    with contextlib.suppress(Exception):
+        # Attempt to determine the method we are wrapping; if we can't then
+        # no matter, the function still works.
         original_prop = getattr(pd_cls, attr)
         if isinstance(original_prop, property):
             method = original_prop.fget
@@ -38,9 +38,6 @@ def _bind_property(cls, pd_cls, attr, min_version=None):
         else:
             method = original_prop
             func.__wrapped__ = method
-    except Exception:
-        # If we can't then no matter, the function still works.
-        pass
     setattr(cls, attr, property(derived_from(pd_cls, version=min_version)(func)))
 
 

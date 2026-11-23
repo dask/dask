@@ -204,23 +204,21 @@ def _should_delegate(self, other) -> bool:
     This implementation follows NEP-13:
     https://numpy.org/neps/nep-0013-ufunc-overrides.html#behavior-in-combination-with-python-s-binary-operations
     """
-    if hasattr(other, "__array_ufunc__") and other.__array_ufunc__ is None:
-        return True
-    elif (
-        hasattr(other, "__array_ufunc__")
-        and not is_valid_array_chunk(other)
-        # don't delegate to our own parent classes
-        and not isinstance(self, type(other))
-        and type(self) is not type(other)
-    ):
-        return True
-    elif (
-        not hasattr(other, "__array_ufunc__")
-        and hasattr(other, "__array_priority__")
-        and other.__array_priority__ > self.__array_priority__
-    ):
-        return True
-    return False
+    return (
+        (hasattr(other, "__array_ufunc__") and other.__array_ufunc__ is None)
+        or (
+            hasattr(other, "__array_ufunc__")
+            and not is_valid_array_chunk(other)
+            # don't delegate to our own parent classes
+            and not isinstance(self, type(other))
+            and type(self) is not type(other)
+        )
+        or (
+            not hasattr(other, "__array_ufunc__")
+            and hasattr(other, "__array_priority__")
+            and other.__array_priority__ > self.__array_priority__
+        )
+    )
 
 
 def check_if_handled_given_other(f):
@@ -429,7 +427,7 @@ def _concatenate2(arrays, axes=None):
         assert all(list(a.keys()) == keys for a in arrays)
         ret = dict()
         for k in keys:
-            ret[k] = concatenate(list(a[k] for a in arrays), axis=axes[0])
+            ret[k] = concatenate([a[k] for a in arrays], axis=axes[0])
         return ret
     else:
         return concatenate(arrays, axis=axes[0])
@@ -522,11 +520,13 @@ def normalize_arg(x):
     """
     if is_dask_collection(x):
         return x
-    elif isinstance(x, str) and re.match(r"_\d+", x):
-        return delayed(x)
-    elif isinstance(x, list) and len(x) >= 10:
-        return delayed(x)
-    elif sizeof(x) > 1e6:
+    elif (
+        isinstance(x, str)
+        and re.match(r"_\d+", x)
+        or isinstance(x, list)
+        and len(x) >= 10
+        or sizeof(x) > 1e6
+    ):
         return delayed(x)
     else:
         return x
@@ -831,10 +831,8 @@ def map_blocks(
     original_kwargs = kwargs
 
     if dtype is None and meta is None:
-        try:
+        with contextlib.suppress(Exception):
             meta = compute_meta(func, dtype, *args, **kwargs)
-        except Exception:
-            pass
 
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
