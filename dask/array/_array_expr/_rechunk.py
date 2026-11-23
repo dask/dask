@@ -40,6 +40,10 @@ class Rechunk(ArrayExpr):
     }
 
     @property
+    def _result_order(self) -> str | None:
+        return self.array._result_order
+
+    @property
     def _meta(self):
         return self.array._meta
 

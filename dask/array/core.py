@@ -1262,13 +1262,13 @@ def blockdims_from_blockshape(shape, chunks):
     )
 
 
-def finalize(results):
+def finalize(results, order=None):
     if not results:
-        return concatenate3(results)
+        return concatenate3(results, order=order)
     results2 = results
     while isinstance(results2, (tuple, list)):
         if len(results2) > 1:
-            return concatenate3(results)
+            return concatenate3(results, order=order)
         else:
             results2 = results2[0]
 
@@ -1277,6 +1277,8 @@ def finalize(results):
     # graph or on a process-local Worker. Deep copy to make sure that nothing can
     # accidentally write back to it.
     try:
+        if order is not None and type(results) is np.ndarray:
+            return results.copy(order=order)
         return results.copy()  # numpy, sparse, scipy.sparse (any version)
     except AttributeError:
         # Not an Array API object
@@ -1321,10 +1323,22 @@ class Array(DaskMethodsMixin):
     dask.array.from_array
     """
 
-    __slots__ = "dask", "__name", "_cached_keys", "__chunks", "_meta", "__dict__"
+    __slots__ = (
+        "dask",
+        "__name",
+        "_cached_keys",
+        "__chunks",
+        "_meta",
+        "_result_order",
+        "__dict__",
+    )
 
-    def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
+    def __new__(
+        cls, dask, name, chunks, dtype=None, meta=None, shape=None, _result_order=None
+    ):
         self = super().__new__(cls)
+        # Preserve an explicit final-output layout independently of block strides.
+        self._result_order = _result_order
         assert isinstance(dask, Mapping)
         if not isinstance(dask, HighLevelGraph):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
@@ -1384,7 +1398,20 @@ class Array(DaskMethodsMixin):
         return self
 
     def __reduce__(self):
-        return (Array, (self.dask, self.name, self.chunks, self.dtype, self._meta))
+        if self._result_order is None:
+            return (Array, (self.dask, self.name, self.chunks, self.dtype, self._meta))
+        return (
+            Array,
+            (
+                self.dask,
+                self.name,
+                self.chunks,
+                self.dtype,
+                self._meta,
+                None,
+                self._result_order,
+            ),
+        )
 
     def __dask_graph__(self) -> Graph:
         return self.dask
@@ -1412,6 +1439,8 @@ class Array(DaskMethodsMixin):
         return result
 
     def __dask_tokenize__(self):
+        if self._result_order is not None:
+            return self.name, self._result_order
         return self.name
 
     __dask_optimize__ = globalmethod(
@@ -1420,6 +1449,8 @@ class Array(DaskMethodsMixin):
     __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
+        if self._result_order is not None:
+            return finalize, (self._result_order,)
         return finalize, ()
 
     def __dask_postpersist__(self):
@@ -1429,7 +1460,14 @@ class Array(DaskMethodsMixin):
         name = self._name
         if rename:
             name = rename.get(name, name)
-        return Array(dsk, name, self.chunks, self.dtype, self._meta)
+        return Array(
+            dsk,
+            name,
+            self.chunks,
+            self.dtype,
+            self._meta,
+            _result_order=self._result_order,
+        )
 
     def _reset_cache(self, key=None):
         """
@@ -2940,7 +2978,21 @@ class Array(DaskMethodsMixin):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        return Array(self.dask, self.name, self.chunks, meta=self)
+        return Array(
+            self.dask,
+            self.name,
+            self.chunks,
+            meta=self,
+            _result_order=self._result_order,
+        )
+
+    def _with_result_order(self, order):
+        # A final-output hint, not a layout invariant for intermediate blocks.
+        if order == "F" and type(self._meta) is np.ndarray:
+            return Array(
+                self.dask, self.name, self.chunks, meta=self._meta, _result_order=order
+            )
+        return self
 
     def __deepcopy__(self, memo):
         c = self.copy()
@@ -5622,7 +5674,7 @@ def concatenate_shaped(arrays, shape):
     return concatenate3(shaped)
 
 
-def concatenate3(arrays):
+def concatenate3(arrays, order=None):
     """Recursive np.concatenate
 
     Input should be a nested list of numpy arrays arranged in the order they
@@ -5679,7 +5731,7 @@ def concatenate3(arrays):
         except AttributeError:
             return type(x)
 
-    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
+    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)), order=order or "C")
 
     for idx, arr in zip(
         slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))

@@ -86,7 +86,8 @@ def test_arr_like(
         else:
             assert da_r.name == name
 
-        if "order" == "F":  # FIXME: this is clearly a bug!  # noqa: PLR0133
+        # The explicit final-output order hint currently applies to NumPy only.
+        if backend == "numpy" and order == "F":
             assert da_r.compute().flags.fnc
         else:
             assert not da_r.compute().flags.fnc

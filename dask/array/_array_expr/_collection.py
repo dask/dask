@@ -49,8 +49,15 @@ class Array(DaskMethodsMixin):
     def _name(self):
         return self.expr._name
 
+    def _with_result_order(self, order: str | None):
+        if order != "F" or type(self._meta) is not np.ndarray:
+            return self
+        from dask.array._array_expr._expr import ResultOrder
+
+        return new_collection(ResultOrder(self.expr, order))
+
     def __dask_postcompute__(self):
-        return finalize, ()
+        return finalize, (self.expr._result_order,)
 
     def __dask_postpersist__(self):
         state = self.expr.lower_completely()
@@ -60,6 +67,7 @@ class Array(DaskMethodsMixin):
             # FIXME: This is using keys of the unoptimized graph
             list(flatten(state.__dask_keys__())),
             key_split(state._name),
+            state._result_order,
         )
 
     @property
@@ -679,7 +687,7 @@ class Array(DaskMethodsMixin):
         )
 
 
-def from_graph(layer, _meta, chunks, keys, name_prefix):
+def from_graph(layer, _meta, chunks, keys, name_prefix, result_order=None):
     return new_collection(
         FromGraph(
             layer=layer,
@@ -687,6 +695,7 @@ def from_graph(layer, _meta, chunks, keys, name_prefix):
             chunks=chunks,
             keys=keys,
             name_prefix=name_prefix,
+            result_order=result_order,
         )
     )
 

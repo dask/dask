@@ -23,7 +23,12 @@ class IO(ArrayExpr):
 
 
 class FromGraph(IO):
-    _parameters = ["layer", "_meta", "chunks", "keys", "name_prefix"]
+    _parameters = ["layer", "_meta", "chunks", "keys", "name_prefix", "result_order"]
+    _defaults = {"result_order": None}
+
+    @property
+    def _result_order(self) -> str | None:
+        return self.operand("result_order")
 
     @functools.cached_property
     def _meta(self):

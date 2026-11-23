@@ -14,6 +14,20 @@ NetCDF, `Zarr`_, or any format that supports NumPy-style slicing.
    stack
    concatenate
 
+Memory Layout of Created NumPy Arrays
+-------------------------------------
+
+For NumPy-backed ``empty``, ``ones``, ``zeros``, ``full``, and their ``*_like``
+variants, ``order="F"`` requests a Fortran-contiguous result from ``compute``.
+The request is retained by copying, pickling, persisting, optimizing, and
+rechunking the created collection. It does not require intermediate blocks to
+be contiguous: constant blocks can still use memory-efficient broadcast views.
+
+This is a final-result layout request, not a layout guarantee for derived
+collections. Operations such as arithmetic, slicing, transposing, and casting
+may choose a different layout. Other array backends retain their existing
+layout behavior.
+
 NumPy Slicing
 -------------
 
