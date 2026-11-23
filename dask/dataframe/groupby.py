@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import contextlib
 import itertools as it
 import operator
 import warnings
@@ -564,12 +565,10 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
 def _nunique_df_chunk(df, *by, **kwargs):
     name = kwargs.pop("name")
-    try:
+    with contextlib.suppress(Exception):
         # This is a lot faster but kind of a pain to implement when by
         # has a boolean series in it.
         return df.drop_duplicates(subset=list(by) + [name]).set_index(list(by))
-    except Exception:
-        pass
 
     g = _groupby_raise_unaligned(df, by=by, group_keys=True)
     if len(df) > 0:

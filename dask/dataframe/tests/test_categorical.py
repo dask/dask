@@ -437,7 +437,6 @@ class TestCategoricalAccessor:
             ("add_categories", dict(new_categories=["d", "e"])),
             ("as_ordered", {}),
             ("as_unordered", {}),
-            ("as_ordered", {}),
             ("remove_categories", dict(removals=["a"])),
             ("rename_categories", dict(new_categories=["d", "e", "f"])),
             ("reorder_categories", dict(new_categories=["a", "b", "c"])),

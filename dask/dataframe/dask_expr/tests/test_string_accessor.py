@@ -45,7 +45,6 @@ def dser(ser):
         ("istitle", {}),
         ("isupper", {}),
         ("join", {"sep": "-"}),
-        ("len", {}),
         ("ljust", {"width": 3}),
         ("lower", {}),
         ("lstrip", {}),

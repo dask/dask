@@ -1032,9 +1032,7 @@ def test_tokenize_object_array_with_nans():
     check_tokenize(a)
 
 
-@pytest.mark.parametrize(
-    "x", [1, True, "a", b"a", 1.0, 1j, 1.0j, [], (), {}, None, str, int]
-)
+@pytest.mark.parametrize("x", [1, True, "a", b"a", 1.0, 1j, [], (), {}, None, str, int])
 def test_tokenize_base_types(x):
     check_tokenize(x)
 

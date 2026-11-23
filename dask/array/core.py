@@ -429,7 +429,7 @@ def _concatenate2(arrays, axes=None):
         assert all(list(a.keys()) == keys for a in arrays)
         ret = dict()
         for k in keys:
-            ret[k] = concatenate(list(a[k] for a in arrays), axis=axes[0])
+            ret[k] = concatenate([a[k] for a in arrays], axis=axes[0])
         return ret
     else:
         return concatenate(arrays, axis=axes[0])
@@ -831,10 +831,8 @@ def map_blocks(
     original_kwargs = kwargs
 
     if dtype is None and meta is None:
-        try:
+        with contextlib.suppress(Exception):
             meta = compute_meta(func, dtype, *args, **kwargs)
-        except Exception:
-            pass
 
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import itertools
 import warnings
 from collections.abc import Iterable
@@ -329,12 +330,9 @@ def make_meta_object(x, index=None):
         # could be a string, a dtype object, or a python type. Skip `None`,
         # because it is implicitly converted to `dtype('f8')`, which we don't
         # want here.
-        try:
+        with contextlib.suppress(Exception):
             dtype = np.dtype(x)
             return _scalar_from_dtype(dtype)
-        except Exception:
-            # Continue on to next check
-            pass
 
     if is_scalar(x):
         return _nonempty_scalar(x)
