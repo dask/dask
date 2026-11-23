@@ -95,7 +95,7 @@ def assert_has_persisted_data(arr):
     else:
         for layer in arr.dask.layers.values():
             if isinstance(layer, MaterializedLayer) and any(
-                map(lambda obj: isinstance(obj, np.ndarray), layer.mapping.values())
+                isinstance(obj, np.ndarray) for obj in layer.mapping.values()
             ):
                 has_persisted_data = True
                 break
