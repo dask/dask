@@ -574,18 +574,18 @@ def test_map_overlap_deprecated_signature():
     # Old positional signature: func, depth, boundary, trim
     with pytest.warns(FutureWarning):
         y = da.map_overlap(x, func, 0, "reflect", True)
-        assert y.compute() == 3
-        assert y.shape == (3,)
+    assert y.compute() == 3
+    assert y.shape == (3,)
 
     with pytest.warns(FutureWarning):
         y = da.map_overlap(x, func, 1, "reflect", True)
-        assert y.compute() == 5
-        assert y.shape == (3,)
+    assert y.compute() == 5
+    assert y.shape == (3,)
 
     with pytest.warns(FutureWarning):
         y = da.map_overlap(x, func, 1, "reflect", False)
-        assert y.compute() == 5
-        assert y.shape == (3,)
+    assert y.compute() == 5
+    assert y.shape == (3,)
 
 
 def test_map_overlap_trim_false_chunking():
