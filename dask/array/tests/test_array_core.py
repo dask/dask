@@ -2168,7 +2168,7 @@ def test_store_regions():
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=region, compute=False)
-    assert all(isinstance(a, Array) for a in v)
+    assert all(isinstance(arr, Array) for arr in v)
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
     assert all(ev.size == 0 for ev in results)
