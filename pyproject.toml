@@ -145,7 +145,6 @@ ignore = [
     "PT031",   # pytest.warns with multiple statements (21 findings)
     "TRY004",  # Type check without TypeError (18 findings)
     "SIM118",  # key in dict.keys() instead of key in dict (14 findings)
-    "PIE808",  # Unnecessary range() start argument (13 findings)
     "FURB192", # Unnecessary sorted() in min()/max() (11 findings)
 ]
 

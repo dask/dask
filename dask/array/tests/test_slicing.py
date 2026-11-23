@@ -1058,7 +1058,7 @@ def test_slice_array_null_dimension():
 
 def test_take_sorted_indexer():
     arr = da.ones((250, 100), chunks=((50, 100, 33, 67), 100))
-    indexer = list(range(0, 250))
+    indexer = list(range(250))
     result = arr[indexer, :]
     assert_eq(arr, result)
     assert {
