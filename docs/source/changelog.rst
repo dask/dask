@@ -5,6 +5,18 @@ Changelog
 
     This is not exhaustive. For an exhaustive list of changes, see the git log.
 
+.. _v2026.11.0:
+
+2026.11.0
+---------
+
+Highlights
+^^^^^^^^^^
+
+- Bokeh 4 compatibility
+- NumPy 3.6 compatibility
+- pandas 3.1 compatibility
+
 .. _v2026.8.0:
 
 2026.8.0
