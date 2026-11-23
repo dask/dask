@@ -56,6 +56,18 @@ def test_merge_asof_on_basic():
     assert_eq(c, C, check_index=False)
 
 
+def test_merge_asof_tail() -> None:
+    left = from_pandas(
+        pd.DataFrame({"a": [1, 3, 5, 7, 9, 11], "b": list("abcdef")}), npartitions=3
+    )
+    right = from_pandas(
+        pd.DataFrame({"a": [1, 4, 8, 10], "c": [10, 20, 30, 40]}), npartitions=2
+    )
+    result = merge_asof(left, right, on="a", direction="nearest")
+
+    assert_eq(result.tail(n=1), result.compute().tail(n=1))
+
+
 def test_merge_asof_one_partition():
     left = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     right = pd.DataFrame({"a": [1, 2, 3], "c": [4, 5, 6]})
