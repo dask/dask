@@ -484,7 +484,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
             divisions.append(end + 1)
         meta_start, meta_end = 0, step
     else:
-        raise ValueError(f"Unhandled index: {spec.index_spec}")
+        raise TypeError(f"Unhandled index: {spec.index_spec}")
 
     kwargs: dict[str, Any] = {"freq": step}
     for col in spec.column_specs:

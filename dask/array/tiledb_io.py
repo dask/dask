@@ -156,7 +156,7 @@ def to_tiledb(
                 "Target TileDB array layout is not compatible with source array"
             )
     else:
-        raise ValueError(
+        raise TypeError(
             "'uri' must be string pointing to supported TileDB store location "
             "or an open, writable TileDB array."
         )

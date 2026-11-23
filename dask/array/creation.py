@@ -597,7 +597,7 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
         dtype = float
 
     if not isinstance(chunks, (int, str)):
-        raise ValueError("chunks must be an int or string")
+        raise TypeError("chunks must be an int or string")
 
     vchunks, hchunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
     chunks = vchunks[0]
