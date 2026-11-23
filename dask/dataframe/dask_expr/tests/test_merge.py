@@ -105,7 +105,7 @@ def test_broadcast_merge(how, npartitions):
 
     # Check that we avoid the shuffle when allowed
     if how in ("left", "inner"):
-        assert all(["Shuffle" not in str(op) for op in df3.simplify().operands[:2]])
+        assert all("Shuffle" not in str(op) for op in df3.simplify().operands[:2])
 
     # Check result with/without fusion
     expect = pdf1.merge(pdf2, on="x", how=how)

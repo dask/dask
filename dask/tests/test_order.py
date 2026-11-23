@@ -1463,7 +1463,7 @@ def test_anom_mean():
     from collections import defaultdict
 
     count_dependents = defaultdict(set)
-    for k in dict(graph).keys():
+    for k in dict(graph):
         count_dependents[len(dependents[k])].add(k)
 
     # array-taker has the most dependents, but it's not what we want to look at
@@ -1994,8 +1994,8 @@ def test_flox_reduction(abcde):
     }
     o = order(dsk)
     assert_topological_sort(dsk, o)
-    of1 = list(o[(g, 1, ix)] for ix in range(3))
-    of2 = list(o[(g, 2, ix)] for ix in range(3))
+    of1 = [o[(g, 1, ix)] for ix in range(3)]
+    of2 = [o[(g, 2, ix)] for ix in range(3)]
     assert max(of1) < min(of2) or max(of2) < min(of1)
 
 

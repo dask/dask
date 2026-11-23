@@ -2104,7 +2104,7 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series(list(range(0, 30)) * 2, dtype=dtype),
+        index=pd.Series(list(range(30)) * 2, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
@@ -2200,9 +2200,7 @@ def test_repartition_datetime_tz_index():
 @pytest.mark.parametrize(
     "end", ["2000-04-15", "2000-04-15 12:37:01", "2000-01-01 12:37:00"]
 )
-@pytest.mark.parametrize(
-    "start", ["2000-01-01", "2000-01-01 12:30:00", "2000-01-01 12:30:00"]
-)
+@pytest.mark.parametrize("start", ["2000-01-01", "2000-01-01 12:30:00"])
 def test_repartition_freq(npartitions, freq, start, end):
     start = pd.Timestamp(start)
     end = pd.Timestamp(end)
@@ -2303,7 +2301,6 @@ def test_repartition_freq_day():
         ("BA", "BYS" if PANDAS_GE_220 else "BAS"),
         ("2BA", "2BYS" if PANDAS_GE_220 else "2BAS"),
         ("BY", "BYS" if PANDAS_GE_220 else "BAS"),
-        ("Y", "YS" if PANDAS_GE_220 else "AS"),
         (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
     ],
 )
@@ -2784,7 +2781,7 @@ def test_to_frame():
     assert_eq(s.to_frame("bar"), a.to_frame("bar"))
 
 
-@pytest.mark.parametrize("as_frame", [False, False])
+@pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_raises(as_frame):
     s = pd.Series([1, 2, 3, 4, 5, 6], name="foo")
     a = dd.from_pandas(s, npartitions=2)

@@ -581,7 +581,7 @@ def to_parquet(
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
 
-    if custom_metadata and b"pandas" in custom_metadata.keys():
+    if custom_metadata and b"pandas" in custom_metadata:
         raise ValueError(
             "User-defined key/value metadata (custom_metadata) can not "
             "contain a b'pandas' key.  This key is reserved by Pandas, "
@@ -1726,7 +1726,7 @@ def _collect_pq_statistics(
     ]
 
     # Execute with delayed for large and remote datasets
-    parallel = int(False if _is_local_fs(fs) else 16)
+    parallel = 0 if _is_local_fs(fs) else 16
     if parallel:
         # Group parts corresponding to the same file.
         # A single task should always parse statistics
@@ -1811,7 +1811,7 @@ def _read_partition_stats_group(parts, fs, columns=None):
                 "min": column_stats[name]["min"],
                 "max": column_stats[name]["max"],
             }
-            for name in column_stats.keys()
+            for name in column_stats
         ]
         return {"num-rows": num_rows, "columns": column_stats_list}
 
@@ -1987,7 +1987,7 @@ def _gather_statistics(frags):
         return token_fragment[0], _extract_stats(token_fragment[1].metadata.to_dict())
 
     return dask.compute(
-        list(_collect_statistics(frag) for frag in frags), scheduler="threading"
+        [_collect_statistics(frag) for frag in frags], scheduler="threading"
     )[0]
 
 

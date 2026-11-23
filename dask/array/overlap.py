@@ -849,9 +849,7 @@ def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
 
     # Ensure that each chunk is big enough to leave at least a size-1 chunk
     # after windowing (this is only really necessary for the last chunk).
-    safe_chunks = list(
-        ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, x.chunks)
-    )
+    safe_chunks = [ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, x.chunks)]
     if automatic_rechunk:
         safe_chunks = [
             s if d != 0 else c for d, c, s in zip(depths, x.chunks, safe_chunks)

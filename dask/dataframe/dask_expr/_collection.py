@@ -194,9 +194,7 @@ def _wrap_expr_op(self, other, op=None):
     ):
         other = self._create_alignable_frame(other).expr
 
-    if not isinstance(other, expr.Expr):
-        return new_collection(getattr(self.expr, op)(other))
-    elif expr.are_co_aligned(self.expr, other):
+    if not isinstance(other, expr.Expr) or expr.are_co_aligned(self.expr, other):
         return new_collection(getattr(self.expr, op)(other))
     else:
         return new_collection(expr.OpAlignPartitions(self, other, op))

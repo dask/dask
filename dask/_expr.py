@@ -1175,9 +1175,9 @@ class _HLGExprSequence(Expr):
             if layer.annotations:
                 annot = layer.annotations
                 for annot_type, value in annot.items():
-                    annots = list(
+                    annots = [
                         (k, (value(k) if callable(value) else value)) for k in layer
-                    )
+                    ]
                     annotations_by_type[annot_type].update(
                         {
                             k: v
