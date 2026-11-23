@@ -1987,7 +1987,7 @@ def _gather_statistics(frags):
         return token_fragment[0], _extract_stats(token_fragment[1].metadata.to_dict())
 
     return dask.compute(
-        list(_collect_statistics(frag) for frag in frags), scheduler="threading"
+        [_collect_statistics(frag) for frag in frags], scheduler="threading"
     )[0]
 
 
