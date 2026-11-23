@@ -21,7 +21,7 @@ class Accessor:
         from dask.dataframe.dask_expr import Series
 
         if not isinstance(series, Series):
-            raise ValueError("Accessor cannot be initialized")
+            raise TypeError("Accessor cannot be initialized")
 
         series_meta = series._meta
         if hasattr(series_meta, "to_series"):  # is index-like

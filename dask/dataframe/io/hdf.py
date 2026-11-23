@@ -247,7 +247,7 @@ def to_hdf(
         kwargs2["append"] = True
 
     filenames = []
-    for i in range(0, df.npartitions):
+    for i in range(df.npartitions):
         i_name = name_function(i)
         filenames.append(fmt_obj(path, i_name))
 
@@ -499,7 +499,7 @@ def _expand_key(key, hdf):
     if not glob.has_magic(key):
         keys = [key]
     else:
-        keys = [k for k in hdf.keys() if fnmatch(k, key)]
+        keys = [k for k in hdf if fnmatch(k, key)]
         # https://github.com/dask/dask/issues/5934
         # TODO: remove this part if/when pandas copes with all keys
         keys.extend(

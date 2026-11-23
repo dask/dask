@@ -869,11 +869,10 @@ class UFuncElemwise(MapPartitions):
                 if isinstance(divisions, pd.Index):
                     divisions = methods.tolist(divisions)
             except Exception:
-                pass
-            else:
-                if not valid_divisions(divisions):
-                    divisions = [None] * (self._dfs[0].npartitions + 1)
-                return divisions
+                return self._dfs[0].divisions
+            if not valid_divisions(divisions):
+                divisions = [None] * (self._dfs[0].npartitions + 1)
+            return divisions
 
         return self._dfs[0].divisions
 
@@ -2158,9 +2157,9 @@ class Filter(Blockwise):
                 # We can't push Projections through filters if the preceding operation
                 # allows us to push filters further down the graph because Projections
                 # block filter pushdown
-                if not isinstance(self.frame, (FilterAlign, Filter)):
-                    return
-                elif is_filter_pushdown_available(
+                if not isinstance(
+                    self.frame, (FilterAlign, Filter)
+                ) or is_filter_pushdown_available(
                     self.frame, self, dependents, allow_reduction=False
                 ):
                     return
@@ -3550,7 +3549,7 @@ class MaybeAlignPartitions(Expr):
                 dfs[0].divisions == df.divisions and df.known_divisions for df in dfs
             )
             or len(self.divisions) == 2
-            and max(map(lambda x: len(x.divisions), dfs)) == 2
+            and max(len(x.divisions) for x in dfs) == 2
         ):
             return self._expr_cls(*self.operands)
         elif self.divisions[0] is None:
@@ -3730,7 +3729,7 @@ class OpAlignPartitions(MaybeAlignPartitions):
             len(dfs) == 1
             or all(dfs[0].divisions == df.divisions for df in dfs)
             or len(self.divisions) == 2
-            and max(map(lambda x: len(x.divisions), dfs)) == 2
+            and max(len(x.divisions) for x in dfs) == 2
         ):
             return self._op(self.frame, self.op, self.other, *self.operands[3:])
 
@@ -4029,7 +4028,7 @@ def _replace_common_or_components(expr, or_components):
     and_components = list(map(_convert_mapping, and_components))
 
     replacements = []
-    for c in mapping.keys():
+    for c in mapping:
         if all(c in comp for comp in and_components):
             # We can pull this component out if it's part of all or components
             replacements.append(c)

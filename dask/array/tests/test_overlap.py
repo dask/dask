@@ -320,7 +320,7 @@ def test_map_overlap():
     y = x.map_overlap(
         lambda x: x + len(x), depth=np.int64(2), dtype=x.dtype, boundary="reflect"
     )
-    assert all([(type(s) is int) for s in y.shape])
+    assert all(type(s) is int for s in y.shape)
     assert_eq(y, np.arange(10) + 5 + 2 + 2)
 
     x = da.ones((10, 10), chunks=(3, 4))

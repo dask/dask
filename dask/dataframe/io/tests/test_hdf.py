@@ -333,7 +333,7 @@ def dependency_depth(dsk):
         d = 1 + max(max_depth_by_deps(dep_key) for dep_key in deps[key])
         return d
 
-    return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
+    return max(max_depth_by_deps(dep_key) for dep_key in deps)
 
 
 @pytest.mark.skipif(

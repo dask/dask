@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import contextlib
 import itertools as it
 import operator
 import warnings
@@ -564,12 +565,10 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
 def _nunique_df_chunk(df, *by, **kwargs):
     name = kwargs.pop("name")
-    try:
+    with contextlib.suppress(Exception):
         # This is a lot faster but kind of a pain to implement when by
         # has a boolean series in it.
         return df.drop_duplicates(subset=list(by) + [name]).set_index(list(by))
-    except Exception:
-        pass
 
     g = _groupby_raise_unaligned(df, by=by, group_keys=True)
     if len(df) > 0:
@@ -683,7 +682,7 @@ def _normalize_spec(spec, non_group_columns):
                 )
 
     else:
-        raise ValueError(f"unsupported agg spec of type {type(spec)}")
+        raise TypeError(f"unsupported agg spec of type {type(spec)}")
 
     compounds = (list, tuple, dict)
     use_flat_columns = not any(
@@ -786,7 +785,7 @@ def _build_agg_args_single(result_column, func, func_args, func_kwargs, input_co
         ),  # No chunk func for median, we can only take it when aggregating
     }
 
-    if func in simple_impl.keys():
+    if func in simple_impl:
         return _build_agg_args_simple(
             result_column, func, input_column, simple_impl[func]
         )

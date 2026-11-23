@@ -110,7 +110,7 @@ def test_passing_engine_as_uri_raises_helpful_error(db):
     with tmpfile() as f:
         db = f"sqlite:///{f}"
         engine = create_engine(db)
-        with pytest.raises(ValueError, match="Expected URI to be a string"):
+        with pytest.raises(TypeError, match="Expected URI to be a string"):
             ddf.to_sql("test", engine, if_exists="replace")
 
 
@@ -449,7 +449,7 @@ def test_query_with_meta(db):
 
 
 def test_read_sql_query_string_raises_error(db):
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         read_sql_query("SELECT * FROM test", db, npartitions=2, index_col="number")
 
 

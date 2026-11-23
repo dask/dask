@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import itertools
 import warnings
 from collections.abc import Iterable
@@ -329,12 +330,9 @@ def make_meta_object(x, index=None):
         # could be a string, a dtype object, or a python type. Skip `None`,
         # because it is implicitly converted to `dtype('f8')`, which we don't
         # want here.
-        try:
+        with contextlib.suppress(Exception):
             dtype = np.dtype(x)
             return _scalar_from_dtype(dtype)
-        except Exception:
-            # Continue on to next check
-            pass
 
     if is_scalar(x):
         return _nonempty_scalar(x)
@@ -476,10 +474,7 @@ def _nonempty_series(s, idx=None):
         # pandas 0.24.0+ should infer this to be Series[Period[freq]]
         freq = dtype.freq
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
-    elif isinstance(dtype, pd.SparseDtype):
-        entry = _scalar_from_dtype(dtype.subtype)
-        data = pd.array([entry, entry], dtype=dtype)
-    elif isinstance(dtype, pd.IntervalDtype):
+    elif isinstance(dtype, (pd.SparseDtype, pd.IntervalDtype)):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
     elif type(dtype) in make_array_nonempty._lookup:

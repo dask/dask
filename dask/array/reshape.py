@@ -129,12 +129,7 @@ def reshape_rechunk(inshape, outshape, inchunks, disallow_dimension_expansion=Fa
 def _calc_lower_dimension_chunks(chunks, start, stop):
     # We need the lower dimension chunks to match what the higher dimension chunks
     # can be combined to, i.e. multiply the different dimensions
-    return tuple(
-        map(
-            lambda x: reduce(mul, x),
-            product(*chunks[start : stop + 1]),
-        )
-    )
+    return tuple(reduce(mul, x) for x in product(*chunks[start : stop + 1]))
 
 
 def _smooth_chunks(ileft, ii, max_in_chunk, result_inchunks):
@@ -582,11 +577,11 @@ def _convert_to_shape(
     output_shape: list[list[int]] = [[]] * (
         len(set(mapper_in.values())) + len(one_dims)
     )
-    output_shape = list(map(lambda x: x.copy(), output_shape))
+    output_shape = [x.copy() for x in output_shape]
     for i in one_dims:
         output_shape[i] = [1]
 
     for k, v in mapper_in.items():
         output_shape[v].append(shape[k])
 
-    return tuple(map(lambda x: reduce(mul, x), output_shape))
+    return tuple(reduce(mul, x) for x in output_shape)

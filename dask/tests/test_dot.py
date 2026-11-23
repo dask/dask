@@ -162,10 +162,10 @@ def test_to_graphviz_verbose():
 
 def test__to_cytoscape_json_verbose():
     data = _to_cytoscape_json(dsk, verbose=True)
-    labels = list(map(lambda x: x["data"]["label"], data["nodes"]))
+    labels = [x["data"]["label"] for x in data["nodes"]]
     assert len(labels) == 10
     assert set(labels) == {"a", "b", "c", "d", "e", "f"}
-    shapes = list(map(lambda x: x["data"]["shape"], data["nodes"]))
+    shapes = [x["data"]["shape"] for x in data["nodes"]]
     assert set(shapes) == {"ellipse", "rectangle"}
 
 
@@ -180,10 +180,10 @@ def test_to_graphviz_collapse_outputs():
 
 def test__to_cytoscape_json_collapse_outputs():
     data = _to_cytoscape_json(dsk, collapse_outputs=True)
-    labels = list(map(lambda x: x["data"]["label"], data["nodes"]))
+    labels = [x["data"]["label"] for x in data["nodes"]]
     assert len(labels) == 6  # 6 nodes total
     assert set(labels) == {"c", "d", "e", "f", ""}
-    shapes = list(map(lambda x: x["data"]["shape"], data["nodes"]))
+    shapes = [x["data"]["shape"] for x in data["nodes"]]
     assert set(shapes) == {"ellipse", "rectangle"}
 
 
@@ -198,10 +198,10 @@ def test_to_graphviz_collapse_outputs_and_verbose():
 
 def test__to_cytoscape_json_collapse_outputs_and_verbose():
     data = _to_cytoscape_json(dsk, collapse_outputs=True, verbose=True)
-    labels = list(map(lambda x: x["data"]["label"], data["nodes"]))
+    labels = [x["data"]["label"] for x in data["nodes"]]
     assert len(labels) == 6  # 6 nodes total
     assert set(labels) == {"a", "b", "c", "d", "e", "f"}
-    shapes = list(map(lambda x: x["data"]["shape"], data["nodes"]))
+    shapes = [x["data"]["shape"] for x in data["nodes"]]
     assert set(shapes) == {"ellipse", "rectangle"}
 
 

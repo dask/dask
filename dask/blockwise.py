@@ -1029,10 +1029,10 @@ def _lol_product(head, values, as_taskref=False):
                 )
             )
         else:
-            return list(
+            return [
                 _lol_product(head + (x,), values[1:], as_taskref=as_taskref)
                 for x in values[0]
-            )
+            ]
     else:
         return _lol_product(head + (values[0],), values[1:], as_taskref=as_taskref)
 
@@ -1395,7 +1395,7 @@ def rewrite_blockwise(inputs):
             new_indices.append(x)
 
     sub = {blockwise_token(k): blockwise_token(v) for k, v in sub.items()}
-    dsk = {k: v.substitute(sub) for k, v in dsk.items() if k not in sub.keys()}
+    dsk = {k: v.substitute(sub) for k, v in dsk.items() if k not in sub}
     task = Task.fuse(*dsk.values(), key=root)
     indices_check = {k for k, v in indices if v is not None}
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])

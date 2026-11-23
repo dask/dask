@@ -735,7 +735,6 @@ def test_groupby_reduction_split(xfail, keyword, agg_func, shuffle_method):
         lambda df: df.groupby("A"),
         lambda df: df.groupby(df["A"]),
         lambda df: df.groupby(df["A"] + 1),
-        lambda df: df.groupby("A")["B"],
         # SeriesGroupBy:
         lambda df: df.groupby("A")["B"],
         lambda df: df.groupby(df["A"])["B"],
