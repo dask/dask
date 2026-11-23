@@ -155,7 +155,7 @@ def read_sql_query(
             q = sa.sql.select(sa.sql.func.count(index)).select_from(sql.subquery())
             count = pd.read_sql(q, engine)["count_1"][0]
             npartitions = (
-                int(round(count * bytes_per_row / parse_bytes(bytes_per_chunk))) or 1
+                round(count * bytes_per_row / parse_bytes(bytes_per_chunk)) or 1
             )
         if dtype.kind == "M":
             freq = (maxi - mini).total_seconds() / npartitions

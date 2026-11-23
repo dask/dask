@@ -151,7 +151,6 @@ ignore = [
     "C419",    # Unnecessary comprehension in call (13 findings)
     "PIE808",  # Unnecessary range() start argument (13 findings)
     "FURB192", # Unnecessary sorted() in min()/max() (11 findings)
-    "RUF046",  # Unnecessary cast to int (11 findings)
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
