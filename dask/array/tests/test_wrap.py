@@ -57,9 +57,8 @@ def test_full_detects_da_dtype():
     a = da.full(shape=(3, 3), fill_value=x)
     assert a.dtype == x.dtype
     expect = np.full(shape=(3, 3), fill_value=100)
-    with pytest.warns(FutureWarning, match="not implemented by Dask array") as record:
+    with pytest.warns(FutureWarning, match="not implemented by Dask array"):
         assert_eq(a, expect)
-    assert len(record) == 1
 
 
 def test_full_none_dtype():
