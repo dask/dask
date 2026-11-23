@@ -1395,7 +1395,7 @@ def rewrite_blockwise(inputs):
             new_indices.append(x)
 
     sub = {blockwise_token(k): blockwise_token(v) for k, v in sub.items()}
-    dsk = {k: v.substitute(sub) for k, v in dsk.items() if k not in sub.keys()}
+    dsk = {k: v.substitute(sub) for k, v in dsk.items() if k not in sub}
     task = Task.fuse(*dsk.values(), key=root)
     indices_check = {k for k, v in indices if v is not None}
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])

@@ -1463,7 +1463,7 @@ def test_anom_mean():
     from collections import defaultdict
 
     count_dependents = defaultdict(set)
-    for k in dict(graph).keys():
+    for k in dict(graph):
         count_dependents[len(dependents[k])].add(k)
 
     # array-taker has the most dependents, but it's not what we want to look at

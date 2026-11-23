@@ -144,7 +144,6 @@ ignore = [
     "SIM102",  # Collapsible if (36 findings)
     "PT031",   # pytest.warns with multiple statements (21 findings)
     "TRY004",  # Type check without TypeError (18 findings)
-    "SIM118",  # key in dict.keys() instead of key in dict (14 findings)
     "FURB192", # Unnecessary sorted() in min()/max() (11 findings)
 ]
 
