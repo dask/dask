@@ -686,10 +686,8 @@ class ArrowDatasetEngine(Engine):
                     metadata_file_exists = True
                 except OSError:
                     try:
-                        # `max` keeps the first maximum in iteration order; reverse
-                        # so ties still select the last file, as the old sort did.
                         with fs.open(
-                            max(reversed(ds.files), key=natural_sort_key), mode="rb"
+                            max(ds.files, key=natural_sort_key), mode="rb"
                         ) as fil:
                             tail_metadata = pq.read_metadata(fil)
                     except OSError:
