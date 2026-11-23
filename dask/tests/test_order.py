@@ -1994,8 +1994,8 @@ def test_flox_reduction(abcde):
     }
     o = order(dsk)
     assert_topological_sort(dsk, o)
-    of1 = list(o[(g, 1, ix)] for ix in range(3))
-    of2 = list(o[(g, 2, ix)] for ix in range(3))
+    of1 = [o[(g, 1, ix)] for ix in range(3)]
+    of2 = [o[(g, 2, ix)] for ix in range(3)]
     assert max(of1) < min(of2) or max(of2) < min(of1)
 
 

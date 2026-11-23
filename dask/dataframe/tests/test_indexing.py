@@ -567,7 +567,7 @@ def test_iloc_duplicate_columns():
 
     selection = ddf.iloc[:, 2]
     # Check that `iloc` is called instead of getitem
-    assert any([key.startswith("iloc") for key in selection.dask.layers])
+    assert any(key.startswith("iloc") for key in selection.dask.layers)
 
     select_first = ddf.iloc[:, 1]
     assert_eq(select_first, df.iloc[:, 1])

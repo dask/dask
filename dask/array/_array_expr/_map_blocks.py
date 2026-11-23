@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import warnings
 from itertools import product
 from numbers import Number
@@ -305,10 +306,8 @@ def map_blocks(
     original_kwargs = kwargs
 
     if dtype is None and meta is None:
-        try:
+        with contextlib.suppress(Exception):
             meta = compute_meta(func, dtype, *args, **kwargs)
-        except Exception:
-            pass
 
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 

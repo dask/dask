@@ -247,7 +247,7 @@ def to_hdf(
         kwargs2["append"] = True
 
     filenames = []
-    for i in range(0, df.npartitions):
+    for i in range(df.npartitions):
         i_name = name_function(i)
         filenames.append(fmt_obj(path, i_name))
 

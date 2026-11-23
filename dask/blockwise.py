@@ -1029,10 +1029,10 @@ def _lol_product(head, values, as_taskref=False):
                 )
             )
         else:
-            return list(
+            return [
                 _lol_product(head + (x,), values[1:], as_taskref=as_taskref)
                 for x in values[0]
-            )
+            ]
     else:
         return _lol_product(head + (values[0],), values[1:], as_taskref=as_taskref)
 

@@ -1793,9 +1793,9 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     seq = list(seq)
     if npartitions and not partition_size:
         if len(seq) <= 100:
-            partition_size = int(math.ceil(len(seq) / npartitions))
+            partition_size = math.ceil(len(seq) / npartitions)
         else:
-            partition_size = max(1, int(math.floor(len(seq) / npartitions)))
+            partition_size = max(1, math.floor(len(seq) / npartitions))
     if npartitions is None and partition_size is None:
         if len(seq) <= 100:
             partition_size = 1
@@ -2385,9 +2385,9 @@ def groupby_tasks(b, grouper, hash=lambda x: int(tokenize(x), 16), max_branch=32
     max_branch = max_branch or 32
     n = b.npartitions
 
-    stages = int(math.ceil(math.log(n) / math.log(max_branch))) or 1
+    stages = math.ceil(math.log(n) / math.log(max_branch)) or 1
     if stages > 1:
-        k = int(math.ceil(n ** (1 / stages)))
+        k = math.ceil(n ** (1 / stages))
     else:
         k = n
 
