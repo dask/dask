@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -405,6 +406,35 @@ def test_calculate_divisions_no_index(tmpdir, write_engine, read_engine):
     df = dd.read_parquet(fn, engine=read_engine, index=False)
     assert df.index.name is None
     assert not df.known_divisions
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("filesystem", ["fsspec", "arrow"])
+@pytest.mark.parametrize("columns", [["x0"], ["x1", "a"], ["b", "x0", "x1"]])
+def test_project_columns_from_stored_multi_index(
+    tmp_path: Path, filesystem: str, columns: list[str]
+) -> None:
+    pdf = pd.DataFrame(
+        {"x0": [0, 3], "x1": [1, 4], "a": [2, 5], "b": [3, 6]}
+    ).set_index(["x0", "x1"])
+    path = tmp_path / "test.parquet"
+    pdf.to_parquet(path)
+
+    result = dd.read_parquet(path, columns=columns, index=False, filesystem=filesystem)
+
+    assert_eq(result, pdf.reset_index()[columns])
+
+
+@PYARROW_MARK
+def test_index_false_with_unnamed_stored_multi_index_arrow(tmp_path: Path) -> None:
+    index = pd.MultiIndex.from_tuples([(0, 1), (2, 3)])
+    pdf = pd.DataFrame({"a": [4, 5]}, index=index)
+    path = tmp_path / "test.parquet"
+    pdf.to_parquet(path)
+
+    result = dd.read_parquet(path, index=False, filesystem="arrow")
+
+    assert_eq(result, pdf.reset_index(drop=True))
 
 
 def test_columns_index_with_multi_index(tmpdir, engine):

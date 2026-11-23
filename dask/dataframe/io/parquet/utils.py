@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Collection, Hashable
 
 import numpy as np
 import pandas as pd
@@ -290,6 +291,23 @@ class Engine:
         Otherwise, None is returned.
         """
         raise NotImplementedError()
+
+
+def _restore_index_columns(
+    frame: pd.DataFrame, columns: Collection[Hashable]
+) -> pd.DataFrame:
+    """Expose requested stored index levels as columns on an unindexed read."""
+    levels = [
+        level
+        for level, name in enumerate(frame.index.names)
+        if name in columns and name not in frame.columns
+    ]
+    remaining_index = len(levels) < frame.index.nlevels
+    if levels:
+        frame = frame.reset_index(level=levels)
+    if remaining_index:
+        frame = frame.reset_index(drop=True)
+    return frame
 
 
 def _normalize_index_columns(user_columns, data_columns, user_index, data_index):
