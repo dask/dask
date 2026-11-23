@@ -661,6 +661,21 @@ def test_index_with_int_dask_array(x_chunks, idx_chunks):
     assert_eq(x.T[idx, :], expect.T)
 
 
+@pytest.mark.parametrize("axis_chunks, indices", [((2,), [0]), ((2, 3), [0, 2])])
+def test_int_dask_index_matching_chunk_offsets(
+    axis_chunks: tuple[int, ...], indices: list[int]
+) -> None:
+    values = np.arange(3 * sum(axis_chunks)).reshape(-1, 3)
+    x = da.from_array(values, chunks=(axis_chunks, (3,)))
+    index = np.array(indices)
+    idx = da.from_array(index, chunks=1)
+
+    result = x[idx]
+
+    assert result.chunks == (idx.chunks[0], x.chunks[1])
+    assert_eq(result, values[index])
+
+
 @pytest.mark.parametrize("chunks", [1, 2, 3])
 def test_index_with_int_dask_array_0d(chunks):
     # Slice by 0-dimensional array
