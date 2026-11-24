@@ -21,6 +21,8 @@ import sys
 from datetime import datetime
 
 import sphinx_autosummary_accessors
+from sphinx import addnodes
+from sphinx.util.matching import patmatch
 
 # -- General configuration -----------------------------------------------------
 
@@ -59,6 +61,11 @@ copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: 
 copybutton_prompt_is_regexp = True
 
 numpydoc_show_class_members = False
+
+# Computing the nested llms.txt indexes costs ~100s of the docs build: the
+# extension recalculates the full list of indexes for every page. The root
+# llms.txt still links to every page, so the nested copies add little value.
+llms_txt_nested_enabled = False
 
 sphinx_tabs_disable_tab_closing = True
 
@@ -488,5 +495,44 @@ def copy_legacy_redirects(app, docname):
             target_path.write_text(page)
 
 
+def _remove_from_toctrees(app, doctree):
+    # `sphinx-remove-toctrees` only cleans ``env.tocs``, while the HTML theme
+    # resolves the global toctree from the individual doctrees. Strip the
+    # generated API pages before Sphinx builds its toctree index so that they
+    # do not end up in every sidebar (and make every page render ~1000 links).
+    for toctree in doctree.findall(addnodes.toctree):
+        toctree["entries"] = [
+            entry
+            for entry in toctree.get("entries", [])
+            if not any(patmatch(entry[1], pattern) for pattern in app.config.remove_from_toctrees)
+        ]
+
+
+_nav_cache = {}
+
+
+def _reuse_api_navigation(app, pagename, templatename, context, doctree):
+    # Sidebar navigation is identical on every generated API page: those pages
+    # are deliberately excluded from the global toctree. Rendering it separately
+    # for ~1100 pages costs more than rendering all of the actual documentation.
+    if not pagename.startswith("generated/"):
+        return
+    for name in ("toctree", "generate_toctree_html"):
+        original = context.get(name)
+        if original is None:
+            continue
+
+        def cached(*args, _name=name, _original=original, **kwargs):
+            key = (_name, args, tuple(sorted(kwargs.items())))
+            if key not in _nav_cache:
+                _nav_cache[key] = _original(*args, **kwargs)
+            return _nav_cache[key]
+
+        context[name] = cached
+
+
 def setup(app):
+    # Run before Sphinx's toctree collector copies the nodes into ``env.tocs``.
+    app.connect("doctree-read", _remove_from_toctrees, priority=100)
     app.connect("build-finished", copy_legacy_redirects)
+    app.connect("html-page-context", _reuse_api_navigation)
