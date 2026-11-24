@@ -627,7 +627,7 @@ def test_nearest_neighbor(abcde):
     Want to finish off a local group before moving on.
     This is difficult because all groups are connected.
     """
-    a, b, _c, _, _ = abcde
+    a, b, _c, _d, _e = abcde
     a1, a2, a3, a4, a5, a6, a7, a8, a9 = (a + i for i in "123456789")
     b1, b2, b3, b4 = (b + i for i in "1234")
 
