@@ -1620,7 +1620,7 @@ def test_to_csv_errors_using_multiple_scheduler_args():
     def my_get(*args, **kwargs):
         return mp_get(*args, **kwargs)
 
-    with tmpdir() as dn, pytest.raises(ValueError) and pytest.warns(FutureWarning):
+    with tmpdir() as dn, pytest.raises(ValueError), pytest.warns(FutureWarning):
         ddf.to_csv(
             dn, index=False, scheduler=my_get, compute_kwargs={"scheduler": my_get}
         )
