@@ -4041,7 +4041,6 @@ def _replace_common_or_components(expr, or_components):
         # construct the outer component
         outer_component = outer_component & mapping[r]
 
-    #
     result_components = []
     for comp in [mapping] + and_components:
         keep_components = [c for c in comp if c not in replacements]

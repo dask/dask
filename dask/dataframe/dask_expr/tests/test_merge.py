@@ -352,7 +352,7 @@ def test_merge_combine_similar_hangs():
             }
         )
     )
-    #
+
     partsupp_filtered = from_pandas(
         pd.DataFrame.from_dict(
             {
