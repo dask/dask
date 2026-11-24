@@ -373,11 +373,14 @@ def test_set_nested():
     assert "abc" not in config
 
 
-def test_set_hard_to_copyables():
-    import threading
+def test_set_does_not_copy():
+    """Test that dask.config.set stores objects by reference.
+    This is important for shared stateful objects, e.g. locks.
+    """
+    x = object()
 
-    with dask.config.set(x=threading.Lock()), dask.config.set(y=1):
-        pass
+    with dask.config.set(x=x):
+        assert config["x"] is x
 
 
 @pytest.mark.parametrize("mkdir", [True, False])

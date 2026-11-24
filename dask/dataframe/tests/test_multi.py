@@ -1720,8 +1720,8 @@ def test_concat_unknown_divisions_errors():
 
     with (
         pytest.raises(ValueError),
-        pytest.warns(UserWarning),
-    ):  # Concat with unknown divisions
+        pytest.warns(UserWarning),  # Concat with unknown divisions
+    ):
         dd.concat([aa, bb], axis=1).compute()
 
 

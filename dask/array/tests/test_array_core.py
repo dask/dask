@@ -3104,10 +3104,10 @@ def test_asarray_h5py(asarray, inline_array):
         d = f.create_dataset("/x", shape=(2, 2), dtype=float)
         x = asarray(d, inline_array=inline_array)
 
-        # Check for the array in the dsk
-        dsk = dict(x.dask)
-        assert (d in dsk.values()) is not inline_array
-        assert not any(isinstance(v, np.ndarray) for v in dsk.values())
+    # Check for the array in the dsk
+    dsk = dict(x.dask)
+    assert (d in dsk.values()) is not inline_array
+    assert not any(isinstance(v, np.ndarray) for v in dsk.values())
 
 
 def test_asarray_chunks():
@@ -5312,7 +5312,7 @@ def test_zarr_regions():
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    with pytest.raises(ValueError), tmpdir() as d:
+    with tmpdir() as d, pytest.raises(ValueError):
         a.to_zarr(d, region=(slice(2), slice(2)))
 
 

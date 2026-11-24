@@ -411,7 +411,7 @@ def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip)
             actual = dd_read(fn, blocksize=200, skiprows=skip, names=names).compute()
         assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
 
-        # if new sample does not contain all the skiprows, raise error
+        # If new sample does not contain all the skiprows, raise error
         with pytest.warns(UserWarning), pytest.raises(ValueError):
             dd_read(fn, blocksize=30, skiprows=skip, names=names)
 
@@ -790,7 +790,7 @@ def test_warn_non_seekable_files():
         with (
             pytest.raises(NotImplementedError),
             pytest.warns(UserWarning),
-        ):  # needed for pytest
+        ):
             df = dd.read_csv("2014-01-*.csv", compression="foo")
 
 
@@ -1200,7 +1200,7 @@ def test_parse_dates_multi_column():
         # Deprecated in pandas=2.2.0
         ctx = pytest.warns(FutureWarning, match="nested")
 
-    with ctx, filetext(pdmc_text) as fn:
+    with filetext(pdmc_text) as fn, ctx:
         ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
         df = pd.read_csv(fn, parse_dates=[["date", "time"]])
 

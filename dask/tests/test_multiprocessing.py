@@ -295,8 +295,8 @@ def test_custom_context_ignored_elsewhere():
     """
     assert get({"x": (inc, 1)}, "x") == 2
     with (
-        pytest.warns(UserWarning),
         dask.config.set({"multiprocessing.context": "forkserver"}),
+        pytest.warns(UserWarning),
     ):
         assert get({"x": (inc, 1)}, "x") == 2
 
@@ -306,7 +306,7 @@ def test_get_context_always_default():
     """On Python 2/Windows, get_context() always returns same context."""
     assert get_context() is multiprocessing
     with (
-        pytest.warns(UserWarning),
         dask.config.set({"multiprocessing.context": "forkserver"}),
+        pytest.warns(UserWarning),
     ):
         assert get_context() is multiprocessing
