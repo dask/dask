@@ -11,6 +11,8 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
+from numpy.typing import DTypeLike
+
 import dask.array as da
 from dask.array.numpy_compat import NUMPY_GE_240
 from dask.array.ufunc import da_frompyfunc
@@ -389,7 +391,7 @@ def test_non_ufunc_others(func):
     ],
 )
 def test_nan_to_num_keywords(
-    func: Callable[..., Any], dtype: type[np.generic], kwargs: dict[str, Any]
+    func: Callable[..., Any], dtype: DTypeLike, kwargs: dict[str, Any]
 ) -> None:
     arr = np.array(
         [[np.nan, np.inf, -np.inf, 2.0], [-0.0, -2.0, 3.0, np.nan]], dtype=dtype

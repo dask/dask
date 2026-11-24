@@ -285,7 +285,8 @@ sinc = wrap_elemwise(np.sinc)
 _nan_to_num = wrap_elemwise(np.nan_to_num)
 
 
-@derived_from(np)
+# derived_from only copies the docstring and does not yet preserve static types.
+@derived_from(np)  # type: ignore[untyped-decorator]
 def nan_to_num(
     x: Any,
     copy: bool = True,
