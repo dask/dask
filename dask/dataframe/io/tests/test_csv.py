@@ -1620,9 +1620,17 @@ def test_to_csv_errors_using_multiple_scheduler_args():
     def my_get(*args, **kwargs):
         return mp_get(*args, **kwargs)
 
-    with tmpdir() as dn, pytest.raises(ValueError), pytest.warns(FutureWarning):
+    # to_csv raises only when the two scheduler values differ
+    with (
+        tmpdir() as dn,
+        pytest.raises(ValueError, match="Differing values for 'scheduler'"),
+        pytest.warns(FutureWarning),
+    ):
         ddf.to_csv(
-            dn, index=False, scheduler=my_get, compute_kwargs={"scheduler": my_get}
+            dn,
+            index=False,
+            scheduler=my_get,
+            compute_kwargs={"scheduler": dask.get},
         )
 
 
