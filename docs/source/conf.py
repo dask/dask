@@ -504,11 +504,14 @@ def _remove_from_toctrees(app, doctree):
         toctree["entries"] = [
             entry
             for entry in toctree.get("entries", [])
-            if not any(patmatch(entry[1], pattern) for pattern in app.config.remove_from_toctrees)
+            if not any(
+                patmatch(entry[1], pattern)
+                for pattern in app.config.remove_from_toctrees
+            )
         ]
 
 
-_nav_cache = {}
+_nav_cache: dict[tuple, object] = {}
 
 
 def _reuse_api_navigation(app, pagename, templatename, context, doctree):
