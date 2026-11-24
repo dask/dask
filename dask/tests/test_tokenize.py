@@ -1406,12 +1406,11 @@ all_numba_funcs = [
 def test_tokenize_numba(func):
     assert func(1, 2) == 3
     check_tokenize(func)
-    for func in all_numba_funcs:
-        tokens = normalize_token(func)
 
-        # Ensure that we attempt to tokenize it instead of dumping it into pickle
-        assert isinstance(tokens, tuple)
-        assert isinstance(tokens[1], tuple)
+    tokens = normalize_token(func)
+    # Ensure that we attempt to tokenize it instead of dumping it into pickle
+    assert isinstance(tokens, tuple)
+    assert isinstance(tokens[1], tuple)
 
 
 @pytest.mark.skipif("not numba")

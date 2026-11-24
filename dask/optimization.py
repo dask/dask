@@ -394,13 +394,13 @@ def functions_of(task):
 
     while work:
         new_work = []
-        for task in work:
-            if type(task) in sequence_types:
-                if istask(task):
-                    funcs.add(unwrap_partial(task[0]))
-                    new_work.extend(task[1:])
+        for cur_task in work:
+            if type(cur_task) in sequence_types:
+                if istask(cur_task):
+                    funcs.add(unwrap_partial(cur_task[0]))
+                    new_work.extend(cur_task[1:])
                 else:
-                    new_work.extend(task)
+                    new_work.extend(cur_task)
         work = new_work
 
     return funcs

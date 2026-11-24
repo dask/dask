@@ -117,10 +117,10 @@ def pack_exception(e, dumps):
     tb = _pack_traceback(exc_traceback)
     try:
         result = dumps((e, tb))
-    except Exception as e:
+    except Exception as exc:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = _pack_traceback(exc_traceback)
-        result = dumps((e, tb))
+        result = dumps((exc, tb))
     return result
 
 

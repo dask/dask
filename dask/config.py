@@ -437,12 +437,12 @@ class set:
         return self.config
 
     def __exit__(self, type, value, traceback):
-        for op, path, value in reversed(self._record):
+        for op, path, rec_value in reversed(self._record):
             d = self.config
             if op == "replace":
                 for key in path[:-1]:
                     d = d.setdefault(key, {})
-                d[path[-1]] = value
+                d[path[-1]] = rec_value
             else:  # insert
                 for key in path[:-1]:
                     try:

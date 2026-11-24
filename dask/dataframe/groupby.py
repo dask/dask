@@ -756,10 +756,10 @@ def _build_agg_args(spec):
         )
 
         # overwrite existing result-columns, generate intermediates only once
-        for spec in impls["chunk_funcs"]:
-            chunks[spec[0]] = spec
-        for spec in impls["aggregate_funcs"]:
-            aggs[spec[0]] = spec
+        for spec_i in impls["chunk_funcs"]:
+            chunks[spec_i[0]] = spec_i
+        for spec_i in impls["aggregate_funcs"]:
+            aggs[spec_i[0]] = spec_i
 
         finalizers.append(impls["finalizer"])
 
