@@ -16,12 +16,12 @@ from dask.dataframe.extensions import make_array_nonempty, make_scalar
 
 @make_array_nonempty.register(DecimalDtype)
 def _(dtype):
-    return DecimalArray._from_sequence([Decimal("0"), Decimal("NaN")], dtype=dtype)
+    return DecimalArray._from_sequence([Decimal(0), Decimal("NaN")], dtype=dtype)
 
 
 @make_scalar.register(Decimal)
 def _(x):
-    return Decimal("1")
+    return Decimal(1)
 
 
 def test_register_extension_type():
@@ -36,7 +36,7 @@ def test_register_extension_type():
 
 
 def test_reduction():
-    ser = pd.Series(DecimalArray._from_sequence([Decimal("0"), Decimal("1")]))
+    ser = pd.Series(DecimalArray._from_sequence([Decimal(0), Decimal(1)]))
     dser = dd.from_pandas(ser, 2)
     assert_eq(ser.mean(skipna=False), dser.mean(skipna=False))
 
