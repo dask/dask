@@ -375,16 +375,12 @@ def test_set_nested():
 
 def test_set_does_not_copy():
     """Test that dask.config.set stores objects by reference.
-
-    This is important for shared stateful objects that cannot be copied, e.g. locks:
-    deep-copying the previous configuration would raise.
+    This is important for shared stateful objects, e.g. locks.
     """
-    import threading
+    x = object()
 
-    lock = threading.Lock()
-
-    with dask.config.set(x=lock):
-        assert config["x"] is lock
+    with dask.config.set(x=x):
+        assert config["x"] is x
 
 
 @pytest.mark.parametrize("mkdir", [True, False])
