@@ -250,7 +250,7 @@ def test_open_files_write(s3):
 def test_read_bytes(s3):
     sample, values = read_bytes(f"s3://{test_bucket_name}/test/accounts.*", **s3so)
     assert isinstance(sample, bytes)
-    assert sample[:5] == files[sorted(files)[0]][:5]
+    assert sample[:5] == files[min(files)][:5]
     assert sample.endswith(b"\n")
 
     assert isinstance(values, (list, tuple))
@@ -395,7 +395,7 @@ def test_compression(s3, fmt, blocksize):
             blocksize=blocksize,
             **s3so,
         )
-        assert sample.startswith(files[sorted(files)[0]][:10])
+        assert sample.startswith(files[min(files)][:10])
         assert sample.endswith(b"\n")
 
         results = compute(*concat(values))
