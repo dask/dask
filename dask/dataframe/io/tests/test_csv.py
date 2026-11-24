@@ -409,7 +409,7 @@ def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip)
     with filetext(text) as fn:
         with pytest.warns(UserWarning, match="sample=blocksize"):
             actual = dd_read(fn, blocksize=200, skiprows=skip, names=names).compute()
-            assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
+        assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
 
         with pytest.warns(UserWarning):
             # if new sample does not contain all the skiprows, raise error
@@ -778,8 +778,8 @@ def test_warn_non_seekable_files():
     with filetexts(files2, mode="b"):
         with pytest.warns(UserWarning) as w:
             df = dd.read_csv("2014-01-*.csv", compression="gzip")
-            assert df.npartitions == 3
 
+        assert df.npartitions == 3
         assert len(w) == 1
         msg = str(w[0].message)
         assert "gzip" in msg

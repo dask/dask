@@ -985,9 +985,9 @@ def test_compute_current_divisions_overlap():
     a = dd.from_pandas(A, npartitions=2)
     with pytest.warns(UserWarning, match="Partitions have overlapping values"):
         divisions = a.compute_current_divisions("key")
-        b = a.set_index("key", divisions=divisions)
-        assert b.divisions == (1, 4, 7)
-        assert [len(p) for p in b.partitions] == [3, 5]
+    b = a.set_index("key", divisions=divisions)
+    assert b.divisions == (1, 4, 7)
+    assert [len(p) for p in b.partitions] == [3, 5]
 
 
 def test_compute_current_divisions_overlap_2():

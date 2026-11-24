@@ -142,7 +142,6 @@ ignore = [
     "SIM117",  # Multiple with statements can be combined (58 findings)
     "BLE001",  # Blind except (42 findings)
     "SIM102",  # Collapsible if (36 findings)
-    "PT031",   # pytest.warns with multiple statements (21 findings)
     "FURB192", # Unnecessary sorted() in min()/max() (11 findings)
 ]
 

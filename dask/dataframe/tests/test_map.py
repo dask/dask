@@ -44,13 +44,17 @@ def test_series_map2():
         index=pd.Index([0, 1, 3, 5, 6, 8, 9, 9, 9], name="myindex"),
     )
     ddf = dd.from_pandas(df, npartitions=3)
+    lk = {v: v + 1 for v in df.a.values}
     with pytest.warns(UserWarning, match="meta"):
         assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
-        lk = {v: v + 1 for v in df.a.values}
+    with pytest.warns(UserWarning, match="meta"):
         assert_eq(ddf.a.map(lk), df.a.map(lk))
+    with pytest.warns(UserWarning, match="meta"):
         assert_eq(ddf.b.map(lk), df.b.map(lk))
-        lk = pd.Series(lk)
+    lk = pd.Series(lk)
+    with pytest.warns(UserWarning, match="meta"):
         assert_eq(ddf.a.map(lk), df.a.map(lk))
+    with pytest.warns(UserWarning, match="meta"):
         assert_eq(ddf.b.map(lk), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
     assert_eq(ddf.b.map(lk, meta=("b", "i8")), df.b.map(lk))
@@ -116,6 +120,7 @@ def test_dataframe_map(na_action):
             ddf.map(lambda x: x + 1, na_action=na_action),
             df.map(lambda x: x + 1, na_action=na_action),
         )
+    with pytest.warns(UserWarning, match="meta"):
         assert_eq(ddf.map(lambda x: (x, x)), df.map(lambda x: (x, x)))
 
 

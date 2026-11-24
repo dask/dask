@@ -1596,12 +1596,12 @@ def test_values():
 
     if pyarrow_strings_enabled() or PANDAS_GE_300:
         with pytest.warns(UserWarning, match="extension dtypes"):
-            assert_eq(df.values, pdf.values)
-            values = df.x.values
-            if not PANDAS_GE_300:
-                # https://github.com/dask/dask/issues/2713
-                # dask lacks an extension array type.
-                assert_eq(values, pdf.x.values)
+            values = df.values, df.x.values
+        assert_eq(values[0], pdf.values)
+        if not PANDAS_GE_300:
+            # https://github.com/dask/dask/issues/2713
+            # dask lacks an extension array type.
+            assert_eq(values[1], pdf.x.values)
     else:
         assert_eq(df.values, pdf.values)
         assert_eq(df.x.values, pdf.x.values)

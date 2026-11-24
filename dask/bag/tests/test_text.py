@@ -104,16 +104,16 @@ def test_files_per_partition():
         # single-threaded scheduler to ensure the warning happens in the
         # same thread as the pytest.warns
         with config.set({"scheduler": "single-threaded"}):
+            b = read_text("*.txt", files_per_partition=10)
             with pytest.warns(UserWarning):
-                b = read_text("*.txt", files_per_partition=10)
                 l = len(b.take(100, npartitions=1))
 
             assert l == 10, "10 files should be grouped into one partition"
 
             assert b.count().compute() == 20, "All 20 lines should be read"
 
+            b = read_text("*.txt", files_per_partition=10, include_path=True)
             with pytest.warns(UserWarning):
-                b = read_text("*.txt", files_per_partition=10, include_path=True)
                 p = b.take(100, npartitions=1)
 
             p_paths = tuple(zip(*p))[1]
