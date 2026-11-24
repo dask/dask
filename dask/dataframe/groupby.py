@@ -19,6 +19,7 @@ from dask.dataframe._compat import (
     check_observed_deprecation,
 )
 from dask.dataframe.core import _convert_to_numeric
+from dask.dataframe.dispatch import meta_nonempty
 from dask.dataframe.methods import concat
 from dask.dataframe.utils import (
     get_numeric_only_kwargs,
@@ -268,20 +269,92 @@ def _groupby_aggregate(
 
 
 def _groupby_aggregate_spec(
-    df, spec, levels=None, dropna=None, sort=False, observed=None, **kwargs
+    df,
+    spec,
+    levels=None,
+    dropna=None,
+    sort=False,
+    observed=None,
+    normalized_spec=None,
+    series_column=None,
+    series_input=False,
+    padding_column=None,
+    **kwargs,
 ):
-    """
-    A simpler version of _groupby_aggregate that just calls ``aggregate`` using
-    the user-provided spec.
-    """
+    """Apply the aggregation spec after the rows for each group are together."""
     dropna = {"dropna": dropna} if dropna is not None else {}
     observed = {"observed": observed} if observed is not None else {}
-    return df.groupby(level=levels, sort=sort, **observed, **dropna).aggregate(
-        spec, **kwargs
+    owned_groups = None
+    if padding_column is not None:
+        index = df.index
+        df = df.loc[~df[padding_column]].drop(columns=padding_column)
+        if isinstance(index, pd.CategoricalIndex):
+            owned_groups = index.unique()
+        elif isinstance(index, pd.MultiIndex) and any(
+            isinstance(level, pd.CategoricalIndex) for level in index.levels
+        ):
+            owned_groups = index.unique()
+            # A noncategorical key might occur only in padding rows in this
+            # partition. Retain all its values while reducing the real rows.
+            df.index = df.index.set_levels(
+                [
+                    (
+                        level
+                        if isinstance(level, pd.CategoricalIndex)
+                        else pd.CategoricalIndex(level, categories=level)
+                    )
+                    for level in index.levels
+                ]
+            )
+    if series_input and is_dataframe_like(df):
+        # Shuffle represents a series as a single-column frame.
+        df = df.iloc[:, 0]
+    grouped = df.groupby(level=levels, sort=sort, **observed, **dropna)
+    if normalized_spec is None:
+        return grouped.aggregate(spec, **kwargs)
+
+    # Pandas cannot call a Dask Aggregation. Run its reduction steps on the
+    # complete groups while pandas handles the other functions.
+    custom_spec = [term for term in normalized_spec if isinstance(term[1], Aggregation)]
+    chunks, aggregates, finalizers = _build_agg_args(custom_spec)
+    intermediate = _groupby_apply_funcs(
+        df, funcs=chunks, level=levels, sort=sort, **observed, **dropna
     )
+    custom = _agg_finalize(
+        intermediate,
+        aggregates,
+        finalizers,
+        level=levels,
+        sort=sort,
+        **observed,
+        **dropna,
+    )
+    parts = []
+    columns = []
+    series = is_series_like(df)
+    for label, func, column in normalized_spec:
+        columns.append(label)
+        if isinstance(func, Aggregation):
+            parts.append(custom[label])
+        else:
+            selected = grouped if series else grouped[column]
+            parts.append(selected.aggregate(func, **kwargs))
+    result = custom.__class__(dict(enumerate(parts)))
+    result.columns = pd.Index(columns)
+    if owned_groups is not None:
+        # Pandas includes all categorical groups, including ones that belong
+        # to other output partitions. Restore the original index types as well.
+        positions = owned_groups.get_indexer(result.index)
+        result = result.iloc[positions >= 0]
+        result.index = owned_groups.take(positions[positions >= 0])
+    if series_column is not None:
+        result = result[series_column]
+    return result
 
 
-def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
+def _non_agg_chunk(
+    df, *by, key, dropna=None, observed=None, padding_column=None, **kwargs
+):
     """
     A non-aggregation agg function. This simulates the behavior of an initial
     partitionwise aggregation, but doesn't actually aggregate or throw away
@@ -299,6 +372,11 @@ def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
             key = list(key)
         result = result[key]
 
+    if padding_column is not None:
+        if is_series_like(result):
+            result = result.to_frame()
+        result = result.assign(**{padding_column: False})
+
     # If observed is False, we have to check for categorical indices and possibly enrich
     # them with unobserved values. This function is intended as an initial partitionwise
     # aggregation, so you might expect that we could enrich the frame with unobserved
@@ -313,7 +391,14 @@ def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
         # categories in them.
         if isinstance(result.index, pd.CategoricalIndex):
             has_categoricals = True
-            full_index = result.index.categories.copy().rename(result.index.name)
+            if padding_column is None:
+                full_index = result.index.categories.copy().rename(result.index.name)
+            else:
+                full_index = pd.CategoricalIndex(
+                    result.index.categories,
+                    dtype=result.index.dtype,
+                    name=result.index.name,
+                )
         elif isinstance(result.index, pd.MultiIndex) and any(
             isinstance(level, pd.CategoricalIndex) for level in result.index.levels
         ):
@@ -325,6 +410,16 @@ def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
             # If we found any categoricals, append unobserved values to the end of the
             # frame.
             new_cats = full_index[~full_index.isin(result.index)]
+            if padding_column is not None:
+                if not len(new_cats):
+                    return result
+                # Copy a row to keep the data types during the shuffle.
+                # The values are discarded before aggregation.
+                sample = result if len(result) else meta_nonempty(result)
+                empty = sample.iloc[np.zeros(len(new_cats), dtype=np.intp)].copy()
+                empty.index = new_cats
+                empty[padding_column] = True
+                return pd.concat([result, empty])
             empty_data = {
                 c: pd.Series(index=new_cats, dtype=result[c].dtype)
                 for c in result.columns
