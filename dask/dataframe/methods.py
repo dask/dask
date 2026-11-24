@@ -56,9 +56,8 @@ def iloc(df, cindexer=None):
 
 @_deprecated_kwarg("convert_dtype", None)
 def apply(df, *args, **kwargs):
-    with check_convert_dtype_deprecation():
-        with check_apply_dataframe_deprecation():
-            return df.apply(*args, **kwargs)
+    with check_convert_dtype_deprecation(), check_apply_dataframe_deprecation():
+        return df.apply(*args, **kwargs)
 
 
 def try_loc(df, iindexer, cindexer=None):

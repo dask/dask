@@ -282,8 +282,8 @@ class LocList(LocBase):
                     indexer,
                     self.cindexer,
                 )
-                divisions.append(sorted(indexer)[0])
-            divisions.append(sorted(items[-1][1])[-1])
+                divisions.append(min(indexer))
+            divisions.append(max(items[-1][1]))
             return dsk, divisions
         else:
             divisions = [None, None]

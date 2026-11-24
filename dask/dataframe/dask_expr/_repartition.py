@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import itertools
 from collections.abc import Callable
 from operator import getitem
 from pprint import pformat
@@ -200,7 +201,7 @@ class RepartitionToFewer(Repartition):
                 [(self.frame._name, j) for j in range(start, end)],
             )
             for i, (start, end) in enumerate(
-                zip(new_partitions_boundaries, new_partitions_boundaries[1:])
+                itertools.pairwise(new_partitions_boundaries)
             )
         }
 

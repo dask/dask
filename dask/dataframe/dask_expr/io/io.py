@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import itertools
 import math
 import operator
 
@@ -167,7 +168,7 @@ class FusedIO(BlockwiseIO):
 
         buckets = [
             partitions[start:end]
-            for (start, end) in zip(partition_boundaries, partition_boundaries[1:])
+            for (start, end) in itertools.pairwise(partition_boundaries)
         ]
         return buckets
 
@@ -487,7 +488,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
                 if npartitions is None:
                     chunksize = self.operand("chunksize")
                 else:
-                    chunksize = int(math.ceil(nrows / npartitions))
+                    chunksize = math.ceil(nrows / npartitions)
                 locations = list(range(0, nrows, chunksize)) + [len(data)]
                 divisions = (None,) * len(locations)
             _division_info_cache[key] = divisions, locations

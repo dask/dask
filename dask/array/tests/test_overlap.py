@@ -320,7 +320,7 @@ def test_map_overlap():
     y = x.map_overlap(
         lambda x: x + len(x), depth=np.int64(2), dtype=x.dtype, boundary="reflect"
     )
-    assert all([(type(s) is int) for s in y.shape])
+    assert all(type(s) is int for s in y.shape)
     assert_eq(y, np.arange(10) + 5 + 2 + 2)
 
     x = da.ones((10, 10), chunks=(3, 4))
@@ -574,18 +574,18 @@ def test_map_overlap_deprecated_signature():
     # Old positional signature: func, depth, boundary, trim
     with pytest.warns(FutureWarning):
         y = da.map_overlap(x, func, 0, "reflect", True)
-        assert y.compute() == 3
-        assert y.shape == (3,)
+    assert y.compute() == 3
+    assert y.shape == (3,)
 
     with pytest.warns(FutureWarning):
         y = da.map_overlap(x, func, 1, "reflect", True)
-        assert y.compute() == 5
-        assert y.shape == (3,)
+    assert y.compute() == 5
+    assert y.shape == (3,)
 
     with pytest.warns(FutureWarning):
         y = da.map_overlap(x, func, 1, "reflect", False)
-        assert y.compute() == 5
-        assert y.shape == (3,)
+    assert y.compute() == 5
+    assert y.shape == (3,)
 
 
 def test_map_overlap_trim_false_chunking():

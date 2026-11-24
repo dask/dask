@@ -162,10 +162,10 @@ def test_to_graphviz_verbose():
 
 def test__to_cytoscape_json_verbose():
     data = _to_cytoscape_json(dsk, verbose=True)
-    labels = list(map(lambda x: x["data"]["label"], data["nodes"]))
+    labels = [x["data"]["label"] for x in data["nodes"]]
     assert len(labels) == 10
     assert set(labels) == {"a", "b", "c", "d", "e", "f"}
-    shapes = list(map(lambda x: x["data"]["shape"], data["nodes"]))
+    shapes = [x["data"]["shape"] for x in data["nodes"]]
     assert set(shapes) == {"ellipse", "rectangle"}
 
 
@@ -180,10 +180,10 @@ def test_to_graphviz_collapse_outputs():
 
 def test__to_cytoscape_json_collapse_outputs():
     data = _to_cytoscape_json(dsk, collapse_outputs=True)
-    labels = list(map(lambda x: x["data"]["label"], data["nodes"]))
+    labels = [x["data"]["label"] for x in data["nodes"]]
     assert len(labels) == 6  # 6 nodes total
     assert set(labels) == {"c", "d", "e", "f", ""}
-    shapes = list(map(lambda x: x["data"]["shape"], data["nodes"]))
+    shapes = [x["data"]["shape"] for x in data["nodes"]]
     assert set(shapes) == {"ellipse", "rectangle"}
 
 
@@ -198,10 +198,10 @@ def test_to_graphviz_collapse_outputs_and_verbose():
 
 def test__to_cytoscape_json_collapse_outputs_and_verbose():
     data = _to_cytoscape_json(dsk, collapse_outputs=True, verbose=True)
-    labels = list(map(lambda x: x["data"]["label"], data["nodes"]))
+    labels = [x["data"]["label"] for x in data["nodes"]]
     assert len(labels) == 6  # 6 nodes total
     assert set(labels) == {"a", "b", "c", "d", "e", "f"}
-    shapes = list(map(lambda x: x["data"]["shape"], data["nodes"]))
+    shapes = [x["data"]["shape"] for x in data["nodes"]]
     assert set(shapes) == {"ellipse", "rectangle"}
 
 
@@ -234,7 +234,7 @@ def test_dot_graph(tmpdir, format, typ):
     # not vulnerable to shell injection when interacting with `dot`.
     filename = str(tmpdir.join("$(touch should_not_get_created.txt)"))
 
-    target = ".".join([filename, format])
+    target = f"{filename}.{format}"
     ensure_not_exists(target)
     try:
         result = dot_graph(dsk, filename=filename, format=format)
@@ -269,7 +269,7 @@ def test_dot_graph_defaults():
     # Test with default args.
     default_name = "mydask"
     default_format = "png"
-    target = ".".join([default_name, default_format])
+    target = f"{default_name}.{default_format}"
 
     ensure_not_exists(target)
     try:

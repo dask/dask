@@ -116,7 +116,7 @@ def meta_from_array(x, ndim=None, dtype=None):
             ):
                 meta = np.array([]).astype(dtype)
             else:
-                raise e
+                raise
 
     return meta
 
@@ -216,7 +216,7 @@ def _check_dsk(dsk):
     collisions = set()
     all_keys = set(dsk)
     layers = [convert_legacy_graph(layer, all_keys) for layer in dsk.layers.values()]
-    for k in non_one.keys():
+    for k in non_one:
         for layer in layers:
             try:
                 key_collisions.add(tokenize(layer[k]))

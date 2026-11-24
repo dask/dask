@@ -68,18 +68,18 @@ _power_div_lambda_names = {
 }
 
 __all__ = [
-    "ttest_ind",
-    "ttest_1samp",
-    "ttest_rel",
     "chisquare",
+    "f_oneway",
+    "kurtosis",
+    "kurtosistest",
+    "moment",
+    "normaltest",
     "power_divergence",
     "skew",
     "skewtest",
-    "kurtosis",
-    "kurtosistest",
-    "normaltest",
-    "f_oneway",
-    "moment",
+    "ttest_1samp",
+    "ttest_ind",
+    "ttest_rel",
 ]
 
 # -----------------

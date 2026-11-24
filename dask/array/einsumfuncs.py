@@ -211,7 +211,7 @@ def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
     einsum_dtype = dtype
 
     inputs, outputs, ops = parse_einsum_input(operands)
-    subscripts = "->".join((inputs, outputs))
+    subscripts = f"{inputs}->{outputs}"
 
     # Infer the output dtype from operands
     if dtype is None:

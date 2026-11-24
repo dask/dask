@@ -8,7 +8,7 @@ import warnings
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from functools import wraps
 from numbers import Integral, Number
-from typing import Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
@@ -152,10 +152,17 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-#
+if TYPE_CHECKING:
+    try:
+        from graphviz import Digraph
+    except ModuleNotFoundError:
+
+        class Digraph:  # type: ignore[no-redef]
+            pass
+
+
 # Utilities to wrap Expr API
 # (Helps limit boiler-plate code in collection APIs)
-#
 
 
 def _wrap_expr_api(*args, wrap_api=None, **kwargs):
@@ -187,9 +194,7 @@ def _wrap_expr_op(self, other, op=None):
     ):
         other = self._create_alignable_frame(other).expr
 
-    if not isinstance(other, expr.Expr):
-        return new_collection(getattr(self.expr, op)(other))
-    elif expr.are_co_aligned(self.expr, other):
+    if not isinstance(other, expr.Expr) or expr.are_co_aligned(self.expr, other):
         return new_collection(getattr(self.expr, op)(other))
     else:
         return new_collection(expr.OpAlignPartitions(self, other, op))
@@ -491,7 +496,9 @@ Expr={expr}"""
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
 
-    def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+    def analyze(
+        self, filename: str | None = None, format: str | None = None
+    ) -> Digraph:
         """Outputs statistics about every node in the expression.
 
         analyze optimizes the expression and triggers a computation. It records statistics
@@ -510,8 +517,7 @@ Expr={expr}"""
 
         Returns
         -------
-            None, but writes a graph representation of the expression enriched with
-            statistics to disk.
+            The graphviz.Digraph written to disk, enriched with expression statistics.
         """
         out = self
         if not isinstance(out, Scalar):
@@ -3056,9 +3062,7 @@ class DataFrame(FrameBase):
         from dask.dataframe.dask_expr._groupby import GroupBy
 
         if isinstance(by, FrameBase) and not isinstance(by, Series):
-            raise ValueError(
-                f"`by` must be a column name or list of columns, got {by}."
-            )
+            raise TypeError(f"`by` must be a column name or list of columns, got {by}.")
 
         return GroupBy(
             self,
@@ -3691,7 +3695,7 @@ class DataFrame(FrameBase):
     @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False, numeric_only=False):
         modes = []
-        for _, col in self.items():
+        for _, col in self.items():  # noqa: PERF102
             if numeric_only and not pd.api.types.is_numeric_dtype(col.dtype):
                 continue
             modes.append(col.mode(dropna=dropna, split_every=split_every))
@@ -3891,7 +3895,7 @@ class DataFrame(FrameBase):
             frame = self
 
         collections = []
-        for _, col in frame.items():
+        for _, col in frame.items():  # noqa: PERF102
             collections.append(col.quantile(q=q, method=method))
 
         if len(collections) > 0 and isinstance(collections[0], Scalar):
@@ -4341,6 +4345,15 @@ class Series(FrameBase):
         Returns
         -------
         uniques : Series
+
+        Notes
+        -----
+        Unlike :meth:`pandas.Series.unique`, the order of the returned
+        values is not guaranteed to match the order of first appearance
+        in the data, because ``unique`` shuffles the data under the hood
+        to avoid overloading a single worker. To preserve the original
+        order, pass ``split_out=1`` to use a tree reduction instead
+        (only suitable for low-cardinality data).
         """
         shuffle_method = _get_shuffle_preferring_order(shuffle_method)
         return new_collection(Unique(self, split_every, split_out, shuffle_method))
@@ -5936,7 +5949,7 @@ def from_map(
     iterables = list(iterables)
     for i, iterable in enumerate(iterables):
         if not isinstance(iterable, Iterable):
-            raise ValueError(
+            raise TypeError(
                 f"All elements of `iterables` must be Iterable, got {type(iterable)}"
             )
         try:

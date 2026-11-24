@@ -367,9 +367,8 @@ def test_SerializableLock():
     with a:
         pass
 
-    with a:
-        with b:
-            pass
+    with a, b:
+        pass
 
     with a:
         assert not a.acquire(False)
@@ -388,12 +387,10 @@ def test_SerializableLock():
 
     for x in [a, a2, a3, a4]:
         for y in [b, b2, b3]:
-            with x:
-                with y:
-                    pass
-            with y:
-                with x:
-                    pass
+            with x, y:
+                pass
+            with y, x:
+                pass
 
 
 def test_SerializableLock_name_collision():
@@ -586,7 +583,6 @@ def test_derived_from():
         @derived_from(Foo)
         def f(a, c):
             "extra docstring"
-            pass
 
     assert Bar.f.__doc__.strip().startswith("A super docstring")
     assert "Foo.f" in Bar.f.__doc__
@@ -633,7 +629,6 @@ def test_derived_from_func():
     @derived_from(builtins)
     def sum():
         "extra docstring"
-        pass
 
     assert "extra docstring\n\n" in sum.__doc__
     assert "Return the sum of" in sum.__doc__
@@ -810,13 +805,10 @@ def test_deprecated():
     def foo():
         return "bar"
 
-    with pytest.warns(FutureWarning) as record:
+    with pytest.warns(
+        FutureWarning, match="foo is deprecated.*removed in a future release"
+    ):
         assert foo() == "bar"
-
-    assert len(record) == 1
-    msg = str(record[0].message)
-    assert "foo is deprecated" in msg
-    assert "removed in a future release" in msg
 
 
 def test_deprecated_version():
@@ -851,11 +843,8 @@ def test_deprecated_message():
     def foo():
         return "bar"
 
-    with pytest.warns(FutureWarning) as record:
+    with pytest.warns(FutureWarning, match="woohoo"):
         assert foo() == "bar"
-
-    assert len(record) == 1
-    assert str(record[0].message) == "woohoo"
 
 
 def test_typename():

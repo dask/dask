@@ -1014,7 +1014,7 @@ def test_clip_traverse_filters(df):
     assert result._name == expected._name
 
 
-@pytest.mark.parametrize("projection", ["zz", ["zz"], ["zz", "x"], "zz"])
+@pytest.mark.parametrize("projection", ["zz", ["zz"], ["zz", "x"]])
 @pytest.mark.parametrize("subset", ["x", ["x"]])
 def test_drop_duplicates_subset_simplify(pdf, subset, projection):
     pdf["zz"] = 1
@@ -1596,12 +1596,12 @@ def test_values():
 
     if pyarrow_strings_enabled() or PANDAS_GE_300:
         with pytest.warns(UserWarning, match="extension dtypes"):
-            assert_eq(df.values, pdf.values)
-            values = df.x.values
-            if not PANDAS_GE_300:
-                # https://github.com/dask/dask/issues/2713
-                # dask lacks an extension array type.
-                assert_eq(values, pdf.x.values)
+            values = df.values, df.x.values
+        assert_eq(values[0], pdf.values)
+        if not PANDAS_GE_300:
+            # https://github.com/dask/dask/issues/2713
+            # dask lacks an extension array type.
+            assert_eq(values[1], pdf.x.values)
     else:
         assert_eq(df.values, pdf.values)
         assert_eq(df.x.values, pdf.x.values)
@@ -2294,7 +2294,7 @@ def test_combine():
     first = lambda a, b: a
 
     # You can add series with strings and nans but you can't add scalars 'a' + np.nan
-    str_add = lambda a, b: a + b if a is not np.nan else a
+    str_add = lambda a, b: a + b if a is not np.nan else a  # noqa: PLW0177
 
     # DataFrame
     for dda, ddb, a, b, runs in [
@@ -2591,9 +2591,11 @@ def test_warn_annotations():
 
     dask.dataframe.dask_expr._collection._WARN_ANNOTATIONS = True
 
-    with pytest.warns(UserWarning, match="annotations.*retries.*ignore"):
-        with dask.annotate(retries=3):
-            from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
+    with (
+        pytest.warns(UserWarning, match="annotations.*retries.*ignore"),
+        dask.annotate(retries=3),
+    ):
+        from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
     # Don't warn a second time
     with dask.annotate(retries=3):
         from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)

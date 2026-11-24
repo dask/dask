@@ -150,7 +150,7 @@ def test_io_fusion_blockwise(tmpdir):
         .__dask_graph__()
     )
     assert any(
-        f"{read_parq._expr._name.split('-')[0]}-fused" in key[0] for key in graph.keys()
+        f"{read_parq._expr._name.split('-')[0]}-fused" in key[0] for key in graph
     )
 
 

@@ -548,16 +548,18 @@ def test_apply_or_transform_shuffle_multilevel(pdf, df, func, cow):
     with ctx:
         grouper = lambda df: [df["x"] + 1, df["y"] + 1]
 
+        # DataFrameGroupBy
         with pytest.warns(UserWarning, match="`meta` is not specified"):
-            # DataFrameGroupBy
             assert_eq(func(df.groupby(grouper(df))), func(pdf.groupby(grouper(pdf))))
 
-            # SeriesGroupBy
+        # SeriesGroupBy
+        with pytest.warns(UserWarning, match="`meta` is not specified"):
             assert_eq(
                 func(df.groupby(grouper(df))["z"]), func(pdf.groupby(grouper(pdf))["z"])
             )
 
-            # DataFrameGroupBy with column slice
+        # DataFrameGroupBy with column slice
+        with pytest.warns(UserWarning, match="`meta` is not specified"):
             assert_eq(
                 func(df.groupby(grouper(df))[["z"]]),
                 func(pdf.groupby(grouper(pdf))[["z"]]),

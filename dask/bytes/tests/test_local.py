@@ -65,7 +65,7 @@ def test_read_bytes():
     with filetexts(files, mode="b"):
         sample, values = read_bytes(".test.accounts.*")
         assert isinstance(sample, bytes)
-        assert sample[:5] == files[sorted(files)[0]][:5]
+        assert sample[:5] == files[min(files)][:5]
         assert sample.endswith(b"\n")
 
         assert isinstance(values, (list, tuple))
@@ -116,9 +116,8 @@ def test_read_bytes_blocksize_types(blocksize):
 
 
 def test_read_bytes_blocksize_float_errs():
-    with filetexts(files, mode="b"):
-        with pytest.raises(TypeError):
-            read_bytes(".test.account*", blocksize=5.5)
+    with filetexts(files, mode="b"), pytest.raises(TypeError):
+        read_bytes(".test.account*", blocksize=5.5)
 
 
 def test_read_bytes_include_path():
@@ -211,7 +210,7 @@ def test_compression(fmt, blocksize):
             delimiter=b"\n",
             compression=fmt,
         )
-        assert sample[:5] == files[sorted(files)[0]][:5]
+        assert sample[:5] == files[min(files)][:5]
         assert sample.endswith(b"\n")
 
         results = compute(*concat(values))

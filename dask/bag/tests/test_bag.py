@@ -287,9 +287,7 @@ def test_fold():
     assert d.key == c.fold(binop, set.union, initial=set()).key
 
     d = db.from_sequence("hello")
-    assert set(d.fold(lambda a, b: "".join([a, b]), initial="").compute()) == set(
-        "hello"
-    )
+    assert set(d.fold(lambda a, b: f"{a}{b}", initial="").compute()) == set("hello")
 
     e = db.from_sequence([[1], [2], [3]], npartitions=2)
     assert set(e.fold(add, initial=[]).compute(scheduler="sync")) == {1, 2, 3}
@@ -477,7 +475,7 @@ def test_foldby_tree_reduction():
             dsk.extend([d, e, f, g])
     results = dask.compute(dsk)
     first = results[0]
-    assert all([r == first for r in results])
+    assert all(r == first for r in results)
 
 
 def test_map_partitions():
@@ -675,7 +673,7 @@ def test_take_npartitions_warn():
 
 
 def test_map_is_lazy():
-    assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
+    assert isinstance(map(str, [1, 2, 3]), Iterator)
 
 
 def test_can_use_dict_to_make_concrete():
@@ -1044,11 +1042,10 @@ def test_to_textfiles_encoding():
 
 def test_to_textfiles_inputs():
     B = db.from_sequence(["abc", "123", "xyz"], npartitions=2)
-    with tmpfile() as a:
-        with tmpfile() as b:
-            B.to_textfiles([a, b])
-            assert os.path.exists(a)
-            assert os.path.exists(b)
+    with tmpfile() as a, tmpfile() as b:
+        B.to_textfiles([a, b])
+        assert os.path.exists(a)
+        assert os.path.exists(b)
 
     with tmpdir() as dirname:
         B.to_textfiles(dirname)
@@ -1551,11 +1548,13 @@ def test_temporary_directory(tmpdir):
 
     # We use a pool to avoid a race condition between the pool close
     # cleaning up files, and the assert below.
-    with ProcessPoolExecutor(4) as pool:
-        with dask.config.set(temporary_directory=str(tmpdir), pool=pool):
-            b2 = b.groupby(lambda x: x % 2)
-            b2.compute()
-            assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
+    with (
+        ProcessPoolExecutor(4) as pool,
+        dask.config.set(temporary_directory=str(tmpdir), pool=pool),
+    ):
+        b2 = b.groupby(lambda x: x % 2)
+        b2.compute()
+        assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
 
 
 def test_empty_bag():

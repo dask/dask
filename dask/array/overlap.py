@@ -738,7 +738,7 @@ def map_overlap(
     assert_int_chunksize([x])
     if trim:
         # Find index of array argument with maximum rank and break ties by choosing first provided
-        i = sorted(enumerate(args), key=lambda v: (v[1].ndim, -v[0]))[-1][0]
+        i = max(enumerate(args), key=lambda v: (v[1].ndim, -v[0]))[0]
         # Trim using depth/boundary setting for array of highest rank
         depth = depth[i]
         boundary = boundary[i]
@@ -849,9 +849,7 @@ def sliding_window_view(x, window_shape, axis=None, automatic_rechunk=True):
 
     # Ensure that each chunk is big enough to leave at least a size-1 chunk
     # after windowing (this is only really necessary for the last chunk).
-    safe_chunks = list(
-        ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, x.chunks)
-    )
+    safe_chunks = [ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, x.chunks)]
     if automatic_rechunk:
         safe_chunks = [
             s if d != 0 else c for d, c, s in zip(depths, x.chunks, safe_chunks)

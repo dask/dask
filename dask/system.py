@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import math
 import os
 import sys
@@ -11,21 +12,19 @@ except ImportError:
 
 from dask._compatibility import LINUX
 
-__all__ = ("cpu_count", "CPU_COUNT")
+__all__ = ("CPU_COUNT", "cpu_count")
 
 
 def _try_extract_cgroup_cpu_quota():
     # cgroup v1
     # The directory name isn't standardized across linux distros, check both
     for dirname in ["cpuacct,cpu", "cpu,cpuacct"]:
-        try:
+        with contextlib.suppress(Exception):
             with open(f"/sys/fs/cgroup/{dirname}/cpu.cfs_quota_us") as f:
                 quota = int(f.read())
             with open(f"/sys/fs/cgroup/{dirname}/cpu.cfs_period_us") as f:
                 period = int(f.read())
             return quota, period
-        except Exception:
-            pass
 
     # cgroup v2
     try:
@@ -37,7 +36,7 @@ def _try_extract_cgroup_cpu_quota():
             quota, period = map(int, f.read().split(" "))
             return quota, period
     except Exception:
-        pass
+        return None, None
 
     # No cgroup CPU quota found
     return None, None

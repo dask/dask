@@ -1594,8 +1594,8 @@ def test_parquet_select_cats(tmpdir, engine):
                 np.random.choice(["a", "b", "c", "d", "e", "f"], size=100),
                 dtype="category",
             ),
-            "ints": pd.Series(list(range(0, 100)), dtype="int"),
-            "floats": pd.Series(list(range(0, 100)), dtype="float"),
+            "ints": pd.Series(list(range(100)), dtype="int"),
+            "floats": pd.Series(list(range(100)), dtype="float"),
         }
     )
 
@@ -3315,8 +3315,8 @@ def test_custom_metadata(tmpdir, engine):
         files += [os.path.join(path, "_metadata")]
         for fn in files:
             _md = pq.ParquetFile(fn).metadata.metadata
-            for k in custom_metadata.keys():
-                assert _md[k] == custom_metadata[k]
+            for k, v in custom_metadata.items():
+                assert _md[k] == v
 
     # Make sure we raise an error if the custom metadata
     # includes a b"pandas" key
@@ -3991,6 +3991,8 @@ def test_parquet_botocore_exception(tmpdir):
     def mock_get_engine(engine):
         raise BotoCoreError
 
-    with pytest.raises(BotoCoreError, match="An unspecified error occurred"):
-        with patch("dask.dataframe.dask_expr.io.parquet.get_engine", mock_get_engine):
-            dd.read_parquet(f"{tmpdir}string.parquet")
+    with (
+        pytest.raises(BotoCoreError, match="An unspecified error occurred"),
+        patch("dask.dataframe.dask_expr.io.parquet.get_engine", mock_get_engine),
+    ):
+        dd.read_parquet(f"{tmpdir}string.parquet")

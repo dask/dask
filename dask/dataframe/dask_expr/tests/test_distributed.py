@@ -281,12 +281,14 @@ async def test_merge_p2p_shuffle_projection_error(c, s, a, b):
 
 
 def test_sort_values():
-    with LocalCluster(processes=False, n_workers=2, dashboard_address=":0") as cluster:
-        with Client(cluster) as client:  # noqa: F841
-            pdf = pd.DataFrame({"a": [5] + list(range(100)), "b": 2})
-            df = from_pandas(pdf, npartitions=10)
+    with (
+        LocalCluster(processes=False, n_workers=2, dashboard_address=":0") as cluster,
+        Client(cluster) as client,  # noqa: F841
+    ):
+        pdf = pd.DataFrame({"a": [5] + list(range(100)), "b": 2})
+        df = from_pandas(pdf, npartitions=10)
 
-            out = df.sort_values(by="a").compute()
+        out = df.sort_values(by="a").compute()
     pd.testing.assert_frame_equal(
         out.reset_index(drop=True),
         pdf.sort_values(by="a", ignore_index=True),
@@ -295,46 +297,48 @@ def test_sort_values():
 
 @pytest.mark.parametrize("add_repartition", [True, False])
 def test_merge_combine_similar_squash_merges(add_repartition):
-    with LocalCluster(processes=False, n_workers=2, dashboard_address=":0") as cluster:
-        with Client(cluster) as client:  # noqa: F841
-            pdf = pd.DataFrame(
-                {
-                    "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2,
-                    "b": 1,
-                    "c": 1,
-                }
-            )
-            pdf2 = pd.DataFrame(
-                {"m": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2, "n": 1, "o": 2, "p": 3}
-            )
-            pdf3 = pd.DataFrame(
-                {"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2, "y": 1, "z": 1, "zz": 2}
-            )
+    with (
+        LocalCluster(processes=False, n_workers=2, dashboard_address=":0") as cluster,
+        Client(cluster) as client,  # noqa: F841
+    ):
+        pdf = pd.DataFrame(
+            {
+                "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2,
+                "b": 1,
+                "c": 1,
+            }
+        )
+        pdf2 = pd.DataFrame(
+            {"m": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2, "n": 1, "o": 2, "p": 3}
+        )
+        pdf3 = pd.DataFrame(
+            {"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 2, "y": 1, "z": 1, "zz": 2}
+        )
 
-            df = from_pandas(pdf, npartitions=5)
-            df2 = from_pandas(pdf2, npartitions=10)
-            df3 = from_pandas(pdf3, npartitions=10)
+        df = from_pandas(pdf, npartitions=5)
+        df2 = from_pandas(pdf2, npartitions=10)
+        df3 = from_pandas(pdf3, npartitions=10)
 
-            df = df[df.a > 1]
-            df2 = df2[df2.m > 1]
-            df3 = df3[df3.x > 1]
-            if add_repartition:
-                df = df.repartition(npartitions=df.npartitions // 2)
-                df2 = df2.repartition(npartitions=df2.npartitions // 2)
-            q = df.merge(df2, left_on="a", right_on="m")
-            if add_repartition:
-                df3 = df3.repartition(npartitions=df3.npartitions // 2)
-                q = q.repartition(npartitions=q.npartitions // 2)
-            q = q.merge(df3, left_on="n", right_on="x")
-            q["revenue"] = q.y * (1 - q.z)
-            result = q[["x", "n", "o", "revenue"]]
-            result_q = result.optimize(fuse=False)
+        df = df[df.a > 1]
+        df2 = df2[df2.m > 1]
+        df3 = df3[df3.x > 1]
+        if add_repartition:
+            df = df.repartition(npartitions=df.npartitions // 2)
+            df2 = df2.repartition(npartitions=df2.npartitions // 2)
+        q = df.merge(df2, left_on="a", right_on="m")
+        if add_repartition:
+            df3 = df3.repartition(npartitions=df3.npartitions // 2)
+            q = q.repartition(npartitions=q.npartitions // 2)
+        q = q.merge(df3, left_on="n", right_on="x")
+        q["revenue"] = q.y * (1 - q.z)
+        result = q[["x", "n", "o", "revenue"]]
+        result_q = result.optimize(fuse=False)
 
-            assert (
-                result_q.expr.frame.frame.frame._name
-                == result_q.expr.frame.operands[2].left.frame._name
-            )
-            out = result.compute()
+        assert (
+            result_q.expr.frame.frame.frame._name
+            == result_q.expr.frame.operands[2].left.frame._name
+        )
+        out = result.compute()
 
     pdf = pdf[pdf.a > 1]
     pdf2 = pdf2[pdf2.m > 1]

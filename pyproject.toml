@@ -36,7 +36,8 @@ dependencies = [
     # NOTE: These must match the versions listed in `pixi.toml`
     # and in `docs/source/install.rst`
     "click >= 8.1",
-    "cloudpickle >= 3.0.0",
+    # 3.1.3 breaks traceback source lines: https://github.com/cloudpipe/cloudpickle/issues/628
+    "cloudpickle >= 3.0.0, < 3.1.3",
     "fsspec >= 2021.09.0",
     "packaging >= 20.0",
     "partd >= 1.4.0",
@@ -60,7 +61,7 @@ dataframe = [
     "pandas >= 2.0",
     "pyarrow >= 16.0",
 ]
-distributed = ["distributed >= 2026.8.0,<2026.8.1"]
+distributed = ["distributed >= 2026.11.0,<2026.11.1"]
 diagnostics = [
     "bokeh >= 3.1.0",
     "jinja2 >= 2.10.3",
@@ -133,7 +134,14 @@ ignore = [
     "PLR1733",  # Unnecessary lookup of dictionary value by key
     "PLR2004",  # Magic value used in comparison, consider replacing with a constant variable
     "PLR2044",  # Line with empty comment
+    "PYI025",   # Use `from collections.abc import Set as AbstractSet` to avoid confusion with the `set` builtin"
     "FURB157",  # Verbose expression in `Decimal` constructor
+    # FIXME need to look at these
+    "RUF012",  # Mutable class default (395 findings)
+    "C408",    # Unnecessary dict()/list()/tuple() call (204 findings)
+    "RUF059",  # Unpacked variable never used (129 findings)
+    "BLE001",  # Blind except (42 findings)
+    "SIM102",  # Collapsible if (36 findings)
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]

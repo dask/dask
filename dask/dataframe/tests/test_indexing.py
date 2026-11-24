@@ -157,9 +157,8 @@ def test_loc_with_non_boolean_series():
         ctx = pytest.warns(
             UserWarning, match="converting pandas extension dtypes to arrays"
         )
-    with ctx:
-        with pytest.raises(KeyError, match=msg):
-            ddf.loc[ds.values]
+    with ctx, pytest.raises(KeyError, match=msg):
+        ddf.loc[ds.values]
 
     assert_eq(ddf.loc[s.values], df.loc[s])
 
@@ -567,7 +566,7 @@ def test_iloc_duplicate_columns():
 
     selection = ddf.iloc[:, 2]
     # Check that `iloc` is called instead of getitem
-    assert any([key.startswith("iloc") for key in selection.dask.layers.keys()])
+    assert any(key.startswith("iloc") for key in selection.dask.layers)
 
     select_first = ddf.iloc[:, 1]
     assert_eq(select_first, df.iloc[:, 1])

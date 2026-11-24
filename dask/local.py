@@ -338,7 +338,7 @@ def nested_get(ind, coll):
 
 def default_get_id():
     """Default get_id"""
-    return None
+    return
 
 
 def default_pack_exception(e, dumps):

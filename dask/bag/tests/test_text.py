@@ -100,29 +100,28 @@ def test_read_text_unicode_no_collection(tmp_path):
 
 def test_files_per_partition():
     files3 = {f"{n:02}.txt": "line from {:02}" for n in range(20)}
-    with filetexts(files3):
-        # single-threaded scheduler to ensure the warning happens in the
-        # same thread as the pytest.warns
-        with config.set({"scheduler": "single-threaded"}):
-            with pytest.warns(UserWarning):
-                b = read_text("*.txt", files_per_partition=10)
-                l = len(b.take(100, npartitions=1))
+    # single-threaded scheduler to ensure the warning happens in the
+    # same thread as the pytest.warns
+    with filetexts(files3), config.set({"scheduler": "single-threaded"}):
+        b = read_text("*.txt", files_per_partition=10)
+        with pytest.warns(UserWarning):
+            l = len(b.take(100, npartitions=1))
 
-            assert l == 10, "10 files should be grouped into one partition"
+        assert l == 10, "10 files should be grouped into one partition"
 
-            assert b.count().compute() == 20, "All 20 lines should be read"
+        assert b.count().compute() == 20, "All 20 lines should be read"
 
-            with pytest.warns(UserWarning):
-                b = read_text("*.txt", files_per_partition=10, include_path=True)
-                p = b.take(100, npartitions=1)
+        b = read_text("*.txt", files_per_partition=10, include_path=True)
+        with pytest.warns(UserWarning):
+            p = b.take(100, npartitions=1)
 
-            p_paths = tuple(zip(*p))[1]
-            p_unique_paths = set(p_paths)
-            assert len(p_unique_paths) == 10
+        p_paths = tuple(zip(*p))[1]
+        p_unique_paths = set(p_paths)
+        assert len(p_unique_paths) == 10
 
-            b_paths = tuple(zip(*b.compute()))[1]
-            b_unique_paths = set(b_paths)
-            assert len(b_unique_paths) == 20
+        b_paths = tuple(zip(*b.compute()))[1]
+        b_unique_paths = set(b_paths)
+        assert len(b_unique_paths) == 20
 
 
 def test_errors():

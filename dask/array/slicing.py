@@ -576,8 +576,6 @@ def issorted(seq):
 class SlicingNoop(Exception):
     """This indicates that a slicing operation is a no-op. The caller has to handle this"""
 
-    pass
-
 
 def take(outname, inname, chunks, index, axis=0):
     """Index array with an iterable of index
@@ -700,7 +698,7 @@ def _expander(where):
         left = "".join(left)
         decl = decl.format(**locals())
         ns = {}
-        exec(compile(decl, "<dynamic>", "exec"), ns, ns)
+        exec(compile(decl, "<dynamic>", "exec"), ns, ns)  # noqa: S102
         return ns["expand"]
 
 
@@ -737,7 +735,7 @@ def new_blockdim(dim_shape, lengths, index):
     ]
     if isinstance(index, slice) and index.step and index.step < 0:
         slices.reverse()
-    return [int(math.ceil((1.0 * slc.stop - slc.start) / slc.step)) for slc in slices]
+    return [math.ceil((1.0 * slc.stop - slc.start) / slc.step) for slc in slices]
 
 
 def replace_ellipsis(n, index):
@@ -910,9 +908,7 @@ def check_index(axis, ind, dimension):
         ind = np.asanyarray(ind)
 
     # unknown dimension, assumed to be in bounds
-    if np.isnan(dimension):
-        return
-    elif is_dask_collection(ind):
+    if np.isnan(dimension) or is_dask_collection(ind):
         return
     elif is_arraylike(ind):
         if ind.dtype == bool:
@@ -925,9 +921,7 @@ def check_index(axis, ind, dimension):
             raise IndexError(
                 f"Index is out of bounds for axis {axis} with size {dimension}"
             )
-    elif isinstance(ind, slice):
-        return
-    elif ind is None:
+    elif isinstance(ind, slice) or ind is None:
         return
 
     elif ind >= dimension or ind < -dimension:
@@ -1813,10 +1807,7 @@ def setitem_array(out_name, array, indices, value):
 
         if b == 1:
             base_value_indices.append(slice(None))
-        elif a == b:
-            base_value_indices.append(None)
-            non_broadcast_dimensions.append(i)
-        elif math.isnan(a):
+        elif a == b or math.isnan(a):
             base_value_indices.append(None)
             non_broadcast_dimensions.append(i)
         else:

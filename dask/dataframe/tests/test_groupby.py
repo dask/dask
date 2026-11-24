@@ -221,28 +221,27 @@ def test_groupby_on_index(scheduler):
     def func3(df):
         return df.mean()
 
-    with dask.config.set(scheduler=scheduler):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            assert_eq(
-                ddf.groupby("a").apply(func, **INCLUDE_GROUPS),
-                pdf.groupby("a").apply(func, **INCLUDE_GROUPS),
-            )
+    with dask.config.set(scheduler=scheduler), warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        assert_eq(
+            ddf.groupby("a").apply(func, **INCLUDE_GROUPS),
+            pdf.groupby("a").apply(func, **INCLUDE_GROUPS),
+        )
 
-            assert_eq(
-                pdf2.groupby(pdf2.index).apply(func2, **INCLUDE_GROUPS),
-                ddf2.groupby(ddf2.index).apply(func2, **INCLUDE_GROUPS),
-            )
+        assert_eq(
+            pdf2.groupby(pdf2.index).apply(func2, **INCLUDE_GROUPS),
+            ddf2.groupby(ddf2.index).apply(func2, **INCLUDE_GROUPS),
+        )
 
-            assert_eq(
-                ddf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
-                pdf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
-            )
+        assert_eq(
+            ddf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
+            pdf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
+        )
 
-            assert_eq(
-                ddf2.b.groupby(ddf2.index).apply(func3, **INCLUDE_GROUPS),
-                pdf2.b.groupby(pdf2.index).apply(func3, **INCLUDE_GROUPS),
-            )
+        assert_eq(
+            ddf2.b.groupby(ddf2.index).apply(func3, **INCLUDE_GROUPS),
+            pdf2.b.groupby(pdf2.index).apply(func3, **INCLUDE_GROUPS),
+        )
 
 
 @pytest.mark.filterwarnings("ignore:invalid value encountered:RuntimeWarning")
@@ -735,7 +734,6 @@ def test_groupby_reduction_split(xfail, keyword, agg_func, shuffle_method):
         lambda df: df.groupby("A"),
         lambda df: df.groupby(df["A"]),
         lambda df: df.groupby(df["A"] + 1),
-        lambda df: df.groupby("A")["B"],
         # SeriesGroupBy:
         lambda df: df.groupby("A")["B"],
         lambda df: df.groupby(df["A"])["B"],
@@ -801,16 +799,18 @@ def test_apply_or_transform_shuffle_multilevel(grouper, func):
     )
     ddf = dd.from_pandas(pdf, 3)
 
+    # DataFrameGroupBy
     with pytest.warns(UserWarning):
-        # DataFrameGroupBy
         assert_eq(func(ddf.groupby(grouper(ddf))), func(pdf.groupby(grouper(pdf))))
 
-        # SeriesGroupBy
+    # SeriesGroupBy
+    with pytest.warns(UserWarning):
         assert_eq(
             func(ddf.groupby(grouper(ddf))["B"]), func(pdf.groupby(grouper(pdf))["B"])
         )
 
-        # DataFrameGroupBy with column slice
+    # DataFrameGroupBy with column slice
+    with pytest.warns(UserWarning):
         assert_eq(
             func(ddf.groupby(grouper(ddf))[["B", "C"]]),
             func(pdf.groupby(grouper(pdf))[["B", "C"]]),
@@ -2285,14 +2285,15 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
 
     ddf = dd.from_pandas(pdf, npartitions)
 
+    # DataFrame
     with pytest.warns(UserWarning):
-        # DataFrame
         assert_eq(
             pdf.groupby("group").transform(lambda series: series - series.mean()),
             ddf.groupby("group").transform(lambda series: series - series.mean()),
         )
 
-        # Series
+    # Series
+    with pytest.warns(UserWarning):
         assert_eq(
             pdf.groupby("group")["value"].transform(
                 lambda series: series - series.mean()

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import bisect
 from threading import Lock
-from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -13,10 +12,6 @@ from dask.dataframe.utils import pyarrow_strings_enabled
 from dask.highlevelgraph import HighLevelGraph
 from dask.tokenize import tokenize
 from dask.utils import ensure_dict, is_series_like
-
-if TYPE_CHECKING:
-    pass
-
 
 lock = Lock()
 
@@ -231,7 +226,7 @@ def _link(token, result):
     We use this to enforce an artificial sequential ordering on tasks that
     don't explicitly pass around a shared resource
     """
-    return None
+    return
 
 
 def _df_to_bag(df, index=False, format="tuple"):

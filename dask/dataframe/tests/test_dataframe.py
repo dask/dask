@@ -1822,7 +1822,7 @@ def test_combine():
     first = lambda a, b: a
 
     # You can add series with strings and nans but you can't add scalars 'a' + np.nan
-    str_add = lambda a, b: a + b if a is not np.nan else a
+    str_add = lambda a, b: a + b if a is not np.nan else a  # noqa: PLW0177
 
     # DataFrame
     for dda, ddb, a, b, runs in [
@@ -2104,7 +2104,7 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series(list(range(0, 30)) * 2, dtype=dtype),
+        index=pd.Series(list(range(30)) * 2, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
@@ -2200,9 +2200,7 @@ def test_repartition_datetime_tz_index():
 @pytest.mark.parametrize(
     "end", ["2000-04-15", "2000-04-15 12:37:01", "2000-01-01 12:37:00"]
 )
-@pytest.mark.parametrize(
-    "start", ["2000-01-01", "2000-01-01 12:30:00", "2000-01-01 12:30:00"]
-)
+@pytest.mark.parametrize("start", ["2000-01-01", "2000-01-01 12:30:00"])
 def test_repartition_freq(npartitions, freq, start, end):
     start = pd.Timestamp(start)
     end = pd.Timestamp(end)
@@ -2303,7 +2301,6 @@ def test_repartition_freq_day():
         ("BA", "BYS" if PANDAS_GE_220 else "BAS"),
         ("2BA", "2BYS" if PANDAS_GE_220 else "2BAS"),
         ("BY", "BYS" if PANDAS_GE_220 else "BAS"),
-        ("Y", "YS" if PANDAS_GE_220 else "AS"),
         (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
     ],
 )
@@ -2784,7 +2781,7 @@ def test_to_frame():
     assert_eq(s.to_frame("bar"), a.to_frame("bar"))
 
 
-@pytest.mark.parametrize("as_frame", [False, False])
+@pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_raises(as_frame):
     s = pd.Series([1, 2, 3, 4, 5, 6], name="foo")
     a = dd.from_pandas(s, npartitions=2)
@@ -3702,64 +3699,59 @@ def test_idxmaxmin(idx, skipna):
     if PANDAS_GE_300 and not skipna:
         ctx = pytest.raises(ValueError, match="Encountered an NA")
 
-    with ctx:
-        with warnings.catch_warnings(record=True):
-            if not skipna and PANDAS_GE_210:
-                warnings.simplefilter("ignore", category=FutureWarning)
-            assert_eq(
-                df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna)
-            )
-            assert_eq(
-                df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna)
-            )
+    with ctx, warnings.catch_warnings(record=True):
+        if not skipna and PANDAS_GE_210:
+            warnings.simplefilter("ignore", category=FutureWarning)
+        assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
+        assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
 
-            assert_eq(
-                df.idxmax(skipna=skipna),
-                ddf.idxmax(skipna=skipna),
-                check_dtype=check_dtype,
-            )
-            assert_eq(
-                df.idxmax(skipna=skipna),
-                ddf.idxmax(skipna=skipna, split_every=2),
-                check_dtype=check_dtype,
-            )
-            assert (
-                ddf.idxmax(skipna=skipna)._name
-                != ddf.idxmax(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna),
+            check_dtype=check_dtype,
+        )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
+        assert (
+            ddf.idxmax(skipna=skipna)._name
+            != ddf.idxmax(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(
-                df.idxmin(skipna=skipna),
-                ddf.idxmin(skipna=skipna),
-                check_dtype=check_dtype,
-            )
-            assert_eq(
-                df.idxmin(skipna=skipna),
-                ddf.idxmin(skipna=skipna, split_every=2),
-                check_dtype=check_dtype,
-            )
-            assert (
-                ddf.idxmin(skipna=skipna)._name
-                != ddf.idxmin(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna),
+            check_dtype=check_dtype,
+        )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
+        assert (
+            ddf.idxmin(skipna=skipna)._name
+            != ddf.idxmin(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
-            assert_eq(
-                df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
-            )
-            assert (
-                ddf.a.idxmax(skipna=skipna)._name
-                != ddf.a.idxmax(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+        assert_eq(
+            df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
+        )
+        assert (
+            ddf.a.idxmax(skipna=skipna)._name
+            != ddf.a.idxmax(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
-            assert_eq(
-                df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
-            )
-            assert (
-                ddf.a.idxmin(skipna=skipna)._name
-                != ddf.a.idxmin(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+        assert_eq(
+            df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
+        )
+        assert (
+            ddf.a.idxmin(skipna=skipna)._name
+            != ddf.a.idxmin(skipna=skipna, split_every=2)._name
+        )
 
 
 @pytest.mark.parametrize("func", ["idxmin", "idxmax"])
@@ -4524,7 +4516,7 @@ def test_map_partition_array(func):
     for pre in [lambda a: a, lambda a: a.x, lambda a: a.y, lambda a: a.index]:
         try:
             expected = func(pre(df))
-        except Exception:
+        except Exception:  # noqa: S112
             continue
         x = pre(ddf).map_partitions(func)
         assert_eq(x, expected, check_type=False)  # TODO: make check_type pass

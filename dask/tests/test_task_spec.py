@@ -657,7 +657,6 @@ class CountSerialization:
 
     def __setstate__(self, state):
         CountSerialization.deserialization += 1
-        pass
 
     def __call__(self):
         return 1
