@@ -26,11 +26,3 @@ We can't just use::
 again, due to lack of pixi-build support for SCM versioning in fsspec; the s3fs project
 pins the fsspec version which fails to match the current fsspec recipe. This s3fs recipe
 works around the problem by removing the fsspec pin.
-
-## Recipes used by the free-threading environments
-### brotli
-Creates non-importable conda-package `brotli-python=1.2.0`.
-brotli is an optional dependency of urllib3, which is in turn a dependency of requests,
-which is in turn an optional dependency of fsspec.
-As of 1.2.0, brotli does not release the GIL on import in Python 3.14t.
-This causes `import requests` to lock the GIL.
