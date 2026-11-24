@@ -30,7 +30,7 @@ def data(dtype):
         data = [1, 0] * 4 + [None] + [2, 1] * 44 + [None] + [1, 99]
     elif pa.types.is_decimal(pa_dtype):
         data = (
-            [Decimal("1"), Decimal("0.0")] * 4
+            [Decimal(1), Decimal("0.0")] * 4
             + [None]
             + [Decimal("-2.0"), Decimal("-1.0")] * 44
             + [None]

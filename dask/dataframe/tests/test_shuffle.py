@@ -1252,7 +1252,7 @@ def test_sort_values_timestamp(npartitions):
             [pd.Timestamp("2022-01-01"), pd.Timestamp("2023-01-02")],
             "timestamp[ns][pyarrow]",
         ),
-        ([Decimal("5"), Decimal("6.24")], "decimal128"),
+        ([Decimal(5), Decimal("6.24")], "decimal128"),
         ([pd.Timedelta("1 day"), pd.Timedelta("20 days")], "duration[ns][pyarrow]"),
         ([time(12, 0), time(0, 12)], "time64[ns][pyarrow]"),
     ],
