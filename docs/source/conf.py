@@ -20,9 +20,32 @@ import pathlib
 import sys
 from datetime import datetime
 
+import sphinx
 import sphinx_autosummary_accessors
 from sphinx import addnodes
 from sphinx.util.matching import patmatch
+
+if sphinx.version_info >= (9,):
+    # Sphinx 9 classifies dask ufunc instances as data and starts with an empty
+    # signature list. numpydoc still supplies a signature through the
+    # autodoc-process-signature event, which Sphinx then assigns to
+    # signatures[0] and crashes. Seed the list so the real signature survives.
+    from sphinx.ext.autodoc._dynamic import _signatures
+
+    _extract_signature_from_object = _signatures._extract_signature_from_object
+
+    def _extract_signature_from_object_with_ufuncs(**kwargs):
+        props = kwargs["props"]
+        if (
+            props.obj_type == "data"
+            and type(props._obj).__module__ == "dask.array.ufunc"
+        ):
+            return [("", "")]
+        return _extract_signature_from_object(**kwargs)
+
+    _signatures._extract_signature_from_object = (
+        _extract_signature_from_object_with_ufuncs
+    )
 
 # -- General configuration -----------------------------------------------------
 

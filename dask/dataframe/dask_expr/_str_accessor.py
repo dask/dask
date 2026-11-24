@@ -101,9 +101,11 @@ class StringAccessor(Accessor):
         return self._split("split", pat=pat, n=n, expand=expand)
 
     def rsplit(self, pat=None, n=-1, expand=False):
+        """Split strings around the given separator, starting from the end."""
         return self._split("rsplit", pat=pat, n=n, expand=expand)
 
     def cat(self, others=None, sep=None, na_rep=None):
+        """Concatenate strings in the Series/Index with the given separator."""
         import pandas as pd
 
         from dask.dataframe.dask_expr._collection import Index, Series, new_collection
