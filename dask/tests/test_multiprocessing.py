@@ -3,6 +3,7 @@ from __future__ import annotations
 import multiprocessing
 import pickle
 import sys
+import traceback
 from concurrent.futures import ProcessPoolExecutor
 from operator import add
 
@@ -76,6 +77,22 @@ def test_errors_propagate():
     with pytest.raises(ValueError) as e:
         get(dsk, "x")
     assert "12345" in str(e.value)
+
+
+def test_traceback_source_of_local_function():
+    """A worker traceback must retain the source line of a cloudpickled function.
+
+    Test vs. cloudpickle regression https://github.com/cloudpipe/cloudpickle/issues/628
+    """
+
+    def bad():
+        raise ValueError("12345")  # source line marker
+
+    with pytest.raises(ValueError) as exc_info:
+        get({"x": (bad,)}, "x")
+
+    tb = "".join(traceback.format_exception(exc_info.value))
+    assert 'raise ValueError("12345")  # source line marker' in tb
 
 
 def test_remote_exception():

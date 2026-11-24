@@ -36,7 +36,8 @@ dependencies = [
     # NOTE: These must match the versions listed in `pixi.toml`
     # and in `docs/source/install.rst`
     "click >= 8.1",
-    "cloudpickle >= 3.0.0",
+    # 3.1.3 breaks traceback source lines: https://github.com/cloudpipe/cloudpickle/issues/628
+    "cloudpickle >= 3.0.0, < 3.1.3",
     "fsspec >= 2021.09.0",
     "packaging >= 20.0",
     "partd >= 1.4.0",
