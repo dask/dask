@@ -192,10 +192,9 @@ def test_multiple_annotations():
 
 def test_annotation_cleared_on_error():
     with dask.annotate(x=1):
-        with pytest.raises(ZeroDivisionError):
-            with dask.annotate(x=2):
-                assert dask.get_annotations() == {"x": 2}
-                1 / 0
+        with pytest.raises(ZeroDivisionError), dask.annotate(x=2):
+            assert dask.get_annotations() == {"x": 2}
+            1 / 0
         assert dask.get_annotations() == {"x": 1}
     assert not dask.get_annotations()
 

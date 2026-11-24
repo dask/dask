@@ -2591,9 +2591,11 @@ def test_warn_annotations():
 
     dask.dataframe.dask_expr._collection._WARN_ANNOTATIONS = True
 
-    with pytest.warns(UserWarning, match="annotations.*retries.*ignore"):
-        with dask.annotate(retries=3):
-            from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
+    with (
+        pytest.warns(UserWarning, match="annotations.*retries.*ignore"),
+        dask.annotate(retries=3),
+    ):
+        from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
     # Don't warn a second time
     with dask.annotate(retries=3):
         from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)

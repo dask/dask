@@ -69,9 +69,8 @@ def test_finish_always_called():
 
     dsk = {"x": (raise_keyboard,)}
     flag[0] = False
-    with pytest.raises(KeyboardInterrupt):
-        with MyCallback():
-            get_sync(dsk, "x")
+    with pytest.raises(KeyboardInterrupt), MyCallback():
+        get_sync(dsk, "x")
     assert flag[0]
 
 

@@ -3991,6 +3991,8 @@ def test_parquet_botocore_exception(tmpdir):
     def mock_get_engine(engine):
         raise BotoCoreError
 
-    with pytest.raises(BotoCoreError, match="An unspecified error occurred"):
-        with patch("dask.dataframe.dask_expr.io.parquet.get_engine", mock_get_engine):
-            dd.read_parquet(f"{tmpdir}string.parquet")
+    with (
+        pytest.raises(BotoCoreError, match="An unspecified error occurred"),
+        patch("dask.dataframe.dask_expr.io.parquet.get_engine", mock_get_engine),
+    ):
+        dd.read_parquet(f"{tmpdir}string.parquet")

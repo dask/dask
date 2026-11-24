@@ -418,16 +418,13 @@ def test_to_hdf_exceptions():
     a = dd.from_pandas(df, 1)
 
     # triggering too many asterisks error
-    with tmpdir() as dn:
-        with pytest.raises(ValueError):
-            fn = os.path.join(dn, "data_*.h5")
-            a.to_hdf(fn, "/data_*")
+    with tmpdir() as dn, pytest.raises(ValueError):
+        fn = os.path.join(dn, "data_*.h5")
+        a.to_hdf(fn, "/data_*")
 
     # triggering too many asterisks error
-    with tmpfile() as fn:
-        with pd.HDFStore(fn) as hdf:
-            with pytest.raises(ValueError):
-                a.to_hdf(hdf, "/data_*_*")
+    with tmpfile() as fn, pd.HDFStore(fn) as hdf, pytest.raises(ValueError):
+        a.to_hdf(hdf, "/data_*_*")
 
 
 @pytest.mark.skipif(
@@ -563,11 +560,13 @@ def test_to_fmt_warns():
     a = dd.from_pandas(df16, 16)
 
     # testing warning when breaking order
-    with tmpfile("h5") as fn:
-        with pytest.warns(
+    with (
+        tmpfile("h5") as fn,
+        pytest.warns(
             UserWarning, match="To preserve order between partitions name_function"
-        ):
-            a.to_hdf(fn, "/data*", name_function=str)
+        ),
+    ):
+        a.to_hdf(fn, "/data*", name_function=str)
 
     with tmpdir() as dn:
         fn = os.path.join(dn, "data_*.csv")

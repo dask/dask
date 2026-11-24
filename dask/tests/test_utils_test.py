@@ -63,6 +63,5 @@ def test__check_warning():
         with _check_warning(True, MyWarning, "foo"):
             warnings.warn("foo", MyWarning)
 
-    with pytest.warns(MyWarning, match="foo"):
-        with _check_warning(False, MyWarning, "foo"):
-            warnings.warn("foo", MyWarning)
+    with pytest.warns(MyWarning, match="foo"), _check_warning(False, MyWarning, "foo"):
+        warnings.warn("foo", MyWarning)

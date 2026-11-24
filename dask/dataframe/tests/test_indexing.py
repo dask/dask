@@ -157,9 +157,8 @@ def test_loc_with_non_boolean_series():
         ctx = pytest.warns(
             UserWarning, match="converting pandas extension dtypes to arrays"
         )
-    with ctx:
-        with pytest.raises(KeyError, match=msg):
-            ddf.loc[ds.values]
+    with ctx, pytest.raises(KeyError, match=msg):
+        ddf.loc[ds.values]
 
     assert_eq(ddf.loc[s.values], df.loc[s])
 

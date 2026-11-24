@@ -411,10 +411,9 @@ def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip)
             actual = dd_read(fn, blocksize=200, skiprows=skip, names=names).compute()
         assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
 
-        with pytest.warns(UserWarning):
-            # if new sample does not contain all the skiprows, raise error
-            with pytest.raises(ValueError):
-                dd_read(fn, blocksize=30, skiprows=skip, names=names)
+        # If new sample does not contain all the skiprows, raise error
+        with pytest.warns(UserWarning), pytest.raises(ValueError):
+            dd_read(fn, blocksize=30, skiprows=skip, names=names)
 
 
 @pytest.mark.parametrize(
@@ -484,9 +483,8 @@ def test_read_csv_include_path_column_as_str(dd_read, files):
     "dd_read,files", [(dd.read_csv, csv_files), (dd.read_table, tsv_files)]
 )
 def test_read_csv_include_path_column_with_duplicate_name(dd_read, files):
-    with filetexts(files, mode="b"):
-        with pytest.raises(ValueError):
-            dd_read("2014-01-*.csv", include_path_column="name")
+    with filetexts(files, mode="b"), pytest.raises(ValueError):
+        dd_read("2014-01-*.csv", include_path_column="name")
 
 
 @pytest.mark.parametrize(
@@ -789,9 +787,11 @@ def test_warn_non_seekable_files():
             df = dd.read_csv("2014-01-*.csv", compression="gzip", blocksize=None)
         assert not record
 
-        with pytest.raises(NotImplementedError):
-            with pytest.warns(UserWarning):  # needed for pytest
-                df = dd.read_csv("2014-01-*.csv", compression="foo")
+        with (
+            pytest.raises(NotImplementedError),
+            pytest.warns(UserWarning),
+        ):
+            df = dd.read_csv("2014-01-*.csv", compression="foo")
 
 
 def test_windows_line_terminator():
@@ -1200,13 +1200,12 @@ def test_parse_dates_multi_column():
         # Deprecated in pandas=2.2.0
         ctx = pytest.warns(FutureWarning, match="nested")
 
-    with ctx:
-        with filetext(pdmc_text) as fn:
-            ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
-            df = pd.read_csv(fn, parse_dates=[["date", "time"]])
+    with filetext(pdmc_text) as fn, ctx:
+        ddf = dd.read_csv(fn, parse_dates=[["date", "time"]])
+        df = pd.read_csv(fn, parse_dates=[["date", "time"]])
 
-            assert (df.columns == ddf.columns).all()
-            assert len(df) == len(ddf)
+        assert (df.columns == ddf.columns).all()
+        assert len(df) == len(ddf)
 
 
 def test_read_csv_sep():
@@ -1362,10 +1361,9 @@ def test_to_csv():
 def test_to_csv_multiple_files_cornercases():
     df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
     a = dd.from_pandas(df, 2)
-    with tmpdir() as dn:
-        with pytest.raises(ValueError):
-            fn = os.path.join(dn, "data_*_*.csv")
-            a.to_csv(fn)
+    with tmpdir() as dn, pytest.raises(ValueError):
+        fn = os.path.join(dn, "data_*_*.csv")
+        a.to_csv(fn)
 
     df16 = pd.DataFrame(
         {
@@ -1609,9 +1607,8 @@ def test_to_csv_warns_using_scheduler_argument():
     def my_get(*args, **kwargs):
         return mp_get(*args, **kwargs)
 
-    with tmpdir() as dn:
-        with pytest.warns(FutureWarning):
-            ddf.to_csv(dn, index=False, scheduler=my_get)
+    with tmpdir() as dn, pytest.warns(FutureWarning):
+        ddf.to_csv(dn, index=False, scheduler=my_get)
 
 
 def test_to_csv_errors_using_multiple_scheduler_args():
@@ -1623,11 +1620,18 @@ def test_to_csv_errors_using_multiple_scheduler_args():
     def my_get(*args, **kwargs):
         return mp_get(*args, **kwargs)
 
-    with tmpdir() as dn:
-        with pytest.raises(ValueError) and pytest.warns(FutureWarning):
-            ddf.to_csv(
-                dn, index=False, scheduler=my_get, compute_kwargs={"scheduler": my_get}
-            )
+    # to_csv raises only when the two scheduler values differ
+    with (
+        tmpdir() as dn,
+        pytest.raises(ValueError, match="Differing values for 'scheduler'"),
+        pytest.warns(FutureWarning),
+    ):
+        ddf.to_csv(
+            dn,
+            index=False,
+            scheduler=my_get,
+            compute_kwargs={"scheduler": dask.get},
+        )
 
 
 def test_to_csv_keeps_all_non_scheduler_compute_kwargs():

@@ -3699,64 +3699,59 @@ def test_idxmaxmin(idx, skipna):
     if PANDAS_GE_300 and not skipna:
         ctx = pytest.raises(ValueError, match="Encountered an NA")
 
-    with ctx:
-        with warnings.catch_warnings(record=True):
-            if not skipna and PANDAS_GE_210:
-                warnings.simplefilter("ignore", category=FutureWarning)
-            assert_eq(
-                df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna)
-            )
-            assert_eq(
-                df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna)
-            )
+    with ctx, warnings.catch_warnings(record=True):
+        if not skipna and PANDAS_GE_210:
+            warnings.simplefilter("ignore", category=FutureWarning)
+        assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
+        assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
 
-            assert_eq(
-                df.idxmax(skipna=skipna),
-                ddf.idxmax(skipna=skipna),
-                check_dtype=check_dtype,
-            )
-            assert_eq(
-                df.idxmax(skipna=skipna),
-                ddf.idxmax(skipna=skipna, split_every=2),
-                check_dtype=check_dtype,
-            )
-            assert (
-                ddf.idxmax(skipna=skipna)._name
-                != ddf.idxmax(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna),
+            check_dtype=check_dtype,
+        )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
+        assert (
+            ddf.idxmax(skipna=skipna)._name
+            != ddf.idxmax(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(
-                df.idxmin(skipna=skipna),
-                ddf.idxmin(skipna=skipna),
-                check_dtype=check_dtype,
-            )
-            assert_eq(
-                df.idxmin(skipna=skipna),
-                ddf.idxmin(skipna=skipna, split_every=2),
-                check_dtype=check_dtype,
-            )
-            assert (
-                ddf.idxmin(skipna=skipna)._name
-                != ddf.idxmin(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna),
+            check_dtype=check_dtype,
+        )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
+        assert (
+            ddf.idxmin(skipna=skipna)._name
+            != ddf.idxmin(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
-            assert_eq(
-                df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
-            )
-            assert (
-                ddf.a.idxmax(skipna=skipna)._name
-                != ddf.a.idxmax(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+        assert_eq(
+            df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
+        )
+        assert (
+            ddf.a.idxmax(skipna=skipna)._name
+            != ddf.a.idxmax(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
-            assert_eq(
-                df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
-            )
-            assert (
-                ddf.a.idxmin(skipna=skipna)._name
-                != ddf.a.idxmin(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+        assert_eq(
+            df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
+        )
+        assert (
+            ddf.a.idxmin(skipna=skipna)._name
+            != ddf.a.idxmin(skipna=skipna, split_every=2)._name
+        )
 
 
 @pytest.mark.parametrize("func", ["idxmin", "idxmax"])
