@@ -134,7 +134,7 @@ class Generator:
             axis,
             chunks,
             meta,
-            dependencies,
+            _dependencies,
         ) = _choice_validate_params(self, a, size, replace, p, axis, chunks)
 
         return new_collection(
@@ -540,10 +540,10 @@ class RandomState:
                 size,
                 replace,
                 p,
-                axis,  # np.random.RandomState.choice does not use axis
+                _axis,  # np.random.RandomState.choice does not use axis
                 chunks,
                 meta,
-                dependencies,
+                _dependencies,
             ) = _choice_validate_params(self, a, size, replace, p, 0, chunks)
 
             return new_collection(
@@ -977,7 +977,7 @@ class Random(IO):
 
     @cached_property
     def _meta(self):
-        bitgens, name, sizes, gen, func_applier = self._info
+        bitgens, _name, _sizes, gen, func_applier = self._info
         return func_applier(
             gen,
             self.distribution,

@@ -1076,7 +1076,7 @@ def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
     # Right now, the metadata for batches is incorrect, but this should be okay
     batches = x.map_blocks(preop, axis=axis, keepdims=True, dtype=dtype)
     # We don't need the last index until the end
-    *indices, last_index = full_indices = [
+    *indices, _last_index = full_indices = [
         list(
             product(
                 *[range(nb) if j != axis else [i] for j, nb in enumerate(x.numblocks)]

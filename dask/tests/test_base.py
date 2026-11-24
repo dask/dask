@@ -325,7 +325,7 @@ def test_custom_collection():
     assert sorted(t2._dask.values()) == [1, 2, 3, 4, 7]
     assert t2.compute() == (1, 2, 3, 4, 7)
 
-    w2, x2, y2, z2 = dask.persist(w, x, y, z)
+    _w2, x2, y2, z2 = dask.persist(w, x, y, z)
     assert y2._keys == y._keys
     assert y2._dask == {("y", h1): 3, ("y", h2): 4}
     assert y2.compute() == (3, 4)
@@ -849,7 +849,7 @@ def test_optimize_globals():
     b = db.range(10, npartitions=2)
 
     with dask.config.set(array_optimize=optimize_double):
-        xx, bb = dask.compute(x + 1, b.map(inc), scheduler="single-threaded")
+        xx, _bb = dask.compute(x + 1, b.map(inc), scheduler="single-threaded")
         assert_eq(xx, (np.ones(10) * 2 + 1) * 2)
 
 

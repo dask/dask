@@ -553,7 +553,7 @@ class RandomState:
                 size,
                 replace,
                 p,
-                axis,  # np.random.RandomState.choice does not use axis
+                _axis,  # np.random.RandomState.choice does not use axis
                 chunks,
                 meta,
                 dependencies,

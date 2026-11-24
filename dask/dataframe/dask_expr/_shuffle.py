@@ -1005,7 +1005,7 @@ class SortValues(BaseSetIndexSortValues):
             # Protect against triggering calculations when we only have one division
             return (None, None)
 
-        divisions, mins, maxes, presorted = _get_divisions(
+        divisions, _mins, _maxes, presorted = _get_divisions(
             self.frame,
             self.frame[self.by[0]],
             self._npartitions_input,

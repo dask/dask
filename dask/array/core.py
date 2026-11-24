@@ -482,7 +482,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     except Exception as e:
         if isinstance(e, OverflowError):
             raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
+        _exc_type, _exc_value, exc_traceback = sys.exc_info()
         tb = "".join(traceback.format_tb(exc_traceback))
         suggest = (
             (

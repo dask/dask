@@ -5395,7 +5395,7 @@ def read_parquet(
 
     if filters is not None:
         for filter in flatten(filters, container=list):
-            col, op, val = filter
+            _col, op, val = filter
             if op == "in" and not isinstance(val, (set, list, tuple)):
                 raise TypeError("Value of 'in' filter must be a list, set or tuple.")
 
