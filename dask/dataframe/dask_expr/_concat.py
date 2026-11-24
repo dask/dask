@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import itertools
 import warnings
 
 import pandas as pd
@@ -144,7 +145,7 @@ class Concat(Expr):
     @functools.cached_property
     def _division_order_is_valid(self):
         dfs = self._frames
-        for left, right in zip(dfs, dfs[1:]):
+        for left, right in itertools.pairwise(dfs):
             if left.divisions == right.divisions:
                 continue
             if left.divisions[-1] > right.divisions[0]:
@@ -155,7 +156,7 @@ class Concat(Expr):
     def _division_ranges_are_disjoint(self):
         divisions = sorted(df.divisions for df in self._frames)
         return all(
-            left[-1] <= right[0] for left, right in zip(divisions, divisions[1:])
+            left[-1] <= right[0] for left, right in itertools.pairwise(divisions)
         )
 
     @functools.cached_property
