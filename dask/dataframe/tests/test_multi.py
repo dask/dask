@@ -2053,8 +2053,9 @@ def test_concat_datetimeindex():
 def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
     with pytest.warns(FutureWarning, match="append method is deprecated"):
         expected = pandas_obj.append(pandas_append)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
         result = dask_obj.append(dask_append)
-        assert_eq(result, expected)
+    assert_eq(result, expected)
 
     return result
 
@@ -2104,7 +2105,7 @@ def test_merge_outer_empty():
     df = dd.from_pandas(df, npartitions=10)
     empty_df = dd.from_pandas(pd.DataFrame(), npartitions=10)
 
-    for x in range(0, k_clusters + 1):
+    for x in range(k_clusters + 1):
         assert_eq(
             dd.merge(empty_df, df[df.cluster == x], how="outer"),
             df[df.cluster == x],

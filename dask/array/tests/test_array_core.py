@@ -3010,7 +3010,7 @@ def test_array_copy_noop(chunks):
 def test_from_array_dask_array():
     x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=(1, 2))
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         da.from_array(dx)
 
 
@@ -4220,13 +4220,13 @@ def test_index_array_with_array_2d():
     # Test with unknown chunks
     dx._chunks = ((2, 2), (np.nan, np.nan, np.nan))
 
-    with pytest.warns(UserWarning, match="different ordering") as record:
+    with pytest.warns(UserWarning, match="different ordering"):
         assert sorted(x[x % 2 == 0].tolist()) == sorted(
             dx[dx % 2 == 0].compute().tolist()
         )
-        assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
 
-    assert len(record) == 2
+    with pytest.warns(UserWarning, match="different ordering"):
+        assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
 
 
 @pytest.mark.xfail(reason="Chunking does not align well")

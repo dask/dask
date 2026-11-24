@@ -82,7 +82,7 @@ class CreationDispatch(Generic[BackendEntrypointType]):
     ) -> BackendEntrypointType:
         """Register a target class for a specific array-backend label"""
         if not isinstance(backend, self._entrypoint_class):
-            raise ValueError(
+            raise TypeError(
                 f"This CreationDispatch only supports "
                 f"{self._entrypoint_class} registration. "
                 f"Got {type(backend)}"

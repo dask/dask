@@ -1167,7 +1167,7 @@ def from_array(
     >>> a = da.from_array(x, chunks=((67, 33), (6,)))
     """
     if isinstance(x, Array):
-        raise ValueError(
+        raise TypeError(
             "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
         )
     elif is_dask_collection(x):

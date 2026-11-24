@@ -222,7 +222,7 @@ def unpack_collections(expr, _return_collections=True):
 
     if typ is dict:
         keyargs, kcollections = unpack_collections(
-            [k for k in expr.keys()], _return_collections=False
+            [k for k in expr], _return_collections=False
         )
         valargs, valcollections = unpack_collections(
             [v for v in expr.values()], _return_collections=False

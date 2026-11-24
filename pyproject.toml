@@ -142,11 +142,6 @@ ignore = [
     "SIM117",  # Multiple with statements can be combined (58 findings)
     "BLE001",  # Blind except (42 findings)
     "SIM102",  # Collapsible if (36 findings)
-    "PT031",   # pytest.warns with multiple statements (21 findings)
-    "TRY004",  # Type check without TypeError (18 findings)
-    "SIM114",  # If branches with identical arms (14 findings)
-    "SIM118",  # key in dict.keys() instead of key in dict (14 findings)
-    "PIE808",  # Unnecessary range() start argument (13 findings)
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]

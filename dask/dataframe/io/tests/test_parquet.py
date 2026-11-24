@@ -1594,8 +1594,8 @@ def test_parquet_select_cats(tmpdir, engine):
                 np.random.choice(["a", "b", "c", "d", "e", "f"], size=100),
                 dtype="category",
             ),
-            "ints": pd.Series(list(range(0, 100)), dtype="int"),
-            "floats": pd.Series(list(range(0, 100)), dtype="float"),
+            "ints": pd.Series(list(range(100)), dtype="int"),
+            "floats": pd.Series(list(range(100)), dtype="float"),
         }
     )
 

@@ -59,9 +59,7 @@ class Rechunk(ArrayExpr):
         if isinstance(chunks, dict):
             chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
             for i in range(x.ndim):
-                if i not in chunks:
-                    chunks[i] = x.chunks[i]
-                elif chunks[i] is None:
+                if i not in chunks or chunks[i] is None:
                     chunks[i] = x.chunks[i]
         if isinstance(chunks, (tuple, list)):
             chunks = tuple(

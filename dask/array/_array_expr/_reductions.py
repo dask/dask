@@ -223,7 +223,7 @@ def _tree_reduce(
         n = builtins.max(int(split_every ** (1 / (len(axis) or 1))), 2)
         split_every = dict.fromkeys(axis, n)
     else:
-        raise ValueError("split_every must be a int or a dict")
+        raise TypeError("split_every must be a int or a dict")
 
     # Reduce across intermediates
     depth = 1

@@ -800,16 +800,18 @@ def test_apply_or_transform_shuffle_multilevel(grouper, func):
     )
     ddf = dd.from_pandas(pdf, 3)
 
+    # DataFrameGroupBy
     with pytest.warns(UserWarning):
-        # DataFrameGroupBy
         assert_eq(func(ddf.groupby(grouper(ddf))), func(pdf.groupby(grouper(pdf))))
 
-        # SeriesGroupBy
+    # SeriesGroupBy
+    with pytest.warns(UserWarning):
         assert_eq(
             func(ddf.groupby(grouper(ddf))["B"]), func(pdf.groupby(grouper(pdf))["B"])
         )
 
-        # DataFrameGroupBy with column slice
+    # DataFrameGroupBy with column slice
+    with pytest.warns(UserWarning):
         assert_eq(
             func(ddf.groupby(grouper(ddf))[["B", "C"]]),
             func(pdf.groupby(grouper(pdf))[["B", "C"]]),
@@ -2284,14 +2286,15 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
 
     ddf = dd.from_pandas(pdf, npartitions)
 
+    # DataFrame
     with pytest.warns(UserWarning):
-        # DataFrame
         assert_eq(
             pdf.groupby("group").transform(lambda series: series - series.mean()),
             ddf.groupby("group").transform(lambda series: series - series.mean()),
         )
 
-        # Series
+    # Series
+    with pytest.warns(UserWarning):
         assert_eq(
             pdf.groupby("group")["value"].transform(
                 lambda series: series - series.mean()

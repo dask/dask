@@ -808,13 +808,10 @@ def test_deprecated():
     def foo():
         return "bar"
 
-    with pytest.warns(FutureWarning) as record:
+    with pytest.warns(
+        FutureWarning, match="foo is deprecated.*removed in a future release"
+    ):
         assert foo() == "bar"
-
-    assert len(record) == 1
-    msg = str(record[0].message)
-    assert "foo is deprecated" in msg
-    assert "removed in a future release" in msg
 
 
 def test_deprecated_version():
@@ -849,11 +846,8 @@ def test_deprecated_message():
     def foo():
         return "bar"
 
-    with pytest.warns(FutureWarning) as record:
+    with pytest.warns(FutureWarning, match="woohoo"):
         assert foo() == "bar"
-
-    assert len(record) == 1
-    assert str(record[0].message) == "woohoo"
 
 
 def test_typename():

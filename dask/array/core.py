@@ -204,23 +204,21 @@ def _should_delegate(self, other) -> bool:
     This implementation follows NEP-13:
     https://numpy.org/neps/nep-0013-ufunc-overrides.html#behavior-in-combination-with-python-s-binary-operations
     """
-    if hasattr(other, "__array_ufunc__") and other.__array_ufunc__ is None:
-        return True
-    elif (
-        hasattr(other, "__array_ufunc__")
-        and not is_valid_array_chunk(other)
-        # don't delegate to our own parent classes
-        and not isinstance(self, type(other))
-        and type(self) is not type(other)
-    ):
-        return True
-    elif (
-        not hasattr(other, "__array_ufunc__")
-        and hasattr(other, "__array_priority__")
-        and other.__array_priority__ > self.__array_priority__
-    ):
-        return True
-    return False
+    return (
+        (hasattr(other, "__array_ufunc__") and other.__array_ufunc__ is None)
+        or (
+            hasattr(other, "__array_ufunc__")
+            and not is_valid_array_chunk(other)
+            # don't delegate to our own parent classes
+            and not isinstance(self, type(other))
+            and type(self) is not type(other)
+        )
+        or (
+            not hasattr(other, "__array_ufunc__")
+            and hasattr(other, "__array_priority__")
+            and other.__array_priority__ > self.__array_priority__
+        )
+    )
 
 
 def check_if_handled_given_other(f):
@@ -522,11 +520,13 @@ def normalize_arg(x):
     """
     if is_dask_collection(x):
         return x
-    elif isinstance(x, str) and re.match(r"_\d+", x):
-        return delayed(x)
-    elif isinstance(x, list) and len(x) >= 10:
-        return delayed(x)
-    elif sizeof(x) > 1e6:
+    elif (
+        isinstance(x, str)
+        and re.match(r"_\d+", x)
+        or isinstance(x, list)
+        and len(x) >= 10
+        or sizeof(x) > 1e6
+    ):
         return delayed(x)
     else:
         return x
@@ -3625,7 +3625,7 @@ def from_array(
     >>> a = da.from_array(x, chunks=((67, 33), (6,)))
     """
     if isinstance(x, Array):
-        raise ValueError(
+        raise TypeError(
             "Array is already a dask array. Use 'asarray' or 'rechunk' instead."
         )
     xr = sys.modules.get("xarray")
@@ -5974,7 +5974,7 @@ def _vindex_array(x, dict_indexes):
                 merge_inputs[outblock].append(TaskRef(keyname(name, i, okey)))
                 merge_indexer[outblock].append(sorted_outblock_idx[slicer])
 
-            for i in merge_inputs.keys():
+            for i in merge_inputs:
                 k = keyname(vindex_merge_name, i, okey)
                 dsk[k] = Task(
                     k,

@@ -2157,9 +2157,9 @@ class Filter(Blockwise):
                 # We can't push Projections through filters if the preceding operation
                 # allows us to push filters further down the graph because Projections
                 # block filter pushdown
-                if not isinstance(self.frame, (FilterAlign, Filter)):
-                    return
-                elif is_filter_pushdown_available(
+                if not isinstance(
+                    self.frame, (FilterAlign, Filter)
+                ) or is_filter_pushdown_available(
                     self.frame, self, dependents, allow_reduction=False
                 ):
                     return
@@ -4028,7 +4028,7 @@ def _replace_common_or_components(expr, or_components):
     and_components = list(map(_convert_mapping, and_components))
 
     replacements = []
-    for c in mapping.keys():
+    for c in mapping:
         if all(c in comp for comp in and_components):
             # We can pull this component out if it's part of all or components
             replacements.append(c)

@@ -409,7 +409,7 @@ def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip)
     with filetext(text) as fn:
         with pytest.warns(UserWarning, match="sample=blocksize"):
             actual = dd_read(fn, blocksize=200, skiprows=skip, names=names).compute()
-            assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
+        assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
 
         with pytest.warns(UserWarning):
             # if new sample does not contain all the skiprows, raise error
@@ -778,8 +778,8 @@ def test_warn_non_seekable_files():
     with filetexts(files2, mode="b"):
         with pytest.warns(UserWarning) as w:
             df = dd.read_csv("2014-01-*.csv", compression="gzip")
-            assert df.npartitions == 3
 
+        assert df.npartitions == 3
         assert len(w) == 1
         msg = str(w[0].message)
         assert "gzip" in msg
@@ -1142,7 +1142,7 @@ def test_read_csv_with_datetime_index_partitions_n():
 # utf-8-sig and utf-16 both start with a BOM.
 @pytest.mark.parametrize("encoding", ["utf-8-sig", "utf-16", "utf-16-le", "utf-16-be"])
 def test_encoding_gh601(encoding):
-    ar = pd.Series(range(0, 100))
+    ar = pd.Series(range(100))
     br = ar % 7
     cr = br * 3.3
     dr = br / 1.9836
@@ -1849,7 +1849,7 @@ def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
 def test_select_with_include_path_column(tmpdir):
     # https://github.com/dask/dask/issues/9518
 
-    d = {"col1": [i for i in range(0, 100)], "col2": [i for i in range(100, 200)]}
+    d = {"col1": [i for i in range(100)], "col2": [i for i in range(100, 200)]}
     df = pd.DataFrame(data=d)
 
     temp_path = f"{tmpdir}/"
