@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 from operator import getitem
+from typing import Any
 
 import numpy as np
 
@@ -281,7 +282,19 @@ imag = wrap_elemwise(np.imag)
 fix = wrap_elemwise(np.fix)
 i0 = wrap_elemwise(np.i0)
 sinc = wrap_elemwise(np.sinc)
-nan_to_num = wrap_elemwise(np.nan_to_num)
+_nan_to_num = wrap_elemwise(np.nan_to_num)
+
+
+@derived_from(np)
+def nan_to_num(
+    x: Any,
+    copy: bool = True,
+    nan: Any = 0.0,
+    posinf: Any = None,
+    neginf: Any = None,
+    **kwargs: Any,
+) -> Any:
+    return _nan_to_num(x, copy, nan, posinf, neginf, **kwargs)
 
 
 @derived_from(np)

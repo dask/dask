@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pickle
 import warnings
+from collections.abc import Callable
 from functools import partial
 from operator import add
+from typing import Any
 
 import pytest
 
@@ -14,6 +16,7 @@ from dask.array.numpy_compat import NUMPY_GE_240
 from dask.array.ufunc import da_frompyfunc
 from dask.array.utils import assert_eq
 from dask.base import tokenize
+from dask.callbacks import Callback
 
 DISCLAIMER = """
 This docstring was copied from numpy.{name}.
@@ -370,6 +373,96 @@ def test_non_ufunc_others(func):
     npfunc = getattr(np, func)
 
     assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
+
+
+@pytest.mark.parametrize("func", [da.nan_to_num, np.nan_to_num], ids=["dask", "numpy"])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.complex64, np.complex128])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"copy": True},
+        {"nan": 7.5},
+        {"posinf": 9.0},
+        {"neginf": -9.0},
+        {"nan": 1.0, "posinf": 4.0, "neginf": -5.0},
+        {"copy": False, "nan": 1.0, "posinf": 4.0, "neginf": -5.0},
+    ],
+)
+def test_nan_to_num_keywords(
+    func: Callable[..., Any], dtype: type[np.generic], kwargs: dict[str, Any]
+) -> None:
+    arr = np.array(
+        [[np.nan, np.inf, -np.inf, 2.0], [-0.0, -2.0, 3.0, np.nan]], dtype=dtype
+    )
+    if np.iscomplexobj(arr):
+        arr.imag = [[np.nan, -np.inf, np.inf, 2.0], [3.0, np.nan, -np.inf, 0.0]]
+    darr = da.from_array(arr, chunks=(1, 2))
+    expected = np.nan_to_num(arr.copy(), **kwargs)
+
+    def unexpected_compute(*args: Any) -> None:
+        pytest.fail("nan_to_num must remain lazy")
+
+    with Callback(pretask=unexpected_compute):
+        result = func(darr, **kwargs)
+    assert isinstance(result, da.Array)
+    assert result.chunks == darr.chunks
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("func", [da.nan_to_num, np.nan_to_num], ids=["dask", "numpy"])
+@pytest.mark.parametrize("lazy_replacements", [False, True])
+def test_nan_to_num_keyword_arrays(
+    func: Callable[..., Any], lazy_replacements: bool
+) -> None:
+    arr = np.array([[np.nan, np.inf, -np.inf, 2.0], [np.inf, -np.inf, np.nan, 3.0]])
+    darr = da.from_array(arr, chunks=(1, 2))
+    replacements = {
+        "nan": np.array([1.0, 2.0, 3.0, 4.0]),
+        "posinf": np.array([[5.0], [6.0]]),
+        "neginf": np.array([-7.0, -8.0, -9.0, -10.0]),
+    }
+    expected = np.nan_to_num(arr, **replacements)
+    if lazy_replacements:
+        replacements = {
+            name: da.from_array(value, chunks=1) for name, value in replacements.items()
+        }
+    assert_eq(func(darr, **replacements), expected)
+
+
+@pytest.mark.parametrize("func", [da.nan_to_num, np.nan_to_num], ids=["dask", "numpy"])
+def test_nan_to_num_keywords_integer(func: Callable[..., Any]) -> None:
+    arr = np.arange(6).reshape(2, 3)
+    darr = da.from_array(arr, chunks=(1, 2))
+    kwargs = {"nan": 1.5, "posinf": 9.0, "neginf": -9.0}
+    assert_eq(func(darr, **kwargs), np.nan_to_num(arr, **kwargs))
+
+
+@pytest.mark.parametrize("copy", [False, True])
+def test_nan_to_num_numpy_input(copy: bool) -> None:
+    arr = np.array([np.nan, np.inf, -np.inf, 2.0])
+    expected = np.nan_to_num(arr.copy(), copy=copy, nan=1.0, posinf=9.0, neginf=-9.0)
+    result = da.nan_to_num(arr, copy=copy, nan=1.0, posinf=9.0, neginf=-9.0)
+    assert isinstance(result, np.ndarray)
+    assert (result is arr) == (not copy)
+    np.testing.assert_array_equal(result, expected)
+
+
+@pytest.mark.parametrize("func", [da.nan_to_num, np.nan_to_num], ids=["dask", "numpy"])
+def test_nan_to_num_positional(func: Callable[..., Any]) -> None:
+    arr = np.array([np.nan, np.inf, -np.inf, 2.0])
+    darr = da.from_array(arr, chunks=2)
+    assert_eq(
+        func(darr, True, 1.0, 9.0, -9.0), np.nan_to_num(arr, True, 1.0, 9.0, -9.0)
+    )
+
+
+def test_nan_to_num_out() -> None:
+    arr = np.array([np.nan, np.inf, -np.inf, 2.0])
+    darr = da.from_array(arr, chunks=2)
+    out = da.empty_like(darr)
+    result = da.nan_to_num(darr, out=out)
+    assert result is out
+    assert_eq(out, np.nan_to_num(arr))
 
 
 def test_frompyfunc():
