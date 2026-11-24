@@ -296,5 +296,5 @@ def _write_avro_part(part, f, schema, codec, sync_interval, metadata):
     """Create single avro file from list of dictionaries"""
     import fastavro
 
-    with f as f:
-        fastavro.writer(f, schema, part, codec, sync_interval, metadata)
+    with f as f_ctx:
+        fastavro.writer(f_ctx, schema, part, codec, sync_interval, metadata)

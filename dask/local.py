@@ -456,15 +456,15 @@ def get_async(
     if not isinstance(dsk, Mapping):
         dsk = dsk.__dask_graph__()
     dsk = convert_legacy_graph(dsk)
-    with local_callbacks(callbacks) as callbacks:
-        _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
+    with local_callbacks(callbacks) as local_cbs:
+        _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(local_cbs)
         started_cbs = []
         succeeded = False
         # if start_state_from_dask fails, we will have something
         # to pass to the final block.
         state = {}
         try:
-            for cb in callbacks:
+            for cb in local_cbs:
                 if cb[0]:
                     cb[0](dsk)
                 started_cbs.append(cb)
@@ -475,7 +475,7 @@ def get_async(
                 dsk, keys=results, cache=cache, sortkey=keyorder.get
             )
 
-            for _, start_state, _, _, _ in callbacks:
+            for _, start_state, _, _, _ in local_cbs:
                 if start_state:
                     start_state(dsk, state)
 

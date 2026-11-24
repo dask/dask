@@ -277,8 +277,8 @@ def _tensordot(a, b, axes, is_sparse):
         return x
     else:
         ind = [slice(None, None)] * x.ndim
-        for a in sorted(axes[0]):
-            ind.insert(a, None)
+        for axis in sorted(axes[0]):
+            ind.insert(axis, None)
         x = x[tuple(ind)]
         return x
 

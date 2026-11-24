@@ -128,7 +128,6 @@ ignore = [
     "PLR0124",  # Name compared with itself, consider replacing `... == ...`
     "PLR0206",  # Cannot have defined parameters for properties
     "PLR09",    # Too many statements, branches, arguments in function definition, statements, ...
-    "PLR1704",  # Redefining argument with local name
     "PLR1714",  # Consider merging multiple comparisons
     "PLR1730",  # Replace `if` statement with `min()` or `max()`
     "PLR1733",  # Unnecessary lookup of dictionary value by key
