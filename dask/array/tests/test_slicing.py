@@ -217,7 +217,7 @@ def test_slice_array_1d():
         ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 3)), (slice(1, 25, 2),)),
     }
 
-    result, _chunks = slice_array("y", "x", [(25,) * 4], (slice(26, None, 2),))
+    result, _ = slice_array("y", "x", [(25,) * 4], (slice(26, None, 2),))
     assert expected == result
 
 
@@ -254,9 +254,7 @@ def test_slice_array_2d():
         ("y", 2): Task(("y", 2), getitem, TaskRef(("x", 0, 2)), (5, slice(None))),
     }
 
-    result, _chunks = slice_array(
-        "y", "x", ([20], [20, 20, 5]), [5, slice(10, None, 1)]
-    )
+    result, _ = slice_array("y", "x", ([20], [20, 20, 5]), [5, slice(10, None, 1)])
 
     assert expected == result
 
@@ -284,7 +282,7 @@ def test_slice_optimizations():
 
 
 def test_slicing_with_singleton_indices():
-    result, _chunks = slice_array("y", "x", ([5, 5], [5, 5]), (slice(0, 5), 8))
+    result, _ = slice_array("y", "x", ([5, 5], [5, 5]), (slice(0, 5), 8))
 
     expected = {
         ("y", 0): Task(

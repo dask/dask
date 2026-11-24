@@ -242,9 +242,7 @@ def test_open_files_write(s3):
     for fil, data in zip(fils, files.values()):
         with fil as f:
             f.write(data)
-    _sample, values = read_bytes(
-        f"s3://{test_bucket_name}/more/test/accounts.*", **s3so
-    )
+    _, values = read_bytes(f"s3://{test_bucket_name}/more/test/accounts.*", **s3so)
     results = compute(*concat(values))
     assert set(files.values()) == set(results)
 
