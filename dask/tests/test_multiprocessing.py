@@ -81,7 +81,7 @@ def test_errors_propagate():
 
 def test_traceback_source_of_local_function():
     """A worker traceback must retain the source line of a cloudpickled function.
-    
+
     Test vs. cloudpickle regression https://github.com/cloudpipe/cloudpickle/issues/628
     """
 
