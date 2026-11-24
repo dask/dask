@@ -538,7 +538,7 @@ def test_schema_is_complete():
                     )
                 )
             if isinstance(v, dict):
-                test_matches(c[k], s["properties"][k])
+                test_matches(v, s["properties"][k])
 
     test_matches(config, schema)
 
