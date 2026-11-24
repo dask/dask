@@ -376,9 +376,8 @@ def test_set_nested():
 def test_set_hard_to_copyables():
     import threading
 
-    with dask.config.set(x=threading.Lock()):
-        with dask.config.set(y=1):
-            pass
+    with dask.config.set(x=threading.Lock()), dask.config.set(y=1):
+        pass
 
 
 @pytest.mark.parametrize("mkdir", [True, False])
@@ -576,9 +575,11 @@ def test_rename():
     ],
 )
 def test_deprecations_on_set(args, kwargs):
-    with pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width"):
-        with dask.config.set(*args, **kwargs):
-            assert dask.config.get("optimization.fuse.ave-width") == 123
+    with (
+        pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width"),
+        dask.config.set(*args, **kwargs),
+    ):
+        assert dask.config.get("optimization.fuse.ave-width") == 123
 
 
 def test_deprecations_on_env_variables(monkeypatch):

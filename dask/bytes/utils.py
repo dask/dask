@@ -10,9 +10,8 @@ import zipfile
 def zip_compress(data):
     """Write data into zipfile and return the bytes"""
     out = io.BytesIO()
-    with zipfile.ZipFile(file=out, mode="w") as z:
-        with z.open("myfile", "w") as zf:
-            zf.write(data)
+    with zipfile.ZipFile(file=out, mode="w") as z, z.open("myfile", "w") as zf:
+        zf.write(data)
     out.seek(0)
     return out.read()
 

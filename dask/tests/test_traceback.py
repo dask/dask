@@ -59,10 +59,12 @@ def test_shorten_traceback(regexes, expect):
     test_distributed.py::test_shorten_traceback_excepthook
     test_distributed.py::test_shorten_traceback_ipython
     """
-    with dask.config.set({"admin.traceback.shorten": regexes}):
-        with assert_tb_levels(expect):
-            with shorten_traceback():
-                f3()
+    with (
+        dask.config.set({"admin.traceback.shorten": regexes}),
+        assert_tb_levels(expect),
+        shorten_traceback(),
+    ):
+        f3()
 
 
 try:

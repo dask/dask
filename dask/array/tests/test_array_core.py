@@ -3100,15 +3100,14 @@ def test_asarray_dask_dataframe(asarray):
 def test_asarray_h5py(asarray, inline_array):
     h5py = pytest.importorskip("h5py")
 
-    with tmpfile(".hdf5") as fn:
-        with h5py.File(fn, mode="a") as f:
-            d = f.create_dataset("/x", shape=(2, 2), dtype=float)
-            x = asarray(d, inline_array=inline_array)
+    with tmpfile(".hdf5") as fn, h5py.File(fn, mode="a") as f:
+        d = f.create_dataset("/x", shape=(2, 2), dtype=float)
+        x = asarray(d, inline_array=inline_array)
 
-            # Check for the array in the dsk
-            dsk = dict(x.dask)
-            assert (d in dsk.values()) is not inline_array
-            assert not any(isinstance(v, np.ndarray) for v in dsk.values())
+        # Check for the array in the dsk
+        dsk = dict(x.dask)
+        assert (d in dsk.values()) is not inline_array
+        assert not any(isinstance(v, np.ndarray) for v in dsk.values())
 
 
 def test_asarray_chunks():
@@ -3357,14 +3356,13 @@ def test_long_slice():
 def test_h5py_newaxis():
     h5py = pytest.importorskip("h5py")
 
-    with tmpfile("h5") as fn:
-        with h5py.File(fn, mode="a") as f:
-            x = f.create_dataset("/x", shape=(10, 10), dtype="f8")
-            d = da.from_array(x, chunks=(5, 5))
-            assert d[None, :, :].compute(scheduler="sync").shape == (1, 10, 10)
-            assert d[:, None, :].compute(scheduler="sync").shape == (10, 1, 10)
-            assert d[:, :, None].compute(scheduler="sync").shape == (10, 10, 1)
-            assert same_keys(d[:, :, None], d[:, :, None])
+    with tmpfile("h5") as fn, h5py.File(fn, mode="a") as f:
+        x = f.create_dataset("/x", shape=(10, 10), dtype="f8")
+        d = da.from_array(x, chunks=(5, 5))
+        assert d[None, :, :].compute(scheduler="sync").shape == (1, 10, 10)
+        assert d[:, None, :].compute(scheduler="sync").shape == (10, 1, 10)
+        assert d[:, :, None].compute(scheduler="sync").shape == (10, 10, 1)
+        assert same_keys(d[:, :, None], d[:, :, None])
 
 
 def test_ellipsis_slicing():
@@ -3545,21 +3543,20 @@ def test_empty_array():
 
 
 def test_memmap():
-    with tmpfile("npy") as fn_1:
-        with tmpfile("npy") as fn_2:
-            try:
-                x = da.arange(100, chunks=15)
-                target = np.memmap(fn_1, shape=x.shape, mode="w+", dtype=x.dtype)
+    with tmpfile("npy") as fn_1, tmpfile("npy") as fn_2:
+        try:
+            x = da.arange(100, chunks=15)
+            target = np.memmap(fn_1, shape=x.shape, mode="w+", dtype=x.dtype)
 
-                x.store(target)
+            x.store(target)
 
-                assert_eq(target, x, check_type=False)
+            assert_eq(target, x, check_type=False)
 
-                np.save(fn_2, target)
+            np.save(fn_2, target)
 
-                assert_eq(np.load(fn_2, mmap_mode="r"), x, check_type=False)
-            finally:
-                target._mmap.close()
+            assert_eq(np.load(fn_2, mmap_mode="r"), x, check_type=False)
+        finally:
+            target._mmap.close()
 
 
 def test_to_npy_stack():
@@ -3607,18 +3604,17 @@ def test_view_fortran():
 
 def test_h5py_tokenize():
     h5py = pytest.importorskip("h5py")
-    with tmpfile("hdf5") as fn1:
-        with tmpfile("hdf5") as fn2:
-            f = h5py.File(fn1, mode="a")
-            g = h5py.File(fn2, mode="a")
+    with tmpfile("hdf5") as fn1, tmpfile("hdf5") as fn2:
+        f = h5py.File(fn1, mode="a")
+        g = h5py.File(fn2, mode="a")
 
-            f["x"] = np.arange(10).astype(float)
-            g["x"] = np.ones(10).astype(float)
+        f["x"] = np.arange(10).astype(float)
+        g["x"] = np.ones(10).astype(float)
 
-            x1 = f["x"]
-            x2 = g["x"]
+        x1 = f["x"]
+        x2 = g["x"]
 
-            assert tokenize(x1) != tokenize(x2)
+        assert tokenize(x1) != tokenize(x2)
 
 
 def test_map_blocks_with_changed_dimension():
@@ -5266,12 +5262,14 @@ def test_zarr_risky_shards_warns():
         dtype=arr.dtype,
     )
 
-    with dask.config.set({"array.chunk-size": 1}):
-        with pytest.raises(
+    with (
+        dask.config.set({"array.chunk-size": 1}),
+        pytest.raises(
             PerformanceWarning,
             match="The input Dask array will be rechunked along axis",
-        ):
-            arr.to_zarr(z)
+        ),
+    ):
+        arr.to_zarr(z)
 
 
 def test_zarr_nocompute():
@@ -5314,9 +5312,8 @@ def test_zarr_regions():
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    with pytest.raises(ValueError):
-        with tmpdir() as d:
-            a.to_zarr(d, region=(slice(2), slice(2)))
+    with pytest.raises(ValueError), tmpdir() as d:
+        a.to_zarr(d, region=(slice(2), slice(2)))
 
 
 def test_tiledb_roundtrip():
@@ -5338,10 +5335,9 @@ def test_tiledb_roundtrip():
             tdb2 = da.from_tiledb(t)
             assert_eq(a, tdb2)
 
-    with tmpdir() as uri2:
-        with tiledb.empty_like(uri2, a) as t:
-            a.to_tiledb(t)
-            assert_eq(da.from_tiledb(uri2), a)
+    with tmpdir() as uri2, tiledb.empty_like(uri2, a) as t:
+        a.to_tiledb(t)
+        assert_eq(da.from_tiledb(uri2), a)
 
     # specific chunking
     with tmpdir() as uri:

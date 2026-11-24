@@ -287,11 +287,13 @@ def test_normalize_numpy_ufunc_unserializable():
         # You can call normalize_token directly
         assert normalize_token(inc) != normalize_token(inc)
 
-    with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(
+    with (
+        dask.config.set({"tokenize.ensure-deterministic": True}),
+        pytest.raises(
             TokenizationError, match=r"Cannot tokenize.*dask\.array\.ufunc.*instead"
-        ):
-            tokenize(inc)
+        ),
+    ):
+        tokenize(inc)
 
     # Test env override
     assert tokenize(inc, ensure_deterministic=False) != tokenize(
@@ -314,11 +316,11 @@ def test_normalize_object_unserializable():
         # You can call normalize_token directly
         assert normalize_token(c) != normalize_token(c)
 
-    with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(
-            TokenizationError, match="cannot be deterministically hashed"
-        ):
-            tokenize(c)
+    with (
+        dask.config.set({"tokenize.ensure-deterministic": True}),
+        pytest.raises(TokenizationError, match="cannot be deterministically hashed"),
+    ):
+        tokenize(c)
 
     # Test env override
     assert tokenize(c, ensure_deterministic=False) != tokenize(

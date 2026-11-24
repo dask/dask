@@ -437,9 +437,8 @@ def changed_cwd(new_cwd):
 
 @contextmanager
 def tmp_cwd(dir=None):
-    with tmpdir(dir) as dirname:
-        with changed_cwd(dirname):
-            yield dirname
+    with tmpdir(dir) as dirname, changed_cwd(dirname):
+        yield dirname
 
 
 class IndexCallable:

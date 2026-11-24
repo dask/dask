@@ -221,28 +221,27 @@ def test_groupby_on_index(scheduler):
     def func3(df):
         return df.mean()
 
-    with dask.config.set(scheduler=scheduler):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            assert_eq(
-                ddf.groupby("a").apply(func, **INCLUDE_GROUPS),
-                pdf.groupby("a").apply(func, **INCLUDE_GROUPS),
-            )
+    with dask.config.set(scheduler=scheduler), warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        assert_eq(
+            ddf.groupby("a").apply(func, **INCLUDE_GROUPS),
+            pdf.groupby("a").apply(func, **INCLUDE_GROUPS),
+        )
 
-            assert_eq(
-                pdf2.groupby(pdf2.index).apply(func2, **INCLUDE_GROUPS),
-                ddf2.groupby(ddf2.index).apply(func2, **INCLUDE_GROUPS),
-            )
+        assert_eq(
+            pdf2.groupby(pdf2.index).apply(func2, **INCLUDE_GROUPS),
+            ddf2.groupby(ddf2.index).apply(func2, **INCLUDE_GROUPS),
+        )
 
-            assert_eq(
-                ddf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
-                pdf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
-            )
+        assert_eq(
+            ddf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
+            pdf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
+        )
 
-            assert_eq(
-                ddf2.b.groupby(ddf2.index).apply(func3, **INCLUDE_GROUPS),
-                pdf2.b.groupby(pdf2.index).apply(func3, **INCLUDE_GROUPS),
-            )
+        assert_eq(
+            ddf2.b.groupby(ddf2.index).apply(func3, **INCLUDE_GROUPS),
+            pdf2.b.groupby(pdf2.index).apply(func3, **INCLUDE_GROUPS),
+        )
 
 
 @pytest.mark.filterwarnings("ignore:invalid value encountered:RuntimeWarning")

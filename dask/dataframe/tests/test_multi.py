@@ -1718,9 +1718,11 @@ def test_concat_unknown_divisions_errors():
     aa = dd.from_pandas(a, npartitions=2, sort=False).clear_divisions()
     bb = dd.from_pandas(b, npartitions=2, sort=False).clear_divisions()
 
-    with pytest.raises(ValueError):
-        with pytest.warns(UserWarning):  # Concat with unknown divisions
-            dd.concat([aa, bb], axis=1).compute()
+    with (
+        pytest.raises(ValueError),
+        pytest.warns(UserWarning),
+    ):  # Concat with unknown divisions
+        dd.concat([aa, bb], axis=1).compute()
 
 
 def test_concat3():

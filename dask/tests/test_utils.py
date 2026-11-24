@@ -367,9 +367,8 @@ def test_SerializableLock():
     with a:
         pass
 
-    with a:
-        with b:
-            pass
+    with a, b:
+        pass
 
     with a:
         assert not a.acquire(False)
@@ -388,12 +387,10 @@ def test_SerializableLock():
 
     for x in [a, a2, a3, a4]:
         for y in [b, b2, b3]:
-            with x:
-                with y:
-                    pass
-            with y:
-                with x:
-                    pass
+            with x, y:
+                pass
+            with y, x:
+                pass
 
 
 def test_SerializableLock_name_collision():

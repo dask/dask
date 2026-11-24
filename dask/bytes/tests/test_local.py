@@ -116,9 +116,8 @@ def test_read_bytes_blocksize_types(blocksize):
 
 
 def test_read_bytes_blocksize_float_errs():
-    with filetexts(files, mode="b"):
-        with pytest.raises(TypeError):
-            read_bytes(".test.account*", blocksize=5.5)
+    with filetexts(files, mode="b"), pytest.raises(TypeError):
+        read_bytes(".test.account*", blocksize=5.5)
 
 
 def test_read_bytes_include_path():

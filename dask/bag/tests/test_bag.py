@@ -1042,11 +1042,10 @@ def test_to_textfiles_encoding():
 
 def test_to_textfiles_inputs():
     B = db.from_sequence(["abc", "123", "xyz"], npartitions=2)
-    with tmpfile() as a:
-        with tmpfile() as b:
-            B.to_textfiles([a, b])
-            assert os.path.exists(a)
-            assert os.path.exists(b)
+    with tmpfile() as a, tmpfile() as b:
+        B.to_textfiles([a, b])
+        assert os.path.exists(a)
+        assert os.path.exists(b)
 
     with tmpdir() as dirname:
         B.to_textfiles(dirname)
@@ -1549,11 +1548,13 @@ def test_temporary_directory(tmpdir):
 
     # We use a pool to avoid a race condition between the pool close
     # cleaning up files, and the assert below.
-    with ProcessPoolExecutor(4) as pool:
-        with dask.config.set(temporary_directory=str(tmpdir), pool=pool):
-            b2 = b.groupby(lambda x: x % 2)
-            b2.compute()
-            assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
+    with (
+        ProcessPoolExecutor(4) as pool,
+        dask.config.set(temporary_directory=str(tmpdir), pool=pool),
+    ):
+        b2 = b.groupby(lambda x: x % 2)
+        b2.compute()
+        assert any(fn.endswith(".partd") for fn in os.listdir(str(tmpdir)))
 
 
 def test_empty_bag():

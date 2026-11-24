@@ -68,9 +68,8 @@ def test_read_orient_not_records_and_lines():
 
 
 def test_write_orient_not_records_and_lines():
-    with tmpfile("json") as f:
-        with pytest.raises(ValueError, match="Line-delimited JSON"):
-            dd.to_json(ddf, f, orient="split", lines=True)
+    with tmpfile("json") as f, pytest.raises(ValueError, match="Line-delimited JSON"):
+        dd.to_json(ddf, f, orient="split", lines=True)
 
 
 @pytest.mark.parametrize("blocksize", [5, 15, 33, 200, 90000])

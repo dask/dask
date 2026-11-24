@@ -51,9 +51,8 @@ def test_profiler_works_under_error():
     div = lambda x, y: x / y
     dsk = {"x": (div, 1, 1), "y": (div, "x", 2), "z": (div, "y", 0)}
 
-    with contextlib.suppress(ZeroDivisionError):
-        with prof:
-            get(dsk, "z")
+    with contextlib.suppress(ZeroDivisionError), prof:
+        get(dsk, "z")
 
     assert all(len(v) == 5 for v in prof.results)
     assert len(prof.results) == 2
@@ -305,9 +304,8 @@ def test_cache_profiler_plot_with_invalid_bokeh_kwarg_raises_error():
 def test_plot_multiple():
     from dask.diagnostics.profile_visualize import visualize
 
-    with ResourceProfiler(dt=0.01) as rprof:
-        with prof:
-            get(dsk2, "c")
+    with ResourceProfiler(dt=0.01) as rprof, prof:
+        get(dsk2, "c")
     p = visualize(
         [prof, rprof], label_size=50, title="Not the default", show=False, save=False
     )

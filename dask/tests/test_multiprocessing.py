@@ -129,10 +129,9 @@ def test_unpicklable_args_generate_errors():
 
 @pytest.mark.parametrize("pool_typ", [multiprocessing.Pool, ProcessPoolExecutor])
 def test_reuse_pool(pool_typ):
-    with pool_typ(CPU_COUNT) as pool:
-        with dask.config.set(pool=pool):
-            assert get({"x": (inc, 1)}, "x") == 2
-            assert get({"x": (inc, 1)}, "x") == 2
+    with pool_typ(CPU_COUNT) as pool, dask.config.set(pool=pool):
+        assert get({"x": (inc, 1)}, "x") == 2
+        assert get({"x": (inc, 1)}, "x") == 2
 
 
 def test_dumps_loads():
@@ -295,15 +294,19 @@ def test_custom_context_ignored_elsewhere():
     not breaking anything.
     """
     assert get({"x": (inc, 1)}, "x") == 2
-    with pytest.warns(UserWarning):
-        with dask.config.set({"multiprocessing.context": "forkserver"}):
-            assert get({"x": (inc, 1)}, "x") == 2
+    with (
+        pytest.warns(UserWarning),
+        dask.config.set({"multiprocessing.context": "forkserver"}),
+    ):
+        assert get({"x": (inc, 1)}, "x") == 2
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="POSIX supports different contexts")
 def test_get_context_always_default():
     """On Python 2/Windows, get_context() always returns same context."""
     assert get_context() is multiprocessing
-    with pytest.warns(UserWarning):
-        with dask.config.set({"multiprocessing.context": "forkserver"}):
-            assert get_context() is multiprocessing
+    with (
+        pytest.warns(UserWarning),
+        dask.config.set({"multiprocessing.context": "forkserver"}),
+    ):
+        assert get_context() is multiprocessing
