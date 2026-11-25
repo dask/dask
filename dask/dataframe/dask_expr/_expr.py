@@ -868,14 +868,9 @@ class UFuncElemwise(MapPartitions):
                 )
                 if isinstance(divisions, pd.Index):
                     divisions = methods.tolist(divisions)
-            except (
-                ArithmeticError,
-                AttributeError,
-                IndexError,
-                KeyError,
-                TypeError,
-                ValueError,
-            ):
+            # Transforming divisions calls user functions; keep the input
+            # divisions on any failure rather than breaking graph construction.
+            except Exception:  # noqa: BLE001
                 return self._dfs[0].divisions
             if not valid_divisions(divisions):
                 divisions = [None] * (self._dfs[0].npartitions + 1)
