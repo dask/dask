@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any as AnyT
 from typing import ClassVar
 
@@ -424,10 +424,11 @@ class ApplyConcatApply(Expr):
     chunk: Callable | None = None
     combine: Callable | None = None
     aggregate: Callable | None = None
-    chunk_kwargs: ClassVar[dict] = {}
-    combine_kwargs: ClassVar[dict] = {}
-    aggregate_args: ClassVar[list] = []
-    aggregate_kwargs: ClassVar[dict] = {}
+    # Subclasses may derive these arguments from individual expressions' operands.
+    chunk_kwargs: Mapping[str, AnyT] = {}
+    combine_kwargs: Mapping[str, AnyT] = {}
+    aggregate_args: Sequence[AnyT] = []
+    aggregate_kwargs: Mapping[str, AnyT] = {}
     _chunk_cls = Chunk
 
     @property
