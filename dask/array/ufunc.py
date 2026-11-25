@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import typing
 from functools import partial
 from operator import getitem
-from typing import Any
 
 import numpy as np
 
@@ -288,13 +288,13 @@ _nan_to_num = wrap_elemwise(np.nan_to_num)
 # derived_from only copies the docstring and does not yet preserve static types.
 @derived_from(np)  # type: ignore[untyped-decorator]
 def nan_to_num(
-    x: Any,
+    x: typing.Any,
     copy: bool = True,
-    nan: Any = 0.0,
-    posinf: Any = None,
-    neginf: Any = None,
-    **kwargs: Any,
-) -> Any:
+    nan: typing.Any = 0.0,
+    posinf: typing.Any = None,
+    neginf: typing.Any = None,
+    **kwargs: typing.Any,
+) -> typing.Any:
     return _nan_to_num(x, copy, nan, posinf, neginf, **kwargs)
 
 
