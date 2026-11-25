@@ -35,6 +35,7 @@ _PICKLING_ERRORS = (
     ArithmeticError,
     AssertionError,
     AttributeError,
+    ImportError,
     IndexError,
     KeyError,
     OSError,
