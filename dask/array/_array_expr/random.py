@@ -6,7 +6,7 @@ import numbers
 from itertools import product
 from numbers import Integral
 from threading import Lock
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -891,7 +891,7 @@ class Random(IO):
         "args",
         "kwargs",
     ]
-    _defaults: ClassVar[dict] = {"extra_chunks": ()}
+    _defaults: ClassVar[dict[str, Any]] = {"extra_chunks": ()}
 
     @cached_property
     def kwargs(self):
@@ -1002,7 +1002,7 @@ class RandomChoice(IO):
         "axis",
         "shuffle",
     ]
-    _defaults: ClassVar[dict] = {"axis": None, "shuffle": None}
+    _defaults: ClassVar[dict[str, Any]] = {"axis": None, "shuffle": None}
     _funcname = "da.random.choice-"
 
     @cached_property
@@ -1029,7 +1029,7 @@ class RandomChoice(IO):
 
 
 class RandomChoiceGenerator(RandomChoice):
-    _defaults: ClassVar[dict] = {}
+    _defaults: ClassVar[dict[str, Any]] = {}
 
     @cached_property
     def state_data(self):

@@ -986,7 +986,7 @@ class HLGExpr(Expr):
         "postcompute",
         "_cached_optimized",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "low_level_optimizer": None,
         "output_keys": None,
         "postcompute": None,
@@ -1418,7 +1418,7 @@ class ProhibitReuse(Expr):
     """
 
     _parameters: ClassVar[list[str]] = ["expr"]
-    _ALLOWED_TYPES: ClassVar[list] = [
+    _ALLOWED_TYPES: ClassVar[list[type[Expr]]] = [
         HLGExpr,
         LLGExpr,
         HLGFinalizeCompute,

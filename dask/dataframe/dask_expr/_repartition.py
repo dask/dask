@@ -37,7 +37,7 @@ class Repartition(Expr):
         "force",
         "partition_size",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "new_partitions": None,
         "new_divisions": None,
         "force": False,
@@ -247,7 +247,7 @@ class RepartitionDivisions(Repartition):
     """Repartition to specific divisions"""
 
     _parameters: ClassVar[list[str]] = ["frame", "new_divisions", "force"]
-    _defaults: ClassVar[dict] = {"force": False}
+    _defaults: ClassVar[dict[str, Any]] = {"force": False}
 
     def _divisions(self):
         return self.new_divisions

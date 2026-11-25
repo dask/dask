@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import operator
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -32,7 +32,7 @@ class Timeseries(PartitionsFiltered, BlockwiseIO):
         "_partitions",
         "_series",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "start": "2000-01-01",
         "end": "2000-01-31",
         "dtypes": {"name": "string", "id": int, "x": float, "y": float},

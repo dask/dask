@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 from collections import namedtuple
 from numbers import Integral
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
@@ -53,7 +53,7 @@ class RollingReduction(Expr):
         "groupby_kwargs",
         "groupby_slice",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "kwargs": None,
         "how_args": (),
         "how_kwargs": None,

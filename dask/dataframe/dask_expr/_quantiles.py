@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import toolz
@@ -25,7 +25,7 @@ class RepartitionQuantiles(Expr):
         "upsample",
         "random_state",
     ]
-    _defaults: ClassVar[dict] = {"upsample": 1.0, "random_state": None}
+    _defaults: ClassVar[dict[str, Any]] = {"upsample": 1.0, "random_state": None}
 
     @functools.cached_property
     def _meta(self):

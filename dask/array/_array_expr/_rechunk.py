@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 import operator
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import toolz
@@ -32,7 +32,7 @@ class Rechunk(ArrayExpr):
         "method",
     ]
 
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "_chunks": "auto",
         "threshold": None,
         "block_size_limit": None,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pandas as pd
 
@@ -32,7 +32,7 @@ class MergeAsof(Merge):
         "allow_exact_matches",
         "direction",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "left_on": None,
         "right_on": None,
         "left_index": False,

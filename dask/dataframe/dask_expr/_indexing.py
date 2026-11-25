@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -433,13 +433,13 @@ class LocSlice(LocBase):
 
 class Loc(Blockwise):
     _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
-    _defaults: ClassVar[dict] = {"cindexer": None}
+    _defaults: ClassVar[dict[str, Any]] = {"cindexer": None}
     operation = staticmethod(methods.loc)
 
 
 class LocAlign(MaybeAlignPartitions):
     _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
-    _defaults: ClassVar[dict] = {"cindexer": None}
+    _defaults: ClassVar[dict[str, Any]] = {"cindexer": None}
     _expr_cls = Loc
 
 

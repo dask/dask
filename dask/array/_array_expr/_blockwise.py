@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numbers
 from collections.abc import Iterable
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import tlz as toolz
@@ -40,7 +40,7 @@ class Blockwise(ArrayExpr):
         "_meta_provided",
         "kwargs",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "name": None,
         "token": None,
         "dtype": None,
@@ -214,7 +214,7 @@ class Blockwise(ArrayExpr):
 
 class Elemwise(Blockwise):
     _parameters: ClassVar[list[str]] = ["op", "dtype", "name", "where"]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "dtype": None,
         "name": None,
         "where": True,

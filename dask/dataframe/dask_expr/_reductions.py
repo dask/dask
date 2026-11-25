@@ -156,7 +156,7 @@ class ShuffleReduce(Expr):
         "shuffle_method",
         "ignore_index",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "split_every": 8,
         "split_out": True,
         "sort": None,
@@ -323,7 +323,7 @@ class TreeReduce(Expr):
         "aggregate_kwargs",
         "split_every",
     ]
-    _defaults: ClassVar[dict] = {"split_every": 8}
+    _defaults: ClassVar[dict[str, AnyT]] = {"split_every": 8}
 
     @functools.cached_property
     def _name(self):
@@ -586,7 +586,7 @@ class Unique(ApplyConcatApply):
         "split_out",
         "shuffle_method",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "split_every": None,
         "split_out": True,
         "shuffle_method": "tasks",
@@ -632,7 +632,7 @@ class DropDuplicates(Unique):
         "shuffle_method",
         "keep",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "subset": None,
         "ignore_index": False,
         "split_every": None,
@@ -686,7 +686,7 @@ class PivotTable(ApplyConcatApply):
         "values",
         "aggfunc",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "columns": None,
         "index": None,
         "values": None,
@@ -761,7 +761,7 @@ class PivotTableAbstract(ApplyConcatApply):
         "values",
         "aggfunc",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "columns": None,
         "index": None,
         "values": None,
@@ -821,7 +821,7 @@ class Reduction(ApplyConcatApply):
     methods.
     """
 
-    _defaults: ClassVar[AnyT] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "skipna": True,
         "numeric_only": False,
         "min_count": 0,
@@ -948,7 +948,7 @@ class Sum(Reduction):
         "split_every",
         "axis",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "split_every": False,
         "numeric_only": False,
         "skipna": True,
@@ -985,7 +985,7 @@ class Max(Reduction):
         "split_every",
         "axis",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "split_every": False,
         "numeric_only": False,
         "skipna": True,
@@ -1019,7 +1019,7 @@ class Min(Max):
 
 class Any(Reduction):
     _parameters: ClassVar[list[str]] = ["frame", "skipna", "split_every"]
-    _defaults: ClassVar[dict] = {"skipna": True, "split_every": False}
+    _defaults: ClassVar[dict[str, AnyT]] = {"skipna": True, "split_every": False}
     reduction_chunk = M.any
 
     @property
@@ -1031,7 +1031,7 @@ class Any(Reduction):
 
 class All(Reduction):
     _parameters: ClassVar[list[str]] = ["frame", "skipna", "split_every"]
-    _defaults: ClassVar[dict] = {"split_every": False}
+    _defaults: ClassVar[dict[str, AnyT]] = {"split_every": False}
     reduction_chunk = M.all
 
     @property
@@ -1048,7 +1048,7 @@ class IdxMin(Reduction):
         "numeric_only",
         "split_every",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "skipna": True,
         "numeric_only": False,
         "split_every": False,
@@ -1081,7 +1081,7 @@ class IdxMax(IdxMin):
 
 class Cov(Reduction):
     _parameters: ClassVar[list[str]] = ["frame", "min_periods", "split_every", "scalar"]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "min_periods": 2,
         "split_every": False,
         "scalar": False,
@@ -1200,7 +1200,7 @@ class Var(ArrayReduction):
         "numeric_only",
         "split_every",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "skipna": True,
         "ddof": 1,
         "numeric_only": False,
@@ -1306,7 +1306,7 @@ class Mean(Reduction):
         "split_every",
         "axis",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "skipna": True,
         "numeric_only": False,
         "split_every": False,
@@ -1343,7 +1343,7 @@ class MeanAggregate(Blockwise):
 
 class Count(Reduction):
     _parameters: ClassVar[list[str]] = ["frame", "numeric_only", "split_every"]
-    _defaults: ClassVar[dict] = {"split_every": False, "numeric_only": False}
+    _defaults: ClassVar[dict[str, AnyT]] = {"split_every": False, "numeric_only": False}
     reduction_chunk = M.count
 
     @classmethod
@@ -1360,7 +1360,7 @@ class Count(Reduction):
 
 class IndexCount(Reduction):
     _parameters: ClassVar[list[str]] = ["frame", "split_every"]
-    _defaults: ClassVar[dict] = {"split_every": False}
+    _defaults: ClassVar[dict[str, AnyT]] = {"split_every": False}
     reduction_chunk = staticmethod(methods.index_count)
     reduction_aggregate = staticmethod(np.sum)
     # aggregate_chunk = staticmethod(np.sum)
@@ -1374,7 +1374,7 @@ class Mode(Reduction):
     """
 
     _parameters: ClassVar[list[str]] = ["frame", "dropna", "split_every"]
-    _defaults: ClassVar[dict] = {"dropna": True, "split_every": False}
+    _defaults: ClassVar[dict[str, AnyT]] = {"dropna": True, "split_every": False}
     reduction_chunk = M.value_counts
     reduction_combine = M.sum
     reduction_aggregate = staticmethod(_mode_aggregate)
@@ -1393,7 +1393,7 @@ class Mode(Reduction):
 
 class NuniqueApprox(Reduction):
     _parameters: ClassVar[list[str]] = ["frame", "b", "split_every"]
-    _defaults: ClassVar[dict] = {"b": 16, "split_every": None}
+    _defaults: ClassVar[dict[str, AnyT]] = {"b": 16, "split_every": None}
     reduction_chunk = hyperloglog.compute_hll_array
     reduction_combine = hyperloglog.reduce_state
     reduction_aggregate = hyperloglog.estimate_count
@@ -1439,7 +1439,11 @@ class ReductionConstantDim(Reduction):
 
 class NLargest(ReductionConstantDim):
     _parameters: ClassVar[list[str]] = ["frame", "n", "_columns", "split_every"]
-    _defaults: ClassVar[dict] = {"n": 5, "_columns": None, "split_every": None}
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "n": 5,
+        "_columns": None,
+        "split_every": None,
+    }
     reduction_chunk = M.nlargest
     reduction_aggregate = M.nlargest
 
@@ -1477,7 +1481,7 @@ class NFirst(NLargest):
         "ascending",
         "split_every",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "n": 5,
         "_columns": None,
         "ascending": None,
@@ -1502,7 +1506,7 @@ class NSmallest(NLargest):
 
 
 class ValueCounts(ReductionConstantDim):
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "sort": None,
         "ascending": False,
         "dropna": True,
@@ -1585,7 +1589,7 @@ class MemoryUsage(Reduction):
 
 class MemoryUsageIndex(MemoryUsage):
     _parameters: ClassVar[list[str]] = ["frame", "deep"]
-    _defaults: ClassVar[dict] = {"deep": False}
+    _defaults: ClassVar[dict[str, AnyT]] = {"deep": False}
 
     @property
     def chunk_kwargs(self):
@@ -1594,7 +1598,7 @@ class MemoryUsageIndex(MemoryUsage):
 
 class MemoryUsageFrame(MemoryUsage):
     _parameters: ClassVar[list[str]] = ["frame", "deep", "_index"]
-    _defaults: ClassVar[dict] = {"deep": False, "_index": True}
+    _defaults: ClassVar[dict[str, AnyT]] = {"deep": False, "_index": True}
 
     @property
     def chunk_kwargs(self):

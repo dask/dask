@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Collection
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pandas as pd
 
@@ -31,7 +31,7 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
         "_partitions",
         "prefix",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "meta": None,
         "_partitions": None,
         "user_divisions": None,

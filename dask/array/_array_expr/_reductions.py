@@ -5,7 +5,7 @@ import math
 from functools import partial
 from itertools import product
 from numbers import Integral
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from tlz import compose, get, partition_all
 
@@ -270,7 +270,7 @@ class PartialReduce(ArrayExpr):
         "name",
         "reduced_meta",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "keepdims": False,
         "dtype": None,
         "name": None,

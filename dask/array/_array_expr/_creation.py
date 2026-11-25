@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 from functools import partial
 from numbers import Integral
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 from tlz import sliding_window
@@ -33,7 +33,7 @@ class Arange(ArrayExpr):
         "dtype",
         "kwargs",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "chunks": "auto",
         "like": None,
         "dtype": None,
@@ -98,7 +98,7 @@ class Linspace(Arange):
         "chunks",
         "dtype",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "num": 50,
         "endpoint": True,
         "chunks": "auto",
@@ -146,7 +146,7 @@ class Linspace(Arange):
 
 class BroadcastTrick(ArrayExpr):
     _parameters: ClassVar[list[str]] = ["shape", "dtype", "chunks", "meta", "kwargs"]
-    _defaults: ClassVar[dict] = {"meta": None}
+    _defaults: ClassVar[dict[str, Any]] = {"meta": None}
 
     @functools.cached_property
     def _meta(self):

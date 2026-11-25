@@ -11,7 +11,7 @@ import weakref
 from abc import abstractmethod
 from collections import defaultdict
 from functools import cached_property, partial
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -843,7 +843,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         "_series",
         "_dataset_info_cache",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "columns": None,
         "filters": None,
         "categories": None,
@@ -1278,7 +1278,7 @@ class ReadParquetFSSpec(ReadParquet):
         "_dataset_info_cache",
         "_pq_length_stats",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "columns": None,
         "filters": None,
         "categories": None,

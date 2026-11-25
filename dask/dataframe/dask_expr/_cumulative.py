@@ -19,7 +19,7 @@ from dask.utils import M
 
 class CumulativeAggregations(Expr):
     _parameters: ClassVar[list[str]] = ["frame", "axis", "skipna"]
-    _defaults: ClassVar[dict] = {"axis": None}
+    _defaults: ClassVar[dict[str, Any]] = {"axis": None}
 
     chunk_operation = None
     aggregate_operation: Callable | None = None
@@ -48,7 +48,7 @@ class CumulativeAggregations(Expr):
 
 class CumulativeBlockwise(Blockwise):
     _parameters: ClassVar[list[str]] = ["frame", "axis", "skipna", "operation"]
-    _defaults: ClassVar[dict] = {"skipna": True, "axis": None}
+    _defaults: ClassVar[dict[str, Any]] = {"skipna": True, "axis": None}
     _projection_passthrough = True
 
     @functools.cached_property

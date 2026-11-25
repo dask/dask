@@ -4,7 +4,7 @@ import functools
 import math
 import warnings
 from collections.abc import Callable
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -280,7 +280,7 @@ class SingleAggregation(GroupByApplyConcatApply, GroupByBase):
         "sort",
         "shuffle_method",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "observed": None,
         "dropna": None,
         "chunk_kwargs": None,
@@ -365,7 +365,7 @@ class GroupbyAggregationBase(GroupByApplyConcatApply, GroupByBase):
         "shuffle_method",
         "_slice",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "observed": None,
         "dropna": None,
         "split_every": 8,
@@ -752,7 +752,7 @@ class Var(GroupByReduction):
         "observed",
         "shuffle_method",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "split_out": 1,
         "sort": None,
         "observed": None,
@@ -886,7 +886,7 @@ class GroupByApply(Expr, GroupByBase):
         "kwargs",
         "shuffle_method",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "observed": None,
         "dropna": None,
         "_slice": None,
@@ -1053,7 +1053,7 @@ class GroupByFFill(GroupByBFill):
 
 
 class GroupByShift(GroupByApply):
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "observed": None,
         "dropna": None,
         "_slice": None,
@@ -1071,7 +1071,7 @@ class GroupByShift(GroupByApply):
 
 class Median(GroupByShift):
     _parameters = GroupByApply._parameters + ["split_every"]
-    default: ClassVar[dict] = {**GroupByShift._defaults, "split_every": None}
+    default: ClassVar[dict[str, Any]] = {**GroupByShift._defaults, "split_every": None}
 
     @functools.cached_property
     def grp_func(self):
@@ -1148,7 +1148,7 @@ class GroupByUDFBlockwise(Blockwise, GroupByBase):
         "dask_func",
         "meta",
     ]
-    _defaults: ClassVar[dict] = {"observed": None, "dropna": None}
+    _defaults: ClassVar[dict[str, Any]] = {"observed": None, "dropna": None}
     _keyword_only: ClassVar[list[str]] = [
         "_slice",
         "group_keys",
@@ -1351,7 +1351,11 @@ def _clean_by_expr(obj, by):
 
 class GroupByCumulative(Expr, GroupByBase):
     _parameters: ClassVar[list[str]] = ["frame", "dropna", "_slice", "numeric_only"]
-    _defaults: ClassVar[dict] = {"numeric_only": None, "dropna": None, "_slice": None}
+    _defaults: ClassVar[dict[str, Any]] = {
+        "numeric_only": None,
+        "dropna": None,
+        "_slice": None,
+    }
     chunk = None
     aggregate: Callable | None = None
     initial = 0

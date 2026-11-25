@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pandas as pd
 
@@ -164,7 +164,7 @@ class GetDummies(Blockwise):
         "drop_first",
         "dtype",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "prefix": None,
         "prefix_sep": "_",
         "dummy_na": False,

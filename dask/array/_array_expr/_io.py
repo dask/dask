@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from itertools import product
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -71,7 +71,7 @@ class FromArray(IO):
         "asarray",
         "fancy",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "getitem": None,
         "inline_array": False,
         "meta": None,

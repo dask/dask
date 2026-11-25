@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -16,7 +16,7 @@ def _finalize_scalar_result(cons, *args, **kwargs):
 
 class SeriesQuantile(Expr):
     _parameters: ClassVar[list[str]] = ["frame", "q", "method"]
-    _defaults: ClassVar[dict] = {"method": "default"}
+    _defaults: ClassVar[dict[str, Any]] = {"method": "default"}
 
     @functools.cached_property
     def q(self):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections import namedtuple
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -112,7 +112,7 @@ class ResampleReduction(Expr):
         "how_args",
         "how_kwargs",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "closed": None,
         "label": None,
         "kwargs": None,

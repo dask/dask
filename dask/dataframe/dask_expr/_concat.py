@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import warnings
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pandas as pd
 from toolz import merge_sorted, unique
@@ -34,7 +34,7 @@ class Concat(Expr):
         "interleave_partitions",
         "_kwargs",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "join": "outer",
         "ignore_order": False,
         "_kwargs": {},
@@ -357,7 +357,7 @@ class StackPartitionInterleaved(StackPartition):
 
 class ConcatUnindexed(Blockwise):
     _parameters: ClassVar[list[str]] = ["ignore_order", "_kwargs", "axis", "join"]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "ignore_order": False,
         "_kwargs": {},
         "axis": 1,

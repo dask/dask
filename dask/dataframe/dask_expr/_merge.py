@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 import math
 import operator
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 from toolz import merge_sorted, unique
@@ -79,7 +79,7 @@ class Merge(Expr):
         "_npartitions",
         "broadcast",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "how": "inner",
         "left_on": None,
         "right_on": None,
@@ -533,7 +533,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         "shuffle_right_on",
         "_npartitions",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "how": "inner",
         "left_on": None,
         "right_on": None,
@@ -695,7 +695,7 @@ class BroadcastJoin(Merge, PartitionsFiltered):
         "indicator",
         "_partitions",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "how": "inner",
         "left_on": None,
         "right_on": None,
@@ -905,7 +905,7 @@ class BlockwiseMerge(Merge, Blockwise):
 
 class JoinRecursive(Expr):
     _parameters: ClassVar[list[str]] = ["frames", "how"]
-    _defaults: ClassVar[dict] = {"right_index": True, "how": "outer"}
+    _defaults: ClassVar[dict[str, Any]] = {"right_index": True, "how": "outer"}
 
     @functools.cached_property
     def _meta(self):

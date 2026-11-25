@@ -4,6 +4,7 @@ import functools
 import math
 import operator
 import uuid
+from typing import Any as AnyType
 from typing import ClassVar
 
 import numpy as np
@@ -82,7 +83,7 @@ class ShuffleBase(Expr):
         "index_shuffle",
         "original_partitioning_index",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "ignore_index": False,
         "method": None,
         "options": None,
@@ -305,7 +306,7 @@ class SimpleShuffle(PartitionsFiltered, Shuffle):
         "_partitions",
     ]
 
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "_partitions": None,
         "original_partitioning_index": None,
         "partitioning_index": "_partitions",
@@ -727,7 +728,7 @@ class AssignPartitioningIndex(Blockwise):
         "index_shuffle",
     ]
 
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "cast_dtype": None,
         "index_shuffle": False,
         "partitioning_index": "_partitions",
@@ -839,7 +840,7 @@ class SetIndex(BaseSetIndexSortValues):
         "append",
         "options",  # Options for the chosen shuffle method
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "drop": True,
         "user_divisions": None,
         "partition_size": 128e6,
@@ -988,7 +989,7 @@ class SortValues(BaseSetIndexSortValues):
         "shuffle_method",
         "options",  # Options for the chosen shuffle method
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "partition_size": 128e6,
         "ascending": True,
         "npartitions": None,
@@ -1209,7 +1210,7 @@ class _SetPartitionsPreSetIndex(Blockwise):
         "ascending",
         "na_position",
     ]
-    _defaults: ClassVar[dict] = {"ascending": True, "na_position": "last"}
+    _defaults: ClassVar[dict[str, AnyType]] = {"ascending": True, "na_position": "last"}
     operation = staticmethod(set_partitions_pre)
     _is_length_preserving = True
 
@@ -1297,7 +1298,11 @@ class SetIndexBlockwise(Blockwise):
         "new_divisions",
         "append",
     ]
-    _defaults: ClassVar[dict] = {"append": False, "new_divisions": None, "drop": True}
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "append": False,
+        "new_divisions": None,
+        "drop": True,
+    }
     _keyword_only: ClassVar[list[str]] = ["drop", "new_divisions", "append"]
     _is_length_preserving = True
     _preserves_partitioning_information = True

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 from pandas.core.dtypes.common import is_datetime64_any_dtype, is_timedelta64_dtype
@@ -31,7 +31,7 @@ class DescribeNumeric(Reduction):
         "percentiles",
         "percentile_method",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "percentiles": None,
         "split_every": None,
         "percentile_method": "default",
@@ -89,7 +89,10 @@ class DescribeNumericAggregate(Blockwise):
         "is_datetime_col",
         "unit",
     ]
-    _defaults: ClassVar[dict] = {"is_timedelta_col": False, "is_datetime_col": False}
+    _defaults: ClassVar[dict[str, Any]] = {
+        "is_timedelta_col": False,
+        "is_datetime_col": False,
+    }
 
     def _broadcast_dep(self, dep):
         return dep.npartitions == 1
@@ -118,7 +121,7 @@ class DescribeNonNumeric(DescribeNumeric):
 
 class DescribeNonNumericAggregate(DescribeNumericAggregate):
     _parameters: ClassVar[list[str]] = ["name"]
-    _defaults: ClassVar[dict] = {}
+    _defaults: ClassVar[dict[str, Any]] = {}
 
     @staticmethod
     def operation(name, *stats):

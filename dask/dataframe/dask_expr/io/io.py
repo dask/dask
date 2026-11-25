@@ -4,7 +4,7 @@ import functools
 import itertools
 import math
 import operator
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import pyarrow as pa
@@ -254,7 +254,7 @@ class FromMap(PartitionsFiltered, BlockwiseIO):
         "label",
         "_partitions",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "user_meta": no_default,
         "enforce_metadata": False,
         "user_divisions": None,
@@ -338,7 +338,7 @@ class FromMapProjectable(FromMap):
         "_partitions",
         "_series",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "user_meta": no_default,
         "enforce_metadata": False,
         "user_divisions": None,
@@ -426,7 +426,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         "_series",
         "_pd_length_stats",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "npartitions": None,
         "sort": True,
         "columns": None,
@@ -568,7 +568,7 @@ class FromPandasDivisions(FromPandas):
         "_series",
         "_pd_length_stats",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "columns": None,
         "_partitions": None,
         "_series": False,
@@ -647,7 +647,7 @@ class FromArray(PartitionsFiltered, BlockwiseIO):
         "columns",
         "_partitions",
     ]
-    _defaults: ClassVar[dict] = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "chunksize": 50_000,
         "original_columns": None,
         "meta": None,
