@@ -128,7 +128,7 @@ def test_dt_accessor(df_ddf):
 
 
 def test_dt_accessor_not_available(df_ddf):
-    df, ddf = df_ddf
+    _df, ddf = df_ddf
 
     # Not available on invalid dtypes
     with pytest.raises(AttributeError) as exc:
@@ -208,7 +208,7 @@ def test_str_accessor(df_ddf):
 
 
 def test_str_accessor_not_available(df_ddf):
-    df, ddf = df_ddf
+    _df, ddf = df_ddf
 
     # Not available on invalid dtypes
     with pytest.raises(AttributeError) as exc:

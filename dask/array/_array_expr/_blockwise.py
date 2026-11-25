@@ -75,7 +75,7 @@ class Blockwise(ArrayExpr):
     @cached_property
     def chunks(self):
         if self.align_arrays:
-            chunkss, arrays, _ = unify_chunks_expr(*self.args)
+            chunkss, _arrays, _ = unify_chunks_expr(*self.args)
         else:
             arginds = [
                 (a, i) for (a, i) in toolz.partition(2, self.args) if i is not None

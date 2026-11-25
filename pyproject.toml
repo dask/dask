@@ -130,7 +130,6 @@ ignore = [
     "PYI025",   # Use `from collections.abc import Set as AbstractSet` to avoid confusion with the `set` builtin"
     # FIXME need to look at these
     "RUF012",  # Mutable class default (395 findings)
-    "RUF059",  # Unpacked variable never used (129 findings)
     "BLE001",  # Blind except (42 findings)
     "SIM102",  # Collapsible if (36 findings)
 ]

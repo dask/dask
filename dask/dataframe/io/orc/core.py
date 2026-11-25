@@ -78,7 +78,7 @@ def read_orc(
 
     # Process file path(s)
     storage_options = storage_options or {}
-    fs, fs_token, paths = get_fs_token_paths(
+    fs, _fs_token, paths = get_fs_token_paths(
         path, mode="rb", storage_options=storage_options
     )
 

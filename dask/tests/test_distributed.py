@@ -734,7 +734,7 @@ def test_futures_in_subgraphs(loop_in_thread):
     """Copied from distributed (tests/test_client.py)"""
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    with cluster() as (s, [a, b]), Client(s["address"], loop=loop_in_thread):
+    with cluster() as (s, [_a, _b]), Client(s["address"], loop=loop_in_thread):
         ddf = dd.from_pandas(
             pd.DataFrame(
                 {

@@ -3801,7 +3801,7 @@ def test_to_delayed():
     x = da.random.default_rng().random((4, 4), chunks=(2, 2))
     y = x + 10
 
-    [[a, b], [c, d]] = y.to_delayed()
+    [[a, _b], [_c, _d]] = y.to_delayed()
     assert_eq(a.compute(), y[:2, :2])
 
     s = 2

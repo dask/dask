@@ -455,10 +455,10 @@ def test_dask_svd_self_consistent(m, n):
 @pytest.mark.parametrize("iterator", ["power", "QR"])
 def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(
+    _u, _s, v = da.linalg.svd_compressed(
         x, k=2, iterator=iterator, n_power_iter=1, compute=True, seed=123
     )
-    uu, ss, vv = da.linalg.svd_compressed(
+    _uu, _ss, vv = da.linalg.svd_compressed(
         x, k=2, iterator=iterator, n_power_iter=1, seed=123
     )
 

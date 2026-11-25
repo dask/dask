@@ -242,7 +242,7 @@ def test_open_files_write(s3):
     for fil, data in zip(fils, files.values()):
         with fil as f:
             f.write(data)
-    sample, values = read_bytes(f"s3://{test_bucket_name}/more/test/accounts.*", **s3so)
+    _, values = read_bytes(f"s3://{test_bucket_name}/more/test/accounts.*", **s3so)
     results = compute(*concat(values))
     assert set(files.values()) == set(results)
 
@@ -263,21 +263,21 @@ def test_read_bytes(s3):
 
 
 def test_read_bytes_sample_delimiter(s3):
-    sample, values = read_bytes(
+    sample, _ = read_bytes(
         f"s3://{test_bucket_name}/test/accounts.*",
         sample=80,
         delimiter=b"\n",
         **s3so,
     )
     assert sample.endswith(b"\n")
-    sample, values = read_bytes(
+    sample, _ = read_bytes(
         f"s3://{test_bucket_name}/test/accounts.1.json",
         sample=80,
         delimiter=b"\n",
         **s3so,
     )
     assert sample.endswith(b"\n")
-    sample, values = read_bytes(
+    sample, _ = read_bytes(
         f"s3://{test_bucket_name}/test/accounts.1.json",
         sample=2,
         delimiter=b"\n",
