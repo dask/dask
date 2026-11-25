@@ -44,6 +44,7 @@ _PICKLING_ERRORS = (
     RuntimeError,
     TypeError,
     ValueError,
+    Warning,
 )
 
 

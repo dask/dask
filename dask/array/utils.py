@@ -94,7 +94,9 @@ def meta_from_array(x, ndim=None, dtype=None):
                 meta = meta.reshape((0,) * ndim)
         if meta is np.ma.masked:
             meta = np.ma.array(np.empty((0,) * ndim, dtype=dtype or x.dtype), mask=True)
-    except (AttributeError, IndexError, TypeError, ValueError):
+    # Third-party array-likes such as tiledb raise implementation-specific errors
+    # from zero-length slicing; the fallback must remain broad.
+    except Exception:  # noqa: BLE001
         meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
 
     if np.isscalar(meta):
