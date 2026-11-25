@@ -4715,7 +4715,7 @@ class Index(Series):
     _accessors: ClassVar[set[str]] = set()
     _partition_type = pd.Index
 
-    _dt_attributes = {
+    _dt_attributes: ClassVar[set[str]] = {
         "nanosecond",
         "microsecond",
         "millisecond",
@@ -4735,7 +4735,7 @@ class Index(Series):
         "year",
     }
 
-    _cat_attributes = {
+    _cat_attributes: ClassVar[set[str]] = {
         "known",
         "as_known",
         "as_unknown",

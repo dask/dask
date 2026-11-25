@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import re
+from typing import ClassVar
 
 import numpy as np
 from tlz import concat, merge, unique
@@ -533,7 +534,7 @@ def apply_gufunc(
 
 
 class GUfuncLeafExpr(ArrayExpr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "array",
         "i",
         "name_prefix",

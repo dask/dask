@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import ClassVar
 
 import pandas as pd
 
@@ -157,7 +158,7 @@ class CategoricalAccessor(Accessor):
 
 
 class AsUnknown(Elemwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = M.copy
 
     @functools.cached_property
@@ -166,7 +167,7 @@ class AsUnknown(Elemwise):
 
 
 class Categorize(Blockwise):
-    _parameters = ["frame", "categories", "index"]
+    _parameters: ClassVar[list[str]] = ["frame", "categories", "index"]
     operation = staticmethod(_categorize_block)
     _projection_passthrough = True
 
@@ -187,7 +188,7 @@ class Categorize(Blockwise):
 
 
 class GetCategories(ApplyConcatApply):
-    _parameters = ["frame", "columns", "index", "split_every"]
+    _parameters: ClassVar[list[str]] = ["frame", "columns", "index", "split_every"]
 
     chunk = staticmethod(_get_categories)
     aggregate = staticmethod(_get_categories_agg)

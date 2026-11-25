@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import functools
 from itertools import count, product
+from typing import ClassVar
 
 import numpy as np
 
@@ -45,7 +46,7 @@ def _shuffle(x, indexer, axis, name):
 
 
 class Shuffle(ArrayExpr):
-    _parameters = ["array", "indexer", "axis", "name"]
+    _parameters: ClassVar[list[str]] = ["array", "indexer", "axis", "name"]
 
     @functools.cached_property
     def _meta(self):

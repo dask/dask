@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pandas as pd
 
@@ -197,7 +197,7 @@ def collect_statistics(frame, analysis_id, expr_name):
 
 
 class Analyze(Blockwise):
-    _parameters = ["frame", "analysis_id", "expr_name"]
+    _parameters: ClassVar[list[str]] = ["frame", "analysis_id", "expr_name"]
 
     operation = staticmethod(collect_statistics)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections import namedtuple
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -104,14 +105,14 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
 
 
 class ResampleReduction(Expr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "rule",
         "kwargs",
         "how_args",
         "how_kwargs",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "closed": None,
         "label": None,
         "kwargs": None,
@@ -172,7 +173,7 @@ class ResampleReduction(Expr):
 
 
 class ResampleAggregation(Blockwise):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "divisions_left",
         "divisions_right",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import pickle
+from typing import ClassVar
 
 import pytest
 
@@ -10,7 +11,7 @@ from dask._task_spec import DataNode
 
 
 class MyExpr(Expr):
-    _parameters = ["foo", "bar"]
+    _parameters: ClassVar[list[str]] = ["foo", "bar"]
 
 
 class MyExpr2(MyExpr):
@@ -36,7 +37,7 @@ def test_setattr2():
 
 class MyExprCachedProperty(Expr):
     called_cached_property = False
-    _parameters = ["foo", "bar"]
+    _parameters: ClassVar[list[str]] = ["foo", "bar"]
 
     @property
     def baz(self):

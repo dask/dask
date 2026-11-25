@@ -10,6 +10,7 @@ from collections import defaultdict
 from collections.abc import Callable, Collection, Mapping
 from functools import partial
 from typing import Any as AnyType
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -514,7 +515,7 @@ class Expr(core.SingletonExpr):
 
 
 class FinalizeComputeDF(FinalizeCompute, Expr):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
 
     def _simplify_down(self):
         from dask.dataframe.dask_expr._repartition import Repartition
@@ -525,7 +526,7 @@ class FinalizeComputeDF(FinalizeCompute, Expr):
 class Literal(Expr):
     """Represent a literal (known) value as an `Expr`"""
 
-    _parameters = ["value"]
+    _parameters: ClassVar[list[str]] = ["value"]
 
     def _divisions(self):
         return (None, None)
@@ -551,7 +552,7 @@ class Blockwise(Expr):
     """
 
     operation: Callable | None = None
-    _keyword_only: list[str] = []
+    _keyword_only: ClassVar[list[str]] = []
     _projection_passthrough = False
     _preserves_partitioning_information = False
 
@@ -649,7 +650,7 @@ class Blockwise(Expr):
 
 
 class MapPartitions(Blockwise):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "func",
         "meta",
@@ -663,7 +664,7 @@ class MapPartitions(Blockwise):
         "kwargs",
         "nargs",
     ]
-    _defaults: dict = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "kwargs": None,
         "align_dataframes": True,
         "parent_meta": None,
@@ -824,7 +825,7 @@ def _get_meta_ufunc(dfs, args, func):
 
 
 class UFuncElemwise(MapPartitions):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "func",
         "meta",
@@ -880,7 +881,7 @@ class UFuncElemwise(MapPartitions):
 
 
 class MapOverlapAlign(Expr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "func",
         "before",
@@ -893,7 +894,7 @@ class MapOverlapAlign(Expr):
         "token",
         "kwargs",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "meta": None,
         "enforce_metadata": True,
         "transform_divisions": True,
@@ -943,7 +944,7 @@ class MapOverlapAlign(Expr):
 
 
 class MapOverlap(MapPartitions):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "func",
         "before",
@@ -956,7 +957,7 @@ class MapOverlap(MapPartitions):
         "token",
         "kwargs",
     ]
-    _defaults: dict = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "meta": None,
         "enforce_metadata": True,
         "transform_divisions": True,
@@ -1032,7 +1033,7 @@ class MapOverlap(MapPartitions):
 
 
 class CreateOverlappingPartitions(Expr):
-    _parameters = ["frame", "before", "after"]
+    _parameters: ClassVar[list[str]] = ["frame", "before", "after"]
 
     @functools.cached_property
     def _meta(self):
@@ -1188,9 +1189,13 @@ def _combined_parts(prev_part, current_part, next_part, before, after):
 
 
 class _Align(Blockwise):
-    _parameters = ["frame", "other", "join", "axis", "fill_value"]
-    _defaults = {"join": "outer", "fill_value": None, "axis": None}
-    _keyword_only = ["join", "fill_value", "axis"]
+    _parameters: ClassVar[list[str]] = ["frame", "other", "join", "axis", "fill_value"]
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "join": "outer",
+        "fill_value": None,
+        "axis": None,
+    }
+    _keyword_only: ClassVar[list[str]] = ["join", "fill_value", "axis"]
     operation = M.align
     _preserves_partitioning_information = True
 
@@ -1200,7 +1205,7 @@ class _Align(Blockwise):
 
 
 class AlignGetitem(Blockwise):
-    _parameters = ["frame", "position"]
+    _parameters: ClassVar[list[str]] = ["frame", "position"]
     operation = operator.getitem
     _preserves_partitioning_information = True
 
@@ -1213,8 +1218,8 @@ class AlignGetitem(Blockwise):
 
 
 class ScalarToSeries(Blockwise):
-    _parameters = ["frame", "index"]
-    _defaults = {"index": 0}
+    _parameters: ClassVar[list[str]] = ["frame", "index"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"index": 0}
 
     @staticmethod
     def operation(value, index=0):
@@ -1222,15 +1227,19 @@ class ScalarToSeries(Blockwise):
 
 
 class DropnaSeries(Blockwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = M.dropna
     _preserves_partitioning_information = True
 
 
 class DropnaFrame(Blockwise):
-    _parameters = ["frame", "how", "subset", "thresh"]
-    _defaults = {"how": no_default, "subset": None, "thresh": no_default}
-    _keyword_only = ["how", "subset", "thresh"]
+    _parameters: ClassVar[list[str]] = ["frame", "how", "subset", "thresh"]
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "how": no_default,
+        "subset": None,
+        "thresh": no_default,
+    }
+    _keyword_only: ClassVar[list[str]] = ["how", "subset", "thresh"]
     operation = M.dropna
     _preserves_partitioning_information = True
 
@@ -1252,7 +1261,7 @@ class DropnaFrame(Blockwise):
 
 
 class CombineFirst(Blockwise):
-    _parameters = ["frame", "other"]
+    _parameters: ClassVar[list[str]] = ["frame", "other"]
     operation = M.combine_first
 
     @functools.cached_property
@@ -1282,7 +1291,7 @@ class CombineFirst(Blockwise):
 
 
 class Sample(Blockwise):
-    _parameters = ["frame", "state_data", "frac", "replace"]
+    _parameters: ClassVar[list[str]] = ["frame", "state_data", "frac", "replace"]
     operation = staticmethod(methods.sample)
 
     @functools.cached_property
@@ -1300,9 +1309,9 @@ class Sample(Blockwise):
 
 
 class Query(Blockwise):
-    _parameters = ["frame", "_expr", "expr_kwargs"]
-    _defaults: dict[str, Any] = {"expr_kwargs": {}}  # type: ignore[dict-item]
-    _keyword_only = ["expr_kwargs"]
+    _parameters: ClassVar[list[str]] = ["frame", "_expr", "expr_kwargs"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"expr_kwargs": {}}
+    _keyword_only: ClassVar[list[str]] = ["expr_kwargs"]
     operation = M.query
 
     @functools.cached_property
@@ -1311,8 +1320,8 @@ class Query(Blockwise):
 
 
 class MemoryUsagePerPartition(Blockwise):
-    _parameters = ["frame", "index", "deep"]
-    _defaults = {"index": True, "deep": False}
+    _parameters: ClassVar[list[str]] = ["frame", "index", "deep"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"index": True, "deep": False}
 
     @staticmethod
     def operation(*args, **kwargs):
@@ -1325,7 +1334,7 @@ class MemoryUsagePerPartition(Blockwise):
 
 
 class DropDuplicatesBlockwise(Blockwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = M.drop_duplicates
     _preserves_partitioning_information = True
 
@@ -1353,7 +1362,7 @@ class Elemwise(Blockwise):
 
 
 class RenameFrame(Elemwise):
-    _parameters = ["frame", "columns"]
+    _parameters: ClassVar[list[str]] = ["frame", "columns"]
 
     @functools.cached_property
     def unique_partition_mapping_columns_from_shuffle(self):
@@ -1409,7 +1418,7 @@ class ColumnsSetter(RenameFrame):
 
 
 class _DeepCopy(Elemwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     _projection_passthrough = True
     _filter_passthrough = True
     _preserves_partitioning_information = True
@@ -1420,15 +1429,15 @@ class _DeepCopy(Elemwise):
 
 
 class ToBackend(Elemwise):
-    _parameters = ["frame", "options"]
+    _parameters: ClassVar[list[str]] = ["frame", "options"]
     _projection_passthrough = True
     _filter_passthrough = True
     _preserves_partitioning_information = True
 
 
 class RenameSeries(Elemwise):
-    _parameters = ["frame", "index", "sorted_index"]
-    _defaults = {"sorted_index": False}
+    _parameters: ClassVar[list[str]] = ["frame", "index", "sorted_index"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"sorted_index": False}
     _filter_passthrough = True
     _preserves_partitioning_information = True
 
@@ -1464,22 +1473,26 @@ class RenameSeries(Elemwise):
 
 class Fillna(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "value"]
-    _defaults = {"value": None}
+    _parameters: ClassVar[list[str]] = ["frame", "value"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"value": None}
     operation = M.fillna
 
 
 class Replace(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "to_replace", "value", "regex"]
-    _defaults = {"to_replace": None, "value": no_default, "regex": False}
-    _keyword_only = ["value", "regex"]
+    _parameters: ClassVar[list[str]] = ["frame", "to_replace", "value", "regex"]
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "to_replace": None,
+        "value": no_default,
+        "regex": False,
+    }
+    _keyword_only: ClassVar[list[str]] = ["value", "regex"]
     operation = M.replace
 
 
 class Isin(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "values"]
+    _parameters: ClassVar[list[str]] = ["frame", "values"]
     operation = M.isin
 
     @functools.cached_property
@@ -1496,9 +1509,13 @@ class Isin(Elemwise):
 
 class Clip(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "lower", "upper", "axis"]
-    _defaults = {"lower": None, "upper": None, "axis": None}
-    _keyword_only = ["axis"]
+    _parameters: ClassVar[list[str]] = ["frame", "lower", "upper", "axis"]
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "lower": None,
+        "upper": None,
+        "axis": None,
+    }
+    _keyword_only: ClassVar[list[str]] = ["axis"]
     operation = M.clip
 
     def _simplify_up(self, parent, dependents):
@@ -1509,21 +1526,21 @@ class Clip(Elemwise):
 class ArrowStringConversion(Elemwise):
     _projection_passthrough = True
     _filter_passthrough = True
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = staticmethod(to_pyarrow_string)
     _preserves_partitioning_information = True
 
 
 class Between(Elemwise):
-    _parameters = ["frame", "left", "right", "inclusive"]
-    _defaults = {"inclusive": "both"}
+    _parameters: ClassVar[list[str]] = ["frame", "left", "right", "inclusive"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"inclusive": "both"}
     operation = M.between
 
 
 class ToTimestamp(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "freq", "how"]
-    _defaults = {"freq": None, "how": "start"}
+    _parameters: ClassVar[list[str]] = ["frame", "freq", "how"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"freq": None, "how": "start"}
     operation = M.to_timestamp
     _filter_passthrough = True
     _preserves_partitioning_information = True
@@ -1535,8 +1552,8 @@ class ToTimestamp(Elemwise):
 
 
 class CombineSeries(Elemwise):
-    _parameters = ["frame", "other", "func", "fill_value"]
-    _defaults: dict = {"fill_value": None}
+    _parameters: ClassVar[list[str]] = ["frame", "other", "func", "fill_value"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"fill_value": None}
     operation = M.combine
 
     @functools.cached_property
@@ -1550,13 +1567,17 @@ class CombineSeries(Elemwise):
 
 class CombineFrame(CombineSeries):
     _parameters = CombineSeries._parameters + ["overwrite"]
-    _defaults = {"fill_value": None, "overwrite": True}
+    _defaults: ClassVar[dict[str, AnyType]] = {"fill_value": None, "overwrite": True}
 
 
 class ToNumeric(Elemwise):
-    _parameters = ["frame", "errors", "downcast", "meta"]
-    _defaults = {"errors": "raise", "downcast": None, "meta": None}
-    _keyword_only = ["meta"]
+    _parameters: ClassVar[list[str]] = ["frame", "errors", "downcast", "meta"]
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "errors": "raise",
+        "downcast": None,
+        "meta": None,
+    }
+    _keyword_only: ClassVar[list[str]] = ["meta"]
     operation = staticmethod(pd.to_numeric)
 
     @functools.cached_property
@@ -1573,9 +1594,9 @@ class ToNumeric(Elemwise):
 
 
 class ToDatetime(Elemwise):
-    _parameters = ["frame", "kwargs", "meta"]
-    _defaults = {"kwargs": None}
-    _keyword_only = ["kwargs", "meta"]
+    _parameters: ClassVar[list[str]] = ["frame", "kwargs", "meta"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"kwargs": None}
+    _keyword_only: ClassVar[list[str]] = ["kwargs", "meta"]
 
     @functools.cached_property
     def _meta(self):
@@ -1593,15 +1614,15 @@ class ToDatetime(Elemwise):
 
 
 class ToTimedelta(Elemwise):
-    _parameters = ["frame", "unit", "errors"]
-    _defaults = {"unit": None, "errors": "raise"}
+    _parameters: ClassVar[list[str]] = ["frame", "unit", "errors"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"unit": None, "errors": "raise"}
     operation = staticmethod(pd.to_timedelta)
 
 
 class AsType(Elemwise):
     """A good example of writing a trivial blockwise operation"""
 
-    _parameters = ["frame", "dtypes"]
+    _parameters: ClassVar[list[str]] = ["frame", "dtypes"]
     operation = M.astype
     _filter_passthrough = True
 
@@ -1649,27 +1670,27 @@ class AsType(Elemwise):
 
 class IsNa(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = M.isna
 
 
 class Mask(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "cond", "other"]
-    _defaults = {"other": np.nan}
+    _parameters: ClassVar[list[str]] = ["frame", "cond", "other"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"other": np.nan}
     operation = M.mask
 
 
 class Round(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "decimals"]
+    _parameters: ClassVar[list[str]] = ["frame", "decimals"]
     operation = M.round
 
 
 class Where(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "cond", "other"]
-    _defaults = {"other": np.nan}
+    _parameters: ClassVar[list[str]] = ["frame", "cond", "other"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"other": np.nan}
     operation = M.where
 
 
@@ -1704,7 +1725,7 @@ def _check_divisions(df, i, division_min, division_max, last):
 
 
 class EnforceRuntimeDivisions(Blockwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = staticmethod(_check_divisions)
     _preserves_partitioning_information = True
 
@@ -1725,35 +1746,35 @@ class EnforceRuntimeDivisions(Blockwise):
 
 class Abs(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = M.abs
 
 
 class RenameAxis(Elemwise):
     _projection_passthrough = True
     _filter_passthrough = True
-    _parameters = ["frame", "mapper", "index", "columns", "axis"]
-    _defaults = {
+    _parameters: ClassVar[list[str]] = ["frame", "mapper", "index", "columns", "axis"]
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "mapper": no_default,
         "index": no_default,
         "columns": no_default,
         "axis": 0,
     }
-    _keyword_only = ["mapper", "index", "columns", "axis"]
+    _keyword_only: ClassVar[list[str]] = ["mapper", "index", "columns", "axis"]
     operation = M.rename_axis
     _preserves_partitioning_information = True
 
 
 class NotNull(Elemwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = M.notnull
     _projection_passthrough = True
 
 
 class ToFrame(Elemwise):
-    _parameters = ["frame", "name"]
-    _defaults = {"name": no_default}
-    _keyword_only = ["name"]
+    _parameters: ClassVar[list[str]] = ["frame", "name"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"name": no_default}
+    _keyword_only: ClassVar[list[str]] = ["name"]
     operation = M.to_frame
     _filter_passthrough = True
 
@@ -1770,15 +1791,15 @@ class ToFrame(Elemwise):
 
 
 class ToFrameIndex(ToFrame):
-    _parameters = ["frame", "index", "name"]
-    _defaults = {"name": no_default, "index": True}
-    _keyword_only = ["name", "index"]
+    _parameters: ClassVar[list[str]] = ["frame", "index", "name"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"name": no_default, "index": True}
+    _keyword_only: ClassVar[list[str]] = ["name", "index"]
     operation = M.to_frame
     _filter_passthrough = True
 
 
 class ToSeriesIndex(ToFrameIndex):
-    _defaults = {"name": no_default, "index": None}
+    _defaults: ClassVar[dict[str, AnyType]] = {"name": no_default, "index": None}
     operation = M.to_series
     _preserves_partitioning_information = True
 
@@ -1796,8 +1817,8 @@ def pd_split(df, p, random_state=None, shuffle=False):
 
 
 class Split(Elemwise):
-    _parameters = ["frame", "frac", "random_state", "shuffle"]
-    _keyword_only = ["random_state", "shuffle"]
+    _parameters: ClassVar[list[str]] = ["frame", "frac", "random_state", "shuffle"]
+    _keyword_only: ClassVar[list[str]] = ["random_state", "shuffle"]
     operation = staticmethod(pd_split)
 
     @functools.cached_property
@@ -1823,15 +1844,15 @@ def _random_split_take(df, i, ndim):
 
 
 class SplitTake(Blockwise):
-    _parameters = ["frame", "i", "ndim"]
+    _parameters: ClassVar[list[str]] = ["frame", "i", "ndim"]
     operation = staticmethod(_random_split_take)
 
 
 class Apply(Elemwise):
     """A good example of writing a less-trivial blockwise operation"""
 
-    _parameters = ["frame", "function", "args", "meta", "kwargs"]
-    _defaults = {"args": (), "kwargs": {}}
+    _parameters: ClassVar[list[str]] = ["frame", "function", "args", "meta", "kwargs"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"args": (), "kwargs": {}}
     operation = M.apply
 
     @functools.cached_property
@@ -1851,9 +1872,19 @@ class Apply(Elemwise):
 
 class Map(Elemwise):
     _projection_passthrough = True
-    _parameters = ["frame", "arg", "na_action", "meta", "is_monotonic"]
-    _defaults = {"na_action": None, "meta": None, "is_monotonic": True}
-    _keyword_only = ["meta", "is_monotonic"]
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "arg",
+        "na_action",
+        "meta",
+        "is_monotonic",
+    ]
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "na_action": None,
+        "meta": None,
+        "is_monotonic": True,
+    }
+    _keyword_only: ClassVar[list[str]] = ["meta", "is_monotonic"]
     operation = M.map
 
     @functools.cached_property
@@ -1907,9 +1938,13 @@ class Map(Elemwise):
 
 
 class VarColumns(Elemwise):
-    _parameters = ["frame", "skipna", "ddof", "numeric_only"]
-    _defaults = {"skipna": True, "ddof": 1, "numeric_only": False}
-    _keyword_only = ["skipna", "ddof", "numeric_only"]
+    _parameters: ClassVar[list[str]] = ["frame", "skipna", "ddof", "numeric_only"]
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "skipna": True,
+        "ddof": 1,
+        "numeric_only": False,
+    }
+    _keyword_only: ClassVar[list[str]] = ["skipna", "ddof", "numeric_only"]
     operation = M.var
     _is_length_preserving = True
 
@@ -1919,23 +1954,23 @@ class VarColumns(Elemwise):
 
 
 class NUniqueColumns(Elemwise):
-    _parameters = ["frame", "axis", "dropna"]
-    _defaults = {"axis": 1, "dropna": True}
+    _parameters: ClassVar[list[str]] = ["frame", "axis", "dropna"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"axis": 1, "dropna": True}
     operation = M.nunique
 
 
 class Sqrt(Elemwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = np.sqrt
 
 
 class ExplodeSeries(Blockwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = M.explode
 
 
 class ExplodeFrame(ExplodeSeries):
-    _parameters = ["frame", "column"]
+    _parameters: ClassVar[list[str]] = ["frame", "column"]
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):
@@ -1943,8 +1978,8 @@ class ExplodeFrame(ExplodeSeries):
 
 
 class Drop(Elemwise):
-    _parameters = ["frame", "columns", "errors"]
-    _defaults = {"errors": "raise"}
+    _parameters: ClassVar[list[str]] = ["frame", "columns", "errors"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"errors": "raise"}
     _preserves_partitioning_information = True
 
     def _simplify_down(self):
@@ -1978,7 +2013,7 @@ def assign(df, *pairs):
 class Assign(Elemwise):
     """Column Assignment"""
 
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = staticmethod(assign)
 
     @functools.cached_property
@@ -2079,9 +2114,9 @@ class Assign(Elemwise):
 
 
 class Eval(Elemwise):
-    _parameters = ["frame", "_expr", "expr_kwargs"]
-    _defaults = {"expr_kwargs": {}}
-    _keyword_only = ["expr_kwargs"]
+    _parameters: ClassVar[list[str]] = ["frame", "_expr", "expr_kwargs"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"expr_kwargs": {}}
+    _keyword_only: ClassVar[list[str]] = ["expr_kwargs"]
     operation = M.eval
 
     @functools.cached_property
@@ -2090,7 +2125,7 @@ class Eval(Elemwise):
 
 
 class CaseWhen(Elemwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
 
     @functools.cached_property
     def caselist(self):
@@ -2122,7 +2157,7 @@ class CaseWhen(Elemwise):
 class Filter(Blockwise):
     _projection_passthrough = True
     _filter_passthrough = True
-    _parameters = ["frame", "predicate"]
+    _parameters: ClassVar[list[str]] = ["frame", "predicate"]
     operation = operator.getitem
     _preserves_partitioning_information = True
 
@@ -2175,7 +2210,7 @@ class Filter(Blockwise):
 class Projection(Elemwise):
     """Column Selection"""
 
-    _parameters = ["frame", "columns"]
+    _parameters: ClassVar[list[str]] = ["frame", "columns"]
     operation = operator.getitem
 
     @functools.cached_property
@@ -2250,7 +2285,7 @@ class Projection(Elemwise):
 class Index(Elemwise):
     """Column Selection"""
 
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = getattr
 
     @functools.cached_property
@@ -2289,7 +2324,7 @@ def _return_input(df, divisions=None):
 
 
 class ClearDivisions(Elemwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = staticmethod(_return_input)
     _preserves_partitioning_information = True
 
@@ -2298,7 +2333,7 @@ class ClearDivisions(Elemwise):
 
 
 class SetDivisions(Elemwise):
-    _parameters = ["frame", "divisions"]
+    _parameters: ClassVar[list[str]] = ["frame", "divisions"]
     operation = staticmethod(_return_input)
     _preserves_partitioning_information = True
 
@@ -2307,7 +2342,7 @@ class SetDivisions(Elemwise):
 
 
 class ResolveOverlappingDivisions(Expr):
-    _parameters = ["frame", "mins", "maxes", "lens"]
+    _parameters: ClassVar[list[str]] = ["frame", "mins", "maxes", "lens"]
 
     @functools.cached_property
     def _meta(self):
@@ -2370,7 +2405,7 @@ class ResolveOverlappingDivisions(Expr):
 class Lengths(Expr):
     """Returns a tuple of partition lengths"""
 
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
 
     @functools.cached_property
     def _meta(self):
@@ -2397,9 +2432,9 @@ class Lengths(Expr):
 class ResetIndex(Elemwise):
     """Reset the index of a Series or DataFrame"""
 
-    _parameters = ["frame", "drop", "name"]
-    _defaults = {"drop": False, "name": no_default}
-    _keyword_only = ["drop", "name"]
+    _parameters: ClassVar[list[str]] = ["frame", "drop", "name"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"drop": False, "name": no_default}
+    _keyword_only: ClassVar[list[str]] = ["drop", "name"]
     operation = M.reset_index
     _filter_passthrough = True
     _preserves_partitioning_information = True
@@ -2463,7 +2498,7 @@ class ResetIndex(Elemwise):
 
 
 class AddPrefixSeries(Elemwise):
-    _parameters = ["frame", "prefix"]
+    _parameters: ClassVar[list[str]] = ["frame", "prefix"]
     operation = M.add_prefix
     _filter_passthrough = True
     _preserves_partitioning_information = True
@@ -2477,7 +2512,7 @@ class AddPrefixSeries(Elemwise):
 
 
 class AddSuffixSeries(AddPrefixSeries):
-    _parameters = ["frame", "suffix"]
+    _parameters: ClassVar[list[str]] = ["frame", "suffix"]
     operation = M.add_suffix
 
     def _divisions(self):
@@ -2485,7 +2520,7 @@ class AddSuffixSeries(AddPrefixSeries):
 
 
 class AddPrefix(Elemwise):
-    _parameters = ["frame", "prefix"]
+    _parameters: ClassVar[list[str]] = ["frame", "prefix"]
     operation = M.add_prefix
 
     @functools.cached_property
@@ -2518,7 +2553,7 @@ class AddPrefix(Elemwise):
 
 
 class AddSuffix(AddPrefix):
-    _parameters = ["frame", "suffix"]
+    _parameters: ClassVar[list[str]] = ["frame", "suffix"]
     operation = M.add_suffix
 
     @functools.cached_property
@@ -2538,7 +2573,7 @@ class AddSuffix(AddPrefix):
 
 
 class AssignIndex(Elemwise):
-    _parameters = ["frame", "value"]
+    _parameters: ClassVar[list[str]] = ["frame", "value"]
     operation = staticmethod(methods.assign_index)
     _preserves_partitioning_information = True
 
@@ -2549,8 +2584,8 @@ class AssignIndex(Elemwise):
 class Head(Expr):
     """Take the first `n` rows of the first partition"""
 
-    _parameters = ["frame", "n", "npartitions"]
-    _defaults = {"n": 5, "npartitions": 1}
+    _parameters: ClassVar[list[str]] = ["frame", "n", "npartitions"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"n": 5, "npartitions": 1}
 
     @functools.cached_property
     def _meta(self):
@@ -2638,7 +2673,7 @@ class BlockwiseHead(Head, Blockwise):
     the first `n` rows of an entire collection.
     """
 
-    _parameters = ["frame", "n", "npartitions", "safe"]
+    _parameters: ClassVar[list[str]] = ["frame", "n", "npartitions", "safe"]
     _preserves_partitioning_information = True
 
     def _simplify_down(self):
@@ -2672,8 +2707,8 @@ class BlockwiseHeadIndex(BlockwiseHead):
 class Tail(Expr):
     """Take the last `n` rows of the last partition"""
 
-    _parameters = ["frame", "n"]
-    _defaults = {"n": 5}
+    _parameters: ClassVar[list[str]] = ["frame", "n"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"n": 5}
 
     @functools.cached_property
     def _meta(self):
@@ -2740,7 +2775,7 @@ class BlockwiseTailIndex(BlockwiseTail):
 
 
 class Binop(Elemwise):
-    _parameters = ["left", "right"]
+    _parameters: ClassVar[list[str]] = ["left", "right"]
 
     @functools.cached_property
     def _broadcastable(self):
@@ -2814,9 +2849,20 @@ class Add(Binop):
 
 
 class MethodOperator(Binop):
-    _parameters = ["name", "left", "right", "axis", "level", "fill_value"]
-    _defaults = {"axis": "columns", "level": None, "fill_value": None}
-    _keyword_only = ["axis", "level", "fill_value"]
+    _parameters: ClassVar[list[str]] = [
+        "name",
+        "left",
+        "right",
+        "axis",
+        "level",
+        "fill_value",
+    ]
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "axis": "columns",
+        "level": None,
+        "fill_value": None,
+    }
+    _keyword_only: ClassVar[list[str]] = ["axis", "level", "fill_value"]
 
     @property
     def _operator_repr(self):
@@ -2861,13 +2907,13 @@ class LT(Binop):
 
 
 class BinOpSeries(Binop):
-    _parameters = ["left", "right", "level", "fill_value"]
-    _defaults = {"fill_value": None, "level": None}
+    _parameters: ClassVar[list[str]] = ["left", "right", "level", "fill_value"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"fill_value": None, "level": None}
 
 
 class BinOpFrame(Binop):
-    _parameters = ["left", "right", "axis"]
-    _defaults = {"axis": 1}
+    _parameters: ClassVar[list[str]] = ["left", "right", "axis"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"axis": 1}
 
 
 class LTSeries(BinOpSeries):
@@ -2981,7 +3027,7 @@ class FloorDiv(Binop):
 
 
 class Unaryop(Elemwise):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
 
     def __str__(self):
         return f"{self._operator_repr} {self.frame}"
@@ -3022,7 +3068,7 @@ class Pos(Unaryop):
 class Partitions(Expr):
     """Select one or more partitions"""
 
-    _parameters = ["frame", "partitions"]
+    _parameters: ClassVar[list[str]] = ["frame", "partitions"]
 
     @functools.cached_property
     def _meta(self):
@@ -3122,7 +3168,7 @@ class PartitionsFiltered(Expr):
 
 
 class _DelayedExpr(Expr):
-    _parameters = ["obj"]
+    _parameters: ClassVar[list[str]] = ["obj"]
 
     def __str__(self):
         return f"{type(self).__name__}({self.obj})"
@@ -3357,8 +3403,8 @@ def optimize_blockwise_fusion(expr):
 
 
 class Diff(MapOverlap):
-    _parameters = ["frame", "periods"]
-    _defaults = {"periods": 1}
+    _parameters: ClassVar[list[str]] = ["frame", "periods"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"periods": 1}
     func = M.diff
     enforce_metadata = True
     transform_divisions = False
@@ -3390,7 +3436,7 @@ class Diff(MapOverlap):
 
 
 class FillnaCheck(Blockwise):
-    _parameters = ["frame", "method", "skip_check"]
+    _parameters: ClassVar[list[str]] = ["frame", "method", "skip_check"]
     operation = staticmethod(methods.fillna_check)
     _projection_passthrough = True
 
@@ -3405,8 +3451,8 @@ class FillnaCheck(Blockwise):
 
 
 class FFill(MapOverlap):
-    _parameters = ["frame", "limit"]
-    _defaults = {"limit": None}
+    _parameters: ClassVar[list[str]] = ["frame", "limit"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"limit": None}
     func = M.ffill
     enforce_metadata = True
     transform_divisions = False
@@ -3454,8 +3500,8 @@ class BFill(FFill):
 
 
 class Shift(MapOverlap):
-    _parameters = ["frame", "periods", "freq"]
-    _defaults = {"periods": 1, "freq": None}
+    _parameters: ClassVar[list[str]] = ["frame", "periods", "freq"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"periods": 1, "freq": None}
 
     func = M.shift
     enforce_metadata = True
@@ -3498,9 +3544,9 @@ class Shift(MapOverlap):
 
 
 class ShiftIndex(Blockwise):
-    _parameters = ["frame", "periods", "freq"]
-    _defaults = {"periods": 1, "freq": None}
-    _keyword_only = ["freq"]
+    _parameters: ClassVar[list[str]] = ["frame", "periods", "freq"]
+    _defaults: ClassVar[dict[str, AnyType]] = {"periods": 1, "freq": None}
+    _keyword_only: ClassVar[list[str]] = ["freq"]
     operation = M.shift
 
     def _divisions(self):
@@ -3595,7 +3641,7 @@ def _are_dtypes_shuffle_compatible(dtypes):
 
 
 class CombineFirstAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "other"]
+    _parameters: ClassVar[list[str]] = ["frame", "other"]
     _expr_cls = CombineFirst
 
     def _simplify_up(self, parent, dependents):
@@ -3618,29 +3664,35 @@ class CombineFirstAlign(MaybeAlignPartitions):
 
 class FillnaAlign(MaybeAlignPartitions):
     _projection_passthrough = True
-    _parameters = ["frame", "value"]
+    _parameters: ClassVar[list[str]] = ["frame", "value"]
     _expr_cls = Fillna
 
 
 class AlignAlignPartitions(MaybeAlignPartitions):
-    _parameters = ["frame", "other", "join", "axis", "fill_value"]
+    _parameters: ClassVar[list[str]] = ["frame", "other", "join", "axis", "fill_value"]
     _expr_cls = _Align
 
 
 class CombineSeriesAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "other", "func", "fill_value"]
+    _parameters: ClassVar[list[str]] = ["frame", "other", "func", "fill_value"]
     _expr_cls = CombineSeries
 
 
 class CombineFrameAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "other", "func", "fill_value", "overwrite"]
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "other",
+        "func",
+        "fill_value",
+        "overwrite",
+    ]
     _expr_cls = CombineSeries
 
 
 class FilterAlign(MaybeAlignPartitions):
     _projection_passthrough = True
     _filter_passthrough = True
-    _parameters = ["frame", "predicate"]
+    _parameters: ClassVar[list[str]] = ["frame", "predicate"]
     _expr_cls = Filter
 
     def _simplify_up(self, parent, dependents):
@@ -3648,7 +3700,7 @@ class FilterAlign(MaybeAlignPartitions):
 
 
 class AssignAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "column", "value"]
+    _parameters: ClassVar[list[str]] = ["frame", "column", "value"]
     _expr_cls = Assign
 
     def _simplify_up(self, parent, dependents):
@@ -3677,7 +3729,7 @@ class AssignAlign(MaybeAlignPartitions):
 
 
 class MaskAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "cond", "other"]
+    _parameters: ClassVar[list[str]] = ["frame", "cond", "other"]
     _expr_cls: AnyType = Mask
 
 
@@ -3686,7 +3738,7 @@ class WhereAlign(MaskAlign):
 
 
 class MapAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "other", "na_action", "meta"]
+    _parameters: ClassVar[list[str]] = ["frame", "other", "na_action", "meta"]
     _projection_passthrough = False
     _expr_cls = Map
 
@@ -3710,14 +3762,20 @@ class MapAlign(MaybeAlignPartitions):
 
 
 class MapIndexAlign(MapAlign):
-    _parameters = ["frame", "other", "na_action", "meta", "is_monotonic"]
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "other",
+        "na_action",
+        "meta",
+        "is_monotonic",
+    ]
 
     def _divisions(self):
         return (None,) * len(self.frame.divisions)
 
 
 class OpAlignPartitions(MaybeAlignPartitions):
-    _parameters = ["frame", "other", "op"]
+    _parameters: ClassVar[list[str]] = ["frame", "other", "op"]
     _projection_passthrough = True
 
     @functools.cached_property
@@ -3752,7 +3810,14 @@ class OpAlignPartitions(MaybeAlignPartitions):
 
 
 class MethodOperatorAlign(OpAlignPartitions):
-    _parameters = ["frame", "other", "op", "axis", "level", "fill_value"]
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "other",
+        "op",
+        "axis",
+        "level",
+        "fill_value",
+    ]
 
     @staticmethod
     def _op(frame, op, other, *args, **kwargs):
@@ -3760,7 +3825,7 @@ class MethodOperatorAlign(OpAlignPartitions):
 
 
 class UFuncAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "func", "meta", "kwargs"]
+    _parameters: ClassVar[list[str]] = ["frame", "func", "meta", "kwargs"]
     enforce_metadata = False
 
     def __str__(self):
@@ -3810,7 +3875,7 @@ class Fused(Blockwise):
         arguments should already be captured in the fused subgraphs.
     """
 
-    _parameters = ["exprs"]
+    _parameters: ClassVar[list[str]] = ["exprs"]
 
     @functools.cached_property
     def _meta(self):
