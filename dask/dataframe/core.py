@@ -41,7 +41,7 @@ def _concat(args, ignore_index=False):
     if not has_parallel_type(args[0]):
         try:
             return pd.Series(args)
-        except (TypeError, ValueError):
+        except (OverflowError, TypeError, ValueError):
             return args
     # We filter out empty partitions here because pandas frequently has
     # inconsistent dtypes in results between empty and non-empty frames.

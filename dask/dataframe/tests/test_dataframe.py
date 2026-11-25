@@ -1680,6 +1680,11 @@ def test_concat():
     assert len(x) == 0
 
 
+def test_concat_large_integers() -> None:
+    values = [10**350, 1]
+    assert list(_concat(values)) == values
+
+
 def test_known_divisions():
     assert d.known_divisions
     df = d.clear_divisions()
