@@ -41,7 +41,7 @@ def _concat(args, ignore_index=False):
     if not has_parallel_type(args[0]):
         try:
             return pd.Series(args)
-        except Exception:
+        except (TypeError, ValueError):
             return args
     # We filter out empty partitions here because pandas frequently has
     # inconsistent dtypes in results between empty and non-empty frames.
@@ -82,7 +82,14 @@ def _get_divisions_map_partitions(
             )
             if isinstance(divisions, pd.Index):
                 divisions = methods.tolist(divisions)
-        except Exception:
+        except (
+            ArithmeticError,
+            AttributeError,
+            IndexError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ):
             return divisions
         if not valid_divisions(divisions):
             divisions = [None] * (dfs[0].npartitions + 1)

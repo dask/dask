@@ -785,7 +785,7 @@ class Task(GraphNode):
                 from distributed.utils import iscoroutinefunction
 
                 self._is_coro = iscoroutinefunction(self.func)
-            except Exception:
+            except ImportError:
                 self._is_coro = False
         return self._is_coro
 

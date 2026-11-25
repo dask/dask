@@ -4516,7 +4516,7 @@ def test_map_partition_array(func):
     for pre in [lambda a: a, lambda a: a.x, lambda a: a.y, lambda a: a.index]:
         try:
             expected = func(pre(df))
-        except Exception:  # noqa: S112
+        except AttributeError:
             continue
         x = pre(ddf).map_partitions(func)
         assert_eq(x, expected, check_type=False)  # TODO: make check_type pass

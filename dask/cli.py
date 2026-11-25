@@ -172,7 +172,7 @@ def _register_command_ep(interface, entry_point):
     """
     try:
         command = entry_point.load()
-    except Exception as e:
+    except (AttributeError, ImportError) as e:
         warnings.warn(
             f"While registering the command with name '{entry_point.name}', an "
             f"exception occurred; {e}."

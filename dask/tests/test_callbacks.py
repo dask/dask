@@ -50,7 +50,7 @@ def test_finish_always_called():
     try:
         with MyCallback():
             get_sync(dsk, "x")
-    except Exception as e:
+    except ZeroDivisionError as e:
         assert isinstance(e, ZeroDivisionError)
     assert flag[0]
 
@@ -59,7 +59,7 @@ def test_finish_always_called():
     try:
         with MyCallback():
             get_threaded(dsk, "x")
-    except Exception as e:
+    except ZeroDivisionError as e:
         assert isinstance(e, ZeroDivisionError)
     assert flag[0]
 

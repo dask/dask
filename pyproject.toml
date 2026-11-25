@@ -132,7 +132,6 @@ ignore = [
     "RUF012",  # Mutable class default (395 findings)
     "C408",    # Unnecessary dict()/list()/tuple() call (204 findings)
     "RUF059",  # Unpacked variable never used (129 findings)
-    "BLE001",  # Blind except (42 findings)
     "SIM102",  # Collapsible if (36 findings)
 ]
 

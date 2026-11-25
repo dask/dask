@@ -61,7 +61,15 @@ def compute_meta(func, _dtype, *args, **kwargs):
                     meta = args_meta[0]
                 else:
                     return None
-            except Exception:
+            except (
+                ArithmeticError,
+                AssertionError,
+                AttributeError,
+                IndexError,
+                KeyError,
+                OSError,
+                RuntimeError,
+            ):
                 return None
 
         if _dtype and getattr(meta, "dtype", None) != _dtype:

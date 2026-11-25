@@ -277,7 +277,7 @@ class Elemwise(Blockwise):
                 dtype = apply_infer_dtype(
                     self.op, vals, {}, "elemwise", suggest_dtype=False
                 )
-            except Exception:
+            except (TypeError, ValueError):
                 raise NotImplementedError
             need_enforce_dtype = any(
                 not is_scalar_for_elemwise(a) and a.ndim == 0

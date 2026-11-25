@@ -146,9 +146,10 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                             f"Original Message: {e}"
                         )
                     except TypeError:
-                        raise e
+                        pass
                     else:
                         raise exc from e
+                    raise
 
             wrapper.__name__ = dispatch_name
             return wrapper

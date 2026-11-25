@@ -5173,7 +5173,7 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
             dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
         except OverflowError:
             raise
-        except Exception:
+        except (TypeError, ValueError):
             return NotImplemented
         need_enforce_dtype = any(
             not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args

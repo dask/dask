@@ -94,7 +94,7 @@ def meta_from_array(x, ndim=None, dtype=None):
                 meta = meta.reshape((0,) * ndim)
         if meta is np.ma.masked:
             meta = np.ma.array(np.empty((0,) * ndim, dtype=dtype or x.dtype), mask=True)
-    except Exception:
+    except (AttributeError, IndexError, TypeError, ValueError):
         meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
 
     if np.isscalar(meta):
@@ -160,7 +160,15 @@ def compute_meta(func, _dtype, *args, **kwargs):
                     meta = args_meta[0]
                 else:
                     return None
-            except Exception:
+            except (
+                ArithmeticError,
+                AssertionError,
+                AttributeError,
+                IndexError,
+                KeyError,
+                OSError,
+                RuntimeError,
+            ):
                 return None
 
         if _dtype and getattr(meta, "dtype", None) != _dtype:

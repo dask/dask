@@ -682,12 +682,12 @@ def takes_multiple_arguments(func, varargs=True):
 
     try:
         spec = getargspec(func)
-    except Exception:
+    except TypeError:
         return False
 
     try:
         is_constructor = spec.args[0] == "self" and isinstance(func, type)
-    except Exception:
+    except IndexError:
         is_constructor = False
 
     if varargs and spec.varargs:
@@ -1898,7 +1898,7 @@ def parse_timedelta(s, default="seconds"):
 def has_keyword(func, keyword):
     try:
         return keyword in inspect.signature(func).parameters
-    except Exception:
+    except (TypeError, ValueError):
         return False
 
 
@@ -1996,7 +1996,7 @@ def key_split(s):
             if result[0] == "<":
                 result = result.strip("<>").split()[0].split(".")[-1]
             return sys.intern(result)
-    except Exception:
+    except (AttributeError, IndexError, TypeError, ValueError):
         return "Other"
 
 
