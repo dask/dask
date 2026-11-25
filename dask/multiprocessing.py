@@ -117,13 +117,7 @@ def pack_exception(e, dumps):
     tb = _pack_traceback(exc_traceback)
     try:
         result = dumps((e, tb))
-    except (
-        AttributeError,
-        RecursionError,
-        TypeError,
-        ValueError,
-        pickle.PicklingError,
-    ) as exc:
+    except Exception as exc:  # noqa: BLE001
         _, _, exc_traceback = sys.exc_info()
         tb = _pack_traceback(exc_traceback)
         result = dumps((exc, tb))

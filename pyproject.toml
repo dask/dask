@@ -128,7 +128,7 @@ ignore = [
     "PLR1730",  # Replace `if` statement with `min()` or `max()`
     "PLR2004",  # Magic value used in comparison, consider replacing with a constant variable
     "PYI025",   # Use `from collections.abc import Set as AbstractSet` to avoid confusion with the `set` builtin"
-    "RUF012",  # Mutable class default
+    "RUF012",   # Mutable class default
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
