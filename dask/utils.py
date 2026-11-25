@@ -1909,7 +1909,8 @@ else:
 def has_keyword(func: Callable[..., Any], keyword: str) -> bool:
     try:
         return keyword in _keyword_signature(func).parameters
-    except Exception:
+    # Objects with a broken __signature__ metehod can raise any exception
+    except Exception:  # noqa: BLE001
         return False
 
 
