@@ -138,7 +138,7 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                 func = getattr(self, dispatch_name)
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     try:
                         exc = type(e)(
                             f"An error occurred while calling the {funcname(func)} "
@@ -146,10 +146,9 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                             f"Original Message: {e}"
                         )
                     except TypeError:
-                        pass
+                        raise e
                     else:
                         raise exc from e
-                    raise
 
             wrapper.__name__ = dispatch_name
             return wrapper
