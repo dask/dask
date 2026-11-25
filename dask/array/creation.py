@@ -1097,7 +1097,7 @@ def pad_reuse(array, pad_width, mode, **kwargs):
     """
 
     if mode in {"reflect", "symmetric"}:
-        reflect_type = kwargs.get("reflect", "even")
+        reflect_type = kwargs.get("reflect_type", "even")
         if reflect_type == "odd":
             raise NotImplementedError("`pad` does not support `reflect_type` of `odd`.")
         if reflect_type != "even":

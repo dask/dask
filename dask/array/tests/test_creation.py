@@ -857,6 +857,8 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "reflect", {}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "symmetric", {}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "reflect", {"reflect_type": "even"}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "symmetric", {"reflect_type": "even"}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "wrap", {}),
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
@@ -876,6 +878,16 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         assert_eq(np_r[pad_width:-pad_width], da_r[pad_width:-pad_width])
     else:
         assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize("mode", ["reflect", "symmetric"])
+def test_pad_reflect_type(mode):
+    da_a = da.arange(10, chunks=3)
+
+    with pytest.raises(NotImplementedError, match="odd"):
+        da.pad(da_a, 2, mode, reflect_type="odd")
+    with pytest.raises(ValueError, match="reflect_type"):
+        da.pad(da_a, 2, mode, reflect_type="foo")
 
 
 @pytest.mark.parametrize(
