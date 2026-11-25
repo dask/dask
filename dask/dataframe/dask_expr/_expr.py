@@ -2136,15 +2136,15 @@ class Filter(Blockwise):
             isinstance(parent, (FilterAlign, Filter))
             and not isinstance(self.frame, (FilterAlign, Filter))
             and not self.frame._filter_passthrough_available(self, dependents)
-            and is_filter_pushdown_available(
-                self, parent, dependents, allow_reduction=False
-            )
-        ):
             # We want to collect filters again when we can't move them
             # anymore. Otherwise, a chain of Filters might block Projections
             # We start with the first Filter, e.g. if my child isn't a filter
             # anymore. Filters above that don't know if the first Filter can
             # still move further
+            and is_filter_pushdown_available(
+                self, parent, dependents, allow_reduction=False
+            )
+        ):
             # We can only squash 2 filters together if the predicate of parent
             # does not directly depend on self, e.g. if
             # sum is in the predicate of parent, then removing self would
@@ -2155,14 +2155,14 @@ class Filter(Blockwise):
             ]
         if isinstance(parent, Projection):
             if self.frame._filter_passthrough_available(self, dependents) and (
+                # We can't push Projections through filters if the preceding operation
+                # allows us to push filters further down the graph because Projections
+                # block filter pushdown
                 not isinstance(self.frame, (FilterAlign, Filter))
                 or is_filter_pushdown_available(
                     self.frame, self, dependents, allow_reduction=False
                 )
             ):
-                # We can't push Projections through filters if the preceding operation
-                # allows us to push filters further down the graph because Projections
-                # block filter pushdown
                 return
 
             return plain_column_projection(self, parent, dependents)

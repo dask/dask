@@ -127,11 +127,12 @@ def merge_chunk(
                     rhs = rhs.assign(**{col: right.astype(dtype)})
 
     if (
-        len(args) and args[0] == "leftsemi" or kwargs.get("how") == "leftsemi"
-    ) and isinstance(rhs, (pd.DataFrame, pd.Series)):
-        # otherwise it's cudf
+        args and args[0] == "leftsemi" or kwargs.get("how") == "leftsemi"
+    ) and isinstance(
+        rhs, (pd.DataFrame, pd.Series)
+    ):  # otherwise it's cudf
         rhs = rhs.drop_duplicates()
-        if len(args):
+        if args:
             args[0] = "inner"
         else:
             kwargs["how"] = "inner"

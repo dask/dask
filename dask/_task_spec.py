@@ -220,12 +220,10 @@ def convert_legacy_task(
                 new = convert_legacy_task(None, a, all_keys)
             new_args.append(new)
         return Task(key, func, *new_args)
+
     try:
         if isinstance(task, (int, float, str, tuple)) and task in all_keys:
-            if key is None:
-                return Alias(task)
-            else:
-                return Alias(key, target=task)
+            return Alias(task) if key is None else Alias(key, target=task)
     except TypeError:
         # Unhashable
         pass

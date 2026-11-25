@@ -2409,8 +2409,9 @@ Expr={expr}"""
         divisions = tuple(mins) + (maxes[-1],)
         if not set_divisions:
             return divisions
+
         if len(mins) == len(self.divisions) - 1 and not any(
-            mins[i] >= maxes[i - 1] for i in range(1, len(mins))
+            min_ >= max_ for min_, max_ in zip(mins[1:], maxes[:-1], strict=True)
         ):
             return new_collection(expr.SetDivisions(self, divisions))
 
