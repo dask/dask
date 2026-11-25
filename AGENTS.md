@@ -4,7 +4,7 @@
 
 **Dask** is a flexible parallel computing library for dynamic task scheduling and analytics in Python. It provides high-level interfaces that mimic NumPy (arrays), Pandas (dataframes), and generic iterables (bags), with optional integration into the Distributed scheduler for cluster computing.
 
-- **Language**: Python 3.10–3.14 (including free-threaded/3.14t)
+- **Language**: Python 3.10–3.15 (including free-threaded 3.14t and 3.15t)
 - **Package name**: `dask`
 - **License**: BSD 3-Clause
 - **Repository**: https://github.com/dask/dask
@@ -122,7 +122,7 @@ with dask.config.set({"dataframe.shuffle.method": "p2p"}):
 The project uses **pixi** for dependency management. Install it from https://github.com/prefix-dev/pixi.
 
 ```bash
-# Default environment (Python 3.14 + all optional deps)
+# Default environment (Python 3.15 + all optional deps)
 pixi run test
 
 # Minimum dependency tests
@@ -304,7 +304,7 @@ from dask.typing import Key     # local submodules
 
 | Workflow | Purpose |
 |---|---|
-| `tests.yml` | Main test matrix (Python 3.10–3.14, multiple envs, scheduled reruns) |
+| `tests.yml` | Main test matrix (Python 3.10–3.15, multiple envs, scheduled reruns) |
 | `conda.yml` | Conda packaging |
 | `pre-commit.yml` | Linting on PRs |
 | `upstream.yml` | Test against latest upstream packages |

@@ -232,7 +232,7 @@ python-freethreading = "=3.15"
 platforms = ["linux-64", "osx-arm64"]
 
 [feature.nightly.dependencies]
-python = "=3.14"
+python = "=3.15"
 # Need nodejs to build bokeh from sources.
 # Can't use bokeh nightlies from the bokeh/label/dev channel because
 # it would downgrade NumPy to the latest release (and building
@@ -291,14 +291,14 @@ doctest = "pytest --doctest-modules --ignore-glob='*/test_*.py' --ignore=dask/ar
 test-array-expr = { cmd = "pytest --cov --cov-report=xml --junit-xml=pytest.xml --dist loadgroup -n auto --runslow --runarrayexpr", env = { DASK_ARRAY__QUERY_PLANNING = "True" } }
 
 [feature.lint.dependencies]
-python = "=3.14"
+python = "=3.15"
 pre-commit = "*"
 
 [feature.lint.tasks]
 lint = "pre-commit run --all-files"
 
 [feature.build.dependencies]
-python = "=3.14"
+python = "=3.15"
 conda-build = "*"
 anaconda-client = "*"
 
