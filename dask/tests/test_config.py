@@ -199,11 +199,12 @@ def test_collect_yaml_permission_errors(tmp_path, kind):
         assert config == expected
 
 
-def test_collect_yaml_malformed_file(tmp_path):
-    (tmp_path / "a.yaml").write_bytes(b"{")
+@pytest.mark.parametrize("content", [b"{", b"a: 2026-13-01", b"a: !!int invalid"])
+def test_collect_yaml_malformed_file(tmp_path: pathlib.Path, content: bytes) -> None:
+    (tmp_path / "a.yaml").write_bytes(content)
 
     with pytest.raises(ValueError, match=r"a\.yaml' is malformed.*"):
-        list(collect_yaml(paths=[tmp_path]))
+        list(collect_yaml(paths=[str(tmp_path)]))
 
 
 def test_collect_yaml_invalid_encoding(tmp_path):
