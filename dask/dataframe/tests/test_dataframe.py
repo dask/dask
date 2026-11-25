@@ -4542,9 +4542,7 @@ def test_transform_divisions_unexpected_user_error():
         return x + 1
 
     assert (
-        _get_divisions_map_partitions(
-            False, True, [idx], raise_on_divisions, [idx], {}
-        )
+        _get_divisions_map_partitions(False, True, [idx], raise_on_divisions, [idx], {})
         == idx.divisions
     )
     result = elemwise(raise_on_divisions, idx, transform_divisions=True)
