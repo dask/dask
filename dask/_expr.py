@@ -7,7 +7,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias
 
 import toolz
 
@@ -56,8 +56,8 @@ def _unpack_collections(o):
 
 
 class Expr:
-    _parameters: list[str] = []
-    _defaults: dict[str, Any] = {}
+    _parameters: ClassVar[list[str]] = []
+    _defaults: ClassVar[dict[str, Any]] = {}
 
     _pickle_functools_cache: bool = True
 
@@ -969,7 +969,7 @@ def optimize_until(expr: Expr, stage: OptimizerStage) -> Expr:
 class LLGExpr(Expr):
     """Low Level Graph Expression"""
 
-    _parameters = ["dsk"]
+    _parameters: ClassVar[list[str]] = ["dsk"]
 
     def __dask_keys__(self):
         return list(self.operand("dsk"))
@@ -979,14 +979,14 @@ class LLGExpr(Expr):
 
 
 class HLGExpr(Expr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "dsk",
         "low_level_optimizer",
         "output_keys",
         "postcompute",
         "_cached_optimized",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "low_level_optimizer": None,
         "output_keys": None,
         "postcompute": None,
@@ -1287,7 +1287,7 @@ class _ExprSequence(Expr):
 class CompositeExpr(Expr):
     """Private expression grouping many child expressions into one collection."""
 
-    _parameters = ["collection"]
+    _parameters: ClassVar[list[str]] = ["collection"]
 
     @property
     def collection(self):
@@ -1320,7 +1320,7 @@ class _AnnotationsTombstone: ...
 
 
 class FinalizeCompute(Expr):
-    _parameters = ["expr"]
+    _parameters: ClassVar[list[str]] = ["expr"]
 
     def _simplify_down(self):
         return self.expr.finalize_compute()
@@ -1417,8 +1417,13 @@ class ProhibitReuse(Expr):
     This can be used to break a common subexpression apart.
     """
 
-    _parameters = ["expr"]
-    _ALLOWED_TYPES = [HLGExpr, LLGExpr, HLGFinalizeCompute, _HLGExprSequence]
+    _parameters: ClassVar[list[str]] = ["expr"]
+    _ALLOWED_TYPES: ClassVar[list[type[Expr]]] = [
+        HLGExpr,
+        LLGExpr,
+        HLGFinalizeCompute,
+        _HLGExprSequence,
+    ]
 
     def __dask_keys__(self):
         return self._modify_keys(self.expr.__dask_keys__())

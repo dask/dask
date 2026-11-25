@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 from itertools import product
 from numbers import Integral
+from typing import ClassVar
 
 import numpy as np
 from toolz import pluck
@@ -380,7 +381,7 @@ class Slice(ArrayExpr):
 
 
 class SliceSlicesIntegers(Slice):
-    _parameters = ["array", "index", "allow_getitem_optimization"]
+    _parameters: ClassVar[list[str]] = ["array", "index", "allow_getitem_optimization"]
 
     @functools.cached_property
     def chunks(self):
@@ -430,7 +431,12 @@ class SliceSlicesIntegers(Slice):
 
 
 class SlicesWrapNone(SliceSlicesIntegers):
-    _parameters = ["array", "index", "allow_getitem_optimization", "where_none"]
+    _parameters: ClassVar[list[str]] = [
+        "array",
+        "index",
+        "allow_getitem_optimization",
+        "where_none",
+    ]
 
     @functools.cached_property
     def chunks(self):
@@ -467,7 +473,7 @@ class SlicesWrapNone(SliceSlicesIntegers):
 
 
 class TakeUnknownOneChunk(Slice):
-    _parameters = ["array", "index", "axis"]
+    _parameters: ClassVar[list[str]] = ["array", "index", "axis"]
 
     @functools.cached_property
     def chunks(self):

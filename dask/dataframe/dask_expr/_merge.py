@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import math
 import operator
+from typing import Any, ClassVar
 
 import numpy as np
 from toolz import merge_sorted, unique
@@ -64,7 +65,7 @@ class Merge(Expr):
     Shuffle
     """
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "how",
@@ -78,7 +79,7 @@ class Merge(Expr):
         "_npartitions",
         "broadcast",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "how": "inner",
         "left_on": None,
         "right_on": None,
@@ -517,7 +518,7 @@ class Merge(Expr):
 
 
 class HashJoinP2P(Merge, PartitionsFiltered):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "how",
@@ -532,7 +533,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         "shuffle_right_on",
         "_npartitions",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "how": "inner",
         "left_on": None,
         "right_on": None,
@@ -682,7 +683,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
 
 
 class BroadcastJoin(Merge, PartitionsFiltered):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "how",
@@ -694,7 +695,7 @@ class BroadcastJoin(Merge, PartitionsFiltered):
         "indicator",
         "_partitions",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "how": "inner",
         "left_on": None,
         "right_on": None,
@@ -903,8 +904,8 @@ class BlockwiseMerge(Merge, Blockwise):
 
 
 class JoinRecursive(Expr):
-    _parameters = ["frames", "how"]
-    _defaults = {"right_index": True, "how": "outer"}
+    _parameters: ClassVar[list[str]] = ["frames", "how"]
+    _defaults: ClassVar[dict[str, Any]] = {"right_index": True, "how": "outer"}
 
     @functools.cached_property
     def _meta(self):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import Any, ClassVar
 
 import numpy as np
 from pandas.core.dtypes.common import is_datetime64_any_dtype, is_timedelta64_dtype
@@ -24,8 +25,13 @@ from dask.dataframe.methods import (
 
 
 class DescribeNumeric(Reduction):
-    _parameters = ["frame", "split_every", "percentiles", "percentile_method"]
-    _defaults = {
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "split_every",
+        "percentiles",
+        "percentile_method",
+    ]
+    _defaults: ClassVar[dict[str, Any]] = {
         "percentiles": None,
         "split_every": None,
         "percentile_method": "default",
@@ -77,8 +83,16 @@ class DescribeNumeric(Reduction):
 
 
 class DescribeNumericAggregate(Blockwise):
-    _parameters = ["name", "is_timedelta_col", "is_datetime_col", "unit"]
-    _defaults = {"is_timedelta_col": False, "is_datetime_col": False}
+    _parameters: ClassVar[list[str]] = [
+        "name",
+        "is_timedelta_col",
+        "is_datetime_col",
+        "unit",
+    ]
+    _defaults: ClassVar[dict[str, Any]] = {
+        "is_timedelta_col": False,
+        "is_datetime_col": False,
+    }
 
     def _broadcast_dep(self, dep):
         return dep.npartitions == 1
@@ -91,7 +105,7 @@ class DescribeNumericAggregate(Blockwise):
 
 
 class DescribeNonNumeric(DescribeNumeric):
-    _parameters = ["frame", "split_every"]
+    _parameters: ClassVar[list[str]] = ["frame", "split_every"]
 
     def _lower(self):
         frame = self.frame
@@ -106,8 +120,8 @@ class DescribeNonNumeric(DescribeNumeric):
 
 
 class DescribeNonNumericAggregate(DescribeNumericAggregate):
-    _parameters = ["name"]
-    _defaults = {}
+    _parameters: ClassVar[list[str]] = ["name"]
+    _defaults: ClassVar[dict[str, Any]] = {}
 
     @staticmethod
     def operation(name, *stats):

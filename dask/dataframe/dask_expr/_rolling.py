@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 from collections import namedtuple
 from numbers import Integral
+from typing import Any, ClassVar
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
@@ -43,7 +44,7 @@ def _rolling_agg(
 
 
 class RollingReduction(Expr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "window",
         "kwargs",
@@ -52,7 +53,7 @@ class RollingReduction(Expr):
         "groupby_kwargs",
         "groupby_slice",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "kwargs": None,
         "how_args": (),
         "how_kwargs": None,
@@ -154,7 +155,7 @@ class RollingReduction(Expr):
 
 
 class RollingAggregation(Blockwise):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "window",
         "kwargs",
