@@ -209,6 +209,15 @@ def test_collect_yaml_malformed_file(tmp_path):
     assert "original error message" in str(rec.value)
 
 
+def test_collect_yaml_invalid_encoding(tmp_path):
+    (tmp_path / "a.yaml").write_bytes(b"\xff\xfe: 1\n")
+
+    with pytest.raises(ValueError) as rec:
+        list(collect_yaml(paths=[tmp_path]))
+    assert "a.yaml" in str(rec.value)
+    assert "is malformed" in str(rec.value)
+
+
 def test_collect_yaml_no_top_level_dict(tmp_path):
     (tmp_path / "a.yaml").write_bytes(b"[1234]")
 

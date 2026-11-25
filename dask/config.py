@@ -181,7 +181,7 @@ def _load_config_file(path: str) -> dict | None:
     except OSError:
         # Ignore permission errors
         return None
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, UnicodeDecodeError) as exc:
         raise ValueError(
             f"A dask config file at {path!r} is malformed, original error "
             f"message:\n\n{exc}"
