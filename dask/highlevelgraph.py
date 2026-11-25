@@ -167,10 +167,9 @@ class Layer(Graph):
                 out[k] = self[k]
                 ret_deps[k] = self.get_dependencies(k, all_hlg_keys)
                 for d in ret_deps[k]:
-                    if d not in seen:
-                        if d in self:
-                            seen.add(d)
-                            work.add(d)
+                    if d not in seen and d in self:
+                        seen.add(d)
+                        work.add(d)
 
             return MaterializedLayer(out, annotations=self.annotations), ret_deps
         else:

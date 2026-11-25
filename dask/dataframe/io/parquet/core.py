@@ -351,7 +351,7 @@ def create_metadata_file(
     # Optionally compute the result
     if compute:
         if compute_kwargs is None:
-            compute_kwargs = dict()
+            compute_kwargs = {}
         out = out.compute(**compute_kwargs)
     return out
 

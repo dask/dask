@@ -27,7 +27,7 @@ def test_keepdims_wrapper_no_axis():
     rwf = summer_wrapped(a, keepdims=False)
 
     assert r.ndim == 0
-    assert r.shape == tuple()
+    assert r.shape == ()
     assert r == 276
 
     assert rw.ndim == 4
@@ -35,7 +35,7 @@ def test_keepdims_wrapper_no_axis():
     assert (rw == 276).all()
 
     assert rwf.ndim == 0
-    assert rwf.shape == tuple()
+    assert rwf.shape == ()
     assert rwf == 276
 
 

@@ -1185,7 +1185,7 @@ def test_fused_keys_max_length():  # generic fix for gh-5999
         "b": 2,
     }
 
-    fused, deps = fuse(d, rename_keys=True)
+    fused, _deps = fuse(d, rename_keys=True)
     for key in fused:
         assert len(key) < 150
 

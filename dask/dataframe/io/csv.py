@@ -934,7 +934,7 @@ def to_csv(
         )
     if compute:
         if compute_kwargs is None:
-            compute_kwargs = dict()
+            compute_kwargs = {}
 
         if scheduler is not None:
             warn(

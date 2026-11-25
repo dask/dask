@@ -194,9 +194,9 @@ def unpack_collections(expr, _return_collections=True):
             (name,) = expr.__dask_keys__()
             return TaskRef(name), (expr,)
 
-    if type(expr) is type(iter(list())):
+    if type(expr) is type(iter([])):
         expr = list(expr)
-    elif type(expr) is type(iter(tuple())):
+    elif type(expr) is type(iter(())):
         expr = tuple(expr)
     elif type(expr) is type(iter(set())):
         expr = set(expr)
@@ -348,9 +348,9 @@ def to_task_dask(expr):
         (name,) = expr.__dask_keys__()
         return name, expr.__dask_graph__()
 
-    if type(expr) is type(iter(list())):
+    if type(expr) is type(iter([])):
         expr = list(expr)
-    elif type(expr) is type(iter(tuple())):
+    elif type(expr) is type(iter(())):
         expr = tuple(expr)
     elif type(expr) is type(iter(set())):
         expr = set(expr)

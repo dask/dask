@@ -220,10 +220,9 @@ def _wrap_expr_method_operator(name, class_):
             ) and not is_dask_collection(other):
                 other = self._create_alignable_frame(other)
 
-            if axis in (1, "columns"):
-                if isinstance(other, Series):
-                    msg = f"Unable to {name} dd.Series with axis=1"
-                    raise ValueError(msg)
+            if axis in (1, "columns") and isinstance(other, Series):
+                msg = f"Unable to {name} dd.Series with axis=1"
+                raise ValueError(msg)
 
             frame = self
             if isinstance(other, FrameBase) and not expr.are_co_aligned(
@@ -2276,9 +2275,8 @@ Expr={expr}"""
         if split_every is not None and split_every < 2 and split_every is not False:
             raise ValueError("split_every must be at least 2")
 
-        if combine is None:
-            if combine_kwargs:
-                raise ValueError("`combine_kwargs` provided with no `combine`")
+        if combine is None and combine_kwargs:
+            raise ValueError("`combine_kwargs` provided with no `combine`")
 
         chunk_kwargs = chunk_kwargs.copy() if chunk_kwargs else {}
         chunk_kwargs.update(kwargs)
@@ -2411,9 +2409,11 @@ Expr={expr}"""
         divisions = tuple(mins) + (maxes[-1],)
         if not set_divisions:
             return divisions
-        if len(mins) == len(self.divisions) - 1:
-            if not any(mins[i] >= maxes[i - 1] for i in range(1, len(mins))):
-                return new_collection(expr.SetDivisions(self, divisions))
+
+        if len(mins) == len(self.divisions) - 1 and not any(
+            min_ >= max_ for min_, max_ in zip(mins[1:], maxes[:-1], strict=True)
+        ):
+            return new_collection(expr.SetDivisions(self, divisions))
 
         return new_collection(expr.ResolveOverlappingDivisions(self, mins, maxes, lens))
 
@@ -2849,13 +2849,14 @@ class DataFrame(FrameBase):
                 continue
 
             elif isinstance(v, (Scalar, Series)):
-                if isinstance(v, Series):
-                    if not expr.are_co_aligned(result.expr, v.expr):
-                        if len(args) > 0:
-                            result = expr.Assign(result, *args)
-                            args = []
-                        result = new_collection(expr.AssignAlign(result, k, v.expr))
-                        continue
+                if isinstance(v, Series) and not expr.are_co_aligned(
+                    result.expr, v.expr
+                ):
+                    if len(args) > 0:
+                        result = expr.Assign(result, *args)
+                        args = []
+                    result = new_collection(expr.AssignAlign(result, k, v.expr))
+                    continue
 
             elif not isinstance(v, FrameBase) and isinstance(v, Hashable):
                 pass
@@ -4244,13 +4245,12 @@ class Series(FrameBase):
 
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=None):
-        if isinstance(arg, Series):
-            if not expr.are_co_aligned(self.expr, arg.expr):
-                if meta is None:
-                    warnings.warn(meta_warning(meta, method="map"))
-                return new_collection(
-                    expr.MapAlign(self, arg, na_action=na_action, meta=meta)
-                )
+        if isinstance(arg, Series) and not expr.are_co_aligned(self.expr, arg.expr):
+            if meta is None:
+                warnings.warn(meta_warning(meta, method="map"))
+            return new_collection(
+                expr.MapAlign(self, arg, na_action=na_action, meta=meta)
+            )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta, method="map"))
@@ -4804,13 +4804,12 @@ class Index(Series):
         divisions to the output.
 
         """
-        if isinstance(arg, Series):
-            if not expr.are_co_aligned(self.expr, arg.expr):
-                if meta is None:
-                    warnings.warn(meta_warning(meta, method="map"))
-                return new_collection(
-                    expr.MapIndexAlign(self, arg, na_action, meta, is_monotonic)
-                )
+        if isinstance(arg, Series) and not expr.are_co_aligned(self.expr, arg.expr):
+            if meta is None:
+                warnings.warn(meta_warning(meta, method="map"))
+            return new_collection(
+                expr.MapIndexAlign(self, arg, na_action, meta, is_monotonic)
+            )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta, method="map"))
@@ -5395,7 +5394,7 @@ def read_parquet(
 
     if filters is not None:
         for filter in flatten(filters, container=list):
-            col, op, val = filter
+            _col, op, val = filter
             if op == "in" and not isinstance(val, (set, list, tuple)):
                 raise TypeError("Value of 'in' filter must be a list, set or tuple.")
 
@@ -6482,12 +6481,11 @@ def handle_out(out, result):
             f"out={type(out)}, result={type(result)}"
         )
 
-    if isinstance(out, DataFrame):
-        if len(out.columns) != len(result.columns):
-            raise ValueError(
-                "Mismatched columns count between result and out parameter. "
-                f"out={len(out.columns)}, result={len(result.columns)}"
-            )
+    if isinstance(out, DataFrame) and len(out.columns) != len(result.columns):
+        raise ValueError(
+            "Mismatched columns count between result and out parameter. "
+            f"out={len(out.columns)}, result={len(result.columns)}"
+        )
 
     if isinstance(out, (Series, DataFrame, Scalar)):
         out._expr = result._expr

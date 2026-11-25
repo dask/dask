@@ -186,13 +186,13 @@ def plot_tasks(
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh.models import HoverTool
 
-    defaults = dict(
-        title="Profile Results",
-        tools="hover,save,reset,xwheel_zoom,xpan",
-        toolbar_location="above",
-        width=800,
-        height=300,
-    )
+    defaults = {
+        "title": "Profile Results",
+        "tools": "hover,save,reset,xwheel_zoom,xpan",
+        "toolbar_location": "above",
+        "width": 800,
+        "height": 300,
+    }
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
@@ -289,13 +289,13 @@ def plot_resources(results, start_time, end_time, palette="Viridis", **kwargs):
     from bokeh import palettes
     from bokeh.models import LinearAxis, Range1d
 
-    defaults = dict(
-        title="Profile Results",
-        tools="save,reset,xwheel_zoom,xpan",
-        toolbar_location="above",
-        width=800,
-        height=300,
-    )
+    defaults = {
+        "title": "Profile Results",
+        "tools": "save,reset,xwheel_zoom,xpan",
+        "toolbar_location": "above",
+        "width": 800,
+        "height": 300,
+    }
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
@@ -397,13 +397,13 @@ def plot_cache(
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh.models import HoverTool
 
-    defaults = dict(
-        title="Profile Results",
-        tools="hover,save,reset,wheel_zoom,xpan",
-        toolbar_location="above",
-        width=800,
-        height=300,
-    )
+    defaults = {
+        "title": "Profile Results",
+        "tools": "hover,save,reset,wheel_zoom,xpan",
+        "toolbar_location": "above",
+        "width": 800,
+        "height": 300,
+    }
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")

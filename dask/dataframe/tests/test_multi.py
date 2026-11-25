@@ -532,7 +532,7 @@ def test_merge_asof_on_left_right(left_col, right_col):
 
 def test_merge_asof_with_various_npartitions():
     # https://github.com/dask/dask/issues/8999
-    df = pd.DataFrame(dict(ts=[pd.to_datetime("1-1-2020")] * 3, foo=[1, 2, 3]))
+    df = pd.DataFrame({"ts": [pd.to_datetime("1-1-2020")] * 3, "foo": [1, 2, 3]})
     expected = pd.merge_asof(left=df, right=df, on="ts")
 
     for npartitions in range(1, 5):
@@ -1497,12 +1497,12 @@ def test_merge_by_multiple_columns(how, shuffle_method):
     "kwargs",
     [
         {},
-        dict(id_vars="int"),
-        dict(value_vars="int"),
-        dict(value_vars=["obj", "int"], var_name="myvar"),
-        dict(id_vars="s1", value_vars=["obj", "int"], value_name="myval"),
-        dict(value_vars=["obj", "s1"]),
-        dict(value_vars=["s1", "s2"]),
+        {"id_vars": "int"},
+        {"value_vars": "int"},
+        {"value_vars": ["obj", "int"], "var_name": "myvar"},
+        {"id_vars": "s1", "value_vars": ["obj", "int"], "value_name": "myval"},
+        {"value_vars": ["obj", "s1"]},
+        {"value_vars": ["s1", "s2"]},
     ],
 )
 def test_melt(kwargs):

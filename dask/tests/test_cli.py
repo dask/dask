@@ -90,7 +90,7 @@ def test_config_set_value(
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(yaml.dump(expected_conf))
     else:
-        expected_conf = dict()
+        expected_conf = {}
         assert not config_file.exists()
 
     cmd = ["fizz.buzz", str(value)]

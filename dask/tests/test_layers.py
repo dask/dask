@@ -180,7 +180,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
     with (
         cluster(scheduler_kwargs={"plugins": [SchedulerImportCheck(lib)]}) as (
             scheduler,
-            workers,
+            _workers,
         ),
         Client(scheduler["address"], loop=loop) as c,
     ):

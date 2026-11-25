@@ -51,7 +51,7 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200, sizes=None):
     sizes = sizes or draw_sizes(shape, size=size)
     y, x = grid_points(chunks, sizes)
 
-    lines, (min_x, max_x, min_y, max_y) = svg_grid(
+    lines, (_min_x, max_x, _min_y, max_y) = svg_grid(
         x, y, offset=offset, skew=skew, size=size
     )
 
@@ -91,7 +91,7 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
     x, y, z = grid_points(chunks, sizes)
     ox, oy = offset
 
-    xy, (mnx, mxx, mny, mxy) = svg_grid(
+    xy, (mnx, mxx, _mny, mxy) = svg_grid(
         x / 1.7, y, offset=(ox + 10, oy + 0), skew=(1, 0), size=size
     )
 

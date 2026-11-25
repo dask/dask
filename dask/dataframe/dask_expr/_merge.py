@@ -209,16 +209,14 @@ class Merge(Expr):
 
     @property
     def _bcast_left(self):
-        if self.operand("_npartitions") is not None:
-            if self.broadcast_side == "right":
-                return Repartition(self.left, new_partitions=self._npartitions)
+        if self.operand("_npartitions") is not None and self.broadcast_side == "right":
+            return Repartition(self.left, new_partitions=self._npartitions)
         return self.left
 
     @property
     def _bcast_right(self):
-        if self.operand("_npartitions") is not None:
-            if self.broadcast_side == "left":
-                return Repartition(self.right, new_partitions=self._npartitions)
+        if self.operand("_npartitions") is not None and self.broadcast_side == "left":
+            return Repartition(self.right, new_partitions=self._npartitions)
         return self.right
 
     def _divisions(self):
@@ -586,8 +584,8 @@ class HashJoinP2P(Merge, PartitionsFiltered):
 
         transfer_name_left = f"hash-join-transfer-{token_left}"
         transfer_name_right = f"hash-join-transfer-{token_right}"
-        transfer_keys_left = list()
-        transfer_keys_right = list()
+        transfer_keys_left = []
+        transfer_keys_right = []
         func = create_assign_index_merge_transfer()
         for i in range(self.left.npartitions):
             t = Task(

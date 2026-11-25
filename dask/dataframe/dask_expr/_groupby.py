@@ -840,7 +840,7 @@ class NUnique(SingleAggregation):
     def chunk(df, *by, **kwargs):
         if df.ndim == 1:
             df = df.to_frame()
-            kwargs = dict(name=df.columns[0], levels=_determine_levels(by))
+            kwargs = {"name": df.columns[0], "levels": _determine_levels(by)}
         return _nunique_df_chunk(df, *by, **kwargs)
 
     @functools.cached_property
@@ -922,12 +922,11 @@ class GroupByApply(Expr, GroupByBase):
 
     @functools.cached_property
     def need_to_shuffle(self):
-        if not any(isinstance(b, Expr) for b in self.by):
-            if any(
-                set(self._by_columns) >= set(cols)
-                for cols in self.frame.unique_partition_mapping_columns_from_shuffle
-            ):
-                return False
+        if not any(isinstance(b, Expr) for b in self.by) and any(
+            set(self._by_columns) >= set(cols)
+            for cols in self.frame.unique_partition_mapping_columns_from_shuffle
+        ):
+            return False
 
         return any(div is None for div in self.frame.divisions) or not any(
             _contains_index_name(self.frame._meta.index.name, b) for b in self.by
@@ -2253,7 +2252,7 @@ class SeriesGroupBy(GroupBy):
             IdxMin,
             split_every=None,
             split_out=split_out,
-            chunk_kwargs=dict(skipna=skipna),
+            chunk_kwargs={"skipna": skipna},
         )
 
     def idxmax(
@@ -2269,7 +2268,7 @@ class SeriesGroupBy(GroupBy):
             IdxMax,
             split_every=split_every,
             split_out=split_out,
-            chunk_kwargs=dict(skipna=skipna),
+            chunk_kwargs={"skipna": skipna},
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)

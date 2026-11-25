@@ -221,7 +221,7 @@ def to_hdf(
         lock = get_scheduler_lock(df, scheduler=scheduler)
     elif lock:
         assert isinstance(lock, SupportsLock)
-    dsk = dict()
+    dsk = {}
 
     i_name = name_function(0)
     kwargs.update(

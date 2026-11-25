@@ -166,7 +166,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None, keys=None):
     if cache is None:
         cache = config.get("cache", None)
     if cache is None:
-        cache = dict()
+        cache = {}
     if keys is None:
         keys = list(set(dsk) - set(cache))
     dsk = convert_legacy_graph(dsk, all_keys=set(dsk) | set(cache))

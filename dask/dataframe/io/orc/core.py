@@ -78,7 +78,7 @@ def read_orc(
 
     # Process file path(s)
     storage_options = storage_options or {}
-    fs, fs_token, paths = get_fs_token_paths(
+    fs, _fs_token, paths = get_fs_token_paths(
         path, mode="rb", storage_options=storage_options
     )
 
@@ -216,7 +216,7 @@ def to_orc(
     # Compute or return future
     if compute:
         if compute_kwargs is None:
-            compute_kwargs = dict()
+            compute_kwargs = {}
         return compute_as_if_collection(DataFrame, graph, part_tasks, **compute_kwargs)
 
     from dask.dataframe import from_graph

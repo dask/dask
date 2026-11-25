@@ -462,7 +462,7 @@ def test_foldby():
 
 
 def test_foldby_tree_reduction():
-    dsk = list()
+    dsk = []
     for n in [1, 7, 32]:
         b = db.from_sequence(range(100), npartitions=n)
         c = b.foldby(iseven, add)
@@ -761,13 +761,13 @@ def test_from_s3():
     )
 
     # test compressed data
-    e = db.read_text("s3://tip-data/t*.gz", storage_options=dict(anon=True))
+    e = db.read_text("s3://tip-data/t*.gz", storage_options={"anon": True})
     assert e.take(5) == five_tips
 
     # test multiple keys in bucket
     c = db.read_text(
         ["s3://tip-data/tips.gz", "s3://tip-data/tips.json", "s3://tip-data/tips.csv"],
-        storage_options=dict(anon=True),
+        storage_options={"anon": True},
     )
     assert c.npartitions == 3
 

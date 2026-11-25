@@ -216,8 +216,8 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         product(*(range(len(c)) for i, c in enumerate(chunks) if i != axis))
     )
 
-    intermediates = dict()
-    merges = dict()
+    intermediates = {}
+    merges = {}
     dtype = np.min_scalar_type(max(*chunks[axis], chunk_size_limit))
     split_name = f"shuffle-split-{token}"
     slices = [slice(None)] * len(chunks)

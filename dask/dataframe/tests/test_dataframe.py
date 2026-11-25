@@ -2428,7 +2428,7 @@ def test_from_delayed_lazy_if_meta_provided():
         raise RuntimeError()
 
     tasks = [raise_exception()]
-    ddf = dd.from_delayed(tasks, meta=dict(a=float))
+    ddf = dd.from_delayed(tasks, meta={"a": float})
 
     with pytest.raises(RuntimeError):
         ddf.compute()
@@ -2437,9 +2437,9 @@ def test_from_delayed_lazy_if_meta_provided():
 def test_fillna_duplicate_index():
     @dask.delayed
     def f():
-        return pd.DataFrame(dict(a=[1.0], b=[np.nan]))
+        return pd.DataFrame({"a": [1.0], "b": [np.nan]})
 
-    ddf = dd.from_delayed([f(), f()], meta=dict(a=float, b=float))
+    ddf = dd.from_delayed([f(), f()], meta={"a": float, "b": float})
     ddf.b = ddf.b.fillna(ddf.a)
     ddf.compute()
 
@@ -2634,9 +2634,9 @@ def test_reduction_method_split_every():
         chunk,
         aggregate=agg,
         combine=combine,
-        chunk_kwargs=dict(constant=1.0),
-        combine_kwargs=dict(constant=2.0),
-        aggregate_kwargs=dict(constant=3.0),
+        chunk_kwargs={"constant": 1.0},
+        combine_kwargs={"constant": 2.0},
+        aggregate_kwargs={"constant": 3.0},
         split_every=n,
     )
 
@@ -2670,9 +2670,9 @@ def test_reduction_method_split_every():
             chunk,
             aggregate=agg,
             split_every=3,
-            chunk_kwargs=dict(constant=1.0),
-            combine_kwargs=dict(constant=2.0),
-            aggregate_kwargs=dict(constant=3.0),
+            chunk_kwargs={"constant": 1.0},
+            combine_kwargs={"constant": 2.0},
+            aggregate_kwargs={"constant": 3.0},
         )
 
 
@@ -4014,7 +4014,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
     dsk = dropped.__dask_optimize__(dropped.dask, dropped.__dask_keys__())
     from dask.core import get_deps
 
-    dependencies, dependents = get_deps(dsk)
+    _dependencies, _dependents = get_deps(dsk)
 
     assert dropped.npartitions == (split_out or 1)
     assert sorted(dropped.compute(scheduler="sync")) == sorted(s.unique())

@@ -425,7 +425,7 @@ def _concatenate2(arrays, axes=None):
         # arrays when that's not supported by the array library (e.g., CuPy).
         keys = list(arrays[0].keys())
         assert all(list(a.keys()) == keys for a in arrays)
-        ret = dict()
+        ret = {}
         for k in keys:
             ret[k] = concatenate([a[k] for a in arrays], axis=axes[0])
         return ret
@@ -482,7 +482,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     except Exception as e:
         if isinstance(e, OverflowError):
             raise
-        exc_type, exc_value, exc_traceback = sys.exc_info()
+        _exc_type, _exc_value, exc_traceback = sys.exc_info()
         tb = "".join(traceback.format_tb(exc_traceback))
         suggest = (
             (
@@ -3207,14 +3207,17 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "zero length dimensions with 0(s) in chunks"
             )
 
-    if not allints and shape is not None:
-        if not all(
+    if (
+        not allints
+        and shape is not None
+        and not all(
             c == s or (math.isnan(c) or math.isnan(s))
             for c, s in zip(map(sum, chunks), shape)
-        ):
-            raise ValueError(
-                f"Chunks do not add up to shape. Got chunks={chunks}, shape={shape}"
-            )
+        )
+    ):
+        raise ValueError(
+            f"Chunks do not add up to shape. Got chunks={chunks}, shape={shape}"
+        )
     if allints or isinstance(sum(sum(_) for _ in chunks), int):
         # Fastpath for when we already know chunks contains only integers
         return tuple(tuple(ch) for ch in chunks)
@@ -4389,7 +4392,7 @@ def unify_chunks(*args, **kwargs):
         return dict(zip(inds[0], arrays[0].chunks)), arrays
 
     nameinds = []
-    blockdim_dict = dict()
+    blockdim_dict = {}
     max_parts = 0
     for a, ind in arginds:
         if ind is not None:
@@ -4606,7 +4609,7 @@ def block(arrays, allow_unknown_chunksizes=False):
         f_reduce=lambda xs, axis: concatenate(
             list(xs), axis=axis, allow_unknown_chunksizes=allow_unknown_chunksizes
         ),
-        f_kwargs=lambda axis: dict(axis=(axis + 1)),
+        f_kwargs=lambda axis: {"axis": (axis + 1)},
         axis=first_axis,
     )
 
@@ -5182,7 +5185,7 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     if not name:
         name = f"{funcname(op)}-{tokenize(op, dtype, *args, where)}"
 
-    blockwise_kwargs = dict(dtype=dtype, name=name, token=funcname(op).strip("_"))
+    blockwise_kwargs = {"dtype": dtype, "name": name, "token": funcname(op).strip("_")}
 
     if where is not True:
         blockwise_kwargs["elemwise_where_function"] = op

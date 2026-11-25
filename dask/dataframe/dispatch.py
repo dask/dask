@@ -118,9 +118,12 @@ def make_meta(x, index=None, parent_meta=None):
     A valid meta-data
     """
 
-    if not isinstance(x, (pd.Series, pd.DataFrame, pd.Index)) and hasattr(x, "_meta"):
-        if is_dask_collection(x):
-            return x._meta
+    if (
+        not isinstance(x, (pd.Series, pd.DataFrame, pd.Index))
+        and hasattr(x, "_meta")
+        and is_dask_collection(x)
+    ):
+        return x._meta
 
     try:
         return make_meta_dispatch(x, index=index)

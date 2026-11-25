@@ -489,9 +489,9 @@ def test_reduction_method_split_every():
         chunk,
         aggregate=agg,
         combine=combine,
-        chunk_kwargs=dict(constant=1.0),
-        combine_kwargs=dict(constant=2.0),
-        aggregate_kwargs=dict(constant=3.0),
+        chunk_kwargs={"constant": 1.0},
+        combine_kwargs={"constant": 2.0},
+        aggregate_kwargs={"constant": 3.0},
         split_every=n,
     )
 
@@ -516,9 +516,9 @@ def test_reduction_method_split_every():
             chunk,
             aggregate=agg,
             split_every=3,
-            chunk_kwargs=dict(constant=1.0),
-            combine_kwargs=dict(constant=2.0),
-            aggregate_kwargs=dict(constant=3.0),
+            chunk_kwargs={"constant": 1.0},
+            combine_kwargs={"constant": 2.0},
+            aggregate_kwargs={"constant": 3.0},
         )
 
 

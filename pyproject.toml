@@ -128,11 +128,7 @@ ignore = [
     "PLR1730",  # Replace `if` statement with `min()` or `max()`
     "PLR2004",  # Magic value used in comparison, consider replacing with a constant variable
     "PYI025",   # Use `from collections.abc import Set as AbstractSet` to avoid confusion with the `set` builtin"
-    # FIXME need to look at these
     "RUF012",  # Mutable class default (395 findings)
-    "C408",    # Unnecessary dict()/list()/tuple() call (204 findings)
-    "RUF059",  # Unpacked variable never used (129 findings)
-    "SIM102",  # Collapsible if (36 findings)
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]

@@ -300,7 +300,7 @@ def fuse_slice(a, b):
             check_for_nonfusible_fancy_indexing(b, a)
 
         j = 0
-        result = list()
+        result = []
         for i in range(len(a)):
             #  axis ceased to exist  or we're out of b
             if isinstance(a[i], Integral) or j == len(b):

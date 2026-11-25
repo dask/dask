@@ -44,8 +44,8 @@ def test_apply_gufunc_axes_input_validation_01():
 
     apply_gufunc(foo, "(i)->()", a, axes=[0])
     apply_gufunc(foo, "(i)->()", a, axes=[(0,)])
-    apply_gufunc(foo, "(i)->()", a, axes=[0, tuple()])
-    apply_gufunc(foo, "(i)->()", a, axes=[(0,), tuple()])
+    apply_gufunc(foo, "(i)->()", a, axes=[0, ()])
+    apply_gufunc(foo, "(i)->()", a, axes=[(0,), ()])
 
     with pytest.raises(ValueError):
         apply_gufunc(foo, "(i)->()", a, axes=[(0, 1)])

@@ -502,10 +502,10 @@ def test_nout():
     assert a._length is None
     pytest.raises(TypeError, lambda: len(a))
 
-    func = delayed(lambda x: tuple(), nout=0, pure=True)
+    func = delayed(lambda x: (), nout=0, pure=True)
     x = func(1)
     assert len(x) == 0
-    assert x.compute() == tuple()
+    assert x.compute() == ()
 
 
 @pytest.mark.parametrize(
@@ -559,7 +559,7 @@ def test_array_delayed():
     assert val.sum().compute() == (arr + arr + 1).sum()
     assert val[0, 0].compute() == (arr + arr + 1)[0, 0]
 
-    task, dsk = to_task_dask(darr)
+    _task, dsk = to_task_dask(darr)
     assert not darr.dask.keys() - dsk.keys()
     diff = dsk.keys() - darr.dask.keys()
     assert len(diff) == 1
