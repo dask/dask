@@ -6,6 +6,7 @@ import numbers
 from itertools import product
 from numbers import Integral
 from threading import Lock
+from typing import ClassVar
 
 import numpy as np
 
@@ -881,7 +882,7 @@ def _wrap_func(
 
 
 class Random(IO):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "rng",
         "distribution",
         "size",
@@ -890,7 +891,7 @@ class Random(IO):
         "args",
         "kwargs",
     ]
-    _defaults = {"extra_chunks": ()}
+    _defaults: ClassVar[dict] = {"extra_chunks": ()}
 
     @cached_property
     def kwargs(self):
@@ -991,7 +992,7 @@ class Random(IO):
 
 
 class RandomChoice(IO):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "array",
         "chunks",
         "_meta",
@@ -1001,7 +1002,7 @@ class RandomChoice(IO):
         "axis",
         "shuffle",
     ]
-    _defaults = {"axis": None, "shuffle": None}
+    _defaults: ClassVar[dict] = {"axis": None, "shuffle": None}
     _funcname = "da.random.choice-"
 
     @cached_property
@@ -1028,7 +1029,7 @@ class RandomChoice(IO):
 
 
 class RandomChoiceGenerator(RandomChoice):
-    _defaults = {}
+    _defaults: ClassVar[dict] = {}
 
     @cached_property
     def state_data(self):

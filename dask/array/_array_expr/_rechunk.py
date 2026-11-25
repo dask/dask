@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import operator
+from typing import ClassVar
 
 import numpy as np
 import toolz
@@ -22,7 +23,7 @@ from dask.utils import cached_property
 
 
 class Rechunk(ArrayExpr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "array",
         "_chunks",
         "threshold",
@@ -31,7 +32,7 @@ class Rechunk(ArrayExpr):
         "method",
     ]
 
-    _defaults = {
+    _defaults: ClassVar[dict] = {
         "_chunks": "auto",
         "threshold": None,
         "block_size_limit": None,
@@ -100,7 +101,12 @@ class Rechunk(ArrayExpr):
 
 
 class TasksRechunk(Rechunk):
-    _parameters = ["array", "_chunks", "threshold", "block_size_limit"]
+    _parameters: ClassVar[list[str]] = [
+        "array",
+        "_chunks",
+        "threshold",
+        "block_size_limit",
+    ]
 
     @cached_property
     def chunks(self):

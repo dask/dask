@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 import math
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 import pandas as pd
 
@@ -18,8 +18,8 @@ from dask.utils import M
 
 
 class CumulativeAggregations(Expr):
-    _parameters = ["frame", "axis", "skipna"]
-    _defaults = {"axis": None}
+    _parameters: ClassVar[list[str]] = ["frame", "axis", "skipna"]
+    _defaults: ClassVar[dict] = {"axis": None}
 
     chunk_operation = None
     aggregate_operation: Callable | None = None
@@ -47,8 +47,8 @@ class CumulativeAggregations(Expr):
 
 
 class CumulativeBlockwise(Blockwise):
-    _parameters = ["frame", "axis", "skipna", "operation"]
-    _defaults = {"skipna": True, "axis": None}
+    _parameters: ClassVar[list[str]] = ["frame", "axis", "skipna", "operation"]
+    _defaults: ClassVar[dict] = {"skipna": True, "axis": None}
     _projection_passthrough = True
 
     @functools.cached_property
@@ -65,7 +65,7 @@ class CumulativeBlockwise(Blockwise):
 
 
 class TakeLast(Blockwise):
-    _parameters = ["frame", "skipna"]
+    _parameters: ClassVar[list[str]] = ["frame", "skipna"]
     _projection_passthrough = True
 
     @staticmethod
@@ -78,7 +78,12 @@ class TakeLast(Blockwise):
 
 
 class CumulativeFinalize(Expr):
-    _parameters = ["frame", "previous_partitions", "aggregator", "neutral_element"]
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "previous_partitions",
+        "aggregator",
+        "neutral_element",
+    ]
 
     def _divisions(self):
         return self.frame._divisions()

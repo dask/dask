@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 from tlz import merge
 
@@ -45,7 +47,7 @@ class CompositeScalarMeta: ...
 
 
 class LiteralExpr(Expr):
-    _parameters = ["name", "value"]
+    _parameters: ClassVar[list[str]] = ["name", "value"]
 
     @property
     def name(self):

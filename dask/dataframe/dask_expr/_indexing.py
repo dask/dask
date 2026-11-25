@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -176,7 +177,7 @@ def _reverse_partition(df):
 
 
 class ReverseDataFrame(Expr):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
 
     @functools.cached_property
     def _meta(self):
@@ -206,7 +207,7 @@ class ReverseDataFrame(Expr):
 
 
 class LocBase(Blockwise):
-    _parameters = ["frame", "iindexer", "cindexer"]
+    _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
     operation = staticmethod(methods.loc)
 
     @functools.cached_property
@@ -230,7 +231,7 @@ class LocBase(Blockwise):
 
 
 class LocUnknown(Blockwise):
-    _parameters = ["frame", "iindexer", "cindexer"]
+    _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
     operation = staticmethod(methods.try_loc)
 
 
@@ -299,7 +300,7 @@ class LocList(LocBase):
 
 
 class LocEmpty(LocList):
-    _parameters = ["meta", "cindexer"]
+    _parameters: ClassVar[list[str]] = ["meta", "cindexer"]
 
     def _lower(self):
         return None
@@ -431,14 +432,14 @@ class LocSlice(LocBase):
 
 
 class Loc(Blockwise):
-    _parameters = ["frame", "iindexer", "cindexer"]
-    _defaults = {"cindexer": None}
+    _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
+    _defaults: ClassVar[dict] = {"cindexer": None}
     operation = staticmethod(methods.loc)
 
 
 class LocAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "iindexer", "cindexer"]
-    _defaults = {"cindexer": None}
+    _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
+    _defaults: ClassVar[dict] = {"cindexer": None}
     _expr_cls = Loc
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import warnings
+from typing import ClassVar
 
 import pandas as pd
 from toolz import merge_sorted, unique
@@ -25,7 +26,7 @@ from dask.utils import apply, is_dataframe_like, is_series_like
 
 
 class Concat(Expr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "join",
         "ignore_order",
         "axis",
@@ -33,7 +34,7 @@ class Concat(Expr):
         "interleave_partitions",
         "_kwargs",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict] = {
         "join": "outer",
         "ignore_order": False,
         "_kwargs": {},
@@ -355,9 +356,14 @@ class StackPartitionInterleaved(StackPartition):
 
 
 class ConcatUnindexed(Blockwise):
-    _parameters = ["ignore_order", "_kwargs", "axis", "join"]
-    _defaults = {"ignore_order": False, "_kwargs": {}, "axis": 1, "join": "outer"}
-    _keyword_only = ["ignore_order", "_kwargs", "axis", "join"]
+    _parameters: ClassVar[list[str]] = ["ignore_order", "_kwargs", "axis", "join"]
+    _defaults: ClassVar[dict] = {
+        "ignore_order": False,
+        "_kwargs": {},
+        "axis": 1,
+        "join": "outer",
+    }
+    _keyword_only: ClassVar[list[str]] = ["ignore_order", "_kwargs", "axis", "join"]
 
     @functools.cached_property
     def _meta(self):

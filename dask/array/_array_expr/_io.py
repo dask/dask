@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 from itertools import product
+from typing import ClassVar
 
 import numpy as np
 
@@ -23,7 +24,13 @@ class IO(ArrayExpr):
 
 
 class FromGraph(IO):
-    _parameters = ["layer", "_meta", "chunks", "keys", "name_prefix"]
+    _parameters: ClassVar[list[str]] = [
+        "layer",
+        "_meta",
+        "chunks",
+        "keys",
+        "name_prefix",
+    ]
 
     @functools.cached_property
     def _meta(self):
@@ -54,7 +61,7 @@ class FromGraph(IO):
 
 
 class FromArray(IO):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "array",
         "chunks",
         "lock",
@@ -64,7 +71,7 @@ class FromArray(IO):
         "asarray",
         "fancy",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict] = {
         "getitem": None,
         "inline_array": False,
         "meta": None,

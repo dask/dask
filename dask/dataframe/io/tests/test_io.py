@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -920,7 +921,7 @@ def test_from_map_other_iterables(iterable):
 
 
 class MyFunc:
-    projected: list[str] = []
+    projected: ClassVar[list[str]] = []
 
     def __init__(self, columns=None):
         self.columns = columns

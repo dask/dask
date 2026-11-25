@@ -11,6 +11,7 @@ import weakref
 from abc import abstractmethod
 from collections import defaultdict
 from functools import cached_property, partial
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -113,7 +114,7 @@ _cached_plan = {}  # type: ignore[var-annotated]
 
 
 class FragmentWrapper:
-    _filesystems = weakref.WeakValueDictionary()  # type: ignore[var-annotated]
+    _filesystems: ClassVar[weakref.WeakValueDictionary] = weakref.WeakValueDictionary()
     _filesystem_pickle_cache = (-1, None)
 
     def __init__(
@@ -250,7 +251,7 @@ def normalize_pq_filemetadata(meta):
 
 
 class ToParquet(Expr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "path",
         "fs",
@@ -825,7 +826,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 
 
 class ReadParquetPyarrowFS(ReadParquet):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "path",
         "columns",
         "filters",
@@ -842,7 +843,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         "_series",
         "_dataset_info_cache",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict] = {
         "columns": None,
         "filters": None,
         "categories": None,
@@ -1255,7 +1256,7 @@ class ReadParquetPyarrowFS(ReadParquet):
 class ReadParquetFSSpec(ReadParquet):
     """Read a parquet dataset"""
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "path",
         "columns",
         "filters",
@@ -1277,7 +1278,7 @@ class ReadParquetFSSpec(ReadParquet):
         "_dataset_info_cache",
         "_pq_length_stats",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict] = {
         "columns": None,
         "filters": None,
         "categories": None,

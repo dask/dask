@@ -5,6 +5,7 @@ import warnings
 from functools import reduce
 from numbers import Integral, Number
 from operator import mul
+from typing import ClassVar
 
 import numpy as np
 from tlz import concat, get, partial
@@ -65,7 +66,7 @@ def overlap_internal(x, axes):
 
 
 class MapOverlap(ArrayExpr):
-    _parameters = ["array", "axes"]
+    _parameters: ClassVar[list[str]] = ["array", "axes"]
 
     @functools.cached_property
     def _meta(self):

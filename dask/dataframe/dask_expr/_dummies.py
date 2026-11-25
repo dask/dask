@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pandas as pd
 
 from dask.dataframe import methods
@@ -152,7 +154,7 @@ def get_dummies(
 
 
 class GetDummies(Blockwise):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "prefix",
         "prefix_sep",
@@ -162,7 +164,7 @@ class GetDummies(Blockwise):
         "drop_first",
         "dtype",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict] = {
         "prefix": None,
         "prefix_sep": "_",
         "dummy_na": False,
@@ -172,7 +174,7 @@ class GetDummies(Blockwise):
         "dtype": bool,
     }
     # cudf has extra kwargs after `columns`
-    _keyword_only = ["sparse", "drop_first", "dtype"]
+    _keyword_only: ClassVar[list[str]] = ["sparse", "drop_first", "dtype"]
 
     @staticmethod
     def operation(df, *args, **kwargs):

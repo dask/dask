@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 from functools import partial
 from numbers import Integral
+from typing import ClassVar
 
 import numpy as np
 from tlz import sliding_window
@@ -23,8 +24,21 @@ from dask.utils import cached_cumsum, derived_from
 
 
 class Arange(ArrayExpr):
-    _parameters = ["start", "stop", "step", "chunks", "like", "dtype", "kwargs"]
-    _defaults = {"chunks": "auto", "like": None, "dtype": None, "kwargs": None}
+    _parameters: ClassVar[list[str]] = [
+        "start",
+        "stop",
+        "step",
+        "chunks",
+        "like",
+        "dtype",
+        "kwargs",
+    ]
+    _defaults: ClassVar[dict] = {
+        "chunks": "auto",
+        "like": None,
+        "dtype": None,
+        "kwargs": None,
+    }
 
     @functools.cached_property
     def num_rows(self):
@@ -76,8 +90,20 @@ class Arange(ArrayExpr):
 
 
 class Linspace(Arange):
-    _parameters = ["start", "stop", "num", "endpoint", "chunks", "dtype"]
-    _defaults = {"num": 50, "endpoint": True, "chunks": "auto", "dtype": None}
+    _parameters: ClassVar[list[str]] = [
+        "start",
+        "stop",
+        "num",
+        "endpoint",
+        "chunks",
+        "dtype",
+    ]
+    _defaults: ClassVar[dict] = {
+        "num": 50,
+        "endpoint": True,
+        "chunks": "auto",
+        "dtype": None,
+    }
     like = None
 
     @functools.cached_property
@@ -119,8 +145,8 @@ class Linspace(Arange):
 
 
 class BroadcastTrick(ArrayExpr):
-    _parameters = ["shape", "dtype", "chunks", "meta", "kwargs"]
-    _defaults = {"meta": None}
+    _parameters: ClassVar[list[str]] = ["shape", "dtype", "chunks", "meta", "kwargs"]
+    _defaults: ClassVar[dict] = {"meta": None}
 
     @functools.cached_property
     def _meta(self):

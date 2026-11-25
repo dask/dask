@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import ClassVar
 
 from dask.dataframe.dask_expr._accessor import Accessor, FunctionMap
 from dask.dataframe.dask_expr._expr import Blockwise
@@ -126,8 +127,8 @@ class StringAccessor(Accessor):
 
 
 class CatBlockwise(Blockwise):
-    _parameters = ["frame", "sep", "na_rep"]
-    _keyword_only = ["sep", "na_rep"]
+    _parameters: ClassVar[list[str]] = ["frame", "sep", "na_rep"]
+    _keyword_only: ClassVar[list[str]] = ["sep", "na_rep"]
 
     @property
     def _args(self) -> list:
@@ -139,7 +140,7 @@ class CatBlockwise(Blockwise):
 
 
 class Cat(Reduction):
-    _parameters = ["frame", "sep", "na_rep"]
+    _parameters: ClassVar[list[str]] = ["frame", "sep", "na_rep"]
 
     @property
     def chunk_kwargs(self):
@@ -167,7 +168,7 @@ class Cat(Reduction):
 
 
 class SplitMap(FunctionMap):
-    _parameters = ["frame", "accessor", "attr", "args", "kwargs"]
+    _parameters: ClassVar[list[str]] = ["frame", "accessor", "attr", "args", "kwargs"]
 
     @property
     def n(self):

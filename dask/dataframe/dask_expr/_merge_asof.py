@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import ClassVar
 
 import pandas as pd
 
@@ -17,7 +18,7 @@ from dask.utils import apply
 
 
 class MergeAsof(Merge):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "left_on",
@@ -31,7 +32,7 @@ class MergeAsof(Merge):
         "allow_exact_matches",
         "direction",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict] = {
         "left_on": None,
         "right_on": None,
         "left_index": False,
@@ -186,7 +187,7 @@ class MergeAsof(Merge):
 
 
 class MergeAsofIndexed(MergeAsof):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "left_index",

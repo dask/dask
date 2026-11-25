@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Collection
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import pandas as pd
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class FromDelayed(PartitionsFiltered, BlockwiseIO):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "delayed_container",
         "meta",
         "user_divisions",
@@ -31,7 +31,7 @@ class FromDelayed(PartitionsFiltered, BlockwiseIO):
         "_partitions",
         "prefix",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict] = {
         "meta": None,
         "_partitions": None,
         "user_divisions": None,
