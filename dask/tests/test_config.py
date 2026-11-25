@@ -210,7 +210,8 @@ def test_collect_yaml_malformed_file(tmp_path):
 
 
 def test_collect_yaml_invalid_encoding(tmp_path):
-    (tmp_path / "a.yaml").write_bytes(b"\xff\xfe: 1\n")
+    # 0x81 is invalid in both UTF-8 and Windows' default cp1252 codec.
+    (tmp_path / "a.yaml").write_bytes(b"\x81: 1\n")
 
     with pytest.raises(ValueError) as rec:
         list(collect_yaml(paths=[tmp_path]))
