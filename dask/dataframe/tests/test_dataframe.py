@@ -33,6 +33,7 @@ from dask.dataframe._compat import (
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     _concat,
+    _get_divisions_map_partitions,
     _map_freq_to_period_start,
     has_parallel_type,
     total_mem_usage,
@@ -1677,6 +1678,11 @@ def test_concat():
     x = _concat([pd.DataFrame(columns=["a", "b"]), pd.DataFrame(columns=["a", "b"])])
     assert list(x.columns) == ["a", "b"]
     assert len(x) == 0
+
+
+def test_concat_large_integers() -> None:
+    values = [10**350, 1]
+    assert list(_concat(values)) == values
 
 
 def test_known_divisions():
@@ -4516,13 +4522,37 @@ def test_map_partition_array(func):
     for pre in [lambda a: a, lambda a: a.x, lambda a: a.y, lambda a: a.index]:
         try:
             expected = func(pre(df))
-        except Exception:  # noqa: S112
+        except AttributeError:
             continue
         x = pre(ddf).map_partitions(func)
         assert_eq(x, expected, check_type=False)  # TODO: make check_type pass
 
         assert isinstance(x, da.Array)
         assert x.chunks[0] == (np.nan, np.nan)
+
+
+def test_transform_divisions_unexpected_user_error():
+    from dask.dataframe.dask_expr._collection import elemwise
+
+    class UnexpectedError(Exception):
+        pass
+
+    s = dd.from_pandas(pd.Series([0, 1, 2, 3]), npartitions=2)
+    idx = s.index
+    divisions = tuple(idx.divisions)
+
+    def raise_on_divisions(x):
+        if isinstance(x, pd.Index) and tuple(x) == divisions:
+            raise UnexpectedError("division transform failed")
+        return x + 1
+
+    assert (
+        _get_divisions_map_partitions(False, True, [idx], raise_on_divisions, [idx], {})
+        == idx.divisions
+    )
+    result = elemwise(raise_on_divisions, idx, transform_divisions=True)
+    assert result.divisions == idx.divisions
+    assert result.compute().tolist() == [1, 2, 3, 4]
 
 
 def test_map_partition_sparse():

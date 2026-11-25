@@ -138,7 +138,7 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                 func = getattr(self, dispatch_name)
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     try:
                         exc = type(e)(
                             f"An error occurred while calling the {funcname(func)} "

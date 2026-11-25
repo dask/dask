@@ -257,7 +257,9 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
         id = get_id()
         result = dumps((result, id))
         failed = False
-    except BaseException as e:
+    # Scheduler boundary: tasks may raise any BaseException, including
+    # KeyboardInterrupt; pack it so callbacks and the caller see the failure.
+    except BaseException as e:  # noqa: BLE001
         result = pack_exception(e, dumps)
         failed = True
     return key, result, failed
@@ -576,7 +578,9 @@ class SynchronousExecutor(Executor):
         fut = Future()
         try:
             fut.set_result(fn(*args, **kwargs))
-        except BaseException as e:
+        # Mirror concurrent.futures: deliver user-code failures through the Future,
+        # including BaseException subclasses that are not Exception.
+        except BaseException as e:  # noqa: BLE001
             fut.set_exception(e)
         return fut
 

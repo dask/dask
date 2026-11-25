@@ -231,11 +231,22 @@ def test_register_command_ep():
         def load(self):
             raise ImportError("Entrypoint could not be imported")
 
+    class BrokenEP:
+        @property
+        def name(self):
+            return "bar"
+
+        def load(self):
+            raise RuntimeError("Entrypoint failed during import")
+
     with pytest.warns(UserWarning, match="must be instances of"):
         _register_command_ep(dummy_cli, bad_ep)
 
     with pytest.warns(UserWarning, match="exception occurred"):
         _register_command_ep(dummy_cli, ErrorEP())
+
+    with pytest.warns(UserWarning, match="exception occurred"):
+        _register_command_ep(dummy_cli, BrokenEP())
 
     _register_command_ep(dummy_cli, good_ep)
     assert "good" in dummy_cli.commands

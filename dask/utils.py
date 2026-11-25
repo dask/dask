@@ -682,12 +682,12 @@ def takes_multiple_arguments(func, varargs=True):
 
     try:
         spec = getargspec(func)
-    except Exception:
+    except TypeError:
         return False
 
     try:
         is_constructor = spec.args[0] == "self" and isinstance(func, type)
-    except Exception:
+    except IndexError:
         is_constructor = False
 
     if varargs and spec.varargs:
@@ -1909,7 +1909,8 @@ else:
 def has_keyword(func: Callable[..., Any], keyword: str) -> bool:
     try:
         return keyword in _keyword_signature(func).parameters
-    except Exception:
+    # Objects with a broken __signature__ metehod can raise any exception
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -2007,7 +2008,7 @@ def key_split(s):
             if result[0] == "<":
                 result = result.strip("<>").split()[0].split(".")[-1]
             return sys.intern(result)
-    except Exception:
+    except (AttributeError, IndexError, TypeError, ValueError):
         return "Other"
 
 

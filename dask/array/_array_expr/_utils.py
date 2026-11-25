@@ -61,7 +61,9 @@ def compute_meta(func, _dtype, *args, **kwargs):
                     meta = args_meta[0]
                 else:
                     return None
-            except Exception:
+            # Meta inference calls user functions; arbitrary failures fall back
+            # to unknown meta rather than breaking graph construction.
+            except Exception:  # noqa: BLE001
                 return None
 
         if _dtype and getattr(meta, "dtype", None) != _dtype:

@@ -2027,6 +2027,21 @@ def test_concat_categorical_mixed_simple():
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.Index([2]),
+        pd.Index(["b"]),
+        pd.Index([None]),
+        pd.Index([(2,)], tupleize_cols=False),
+    ],
+)
+def test_concat_multiindex_with_plain_index(index: pd.Index) -> None:
+    first = pd.MultiIndex.from_tuples([(1, "a")], names=["x", "y"])
+    expected = pd.Index([*first, *index], tupleize_cols=False)
+    assert_eq(concat([first, index]), expected)
+
+
 def test_concat_datetimeindex():
     # https://github.com/dask/dask/issues/2932
     b2 = pd.DataFrame(

@@ -94,7 +94,9 @@ def meta_from_array(x, ndim=None, dtype=None):
                 meta = meta.reshape((0,) * ndim)
         if meta is np.ma.masked:
             meta = np.ma.array(np.empty((0,) * ndim, dtype=dtype or x.dtype), mask=True)
-    except Exception:
+    # Third-party array-likes such as tiledb raise implementation-specific errors
+    # from zero-length slicing; the fallback must remain broad.
+    except Exception:  # noqa: BLE001
         meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
 
     if np.isscalar(meta):
@@ -160,7 +162,9 @@ def compute_meta(func, _dtype, *args, **kwargs):
                     meta = args_meta[0]
                 else:
                     return None
-            except Exception:
+            # Meta inference calls user functions; arbitrary failures fall back
+            # to unknown meta rather than breaking graph construction.
+            except Exception:  # noqa: BLE001
                 return None
 
         if _dtype and getattr(meta, "dtype", None) != _dtype:

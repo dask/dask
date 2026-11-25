@@ -35,7 +35,7 @@ def _try_extract_cgroup_cpu_quota():
         with open(f"/sys/fs/cgroup{group_path}cpu.max") as f:
             quota, period = map(int, f.read().split(" "))
             return quota, period
-    except Exception:
+    except (OSError, ValueError):
         return None, None
 
     # No cgroup CPU quota found

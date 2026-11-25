@@ -4,8 +4,9 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array._array_expr._utils import compute_meta as expr_compute_meta
 from dask.array.core import Array
-from dask.array.utils import assert_eq, meta_from_array
+from dask.array.utils import assert_eq, compute_meta, meta_from_array
 from dask.local import get_sync
 from dask.utils_test import assert_scipy_sparse_matrix_deprecated
 
@@ -53,6 +54,17 @@ def test_meta_from_array(asarray):
     assert meta_from_array(123) == 123
     assert meta_from_array("foo") == "foo"
     assert meta_from_array(np.dtype("float32")) == np.dtype("float32")
+
+
+def test_compute_meta_swallows_user_exception():
+    class CustomMetaError(Exception):
+        pass
+
+    def raises_custom_error(x):
+        raise CustomMetaError("meta inference failed")
+
+    for meta_func in (compute_meta, expr_compute_meta):
+        assert meta_func(raises_custom_error, None, np.empty((0,))) is None
 
 
 @pytest.mark.parametrize("meta", ["", "str", b"", b"str"])

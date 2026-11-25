@@ -116,7 +116,7 @@ def coerce_dtypes(df, dtypes):
             else:
                 try:
                     df[c] = df[c].astype(dtypes[c])
-                except Exception as e:
+                except (OverflowError, TypeError, ValueError) as e:
                     bad_dtypes.append((c, actual, desired))
                     errors.append((c, e))
 

@@ -1061,6 +1061,14 @@ def test_late_dtypes():
         assert_eq(res, sol)
 
 
+def test_late_dtype_overflow() -> None:
+    with filetext(f"a\n1\n{10**50}\n") as fn:
+        df = dd.read_csv(fn, sample=4, sample_rows=1, blocksize=None)
+        with pytest.raises(ValueError, match="Mismatched dtypes found") as exc:
+            df.compute(scheduler="sync")
+        assert "OverflowError" in str(exc.value)
+
+
 def test_assume_missing():
     text = "numbers,names,more_numbers,integers\n"
     for _ in range(1000):
