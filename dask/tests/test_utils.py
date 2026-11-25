@@ -560,6 +560,18 @@ def test_has_keyword():
     assert has_keyword(bar, "c")
 
 
+def test_has_keyword_with_broken_signature():
+    class BrokenSignature:
+        @property
+        def __signature__(self):
+            raise RuntimeError("broken signature")
+
+        def __call__(self):
+            pass
+
+    assert not has_keyword(BrokenSignature(), "keyword")
+
+
 @pytest.mark.skipif(sys.version_info < (3, 14), reason="requires deferred annotations")
 def test_has_keyword_with_unresolved_annotation() -> None:
     # Compile without this module's __future__ import to exercise deferred evaluation.

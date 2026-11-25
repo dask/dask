@@ -1909,7 +1909,7 @@ else:
 def has_keyword(func: Callable[..., Any], keyword: str) -> bool:
     try:
         return keyword in _keyword_signature(func).parameters
-    except (TypeError, ValueError):
+    except Exception:
         return False
 
 
