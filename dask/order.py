@@ -663,7 +663,7 @@ def _connecting_to_roots(
         # graphs. We don't want to create new sets over and over again
         transitive_deps = []
         transitive_deps_ids = set()
-        max_dependents_key = list()
+        max_dependents_key = []
         for child in dependencies[key]:
             r_child = result[child]
             if id(r_child) in transitive_deps_ids:

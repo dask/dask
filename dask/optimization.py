@@ -48,7 +48,7 @@ def cull(dsk, keys):
         keys = [keys]
 
     seen = set()
-    dependencies = dict()
+    dependencies = {}
     out = {}
     work = list(set(flatten(keys)))
 

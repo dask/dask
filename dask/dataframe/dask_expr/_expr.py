@@ -2371,7 +2371,7 @@ class Lengths(Expr):
 
     @functools.cached_property
     def _meta(self):
-        return tuple()
+        return ()
 
     def _divisions(self):
         return (None, None)
@@ -3375,7 +3375,7 @@ class Diff(MapOverlap):
 
     @functools.cached_property
     def kwargs(self):
-        return dict(periods=self.periods)
+        return {"periods": self.periods}
 
     @property
     def before(self):
@@ -3423,7 +3423,7 @@ class FFill(MapOverlap):
 
     @functools.cached_property
     def kwargs(self):
-        return dict(limit=self.limit)
+        return {"limit": self.limit}
 
     @property
     def before(self):
@@ -3479,7 +3479,7 @@ class Shift(MapOverlap):
 
     @functools.cached_property
     def kwargs(self):
-        return dict(periods=self.periods, freq=self.freq)
+        return {"periods": self.periods, "freq": self.freq}
 
     def _simplify_up(self, parent, dependents):
         if isinstance(parent, Projection):

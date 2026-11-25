@@ -1370,7 +1370,7 @@ def test_broadcast_to_array():
 def test_broadcast_to_scalar():
     x = 5
 
-    for shape in [tuple(), (0,), (2, 3), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+    for shape in [(), (0,), (2, 3), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         a = np.broadcast_to(x, shape)
         d = broadcast_to(x, shape)
 
@@ -1438,7 +1438,7 @@ def test_broadcast_arrays_uneven_chunks():
 @pytest.mark.parametrize(
     "u_shape, v_shape",
     [
-        [tuple(), (2, 3)],
+        [(), (2, 3)],
         [(1,), (2, 3)],
         [(1, 1), (2, 3)],
         [(0, 3), (1, 3)],
@@ -3806,7 +3806,7 @@ def test_to_delayed():
 
     s = 2
     x = da.from_array(np.array(s), chunks=0)
-    a = x.to_delayed()[tuple()]
+    a = x.to_delayed()[()]
     assert a.compute() == s
 
 

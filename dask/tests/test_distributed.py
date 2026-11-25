@@ -737,12 +737,12 @@ def test_futures_in_subgraphs(loop_in_thread):
     with cluster() as (s, [_a, _b]), Client(s["address"], loop=loop_in_thread):
         ddf = dd.from_pandas(
             pd.DataFrame(
-                dict(
-                    uid=range(50),
-                    enter_time=pd.date_range(
+                {
+                    "uid": range(50),
+                    "enter_time": pd.date_range(
                         start="2020-01-01", end="2020-09-01", periods=50, tz="UTC"
                     ),
-                )
+                }
             ),
             npartitions=5,
         )

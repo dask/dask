@@ -33,7 +33,7 @@ def keepdims_wrapper(a_callable):
         if not isinstance(axes, (Container, Iterable, Sequence)):
             axes = [axes]
 
-        r_slice = tuple()
+        r_slice = ()
         for each_axis in range(x.ndim):
             if each_axis in axes:
                 r_slice += (None,)

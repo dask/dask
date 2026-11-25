@@ -499,7 +499,7 @@ class GraphNode:
     @classmethod
     @lru_cache
     def get_all_slots(cls):
-        slots = list()
+        slots = []
         for c in cls.mro():
             slots.extend(getattr(c, "__slots__", ()))
         # Interestingly, sorting this causes the nested containers to pickle

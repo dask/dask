@@ -169,11 +169,11 @@ def test_tril_triu_non_square_arrays():
 @pytest.mark.parametrize("return_inverse", [False, True])
 @pytest.mark.parametrize("return_counts", [False, True])
 def test_unique_kwargs(return_index, return_inverse, return_counts):
-    kwargs = dict(
-        return_index=return_index,
-        return_inverse=return_inverse,
-        return_counts=return_counts,
-    )
+    kwargs = {
+        "return_index": return_index,
+        "return_inverse": return_inverse,
+        "return_counts": return_counts,
+    }
 
     a = cupy.array([1, 2, 4, 4, 5, 2])
     d = da.from_array(a, chunks=(3,))

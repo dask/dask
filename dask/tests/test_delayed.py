@@ -502,10 +502,10 @@ def test_nout():
     assert a._length is None
     pytest.raises(TypeError, lambda: len(a))
 
-    func = delayed(lambda x: tuple(), nout=0, pure=True)
+    func = delayed(lambda x: (), nout=0, pure=True)
     x = func(1)
     assert len(x) == 0
-    assert x.compute() == tuple()
+    assert x.compute() == ()
 
 
 @pytest.mark.parametrize(

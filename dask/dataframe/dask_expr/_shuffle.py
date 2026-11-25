@@ -582,7 +582,7 @@ class P2PShuffle(SimpleShuffle):
             tuple(self._partitions) if self._filtered else self.npartitions_out
         )
 
-        transfer_keys = list()
+        transfer_keys = []
         for i in range(self.frame.npartitions):
             t = Task(
                 (name, i),

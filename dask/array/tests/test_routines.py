@@ -61,7 +61,7 @@ def test_atleast_nd_no_args(funcname):
 @pytest.mark.parametrize(
     "shape, chunks",
     [
-        (tuple(), tuple()),
+        ((), ()),
         ((4,), (2,)),
         ((4, 6), (2, 3)),
         ((4, 6, 8), (2, 3, 4)),
@@ -86,7 +86,7 @@ def test_atleast_nd_one_arg(funcname, shape, chunks):
     "shape1, shape2",
     list(
         itertools.combinations_with_replacement(
-            [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)], 2
+            [(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)], 2
         )
     ),
 )
@@ -208,7 +208,7 @@ def test_moveaxis_rollaxis_numpy_api():
         ("flip", {"axis": (0, 2)}),
     ],
 )
-@pytest.mark.parametrize("shape", [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
+@pytest.mark.parametrize("shape", [(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
 def test_flip(funcname, kwargs, shape):
     axis = kwargs.get("axis")
     if axis is None:
@@ -252,7 +252,7 @@ def test_flip(funcname, kwargs, shape):
 @pytest.mark.parametrize(
     "shape",
     [
-        tuple(),
+        (),
         (4,),
         (4, 6),
         (4, 6, 8),
@@ -510,7 +510,7 @@ def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape
 @pytest.mark.parametrize(
     "shape, axes",
     [
-        [(10, 15, 20), tuple()],
+        [(10, 15, 20), ()],
         [(10, 15, 20), 0],
         [(10, 15, 20), (1,)],
         [(10, 15, 20), (-1, 1)],
@@ -1359,11 +1359,11 @@ def test_round():
 @pytest.mark.parametrize("return_inverse", [False, True])
 @pytest.mark.parametrize("return_counts", [False, True])
 def test_unique_kwargs(return_index, return_inverse, return_counts):
-    kwargs = dict(
-        return_index=return_index,
-        return_inverse=return_inverse,
-        return_counts=return_counts,
-    )
+    kwargs = {
+        "return_index": return_index,
+        "return_inverse": return_inverse,
+        "return_counts": return_counts,
+    }
 
     a = np.array([1, 2, 4, 4, 5, 2])
     d = da.from_array(a, chunks=(3,))
@@ -2029,7 +2029,7 @@ def test_count_nonzero():
         x_c = np.count_nonzero(x)
         d_c = da.count_nonzero(d)
 
-        if d_c.shape == tuple():
+        if d_c.shape == ():
             assert x_c == d_c.compute()
         else:
             assert_eq(x_c, d_c)
@@ -2044,7 +2044,7 @@ def test_count_nonzero_axis(axis):
         x_c = np.count_nonzero(x, axis)
         d_c = da.count_nonzero(d, axis)
 
-        if d_c.shape == tuple():
+        if d_c.shape == ():
             assert x_c == d_c.compute()
         else:
             assert_eq(x_c, d_c)
@@ -2057,7 +2057,7 @@ def test_count_nonzero_obj():
     x_c = np.count_nonzero(x)
     d_c = da.count_nonzero(d)
 
-    if d_c.shape == tuple():
+    if d_c.shape == ():
         assert x_c == d_c.compute()
     else:
         assert_eq(x_c, d_c)
@@ -2071,7 +2071,7 @@ def test_count_nonzero_obj_axis(axis):
     x_c = np.count_nonzero(x, axis)
     d_c = da.count_nonzero(d, axis)
 
-    if d_c.shape == tuple():
+    if d_c.shape == ():
         assert x_c == d_c.compute()
     else:
         #######################################################
@@ -2137,7 +2137,7 @@ def test_nonzero_method():
 
 
 def test_unravel_index_empty():
-    shape = tuple()
+    shape = ()
     findices = np.array(0, dtype=int)
     d_findices = da.from_array(findices, chunks=1)
 
@@ -2190,22 +2190,22 @@ def test_unravel_index():
     "arr, chunks, kwargs",
     [
         # Numpy doctests:
-        ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(7, 6), order="C")),
-        ([[3, 6, 6], [4, 5, 1]], (2, 1), dict(dims=(7, 6), order="F")),
-        ([[3, 6, 6], [4, 5, 1]], 1, dict(dims=(4, 6), mode="clip")),
-        ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(4, 4), mode=("clip", "wrap"))),
+        ([[3, 6, 6], [4, 5, 1]], (2, 3), {"dims": (7, 6), "order": "C"}),
+        ([[3, 6, 6], [4, 5, 1]], (2, 1), {"dims": (7, 6), "order": "F"}),
+        ([[3, 6, 6], [4, 5, 1]], 1, {"dims": (4, 6), "mode": "clip"}),
+        ([[3, 6, 6], [4, 5, 1]], (2, 3), {"dims": (4, 4), "mode": ("clip", "wrap")}),
         # Shape tests:
-        ([[3, 6, 6]], (1, 1), dict(dims=(7), order="C")),
-        ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), dict(dims=(7, 6, 9), order="C")),
+        ([[3, 6, 6]], (1, 1), {"dims": (7), "order": "C"}),
+        ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), {"dims": (7, 6, 9), "order": "C"}),
         # Multi-dimensional index arrays
         (
             np.arange(6).reshape(3, 2, 1).tolist(),
             (1, 2, 1),
-            dict(dims=(7, 6, 9), order="C"),
+            {"dims": (7, 6, 9), "order": "C"},
         ),
         # Broadcasting index arrays
-        ([1, [2, 3]], None, dict(dims=(8, 9))),
-        ([1, [2, 3], [[1, 2], [3, 4], [5, 6], [7, 8]]], None, dict(dims=(8, 9, 10))),
+        ([1, [2, 3]], None, {"dims": (8, 9)}),
+        ([1, [2, 3], [[1, 2], [3, 4], [5, 6], [7, 8]]], None, {"dims": (8, 9, 10)}),
     ],
 )
 def test_ravel_multi_index(xfail, asarray, arr, chunks, kwargs):

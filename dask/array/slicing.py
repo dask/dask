@@ -480,7 +480,7 @@ def _slice_1d(dim_shape, lengths, index):
     if stop < 0:
         stop += dim_shape
 
-    d = dict()
+    d = {}
     if step > 0:
         istart = bisect.bisect_right(chunk_boundaries, start)
         istop = bisect.bisect_left(chunk_boundaries, stop)

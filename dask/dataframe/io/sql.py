@@ -548,18 +548,18 @@ def to_sql(
         raise TypeError(f"Expected URI to be a string, got {type(uri)}.")
 
     # This is the only argument we add on top of what Pandas supports
-    kwargs = dict(
-        name=name,
-        uri=uri,
-        engine_kwargs=engine_kwargs,
-        schema=schema,
-        if_exists=if_exists,
-        index=index,
-        index_label=index_label,
-        chunksize=chunksize,
-        dtype=dtype,
-        method=method,
-    )
+    kwargs = {
+        "name": name,
+        "uri": uri,
+        "engine_kwargs": engine_kwargs,
+        "schema": schema,
+        "if_exists": if_exists,
+        "index": index,
+        "index_label": index_label,
+        "chunksize": chunksize,
+        "dtype": dtype,
+        "method": method,
+    }
 
     meta_task = delayed(_to_sql_chunk)(df._meta, **kwargs)
 

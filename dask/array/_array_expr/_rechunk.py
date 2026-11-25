@@ -139,8 +139,8 @@ def _compute_rechunk(old_name, old_chunks, chunks, level, name):
 
     ndim = len(old_chunks)
     crossed = intersect_chunks(old_chunks, chunks)
-    x2 = dict()
-    intermediates = dict()
+    x2 = {}
+    intermediates = {}
     # token = tokenize(old_name, chunks)
     if level != 0:
         merge_name = name.replace("rechunk-merge-", f"rechunk-merge-{level}-")

@@ -2644,12 +2644,12 @@ def test_shape_integer(df):
     "kwargs",
     [
         {},
-        dict(id_vars="int"),
-        dict(value_vars="int"),
-        dict(value_vars=["obj", "int"], var_name="myvar"),
-        dict(id_vars="s1", value_vars=["obj", "int"], value_name="myval"),
-        dict(value_vars=["obj", "s1"]),
-        dict(value_vars=["s1", "s2"]),
+        {"id_vars": "int"},
+        {"value_vars": "int"},
+        {"value_vars": ["obj", "int"], "var_name": "myvar"},
+        {"id_vars": "s1", "value_vars": ["obj", "int"], "value_name": "myval"},
+        {"value_vars": ["obj", "s1"]},
+        {"value_vars": ["s1", "s2"]},
     ],
 )
 def test_melt(kwargs):

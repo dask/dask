@@ -216,7 +216,7 @@ def to_orc(
     # Compute or return future
     if compute:
         if compute_kwargs is None:
-            compute_kwargs = dict()
+            compute_kwargs = {}
         return compute_as_if_collection(DataFrame, graph, part_tasks, **compute_kwargs)
 
     from dask.dataframe import from_graph

@@ -3945,7 +3945,7 @@ def test_non_categorical_partitioning_pyarrow(tmpdir, filters):
     ddf1.to_parquet(path=tmpdir, partition_on=["b"], write_index=False)
 
     schema = pa.schema([("b", pa.string())])
-    partitioning = dict(flavor="hive", schema=schema)
+    partitioning = {"flavor": "hive", "schema": schema}
     ddf = dd.read_parquet(
         tmpdir, dataset={"partitioning": partitioning}, filters=filters
     )

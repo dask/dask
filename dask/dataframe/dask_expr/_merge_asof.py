@@ -240,7 +240,7 @@ class MergeAsofIndexed(MergeAsof):
         return None
 
     def _layer(self) -> dict:
-        dsk = dict()
+        dsk = {}
         tails = heads = None
         tails_name = f"prefix-reduction-{self._name}"
         heads_name = f"suffix_reduction-{self._name}"
@@ -317,7 +317,7 @@ def prefix_reduction(f, ddf, identity, name, **kwargs):
     identity : pd.DataFrame
         an identity element of f, that is f(identity, df) = f(df, identity) = df
     """
-    dsk = dict()
+    dsk = {}
     n = len(ddf.divisions) - 1
 
     N = 1
@@ -400,7 +400,7 @@ def suffix_reduction(f, ddf, identity, name, **kwargs):
     kwargs : ??
         keyword arguments of f ??
     """
-    dsk = dict()
+    dsk = {}
     n = len(ddf.divisions) - 1
 
     N = 1

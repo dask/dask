@@ -110,8 +110,8 @@ class Shuffle(ArrayExpr):
             product(*(range(len(c)) for i, c in enumerate(chunks) if i != axis))
         )
 
-        intermediates: dict = dict()
-        merges: dict = dict()
+        intermediates: dict = {}
+        merges: dict = {}
         dtype = np.min_scalar_type(max(*chunks[axis], self._chunk_size_limit))
         split_name = f"shuffle-split-{self.deterministic_token}"
         slices = [slice(None)] * len(chunks)

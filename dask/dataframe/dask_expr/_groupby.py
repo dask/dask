@@ -840,7 +840,7 @@ class NUnique(SingleAggregation):
     def chunk(df, *by, **kwargs):
         if df.ndim == 1:
             df = df.to_frame()
-            kwargs = dict(name=df.columns[0], levels=_determine_levels(by))
+            kwargs = {"name": df.columns[0], "levels": _determine_levels(by)}
         return _nunique_df_chunk(df, *by, **kwargs)
 
     @functools.cached_property
@@ -2253,7 +2253,7 @@ class SeriesGroupBy(GroupBy):
             IdxMin,
             split_every=None,
             split_out=split_out,
-            chunk_kwargs=dict(skipna=skipna),
+            chunk_kwargs={"skipna": skipna},
         )
 
     def idxmax(
@@ -2269,7 +2269,7 @@ class SeriesGroupBy(GroupBy):
             IdxMax,
             split_every=split_every,
             split_out=split_out,
-            chunk_kwargs=dict(skipna=skipna),
+            chunk_kwargs={"skipna": skipna},
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)

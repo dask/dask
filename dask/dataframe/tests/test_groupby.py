@@ -365,7 +365,7 @@ def test_groupby_get_group(categoricals, by):
 def test_dataframe_groupby_nunique():
     strings = list("aaabbccccdddeee")
     data = np.random.randn(len(strings))
-    ps = pd.DataFrame(dict(strings=strings, data=data))
+    ps = pd.DataFrame({"strings": strings, "data": data})
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
     result = s.groupby("strings")["data"].nunique()
@@ -375,7 +375,7 @@ def test_dataframe_groupby_nunique():
 def test_dataframe_groupby_nunique_across_group_same_value():
     strings = list("aaabbccccdddeee")
     data = list(map(int, "123111223323412"))
-    ps = pd.DataFrame(dict(strings=strings, data=data))
+    ps = pd.DataFrame({"strings": strings, "data": data})
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
     result = s.groupby("strings")["data"].nunique()
@@ -1444,7 +1444,7 @@ def test_groupby_dataframe_cum_caching(op):
     Relates to #3756.
     """
     df = pd.DataFrame(
-        dict(a=list("aabbcc")), index=pd.date_range(start="20100101", periods=6)
+        {"a": list("aabbcc")}, index=pd.date_range(start="20100101", periods=6)
     )
     df["ones"] = 1
     df["twos"] = 2
@@ -2219,7 +2219,7 @@ def test_groupby_shift_within_partition_sorting():
 
 def test_groupby_shift_with_freq(shuffle_method):
     pdf = pd.DataFrame(
-        dict(a=[1, 2, 3, 4, 5, 6], b=[0, 0, 0, 1, 1, 1]),
+        {"a": [1, 2, 3, 4, 5, 6], "b": [0, 0, 0, 1, 1, 1]},
         index=pd.date_range(start="20100101", periods=6),
     )
     ddf = dd.from_pandas(pdf, npartitions=3)
