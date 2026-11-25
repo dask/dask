@@ -586,8 +586,8 @@ class HashJoinP2P(Merge, PartitionsFiltered):
 
         transfer_name_left = f"hash-join-transfer-{token_left}"
         transfer_name_right = f"hash-join-transfer-{token_right}"
-        transfer_keys_left = list()
-        transfer_keys_right = list()
+        transfer_keys_left = []
+        transfer_keys_right = []
         func = create_assign_index_merge_transfer()
         for i in range(self.left.npartitions):
             t = Task(

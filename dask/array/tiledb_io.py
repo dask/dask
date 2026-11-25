@@ -41,7 +41,7 @@ def from_tiledb(uri, attribute=None, chunks=None, storage_options=None, **kwargs
     """
     import tiledb
 
-    tiledb_config = storage_options or dict()
+    tiledb_config = storage_options or {}
     key = tiledb_config.pop("key", None)
 
     if isinstance(uri, tiledb.Array):
@@ -132,7 +132,7 @@ def to_tiledb(
     """
     import tiledb
 
-    tiledb_config = storage_options or dict()
+    tiledb_config = storage_options or {}
     # encryption key, if any
     key = key or tiledb_config.pop("key", None)
 

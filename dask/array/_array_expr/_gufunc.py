@@ -120,7 +120,7 @@ def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_cored
     # Expand defaults or axis
     if axes is None:
         if axis is not None:
-            axes = [(axis,) if cd else tuple() for cd in core_dims]
+            axes = [(axis,) if cd else () for cd in core_dims]
         else:
             axes = [tuple(range(-len(icd), 0)) for icd in core_dims]
     elif not isinstance(axes, list):
@@ -407,7 +407,7 @@ def apply_gufunc(
     ]
     input_dimss = [l + c for l, c in zip(loop_input_dimss, input_coredimss)]
 
-    loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else tuple()
+    loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else ()
 
     ## Assess input args for same size and chunk sizes
     ### Collect sizes and chunksizes of all dims in all arrays

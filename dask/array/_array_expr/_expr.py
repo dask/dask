@@ -148,7 +148,7 @@ def unify_chunks_expr(*args):
         return dict(zip(inds[0], arrays[0].chunks)), arrays, False
 
     nameinds = []
-    blockdim_dict = dict()
+    blockdim_dict = {}
     for a, ind in arginds:
         if ind is not None and not isinstance(a, ArrayBlockwiseDep):
             nameinds.append((a.name, ind))

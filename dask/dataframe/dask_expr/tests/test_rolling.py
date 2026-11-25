@@ -54,13 +54,13 @@ def test_rolling_apis(
     df, pdf, window, api, how_args, min_periods, center, numeric_only
 ):
     args = (window,)
-    kwargs = dict(
-        min_periods=min_periods,
-        center=center,
-    )
-    how_kwargs = dict(
-        numeric_only=numeric_only,
-    )
+    kwargs = {
+        "min_periods": min_periods,
+        "center": center,
+    }
+    how_kwargs = {
+        "numeric_only": numeric_only,
+    }
     result = getattr(df.rolling(*args, **kwargs), api)(*how_args, **how_kwargs)
     expected = getattr(pdf.rolling(*args, **kwargs), api)(*how_args, **how_kwargs)
     assert_eq(result, expected)
@@ -113,7 +113,7 @@ def test_rolling_apply(df, pdf, window, raw, foo, bar):
             assert isinstance(vals, pd.Series)
         return vals.sum()
 
-    kwargs = dict(raw=raw, args=(foo,), kwargs=dict(bar_=bar))
+    kwargs = {"raw": raw, "args": (foo,), "kwargs": {"bar_": bar}}
 
     result = df.rolling(window).apply(my_sum, **kwargs)
     expected = pdf.rolling(window).apply(my_sum, **kwargs)

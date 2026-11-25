@@ -94,7 +94,7 @@ def sizeof_python_dict(d):
         sys.getsizeof(d)
         + sizeof(list(d.keys()))
         + sizeof(list(d.values()))
-        - 2 * sizeof(list())
+        - 2 * sizeof([])
     )
 
 

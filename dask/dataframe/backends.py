@@ -359,8 +359,8 @@ def meta_nonempty_object(x):
 @meta_nonempty.register(pd.DataFrame)
 def meta_nonempty_dataframe(x):
     idx = meta_nonempty(x.index)
-    dt_s_dict = dict()
-    data = dict()
+    dt_s_dict = {}
+    data = {}
     for i in range(len(x.columns)):
         series = x.iloc[:, i]
         dt = series.dtype

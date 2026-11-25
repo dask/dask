@@ -915,15 +915,19 @@ class Sum(Reduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(skipna=self.skipna, numeric_only=self.numeric_only, axis=self.axis)
+        return {
+            "skipna": self.skipna,
+            "numeric_only": self.numeric_only,
+            "axis": self.axis,
+        }
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna, axis=self.axis)
+        return {"skipna": self.skipna, "axis": self.axis}
 
     @property
     def aggregate_kwargs(self):
-        return dict(skipna=self.skipna, axis=self.axis)
+        return {"skipna": self.skipna, "axis": self.axis}
 
 
 class Prod(Sum):
@@ -943,19 +947,21 @@ class Max(Reduction):
     @property
     def chunk_kwargs(self):
         if self.frame._meta.ndim < 2:
-            return dict(skipna=self.skipna)
+            return {"skipna": self.skipna}
         else:
-            return dict(
-                skipna=self.skipna, numeric_only=self.numeric_only, axis=self.axis
-            )
+            return {
+                "skipna": self.skipna,
+                "numeric_only": self.numeric_only,
+                "axis": self.axis,
+            }
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna, axis=self.axis)
+        return {"skipna": self.skipna, "axis": self.axis}
 
     @property
     def aggregate_kwargs(self):
-        return dict(skipna=self.skipna, axis=self.axis)
+        return {"skipna": self.skipna, "axis": self.axis}
 
 
 class Min(Max):
@@ -969,9 +975,9 @@ class Any(Reduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(
-            skipna=self.skipna,
-        )
+        return {
+            "skipna": self.skipna,
+        }
 
 
 class All(Reduction):
@@ -981,9 +987,9 @@ class All(Reduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(
-            skipna=self.skipna,
-        )
+        return {
+            "skipna": self.skipna,
+        }
 
 
 class IdxMin(Reduction):
@@ -996,15 +1002,15 @@ class IdxMin(Reduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(
-            skipna=self.skipna,
-            fn=self._reduction_attribute,
-            numeric_only=self.numeric_only,
-        )
+        return {
+            "skipna": self.skipna,
+            "fn": self._reduction_attribute,
+            "numeric_only": self.numeric_only,
+        }
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna, fn=self._reduction_attribute)
+        return {"skipna": self.skipna, "fn": self._reduction_attribute}
 
     @property
     def aggregate_kwargs(self):
@@ -1138,7 +1144,7 @@ class Var(ArrayReduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(skipna=self.skipna)
+        return {"skipna": self.skipna}
 
     @property
     def combine_kwargs(self):
@@ -1147,12 +1153,12 @@ class Var(ArrayReduction):
     @property
     def aggregate_kwargs(self):
         cols = self.frame.columns if self.frame.ndim == 1 else self.frame._meta.columns
-        return dict(
-            ddof=self.ddof,
-            skipna=self.skipna,
-            meta=self._meta,
-            index=cols,
-        )
+        return {
+            "ddof": self.ddof,
+            "skipna": self.skipna,
+            "meta": self._meta,
+            "index": cols,
+        }
 
     @classmethod
     def reduction_chunk(cls, x, skipna):
@@ -1190,7 +1196,7 @@ class Moment(ArrayReduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(order=self.order)
+        return {"order": self.order}
 
     @property
     def combine_kwargs(self):
@@ -1198,11 +1204,11 @@ class Moment(ArrayReduction):
 
     @property
     def aggregate_kwargs(self):
-        return dict(
-            order=self.order,
-            meta=self._meta,
-            index=self.frame.columns,
-        )
+        return {
+            "order": self.order,
+            "meta": self._meta,
+            "index": self.frame.columns,
+        }
 
     @classmethod
     def reduction_chunk(cls, x, order):
@@ -1263,9 +1269,9 @@ class Count(Reduction):
     @property
     def chunk_kwargs(self):
         if self.frame._meta.ndim < 2:
-            return dict()
+            return {}
         else:
-            return dict(numeric_only=self.numeric_only)
+            return {"numeric_only": self.numeric_only}
 
 
 class IndexCount(Reduction):

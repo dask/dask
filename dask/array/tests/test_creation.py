@@ -339,7 +339,7 @@ def test_arange_float_step():
 
 def test_indices_wrong_chunks():
     with pytest.raises(ValueError):
-        da.indices((1,), chunks=tuple())
+        da.indices((1,), chunks=())
 
 
 def test_indices_dimensions_chunks():
@@ -357,14 +357,14 @@ def test_indices_dimensions_chunks():
 
 
 def test_empty_indices():
-    darr = da.indices(tuple(), chunks=tuple())
-    nparr = np.indices(tuple())
+    darr = da.indices((), chunks=())
+    nparr = np.indices(())
     assert darr.shape == nparr.shape
     assert darr.dtype == nparr.dtype
     assert_eq(darr, nparr)
 
-    darr = da.indices(tuple(), float, chunks=tuple())
-    nparr = np.indices(tuple(), float)
+    darr = da.indices((), float, chunks=())
+    nparr = np.indices((), float)
     assert darr.shape == nparr.shape
     assert darr.dtype == nparr.dtype
     assert_eq(darr, nparr)

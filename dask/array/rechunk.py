@@ -688,8 +688,8 @@ def _compute_rechunk(x, chunks):
 
     ndim = x.ndim
     crossed = intersect_chunks(x.chunks, chunks)
-    x2 = dict()
-    intermediates = dict()
+    x2 = {}
+    intermediates = {}
     token = tokenize(x, chunks)
     merge_name = f"rechunk-merge-{token}"
     split_name = f"rechunk-split-{token}"

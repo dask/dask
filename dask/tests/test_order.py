@@ -1402,16 +1402,16 @@ def test_array_vs_dataframe(optimize):
 
     size = 5000
     ds = xr.Dataset(
-        dict(
-            anom_u=(
+        {
+            "anom_u": (
                 ["time", "face", "j", "i"],
                 da.random.random((size, 1, 987, 1920), chunks=(10, 1, -1, -1)),
             ),
-            anom_v=(
+            "anom_v": (
                 ["time", "face", "j", "i"],
                 da.random.random((size, 1, 987, 1920), chunks=(10, 1, -1, -1)),
             ),
-        )
+        }
     )
 
     quad = ds**2
@@ -2347,10 +2347,10 @@ def test_xarray_8414():
     xr = pytest.importorskip("xarray")
 
     ds = xr.Dataset(
-        data_vars=dict(
-            a=(("x", "y"), np.arange(80).reshape(8, 10)),
-            b=(("y"), np.arange(10)),
-        )
+        data_vars={
+            "a": (("x", "y"), np.arange(80).reshape(8, 10)),
+            "b": (("y"), np.arange(10)),
+        }
     ).chunk(x=1)
 
     def f(ds):

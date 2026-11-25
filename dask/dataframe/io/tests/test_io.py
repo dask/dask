@@ -117,7 +117,7 @@ def test_from_array_with_record_dtype():
 def test_from_pandas_dataframe():
     a = list("aaaaaaabbbbbbbbccccccc")
     df = pd.DataFrame(
-        dict(a=a, b=np.random.randn(len(a))),
+        {"a": a, "b": np.random.randn(len(a))},
         index=pd.date_range(start="20120101", periods=len(a)),
     )
     ddf = dd.from_pandas(df, 3)

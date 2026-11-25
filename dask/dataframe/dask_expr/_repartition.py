@@ -292,7 +292,7 @@ class RepartitionDivisions(Repartition):
             return len(x) >= 2 and x[-1] == x[-2]
 
         c = [a[0]]
-        d = dict()
+        d = {}
         low = a[0]
 
         i, j = 1, 1  # indices for old/new divisions

@@ -489,13 +489,13 @@ def test_merge_known_to_single(how, shuffle_method):
     idx = [i for i, s in enumerate(partition_sizes) for _ in range(s)]
     k = [i for s in partition_sizes for i in range(s)]
     vi = range(len(k))
-    pdf1 = pd.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
+    pdf1 = pd.DataFrame({"idx": idx, "k": k, "v1": vi}).set_index(["idx"])
 
     partition_sizes = np.array([4, 2, 5, 3, 2, 5, 9, 4, 7, 4, 8])
     idx = [i for i, s in enumerate(partition_sizes) for _ in range(s)]
     k = [i for s in partition_sizes for i in range(s)]
     vi = range(len(k))
-    pdf2 = pd.DataFrame(dict(idx=idx, k=k, v1=vi)).set_index(["idx"])
+    pdf2 = pd.DataFrame({"idx": idx, "k": k, "v1": vi}).set_index(["idx"])
 
     df1 = repartition(pdf1, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     df2 = from_pandas(pdf2, npartitions=1, sort=False)
@@ -848,11 +848,11 @@ def test_merge_avoid_overeager_filter_pushdown():
 
 @pytest.mark.skipif(not PANDAS_GE_220, reason="pandas bug")
 def test_join_consistent_index_names():
-    pdf1 = pd.DataFrame(index=["a", "b", "c"], data=dict(a=[1, 2, 3]))
+    pdf1 = pd.DataFrame(index=["a", "b", "c"], data={"a": [1, 2, 3]})
     pdf1.index.name = "test"
     df1 = from_pandas(pdf1, 2)
 
-    pdf2 = pd.DataFrame(index=["a", "b", "d"], data=dict(b=[1, 2, 3]))
+    pdf2 = pd.DataFrame(index=["a", "b", "d"], data={"b": [1, 2, 3]})
     df2 = from_pandas(pdf2, 2)
     result = df1.join(df2, how="outer")
     expected = pdf1.join(pdf2, how="outer")

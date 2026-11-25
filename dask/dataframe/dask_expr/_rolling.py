@@ -141,15 +141,15 @@ class RollingReduction(Expr):
             after=after,
             meta=self._meta,
             enforce_metadata=True,
-            kwargs=dict(
-                window=self.window,
-                kwargs=self.kwargs,
-                how=self.how,
-                how_args=self.how_args,
-                how_kwargs=self.how_kwargs,
-                groupby_kwargs=self.groupby_kwargs,
-                groupby_slice=self.groupby_slice,
-            ),
+            kwargs={
+                "window": self.window,
+                "kwargs": self.kwargs,
+                "how": self.how,
+                "how_args": self.how_args,
+                "how_kwargs": self.how_kwargs,
+                "groupby_kwargs": self.groupby_kwargs,
+                "groupby_slice": self.groupby_slice,
+            },
         )
 
 
@@ -269,9 +269,11 @@ class Rolling:
 
     @functools.cached_property
     def kwargs(self):
-        return dict(
-            min_periods=self.min_periods, center=self.center, win_type=self.win_type
-        )
+        return {
+            "min_periods": self.min_periods,
+            "center": self.center,
+            "win_type": self.win_type,
+        }
 
     def _single_agg(self, expr_cls, how_args=(), how_kwargs=None):
         return new_collection(
