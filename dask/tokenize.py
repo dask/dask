@@ -30,24 +30,6 @@ class TokenizationError(RuntimeError):
     pass
 
 
-# pickle and cloudpickle can surface these from user-defined reduction methods.
-_PICKLING_ERRORS = (
-    ArithmeticError,
-    AssertionError,
-    AttributeError,
-    ImportError,
-    IndexError,
-    KeyError,
-    OSError,
-    pickle.PicklingError,
-    RecursionError,
-    RuntimeError,
-    TypeError,
-    ValueError,
-    Warning,
-)
-
-
 def _tokenize(*args: object, **kwargs: object) -> str:
     token: object = _normalize_seq_func(args)
     if kwargs:
@@ -226,7 +208,7 @@ def normalize_object(o):
 
     try:
         return _normalize_pickle(o)
-    except _PICKLING_ERRORS:
+    except Exception:  # noqa: BLE001
         _maybe_raise_nondeterministic(
             f"Object {o!r} cannot be deterministically hashed. This likely "
             "indicates that the object cannot be serialized deterministically."
@@ -262,13 +244,13 @@ def _normalize_pickle(o: object) -> tuple:
                 out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
             pickle.loads(out, buffers=buffers)
             pik2 = hash_buffer_hex(out)
-        except _PICKLING_ERRORS:
+        except Exception:  # noqa: BLE001
             buffers.clear()
             try:
                 out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
                 pickle.loads(out, buffers=buffers)
                 pik2 = hash_buffer_hex(out)
-            except _PICKLING_ERRORS:
+            except Exception:  # noqa: BLE001
                 break
         if pik and pik2 and pik == pik2:
             break
@@ -489,7 +471,7 @@ def register_numpy():
     def normalize_ufunc(func):
         try:
             return _normalize_pickle(func)
-        except _PICKLING_ERRORS:
+        except Exception:  # noqa: BLE001
             _maybe_raise_nondeterministic(
                 f"Cannot tokenize numpy ufunc {func!r}. Please use functions "
                 "of the dask.array.ufunc module instead. See also "
