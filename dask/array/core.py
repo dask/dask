@@ -3207,14 +3207,17 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
                 "zero length dimensions with 0(s) in chunks"
             )
 
-    if not allints and shape is not None:
-        if not all(
+    if (
+        not allints
+        and shape is not None
+        and not all(
             c == s or (math.isnan(c) or math.isnan(s))
             for c, s in zip(map(sum, chunks), shape)
-        ):
-            raise ValueError(
-                f"Chunks do not add up to shape. Got chunks={chunks}, shape={shape}"
-            )
+        )
+    ):
+        raise ValueError(
+            f"Chunks do not add up to shape. Got chunks={chunks}, shape={shape}"
+        )
     if allints or isinstance(sum(sum(_) for _ in chunks), int):
         # Fastpath for when we already know chunks contains only integers
         return tuple(tuple(ch) for ch in chunks)

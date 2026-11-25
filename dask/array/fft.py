@@ -145,19 +145,21 @@ def fft_wrap(fft_func, kind=None, dtype=None, allow_fftpack=False):
     >>> parallel_fft = dff.fft_wrap(np.fft.fft)
     >>> parallel_ifft = dff.fft_wrap(np.fft.ifft)
     """
-    if scipy is not None:
-        if fft_func.__module__.startswith("scipy.fftpack"):
-            if not allow_fftpack:
-                warnings.warn(
-                    f"Function {fft_func.__name__} from `scipy.fftpack` does not "
-                    "match NumPy's API and is considered legacy. Please use "
-                    "`scipy.fft` instead. To suppress this warning and allow usage"
-                    ", set `allow_fftpack=True`. Support for `scipy.fftpack` will "
-                    "be deprecated in future releases.",
-                    FutureWarning,
-                )
-            # If allow_fftpack is True, we proceed but we skip passing the norm
-            # argument.
+    if (
+        scipy is not None
+        and fft_func.__module__.startswith("scipy.fftpack")
+        and not allow_fftpack
+    ):
+        warnings.warn(
+            f"Function {fft_func.__name__} from `scipy.fftpack` does not "
+            "match NumPy's API and is considered legacy. Please use "
+            "`scipy.fft` instead. To suppress this warning and allow usage"
+            ", set `allow_fftpack=True`. Support for `scipy.fftpack` will "
+            "be deprecated in future releases.",
+            FutureWarning,
+        )
+        # If allow_fftpack is True, we proceed but we skip passing the norm
+        # argument.
 
     if kind is None:
         kind = fft_func.__name__

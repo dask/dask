@@ -922,12 +922,11 @@ class GroupByApply(Expr, GroupByBase):
 
     @functools.cached_property
     def need_to_shuffle(self):
-        if not any(isinstance(b, Expr) for b in self.by):
-            if any(
-                set(self._by_columns) >= set(cols)
-                for cols in self.frame.unique_partition_mapping_columns_from_shuffle
-            ):
-                return False
+        if not any(isinstance(b, Expr) for b in self.by) and any(
+            set(self._by_columns) >= set(cols)
+            for cols in self.frame.unique_partition_mapping_columns_from_shuffle
+        ):
+            return False
 
         return any(div is None for div in self.frame.divisions) or not any(
             _contains_index_name(self.frame._meta.index.name, b) for b in self.by

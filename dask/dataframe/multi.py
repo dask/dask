@@ -93,15 +93,21 @@ def merge_chunk(
 
             if col in lhs:
                 left = lhs[col]
-            elif col == kwargs.get("right_on") and left_index:
-                if isinstance(lhs.index.dtype, pd.CategoricalDtype):
-                    left = lhs.index
+            elif (
+                col == kwargs.get("right_on")
+                and left_index
+                and isinstance(lhs.index.dtype, pd.CategoricalDtype)
+            ):
+                left = lhs.index
 
             if col in rhs:
                 right = rhs[col]
-            elif col == kwargs.get("left_on") and right_index:
-                if isinstance(rhs.index.dtype, pd.CategoricalDtype):
-                    right = rhs.index
+            elif (
+                col == kwargs.get("left_on")
+                and right_index
+                and isinstance(rhs.index.dtype, pd.CategoricalDtype)
+            ):
+                right = rhs.index
 
             dtype = "category"
             if left is not None and right is not None:
@@ -120,14 +126,15 @@ def merge_chunk(
                 else:
                     rhs = rhs.assign(**{col: right.astype(dtype)})
 
-    if len(args) and args[0] == "leftsemi" or kwargs.get("how") == "leftsemi":
-        if isinstance(rhs, (pd.DataFrame, pd.Series)):
-            # otherwise it's cudf
-            rhs = rhs.drop_duplicates()
-            if len(args):
-                args[0] = "inner"
-            else:
-                kwargs["how"] = "inner"
+    if (
+        len(args) and args[0] == "leftsemi" or kwargs.get("how") == "leftsemi"
+    ) and isinstance(rhs, (pd.DataFrame, pd.Series)):
+        # otherwise it's cudf
+        rhs = rhs.drop_duplicates()
+        if len(args):
+            args[0] = "inner"
+        else:
+            kwargs["how"] = "inner"
     out = lhs.merge(rhs, *args, **kwargs)
 
     # Workaround for pandas bug where if the left frame of a merge operation is

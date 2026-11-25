@@ -64,9 +64,12 @@ def pytest_runtest_setup(item):
         pytest.skip("need --runslow option to run")
     if "array_expr" in item.keywords and not item.config.getoption("--runarrayexpr"):
         pytest.skip("need --runarrayexpr option to run")
-    elif "array_expr" not in item.keywords and item.config.getoption("--runarrayexpr"):
-        if "normal_and_array_expr" not in item.keywords:
-            pytest.skip("only array-expr tests are being run")
+    elif (
+        "array_expr" not in item.keywords
+        and item.config.getoption("--runarrayexpr")
+        and "normal_and_array_expr" not in item.keywords
+    ):
+        pytest.skip("only array-expr tests are being run")
 
 
 def pytest_assertrepr_compare(op, left, right):

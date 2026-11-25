@@ -257,14 +257,14 @@ def _validate_rechunk(old_chunks, new_chunks):
     for old_shape, old_dim, new_shape, new_dim in zip(
         old_shapes, old_chunks, new_shapes, new_chunks
     ):
-        if old_shape != new_shape:
-            if not (
-                math.isnan(old_shape) and math.isnan(new_shape)
-            ) or not np.array_equal(old_dim, new_dim, equal_nan=True):
-                raise ValueError(
-                    "Chunks must be unchanging along dimensions with missing values.\n\n"
-                    "A possible solution:\n  x.compute_chunk_sizes()"
-                )
+        if old_shape != new_shape and (
+            not (math.isnan(old_shape) and math.isnan(new_shape))
+            or not np.array_equal(old_dim, new_dim, equal_nan=True)
+        ):
+            raise ValueError(
+                "Chunks must be unchanging along dimensions with missing values.\n\n"
+                "A possible solution:\n  x.compute_chunk_sizes()"
+            )
 
 
 def rechunk(

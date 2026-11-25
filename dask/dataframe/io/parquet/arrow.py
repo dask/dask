@@ -535,14 +535,17 @@ class ArrowDatasetEngine(Engine):
 
         # Ensure `columns` and `partitions` do not overlap
         columns_and_parts = columns.copy()
-        if not isinstance(partitions, (list, tuple)):
-            if columns_and_parts and partitions:
-                for part_name in partitions.partition_names:
-                    if part_name in columns:
-                        columns.remove(part_name)
-                    else:
-                        columns_and_parts.append(part_name)
-                columns = columns or None
+        if (
+            not isinstance(partitions, (list, tuple))
+            and columns_and_parts
+            and partitions
+        ):
+            for part_name in partitions.partition_names:
+                if part_name in columns:
+                    columns.remove(part_name)
+                else:
+                    columns_and_parts.append(part_name)
+            columns = columns or None
 
         # Always convert pieces to list
         if not isinstance(pieces, list):
@@ -1126,14 +1129,13 @@ class ArrowDatasetEngine(Engine):
 
         # Use pandas metadata to update categories
         pandas_metadata = _get_pandas_metadata(schema) or {}
-        if pandas_metadata:
-            if categories is None:
-                categories = []
-                for col in pandas_metadata["columns"]:
-                    if (col["pandas_type"] == "categorical") and (
-                        col["name"] not in categories
-                    ):
-                        categories.append(col["name"])
+        if pandas_metadata and categories is None:
+            categories = []
+            for col in pandas_metadata["columns"]:
+                if (col["pandas_type"] == "categorical") and (
+                    col["name"] not in categories
+                ):
+                    categories.append(col["name"])
 
         # Use _arrow_table_to_pandas to generate meta
         arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
@@ -1541,20 +1543,19 @@ class ArrowDatasetEngine(Engine):
                                     filters
                                     or (blocksize and split_row_groups is True)
                                     or aggregation_depth
-                                ):
+                                ) and (cmin is None or (last and cmin < last)):
                                     # Only think about bailing if we don't need
                                     # stats for filtering
-                                    if cmin is None or (last and cmin < last):
-                                        # We are collecting statistics for divisions
-                                        # only (no filters) - Column isn't sorted, or
-                                        # we have an all-null partition, so lets bail.
-                                        #
-                                        # Note: This assumes ascending order.
-                                        #
-                                        gather_statistics = False
-                                        file_row_group_stats = {}
-                                        file_row_group_column_stats = {}
-                                        break
+                                    # We are collecting statistics for divisions
+                                    # only (no filters) - Column isn't sorted, or
+                                    # we have an all-null partition, so lets bail.
+                                    #
+                                    # Note: This assumes ascending order.
+                                    #
+                                    gather_statistics = False
+                                    file_row_group_stats = {}
+                                    file_row_group_column_stats = {}
+                                    break
 
                                 if single_rg_parts:
                                     s["columns"].append(

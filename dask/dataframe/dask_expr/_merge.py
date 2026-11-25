@@ -209,16 +209,14 @@ class Merge(Expr):
 
     @property
     def _bcast_left(self):
-        if self.operand("_npartitions") is not None:
-            if self.broadcast_side == "right":
-                return Repartition(self.left, new_partitions=self._npartitions)
+        if self.operand("_npartitions") is not None and self.broadcast_side == "right":
+            return Repartition(self.left, new_partitions=self._npartitions)
         return self.left
 
     @property
     def _bcast_right(self):
-        if self.operand("_npartitions") is not None:
-            if self.broadcast_side == "left":
-                return Repartition(self.right, new_partitions=self._npartitions)
+        if self.operand("_npartitions") is not None and self.broadcast_side == "left":
+            return Repartition(self.right, new_partitions=self._npartitions)
         return self.right
 
     def _divisions(self):

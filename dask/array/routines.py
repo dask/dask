@@ -752,9 +752,8 @@ def _bincount_agg(bincounts, dtype, **kwargs):
 def bincount(x, weights=None, minlength=0, split_every=None):
     if x.ndim != 1:
         raise ValueError("Input array must be one dimensional. Try using x.ravel()")
-    if weights is not None:
-        if weights.chunks != x.chunks:
-            raise ValueError("Chunks of input array x and weights must match.")
+    if weights is not None and weights.chunks != x.chunks:
+        raise ValueError("Chunks of input array x and weights must match.")
 
     token = tokenize(x, weights, minlength)
     args = [x, "i"]
@@ -1420,11 +1419,10 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
 
     # if bins is a list, tuple, then make sure the length is the same
     # as the number dimensions.
-    if isinstance(bins, (list, tuple)):
-        if len(bins) != D:
-            raise ValueError(
-                "The dimension of bins must be equal to the dimension of the sample."
-            )
+    if isinstance(bins, (list, tuple)) and len(bins) != D:
+        raise ValueError(
+            "The dimension of bins must be equal to the dimension of the sample."
+        )
 
     # if range is defined, check that it's the right length and also a
     # sequence of pairs.
