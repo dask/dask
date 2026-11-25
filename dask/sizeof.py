@@ -4,6 +4,7 @@ import itertools
 import logging
 import random
 import sys
+import threading
 from array import array
 
 from packaging.version import Version
@@ -14,6 +15,32 @@ from dask.utils import Dispatch
 sizeof = Dispatch(name="sizeof")
 
 logger = logging.getLogger(__name__)
+
+_ACTIVE_STATE = threading.local()
+
+
+def _get_active_ids() -> set[int]:
+    """Return the per-thread set of container IDs currently on the sizeof stack."""
+    active_ids = getattr(_ACTIVE_STATE, "active_ids", None)
+    if active_ids is None:
+        active_ids = set()
+        _ACTIVE_STATE.active_ids = active_ids
+    return active_ids
+
+
+def _guarded_container_sizeof(obj, compute_size):
+    """Size a container while guarding against reference cycles and deep recursion."""
+    active_ids = _get_active_ids()
+    obj_id = id(obj)
+    if obj_id in active_ids:
+        return 0
+    active_ids.add(obj_id)
+    try:
+        return compute_size(obj)
+    except RecursionError:
+        return sys.getsizeof(obj)
+    finally:
+        active_ids.discard(obj_id)
 
 
 @sizeof.register(object)
@@ -37,11 +64,7 @@ def sizeof_array(o):
     return o.itemsize * len(o)
 
 
-@sizeof.register(list)
-@sizeof.register(tuple)
-@sizeof.register(set)
-@sizeof.register(frozenset)
-def sizeof_python_collection(seq):
+def _sizeof_python_collection(seq):
     num_items = len(seq)
     num_samples = 10
     if num_items > num_samples:
@@ -57,6 +80,14 @@ def sizeof_python_collection(seq):
         )
     else:
         return sys.getsizeof(seq) + sum(map(sizeof, seq))
+
+
+@sizeof.register(list)
+@sizeof.register(tuple)
+@sizeof.register(set)
+@sizeof.register(frozenset)
+def sizeof_python_collection(seq):
+    return _guarded_container_sizeof(seq, _sizeof_python_collection)
 
 
 class SimpleSizeof:
@@ -88,14 +119,18 @@ def sizeof_blocked(d):
     return sys.getsizeof(d)
 
 
-@sizeof.register(dict)
-def sizeof_python_dict(d):
+def _sizeof_python_dict(d):
     return (
         sys.getsizeof(d)
         + sizeof(list(d.keys()))
         + sizeof(list(d.values()))
         - 2 * sizeof(list())
     )
+
+
+@sizeof.register(dict)
+def sizeof_python_dict(d):
+    return _guarded_container_sizeof(d, _sizeof_python_dict)
 
 
 @sizeof.register_lazy("cupy")

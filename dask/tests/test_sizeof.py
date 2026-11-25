@@ -328,3 +328,35 @@ def test_xarray_not_in_memory():
         dataset.load()
         assert dataset.foo._in_memory
         assert sizeof(dataset) >= sizeof(arr) + sizeof(ind)
+
+
+def test_self_referential_containers():
+    cyclic_dict = {}
+    cyclic_dict["self"] = cyclic_dict
+    assert sizeof(cyclic_dict) >= sys.getsizeof(cyclic_dict)
+
+    cyclic_list = []
+    cyclic_list.append(cyclic_list)
+    assert sizeof(cyclic_list) >= sys.getsizeof(cyclic_list)
+
+    mutual_dict = {}
+    mutual_list = [mutual_dict]
+    mutual_dict["list"] = mutual_list
+    assert sizeof(mutual_dict) >= sys.getsizeof(mutual_dict)
+
+
+def test_deeply_nested_containers():
+    nested_dict = 1
+    nested_list = 1
+    depth = sys.getrecursionlimit() + 50
+    for _ in range(depth):
+        nested_dict = {"child": nested_dict}
+        nested_list = [nested_list]
+
+    assert sizeof(nested_dict) >= sys.getsizeof(nested_dict)
+    assert sizeof(nested_list) >= sys.getsizeof(nested_list)
+
+
+def test_shared_non_cyclic_containers():
+    shared = {"payload": "x" * 10_000}
+    assert sizeof([shared, shared]) >= 2 * sizeof(shared)
