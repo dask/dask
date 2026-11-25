@@ -148,7 +148,7 @@ def raise_on_meta_error(funcname=None, udf=False):
     try:
         yield
     except Exception as e:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
+        _exc_type, _exc_value, exc_traceback = sys.exc_info()
         tb = "".join(traceback.format_tb(exc_traceback))
         msg = "Metadata inference failed{0}.\n\n"
         if udf:
@@ -662,7 +662,7 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
 
 
 def assert_max_deps(x, n, eq=True):
-    dependencies, dependents = get_deps(x.dask)
+    dependencies, _dependents = get_deps(x.dask)
     if eq:
         assert max(map(len, dependencies.values())) == n
     else:

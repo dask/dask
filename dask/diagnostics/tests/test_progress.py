@@ -14,9 +14,9 @@ dsk = {"a": 1, "b": 2, "c": (add, "a", "b"), "d": (mul, "a", "b"), "e": (mul, "c
 
 
 def check_bar_completed(capsys, width=40):
-    out, err = capsys.readouterr()
+    out, _err = capsys.readouterr()
     assert out.count("100% Completed") == 1
-    bar, percent, time = (i.strip() for i in out.split("\r")[-1].split("|"))
+    bar, percent, _time = (i.strip() for i in out.split("\r")[-1].split("|"))
     assert bar == "[" + "#" * width + "]"
     assert percent == "100% Completed"
 

@@ -474,7 +474,7 @@ def apply_gufunc(
     loop_output_shape = tmp.shape
     loop_output_chunks = tmp.chunks
     keys = list(flatten(tmp.__dask_keys__()))
-    name, token = keys[0][0].split("-")
+    name, _token = keys[0][0].split("-")
 
     ### *) Treat direct output
     if nout is None:

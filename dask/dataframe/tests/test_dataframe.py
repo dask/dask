@@ -4013,7 +4013,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
     dsk = dropped.__dask_optimize__(dropped.dask, dropped.__dask_keys__())
     from dask.core import get_deps
 
-    dependencies, dependents = get_deps(dsk)
+    _dependencies, _dependents = get_deps(dsk)
 
     assert dropped.npartitions == (split_out or 1)
     assert sorted(dropped.compute(scheduler="sync")) == sorted(s.unique())
