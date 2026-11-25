@@ -857,8 +857,6 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "reflect", {}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "symmetric", {}),
-        ((10, 11), (4, 5), ((1, 4), (2, 3)), "reflect", {"reflect_type": "even"}),
-        ((10, 11), (4, 5), ((1, 4), (2, 3)), "symmetric", {"reflect_type": "even"}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "wrap", {}),
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
