@@ -97,11 +97,10 @@ class MergeAsof(Merge):
         right_by = self.right_by
 
         ixname = ixcol = divs = None
-        if left_on is not None:
-            if right_index:
-                divs = self.left.divisions if self.left.known_divisions else None
-                ixname = self.left.index.name
-                ixcol = left.columns[0]
+        if left_on is not None and right_index:
+            divs = self.left.divisions if self.left.known_divisions else None
+            ixname = self.left.index.name
+            ixcol = left.columns[0]
 
         if right_on is not None:
             right = (

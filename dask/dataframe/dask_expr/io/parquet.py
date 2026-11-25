@@ -1548,11 +1548,10 @@ def _aggregate_row_groups(parts, statistics, dataset_info):
     fs = dataset_info["fs"]
     aggregation_depth = dataset_info["aggregation_depth"]
 
-    if statistics:
-        if blocksize or (split_row_groups and int(split_row_groups) > 1):
-            parts, statistics = aggregate_row_groups(
-                parts, statistics, blocksize, split_row_groups, fs, aggregation_depth
-            )
+    if statistics and (blocksize or (split_row_groups and int(split_row_groups) > 1)):
+        parts, statistics = aggregate_row_groups(
+            parts, statistics, blocksize, split_row_groups, fs, aggregation_depth
+        )
     return parts, statistics
 
 
@@ -1788,20 +1787,23 @@ def _read_partition_stats_group(parts, fs, columns=None):
                 for i in range(row_group.num_columns):
                     col = row_group.column(i)
                     name = col.path_in_schema
-                    if name in columns:
-                        if col.statistics and col.statistics.has_min_max:
-                            if name in column_stats:
-                                column_stats[name]["min"] = min(
-                                    column_stats[name]["min"], col.statistics.min
-                                )
-                                column_stats[name]["max"] = max(
-                                    column_stats[name]["max"], col.statistics.max
-                                )
-                            else:
-                                column_stats[name] = {
-                                    "min": col.statistics.min,
-                                    "max": col.statistics.max,
-                                }
+                    if (
+                        name in columns
+                        and col.statistics
+                        and col.statistics.has_min_max
+                    ):
+                        if name in column_stats:
+                            column_stats[name]["min"] = min(
+                                column_stats[name]["min"], col.statistics.min
+                            )
+                            column_stats[name]["max"] = max(
+                                column_stats[name]["max"], col.statistics.max
+                            )
+                        else:
+                            column_stats[name] = {
+                                "min": col.statistics.min,
+                                "max": col.statistics.max,
+                            }
 
         # Convert dict-of-dict to list-of-dict to be consistent
         # with current `dd.read_parquet` convention (for now)

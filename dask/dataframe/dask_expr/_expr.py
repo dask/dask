@@ -2132,37 +2132,38 @@ class Filter(Blockwise):
                     type(self)(self.frame, result), *parent.operands[1:]
                 )
 
-        if isinstance(parent, (FilterAlign, Filter)) and not isinstance(
-            self.frame, (FilterAlign, Filter)
+        if (
+            isinstance(parent, (FilterAlign, Filter))
+            and not isinstance(self.frame, (FilterAlign, Filter))
+            and not self.frame._filter_passthrough_available(self, dependents)
+            # We want to collect filters again when we can't move them
+            # anymore. Otherwise, a chain of Filters might block Projections
+            # We start with the first Filter, e.g. if my child isn't a filter
+            # anymore. Filters above that don't know if the first Filter can
+            # still move further
+            and is_filter_pushdown_available(
+                self, parent, dependents, allow_reduction=False
+            )
         ):
-            if not self.frame._filter_passthrough_available(self, dependents):
-                # We want to collect filters again when we can't move them
-                # anymore. Otherwise, a chain of Filters might block Projections
-                # We start with the first Filter, e.g. if my child isn't a filter
-                # anymore. Filters above that don't know if the first Filter can
-                # still move further
-                if is_filter_pushdown_available(
-                    self, parent, dependents, allow_reduction=False
-                ):
-                    # We can only squash 2 filters together if the predicate of parent
-                    # does not directly depend on self, e.g. if
-                    # sum is in the predicate of parent, then removing self would
-                    # alter the condition of parent because the sum changes, this is
-                    # only relevant in broadcasting cases
-                    return self.frame[
-                        self.predicate & parent.predicate.substitute(self, self.frame)
-                    ]
+            # We can only squash 2 filters together if the predicate of parent
+            # does not directly depend on self, e.g. if
+            # sum is in the predicate of parent, then removing self would
+            # alter the condition of parent because the sum changes, this is
+            # only relevant in broadcasting cases
+            return self.frame[
+                self.predicate & parent.predicate.substitute(self, self.frame)
+            ]
         if isinstance(parent, Projection):
-            if self.frame._filter_passthrough_available(self, dependents):
+            if self.frame._filter_passthrough_available(self, dependents) and (
                 # We can't push Projections through filters if the preceding operation
                 # allows us to push filters further down the graph because Projections
                 # block filter pushdown
-                if not isinstance(
-                    self.frame, (FilterAlign, Filter)
-                ) or is_filter_pushdown_available(
+                not isinstance(self.frame, (FilterAlign, Filter))
+                or is_filter_pushdown_available(
                     self.frame, self, dependents, allow_reduction=False
-                ):
-                    return
+                )
+            ):
+                return
 
             return plain_column_projection(self, parent, dependents)
         if isinstance(parent, Index):
@@ -4087,9 +4088,10 @@ def _check_dependents_are_predicates(
             {x()._name for x in dependents[e._name] if x() is not None}
         )
 
-        if not allow_reduction:
-            if isinstance(e, (ApplyConcatApply, TreeReduce, ShuffleReduce)):
-                return False
+        if not allow_reduction and isinstance(
+            e, (ApplyConcatApply, TreeReduce, ShuffleReduce)
+        ):
+            return False
 
         allowed_expressions.add(e._name)
         stack.extend(e.dependencies())

@@ -86,9 +86,10 @@ class LocIndexer(Indexer):
         return self._loc(iindexer, cindexer)
 
     def _loc(self, iindexer, cindexer):
-        if iindexer is None or isinstance(iindexer, slice) and iindexer == slice(None):
-            if not isinstance(cindexer, Callable):
-                return new_collection(Projection(self.obj, cindexer))
+        if (
+            iindexer is None or isinstance(iindexer, slice) and iindexer == slice(None)
+        ) and not isinstance(cindexer, Callable):
+            return new_collection(Projection(self.obj, cindexer))
         if isinstance(iindexer, Series):
             return self._loc_series(iindexer, cindexer)
         elif isinstance(iindexer, Array):
