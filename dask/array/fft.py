@@ -158,8 +158,6 @@ def fft_wrap(fft_func, kind=None, dtype=None, allow_fftpack=False):
             "be deprecated in future releases.",
             FutureWarning,
         )
-        # If allow_fftpack is True, we proceed but we skip passing the norm
-        # argument.
 
     if kind is None:
         kind = fft_func.__name__
