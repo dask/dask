@@ -4,6 +4,7 @@ import datetime
 import functools
 import operator
 import pickle
+import sys
 from array import array
 
 import pytest
@@ -557,6 +558,15 @@ def test_has_keyword():
     bar = functools.partial(foo, a=1)
     assert has_keyword(bar, "b")
     assert has_keyword(bar, "c")
+
+
+@pytest.mark.skipif(sys.version_info < (3, 14), reason="requires deferred annotations")
+def test_has_keyword_with_unresolved_annotation() -> None:
+    # Compile without this module's __future__ import to exercise deferred evaluation.
+    ns: dict = {}
+    code = compile("def f(x: MissingType): pass", "<test>", "exec", dont_inherit=True)
+    exec(code, ns)  # noqa: S102
+    assert has_keyword(ns["f"], "x")
 
 
 def test_derived_from():

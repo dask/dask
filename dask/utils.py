@@ -1895,10 +1895,21 @@ def parse_timedelta(s, default="seconds"):
     return result
 
 
-def has_keyword(func, keyword):
+if sys.version_info >= (3, 14):
+    from annotationlib import Format
+
+    # Keyword detection must also work for types imported under TYPE_CHECKING.
+    _keyword_signature = functools.partial(
+        inspect.signature, annotation_format=Format.FORWARDREF
+    )
+else:
+    _keyword_signature = inspect.signature
+
+
+def has_keyword(func: Callable[..., Any], keyword: str) -> bool:
     try:
-        return keyword in inspect.signature(func).parameters
-    except Exception:
+        return keyword in _keyword_signature(func).parameters
+    except (TypeError, ValueError):
         return False
 
 
