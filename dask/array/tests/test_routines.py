@@ -5,7 +5,6 @@ import itertools
 import pickle
 import sys
 import warnings
-from numbers import Number
 
 import pytest
 
@@ -637,6 +636,9 @@ def test_ediff1d(shape, to_end, to_begin):
         [(10, 15, 20), (np.exp(np.arange(10)), np.exp(np.arange(20))), (0, 2)],
         [(10, 15, 20), (0.5, np.exp(np.arange(20))), (0, 2)],
         [(10, 15, 20), (np.exp(np.arange(20)),), -1],
+        [(10, 15, 20), (), (1,)],
+        [(10,), (), None],
+        [(10,), (np.exp(np.arange(10)),), None],
     ],
 )
 @pytest.mark.parametrize("edge_order", [1, 2])
@@ -647,7 +649,8 @@ def test_gradient(shape, varargs, axis, edge_order):
     r_a = np.gradient(a, *varargs, axis=axis, edge_order=edge_order)
     r_d_a = da.gradient(d_a, *varargs, axis=axis, edge_order=edge_order)
 
-    if isinstance(axis, Number):
+    if isinstance(r_a, np.ndarray):
+        assert isinstance(r_d_a, da.Array)
         assert_eq(r_d_a, r_a)
     else:
         assert len(r_d_a) == len(r_a)

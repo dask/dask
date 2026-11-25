@@ -665,11 +665,9 @@ def gradient(f, *varargs, axis=None, **kwargs):
     if kwargs["edge_order"] > 2:
         raise ValueError("edge_order must be less than or equal to 2.")
 
-    drop_result_list = False
     if axis is None:
         axis = tuple(range(f.ndim))
     elif isinstance(axis, Integral):
-        drop_result_list = True
         axis = (axis,)
 
     axis = validate_axis(axis, f.ndim)
@@ -731,7 +729,7 @@ def gradient(f, *varargs, axis=None, **kwargs):
             )
         )
 
-    if drop_result_list:
+    if len(axis) == 1:
         results = results[0]
 
     return results
