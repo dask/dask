@@ -2055,6 +2055,12 @@ def extract(condition, arr):
 def take(a, indices, axis=0):
     axis = validate_axis(axis, a.ndim)
 
+    indices_array = indices if is_arraylike(indices) else np.asarray(indices)
+    if indices_array.dtype.kind == "b":
+        indices = indices_array.astype(np.intp)
+        if not isinstance(indices, Array) and indices.ndim == 0:
+            indices = indices.item()
+
     if isinstance(a, np.ndarray) and isinstance(indices, Array):
         return _take_dask_array_from_numpy(a, indices, axis)
     else:
