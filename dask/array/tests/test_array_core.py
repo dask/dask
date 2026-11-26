@@ -2494,6 +2494,32 @@ def test_to_hdf5():
             assert f["/y"].chunks == (2,)
 
 
+def test_to_hdf5_compute_false():
+    h5py = pytest.importorskip("h5py")
+    x = da.arange(16, chunks=4).reshape((4, 4))
+    y = da.ones(4, chunks=2, dtype="i4")
+
+    with tmpfile(".hdf5") as fn:
+        out = x.to_hdf5(fn, "/x", compute=False)
+        assert dask.is_dask_collection(out)
+        with h5py.File(fn, mode="r") as f:
+            # dataset exists, data not yet written
+            assert f["/x"].shape == x.shape
+            assert not f["/x"][:].any()
+        out.compute()
+        with h5py.File(fn, mode="r") as f:
+            assert_eq(f["/x"][:], x)
+            assert f["/x"].chunks == (1, 4)
+
+    with tmpfile(".hdf5") as fn:
+        out = da.to_hdf5(fn, {"/x": x, "/y": y}, compute=False)
+        assert all(dask.is_dask_collection(o) for o in out)
+        dask.compute(out, scheduler="sync")
+        with h5py.File(fn, mode="r") as f:
+            assert_eq(f["/x"][:], x)
+            assert_eq(f["/y"][:], y)
+
+
 def test_to_dask_dataframe():
     pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
