@@ -175,6 +175,33 @@ def test_convert_legacy_dsk():
     ]
 
 
+def test_convert_legacy_dsk_dict_dependencies():
+    def add(x, y):
+        return x + y
+
+    dsk = {
+        "a": 3,
+        "b": 4,
+        "c": (add, "a", "b"),
+        "d": {"arg1": "c"},
+        "e": ["a", "c"],
+        "f": {"inner_list": ["a", "c"]},
+        "g": {"c": "a"},
+    }
+
+    converted = convert_and_verify_keys(dsk)
+
+    assert converted["d"].dependencies == {"c"}
+    assert converted["f"].dependencies == {"a", "c"}
+    assert converted["g"].dependencies == {"a"}
+
+    result = execute_graph(converted, keys={"d", "e", "f", "g"})
+    assert result["d"] == {"arg1": 7}
+    assert result["e"] == [3, 7]
+    assert result["f"] == {"inner_list": [3, 7]}
+    assert result["g"] == {"c": 3}
+
+
 def test_task_executable():
     t1 = Task("key-1", func, "a", "b")
     assert t1() == func("a", "b")
