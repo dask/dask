@@ -162,6 +162,38 @@ def test_repartition_io_fusion_blockwise(tmpdir):
     assert df.npartitions == 2
 
 
+@pytest.mark.parametrize("filesystem", ["fsspec", "arrow"])
+def test_io_fusion_assign_map_partitions_drop(tmpdir, filesystem):
+    # Regression test for https://github.com/dask/dask/issues/12808
+    pdf = pd.DataFrame({c: range(100) for c in "abcdefgh"})
+    dd.from_pandas(pdf, 5).to_parquet(tmpdir)
+    with config.set({"dataframe.parquet.minimum-partition-size": 1}):
+        df = read_parquet(tmpdir, filesystem=filesystem)
+        df["label"] = df.map_partitions(
+            lambda p: (p["a"] > 50).astype(int), meta=("label", int)
+        )
+        result = df.drop(columns=["c"])
+        expected = pdf.assign(label=(pdf["a"] > 50).astype(int)).drop(columns=["c"])
+        assert len(result.to_delayed()) < 5
+        assert_eq(result, expected, check_index=False)
+
+
+def test_io_fusion_mismatched_branches(tmpdir):
+    # Two FusedIO branches with different compression factors must align rows cleanly
+    p1 = f"{tmpdir}/p1"
+    p2 = f"{tmpdir}/p2"
+    pdf = pd.DataFrame({c: range(100) for c in "abcdefgh"})
+    pdf2 = pd.DataFrame({c: range(100) for c in "abcdefgh"})
+    dd.from_pandas(pdf, 5).to_parquet(p1)
+    dd.from_pandas(pdf2, 5).to_parquet(p2)
+    with config.set({"dataframe.parquet.minimum-partition-size": 1}):
+        df1 = read_parquet(p1)
+        df2 = read_parquet(p2)
+        result = df1[["a", "b", "d", "e", "f", "g"]].assign(val=df2["a"] + 1)
+        expected = pdf[["a", "b", "d", "e", "f", "g"]].assign(val=pdf2["a"] + 1)
+        assert_eq(result, expected, check_index=False)
+
+
 def test_io_fusion_merge(tmpdir):
     pdf = pd.DataFrame({c: range(10) for c in "ab"})
     pdf2 = pd.DataFrame({c: range(10) for c in "uvwxyz"})

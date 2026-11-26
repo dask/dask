@@ -638,6 +638,74 @@ class Blockwise(Expr):
         else:
             return Task(name, self.operation, *args)  # type: ignore[arg-type]
 
+    def _tune_down(self):
+        deps = self.dependencies()
+        if len(deps) <= 1:
+            return None
+
+        from dask.dataframe.dask_expr._repartition import Repartition
+        from dask.dataframe.dask_expr.io.io import FusedIO
+
+        def _fused_io_leaves(node: Expr) -> list[FusedIO]:
+            # Only traverse 1-to-1 Blockwise chains so reductions aren't treated
+            # as row-partitioned dependencies of a FusedIO.
+            if isinstance(node, FusedIO):
+                return [node]
+            if not isinstance(node, Blockwise):
+                return []
+            out = []
+            for child in node.dependencies():
+                out.extend(_fused_io_leaves(child))
+            return out
+
+        dep_fused = {dep._name: _fused_io_leaves(dep) for dep in deps}
+        aligned_deps = []
+        seen_deps = set()
+        for dep in deps:
+            if dep._name in seen_deps:
+                continue
+            seen_deps.add(dep._name)
+            if not self._broadcast_dep(dep) or any(
+                f.operand("_expr").npartitions > 1 for f in dep_fused[dep._name]
+            ):
+                aligned_deps.append(dep)
+
+        if len(aligned_deps) <= 1:
+            return None
+
+        nparts_per_dep = {dep._name: dep.npartitions for dep in aligned_deps}
+        if len(set(nparts_per_dep.values())) <= 1:
+            return None
+
+        fused_nparts = [
+            f.npartitions for dep in aligned_deps for f in dep_fused[dep._name]
+        ]
+        target_nparts = (
+            max(fused_nparts) if fused_nparts else min(nparts_per_dep.values())
+        )
+
+        result = self
+        for dep in aligned_deps:
+            if nparts_per_dep[dep._name] == target_nparts:
+                continue
+            leaves = dep_fused[dep._name]
+            if leaves:
+                updated = dep
+                for leaf in leaves:
+                    if leaf.npartitions != target_nparts:
+                        updated = updated.substitute(
+                            leaf,
+                            type(leaf)(leaf.operand("_expr"), target_nparts),
+                        )
+                if updated.npartitions != target_nparts:
+                    updated = Repartition(updated, new_partitions=target_nparts)
+                result = result.substitute(dep, updated)
+            else:
+                result = result.substitute(
+                    dep, Repartition(dep, new_partitions=target_nparts)
+                )
+        return result
+
     def _simplify_up(self, parent, dependents):
         if self._projection_passthrough and isinstance(parent, Projection):
             return plain_column_projection(self, parent, dependents)
