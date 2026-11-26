@@ -344,3 +344,25 @@ def test_split_every_invalid():
         checkpoint(t, split_every=-2)
     with pytest.raises(TypeError):
         checkpoint(t, split_every={0: 2})  # This is legal for dask.array but not here
+
+
+@pytest.mark.skipif(dd is None or pd is None, reason="requires dask.dataframe and pandas")
+def test_bind_delayed_wrapping_dask_collection_gh12127():
+    # gh-12127: bind() raised ValueError ("Missing dependency") when the child
+    # delayed wrapped a dask collection (e.g. a DataFrame) as an argument.
+    # MaterializedLayer.clone() was returning Task objects unchanged, so the
+    # cloned task still referenced the original (un-cloned) partition keys.
+    pdf1 = pd.DataFrame({"x": [1, 2, 3]})
+    pdf2 = pd.DataFrame({"x": [4, 5, 6]})
+    ddf1 = dd.from_pandas(pdf1, npartitions=1)
+    ddf2 = dd.from_pandas(pdf2, npartitions=1)
+
+    def collect(df):
+        return list(df["x"])
+
+    d1 = delayed(collect)(ddf1)
+    d2 = delayed(collect)(ddf2)
+
+    # Both orderings must compute without error and produce the correct value.
+    assert bind(d2, d1).compute(scheduler="sync") == [4, 5, 6]
+    assert bind(d1, d2).compute(scheduler="sync") == [1, 2, 3]
