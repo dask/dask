@@ -255,6 +255,22 @@ def test_concat4_interleave_partitions():
         concat([ddf1, ddf1], join="invalid", interleave_partitions=True)
 
 
+def test_concat_known_unordered_divisions_raises():
+    pdf = pd.DataFrame({"x": range(12)}, index=range(12))
+    df = from_pandas(pdf, npartitions=4)
+    a, b, c = df.partitions[0], df.partitions[1], df.partitions[2]
+
+    msg = (
+        "All inputs have known divisions which cannot be concatenated in order. "
+        "Specify interleave_partitions=True to ignore order"
+    )
+    with pytest.raises(ValueError, match=msg):
+        concat([b, a, c]).divisions
+
+    assert concat([a, b, c]).divisions == (None, None, None, None)
+    assert concat([b, a, c], interleave_partitions=True).divisions == (0, 3, 6, 9)
+
+
 def test_concat5():
     pdf1 = pd.DataFrame(
         np.random.randn(7, 5), columns=list("ABCDE"), index=list("abcdefg")
