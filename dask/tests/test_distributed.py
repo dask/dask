@@ -38,7 +38,6 @@ if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
     cluster = partial(cluster, should_check_state=False)
 
-
 # TODO: the fixture teardown for `cluster_fixture` is failing periodically with
 # a PermissionError on windows only (in CI). Since this fixture lives in the
 # distributed codebase and is nested within other fixtures we use, it's hard to
@@ -422,6 +421,44 @@ def test_zarr_in_memory_distributed_err(c, zarr):
 
     with pytest.raises(RuntimeError, match="distributed scheduler"):
         a.to_zarr(z)
+
+
+def test_zarr_distributed_rectilinear_chunks_rechunk(c, zarr):
+    da = pytest.importorskip("dask.array")
+
+    with tmpdir() as d, zarr.config.set({"array.rectilinear_chunks": False}):
+        x1 = da.concatenate(
+            (da.ones((3, 10)), da.ones((2, 10)), da.ones((4, 10))), axis=0
+        )
+
+        rectilinear_chunks_path = os.path.join(d, "test.zarr")
+        with pytest.warns(UserWarning):
+            da.to_zarr(x1, rectilinear_chunks_path)
+        d1 = da.from_zarr(rectilinear_chunks_path)
+        assert d1.chunksize == (4, 10)
+
+
+def test_zarr_distributed_rectilinear_chunks(c, zarr):
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+
+    with tmpdir() as d, zarr.config.set({"array.rectilinear_chunks": True}):
+        x1 = da.concatenate(
+            (da.ones((3, 10)), da.ones((2, 10)), da.ones((4, 10))), axis=0
+        )
+        x2 = x1.rechunk((2, 10))
+        rectilinear_chunks_path = os.path.join(d, "test1.zarr")
+        regular_chunks_path = os.path.join(d, "test2.zarr")
+
+        da.to_zarr(x1, rectilinear_chunks_path, chunks=x1.chunks)
+        da.to_zarr(x2, regular_chunks_path)
+
+        d1 = da.from_zarr(rectilinear_chunks_path)
+        d2 = da.from_zarr(regular_chunks_path)
+        np.testing.assert_array_equal(d1, x1)
+        np.testing.assert_array_equal(d2, x1)
+        assert d1.chunks == x1.chunks
+        assert d2.chunks == x2.chunks
 
 
 def test_scheduler_equals_client(c):
