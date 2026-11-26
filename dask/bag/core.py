@@ -963,7 +963,7 @@ class Bag(DaskMethodsMixin):
         >>> list(b.topk(2, lambda x: -x))
         [3, 4]
         """
-        if key:
+        if key is not None:
             if callable(key) and takes_multiple_arguments(key):
                 key = partial(apply, key)
             func = partial(topk, k, key=key)
