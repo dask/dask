@@ -46,7 +46,17 @@ def is_object_string_dataframe(x) -> bool:
     )
 
 
-def _to_string_dtype(df, dtype_check, index_check, string_dtype):
+def _contains_only_strings_or_na(x) -> bool:
+    """Whether all non-missing values in ``x`` are strings.
+
+    An object-dtype column can hold arbitrary Python objects, so checking the
+    dtype alone is not enough to know that a conversion to ``string[pyarrow]``
+    is lossless.
+    """
+    return pd.api.types.infer_dtype(x, skipna=True) in ("string", "unicode", "empty")
+
+
+def _to_string_dtype(df, dtype_check, index_check, string_dtype, check_values=False):
     if not (is_dataframe_like(df) or is_series_like(df) or is_index_like(df)):
         return df
 
@@ -57,11 +67,16 @@ def _to_string_dtype(df, dtype_check, index_check, string_dtype):
     # Possibly convert DataFrame/Series/Index to `string[pyarrow]`
     if is_dataframe_like(df):
         dtypes = {
-            col: string_dtype for col, dtype in df.dtypes.items() if dtype_check(dtype)
+            col: string_dtype
+            for col, dtype in df.dtypes.items()
+            if dtype_check(dtype)
+            and (not check_values or _contains_only_strings_or_na(df[col]))
         }
         if dtypes:
             df = df.astype(dtypes)
-    elif dtype_check(df.dtype):
+    elif dtype_check(df.dtype) and (
+        not check_values or _contains_only_strings_or_na(df)
+    ):
         dtypes = string_dtype
         df = df.copy().astype(dtypes)
 
@@ -72,12 +87,13 @@ def _to_string_dtype(df, dtype_check, index_check, string_dtype):
                 i: level.astype(string_dtype)
                 for i, level in enumerate(df.index.levels)
                 if dtype_check(level.dtype)
+                and (not check_values or _contains_only_strings_or_na(level))
             }
             # set verify_integrity=False to preserve index codes
             df.index = df.index.set_levels(
                 levels.values(), level=levels.keys(), verify_integrity=False
             )
-        else:
+        elif not check_values or _contains_only_strings_or_na(df.index):
             df.index = df.index.astype(string_dtype)
     return df
 
