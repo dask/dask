@@ -1456,13 +1456,13 @@ def _maybe_len(l):
 
 
 @pytest.mark.parametrize("chunks", [(4, 6), (2, 6)])
-@pytest.mark.parametrize("shift", [3, 7, 9, (3, 9), (7, 2)])
+@pytest.mark.parametrize("shift", [3, 7, 9, np.int64(-2), (3, 9), (7, 2)])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1, (0, 1), (1, 0)])
 def test_roll(chunks, shift, axis):
     x = np.random.default_rng().integers(10, size=(4, 6))
     a = da.from_array(x, chunks=chunks)
 
-    if _maybe_len(shift) != _maybe_len(axis):
+    if isinstance(shift, tuple) and _maybe_len(shift) != _maybe_len(axis):
         with pytest.raises(TypeError if axis is None else ValueError):
             da.roll(a, shift, axis)
     else:

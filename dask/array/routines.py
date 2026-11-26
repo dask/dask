@@ -1925,13 +1925,14 @@ def roll(array, shift, axis=None):
         axis = (0,)
     else:
         try:
-            len(shift)
-        except TypeError:
-            shift = (shift,)
-        try:
             len(axis)
         except TypeError:
             axis = (axis,)
+        try:
+            len(shift)
+        except TypeError:
+            repeats = len(axis) if isinstance(shift, Integral) else 1
+            shift = (shift,) * repeats
 
     if len(shift) != len(axis):
         raise ValueError("Must have the same number of shifts as axes.")
