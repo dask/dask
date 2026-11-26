@@ -18,6 +18,113 @@ import dask.array as da
 from dask.array.core import normalize_chunks
 from dask.array.numpy_compat import NUMPY_GE_210, AxisError
 from dask.array.utils import assert_eq, same_keys
+from dask.callbacks import Callback
+
+
+@pytest.mark.normal_and_array_expr
+@pytest.mark.parametrize("ndmin", [None, 0, 1, 2, 3])
+@pytest.mark.parametrize(
+    "x", [[(1, 2), (3, 4)], ((1, 2), (3, 4))], ids=["list", "tuple"]
+)
+@pytest.mark.parametrize("like_kind", [None, "numpy", "dask"])
+def test_array_structured_dtype(
+    x: list[tuple[int, int]] | tuple[tuple[int, int], ...],
+    ndmin: int | None,
+    like_kind: str | None,
+) -> None:
+    dtype = [("x", "i4"), ("y", "i4")]
+    like = None
+    if like_kind == "numpy":
+        like = np.array(0)
+    elif like_kind == "dask":
+        like = da.array(0)
+
+    if isinstance(x, tuple):
+        with pytest.raises((TypeError, ValueError)) as numpy_error:
+            np.array(x, dtype=dtype, ndmin=ndmin or 0)
+        with pytest.raises(numpy_error.type) as dask_error:
+            da.array(x, dtype=dtype, ndmin=ndmin, like=like)
+        assert dask_error.type is numpy_error.type
+        return
+
+    expected = np.array(x, dtype=dtype, ndmin=ndmin or 0)
+    actual = da.array(x, dtype=dtype, ndmin=ndmin, like=like)
+    assert_eq(actual, expected)
+    computed = actual.compute(scheduler="sync")
+    for field in ("x", "y"):
+        assert_eq(computed[field], expected[field])
+
+
+@pytest.mark.normal_and_array_expr
+@pytest.mark.parametrize("ndmin", [None, 0, 1, 2, 3])
+@pytest.mark.parametrize("like_kind", [None, "numpy", "dask"])
+@pytest.mark.parametrize(
+    "x, dtype",
+    [
+        pytest.param((1, 2), [("x", "i4"), ("y", "i4")], id="record"),
+        pytest.param(1, None, id="numeric"),
+        pytest.param(1, "f4", id="numeric-cast"),
+    ],
+)
+def test_array_scalar_ndmin(
+    x: tuple[int, int] | int,
+    dtype: list[tuple[str, str]] | str | None,
+    ndmin: int | None,
+    like_kind: str | None,
+) -> None:
+    like = None
+    if like_kind == "numpy":
+        like = np.array(0)
+    elif like_kind == "dask":
+        like = da.array(0)
+
+    expected = np.array(x, dtype=dtype, ndmin=ndmin or 0)
+    actual = da.array(x, dtype=dtype, ndmin=ndmin, like=like)
+    assert_eq(actual, expected)
+
+
+@pytest.mark.normal_and_array_expr
+@pytest.mark.parametrize("input_kind", ["list", "ndarray"])
+@pytest.mark.parametrize("dtype", [None, "i2", "f4"])
+@pytest.mark.parametrize("ndmin", [0, 3])
+def test_array_dtype_conversion(input_kind: str, dtype: str | None, ndmin: int) -> None:
+    x: list[list[int]] | np.ndarray = [[1, 2], [3, 4]]
+    if input_kind == "ndarray":
+        x = np.array(x, dtype="i4")
+    assert_eq(
+        da.array(x, dtype=dtype, ndmin=ndmin), np.array(x, dtype=dtype, ndmin=ndmin)
+    )
+
+
+@pytest.mark.normal_and_array_expr
+@pytest.mark.parametrize("dtype", [None, "i2", "f4"])
+@pytest.mark.parametrize("like_kind", [None, "numpy", "dask"])
+def test_array_dtype_conversion_lazy(dtype: str | None, like_kind: str | None) -> None:
+    calls: list[bool] = []
+    expected = np.array([1, 2], dtype="i4")
+
+    def source(block: np.ndarray) -> np.ndarray:
+        calls.append(True)
+        return block
+
+    x = da.from_array(expected, chunks=1).map_blocks(
+        source, dtype="i4", meta=np.array([], dtype="i4")
+    )
+    like = None
+    if like_kind == "numpy":
+        like = np.array(0)
+    elif like_kind == "dask":
+        like = da.array(0)
+
+    def no_compute(graph: dict) -> None:
+        pytest.fail("array construction must not execute the graph")
+
+    with Callback(start=no_compute):
+        actual = da.array(x, dtype=dtype, ndmin=3, like=like)
+    assert not calls
+    assert actual.shape == (1, 1, 2)
+    assert actual.dtype == np.dtype(dtype or "i4")
+    assert_eq(actual, np.array(expected, dtype=dtype, ndmin=3))
 
 
 @pytest.mark.parametrize(
