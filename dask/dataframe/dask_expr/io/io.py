@@ -25,7 +25,7 @@ from dask.dataframe.dask_expr._expr import (
     no_default,
 )
 from dask.dataframe.dask_expr._reductions import Len
-from dask.dataframe.dask_expr._repartition import Repartition, RepartitionToFewer
+from dask.dataframe.dask_expr._repartition import RepartitionToFewer
 from dask.dataframe.dask_expr._util import _BackendData, _convert_to_list
 from dask.dataframe.dispatch import make_meta
 from dask.dataframe.io.io import _meta_from_array, sorted_division_locations
@@ -106,21 +106,12 @@ class BlockwiseIO(Blockwise, IO):
             return
         if isinstance(parent, FusedIO):
             return
-        fused = FusedIO(self)
-        if isinstance(parent, Blockwise):
-            nparts = fused.npartitions
-            for arg in parent.dependencies():
-                if arg is self:
-                    continue
-                if not parent._broadcast_dep(arg):
-                    parent = parent.substitute(
-                        arg, Repartition(arg, new_partitions=nparts)
-                    )
-        return parent.substitute(self, fused)
+        return parent.substitute(self, FusedIO(self))
 
 
 class FusedIO(BlockwiseIO):
-    _parameters: ClassVar[list[str]] = ["_expr"]
+    _parameters: ClassVar[list[str]] = ["_expr", "_npartitions"]
+    _defaults: ClassVar[dict[str, Any]] = {"_npartitions": None}
 
     @functools.cached_property
     def _name(self):
@@ -163,10 +154,15 @@ class FusedIO(BlockwiseIO):
         partitions = self.operand("_expr")._partitions
         npartitions = len(partitions)
 
-        bucket_size = math.ceil(1 / self.operand("_expr")._fusion_compression_factor)
-        bucket_size = min(bucket_size, math.ceil(math.sqrt(npartitions)), 100)
+        if self.operand("_npartitions") is not None:
+            new_npartitions = min(self.operand("_npartitions"), npartitions)
+        else:
+            bucket_size = math.ceil(
+                1 / self.operand("_expr")._fusion_compression_factor
+            )
+            bucket_size = min(bucket_size, math.ceil(math.sqrt(npartitions)), 100)
 
-        new_npartitions = math.ceil(npartitions / bucket_size)
+            new_npartitions = math.ceil(npartitions / bucket_size)
         # Keep this aligned with RepartitionToFewer such that binops (e.g.
         # Assign) are always properly aligned
         partition_boundaries = RepartitionToFewer._compute_partition_boundaries(
@@ -184,7 +180,8 @@ class FusedIO(BlockwiseIO):
 
 
 class FusedParquetIO(FusedIO):
-    _parameters: ClassVar[list[str]] = ["_expr"]
+    _parameters: ClassVar[list[str]] = ["_expr", "_npartitions"]
+    _defaults: ClassVar[dict[str, Any]] = {"_npartitions": None}
 
     @functools.cached_property
     def _name(self):
