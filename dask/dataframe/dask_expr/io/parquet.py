@@ -28,6 +28,7 @@ from toolz import identity
 import dask
 from dask._task_spec import Task, TaskRef
 from dask.core import flatten
+from dask.dataframe.core import is_dataframe_like
 from dask.dataframe.dask_expr._expr import (
     EQ,
     GE,
@@ -59,7 +60,14 @@ from dask.dataframe.io.parquet.core import (
     set_index_columns,
     sorted_columns,
 )
-from dask.dataframe.io.parquet.utils import _split_user_options
+from dask.dataframe.io.parquet.utils import (
+    _is_nested_column,
+    _map_leaf_columns_to_nested,
+    _output_column_name,
+    _projected_nested_table,
+    _select_columns,
+    _split_user_options,
+)
 from dask.dataframe.io.utils import _is_local_fs
 from dask.delayed import delayed
 from dask.tokenize import _tokenize_deterministic, normalize_token, tokenize
@@ -248,6 +256,40 @@ def normalize_pq_filemetadata(meta):
                 meta.serialized_size,
             )
         )
+
+
+def _has_nested_filter(filters, schema):
+    """Whether any predicate in ``filters`` names a nested column.
+
+    ``filters`` is a list of ``(column, operator, value)`` tuples in
+    disjunctive normal form, as passed to ``read_parquet``.
+    """
+    if not filters or not isinstance(filters, list):
+        return False
+    for predicate in flatten(filters, container=list):
+        if (
+            isinstance(predicate, tuple)
+            and len(predicate) == 3
+            and _is_nested_column(predicate[0])
+            and predicate[0] not in schema.names
+        ):
+            return True
+    return False
+
+
+def _convert_filters_to_expression(filters, schema):
+    """Convert ``filters`` to a pyarrow expression.
+
+    Falls back to ``pq.filters_to_expression`` unless a predicate names a
+    nested column, so plain-column behavior is unchanged. Nested names are
+    converted with dask's own ``_filters_to_expression``, which translates
+    dotted names to nested field references.
+    """
+    if _has_nested_filter(filters, schema):
+        from dask.dataframe.io.parquet.arrow import _filters_to_expression
+
+        return _filters_to_expression(filters, schema=schema)
+    return pq.filters_to_expression(filters)
 
 
 class ToParquet(Expr):
@@ -732,6 +774,11 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
         if isinstance(parent, Index):
             # Column projection
             columns = determine_column_projection(self, parent, dependents)
+            columns = _convert_to_list(columns)
+            # A nested selection like "a.b" produces a leaf column named
+            # "b", so map requested leaf names back to the selections
+            # that produce them before intersecting with our columns.
+            columns = _map_leaf_columns_to_nested(self.columns, columns)
             columns = [col for col in self.columns if col in columns]
             if set(columns) == set(self.columns):
                 return
@@ -740,7 +787,24 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
             )
 
         if isinstance(parent, Projection):
-            return super()._simplify_up(parent, dependents)
+            # Column projection, mirroring BlockwiseIO._simplify_up but
+            # mapping requested leaf names back to nested selections
+            # (see the Index branch above).
+            if not is_dataframe_like(self._meta):
+                return super()._simplify_up(parent, dependents)
+            parent_columns = parent.operand("columns")
+            proposed_columns = determine_column_projection(self, parent, dependents)
+            proposed_columns = _convert_to_list(proposed_columns)
+            proposed_columns = _map_leaf_columns_to_nested(
+                self.columns, proposed_columns
+            )
+            proposed_columns = [col for col in self.columns if col in proposed_columns]
+            if set(proposed_columns) == set(self.columns):
+                return
+            result = self.substitute_parameters({"columns": proposed_columns})
+            if result.columns != parent_columns:
+                result = result[parent_columns]
+            return result
 
         if isinstance(parent, Filter) and self._filter_passthrough_available(
             parent, dependents
@@ -804,12 +868,63 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
     def _meta(self):
         meta = self._dataset_info["base_meta"]
         columns = _convert_to_list(self.operand("columns"))
+        if columns is not None:
+            schema = self._dataset_info["schema"]
+            if any(_is_nested_column(c) and c not in schema.names for c in columns):
+                # The projected metadata already has the requested columns,
+                # in order, under their output names (leaf names for nested
+                # selections). _select_columns handles duplicate leaf names
+                # by selecting positionally, and a requested index column
+                # raises KeyError here, the same way it does for plain
+                # columns.
+                meta = self._nested_columns_meta(meta, columns)
+                output_columns = [_output_column_name(schema, c) for c in columns]
+                meta = _select_columns(meta, output_columns)
+                if self._series:
+                    assert len(columns) > 0
+                    return meta.iloc[:, 0]
+                return meta
         if self._series:
             assert len(columns) > 0
             return meta[columns[0]]
         elif columns is not None:
             return meta[columns]
         return meta
+
+    def _nested_columns_meta(self, meta, columns):
+        """Metadata for a read with nested column selections.
+
+        Nested selections like ``"a.b"`` are not top-level columns of the
+        dataset, so they cannot be selected from the base metadata.
+        Build the metadata from the dataset schema instead, with one
+        leaf-named column per requested column, converted the same way as
+        the base metadata. Index columns are not data columns, mirroring
+        the base metadata, and the base metadata's index is kept.
+        """
+        table = _projected_nested_table(self._dataset_info["schema"], columns)
+        # NOTE: Do not use hasattr(self, "engine") here: Expr.__getattr__
+        # inspects self._meta, which would recurse back into this method.
+        if "engine" in self._parameters:
+            # fsspec-based read: mirror ArrowDatasetEngine._create_dd_meta
+            dataset_info = self._dataset_info
+            kwargs = dataset_info["kwargs"]
+            projected = self.engine._arrow_table_to_pandas(
+                table,
+                dataset_info.get("categories"),
+                arrow_to_pandas=kwargs.get("arrow_to_pandas", {}).copy(),
+                dtype_backend=kwargs.get("dtype_backend"),
+                convert_string=kwargs.get("convert_string"),
+            )
+        else:
+            # pyarrow-filesystem read: mirror base_meta construction
+            projected = table.to_pandas()
+        index_names = {name for name in meta.index.names if name is not None}
+        if index_names:
+            projected = projected.drop(
+                columns=[c for c in projected.columns if c in index_names]
+            )
+        projected.index = meta.index
+        return projected
 
     @abstractmethod
     def _divisions(self):
@@ -1135,7 +1250,9 @@ class ReadParquetPyarrowFS(ReadParquet):
         ReadParquetPyarrowFS.fragments
         """
         if self.filters is not None:
-            filter_expression = pq.filters_to_expression(self.filters)
+            filter_expression = _convert_filters_to_expression(
+                self.filters, self._dataset_info["schema"]
+            )
             frags = [frag.fragment for frag in self._dataset_info["fragments"]]
             ds = pyarrow.dataset.FileSystemDataset(
                 frags,
@@ -1203,7 +1320,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         else:
             fragment = fragment_wrapper
         if isinstance(filters, list):
-            filters = pq.filters_to_expression(filters)
+            filters = _convert_filters_to_expression(filters, schema)
         return fragment.to_table(
             schema=schema,
             columns=columns,
@@ -1450,7 +1567,10 @@ class ReadParquetFSSpec(ReadParquet):
     def _filtered_task(self, name: Key, index: int) -> Task:
         tsk = Task(name, self._io_func, self._plan["parts"][index], _data_producer=True)
         if self._series:
-            return Task(name, operator.getitem, tsk, self.columns[0])
+            # Select the single column out of the frame. The metadata
+            # carries the output name (the leaf name for a nested
+            # selection like "a.b").
+            return Task(name, operator.getitem, tsk, self._meta.name)
         return tsk
 
     @property
@@ -1683,6 +1803,18 @@ class _DNF:
                 column = predicate_expr.right.columns[0]
                 value = predicate_expr.left
                 _filters = (column, op, value)
+            if _filters is not None:
+                # The predicate names a column of the read result, which
+                # for a nested selection is the leaf name (e.g. "b" for
+                # "a.b"). Map it back to the nested selection so the
+                # filter can be pushed down to the reader. If the leaf
+                # maps to more than one nested selection, the filter is
+                # ambiguous and cannot be pushed down safely.
+                column, op, value = _filters
+                mapped = _map_leaf_columns_to_nested(pq_expr.columns, [column])
+                if len(mapped) != 1:
+                    return _DNF(None)
+                _filters = (mapped[0], op, value)
 
         elif isinstance(predicate_expr, (And, Or)):
             left = cls.extract_pq_filters(pq_expr, predicate_expr.left)._filters

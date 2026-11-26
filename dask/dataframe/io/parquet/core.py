@@ -8,7 +8,12 @@ import tlz as toolz
 from fsspec.core import get_fs_token_paths
 
 from dask.base import tokenize
-from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
+from dask.dataframe.io.parquet.utils import (
+    Engine,
+    _output_column_names,
+    _select_columns,
+    _sort_and_analyze_paths,
+)
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.methods import concat
 from dask.delayed import Delayed
@@ -217,7 +222,13 @@ def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
         df.columns.name = meta.columns.name
     columns = columns or []
     index = index or []
-    df = df[[c for c in columns if c not in index]]
+    # Nested selections (e.g. "a.b") come back from the reader under
+    # their leaf name ("b"), so select by the name they have in the
+    # result. Select positionally: duplicate leaf names must not match
+    # more than once.
+    df = _select_columns(
+        df, _output_column_names(df, [c for c in columns if c not in index])
+    )
     if index == [NONE_LABEL]:
         df.index.name = None
     return df

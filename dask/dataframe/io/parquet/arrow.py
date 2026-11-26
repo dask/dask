@@ -11,6 +11,7 @@ from functools import reduce
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 # Check PyArrow version for feature support
@@ -26,9 +27,13 @@ from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
     _infer_split_row_groups,
+    _is_nested_column,
     _normalize_index_columns,
+    _output_column_names,
     _process_open_file_options,
+    _project_nested_table_columns,
     _row_groups_to_parts,
+    _select_columns,
     _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
@@ -258,20 +263,29 @@ def _read_table_from_path(
         **open_file_options,
     )[0] as fil:
         if row_groups == [None]:
-            return pq.ParquetFile(fil, **pre_buffer).read(
+            arrow_table = pq.ParquetFile(fil, **pre_buffer).read(
                 columns=columns,
                 use_threads=False,
                 use_pandas_metadata=True,
                 **read_kwargs,
             )
         else:
-            return pq.ParquetFile(fil, **pre_buffer).read_row_groups(
+            arrow_table = pq.ParquetFile(fil, **pre_buffer).read_row_groups(
                 row_groups,
                 columns=columns,
                 use_threads=False,
                 use_pandas_metadata=True,
                 **read_kwargs,
             )
+
+    if columns and any(_is_nested_column(column) for column in columns):
+        # ParquetFile.read returns the top-level struct column for a
+        # nested selection (e.g. "a.b" reads column "a"). Project the
+        # requested fields out so the result has one leaf-named column
+        # per requested column, like pandas and pyarrow return.
+        arrow_table = _project_nested_table_columns(arrow_table, columns)
+
+    return arrow_table
 
 
 def _get_rg_statistics(row_group, col_names):
@@ -360,7 +374,9 @@ def _process_kwargs(partitioning=None, **kwargs):
     }
 
 
-def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
+def _filters_to_expression(
+    filters, propagate_null=False, nan_is_null=True, schema=None
+):
     # Mostly copied from: pq.filters_to_expression
     # TODO: Use pq.filters_to_expression if/when null-value
     # handling is resolved.
@@ -379,7 +395,14 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
             filters = [filters]
 
     def convert_single_predicate(col, op, val):
-        field = pa_ds.field(col)
+        if schema is not None and _is_nested_column(col) and col not in schema.names:
+            # A dotted name that is not a top-level field selects a field
+            # nested inside a struct column; translate it to a nested field
+            # reference the same way pyarrow resolves dotted names in
+            # read_parquet(columns=...).
+            field = pc.field(*col.split("."))
+        else:
+            field = pa_ds.field(col)
 
         # Handle null-value comparison
         if val is None or (nan_is_null and val is np.nan):  # noqa: PLW0177
@@ -631,7 +654,12 @@ class ArrowDatasetEngine(Engine):
             # The correct index has already been set
             index = False
             columns_and_parts = list(set(columns_and_parts) - set(df.index.names))
-        df = df[list(columns_and_parts)]
+        # Nested selections (e.g. "a.b") come back from the reader under
+        # their leaf name ("b"), so select by the name they have in the
+        # result. Select positionally: duplicate leaf names must not
+        # match more than once.
+        columns_and_parts = _output_column_names(df, columns_and_parts)
+        df = _select_columns(df, columns_and_parts)
 
         if index:
             df = df.set_index(index)
@@ -1338,7 +1366,7 @@ class ArrowDatasetEngine(Engine):
         # Get/translate filters
         ds_filters = None
         if filters is not None:
-            ds_filters = _filters_to_expression(filters)
+            ds_filters = _filters_to_expression(filters, schema=schema)
 
         # Define subset of `dataset_info` required by _collect_file_parts
         dataset_info_kwargs = {
@@ -1693,7 +1721,9 @@ class ArrowDatasetEngine(Engine):
                 use_threads=False,
                 schema=schema,
                 columns=cols,
-                filter=_filters_to_expression(filters) if filters else None,
+                filter=(
+                    _filters_to_expression(filters, schema=schema) if filters else None
+                ),
             )
         else:
             arrow_table = _read_table_from_path(
