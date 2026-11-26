@@ -4338,7 +4338,7 @@ def unify_chunks(*args, **kwargs):
     Unify chunks across a sequence of arrays
 
     This utility function is used within other common operations like
-    :func:`dask.array.core.map_blocks` and :func:`dask.array.core.blockwise`.
+    :func:`dask.array.map_blocks` and :func:`dask.array.blockwise`.
     It is not commonly used by end-users directly.
 
     Parameters
@@ -4373,7 +4373,7 @@ def unify_chunks(*args, **kwargs):
 
     See Also
     --------
-    common_blockdim
+    dask.array.core.common_blockdim
     """
     if not args:
         return {}, []
@@ -4504,7 +4504,7 @@ def block(arrays, allow_unknown_chunksizes=False):
     hstack : Stack arrays in sequence horizontally (column wise).
     vstack : Stack arrays in sequence vertically (row wise).
     dstack : Stack arrays in sequence depth wise (along third dimension).
-    vsplit : Split array into a list of multiple sub-arrays vertically.
+    numpy.vsplit : Split array into a list of multiple sub-arrays vertically.
 
     Notes
     -----
