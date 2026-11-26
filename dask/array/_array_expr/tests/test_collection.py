@@ -41,6 +41,14 @@ def test_arithmetic_ops(arr, op):
 
 
 @pytest.mark.array_expr
+def test_fancy_index_across_chunks():
+    values = np.arange(6)
+    array = da.from_array(values, chunks=2)
+    indices = [4, 0, 3]
+    assert_eq(array[indices], values[indices])
+
+
+@pytest.mark.array_expr
 def test_rechunk(arr):
     result = arr.rechunk((7, 3))
     expected = arr.compute()
