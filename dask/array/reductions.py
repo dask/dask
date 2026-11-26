@@ -28,7 +28,6 @@ from dask.array.creation import arange, diagonal
 from dask.array.dispatch import divide_lookup, nannumel_lookup, numel_lookup
 from dask.array.numpy_compat import NUMPY_GE_200
 from dask.array.utils import (
-    array_safe,
     asarray_safe,
     is_arraylike,
     meta_from_array,
@@ -117,10 +116,34 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
+def _empty_along_reduced_axis(x, axis):
+    """Whether ``x`` has no elements along one of the reduced ``axis``"""
+    if x.size != 0:
+        return False
+    axis = range(x.ndim) if axis is None else validate_axis(axis, x.ndim)
+    if isinstance(axis, Integral):
+        axis = (axis,)
+    return builtins.any(x.shape[ax] == 0 for ax in axis)
+
+
+def _skip_empty_chunk(x, axis):
+    """Stand-in result of a min/max-like reduction of a chunk that is empty
+    along one of the reduced axes, for which the reduction has no identity.
+
+    It has the shape the keepdims result would have, except that the empty
+    reduced axes stay empty, so concatenating it with the results of the other
+    chunks adds nothing to them.
+    """
+    axis = range(x.ndim) if axis is None else validate_axis(axis, x.ndim)
+    if isinstance(axis, Integral):
+        axis = (axis,)
+    return x[tuple(slice(0, 1) if ax in axis else slice(None) for ax in range(x.ndim))]
+
+
 def chunk_min(x, axis=None, keepdims=None):
-    """Version of np.min which ignores size 0 arrays"""
-    if x.size == 0:
-        return array_safe([], x, ndmin=x.ndim, dtype=x.dtype)
+    """Version of np.min which ignores chunks that are empty along ``axis``"""
+    if keepdims and _empty_along_reduced_axis(x, axis):
+        return _skip_empty_chunk(x, axis)
     else:
         return np.min(x, axis=axis, keepdims=keepdims)
 
@@ -142,9 +165,9 @@ def max(a, axis=None, keepdims=False, split_every=None, out=None):
 
 
 def chunk_max(x, axis=None, keepdims=None):
-    """Version of np.max which ignores size 0 arrays"""
-    if x.size == 0:
-        return array_safe([], x, ndmin=x.ndim, dtype=x.dtype)
+    """Version of np.max which ignores chunks that are empty along ``axis``"""
+    if keepdims and _empty_along_reduced_axis(x, axis):
+        return _skip_empty_chunk(x, axis)
     else:
         return np.max(x, axis=axis, keepdims=keepdims)
 
@@ -269,7 +292,7 @@ def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
 def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
     if np.isnan(a.size):
         raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
-    if a.size == 0:
+    if _empty_along_reduced_axis(a, axis):
         raise ValueError(
             "zero-size array to reduction operation fmin which has no identity"
         )
@@ -286,23 +309,18 @@ def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
 
 
 def _nanmin_skip(x_chunk, axis, keepdims):
-    if x_chunk.size > 0:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", "All-NaN slice encountered", RuntimeWarning
-            )
-            return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
-    else:
-        return asarray_safe(
-            np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
-        )
+    if keepdims and _empty_along_reduced_axis(x_chunk, axis):
+        return _skip_empty_chunk(x_chunk, axis)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
+        return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
 
 
 @derived_from(np)
 def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
     if np.isnan(a.size):
         raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
-    if a.size == 0:
+    if _empty_along_reduced_axis(a, axis):
         raise ValueError(
             "zero-size array to reduction operation fmax which has no identity"
         )
@@ -319,16 +337,11 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 
 def _nanmax_skip(x_chunk, axis, keepdims):
-    if x_chunk.size > 0:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", "All-NaN slice encountered", RuntimeWarning
-            )
-            return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
-    else:
-        return asarray_safe(
-            np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
-        )
+    if keepdims and _empty_along_reduced_axis(x_chunk, axis):
+        return _skip_empty_chunk(x_chunk, axis)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
+        return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
 
 
 def mean_chunk(
