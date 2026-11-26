@@ -152,6 +152,17 @@ def merge_chunk(
     return out
 
 
+def _dtype_name(dtype):
+    """Return a display name that distinguishes pandas StringDtype storages.
+
+    ``str(pd.StringDtype())`` is ``"string"`` for both the python and pyarrow
+    storages, so a dtype mismatch table would show identical dtypes.
+    """
+    if isinstance(dtype, pd.StringDtype):
+        return f"string[{dtype.storage}]"
+    return str(dtype)
+
+
 def warn_dtype_mismatch(left, right, left_on, right_on):
     """Checks for merge column dtype mismatches and throws a warning (#4574)"""
 
@@ -170,9 +181,11 @@ def warn_dtype_mismatch(left, right, left_on, right_on):
         ]
 
         if dtype_mism:
-            col_tb = asciitable(
-                ("Merge columns", "left dtype", "right dtype"), dtype_mism
-            )
+            rows = [
+                (columns, _dtype_name(left_dtype), _dtype_name(right_dtype))
+                for columns, left_dtype, right_dtype in dtype_mism
+            ]
+            col_tb = asciitable(("Merge columns", "left dtype", "right dtype"), rows)
 
             warnings.warn(
                 "Merging dataframes with merge column data "
