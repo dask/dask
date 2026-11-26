@@ -2310,6 +2310,125 @@ def select(condlist, choicelist, default=0):
     )
 
 
+def simpson(y, x=None, *, dx=1.0, axis=-1):
+    """Integrate y (x) along the given axis using the composite Simpson's rule.
+
+    This function mirrors :func:`scipy.integrate.simpson` (formerly
+    ``scipy.integrate.simps``). Simpson's rule is used to estimate the definite
+    integral of ``y`` along ``axis`` using equally or non-equally spaced sample
+    points.
+
+    Parameters
+    ----------
+    y : array_like
+        Array to be integrated.
+    x : array_like, optional
+        If given, the points at which ``y`` is sampled. It must have the same
+        length as ``y`` along ``axis`` and must be one-dimensional. If ``x`` is
+        a Dask array it may be chunked in any way.
+    dx : float, optional
+        Spacing of the integration points along ``axis`` when ``x`` is None.
+        Default is 1.
+    axis : int, optional
+        Axis along which to integrate. Default is -1 (last axis).
+
+    Returns
+    -------
+    Array
+        Definite integral of ``y`` with respect to ``x`` (or ``dx``) along
+        ``axis``.
+
+    Examples
+    --------
+    Integrate a parabola sampled at 11 equally spaced points; the exact
+    integral is 1000 / 3:
+
+    >>> import dask.array as da
+    >>> y = da.arange(11, chunks=3) ** 2
+    >>> da.simpson(y).compute()
+    np.float64(333.3333333333333)
+
+    Non-uniformly spaced sample points are also supported:
+
+    >>> x = da.from_array([0.0, 0.5, 1.5, 2.0, 2.5], chunks=2)
+    >>> y = da.from_array([0.0, 1.0, 2.0, 1.0, 0.0], chunks=2)
+    >>> da.simpson(y, x=x).compute()
+    np.float64(2.875)
+    """
+    y = asarray(y)
+    axis = validate_axis(axis, y.ndim)
+    n = y.shape[axis]
+    if n < 2:
+        raise ValueError(
+            "At least two sample points are required along the integration axis."
+        )
+
+    if x is not None:
+        x = asarray(x)
+        if x.ndim != 1:
+            raise ValueError("x must be one-dimensional.")
+        if x.shape[0] != n:
+            raise ValueError(
+                "x must have the same length as y along the integration axis."
+            )
+
+    # Move the integration axis to the last position so that the composite
+    # rule can be expressed with simple (chunk-safe) slices.
+    y = y.transpose(*[i for i in range(y.ndim) if i != axis], axis)
+
+    if n == 2:
+        # A single interval: fall back to the trapezoidal rule.
+        h = dx if x is None else x[-1] - x[-2]
+        return 0.5 * h * (y[..., -1] + y[..., -2])
+
+    if n % 2 == 0:
+        # An odd number of intervals: apply Simpson's rule to the first n - 2
+        # points and a corrected formula to the trailing interval (Cartwright).
+        result = _simpson_basic(y[..., :-1], None if x is None else x[:-1], dx)
+        h0 = dx if x is None else x[-2] - x[-3]
+        h1 = dx if x is None else x[-1] - x[-2]
+        alpha = _safe_div(2 * h1**2 + 3 * h0 * h1, 6 * (h1 + h0))
+        beta = _safe_div(h1**2 + 3 * h0 * h1, 6 * h0)
+        eta = _safe_div(h1**3, 6 * h0 * (h0 + h1))
+        return result + alpha * y[..., -1] + beta * y[..., -2] - eta * y[..., -3]
+
+    return _simpson_basic(y, x, dx)
+
+
+def _safe_div(numerator, denominator):
+    """Element-wise division that yields 0 where the denominator is 0."""
+    return where(denominator != 0, numerator / denominator, 0.0)
+
+
+def _simpson_basic(y, x, dx):
+    """Composite Simpson's rule for an odd number of points on the last axis.
+
+    ``y`` must have the integration axis in the last position and an odd number
+    of points; ``x`` is ``None`` or a 1-D array of sample points with the same
+    length. Mirrors ``scipy.integrate._basic_simpson`` for an even number of
+    intervals.
+    """
+    y0 = y[..., :-2:2]
+    y1 = y[..., 1:-1:2]
+    y2 = y[..., 2::2]
+
+    if x is None:
+        return (dx / 3.0 * (y0 + 4.0 * y1 + y2)).sum(axis=-1)
+
+    h = diff(x)
+    h0 = h[0 : 2 * y0.shape[-1] : 2]  # spacing of the first interval of each pair
+    h1 = h[1 : 2 * y0.shape[-1] + 1 : 2]
+    hsum = h0 + h1
+    hprod = h0 * h1
+
+    # Weights of the three points of each pair of intervals (Cartwright):
+    #   y0: 2 - h1 / h0      y1: (h0 + h1)^2 / (h0 * h1)      y2: 2 - h0 / h1
+    w0 = 2.0 - _safe_div(h1, h0)
+    w1 = _safe_div(hsum * hsum, hprod)
+    w2 = 2.0 - _safe_div(h0, h1)
+    return (hsum / 6.0 * (y0 * w0 + y1 * w1 + y2 * w2)).sum(axis=-1)
+
+
 def _partition(total: int, divisor: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """Given a total and a divisor, return two tuples: A tuple containing `divisor`
     repeated the number of times it divides `total`, and length-1 or empty tuple

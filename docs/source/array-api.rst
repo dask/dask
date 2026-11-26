@@ -215,6 +215,7 @@ Top level functions
    shuffle
    sign
    signbit
+   simpson
    sin
    sinc
    sinh
