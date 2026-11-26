@@ -1053,6 +1053,12 @@ def test_nan_zeros_ones_like(fn, shape_chunks, dtype):
     )
 
 
+def test_full_docstring_uses_numpy_full():
+    doc = da.full.__doc__
+    assert "Blocked variant of full\n" in doc
+    assert "Blocked variant of full_like" not in doc
+
+
 def test_from_array_getitem_fused():
     arr = np.arange(100).reshape(10, 10)
     darr = da.from_array(arr, chunks=(5, 5))

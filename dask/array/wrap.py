@@ -194,7 +194,7 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 _full = array_creation_dispatch.register_inplace(
     backend="numpy",
     name="full",
-)(w(broadcast_trick(np.full_like)))
+)(w(broadcast_trick(np.full), func_like=broadcast_trick(np.full_like)))
 _full_like = w_like(np.full, func_like=np.full_like)
 
 
