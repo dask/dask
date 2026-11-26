@@ -190,7 +190,7 @@ def unpack_collections(expr, _return_collections=True):
 
             return unpack_collections(Delayed(keys[0], dsk))
         else:
-            expr = collections_to_expr(expr).finalize_compute()
+            expr = collections_to_expr(expr).finalize_compute().optimize()
             (name,) = expr.__dask_keys__()
             return TaskRef(name), (expr,)
 
