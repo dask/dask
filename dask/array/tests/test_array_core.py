@@ -4087,6 +4087,20 @@ def test_uneven_chunks_blockwise():
     assert_eq(z, x.compute().dot(y))
 
 
+def test_blockwise_name():
+    x = da.from_array([[1, 2], [3, 4]], chunks=(1, 2))
+    z = da.blockwise(
+        np.transpose, "ji", x, "ij", dtype=x.dtype, name="my_unique_identifier"
+    )
+    assert z.name == "my_unique_identifier"
+
+
+def test_blockwise_token():
+    x = da.from_array([[1, 2], [3, 4]], chunks=(1, 2))
+    z = da.blockwise(np.transpose, "ji", x, "ij", dtype=x.dtype, token="my_prefix")
+    assert z.name != "my_prefix" and z.name.startswith("my_prefix-")
+
+
 def test_warn_bad_rechunking():
     x = da.ones((20, 20), chunks=(20, 1))
     y = da.ones((20, 20), chunks=(1, 20))
