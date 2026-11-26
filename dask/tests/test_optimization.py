@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from functools import partial
 
 import pytest
@@ -9,6 +10,7 @@ from dask._task_spec import Alias, Task, TaskRef, convert_legacy_graph
 from dask.core import get_dependencies
 from dask.optimization import (
     cull,
+    default_fused_keys_renamer,
     functions_of,
     fuse,
     fuse_linear,
@@ -33,6 +35,21 @@ def test_cull():
     assert cull(d, ["out", "z"])[0] == d
     assert cull(d, [["out"], ["z"]]) == cull(d, ["out", "z"])
     pytest.raises(KeyError, lambda: cull(d, "badkey"))
+
+
+def test_default_fused_keys_renamer_uses_stable_digest_suffix():
+    keys = [
+        "load" + "x" * 150,
+        "getitem" + "y" * 150,
+        "output" + "z" * 150,
+    ]
+    full_name = "-".join(sorted(keys[:-1]) + [keys[-1]])
+    result = default_fused_keys_renamer(keys, max_fused_key_length=40)
+
+    assert (
+        result == f"{full_name[:31]}-{hashlib.sha1(full_name.encode()).hexdigest()[:8]}"
+    )
+    assert len(result) == 40
 
 
 def fuse2(*args, **kwargs):
