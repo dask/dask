@@ -553,6 +553,19 @@ def test_diff(shape, n, axis):
     assert_eq(da.diff(a, n, axis), np.diff(x, n, axis))
 
 
+@pytest.mark.parametrize("axis", [0, 1, -1])
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff_bool(n, axis):
+    # NumPy takes the logical XOR of neighbouring booleans, subtraction is not
+    # defined for them
+    x = np.random.default_rng().integers(0, 2, (6, 7)).astype(bool)
+    a = da.from_array(x, chunks=(3, 3))
+
+    assert_eq(da.diff(a, n, axis), np.diff(x, n, axis))
+    assert_eq(da.diff(a, n, axis, prepend=True), np.diff(x, n, axis, prepend=True))
+    assert_eq(da.diff(a, n, axis, append=False), np.diff(x, n, axis, append=False))
+
+
 @pytest.mark.parametrize("n", [0, 1, 2])
 def test_diff_prepend(n):
     x = np.arange(5) + 1
