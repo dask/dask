@@ -345,7 +345,9 @@ def tensordot(lhs, rhs, axes=2):
         return intermediate
     else:
         left_axes = [ax if ax >= 0 else lhs.ndim + ax for ax in left_axes]
-        return intermediate.sum(axis=left_axes)
+        # np.tensordot does not promote small integer or boolean inputs the way
+        # np.sum does, so keep the promoted input dtype explicitly here.
+        return intermediate.sum(axis=left_axes, dtype=dt)
 
 
 @derived_from(np, ua_args=["out"])
