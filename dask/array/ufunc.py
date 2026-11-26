@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing
 from functools import partial
 from operator import getitem
 from typing import ClassVar
@@ -282,7 +283,20 @@ imag = wrap_elemwise(np.imag)
 fix = wrap_elemwise(np.fix)
 i0 = wrap_elemwise(np.i0)
 sinc = wrap_elemwise(np.sinc)
-nan_to_num = wrap_elemwise(np.nan_to_num)
+_nan_to_num = wrap_elemwise(np.nan_to_num)
+
+
+# derived_from only copies the docstring and does not yet preserve static types.
+@derived_from(np)  # type: ignore[untyped-decorator]
+def nan_to_num(
+    x: typing.Any,
+    copy: bool = True,
+    nan: typing.Any = 0.0,
+    posinf: typing.Any = None,
+    neginf: typing.Any = None,
+    **kwargs: typing.Any,
+) -> typing.Any:
+    return _nan_to_num(x, copy, nan, posinf, neginf, **kwargs)
 
 
 @derived_from(np)
