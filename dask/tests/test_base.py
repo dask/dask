@@ -386,6 +386,47 @@ def test_compute_array():
 
 
 @pytest.mark.skipif("not da")
+def test_compute_custom_array_collection_with_shared_dependency():
+    class Pair:
+        def __init__(self, *arrays):
+            self.arrays = arrays
+
+        def __dask_graph__(self):
+            return HighLevelGraph.merge(
+                *(array.__dask_graph__() for array in self.arrays)
+            )
+
+        def __dask_keys__(self):
+            return [array.__dask_keys__() for array in self.arrays]
+
+        def __dask_layers__(self):
+            return sum((array.__dask_layers__() for array in self.arrays), ())
+
+        __dask_optimize__ = staticmethod(da.Array.__dask_optimize__)
+        __dask_scheduler__ = staticmethod(da.Array.__dask_scheduler__)
+
+        def __dask_postcompute__(self):
+            return (lambda results: results), ()
+
+        def __dask_tokenize__(self):
+            return tuple(array.name for array in self.arrays)
+
+    rng = da.random.default_rng(seed=1234)
+    gain = rng.random((100,), chunks=10)
+    weight = rng.random((100,), chunks=10)
+    new_weight = weight * 1.1
+    new_gain = da.where(new_weight > 0.5, gain, 0.0)
+
+    ((actual_weight, actual_gain),) = compute(
+        Pair(new_weight, new_gain), scheduler="sync"
+    )
+    expected_weight, expected_gain = compute(new_weight, new_gain, scheduler="sync")
+
+    np.testing.assert_array_equal(np.concatenate(actual_weight), expected_weight)
+    np.testing.assert_array_equal(np.concatenate(actual_gain), expected_gain)
+
+
+@pytest.mark.skipif("not da")
 def test_persist_array():
     from dask.array.utils import assert_eq
 

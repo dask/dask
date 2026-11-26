@@ -422,10 +422,14 @@ class Item(DaskMethodsMixin):
         return (self.dask, self.key)
 
     def __getstate__(self):
-        return self._args
+        return (*self._args, self._layer)
 
     def __setstate__(self, state):
-        self.dask, self.key = state
+        if len(state) == 3:
+            self.dask, self.key, self._layer = state
+        else:
+            self.dask, self.key = state
+            self._layer = self.key
 
     def apply(self, func):
         name = "{}-{}".format(funcname(func), tokenize(self, func, "apply"))
