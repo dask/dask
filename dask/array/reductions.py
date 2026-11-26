@@ -766,8 +766,18 @@ def _arg_combine(data, axis, argfunc, keepdims=False):
     arg = data["arg"]
     if axis is None:
         local_args = argfunc(vals, axis=axis, keepdims=keepdims)
-        vals = vals.ravel()[local_args]
-        arg = arg.ravel()[local_args]
+        vals_flat = vals.ravel()
+        arg_flat = arg.ravel()
+        # ``vals`` is in block order, not in C order of the full array, so
+        # ties must be broken by the smallest global index.
+        best = vals_flat[np.reshape(local_args, -1)]
+        ties = vals_flat == best
+        if vals_flat.dtype.kind in "fc":
+            ties |= np.isnan(best) & np.isnan(vals_flat)
+        first = np.flatnonzero(ties)[arg_flat[ties].argmin()]
+        local_args = np.reshape(first, np.shape(local_args))
+        vals = vals_flat[local_args]
+        arg = arg_flat[local_args]
     else:
         local_args = argfunc(vals, axis=axis)
         inds = list(np.ogrid[tuple(map(slice, local_args.shape))])

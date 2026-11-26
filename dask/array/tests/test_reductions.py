@@ -318,6 +318,26 @@ def test_arg_reductions(dfunc, func):
 
 
 @pytest.mark.parametrize(
+    ["dfunc", "func"],
+    [
+        (da.argmin, np.argmin),
+        (da.argmax, np.argmax),
+        (da.nanargmin, np.nanargmin),
+        (da.nanargmax, np.nanargmax),
+    ],
+)
+@pytest.mark.parametrize("chunks", [1, 2, (1, 3), (2, 1)])
+def test_arg_reductions_ties_first_occurrence(dfunc, func, chunks):
+    # Ties across blocks must resolve to the first index in C order
+    x = np.array([[0.0, 5.0, -1.0], [-1.0, 5.0, 0.0]])
+    if func in (np.argmax, np.nanargmax):
+        x = -x
+    a = da.from_array(x, chunks=chunks)
+    assert_eq(dfunc(a), func(x))
+    assert_eq(dfunc(a, keepdims=True), func(x, keepdims=True))
+
+
+@pytest.mark.parametrize(
     ["dfunc", "func"], [(da.nanmin, np.nanmin), (da.nanmax, np.nanmax)]
 )
 def test_nan_reduction_warnings(dfunc, func):
