@@ -447,6 +447,28 @@ def test_apply_gufunc_check_inhomogeneous_chunksize():
     assert "with different chunksize present" in str(excinfo.value)
 
 
+@pytest.mark.parametrize("axes", [None, [(0, 2), (), ()]])
+def test_apply_gufunc_infer_fixed_core_dimensions(axes: list | None) -> None:
+    seen_shapes = []
+
+    def fixed_core(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        seen_shapes.append(x.shape)
+        if x.shape[-2:] != (3, 3):
+            raise ValueError("Core dimensions must both have length 3")
+        return x[..., 0, 0], x[..., 1, 1].astype(np.float32)
+
+    raw = np.arange(54).reshape(6, 3, 3)
+    a = da.from_array(raw, chunks=(2, 3, 3))
+    if axes is not None:
+        a = a.transpose(1, 0, 2)
+    result = apply_gufunc(fixed_core, "(3,3)->(),()", a, axes=axes)
+
+    # Metadata inference must use a small sample, not compute real input data.
+    assert seen_shapes == [(1, 3, 3)]
+    assert_eq(result[0], raw[..., 0, 0])
+    assert_eq(result[1], raw[..., 1, 1].astype(np.float32))
+
+
 def test_apply_gufunc_infer_dtype():
     x = np.arange(50).reshape((5, 10))
     y = np.arange(10)
