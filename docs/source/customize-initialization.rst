@@ -114,12 +114,12 @@ Worker Lifecycle Plugins
 
 You can also create a class with ``setup``, ``teardown``, and ``transition`` methods,
 and register that class with the scheduler to give to every worker using the
-``Client.register_worker_plugin`` method.
+``Client.register_plugin`` method.
 
 .. currentmodule:: distributed
 
 .. autosummary::
-   Client.register_worker_plugin
+   Client.register_plugin
 
-.. automethod:: Client.register_worker_plugin
+.. automethod:: Client.register_plugin
    :noindex:
