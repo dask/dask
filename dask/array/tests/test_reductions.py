@@ -686,6 +686,34 @@ def test_array_cumreduction_dtype(func, method, target_dtype):
     assert_eq(a_r, d_r)
 
 
+@pytest.mark.parametrize("axis", [None, 0, -1])
+@pytest.mark.parametrize("dtype", [None, np.float32, np.complex128])
+def test_cumsum_sequential_order(axis, dtype):
+    # Adding the previous chunk's total after a local scan loses the 1.
+    a = np.array([[1e16, -1e16, 1.0] * 2, [-1e16, 1e16, -1.0] * 2])
+    chunks = ((2,), (1, 3, 2))
+    if axis == 0:
+        a = a.T
+        chunks = chunks[::-1]
+    d = da.from_array(a, chunks=chunks)
+
+    expected = np.cumsum(a, axis=axis, dtype=dtype)
+    actual = da.cumsum(d, axis=axis, dtype=dtype).compute()
+    assert actual.dtype == expected.dtype
+    np.testing.assert_array_equal(actual, expected)
+
+
+def test_cumsum_sequential_unknown_chunks():
+    a = np.array([0, -0.0, 1e16, 0, -1e16, 1.0, np.nan, 2.0])
+    d = da.from_array(a, chunks=(1, 1, 1, 1, 4))
+    keep = np.array([False, True, True, False, True, True, True, True])
+    result = d[da.from_array(keep, chunks=d.chunks)].cumsum(axis=0).compute()
+
+    expected = np.cumsum(a[keep])
+    np.testing.assert_array_equal(result, expected)
+    np.testing.assert_array_equal(np.signbit(result), np.signbit(expected))
+
+
 @pytest.mark.parametrize("ufunc", ["add", "multiply", "maximum"])
 @pytest.mark.parametrize("target_dtype", [None, int, float])
 def test_array_cumreduction_ufunc(ufunc, target_dtype):
