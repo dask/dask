@@ -821,6 +821,55 @@ def test_check_meta_flag():
     dd.utils.assert_eq(c, c)
 
 
+@pytest.mark.parametrize("kind", ["dataframe", "series", "scalar"])
+@pytest.mark.parametrize("container", [None, list, tuple, dict])
+@pytest.mark.parametrize("keyword", [False, True])
+def test_delayed_dataframe_arguments(kind, container, keyword):
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    expected = pd.DataFrame({"a": [1, 2, 3, 4]})
+    frame = dd.from_pandas(expected, npartitions=2)
+    if kind == "series":
+        frame, expected = frame.a, expected.a
+    elif kind == "scalar":
+        frame, expected = frame.a.sum(), expected.a.sum()
+
+    @delayed
+    def unwrap(value):
+        if container is dict:
+            return value["data"]
+        if container is not None:
+            return value[0]
+        return value
+
+    value = frame
+    if container is dict:
+        value = {"data": frame}
+    elif container is not None:
+        value = container([frame])
+    result = unwrap(value=value) if keyword else unwrap(value)
+    dd.utils.assert_eq(result.compute(scheduler="sync"), expected)
+
+
+def test_delayed_dataframe_keyword_arguments_are_lazy_and_shared():
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+    expected = pd.DataFrame({"a": [1, 2, 3]})
+    calls = []
+
+    @delayed
+    def load():
+        calls.append(1)
+        return expected
+
+    frame = dd.from_delayed([load()], meta=expected)
+    result = delayed(lambda left, right: left + right)(left=frame, right=frame)
+    assert not calls
+    dd.utils.assert_eq(result.compute(scheduler="sync"), expected + expected)
+    assert len(calls) == 1
+
+
 def modlevel_eager(x):
     return x + 1
 
