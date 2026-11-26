@@ -822,6 +822,84 @@ def test_args_delayed():
     assert_eq(z, np.arange(10) + 100)
 
 
+@pytest.mark.parametrize("literal_kind", ["getitem", "min", "whole"])
+@pytest.mark.parametrize("call_kind", ["positional", "keyword", "map_blocks"])
+def test_literal_array_shared_dependencies(literal_kind: str, call_kind: str) -> None:
+    calls: collections.Counter[tuple[int, ...]] = collections.Counter()
+
+    def track(block: np.ndarray, block_info: dict) -> np.ndarray:
+        calls[block_info[0]["chunk-location"]] += 1
+        return block
+
+    x = da.arange(1, 13, chunks=4).map_blocks(
+        track, dtype=int, meta=np.array([], dtype=int)
+    )
+    if literal_kind == "getitem":
+        literal = x[0]
+    elif literal_kind == "min":
+        literal = x.min()
+    else:
+        literal = x
+
+    def subtract_min(block: np.ndarray, literal: np.ndarray | np.generic) -> np.ndarray:
+        return block - np.min(literal)
+
+    if call_kind == "positional":
+        result = da.blockwise(
+            subtract_min,
+            "i",
+            x,
+            "i",
+            literal,
+            None,
+            dtype=int,
+            meta=np.array([], dtype=int),
+        )
+    elif call_kind == "keyword":
+        result = da.blockwise(
+            subtract_min,
+            "i",
+            x,
+            "i",
+            literal=literal,
+            dtype=int,
+            meta=np.array([], dtype=int),
+        )
+    else:
+        result = x.map_blocks(
+            subtract_min, literal=literal, dtype=int, meta=np.array([], dtype=int)
+        )
+
+    assert not calls
+    np.testing.assert_array_equal(result.compute(scheduler="sync"), np.arange(12))
+    assert calls == {(i,): 1 for i in range(3)}
+
+
+@pytest.mark.parametrize("shape", [(), (2,), (2, 2)])
+@pytest.mark.parametrize("keyword", [False, True])
+def test_literal_array_finalization_copy(shape: tuple[int, ...], keyword: bool) -> None:
+    source = np.full(shape, 7)
+    literal = da.from_delayed(
+        dask.delayed(lambda: source)(), shape=shape, dtype=source.dtype
+    )
+    x = da.ones(3, chunks=3)
+
+    def mutate_literal(block: np.ndarray, literal: np.ndarray) -> np.ndarray:
+        value = np.min(literal)
+        literal[...] = 0
+        return block + value
+
+    if keyword:
+        result = da.blockwise(
+            mutate_literal, "i", x, "i", literal=literal, dtype=x.dtype
+        )
+    else:
+        result = da.blockwise(mutate_literal, "i", x, "i", literal, None, dtype=x.dtype)
+
+    np.testing.assert_array_equal(result.compute(scheduler="sync"), np.full(3, 8))
+    np.testing.assert_array_equal(source, np.full(shape, 7))
+
+
 @pytest.mark.parametrize(
     "tup", [(1, 2), collections.namedtuple("foo", ["a", "b"])(1, 2)]  # type: ignore[arg-type, call-arg]
 )
