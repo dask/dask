@@ -31,6 +31,7 @@ from dask.base import (
     replace_name_in_key,
 )
 from dask.base import tokenize as _tokenize
+from dask.blockwise import optimize_highlevel_graph
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
@@ -660,13 +661,18 @@ def optimize(dsk, keys, **kwargs):
     if not isinstance(keys, (list, set)):
         keys = [keys]
 
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+
+    flat_keys = list(flatten(keys))
+    # Fuse any dask.array Blockwise layers carried inside the delayed graph.
+    dsk = optimize_highlevel_graph(dsk, flat_keys)
+    dsk = dsk.cull(set(flat_keys))
+
     if config.get("optimization.fuse.delayed"):
         dsk = ensure_dict(dsk)
         dsk = fuse_linear_task_spec(dsk, keys, **kwargs)
 
-    if not isinstance(dsk, HighLevelGraph):
-        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
-    dsk = dsk.cull(set(flatten(keys)))
     return dsk
 
 
