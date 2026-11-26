@@ -346,6 +346,75 @@ def test_limits(db):
     assert data.index.max().compute() == 4
 
 
+@pytest.mark.parametrize(
+    "ids,limits,divisions",
+    [
+        (
+            [23849864652850694],
+            None,
+            (23849864652850694, 23849864652850694),
+        ),
+        (
+            [2**53 + 1, 2**53 + 2, 2**53 + 3, 2**53 + 4],
+            None,
+            (2**53 + 1, 2**53 + 2, 2**53 + 4),
+        ),
+        (
+            [-(2**63), -1, 0, 2**63 - 1],
+            None,
+            (-(2**63), -1, 2**63 - 1),
+        ),
+        (
+            [2**53 + n for n in range(5)],
+            (2**53 + 1, 2**53 + 3),
+            (2**53 + 1, 2**53 + 2, 2**53 + 3),
+        ),
+    ],
+    ids=["singleton", "consecutive", "signed-range", "explicit-limits"],
+)
+def test_bigint_divisions(tmp_path, ids, limits, divisions):
+    from sqlalchemy import BigInteger
+
+    uri = f"sqlite:///{tmp_path / 'bigint.db'}"
+    source = pd.DataFrame({"id": ids, "value": range(len(ids))}).set_index("id")
+    source.to_sql("test", uri, dtype={"id": BigInteger()})
+
+    data = read_sql_table(
+        "test",
+        uri,
+        npartitions=np.int64(len(divisions) - 1),
+        index_col="id",
+        limits=limits,
+    )
+    expected = source if limits is None else source.loc[limits[0] : limits[1]]
+
+    assert_eq(data.compute(), expected)
+    assert data.divisions == divisions
+
+
+def test_unsigned_bigint_divisions(tmp_path, monkeypatch):
+    from sqlalchemy import column, select, table
+
+    # Unsigned BIGINT aggregates can be inferred into different pandas dtypes.
+    # SQLite has no unsigned BIGINT, so supply the aggregate result directly.
+    lower, upper = 2**63 - 1, 2**64 - 1
+    bounds = pd.DataFrame({"max_1": [upper], "min_1": [lower]})
+    monkeypatch.setattr(pd, "read_sql", lambda *args, **kwargs: bounds)
+    query = select(table("test", column("id"), column("value")))
+    meta = pd.DataFrame({"id": pd.Series(dtype="uint64"), "value": []}).set_index("id")
+
+    data = read_sql_query(
+        query,
+        f"sqlite:///{tmp_path / 'bigint.db'}",
+        index_col="id",
+        head_rows=0,
+        meta=meta,
+        npartitions=2,
+    )
+
+    assert data.divisions == (lower, 3 * 2**62 - 1, upper)
+
+
 def test_datetimes():
     import datetime
 
