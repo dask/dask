@@ -59,3 +59,10 @@ def test_rewrite_filters_query(df, pdf):
     expected = pdf[((pdf.x == 1) & (pdf.y > 1)) | ((pdf.x == 1) & (pdf.y > 2))]
     expected = expected[["x"]]
     assert_eq(result, expected)
+
+
+def test_filter_with_scalar_or_component(df, pdf):
+    # A literal in an OR predicate has no expr name and used to break the rewrite (#12664)
+    predicate = False | (df.x == 1)
+    assert rewrite_filters(predicate.expr)._name == predicate.expr._name
+    assert_eq(df[False | (df.x == 1)], pdf[False | (pdf.x == 1)])
