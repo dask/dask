@@ -699,8 +699,6 @@ class HighLevelGraph(Graph):
 
         Parameters
         ----------
-        hlg : HighLevelGraph
-            The high level graph's layers to sort
 
         Returns
         -------

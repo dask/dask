@@ -1789,7 +1789,6 @@ class Array(DaskMethodsMixin):
 
         Parameters
         ----------
-        chunks: tuple
         size: int
             Rough size of the image
 
