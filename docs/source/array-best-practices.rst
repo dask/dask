@@ -66,29 +66,28 @@ Note that if you provide ``chunks='auto'`` then Dask Array will look for a
 Avoid Oversubscribing Threads
 -----------------------------
 
-.. tip::
-
-   When using the ``distributed`` scheduler, the ``OMP_NUM_THREADS``,
-   ``MKL_NUM_THREADS``, and ``OPENBLAS_NUM_THREADS`` environment variables
-   are automatically set to ``1`` when using :ref:`nanny` workers.
-   This helps avoid oversubscribing threads in common cases.
-
 By default Dask will run as many concurrent tasks as you have logical cores.
 It assumes that each task will consume about one core.  However, many
 array-computing libraries are themselves multi-threaded, which can cause
 contention and low performance.  In particular the BLAS/LAPACK libraries that
 back most of NumPy's linear algebra routines are often multi-threaded, and need
 to be told to use only one thread explicitly.  You can do this with the
-following environment variables (using bash ``export`` command below, but this
-may vary depending on your operating system).
+following environment variables (see `joblib’s configuration`_. The below code
+uses bash’s ``export`` command, your shell’s equivalent instruction might vary).
 
 .. code-block:: bash
 
    export OMP_NUM_THREADS=1
    export MKL_NUM_THREADS=1
    export OPENBLAS_NUM_THREADS=1
+   export BLIS_NUM_THREADS=1
+   export VECLIB_MAXIMUM_THREADS=1
+   export NUMBA_NUM_THREADS=1
+   export NUMEXPR_NUM_THREADS=1
 
 You need to run this before you start your Python process for it to take effect.
+
+.. _joblib’s configuration: https://github.com/joblib/joblib/blob/ed0806a497268005ad7dad30f79e1d563927d7c6/joblib/_parallel_backends.py#L59-L67
 
 
 Consider Xarray
