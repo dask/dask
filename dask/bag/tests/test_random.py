@@ -9,6 +9,17 @@ import dask.bag as db
 from dask.bag import random
 
 
+@pytest.mark.parametrize("api", ["sample", "choices"])
+@pytest.mark.parametrize("population", [[], [1, 2, 3]])
+@pytest.mark.parametrize("split_every", [None, 2])
+def test_zero_size_sampling_returns_an_empty_bag(api, population, split_every):
+    bag = db.from_sequence(population, npartitions=2)
+    kwargs = {} if split_every is None else {"split_every": split_every}
+    result = getattr(random, api)(bag, k=0, **kwargs)
+    assert result.npartitions == bag.npartitions
+    assert result.compute(scheduler="synchronous") == []
+
+
 def test_choices_size_exactly_k():
     seq = range(20)
     sut = db.from_sequence(seq, npartitions=3)
