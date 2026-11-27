@@ -3165,6 +3165,28 @@ def test_from_func():
     assert same_keys(d, from_func(f, (10,), x.dtype, kwargs={"n": 2}))
 
 
+@pytest.mark.parametrize("dtype", ["U8", "S8"])
+@pytest.mark.parametrize(
+    "values", [("ab", "abcdefgh"), ("abcdefgh", "ab"), ("ab", "xyz")]
+)
+def test_compute_string_blocks_with_different_widths(
+    dtype: str, values: tuple[str, str]
+) -> None:
+    source = np.array(values, dtype=dtype)
+    array = da.from_array(source, chunks=1)
+    filled = array.map_blocks(np.char.zfill, 4, dtype=dtype)
+    expected = np.char.zfill(source, 4)
+
+    assert_eq(filled.compute(), expected)
+
+
+@pytest.mark.parametrize("dtype", ["U", "S"])
+def test_concatenate3_string_blocks_with_empty_first_block(dtype: str) -> None:
+    empty = np.empty((0, 1), dtype=f"{dtype}2")
+    wide = np.array([["abcdefgh"]], dtype=f"{dtype}8")
+    assert_eq(concatenate3([[empty], [wide]]), wide)
+
+
 def test_concatenate3_2():
     x = np.array([1, 2])
     assert_eq(concatenate3([x, x, x]), np.array([1, 2, 1, 2, 1, 2]))
