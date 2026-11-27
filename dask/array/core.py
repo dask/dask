@@ -5681,7 +5681,20 @@ def concatenate3(arrays):
         except AttributeError:
             return type(x)
 
-    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
+    result_dtype = dtype(deepfirst(arrays))
+    kind = getattr(result_dtype, "kind", None)
+    if kind in {"S", "U"}:
+        # NumPy string dtypes encode the width, which can vary by block.
+        widest = result_dtype
+        for arr in core.flatten(arrays, container=(list, tuple)):
+            if type(arr) is not np.ndarray or arr.dtype.kind != kind:
+                break
+            if arr.dtype.itemsize > widest.itemsize:
+                widest = arr.dtype
+        else:
+            result_dtype = widest
+
+    result = np.empty(shape=shape, dtype=result_dtype)
 
     for idx, arr in zip(
         slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))
