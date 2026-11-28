@@ -512,6 +512,16 @@ def test_svd_dtype_preservation(chunks, dtype):
     assert u.dtype == s.dtype == v.dtype == dtype
 
 
+@pytest.mark.parametrize("dtype", ["complex64", "complex128"])
+def test_svd_complex_singular_values(dtype: str) -> None:
+    values = np.array([[1 + 2j, 2], [3, 4 - 1j], [1, 3 + 2j], [5, 1]], dtype=dtype)
+    x = da.from_array(values, chunks=(2, 2))
+
+    _, singular_values, _ = svd(x)
+
+    assert_eq(singular_values, np.linalg.svd(values, compute_uv=False))
+
+
 def test_svd_compressed_deterministic():
     m, n = 30, 25
     x = da.random.default_rng(1234).random(size=(m, n), chunks=(5, 5))
