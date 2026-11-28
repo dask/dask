@@ -59,7 +59,7 @@ from dask.dataframe.io.parquet.core import (
     set_index_columns,
     sorted_columns,
 )
-from dask.dataframe.io.parquet.utils import _split_user_options
+from dask.dataframe.io.parquet.utils import _restore_index_columns, _split_user_options
 from dask.dataframe.io.utils import _is_local_fs
 from dask.delayed import delayed
 from dask.tokenize import _tokenize_deterministic, normalize_token, tokenize
@@ -1072,7 +1072,12 @@ class ReadParquetPyarrowFS(ReadParquet):
             dataset_info["all_files"] = all_files
 
         dataset_info["schema"] = dataset.schema
-        dataset_info["base_meta"] = dataset.schema.empty_table().to_pandas()
+        base_meta = dataset.schema.empty_table().to_pandas()
+        if self.operand("index") is False and isinstance(
+            base_meta.index, pd.MultiIndex
+        ):
+            base_meta = _restore_index_columns(base_meta, dataset.schema.names)
+        dataset_info["base_meta"] = base_meta
         self._dataset_info_cache = dataset_info
         return dataset_info
 

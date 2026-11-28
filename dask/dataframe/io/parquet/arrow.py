@@ -28,6 +28,7 @@ from dask.dataframe.io.parquet.utils import (
     _infer_split_row_groups,
     _normalize_index_columns,
     _process_open_file_options,
+    _restore_index_columns,
     _row_groups_to_parts,
     _set_gather_statistics,
     _set_metadata_task_size,
@@ -615,14 +616,7 @@ class ArrowDatasetEngine(Engine):
             set(columns_and_parts)
         )
         if not index:
-            if index_in_columns_and_parts:
-                # User does not want to set index and a desired
-                # column/partition has been set to the index
-                df = df.reset_index(drop=False)
-            else:
-                # User does not want to set index and an
-                # "unwanted" column has been set to the index
-                df = df.reset_index(drop=True)
+            df = _restore_index_columns(df, columns_and_parts)
         elif set(df.index.names) != set(index) and index_in_columns_and_parts:
             # The wrong index has been set and it contains
             # one or more desired columns/partitions
