@@ -799,6 +799,19 @@ def test_set_index_user_divisions_one_partition(pdf):
     assert_eq(result, pdf.set_index("x"))
 
 
+@pytest.mark.parametrize("divisions", [("a", "a"), ("a", "d")])
+def test_set_index_optimize_preserves_single_partition_divisions(
+    divisions: tuple[str, str],
+) -> None:
+    pdf = pd.DataFrame({"key": [divisions[-1], divisions[0]], "value": [2, 1]})
+    result = from_pandas(pdf, npartitions=1).set_index("key", divisions=divisions)
+
+    optimized = result.optimize()
+
+    assert optimized.divisions == divisions
+    assert_eq(optimized, pdf.set_index("key").sort_index())
+
+
 def test_set_index_divisions_npartitions(pdf):
     df = from_pandas(pdf, npartitions=1, sort=False)
     result = df.set_index("x", sort=True, npartitions=2)
