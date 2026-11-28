@@ -1005,7 +1005,8 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
     offset = np.roll(np.cumsum(asarray_safe(x.chunks[axis], like=x._meta)), 1)
     offset[0] = 0
-    offset = from_array(offset, chunks=1)
+    # Keep the offset name separate from an indexer containing the same values.
+    offset = from_array(offset, chunks=1, name=f"slice-offset-{tokenize(x, axis)}")
     # Tamper with the declared chunks of offset to make blockwise align it with
     # x[axis]
     offset = Array(
