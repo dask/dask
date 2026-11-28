@@ -45,6 +45,26 @@ def test_groupby_unsupported_by(pdf, df):
     assert_eq(df.groupby(df.x).sum(), pdf.groupby(pdf.x).sum())
 
 
+@pytest.mark.parametrize("npartitions", [1, 2, 4])
+@pytest.mark.parametrize("split_out", [1, 2])
+@pytest.mark.filterwarnings(
+    "ignore:invalid value encountered in reduceat:RuntimeWarning"
+)
+def test_groupby_mean_with_opposing_infinities(
+    npartitions: int, split_out: int
+) -> None:
+    pdf = pd.DataFrame(
+        {
+            "key": ["a", "a", "b", "c"] * 2,
+            "value": [np.inf, -np.inf, np.nan, np.inf, 4.0, 8.0, 6.0, 1.0],
+            "other": [np.nan, 2.0, 3.0, 4.0, 4.0, 6.0, 7.0, 8.0],
+        }
+    )
+    df = from_pandas(pdf, npartitions=npartitions)
+    result = df.groupby("key").mean(split_every=2, split_out=split_out)
+    assert_eq(result, pdf.groupby("key").mean())
+
+
 @pytest.mark.parametrize("split_every", [None, 5])
 @pytest.mark.parametrize(
     "api",

@@ -800,12 +800,34 @@ def _mean_chunk(df, *by, observed=None, dropna=None):
     return concat([x, n], axis=1)
 
 
-def _mean_combine(g, levels, sort=False, observed=None, dropna=None):
-    return g.groupby(level=levels, sort=sort, observed=observed, dropna=dropna).sum()
+def _mean_combine(
+    g: pd.DataFrame,
+    levels: int | list[int],
+    sort: bool = False,
+    observed: bool | None = None,
+    dropna: bool | None = None,
+) -> pd.DataFrame:
+    groupby_kwargs = {
+        "level": levels,
+        "sort": sort,
+        "observed": observed,
+        "dropna": dropna,
+    }
+    grouped = g.groupby(**groupby_kwargs)
+    # The chunk sum already skips missing inputs. A missing partial sum
+    # (e.g. +inf and -inf in the same partition) must survive later reductions.
+    if PANDAS_GE_300 and isinstance(g, pd.DataFrame):
+        return grouped.sum(skipna=False)
+
+    result = grouped.sum()
+    missing = g.isna()
+    if missing.any().any():
+        result = result.mask(missing.groupby(**groupby_kwargs).any())
+    return result
 
 
 def _mean_agg(g, levels, sort=False, observed=False, dropna=True):
-    result = g.groupby(level=levels, sort=sort, observed=observed, dropna=dropna).sum()
+    result = _mean_combine(g, levels, sort=sort, observed=observed, dropna=dropna)
     s = result[result.columns[: len(result.columns) // 2]]
     c = result[result.columns[len(result.columns) // 2 :]]
     c.columns = s.columns
