@@ -686,12 +686,17 @@ class Task(GraphNode):
     def has_subgraph(self) -> bool:
         return self.func == _execute_subgraph
 
-    def copy(self):
+    def copy(self) -> Task:
+        extras = _extra_args(type(self))  # type: ignore[arg-type]
+        extra_kwargs = {
+            name: getattr(self, name) for name in extras if name not in {"key", "func"}
+        }
         return type(self)(
             self.key,
             self.func,
             *self.args,
             **self.kwargs,
+            **extra_kwargs,
         )
 
     def __hash__(self):
@@ -856,6 +861,11 @@ class NestedContainer(Task, Iterable):
             constructor=self.constructor,
             **kwargs,
         )
+
+    def copy(self) -> NestedContainer:
+        copied = type(self)(*self.args)
+        copied.key = self.key
+        return copied
 
     def __getstate__(self):
         state = super().__getstate__()

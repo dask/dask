@@ -285,6 +285,59 @@ def test_pickle():
     assert d() == rtd()
 
 
+def test_copy():
+    d = DataNode("key", "a")
+    assert d.copy() == d
+    assert d.copy().key == "key"
+
+    a = Alias(("x", 0, 0))
+    assert a.copy() == a
+    assert a.copy().target == ("x", 0, 0)
+
+    t = Task("key", func, TaskRef("a"), kwarg=TaskRef("b"), _data_producer=True)
+    copied = t.copy()
+    assert copied == t
+    assert copied.key == "key"
+    assert copied.kwargs.keys() == {"kwarg"}
+    assert copied.dependencies == {"a", "b"}
+    # copy() must not drop constructor state that substitute() preserves
+    assert copied.data_producer is True
+
+    for node in (
+        List(TaskRef("a"), TaskRef("b")),
+        Tuple(TaskRef("a"), TaskRef("b")),
+        Set(TaskRef("a"), TaskRef("b")),
+        Dict({"a": TaskRef("x"), "b": TaskRef("y")}),
+        Dict({"a": 1}),
+        List(),
+    ):
+        copied = node.copy()
+        assert type(copied) is type(node)
+        assert copied == node, node
+        assert copied.args == node.args, node
+        values = {"a": 1, "b": 2, "x": 3, "y": 4}
+        assert copied(values) == node(values), node
+
+    # Nested containers are created with key=None but may be renamed later, e.g.
+    # by resolve_aliases; copy() has to preserve that
+    renamed = List(TaskRef("a"))
+    renamed.key = ("renamed", 0)
+    assert renamed.copy().key == ("renamed", 0)
+
+    kwargs_dict = Dict(k=Task("key-1", func, "a"), v=Task("key-2", func, "b"))
+    assert kwargs_dict.copy() == kwargs_dict
+
+
+def test_resolve_aliases_collapses_into_nested_container():
+    dsk = {"x": List(TaskRef("a"), TaskRef("b")), "y": Alias("y", "x")}
+    dependents = {"x": {"y"}, "y": set()}
+    result = resolve_aliases(dsk, {"y"}, dependents)
+    assert "x" not in result
+    assert isinstance(result["y"], List)
+    assert result["y"].key == "y"
+    assert result["y"]({"a": 1, "b": 2}) == [1, 2]
+
+
 def test_pickle_size():
     # We will serialize many of these objects which drives both memory usage and
     # serialization runtime performance.
