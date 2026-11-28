@@ -824,13 +824,13 @@ def nunique_df_combine(dfs, *args, **kwargs):
     return _nunique_df_combine(concat(dfs), *args, **kwargs)
 
 
-def nunique_df_aggregate(dfs, levels, name, sort=False):
+def nunique_df_aggregate(dfs, levels, name, sort=False, dropna=True):
     df = concat(dfs)
+    grouped = df.groupby(level=levels, sort=sort, observed=True, dropna=dropna)
     if df.ndim == 1:
         # split out reduces to a Series
-        return df.groupby(level=levels, sort=sort, observed=True).nunique()
-    else:
-        return df.groupby(level=levels, sort=sort, observed=True)[name].nunique()
+        return grouped.nunique()
+    return grouped[name].nunique()
 
 
 class NUnique(SingleAggregation):
@@ -841,7 +841,7 @@ class NUnique(SingleAggregation):
     def chunk(df, *by, **kwargs):
         if df.ndim == 1:
             df = df.to_frame()
-            kwargs = {"name": df.columns[0], "levels": _determine_levels(by)}
+            kwargs.update(name=df.columns[0], levels=_determine_levels(by))
         return _nunique_df_chunk(df, *by, **kwargs)
 
     @functools.cached_property
@@ -852,11 +852,11 @@ class NUnique(SingleAggregation):
 
     @functools.cached_property
     def aggregate_kwargs(self) -> dict:  # type: ignore[override]
-        return {"levels": self.levels, "name": self._slice}
+        return {**self.combine_kwargs, "name": self._slice}
 
     @functools.cached_property
     def combine_kwargs(self):
-        return {"levels": self.levels}
+        return {"levels": self.levels, **_as_dict("dropna", self.dropna)}
 
 
 class Head(SingleAggregation):

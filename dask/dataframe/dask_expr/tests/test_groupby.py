@@ -231,6 +231,27 @@ def test_groupby_nunique(df, pdf):
     assert_eq(df.xx.groupby(df.xy).nunique(), pdf.xx.groupby(pdf.xy).nunique())
 
 
+@pytest.mark.parametrize("dropna", [False, True])
+@pytest.mark.parametrize("split_out", [1, 2])
+@pytest.mark.parametrize("by_series", [False, True])
+def test_groupby_nunique_dropna(dropna, split_out, by_series):
+    pdf = pd.DataFrame(
+        {
+            "key": [1, None, 2, None, 1, None, 2, None],
+            "value": [1, 2, 3, 4, 1, 2, None, None],
+        }
+    )
+    df = from_pandas(pdf, npartitions=4)
+    if by_series:
+        grouped = df.value.groupby(df.key, dropna=dropna)
+        expected = pdf.value.groupby(pdf.key, dropna=dropna).nunique()
+    else:
+        grouped = df.groupby("key", dropna=dropna).value
+        expected = pdf.groupby("key", dropna=dropna).value.nunique()
+
+    assert_eq(grouped.nunique(split_every=2, split_out=split_out), expected)
+
+
 def test_groupby_series(pdf, df):
     pdf_result = pdf.groupby(pdf.x).sum()
     result = df.groupby(df.x).sum()

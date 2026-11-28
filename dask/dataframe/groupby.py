@@ -563,14 +563,14 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 ###############################################################
 
 
-def _nunique_df_chunk(df, *by, **kwargs):
+def _nunique_df_chunk(df, *by, dropna=True, **kwargs):
     name = kwargs.pop("name")
     with contextlib.suppress(Exception):
         # This is a lot faster but kind of a pain to implement when by
         # has a boolean series in it.
         return df.drop_duplicates(subset=list(by) + [name]).set_index(list(by))
 
-    g = _groupby_raise_unaligned(df, by=by, group_keys=True)
+    g = _groupby_raise_unaligned(df, by=by, group_keys=True, dropna=dropna)
     if len(df) > 0:
         grouped = g[name].unique().explode().to_frame()
     else:
@@ -582,9 +582,9 @@ def _nunique_df_chunk(df, *by, **kwargs):
     return grouped
 
 
-def _nunique_df_combine(df, levels, sort=False):
+def _nunique_df_combine(df, levels, sort=False, dropna=True):
     result = (
-        df.groupby(level=levels, sort=sort, observed=True)[df.columns[0]]
+        df.groupby(level=levels, sort=sort, observed=True, dropna=dropna)[df.columns[0]]
         .unique()
         .explode()
         .to_frame()
