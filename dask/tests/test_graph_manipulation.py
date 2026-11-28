@@ -9,6 +9,7 @@ import pytest
 import dask
 import dask.bag as db
 from dask import delayed
+from dask._task_spec import Alias, TaskRef
 from dask.base import clone_key
 from dask.blockwise import Blockwise
 from dask.graph_manipulation import bind, checkpoint, chunks, clone, wait_on
@@ -202,6 +203,14 @@ def test_clone(layers):
     assert_no_common_keys(c8, t3, layers=layers)
 
 
+def test_clone_legacy_task_with_task_ref() -> None:
+    original = Tuple({"input": 1, "result": (add, TaskRef("input"), 2)}, ["result"])
+
+    cloned = clone(original, seed=1, assume_layers=False)
+
+    assert cloned.compute(scheduler="sync") == (3,)
+
+
 @pytest.mark.skipif("not da")
 @pytest.mark.parametrize(
     "literal",
@@ -300,6 +309,39 @@ def test_bind(layers):
     assert bound3.__dask_graph__()[cloned_e_name][0] is chunks.bind
     assert bound3.compute() == (1, 2, 3)
     assert cnt.n == 9
+
+
+@pytest.mark.skipif("not da")
+@pytest.mark.parametrize("indexer", [slice(500, 800), slice(500, 800, 2)])
+@pytest.mark.parametrize("assume_layers", [False, True])
+@pytest.mark.parametrize("omit_source", [False, True])
+def test_bind_sliced_array(
+    indexer: slice, assume_layers: bool, omit_source: bool
+) -> None:
+    source = da.arange(800, chunks=100)
+    child = source[indexer]
+    counter = NodeCounter()
+    parent = delayed(counter.f)(None)
+
+    bound = bind(
+        child, parent, omit=source if omit_source else None, assume_layers=assume_layers
+    )
+
+    da.utils.assert_eq(bound.compute(scheduler="sync"), child)
+    assert counter.n == 1
+
+
+@pytest.mark.parametrize("omit_source", [False, True])
+def test_bind_alias_with_reference_key(omit_source: bool) -> None:
+    source = Tuple({"source": 3}, ["source"])
+    child = Tuple({"source": 3, "out": Alias("source")}, ["out"])
+    parent = delayed(lambda: None)()
+
+    bound = bind(
+        child, parent, omit=source if omit_source else None, assume_layers=False
+    )
+
+    assert bound.compute(scheduler="sync") == (3,)
 
 
 @pytest.mark.parametrize(

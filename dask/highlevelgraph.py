@@ -22,7 +22,7 @@ import tlz as toolz
 
 import dask
 from dask import config
-from dask._task_spec import GraphNode
+from dask._task_spec import Alias, GraphNode, Task, TaskRef
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
 from dask.tokenize import normalize_token, tokenize
@@ -234,11 +234,31 @@ class Layer(Graph):
 
         is_leaf: bool
 
-        def clone_value(o):
+        def clone_value(o: Any, key: Key | None = None) -> Any:
             """Variant of distributed.utils_comm.subs_multiple, which allows injecting
             bind_to
             """
             nonlocal is_leaf
+
+            if isinstance(o, Alias):
+                # An alias can use the same key as its target.
+                target = o.target
+                if target in keys:
+                    is_leaf = False
+                    target = clone_key(target, seed)
+                return Alias(o.key if key is None else key, target)
+            if isinstance(o, GraphNode):
+                substitutions: dict[Key, Key | GraphNode] = {
+                    dep: clone_key(dep, seed) for dep in o.dependencies & keys
+                }
+                if substitutions:
+                    is_leaf = False
+                return o.substitute(substitutions, key=key)
+            if isinstance(o, TaskRef):
+                if o.key in keys:
+                    is_leaf = False
+                    return TaskRef(clone_key(o.key, seed))
+                return o
 
             typ = type(o)
             if typ is tuple and o and callable(o[0]):
@@ -263,9 +283,18 @@ class Layer(Graph):
             if key in keys:
                 key = clone_key(key, seed)
                 is_leaf = True
-                value = clone_value(value)
+                value = clone_value(value, key)
                 if bind_to is not None and is_leaf:
-                    value = (chunks.bind, value, bind_to)
+                    if isinstance(value, GraphNode):
+                        value = Task(
+                            key,
+                            chunks.bind,
+                            value,
+                            TaskRef(bind_to),
+                            _data_producer=value.data_producer,
+                        )
+                    else:
+                        value = (chunks.bind, value, bind_to)
                     bound = True
 
             dsk_new[key] = value
