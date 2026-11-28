@@ -2757,6 +2757,10 @@ class BlockwiseTail(Tail, Blockwise):
 
     _preserves_partitioning_information = True
 
+    def _simplify_down(self) -> None:
+        # The logical Tail rewrite would introduce a new, unlowered expression.
+        return
+
     def _divisions(self):
         return self.frame.divisions
 
