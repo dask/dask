@@ -56,7 +56,7 @@ def test_groupby_mean_with_opposing_infinities(
     pdf = pd.DataFrame(
         {
             "key": ["a", "a", "b", "c"] * 2,
-            "value": [np.inf, -np.inf, np.nan, np.inf, 4.0, 8.0, 6.0, 1.0],
+            "value": [np.inf, -np.inf, np.nan, 3.0, 4.0, 8.0, 6.0, 1.0],
             "other": [np.nan, 2.0, 3.0, 4.0, 4.0, 6.0, 7.0, 8.0],
         }
     )
