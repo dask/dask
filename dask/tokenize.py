@@ -208,7 +208,7 @@ def normalize_object(o):
 
     try:
         return _normalize_pickle(o)
-    except Exception:
+    except Exception:  # noqa: BLE001
         _maybe_raise_nondeterministic(
             f"Object {o!r} cannot be deterministically hashed. This likely "
             "indicates that the object cannot be serialized deterministically."
@@ -216,7 +216,7 @@ def normalize_object(o):
         return uuid.uuid4().hex
 
 
-_seen_objects = set()
+_seen_objects: set[object] = set()
 
 
 def _normalize_pure_object(o: object) -> tuple[str, int]:
@@ -244,13 +244,13 @@ def _normalize_pickle(o: object) -> tuple:
                 out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
             pickle.loads(out, buffers=buffers)
             pik2 = hash_buffer_hex(out)
-        except Exception:
+        except Exception:  # noqa: BLE001
             buffers.clear()
             try:
                 out = cloudpickle.dumps(o, protocol=5, buffer_callback=buffers.append)
                 pickle.loads(out, buffers=buffers)
                 pik2 = hash_buffer_hex(out)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 break
         if pik and pik2 and pik == pik2:
             break
@@ -471,7 +471,7 @@ def register_numpy():
     def normalize_ufunc(func):
         try:
             return _normalize_pickle(func)
-        except Exception:
+        except Exception:  # noqa: BLE001
             _maybe_raise_nondeterministic(
                 f"Cannot tokenize numpy ufunc {func!r}. Please use functions "
                 "of the dask.array.ufunc module instead. See also "

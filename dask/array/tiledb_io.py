@@ -5,7 +5,7 @@ from dask.array import core
 
 def _tiledb_to_chunks(tiledb_array):
     schema = tiledb_array.schema
-    return list(schema.domain.dim(i).tile for i in range(schema.ndim))
+    return [schema.domain.dim(i).tile for i in range(schema.ndim)]
 
 
 def from_tiledb(uri, attribute=None, chunks=None, storage_options=None, **kwargs):
@@ -41,7 +41,7 @@ def from_tiledb(uri, attribute=None, chunks=None, storage_options=None, **kwargs
     """
     import tiledb
 
-    tiledb_config = storage_options or dict()
+    tiledb_config = storage_options or {}
     key = tiledb_config.pop("key", None)
 
     if isinstance(uri, tiledb.Array):
@@ -132,7 +132,7 @@ def to_tiledb(
     """
     import tiledb
 
-    tiledb_config = storage_options or dict()
+    tiledb_config = storage_options or {}
     # encryption key, if any
     key = key or tiledb_config.pop("key", None)
 
@@ -156,7 +156,7 @@ def to_tiledb(
                 "Target TileDB array layout is not compatible with source array"
             )
     else:
-        raise ValueError(
+        raise TypeError(
             "'uri' must be string pointing to supported TileDB store location "
             "or an open, writable TileDB array."
         )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import Any, ClassVar
 
 import pandas as pd
 
@@ -17,7 +18,7 @@ from dask.utils import apply
 
 
 class MergeAsof(Merge):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "left_on",
@@ -31,7 +32,7 @@ class MergeAsof(Merge):
         "allow_exact_matches",
         "direction",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "left_on": None,
         "right_on": None,
         "left_index": False,
@@ -97,11 +98,10 @@ class MergeAsof(Merge):
         right_by = self.right_by
 
         ixname = ixcol = divs = None
-        if left_on is not None:
-            if right_index:
-                divs = self.left.divisions if self.left.known_divisions else None
-                ixname = self.left.index.name
-                ixcol = left.columns[0]
+        if left_on is not None and right_index:
+            divs = self.left.divisions if self.left.known_divisions else None
+            ixname = self.left.index.name
+            ixcol = left.columns[0]
 
         if right_on is not None:
             right = (
@@ -187,7 +187,7 @@ class MergeAsof(Merge):
 
 
 class MergeAsofIndexed(MergeAsof):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "left_index",
@@ -240,7 +240,7 @@ class MergeAsofIndexed(MergeAsof):
         return None
 
     def _layer(self) -> dict:
-        dsk = dict()
+        dsk = {}
         tails = heads = None
         tails_name = f"prefix-reduction-{self._name}"
         heads_name = f"suffix_reduction-{self._name}"
@@ -317,7 +317,7 @@ def prefix_reduction(f, ddf, identity, name, **kwargs):
     identity : pd.DataFrame
         an identity element of f, that is f(identity, df) = f(df, identity) = df
     """
-    dsk = dict()
+    dsk = {}
     n = len(ddf.divisions) - 1
 
     N = 1
@@ -400,7 +400,7 @@ def suffix_reduction(f, ddf, identity, name, **kwargs):
     kwargs : ??
         keyword arguments of f ??
     """
-    dsk = dict()
+    dsk = {}
     n = len(ddf.divisions) - 1
 
     N = 1

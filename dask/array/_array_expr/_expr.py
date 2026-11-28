@@ -5,6 +5,7 @@ from bisect import bisect
 from functools import cached_property, reduce
 from itertools import product
 from operator import add, mul
+from typing import ClassVar
 
 import numpy as np
 import toolz
@@ -148,7 +149,7 @@ def unify_chunks_expr(*args):
         return dict(zip(inds[0], arrays[0].chunks)), arrays, False
 
     nameinds = []
-    blockdim_dict = dict()
+    blockdim_dict = {}
     for a, ind in arginds:
         if ind is not None and not isinstance(a, ArrayBlockwiseDep):
             nameinds.append((a.name, ind))
@@ -182,7 +183,7 @@ def unify_chunks_expr(*args):
 
 
 class Stack(ArrayExpr):
-    _parameters = ["array", "axis", "meta"]
+    _parameters: ClassVar[list[str]] = ["array", "axis", "meta"]
 
     @functools.cached_property
     def args(self):
@@ -230,7 +231,7 @@ class Stack(ArrayExpr):
 
 
 class Concatenate(ArrayExpr):
-    _parameters = ["array", "axis", "meta"]
+    _parameters: ClassVar[list[str]] = ["array", "axis", "meta"]
 
     @functools.cached_property
     def args(self):
@@ -272,7 +273,7 @@ class Concatenate(ArrayExpr):
 
 
 class FinalizeComputeArray(FinalizeCompute, ArrayExpr):
-    _parameters = ["arr"]
+    _parameters: ClassVar[list[str]] = ["arr"]
 
     def chunks(self):
         return (self.arr.shape,)

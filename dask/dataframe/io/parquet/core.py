@@ -351,7 +351,7 @@ def create_metadata_file(
     # Optionally compute the result
     if compute:
         if compute_kwargs is None:
-            compute_kwargs = dict()
+            compute_kwargs = {}
         out = out.compute(**compute_kwargs)
     return out
 
@@ -504,7 +504,7 @@ def apply_filters(parts, statistics, filters):
             out_parts = []
             out_statistics = []
             for part, stats in zip(parts, statistics):
-                if "filter" in stats and stats["filter"]:
+                if stats.get("filter"):
                     continue  # Filtered by engine
                 try:
                     c = toolz.groupby("name", stats["columns"])[column][0]

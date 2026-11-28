@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import partial
 from operator import getitem
+from typing import ClassVar
 
 import numpy as np
 
@@ -70,7 +71,7 @@ def frompyfunc(func, nin, nout):
 
 
 class ufunc:
-    _forward_attrs = {
+    _forward_attrs: ClassVar[set[str]] = {
         "nin",
         "nargs",
         "nout",

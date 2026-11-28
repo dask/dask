@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any as AnyT
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -54,7 +55,7 @@ class Chunk(Blockwise):
     ApplyConcatApply
     """
 
-    _parameters = ["frame", "kind", "chunk", "chunk_kwargs"]
+    _parameters: ClassVar[list[str]] = ["frame", "kind", "chunk", "chunk_kwargs"]
 
     @property
     def operation(self):
@@ -96,7 +97,12 @@ class Aggregate(Chunk):
     ApplyConcatApply
     """
 
-    _parameters = ["frame", "kind", "aggregate", "aggregate_kwargs"]
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "kind",
+        "aggregate",
+        "aggregate_kwargs",
+    ]
 
     @functools.cached_property
     def aggregate_args(self):
@@ -133,7 +139,7 @@ class ShuffleReduce(Expr):
     ApplyConcatApply
     """
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "kind",
         "_meta",
@@ -150,7 +156,7 @@ class ShuffleReduce(Expr):
         "shuffle_method",
         "ignore_index",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "split_every": 8,
         "split_out": True,
         "sort": None,
@@ -307,7 +313,7 @@ class TreeReduce(Expr):
     ApplyConcatApply
     """
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "kind",
         "_meta",
@@ -317,7 +323,7 @@ class TreeReduce(Expr):
         "aggregate_kwargs",
         "split_every",
     ]
-    _defaults = {"split_every": 8}
+    _defaults: ClassVar[dict[str, AnyT]] = {"split_every": 8}
 
     @functools.cached_property
     def _name(self):
@@ -414,14 +420,15 @@ class ApplyConcatApply(Expr):
     combine takes from aggregate and aggregate takes from chunk.
     """
 
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     chunk: Callable | None = None
     combine: Callable | None = None
     aggregate: Callable | None = None
-    chunk_kwargs: dict = {}
-    combine_kwargs: dict = {}
-    aggregate_args: list = []
-    aggregate_kwargs: dict = {}
+    # Subclasses may derive these arguments from individual expressions' operands.
+    chunk_kwargs: Mapping[str, AnyT] = {}
+    combine_kwargs: Mapping[str, AnyT] = {}
+    aggregate_args: Sequence[AnyT] = []
+    aggregate_kwargs: Mapping[str, AnyT] = {}
     _chunk_cls = Chunk
 
     @property
@@ -481,12 +488,12 @@ class ApplyConcatApply(Expr):
     @functools.cached_property
     def need_to_shuffle(self):
         split_by = self.split_by or self.frame.columns
-        if any(
+        # all(set(split_by) < cols) is not equivalent to not any(set(split_by) >= cols):
+        # disjoint column sets still require a shuffle.
+        return not any(
             set(split_by) >= (set(cols) if isinstance(cols, tuple) else {cols})
             for cols in self.frame.unique_partition_mapping_columns_from_shuffle
-        ):
-            return False
-        return True
+        )
 
     @functools.cached_property
     def unique_partition_mapping_columns_from_shuffle(self):
@@ -574,8 +581,17 @@ class ApplyConcatApply(Expr):
 
 
 class Unique(ApplyConcatApply):
-    _parameters = ["frame", "split_every", "split_out", "shuffle_method"]
-    _defaults = {"split_every": None, "split_out": True, "shuffle_method": "tasks"}
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "split_every",
+        "split_out",
+        "shuffle_method",
+    ]
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "split_every": None,
+        "split_out": True,
+        "shuffle_method": "tasks",
+    }
     chunk = staticmethod(methods.unique)
     aggregate_func = staticmethod(methods.unique)
 
@@ -608,7 +624,7 @@ class Unique(ApplyConcatApply):
 
 
 class DropDuplicates(Unique):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "subset",
         "ignore_index",
@@ -617,7 +633,7 @@ class DropDuplicates(Unique):
         "shuffle_method",
         "keep",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "subset": None,
         "ignore_index": False,
         "split_every": None,
@@ -664,8 +680,19 @@ class DropDuplicates(Unique):
 
 
 class PivotTable(ApplyConcatApply):
-    _parameters = ["frame", "columns", "index", "values", "aggfunc"]
-    _defaults = {"columns": None, "index": None, "values": None, "aggfunc": "mean"}
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "columns",
+        "index",
+        "values",
+        "aggfunc",
+    ]
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "columns": None,
+        "index": None,
+        "values": None,
+        "aggfunc": "mean",
+    }
 
     @functools.cached_property
     def _meta(self):
@@ -728,8 +755,19 @@ class PivotTable(ApplyConcatApply):
 
 
 class PivotTableAbstract(ApplyConcatApply):
-    _parameters = ["frame", "columns", "index", "values", "aggfunc"]
-    _defaults = {"columns": None, "index": None, "values": None, "aggfunc": "mean"}
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "columns",
+        "index",
+        "values",
+        "aggfunc",
+    ]
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "columns": None,
+        "index": None,
+        "values": None,
+        "aggfunc": "mean",
+    }
 
     @property
     def chunk_kwargs(self):
@@ -784,7 +822,7 @@ class Reduction(ApplyConcatApply):
     methods.
     """
 
-    _defaults: AnyT = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "skipna": True,
         "numeric_only": False,
         "min_count": 0,
@@ -842,7 +880,7 @@ class Reduction(ApplyConcatApply):
 
 
 class CustomReduction(Reduction):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "meta",
         "chunk_kwargs",
@@ -904,8 +942,14 @@ class CustomReduction(Reduction):
 
 
 class Sum(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only", "split_every", "axis"]
-    _defaults = {
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "skipna",
+        "numeric_only",
+        "split_every",
+        "axis",
+    ]
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "split_every": False,
         "numeric_only": False,
         "skipna": True,
@@ -915,15 +959,19 @@ class Sum(Reduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(skipna=self.skipna, numeric_only=self.numeric_only, axis=self.axis)
+        return {
+            "skipna": self.skipna,
+            "numeric_only": self.numeric_only,
+            "axis": self.axis,
+        }
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna, axis=self.axis)
+        return {"skipna": self.skipna, "axis": self.axis}
 
     @property
     def aggregate_kwargs(self):
-        return dict(skipna=self.skipna, axis=self.axis)
+        return {"skipna": self.skipna, "axis": self.axis}
 
 
 class Prod(Sum):
@@ -931,8 +979,14 @@ class Prod(Sum):
 
 
 class Max(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only", "split_every", "axis"]
-    _defaults = {
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "skipna",
+        "numeric_only",
+        "split_every",
+        "axis",
+    ]
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "split_every": False,
         "numeric_only": False,
         "skipna": True,
@@ -943,19 +997,21 @@ class Max(Reduction):
     @property
     def chunk_kwargs(self):
         if self.frame._meta.ndim < 2:
-            return dict(skipna=self.skipna)
+            return {"skipna": self.skipna}
         else:
-            return dict(
-                skipna=self.skipna, numeric_only=self.numeric_only, axis=self.axis
-            )
+            return {
+                "skipna": self.skipna,
+                "numeric_only": self.numeric_only,
+                "axis": self.axis,
+            }
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna, axis=self.axis)
+        return {"skipna": self.skipna, "axis": self.axis}
 
     @property
     def aggregate_kwargs(self):
-        return dict(skipna=self.skipna, axis=self.axis)
+        return {"skipna": self.skipna, "axis": self.axis}
 
 
 class Min(Max):
@@ -963,32 +1019,41 @@ class Min(Max):
 
 
 class Any(Reduction):
-    _parameters = ["frame", "skipna", "split_every"]
-    _defaults = {"skipna": True, "split_every": False}
+    _parameters: ClassVar[list[str]] = ["frame", "skipna", "split_every"]
+    _defaults: ClassVar[dict[str, AnyT]] = {"skipna": True, "split_every": False}
     reduction_chunk = M.any
 
     @property
     def chunk_kwargs(self):
-        return dict(
-            skipna=self.skipna,
-        )
+        return {
+            "skipna": self.skipna,
+        }
 
 
 class All(Reduction):
-    _parameters = ["frame", "skipna", "split_every"]
-    _defaults = {"split_every": False}
+    _parameters: ClassVar[list[str]] = ["frame", "skipna", "split_every"]
+    _defaults: ClassVar[dict[str, AnyT]] = {"split_every": False}
     reduction_chunk = M.all
 
     @property
     def chunk_kwargs(self):
-        return dict(
-            skipna=self.skipna,
-        )
+        return {
+            "skipna": self.skipna,
+        }
 
 
 class IdxMin(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only", "split_every"]
-    _defaults = {"skipna": True, "numeric_only": False, "split_every": False}
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "skipna",
+        "numeric_only",
+        "split_every",
+    ]
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "skipna": True,
+        "numeric_only": False,
+        "split_every": False,
+    }
     reduction_chunk = idxmaxmin_chunk
     reduction_combine = idxmaxmin_combine
     reduction_aggregate = idxmaxmin_agg
@@ -996,15 +1061,15 @@ class IdxMin(Reduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(
-            skipna=self.skipna,
-            fn=self._reduction_attribute,
-            numeric_only=self.numeric_only,
-        )
+        return {
+            "skipna": self.skipna,
+            "fn": self._reduction_attribute,
+            "numeric_only": self.numeric_only,
+        }
 
     @property
     def combine_kwargs(self):
-        return dict(skipna=self.skipna, fn=self._reduction_attribute)
+        return {"skipna": self.skipna, "fn": self._reduction_attribute}
 
     @property
     def aggregate_kwargs(self):
@@ -1016,8 +1081,12 @@ class IdxMax(IdxMin):
 
 
 class Cov(Reduction):
-    _parameters = ["frame", "min_periods", "split_every", "scalar"]
-    _defaults = {"min_periods": 2, "split_every": False, "scalar": False}
+    _parameters: ClassVar[list[str]] = ["frame", "min_periods", "split_every", "scalar"]
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "min_periods": 2,
+        "split_every": False,
+        "scalar": False,
+    }
     reduction_chunk = staticmethod(_cov_corr_chunk)
     reduction_combine = staticmethod(_cov_corr_combine)
     reduction_aggregate = staticmethod(_cov_corr_agg)
@@ -1125,8 +1194,19 @@ class ArrayReduction(Reduction):
 class Var(ArrayReduction):
     # Uses the parallel version of Welford's online algorithm (Chan 79')
     # (http://i.stanford.edu/pub/cstr/reports/cs/tr/79/773/CS-TR-79-773.pdf)
-    _parameters = ["frame", "skipna", "ddof", "numeric_only", "split_every"]
-    _defaults = {"skipna": True, "ddof": 1, "numeric_only": False, "split_every": False}
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "skipna",
+        "ddof",
+        "numeric_only",
+        "split_every",
+    ]
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "skipna": True,
+        "ddof": 1,
+        "numeric_only": False,
+        "split_every": False,
+    }
 
     @functools.cached_property
     def _meta(self):
@@ -1138,7 +1218,7 @@ class Var(ArrayReduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(skipna=self.skipna)
+        return {"skipna": self.skipna}
 
     @property
     def combine_kwargs(self):
@@ -1147,12 +1227,12 @@ class Var(ArrayReduction):
     @property
     def aggregate_kwargs(self):
         cols = self.frame.columns if self.frame.ndim == 1 else self.frame._meta.columns
-        return dict(
-            ddof=self.ddof,
-            skipna=self.skipna,
-            meta=self._meta,
-            index=cols,
-        )
+        return {
+            "ddof": self.ddof,
+            "skipna": self.skipna,
+            "meta": self._meta,
+            "index": cols,
+        }
 
     @classmethod
     def reduction_chunk(cls, x, skipna):
@@ -1181,7 +1261,7 @@ class Var(ArrayReduction):
 
 
 class Moment(ArrayReduction):
-    _parameters = ["frame", "order"]
+    _parameters: ClassVar[list[str]] = ["frame", "order"]
 
     @functools.cached_property
     def _meta(self):
@@ -1190,7 +1270,7 @@ class Moment(ArrayReduction):
 
     @property
     def chunk_kwargs(self):
-        return dict(order=self.order)
+        return {"order": self.order}
 
     @property
     def combine_kwargs(self):
@@ -1198,11 +1278,11 @@ class Moment(ArrayReduction):
 
     @property
     def aggregate_kwargs(self):
-        return dict(
-            order=self.order,
-            meta=self._meta,
-            index=self.frame.columns,
-        )
+        return {
+            "order": self.order,
+            "meta": self._meta,
+            "index": self.frame.columns,
+        }
 
     @classmethod
     def reduction_chunk(cls, x, order):
@@ -1220,8 +1300,19 @@ class Moment(ArrayReduction):
 
 
 class Mean(Reduction):
-    _parameters = ["frame", "skipna", "numeric_only", "split_every", "axis"]
-    _defaults = {"skipna": True, "numeric_only": False, "split_every": False, "axis": 0}
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "skipna",
+        "numeric_only",
+        "split_every",
+        "axis",
+    ]
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "skipna": True,
+        "numeric_only": False,
+        "split_every": False,
+        "axis": 0,
+    }
 
     @functools.cached_property
     def _meta(self):
@@ -1247,13 +1338,13 @@ class Mean(Reduction):
 
 
 class MeanAggregate(Blockwise):
-    _parameters = ["frame", "counter"]
+    _parameters: ClassVar[list[str]] = ["frame", "counter"]
     operation = staticmethod(methods.mean_aggregate)
 
 
 class Count(Reduction):
-    _parameters = ["frame", "numeric_only", "split_every"]
-    _defaults = {"split_every": False, "numeric_only": False}
+    _parameters: ClassVar[list[str]] = ["frame", "numeric_only", "split_every"]
+    _defaults: ClassVar[dict[str, AnyT]] = {"split_every": False, "numeric_only": False}
     reduction_chunk = M.count
 
     @classmethod
@@ -1263,14 +1354,14 @@ class Count(Reduction):
     @property
     def chunk_kwargs(self):
         if self.frame._meta.ndim < 2:
-            return dict()
+            return {}
         else:
-            return dict(numeric_only=self.numeric_only)
+            return {"numeric_only": self.numeric_only}
 
 
 class IndexCount(Reduction):
-    _parameters = ["frame", "split_every"]
-    _defaults = {"split_every": False}
+    _parameters: ClassVar[list[str]] = ["frame", "split_every"]
+    _defaults: ClassVar[dict[str, AnyT]] = {"split_every": False}
     reduction_chunk = staticmethod(methods.index_count)
     reduction_aggregate = staticmethod(np.sum)
     # aggregate_chunk = staticmethod(np.sum)
@@ -1283,8 +1374,8 @@ class Mode(Reduction):
     to ApplyConcatApply
     """
 
-    _parameters = ["frame", "dropna", "split_every"]
-    _defaults = {"dropna": True, "split_every": False}
+    _parameters: ClassVar[list[str]] = ["frame", "dropna", "split_every"]
+    _defaults: ClassVar[dict[str, AnyT]] = {"dropna": True, "split_every": False}
     reduction_chunk = M.value_counts
     reduction_combine = M.sum
     reduction_aggregate = staticmethod(_mode_aggregate)
@@ -1302,8 +1393,8 @@ class Mode(Reduction):
 
 
 class NuniqueApprox(Reduction):
-    _parameters = ["frame", "b", "split_every"]
-    _defaults = {"b": 16, "split_every": None}
+    _parameters: ClassVar[list[str]] = ["frame", "b", "split_every"]
+    _defaults: ClassVar[dict[str, AnyT]] = {"b": 16, "split_every": None}
     reduction_chunk = hyperloglog.compute_hll_array
     reduction_combine = hyperloglog.reduce_state
     reduction_aggregate = hyperloglog.estimate_count
@@ -1348,8 +1439,12 @@ class ReductionConstantDim(Reduction):
 
 
 class NLargest(ReductionConstantDim):
-    _parameters = ["frame", "n", "_columns", "split_every"]
-    _defaults = {"n": 5, "_columns": None, "split_every": None}
+    _parameters: ClassVar[list[str]] = ["frame", "n", "_columns", "split_every"]
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "n": 5,
+        "_columns": None,
+        "split_every": None,
+    }
     reduction_chunk = M.nlargest
     reduction_aggregate = M.nlargest
 
@@ -1380,8 +1475,19 @@ def _nlast(df, columns, n, ascending):
 
 
 class NFirst(NLargest):
-    _parameters = ["frame", "n", "_columns", "ascending", "split_every"]
-    _defaults = {"n": 5, "_columns": None, "ascending": None, "split_every": None}
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "n",
+        "_columns",
+        "ascending",
+        "split_every",
+    ]
+    _defaults: ClassVar[dict[str, AnyT]] = {
+        "n": 5,
+        "_columns": None,
+        "ascending": None,
+        "split_every": None,
+    }
     reduction_chunk = staticmethod(_nfirst)
     reduction_aggregate = staticmethod(_nfirst)
 
@@ -1401,7 +1507,7 @@ class NSmallest(NLargest):
 
 
 class ValueCounts(ReductionConstantDim):
-    _defaults = {
+    _defaults: ClassVar[dict[str, AnyT]] = {
         "sort": None,
         "ascending": False,
         "dropna": True,
@@ -1411,7 +1517,7 @@ class ValueCounts(ReductionConstantDim):
         "total_length": None,
     }
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "sort",
         "ascending",
@@ -1483,8 +1589,8 @@ class MemoryUsage(Reduction):
 
 
 class MemoryUsageIndex(MemoryUsage):
-    _parameters = ["frame", "deep"]
-    _defaults = {"deep": False}
+    _parameters: ClassVar[list[str]] = ["frame", "deep"]
+    _defaults: ClassVar[dict[str, AnyT]] = {"deep": False}
 
     @property
     def chunk_kwargs(self):
@@ -1492,8 +1598,8 @@ class MemoryUsageIndex(MemoryUsage):
 
 
 class MemoryUsageFrame(MemoryUsage):
-    _parameters = ["frame", "deep", "_index"]
-    _defaults = {"deep": False, "_index": True}
+    _parameters: ClassVar[list[str]] = ["frame", "deep", "_index"]
+    _defaults: ClassVar[dict[str, AnyT]] = {"deep": False, "_index": True}
 
     @property
     def chunk_kwargs(self):

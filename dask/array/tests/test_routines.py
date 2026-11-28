@@ -61,7 +61,7 @@ def test_atleast_nd_no_args(funcname):
 @pytest.mark.parametrize(
     "shape, chunks",
     [
-        (tuple(), tuple()),
+        ((), ()),
         ((4,), (2,)),
         ((4, 6), (2, 3)),
         ((4, 6, 8), (2, 3, 4)),
@@ -86,7 +86,7 @@ def test_atleast_nd_one_arg(funcname, shape, chunks):
     "shape1, shape2",
     list(
         itertools.combinations_with_replacement(
-            [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)], 2
+            [(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)], 2
         )
     ),
 )
@@ -208,7 +208,7 @@ def test_moveaxis_rollaxis_numpy_api():
         ("flip", {"axis": (0, 2)}),
     ],
 )
-@pytest.mark.parametrize("shape", [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
+@pytest.mark.parametrize("shape", [(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
 def test_flip(funcname, kwargs, shape):
     axis = kwargs.get("axis")
     if axis is None:
@@ -252,7 +252,7 @@ def test_flip(funcname, kwargs, shape):
 @pytest.mark.parametrize(
     "shape",
     [
-        tuple(),
+        (),
         (4,),
         (4, 6),
         (4, 6, 8),
@@ -510,7 +510,7 @@ def test_apply_along_axis(func1d_name, func1d, specify_output_props, input_shape
 @pytest.mark.parametrize(
     "shape, axes",
     [
-        [(10, 15, 20), tuple()],
+        [(10, 15, 20), ()],
         [(10, 15, 20), 0],
         [(10, 15, 20), (1,)],
         [(10, 15, 20), (-1, 1)],
@@ -759,8 +759,8 @@ def test_histogram():
     n = 100
     v = da.random.default_rng().random(n, chunks=10)
     bins = np.arange(0, 1.01, 0.01)
-    a1, b1 = da.histogram(v, bins=bins)
-    a2, b2 = np.histogram(v, bins=bins)
+    a1, _ = da.histogram(v, bins=bins)
+    a2, _ = np.histogram(v, bins=bins)
 
     # Check if the sum of the bins equals the number of samples
     assert a2.sum(axis=0) == n
@@ -952,9 +952,9 @@ def test_histogram2d(weights, density, bins):
     x = rng.uniform(0, 1, size=(n,), chunks=(200,))
     y = rng.uniform(0, 1, size=(n,), chunks=(200,))
     w = rng.uniform(0.2, 1.1, size=(n,), chunks=(200,)) if weights else None
-    a1, b1x, b1y = da.histogram2d(x, y, bins=b, range=r, density=density, weights=w)
-    a2, b2x, b2y = np.histogram2d(x, y, bins=b, range=r, density=density, weights=w)
-    a3, b3x, b3y = np.histogram2d(
+    a1, _, _ = da.histogram2d(x, y, bins=b, range=r, density=density, weights=w)
+    a2, _, _ = np.histogram2d(x, y, bins=b, range=r, density=density, weights=w)
+    a3, _, _ = np.histogram2d(
         x.compute(),
         y.compute(),
         bins=b,
@@ -985,9 +985,9 @@ def test_histogram2d_array_bins(weights, density):
     x = rng.uniform(0, 1, size=(n,), chunks=(200,))
     y = rng.uniform(0, 1, size=(n,), chunks=(200,))
     w = rng.uniform(0.2, 1.1, size=(n,), chunks=(200,)) if weights else None
-    a1, b1x, b1y = da.histogram2d(x, y, bins=b, density=density, weights=w)
-    a2, b2x, b2y = np.histogram2d(x, y, bins=b, density=density, weights=w)
-    a3, b3x, b3y = np.histogram2d(
+    a1, _, _ = da.histogram2d(x, y, bins=b, density=density, weights=w)
+    a2, _, _ = np.histogram2d(x, y, bins=b, density=density, weights=w)
+    a3, _, _ = np.histogram2d(
         x.compute(),
         y.compute(),
         bins=b,
@@ -1010,9 +1010,9 @@ def test_histogramdd():
     n1, n2 = 800, 3
     x = da.random.default_rng().uniform(0, 1, size=(n1, n2), chunks=(200, 3))
     bins = [[0, 0.5, 1], [0, 0.25, 0.85, 1], [0, 0.5, 0.8, 1]]
-    a1, b1 = da.histogramdd(x, bins=bins)
-    a2, b2 = np.histogramdd(x, bins=bins)
-    a3, b3 = np.histogramdd(x.compute(), bins=bins)
+    a1, _ = da.histogramdd(x, bins=bins)
+    a2, _ = np.histogramdd(x, bins=bins)
+    a3, _ = np.histogramdd(x.compute(), bins=bins)
     assert_eq(a1, a2)
     assert_eq(a1, a3)
     assert a1.sum() == n1
@@ -1028,9 +1028,9 @@ def test_histogramdd_seq_of_arrays():
     y = rng.uniform(size=(n1,), chunks=200)
     bx = [0.0, 0.25, 0.75, 1.0]
     by = [0.0, 0.30, 0.70, 0.8, 1.0]
-    a1, b1 = da.histogramdd([x, y], bins=[bx, by])
-    a2, b2 = np.histogramdd([x, y], bins=[bx, by])
-    a3, b3 = np.histogramdd((x.compute(), y.compute()), bins=[bx, by])
+    a1, _ = da.histogramdd([x, y], bins=[bx, by])
+    a2, _ = np.histogramdd([x, y], bins=[bx, by])
+    a3, _ = np.histogramdd((x.compute(), y.compute()), bins=[bx, by])
     assert_eq(a1, a2)
     assert_eq(a1, a3)
 
@@ -1043,14 +1043,14 @@ def test_histogramdd_alternative_bins_range():
     )
     bins = (3, 5, 4)
     ranges = ((0, 1),) * len(bins)
-    a1, b1 = da.histogramdd(x, bins=bins, range=ranges)
-    a2, b2 = np.histogramdd(x, bins=bins, range=ranges)
-    a3, b3 = np.histogramdd(x.compute(), bins=bins, range=ranges)
+    a1, _ = da.histogramdd(x, bins=bins, range=ranges)
+    a2, _ = np.histogramdd(x, bins=bins, range=ranges)
+    a3, _ = np.histogramdd(x.compute(), bins=bins, range=ranges)
     assert_eq(a1, a2)
     assert_eq(a1, a3)
     bins = 4
-    a1, b1 = da.histogramdd(x, bins=bins, range=ranges)
-    a2, b2 = np.histogramdd(x, bins=bins, range=ranges)
+    a1, _ = da.histogramdd(x, bins=bins, range=ranges)
+    a2, _ = np.histogramdd(x, bins=bins, range=ranges)
     assert_eq(a1, a2)
 
     assert a1.sum() == n1
@@ -1066,15 +1066,15 @@ def test_histogramdd_weighted():
     w = rng.uniform(0.5, 0.8, size=(n1,), chunks=200)
     bins = (3, 5, 4)
     ranges = ((0, 1),) * len(bins)
-    a1, b1 = da.histogramdd(x, bins=bins, range=ranges, weights=w)
-    a2, b2 = np.histogramdd(x, bins=bins, range=ranges, weights=w)
-    a3, b3 = np.histogramdd(x.compute(), bins=bins, range=ranges, weights=w.compute())
+    a1, _ = da.histogramdd(x, bins=bins, range=ranges, weights=w)
+    a2, _ = np.histogramdd(x, bins=bins, range=ranges, weights=w)
+    a3, _ = np.histogramdd(x.compute(), bins=bins, range=ranges, weights=w.compute())
     assert_eq(a1, a2)
     assert_eq(a1, a3)
     bins = 4
-    a1, b1 = da.histogramdd(x, bins=bins, range=ranges, weights=w)
-    a2, b2 = np.histogramdd(x, bins=bins, range=ranges, weights=w)
-    a3, b3 = np.histogramdd(x.compute(), bins=bins, range=ranges, weights=w.compute())
+    a1, _ = da.histogramdd(x, bins=bins, range=ranges, weights=w)
+    a2, _ = np.histogramdd(x, bins=bins, range=ranges, weights=w)
+    a3, _ = np.histogramdd(x.compute(), bins=bins, range=ranges, weights=w.compute())
     assert_eq(a1, a2)
     assert_eq(a1, a3)
 
@@ -1083,10 +1083,10 @@ def test_histogramdd_density():
     n1, n2 = 800, 3
     x = da.random.default_rng().uniform(0, 1, size=(n1, n2), chunks=(200, 3))
     bins = [[0, 0.5, 1], [0, 0.25, 0.85, 1], [0, 0.5, 0.8, 1]]
-    a1, b1 = da.histogramdd(x, bins=bins, density=True)
-    a2, b2 = np.histogramdd(x, bins=bins, density=True)
-    a3, b3 = da.histogramdd(x, bins=bins, normed=True)
-    a4, b4 = np.histogramdd(x.compute(), bins=bins, density=True)
+    a1, _ = da.histogramdd(x, bins=bins, density=True)
+    a2, _ = np.histogramdd(x, bins=bins, density=True)
+    a3, _ = da.histogramdd(x, bins=bins, normed=True)
+    a4, _ = np.histogramdd(x.compute(), bins=bins, density=True)
     assert_eq(a1, a2)
     assert_eq(a1, a3)
     assert_eq(a1, a4)
@@ -1100,9 +1100,9 @@ def test_histogramdd_weighted_density():
     w = rng.uniform(0.5, 1.2, size=(n1,), chunks=200)
     bins = (5, 6, 7, 8)
     ranges = ((-4, 4),) * len(bins)
-    a1, b1 = da.histogramdd(x, bins=bins, range=ranges, weights=w, density=True)
-    a2, b2 = np.histogramdd(x, bins=bins, range=ranges, weights=w, density=True)
-    a3, b3 = da.histogramdd(x, bins=bins, range=ranges, weights=w, normed=True)
+    a1, _ = da.histogramdd(x, bins=bins, range=ranges, weights=w, density=True)
+    a2, _ = np.histogramdd(x, bins=bins, range=ranges, weights=w, density=True)
+    a3, _ = da.histogramdd(x, bins=bins, range=ranges, weights=w, normed=True)
     assert_eq(a1, a2)
     assert_eq(a1, a3)
 
@@ -1204,13 +1204,13 @@ def test_histogramdd_edges():
         np.array([0.1, 0.5, 0.7]),
     ]
     # passing bins as an array of bin edges.
-    a1, b1 = da.histogramdd(data, bins=edges)
-    a2, b2 = np.histogramdd(data.compute(), bins=edges)
+    _, b1 = da.histogramdd(data, bins=edges)
+    _, b2 = np.histogramdd(data.compute(), bins=edges)
     for ib1, ib2 in zip(b1, b2):
         assert_eq(ib1, ib2)
     # passing bins as an int with range definitions
-    a1, b1 = da.histogramdd(data, bins=5, range=((0, 1),) * 3)
-    a2, b2 = np.histogramdd(data.compute(), bins=5, range=((0, 1),) * 3)
+    _, b1 = da.histogramdd(data, bins=5, range=((0, 1),) * 3)
+    _, b2 = np.histogramdd(data.compute(), bins=5, range=((0, 1),) * 3)
     for ib1, ib2 in zip(b1, b2):
         assert_eq(ib1, ib2)
 
@@ -1359,11 +1359,11 @@ def test_round():
 @pytest.mark.parametrize("return_inverse", [False, True])
 @pytest.mark.parametrize("return_counts", [False, True])
 def test_unique_kwargs(return_index, return_inverse, return_counts):
-    kwargs = dict(
-        return_index=return_index,
-        return_inverse=return_inverse,
-        return_counts=return_counts,
-    )
+    kwargs = {
+        "return_index": return_index,
+        "return_inverse": return_inverse,
+        "return_counts": return_counts,
+    }
 
     a = np.array([1, 2, 4, 4, 5, 2])
     d = da.from_array(a, chunks=(3,))
@@ -2029,7 +2029,7 @@ def test_count_nonzero():
         x_c = np.count_nonzero(x)
         d_c = da.count_nonzero(d)
 
-        if d_c.shape == tuple():
+        if d_c.shape == ():
             assert x_c == d_c.compute()
         else:
             assert_eq(x_c, d_c)
@@ -2044,7 +2044,7 @@ def test_count_nonzero_axis(axis):
         x_c = np.count_nonzero(x, axis)
         d_c = da.count_nonzero(d, axis)
 
-        if d_c.shape == tuple():
+        if d_c.shape == ():
             assert x_c == d_c.compute()
         else:
             assert_eq(x_c, d_c)
@@ -2057,7 +2057,7 @@ def test_count_nonzero_obj():
     x_c = np.count_nonzero(x)
     d_c = da.count_nonzero(d)
 
-    if d_c.shape == tuple():
+    if d_c.shape == ():
         assert x_c == d_c.compute()
     else:
         assert_eq(x_c, d_c)
@@ -2071,7 +2071,7 @@ def test_count_nonzero_obj_axis(axis):
     x_c = np.count_nonzero(x, axis)
     d_c = da.count_nonzero(d, axis)
 
-    if d_c.shape == tuple():
+    if d_c.shape == ():
         assert x_c == d_c.compute()
     else:
         #######################################################
@@ -2137,7 +2137,7 @@ def test_nonzero_method():
 
 
 def test_unravel_index_empty():
-    shape = tuple()
+    shape = ()
     findices = np.array(0, dtype=int)
     d_findices = da.from_array(findices, chunks=1)
 
@@ -2190,22 +2190,22 @@ def test_unravel_index():
     "arr, chunks, kwargs",
     [
         # Numpy doctests:
-        ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(7, 6), order="C")),
-        ([[3, 6, 6], [4, 5, 1]], (2, 1), dict(dims=(7, 6), order="F")),
-        ([[3, 6, 6], [4, 5, 1]], 1, dict(dims=(4, 6), mode="clip")),
-        ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(4, 4), mode=("clip", "wrap"))),
+        ([[3, 6, 6], [4, 5, 1]], (2, 3), {"dims": (7, 6), "order": "C"}),
+        ([[3, 6, 6], [4, 5, 1]], (2, 1), {"dims": (7, 6), "order": "F"}),
+        ([[3, 6, 6], [4, 5, 1]], 1, {"dims": (4, 6), "mode": "clip"}),
+        ([[3, 6, 6], [4, 5, 1]], (2, 3), {"dims": (4, 4), "mode": ("clip", "wrap")}),
         # Shape tests:
-        ([[3, 6, 6]], (1, 1), dict(dims=(7), order="C")),
-        ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), dict(dims=(7, 6, 9), order="C")),
+        ([[3, 6, 6]], (1, 1), {"dims": (7), "order": "C"}),
+        ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), {"dims": (7, 6, 9), "order": "C"}),
         # Multi-dimensional index arrays
         (
             np.arange(6).reshape(3, 2, 1).tolist(),
             (1, 2, 1),
-            dict(dims=(7, 6, 9), order="C"),
+            {"dims": (7, 6, 9), "order": "C"},
         ),
         # Broadcasting index arrays
-        ([1, [2, 3]], None, dict(dims=(8, 9))),
-        ([1, [2, 3], [[1, 2], [3, 4], [5, 6], [7, 8]]], None, dict(dims=(8, 9, 10))),
+        ([1, [2, 3]], None, {"dims": (8, 9)}),
+        ([1, [2, 3], [[1, 2], [3, 4], [5, 6], [7, 8]]], None, {"dims": (8, 9, 10)}),
     ],
 )
 def test_ravel_multi_index(xfail, asarray, arr, chunks, kwargs):
@@ -2635,7 +2635,7 @@ def test_einsum_chunksizes():
 def test_einsum_optimize(optimize_opts):
     sig = "ea,fb,abcd,gc,hd->efgh"
     input_sigs = sig.split("->")[0].split(",")
-    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+    np_inputs, _ = _numpy_and_dask_inputs(input_sigs)
 
     opt1, opt2 = optimize_opts
 
@@ -2654,7 +2654,7 @@ def test_einsum_optimize(optimize_opts):
 def test_einsum_order(order):
     sig = "ea,fb,abcd,gc,hd->efgh"
     input_sigs = sig.split("->")[0].split(",")
-    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+    np_inputs, _ = _numpy_and_dask_inputs(input_sigs)
 
     assert_eq(
         np.einsum(sig, *np_inputs, order=order), da.einsum(sig, *np_inputs, order=order)
@@ -2665,7 +2665,7 @@ def test_einsum_order(order):
 def test_einsum_casting(casting):
     sig = "ea,fb,abcd,gc,hd->efgh"
     input_sigs = sig.split("->")[0].split(",")
-    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+    np_inputs, _ = _numpy_and_dask_inputs(input_sigs)
 
     assert_eq(
         np.einsum(sig, *np_inputs, casting=casting),

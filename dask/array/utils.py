@@ -94,7 +94,9 @@ def meta_from_array(x, ndim=None, dtype=None):
                 meta = meta.reshape((0,) * ndim)
         if meta is np.ma.masked:
             meta = np.ma.array(np.empty((0,) * ndim, dtype=dtype or x.dtype), mask=True)
-    except Exception:
+    # Third-party array-likes such as tiledb raise implementation-specific errors
+    # from zero-length slicing; the fallback must remain broad.
+    except Exception:  # noqa: BLE001
         meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
 
     if np.isscalar(meta):
@@ -116,7 +118,7 @@ def meta_from_array(x, ndim=None, dtype=None):
             ):
                 meta = np.array([]).astype(dtype)
             else:
-                raise e
+                raise
 
     return meta
 
@@ -160,7 +162,9 @@ def compute_meta(func, _dtype, *args, **kwargs):
                     meta = args_meta[0]
                 else:
                     return None
-            except Exception:
+            # Meta inference calls user functions; arbitrary failures fall back
+            # to unknown meta rather than breaking graph construction.
+            except Exception:  # noqa: BLE001
                 return None
 
         if _dtype and getattr(meta, "dtype", None) != _dtype:
@@ -216,7 +220,7 @@ def _check_dsk(dsk):
     collisions = set()
     all_keys = set(dsk)
     layers = [convert_legacy_graph(layer, all_keys) for layer in dsk.layers.values()]
-    for k in non_one.keys():
+    for k in non_one:
         for layer in layers:
             try:
                 key_collisions.add(tokenize(layer[k]))
@@ -439,6 +443,24 @@ def arange_safe(*args, like, **kwargs):
             return np.arange(*args, **kwargs)
 
 
+_SPARSE_CONTAINER_MODULES = ("scipy.sparse", "cupyx.scipy.sparse")
+
+
+def _is_sparse_container(obj) -> bool:
+    """Whether ``obj`` is a SciPy or CuPy sparse container.
+
+    Both the sparse matrix (``*_matrix``) and the sparse array (``*_array``)
+    families are recognized. The check is done on the type's module so that it
+    also covers formats whose concrete class lives in a submodule, e.g.
+    ``scipy.sparse._csr.csr_array``.
+    """
+    module = type(obj).__module__
+    return any(
+        module == prefix or module.startswith(f"{prefix}.")
+        for prefix in _SPARSE_CONTAINER_MODULES
+    )
+
+
 def _array_like_safe(np_func, da_func, a, like, **kwargs):
     from dask.array import Array
 
@@ -454,8 +476,7 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if hasattr(like, "__array_function__"):
         return np_func(a, like=like, **kwargs)
 
-    if type(like).__module__.startswith("scipy.sparse"):
-        # e.g. scipy.sparse.csr_matrix
+    if _is_sparse_container(like):
         kwargs.pop("order", None)
         if np.isscalar(a):
             a = np.array([[a]])

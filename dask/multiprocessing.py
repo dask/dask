@@ -113,14 +113,14 @@ except ImportError:
 
 
 def pack_exception(e, dumps):
-    exc_type, exc_value, exc_traceback = sys.exc_info()
+    _, _, exc_traceback = sys.exc_info()
     tb = _pack_traceback(exc_traceback)
     try:
         result = dumps((e, tb))
-    except Exception as e:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
+    except Exception as exc:  # noqa: BLE001
+        _, _, exc_traceback = sys.exc_info()
         tb = _pack_traceback(exc_traceback)
-        result = dumps((e, tb))
+        result = dumps((exc, tb))
     return result
 
 

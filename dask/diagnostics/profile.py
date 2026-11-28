@@ -276,7 +276,8 @@ class _Tracker(Process):
                         try:
                             mem2 = p.memory_info().rss
                             cpu2 = p.cpu_percent()
-                        except Exception:  # could be a few different exceptions
+                        # Processes may have exited or become inaccessible
+                        except psutil.Error:
                             pass
                         else:
                             # Only increment if both were successful

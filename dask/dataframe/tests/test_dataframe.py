@@ -27,11 +27,13 @@ from dask.dataframe._compat import (
     PANDAS_GE_220,
     PANDAS_GE_300,
     PANDAS_GE_310,
+    PANDAS_GE_320,
     tm,
 )
 from dask.dataframe._pyarrow import to_pyarrow_string
 from dask.dataframe.core import (
     _concat,
+    _get_divisions_map_partitions,
     _map_freq_to_period_start,
     has_parallel_type,
     total_mem_usage,
@@ -46,6 +48,7 @@ from dask.dataframe.utils import (
     pyarrow_strings_enabled,
 )
 from dask.utils import M, is_dataframe_like, is_series_like
+from dask.utils_test import assert_scipy_sparse_matrix_deprecated
 
 try:
     import crick
@@ -73,7 +76,7 @@ def _drop_mean(df, col=None):
     """TODO: In pandas 2.0, mean is implemented for datetimes, but Dask returns None."""
     if isinstance(df, pd.DataFrame):
         df.at["mean", col] = np.nan
-        df.dropna(how="all", inplace=True)
+        df = df.dropna(how="all")
     elif isinstance(df, pd.Series):
         df = df.drop(labels=["mean"], errors="ignore")
     else:
@@ -1677,6 +1680,11 @@ def test_concat():
     assert len(x) == 0
 
 
+def test_concat_large_integers() -> None:
+    values = [10**350, 1]
+    assert list(_concat(values)) == values
+
+
 def test_known_divisions():
     assert d.known_divisions
     df = d.clear_divisions()
@@ -1820,7 +1828,7 @@ def test_combine():
     first = lambda a, b: a
 
     # You can add series with strings and nans but you can't add scalars 'a' + np.nan
-    str_add = lambda a, b: a + b if a is not np.nan else a
+    str_add = lambda a, b: a + b if a is not np.nan else a  # noqa: PLW0177
 
     # DataFrame
     for dda, ddb, a, b, runs in [
@@ -2102,7 +2110,7 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series(list(range(0, 30)) * 2, dtype=dtype),
+        index=pd.Series(list(range(30)) * 2, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
@@ -2198,9 +2206,7 @@ def test_repartition_datetime_tz_index():
 @pytest.mark.parametrize(
     "end", ["2000-04-15", "2000-04-15 12:37:01", "2000-01-01 12:37:00"]
 )
-@pytest.mark.parametrize(
-    "start", ["2000-01-01", "2000-01-01 12:30:00", "2000-01-01 12:30:00"]
-)
+@pytest.mark.parametrize("start", ["2000-01-01", "2000-01-01 12:30:00"])
 def test_repartition_freq(npartitions, freq, start, end):
     start = pd.Timestamp(start)
     end = pd.Timestamp(end)
@@ -2301,7 +2307,6 @@ def test_repartition_freq_day():
         ("BA", "BYS" if PANDAS_GE_220 else "BAS"),
         ("2BA", "2BYS" if PANDAS_GE_220 else "2BAS"),
         ("BY", "BYS" if PANDAS_GE_220 else "BAS"),
-        ("Y", "YS" if PANDAS_GE_220 else "AS"),
         (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
     ],
 )
@@ -2428,7 +2433,7 @@ def test_from_delayed_lazy_if_meta_provided():
         raise RuntimeError()
 
     tasks = [raise_exception()]
-    ddf = dd.from_delayed(tasks, meta=dict(a=float))
+    ddf = dd.from_delayed(tasks, meta={"a": float})
 
     with pytest.raises(RuntimeError):
         ddf.compute()
@@ -2437,9 +2442,9 @@ def test_from_delayed_lazy_if_meta_provided():
 def test_fillna_duplicate_index():
     @dask.delayed
     def f():
-        return pd.DataFrame(dict(a=[1.0], b=[np.nan]))
+        return pd.DataFrame({"a": [1.0], "b": [np.nan]})
 
-    ddf = dd.from_delayed([f(), f()], meta=dict(a=float, b=float))
+    ddf = dd.from_delayed([f(), f()], meta={"a": float, "b": float})
     ddf.b = ddf.b.fillna(ddf.a)
     ddf.compute()
 
@@ -2634,9 +2639,9 @@ def test_reduction_method_split_every():
         chunk,
         aggregate=agg,
         combine=combine,
-        chunk_kwargs=dict(constant=1.0),
-        combine_kwargs=dict(constant=2.0),
-        aggregate_kwargs=dict(constant=3.0),
+        chunk_kwargs={"constant": 1.0},
+        combine_kwargs={"constant": 2.0},
+        aggregate_kwargs={"constant": 3.0},
         split_every=n,
     )
 
@@ -2670,9 +2675,9 @@ def test_reduction_method_split_every():
             chunk,
             aggregate=agg,
             split_every=3,
-            chunk_kwargs=dict(constant=1.0),
-            combine_kwargs=dict(constant=2.0),
-            aggregate_kwargs=dict(constant=3.0),
+            chunk_kwargs={"constant": 1.0},
+            combine_kwargs={"constant": 2.0},
+            aggregate_kwargs={"constant": 3.0},
         )
 
 
@@ -2782,7 +2787,7 @@ def test_to_frame():
     assert_eq(s.to_frame("bar"), a.to_frame("bar"))
 
 
-@pytest.mark.parametrize("as_frame", [False, False])
+@pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_raises(as_frame):
     s = pd.Series([1, 2, 3, 4, 5, 6], name="foo")
     a = dd.from_pandas(s, npartitions=2)
@@ -3393,8 +3398,18 @@ def test_dataframe_iterrows():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    for a, b in zip(df.iterrows(), ddf.iterrows()):
-        tm.assert_series_equal(a[1], b[1])
+    if PANDAS_GE_320:
+        # pandas 3.2 deprecated DataFrame.iterrows. Dask yields from the pandas
+        # implementation, so the warning must surface rather than be suppressed.
+        from pandas.errors import Pandas4Warning
+
+        ctx = pytest.warns(Pandas4Warning, match="iterrows is deprecated")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        for a, b in zip(df.iterrows(), ddf.iterrows()):
+            tm.assert_series_equal(a[1], b[1])
 
 
 def test_dataframe_itertuples():
@@ -3690,64 +3705,59 @@ def test_idxmaxmin(idx, skipna):
     if PANDAS_GE_300 and not skipna:
         ctx = pytest.raises(ValueError, match="Encountered an NA")
 
-    with ctx:
-        with warnings.catch_warnings(record=True):
-            if not skipna and PANDAS_GE_210:
-                warnings.simplefilter("ignore", category=FutureWarning)
-            assert_eq(
-                df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna)
-            )
-            assert_eq(
-                df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna)
-            )
+    with ctx, warnings.catch_warnings(record=True):
+        if not skipna and PANDAS_GE_210:
+            warnings.simplefilter("ignore", category=FutureWarning)
+        assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
+        assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
 
-            assert_eq(
-                df.idxmax(skipna=skipna),
-                ddf.idxmax(skipna=skipna),
-                check_dtype=check_dtype,
-            )
-            assert_eq(
-                df.idxmax(skipna=skipna),
-                ddf.idxmax(skipna=skipna, split_every=2),
-                check_dtype=check_dtype,
-            )
-            assert (
-                ddf.idxmax(skipna=skipna)._name
-                != ddf.idxmax(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna),
+            check_dtype=check_dtype,
+        )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
+        assert (
+            ddf.idxmax(skipna=skipna)._name
+            != ddf.idxmax(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(
-                df.idxmin(skipna=skipna),
-                ddf.idxmin(skipna=skipna),
-                check_dtype=check_dtype,
-            )
-            assert_eq(
-                df.idxmin(skipna=skipna),
-                ddf.idxmin(skipna=skipna, split_every=2),
-                check_dtype=check_dtype,
-            )
-            assert (
-                ddf.idxmin(skipna=skipna)._name
-                != ddf.idxmin(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna),
+            check_dtype=check_dtype,
+        )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
+        assert (
+            ddf.idxmin(skipna=skipna)._name
+            != ddf.idxmin(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
-            assert_eq(
-                df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
-            )
-            assert (
-                ddf.a.idxmax(skipna=skipna)._name
-                != ddf.a.idxmax(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+        assert_eq(
+            df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
+        )
+        assert (
+            ddf.a.idxmax(skipna=skipna)._name
+            != ddf.a.idxmax(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
-            assert_eq(
-                df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
-            )
-            assert (
-                ddf.a.idxmin(skipna=skipna)._name
-                != ddf.a.idxmin(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+        assert_eq(
+            df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
+        )
+        assert (
+            ddf.a.idxmin(skipna=skipna)._name
+            != ddf.a.idxmin(skipna=skipna, split_every=2)._name
+        )
 
 
 @pytest.mark.parametrize("func", ["idxmin", "idxmax"])
@@ -4009,7 +4019,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
     dsk = dropped.__dask_optimize__(dropped.dask, dropped.__dask_keys__())
     from dask.core import get_deps
 
-    dependencies, dependents = get_deps(dsk)
+    _dependencies, _dependents = get_deps(dsk)
 
     assert dropped.npartitions == (split_out or 1)
     assert sorted(dropped.compute(scheduler="sync")) == sorted(s.unique())
@@ -4512,13 +4522,37 @@ def test_map_partition_array(func):
     for pre in [lambda a: a, lambda a: a.x, lambda a: a.y, lambda a: a.index]:
         try:
             expected = func(pre(df))
-        except Exception:
+        except AttributeError:
             continue
         x = pre(ddf).map_partitions(func)
         assert_eq(x, expected, check_type=False)  # TODO: make check_type pass
 
         assert isinstance(x, da.Array)
         assert x.chunks[0] == (np.nan, np.nan)
+
+
+def test_transform_divisions_unexpected_user_error():
+    from dask.dataframe.dask_expr._collection import elemwise
+
+    class UnexpectedError(Exception):
+        pass
+
+    s = dd.from_pandas(pd.Series([0, 1, 2, 3]), npartitions=2)
+    idx = s.index
+    divisions = tuple(idx.divisions)
+
+    def raise_on_divisions(x):
+        if isinstance(x, pd.Index) and tuple(x) == divisions:
+            raise UnexpectedError("division transform failed")
+        return x + 1
+
+    assert (
+        _get_divisions_map_partitions(False, True, [idx], raise_on_divisions, [idx], {})
+        == idx.divisions
+    )
+    result = elemwise(raise_on_divisions, idx, transform_divisions=True)
+    assert result.divisions == idx.divisions
+    assert result.compute().tolist() == [1, 2, 3, 4]
 
 
 def test_map_partition_sparse():
@@ -4616,13 +4650,15 @@ def test_dask_dataframe_holds_scipy_sparse_containers(container):
     x = da.random.random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
     df = dd.from_dask_array(x)
-    y = df.map_partitions(cls)
 
-    assert isinstance(y, da.Array)
+    with assert_scipy_sparse_matrix_deprecated(container == "matrix"):
+        y = df.map_partitions(cls)
 
-    vs = y.to_delayed().flatten().tolist()
-    values = dask.compute(*vs, scheduler="single-threaded")
-    assert all(isinstance(v, cls) for v in values)
+        assert isinstance(y, da.Array)
+
+        vs = y.to_delayed().flatten().tolist()
+        values = dask.compute(*vs, scheduler="single-threaded")
+        assert all(isinstance(v, cls) for v in values)
 
 
 @pytest.mark.xfail(reason="we can't do this yet")
@@ -4879,7 +4915,11 @@ def test_attrs_series():
 def test_join_series():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=1)
-    expected_df = dd.from_pandas(df.join(df["x"], lsuffix="_"), npartitions=1)
+    if PANDAS_GE_310:
+        expected = df.join(df["x"], suffixes=("_", ""))
+    else:
+        expected = df.join(df["x"], lsuffix="_")
+    expected_df = dd.from_pandas(expected, npartitions=1)
     actual_df = ddf.join(ddf["x"], lsuffix="_")
     assert_eq(actual_df, expected_df)
 

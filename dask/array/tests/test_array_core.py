@@ -55,6 +55,7 @@ from dask.array.core import (
 )
 from dask.array.numpy_compat import NUMPY_GE_200, NUMPY_GE_210
 from dask.array.reshape import _not_implemented_message
+from dask.array.scipy_compat import SCIPY_GE_111
 from dask.array.utils import assert_eq, same_keys
 from dask.base import collections_to_expr, compute_as_if_collection, tokenize
 from dask.blockwise import (
@@ -66,7 +67,12 @@ from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
 from dask.utils import SerializableLock, key_split, tmpdir, tmpfile
-from dask.utils_test import dec, hlg_layer_topological, inc
+from dask.utils_test import (
+    assert_scipy_sparse_matrix_deprecated,
+    dec,
+    hlg_layer_topological,
+    inc,
+)
 
 try:
     from distributed import futures_of
@@ -77,15 +83,9 @@ if da._array_expr_enabled():
     pytest.skip("parametrize using unsupported functions", allow_module_level=True)
 
 
-def skip_if_no_sparray():
-    try:
-        import scipy
-    except ImportError:
-        skip = True
-    else:
-        skip = Version(scipy.__version__) < Version("1.11")
-
-    return pytest.mark.skipif(skip, reason="scipy<1.11 has no sparray")
+skip_if_no_sparray = pytest.mark.skipif(
+    not SCIPY_GE_111, reason="scipy.sparse.sparray required"
+)
 
 
 def assert_has_persisted_data(arr):
@@ -95,7 +95,7 @@ def assert_has_persisted_data(arr):
     else:
         for layer in arr.dask.layers.values():
             if isinstance(layer, MaterializedLayer) and any(
-                map(lambda obj: isinstance(obj, np.ndarray), layer.mapping.values())
+                isinstance(obj, np.ndarray) for obj in layer.mapping.values()
             ):
                 has_persisted_data = True
                 break
@@ -1370,7 +1370,7 @@ def test_broadcast_to_array():
 def test_broadcast_to_scalar():
     x = 5
 
-    for shape in [tuple(), (0,), (2, 3), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+    for shape in [(), (0,), (2, 3), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         a = np.broadcast_to(x, shape)
         d = broadcast_to(x, shape)
 
@@ -1438,7 +1438,7 @@ def test_broadcast_arrays_uneven_chunks():
 @pytest.mark.parametrize(
     "u_shape, v_shape",
     [
-        [tuple(), (2, 3)],
+        [(), (2, 3)],
         [(1,), (2, 3)],
         [(1, 1), (2, 3)],
         [(0, 3), (1, 3)],
@@ -2129,7 +2129,7 @@ def test_store_delayed_target():
 
         assert st is not None
         assert isinstance(st, tuple)
-        assert all([isinstance(v, np.ndarray) for v in st])
+        assert all(isinstance(v, np.ndarray) for v in st)
         assert_eq(at, a)
         assert_eq(bt, b)
         assert_eq(st[0], a)
@@ -2168,10 +2168,10 @@ def test_store_regions():
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=region, compute=False)
-    assert all([isinstance(a, Array) for a in v])
+    assert all(isinstance(arr, Array) for arr in v)
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
-    assert all([ev.size == 0 for ev in results])
+    assert all(ev.size == 0 for ev in results)
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not (bt == 0).all()
     assert not (at == 2).all() and not (at == 0).all()
@@ -2182,7 +2182,7 @@ def test_store_regions():
     v = store([a, b], [at, bt], regions=[region, region], compute=False)
     assert (at == 0).all() and (bt[region] == 0).all()
     results = dask.compute(*v)
-    assert all([ev.size == 0 for ev in results])
+    assert all(ev.size == 0 for ev in results)
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not (bt == 0).all()
     assert not (at == 2).all() and not (at == 0).all()
@@ -2195,7 +2195,7 @@ def test_store_regions():
             [a, b], [at, bt], regions=region, compute=st_compute, return_stored=True
         )
         assert isinstance(v, tuple)
-        assert all([isinstance(e, da.Array) for e in v])
+        assert all(isinstance(e, da.Array) for e in v)
         if st_compute:
             for arr in v:
                 assert_has_persisted_data(arr)
@@ -2229,7 +2229,7 @@ def test_store_regions():
             return_stored=True,
         )
         assert isinstance(v, tuple)
-        assert all([isinstance(e, da.Array) for e in v])
+        assert all(isinstance(e, da.Array) for e in v)
         if st_compute:
             for arr in v:
                 assert_has_persisted_data(arr)
@@ -2263,7 +2263,7 @@ def test_store_compute_false():
 
     assert (at == 0).all() and (bt == 0).all()
     results = dask.compute(*v)
-    assert all([ev.size == 0 for ev in results])
+    assert all(ev.size == 0 for ev in results)
     assert (at == 2).all() and (bt == 3).all()
 
     at = np.zeros(shape=(4, 4))
@@ -3010,7 +3010,7 @@ def test_array_copy_noop(chunks):
 def test_from_array_dask_array():
     x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=(1, 2))
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         da.from_array(dx)
 
 
@@ -3100,15 +3100,14 @@ def test_asarray_dask_dataframe(asarray):
 def test_asarray_h5py(asarray, inline_array):
     h5py = pytest.importorskip("h5py")
 
-    with tmpfile(".hdf5") as fn:
-        with h5py.File(fn, mode="a") as f:
-            d = f.create_dataset("/x", shape=(2, 2), dtype=float)
-            x = asarray(d, inline_array=inline_array)
+    with tmpfile(".hdf5") as fn, h5py.File(fn, mode="a") as f:
+        d = f.create_dataset("/x", shape=(2, 2), dtype=float)
+        x = asarray(d, inline_array=inline_array)
 
-            # Check for the array in the dsk
-            dsk = dict(x.dask)
-            assert (d in dsk.values()) is not inline_array
-            assert not any(isinstance(v, np.ndarray) for v in dsk.values())
+    # Check for the array in the dsk
+    dsk = dict(x.dask)
+    assert (d in dsk.values()) is not inline_array
+    assert not any(isinstance(v, np.ndarray) for v in dsk.values())
 
 
 def test_asarray_chunks():
@@ -3357,14 +3356,13 @@ def test_long_slice():
 def test_h5py_newaxis():
     h5py = pytest.importorskip("h5py")
 
-    with tmpfile("h5") as fn:
-        with h5py.File(fn, mode="a") as f:
-            x = f.create_dataset("/x", shape=(10, 10), dtype="f8")
-            d = da.from_array(x, chunks=(5, 5))
-            assert d[None, :, :].compute(scheduler="sync").shape == (1, 10, 10)
-            assert d[:, None, :].compute(scheduler="sync").shape == (10, 1, 10)
-            assert d[:, :, None].compute(scheduler="sync").shape == (10, 10, 1)
-            assert same_keys(d[:, :, None], d[:, :, None])
+    with tmpfile("h5") as fn, h5py.File(fn, mode="a") as f:
+        x = f.create_dataset("/x", shape=(10, 10), dtype="f8")
+        d = da.from_array(x, chunks=(5, 5))
+        assert d[None, :, :].compute(scheduler="sync").shape == (1, 10, 10)
+        assert d[:, None, :].compute(scheduler="sync").shape == (10, 1, 10)
+        assert d[:, :, None].compute(scheduler="sync").shape == (10, 10, 1)
+        assert same_keys(d[:, :, None], d[:, :, None])
 
 
 def test_ellipsis_slicing():
@@ -3545,21 +3543,20 @@ def test_empty_array():
 
 
 def test_memmap():
-    with tmpfile("npy") as fn_1:
-        with tmpfile("npy") as fn_2:
-            try:
-                x = da.arange(100, chunks=15)
-                target = np.memmap(fn_1, shape=x.shape, mode="w+", dtype=x.dtype)
+    with tmpfile("npy") as fn_1, tmpfile("npy") as fn_2:
+        try:
+            x = da.arange(100, chunks=15)
+            target = np.memmap(fn_1, shape=x.shape, mode="w+", dtype=x.dtype)
 
-                x.store(target)
+            x.store(target)
 
-                assert_eq(target, x, check_type=False)
+            assert_eq(target, x, check_type=False)
 
-                np.save(fn_2, target)
+            np.save(fn_2, target)
 
-                assert_eq(np.load(fn_2, mmap_mode="r"), x, check_type=False)
-            finally:
-                target._mmap.close()
+            assert_eq(np.load(fn_2, mmap_mode="r"), x, check_type=False)
+        finally:
+            target._mmap.close()
 
 
 def test_to_npy_stack():
@@ -3607,18 +3604,17 @@ def test_view_fortran():
 
 def test_h5py_tokenize():
     h5py = pytest.importorskip("h5py")
-    with tmpfile("hdf5") as fn1:
-        with tmpfile("hdf5") as fn2:
-            f = h5py.File(fn1, mode="a")
-            g = h5py.File(fn2, mode="a")
+    with tmpfile("hdf5") as fn1, tmpfile("hdf5") as fn2:
+        f = h5py.File(fn1, mode="a")
+        g = h5py.File(fn2, mode="a")
 
-            f["x"] = np.arange(10).astype(float)
-            g["x"] = np.ones(10).astype(float)
+        f["x"] = np.arange(10).astype(float)
+        g["x"] = np.ones(10).astype(float)
 
-            x1 = f["x"]
-            x2 = g["x"]
+        x1 = f["x"]
+        x2 = g["x"]
 
-            assert tokenize(x1) != tokenize(x2)
+        assert tokenize(x1) != tokenize(x2)
 
 
 def test_map_blocks_with_changed_dimension():
@@ -3805,12 +3801,12 @@ def test_to_delayed():
     x = da.random.default_rng().random((4, 4), chunks=(2, 2))
     y = x + 10
 
-    [[a, b], [c, d]] = y.to_delayed()
+    [[a, _b], [_c, _d]] = y.to_delayed()
     assert_eq(a.compute(), y[:2, :2])
 
     s = 2
     x = da.from_array(np.array(s), chunks=0)
-    a = x.to_delayed()[tuple()]
+    a = x.to_delayed()[()]
     assert a.compute() == s
 
 
@@ -4220,13 +4216,13 @@ def test_index_array_with_array_2d():
     # Test with unknown chunks
     dx._chunks = ((2, 2), (np.nan, np.nan, np.nan))
 
-    with pytest.warns(UserWarning, match="different ordering") as record:
+    with pytest.warns(UserWarning, match="different ordering"):
         assert sorted(x[x % 2 == 0].tolist()) == sorted(
             dx[dx % 2 == 0].compute().tolist()
         )
-        assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
 
-    assert len(record) == 2
+    with pytest.warns(UserWarning, match="different ordering"):
+        assert sorted(x[x > 6].tolist()) == sorted(dx[dx > 6].compute().tolist())
 
 
 @pytest.mark.xfail(reason="Chunking does not align well")
@@ -4336,8 +4332,6 @@ def test_setitem_extended_API_0d():
         [slice(1, None, -2), [-40]],
         [slice(3, None, 2), -5],
         [slice(-3, None, -2), -6],
-        [slice(1, None, -2), -4],
-        [slice(3, None, 2), -5],
         [slice(3, None, 2), [10, 11, 12, 13]],
         [slice(-4, None, -2), [14, 15, 16, 17]],
     ],
@@ -5105,12 +5099,12 @@ def test_zarr_group():
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d, component="test")
         with pytest.raises((OSError, ValueError)):
-            a.to_zarr(d, component="test", **{"overwrite": False})
-        a.to_zarr(d, component="test", **{"overwrite": True})
+            a.to_zarr(d, component="test", overwrite=False)
+        a.to_zarr(d, component="test", overwrite=True)
 
         # second time is fine, group exists
-        a.to_zarr(d, component="test2", **{"overwrite": False})
-        a.to_zarr(d, component="nested/test", **{"overwrite": False})
+        a.to_zarr(d, component="test2", overwrite=False)
+        a.to_zarr(d, component="nested/test", overwrite=False)
 
         group = zarr.open_group(store=d, mode="r")
         assert set(group) == {"nested", "test", "test2"}
@@ -5268,12 +5262,14 @@ def test_zarr_risky_shards_warns():
         dtype=arr.dtype,
     )
 
-    with dask.config.set({"array.chunk-size": 1}):
-        with pytest.raises(
+    with (
+        dask.config.set({"array.chunk-size": 1}),
+        pytest.raises(
             PerformanceWarning,
             match="The input Dask array will be rechunked along axis",
-        ):
-            arr.to_zarr(z)
+        ),
+    ):
+        arr.to_zarr(z)
 
 
 def test_zarr_nocompute():
@@ -5316,9 +5312,8 @@ def test_zarr_regions():
     assert_eq(a2, expected)
     assert a2.chunks == a.chunks
 
-    with pytest.raises(ValueError):
-        with tmpdir() as d:
-            a.to_zarr(d, region=(slice(2), slice(2)))
+    with tmpdir() as d, pytest.raises(ValueError):
+        a.to_zarr(d, region=(slice(2), slice(2)))
 
 
 def test_tiledb_roundtrip():
@@ -5340,10 +5335,9 @@ def test_tiledb_roundtrip():
             tdb2 = da.from_tiledb(t)
             assert_eq(a, tdb2)
 
-    with tmpdir() as uri2:
-        with tiledb.empty_like(uri2, a) as t:
-            a.to_tiledb(t)
-            assert_eq(da.from_tiledb(uri2), a)
+    with tmpdir() as uri2, tiledb.empty_like(uri2, a) as t:
+        a.to_tiledb(t)
+        assert_eq(da.from_tiledb(uri2), a)
 
     # specific chunking
     with tmpdir() as uri:
@@ -5513,26 +5507,34 @@ def test_dask_array_holds_scipy_sparse_containers(container):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    cls = scipy.sparse.csr_matrix if container == "matrix" else scipy.sparse.csr_array
-    kind = scipy.sparse.spmatrix if container == "matrix" else scipy.sparse.sparray
+    if container == "matrix":
+        cls = scipy.sparse.csr_matrix
+        kind = scipy.sparse.spmatrix
+        warn_deprecated = True
+    else:
+        cls = scipy.sparse.csr_array
+        kind = scipy.sparse.sparray
+        warn_deprecated = False
 
     x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
     xx = x.compute()
-    y = x.map_blocks(cls)
 
-    vs = y.to_delayed().flatten().tolist()
-    values = dask.compute(*vs, scheduler="single-threaded")
-    assert all(isinstance(v, cls) for v in values)
+    with assert_scipy_sparse_matrix_deprecated(warn_deprecated):
+        y = x.map_blocks(cls)
 
-    yy = y.compute(scheduler="single-threaded")
-    assert isinstance(yy, kind)
-    assert (yy == xx).all()
+        vs = y.to_delayed().flatten().tolist()
+        values = dask.compute(*vs, scheduler="single-threaded")
+        assert all(isinstance(v, cls) for v in values)
 
-    z = x.T.map_blocks(cls)
-    zz = z.compute(scheduler="single-threaded")
-    assert isinstance(zz, kind)
-    assert (zz == xx.T).all()
+        yy = y.compute(scheduler="single-threaded")
+        assert isinstance(yy, kind)
+        assert (yy == xx).all()
+
+        z = x.T.map_blocks(cls)
+        zz = z.compute(scheduler="single-threaded")
+        assert isinstance(zz, kind)
+        assert (zz == xx.T).all()
 
 
 @pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
@@ -5547,19 +5549,23 @@ def test_dask_array_setitem_singleton_sparse(container, format):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    cls = (
-        getattr(scipy.sparse, f"{format}_matrix")
-        if container == "matrix"
-        else getattr(scipy.sparse, f"{format}_array")
-    )
+    if container == "matrix":
+        cls = getattr(scipy.sparse, f"{format}_matrix")
+        eye = scipy.sparse.eye
+        warn_deprecated = True
+    else:
+        cls = getattr(scipy.sparse, f"{format}_array")
+        eye = scipy.sparse.eye_array
+        warn_deprecated = False
 
-    x = cls(scipy.sparse.eye(100))
-    x_dask = da.from_array(x)
-    x[slice(10), slice(10)] = 0
-    x_dask[slice(10), slice(10)] = 0
-    np.testing.assert_almost_equal(
-        x_dask.compute(scheduler="single-threaded").toarray(), x.toarray()
-    )
+    with assert_scipy_sparse_matrix_deprecated(warn_deprecated):
+        x = cls(eye(100))
+        x_dask = da.from_array(x)
+        x[slice(10), slice(10)] = 0
+        x_dask[slice(10), slice(10)] = 0
+        np.testing.assert_almost_equal(
+            x_dask.compute(scheduler="single-threaded").toarray(), x.toarray()
+        )
 
 
 @pytest.mark.parametrize(
@@ -5592,12 +5598,15 @@ def test_scipy_sparse_indexing(index, sparse_module_path, container):
     with dask.config.set({"array.backend": backend}):
         x = da.random.default_rng().random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
-        y = x.map_blocks(getattr(sp, container))
+        with assert_scipy_sparse_matrix_deprecated(
+            sparse_module_path == "scipy.sparse" and container == "csr_matrix"
+        ):
+            y = x.map_blocks(getattr(sp, container))
 
-    assert not (
-        x[index, :].compute(scheduler="single-threaded")
-        != y[index, :].compute(scheduler="single-threaded")
-    ).sum()
+            assert not (
+                x[index, :].compute(scheduler="single-threaded")
+                != y[index, :].compute(scheduler="single-threaded")
+            ).sum()
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -5613,23 +5622,22 @@ def test_scipy_sparse_concatenate(axis, container):
     rng = da.random.default_rng()
 
     xs = []
-    ys = []
     for _ in range(2):
         x = rng.random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
         xs.append(x)
-        ys.append(x.map_blocks(cls))
 
-    z = da.concatenate(ys, axis=axis)
-    z = z.compute()
+    with assert_scipy_sparse_matrix_deprecated(container == "matrix"):
+        ys = [x.map_blocks(cls) for x in xs]
+        z = da.concatenate(ys, axis=axis).compute()
 
-    if axis == 0:
-        sp_concatenate = scipy.sparse.vstack
-    elif axis == 1:
-        sp_concatenate = scipy.sparse.hstack
-    z_expected = sp_concatenate([cls(e.compute()) for e in xs])
+        if axis == 0:
+            sp_concatenate = scipy.sparse.vstack
+        elif axis == 1:
+            sp_concatenate = scipy.sparse.hstack
+        z_expected = sp_concatenate([cls(e.compute()) for e in xs])
 
-    assert (z != z_expected).nnz == 0
+        assert (z != z_expected).nnz == 0
 
 
 @pytest.mark.parametrize("func", [da.asarray, da.asanyarray])
@@ -5641,19 +5649,42 @@ def test_scipy_sparse_asarray_like(src, func):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    mtx = scipy.sparse.csr_matrix([[3, 4, 5], [6, 7, 8]])
-    like = da.from_array(mtx)
+    with assert_scipy_sparse_matrix_deprecated():
+        mtx = scipy.sparse.csr_matrix([[3, 4, 5], [6, 7, 8]])
+        like = da.from_array(mtx)
 
-    a = func(src, like=like)
-    assert isinstance(a._meta, type(mtx))
-    assert isinstance(a.compute(), type(mtx))
+        a = func(src, like=like)
+        assert isinstance(a._meta, type(mtx))
+        assert isinstance(a.compute(), type(mtx))
 
-    # Respect dtype; quietly disregard order
-    a = func(src, dtype=np.float32, order="C", like=like)
-    assert a.dtype == np.float32
-    assert a.compute().dtype == np.float32
-    assert isinstance(a._meta, type(mtx))
-    assert isinstance(a.compute(), type(mtx))
+        # Respect dtype; quietly disregard order
+        a = func(src, dtype=np.float32, order="C", like=like)
+        assert a.dtype == np.float32
+        assert a.compute().dtype == np.float32
+        assert isinstance(a._meta, type(mtx))
+        assert isinstance(a.compute(), type(mtx))
+
+
+@skip_if_no_sparray
+def test_scipy_sparse_array_never_constructs_matrix():
+    """Dask must not construct a deprecated sparse matrix on its own.
+
+    A dask workflow built from a sparse *array* must not emit the SciPy spmatrix
+    deprecation warning. Only the user's explicit request for a matrix container
+    may trigger it.
+    """
+    import scipy.sparse
+
+    src = scipy.sparse.csr_array(np.eye(4))
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        d = da.from_array(src, chunks=2)
+        d = d[0:2]
+        d = d.map_blocks(lambda x: x)
+        d.compute(scheduler="single-threaded")
+        da.concatenate([d, d]).compute(scheduler="single-threaded")
+
+    assert not [w for w in record if "is being replaced by" in str(w.message)]
 
 
 def test_3851():

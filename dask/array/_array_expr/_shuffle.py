@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import functools
 from itertools import count, product
+from typing import ClassVar
 
 import numpy as np
 
@@ -45,7 +46,7 @@ def _shuffle(x, indexer, axis, name):
 
 
 class Shuffle(ArrayExpr):
-    _parameters = ["array", "indexer", "axis", "name"]
+    _parameters: ClassVar[list[str]] = ["array", "indexer", "axis", "name"]
 
     @functools.cached_property
     def _meta(self):
@@ -110,8 +111,8 @@ class Shuffle(ArrayExpr):
             product(*(range(len(c)) for i, c in enumerate(chunks) if i != axis))
         )
 
-        intermediates: dict = dict()
-        merges: dict = dict()
+        intermediates: dict = {}
+        merges: dict = {}
         dtype = np.min_scalar_type(max(*chunks[axis], self._chunk_size_limit))
         split_name = f"shuffle-split-{self.deterministic_token}"
         slices = [slice(None)] * len(chunks)

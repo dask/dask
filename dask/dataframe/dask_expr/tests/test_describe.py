@@ -48,7 +48,7 @@ def _drop_mean(df, col=None):
     """TODO: In pandas 2.0, mean is implemented for datetimes, but Dask returns None."""
     if isinstance(df, pd.DataFrame):
         df.at["mean", col] = np.nan
-        df.dropna(how="all", inplace=True)
+        df = df.dropna(how="all")
     elif isinstance(df, pd.Series):
         df = df.drop(labels=["mean"], errors="ignore")
     else:

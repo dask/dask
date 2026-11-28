@@ -16,12 +16,12 @@ from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
 
 __all__ = [
+    "ColumnSpec",
+    "DatasetSpec",
+    "DatetimeIndexSpec",
+    "RangeIndexSpec",
     "make_timeseries",
     "with_spec",
-    "ColumnSpec",
-    "RangeIndexSpec",
-    "DatetimeIndexSpec",
-    "DatasetSpec",
 ]
 
 default_int_args: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {
@@ -484,7 +484,7 @@ def with_spec(spec: DatasetSpec, seed: int | None = None):
             divisions.append(end + 1)
         meta_start, meta_end = 0, step
     else:
-        raise ValueError(f"Unhandled index: {spec.index_spec}")
+        raise TypeError(f"Unhandled index: {spec.index_spec}")
 
     kwargs: dict[str, Any] = {"freq": step}
     for col in spec.column_specs:

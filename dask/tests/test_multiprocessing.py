@@ -3,6 +3,7 @@ from __future__ import annotations
 import multiprocessing
 import pickle
 import sys
+import traceback
 from concurrent.futures import ProcessPoolExecutor
 from operator import add
 
@@ -78,6 +79,22 @@ def test_errors_propagate():
     assert "12345" in str(e.value)
 
 
+def test_traceback_source_of_local_function():
+    """A worker traceback must retain the source line of a cloudpickled function.
+
+    Test vs. cloudpickle regression https://github.com/cloudpipe/cloudpickle/issues/628
+    """
+
+    def bad():
+        raise ValueError("12345")  # source line marker
+
+    with pytest.raises(ValueError) as exc_info:
+        get({"x": (bad,)}, "x")
+
+    tb = "".join(traceback.format_exception(exc_info.value))
+    assert 'raise ValueError("12345")  # source line marker' in tb
+
+
 def test_remote_exception():
     e = TypeError("hello")
     a = remote_exception(e, "traceback-body")
@@ -129,10 +146,9 @@ def test_unpicklable_args_generate_errors():
 
 @pytest.mark.parametrize("pool_typ", [multiprocessing.Pool, ProcessPoolExecutor])
 def test_reuse_pool(pool_typ):
-    with pool_typ(CPU_COUNT) as pool:
-        with dask.config.set(pool=pool):
-            assert get({"x": (inc, 1)}, "x") == 2
-            assert get({"x": (inc, 1)}, "x") == 2
+    with pool_typ(CPU_COUNT) as pool, dask.config.set(pool=pool):
+        assert get({"x": (inc, 1)}, "x") == 2
+        assert get({"x": (inc, 1)}, "x") == 2
 
 
 def test_dumps_loads():
@@ -169,7 +185,7 @@ def test_works_with_highlevel_graph():
             self.x = x
 
         def __getitem__(self, key):
-            raise Exception("Oh no!")
+            raise AssertionError("Oh no!")
 
     x = delayed(lambda x: x)(NoIndex(1))
     (res,) = get(x.dask, x.__dask_keys__())
@@ -245,6 +261,9 @@ def check_for_pytest():
 @pytest.mark.skipif(
     sys.platform == "win32", reason="Windows doesn't support different contexts"
 )
+@pytest.mark.filterwarnings(
+    "ignore:This process .* is multi-threaded:DeprecationWarning"
+)
 def test_custom_context_used_python3_posix():
     """The 'multiprocessing.context' config is used to create the pool.
 
@@ -292,15 +311,19 @@ def test_custom_context_ignored_elsewhere():
     not breaking anything.
     """
     assert get({"x": (inc, 1)}, "x") == 2
-    with pytest.warns(UserWarning):
-        with dask.config.set({"multiprocessing.context": "forkserver"}):
-            assert get({"x": (inc, 1)}, "x") == 2
+    with (
+        dask.config.set({"multiprocessing.context": "forkserver"}),
+        pytest.warns(UserWarning),
+    ):
+        assert get({"x": (inc, 1)}, "x") == 2
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="POSIX supports different contexts")
 def test_get_context_always_default():
     """On Python 2/Windows, get_context() always returns same context."""
     assert get_context() is multiprocessing
-    with pytest.warns(UserWarning):
-        with dask.config.set({"multiprocessing.context": "forkserver"}):
-            assert get_context() is multiprocessing
+    with (
+        dask.config.set({"multiprocessing.context": "forkserver"}),
+        pytest.warns(UserWarning),
+    ):
+        assert get_context() is multiprocessing

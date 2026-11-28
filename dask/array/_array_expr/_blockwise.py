@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numbers
 from collections.abc import Iterable
+from typing import Any, ClassVar
 
 import numpy as np
 import tlz as toolz
@@ -26,7 +27,7 @@ from dask.utils import cached_property, funcname
 
 
 class Blockwise(ArrayExpr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "func",
         "out_ind",
         "name",
@@ -39,7 +40,7 @@ class Blockwise(ArrayExpr):
         "_meta_provided",
         "kwargs",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "name": None,
         "token": None,
         "dtype": None,
@@ -75,7 +76,7 @@ class Blockwise(ArrayExpr):
     @cached_property
     def chunks(self):
         if self.align_arrays:
-            chunkss, arrays, _ = unify_chunks_expr(*self.args)
+            chunkss, _arrays, _ = unify_chunks_expr(*self.args)
         else:
             arginds = [
                 (a, i) for (a, i) in toolz.partition(2, self.args) if i is not None
@@ -212,14 +213,14 @@ class Blockwise(ArrayExpr):
 
 
 class Elemwise(Blockwise):
-    _parameters = ["op", "dtype", "name", "where"]
-    _defaults = {
+    _parameters: ClassVar[list[str]] = ["op", "dtype", "name", "where"]
+    _defaults: ClassVar[dict[str, Any]] = {
         "dtype": None,
         "name": None,
         "where": True,
     }
     align_arrays = True
-    new_axes: dict = {}
+    new_axes: ClassVar[dict] = {}
     adjust_chunks = None
     concatenate = None
 
@@ -277,7 +278,7 @@ class Elemwise(Blockwise):
                 dtype = apply_infer_dtype(
                     self.op, vals, {}, "elemwise", suggest_dtype=False
                 )
-            except Exception:
+            except (TypeError, ValueError):
                 raise NotImplementedError
             need_enforce_dtype = any(
                 not is_scalar_for_elemwise(a) and a.ndim == 0
@@ -337,7 +338,7 @@ class Elemwise(Blockwise):
 
 
 class Transpose(Blockwise):
-    _parameters = ["array", "axes"]
+    _parameters: ClassVar[list[str]] = ["array", "axes"]
     func = staticmethod(np.transpose)
     align_arrays = False
     adjust_chunks = None

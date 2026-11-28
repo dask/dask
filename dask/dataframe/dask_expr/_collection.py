@@ -3,11 +3,12 @@ from __future__ import annotations
 import datetime
 import functools
 import inspect
+import sys
 import warnings
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from functools import wraps
 from numbers import Integral, Number
-from typing import Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 import pandas as pd
@@ -151,10 +152,17 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-#
+if TYPE_CHECKING:
+    try:
+        from graphviz import Digraph
+    except ModuleNotFoundError:
+
+        class Digraph:  # type: ignore[no-redef]
+            pass
+
+
 # Utilities to wrap Expr API
 # (Helps limit boiler-plate code in collection APIs)
-#
 
 
 def _wrap_expr_api(*args, wrap_api=None, **kwargs):
@@ -186,9 +194,7 @@ def _wrap_expr_op(self, other, op=None):
     ):
         other = self._create_alignable_frame(other).expr
 
-    if not isinstance(other, expr.Expr):
-        return new_collection(getattr(self.expr, op)(other))
-    elif expr.are_co_aligned(self.expr, other):
+    if not isinstance(other, expr.Expr) or expr.are_co_aligned(self.expr, other):
         return new_collection(getattr(self.expr, op)(other))
     else:
         return new_collection(expr.OpAlignPartitions(self, other, op))
@@ -214,10 +220,9 @@ def _wrap_expr_method_operator(name, class_):
             ) and not is_dask_collection(other):
                 other = self._create_alignable_frame(other)
 
-            if axis in (1, "columns"):
-                if isinstance(other, Series):
-                    msg = f"Unable to {name} dd.Series with axis=1"
-                    raise ValueError(msg)
+            if axis in (1, "columns") and isinstance(other, Series):
+                msg = f"Unable to {name} dd.Series with axis=1"
+                raise ValueError(msg)
 
             frame = self
             if isinstance(other, FrameBase) and not expr.are_co_aligned(
@@ -299,6 +304,31 @@ _WARN_ANNOTATIONS = True
 #
 # Collection classes
 #
+
+
+def _wrapped_numpy_funcname() -> str | None:
+    """Return the name of the public NumPy function that called ``__array_wrap__``,
+    or None if the caller is not NumPy.
+
+    Depending on the NumPy version, private helpers (``_wrapfunc``, ``_wrapit``)
+    may sit between the public function and ``__array_wrap__``; skip them.
+    """
+    # Caller of __array_wrap__
+    try:
+        frame = sys._getframe(1)
+    except AttributeError:  # Not CPython
+        frame = inspect.stack()[1].frame  # pragma: nocover
+    assert frame.f_back is not None
+    frame = frame.f_back
+
+    while frame.f_globals.get("__name__", "").startswith("numpy."):
+        name = frame.f_code.co_name
+        if not name.startswith("_"):
+            return name
+        if frame.f_back is None:
+            return None
+        frame = frame.f_back
+    return None
 
 
 class FrameBase(DaskMethodsMixin):
@@ -465,7 +495,9 @@ Expr={expr}"""
         out = self.optimize(fuse=fuse)
         return DaskMethodsMixin.persist(out, **kwargs)
 
-    def analyze(self, filename: str | None = None, format: str | None = None) -> None:
+    def analyze(
+        self, filename: str | None = None, format: str | None = None
+    ) -> Digraph:
         """Outputs statistics about every node in the expression.
 
         analyze optimizes the expression and triggers a computation. It records statistics
@@ -484,8 +516,7 @@ Expr={expr}"""
 
         Returns
         -------
-            None, but writes a graph representation of the expression enriched with
-            statistics to disk.
+            The graphviz.Digraph written to disk, enriched with expression statistics.
         """
         out = self
         if not isinstance(out, Scalar):
@@ -2244,9 +2275,8 @@ Expr={expr}"""
         if split_every is not None and split_every < 2 and split_every is not False:
             raise ValueError("split_every must be at least 2")
 
-        if combine is None:
-            if combine_kwargs:
-                raise ValueError("`combine_kwargs` provided with no `combine`")
+        if combine is None and combine_kwargs:
+            raise ValueError("`combine_kwargs` provided with no `combine`")
 
         chunk_kwargs = chunk_kwargs.copy() if chunk_kwargs else {}
         chunk_kwargs.update(kwargs)
@@ -2379,9 +2409,11 @@ Expr={expr}"""
         divisions = tuple(mins) + (maxes[-1],)
         if not set_divisions:
             return divisions
-        if len(mins) == len(self.divisions) - 1:
-            if not any(mins[i] >= maxes[i - 1] for i in range(1, len(mins))):
-                return new_collection(expr.SetDivisions(self, divisions))
+
+        if len(mins) == len(self.divisions) - 1 and not any(
+            min_ >= max_ for min_, max_ in zip(mins[1:], maxes[:-1], strict=True)
+        ):
+            return new_collection(expr.SetDivisions(self, divisions))
 
         return new_collection(expr.ResolveOverlappingDivisions(self, mins, maxes, lens))
 
@@ -2786,12 +2818,8 @@ class DataFrame(FrameBase):
             else:
                 index = context[1][0].index
         else:
-            try:
-                import inspect
-
-                method_name = f"`{inspect.stack()[3][3]}`"
-            except IndexError:
-                method_name = "This method"
+            funcname = _wrapped_numpy_funcname()
+            method_name = f"`{funcname}`" if funcname else "This method"
 
             raise NotImplementedError(
                 f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
@@ -2821,13 +2849,14 @@ class DataFrame(FrameBase):
                 continue
 
             elif isinstance(v, (Scalar, Series)):
-                if isinstance(v, Series):
-                    if not expr.are_co_aligned(result.expr, v.expr):
-                        if len(args) > 0:
-                            result = expr.Assign(result, *args)
-                            args = []
-                        result = new_collection(expr.AssignAlign(result, k, v.expr))
-                        continue
+                if isinstance(v, Series) and not expr.are_co_aligned(
+                    result.expr, v.expr
+                ):
+                    if len(args) > 0:
+                        result = expr.Assign(result, *args)
+                        args = []
+                    result = new_collection(expr.AssignAlign(result, k, v.expr))
+                    continue
 
             elif not isinstance(v, FrameBase) and isinstance(v, Hashable):
                 pass
@@ -3034,9 +3063,7 @@ class DataFrame(FrameBase):
         from dask.dataframe.dask_expr._groupby import GroupBy
 
         if isinstance(by, FrameBase) and not isinstance(by, Series):
-            raise ValueError(
-                f"`by` must be a column name or list of columns, got {by}."
-            )
+            raise TypeError(f"`by` must be a column name or list of columns, got {by}.")
 
         return GroupBy(
             self,
@@ -3669,7 +3696,7 @@ class DataFrame(FrameBase):
     @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False, numeric_only=False):
         modes = []
-        for _, col in self.items():
+        for _, col in self.items():  # noqa: PERF102
             if numeric_only and not pd.api.types.is_numeric_dtype(col.dtype):
                 continue
             modes.append(col.mode(dropna=dropna, split_every=split_every))
@@ -3869,7 +3896,7 @@ class DataFrame(FrameBase):
             frame = self
 
         collections = []
-        for _, col in frame.items():
+        for _, col in frame.items():  # noqa: PERF102
             collections.append(col.quantile(q=q, method=method))
 
         if len(collections) > 0 and isinstance(collections[0], Scalar):
@@ -4208,12 +4235,8 @@ class Series(FrameBase):
             else:
                 index = context[1][0].index
         else:
-            try:
-                import inspect
-
-                method_name = f"`{inspect.stack()[3][3]}`"
-            except IndexError:
-                method_name = "This method"
+            funcname = _wrapped_numpy_funcname()
+            method_name = f"`{funcname}`" if funcname else "This method"
             raise NotImplementedError(
                 f"{method_name} is not implemented for `dask.dataframe.Series`."
             )
@@ -4222,13 +4245,12 @@ class Series(FrameBase):
 
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=None):
-        if isinstance(arg, Series):
-            if not expr.are_co_aligned(self.expr, arg.expr):
-                if meta is None:
-                    warnings.warn(meta_warning(meta, method="map"))
-                return new_collection(
-                    expr.MapAlign(self, arg, na_action=na_action, meta=meta)
-                )
+        if isinstance(arg, Series) and not expr.are_co_aligned(self.expr, arg.expr):
+            if meta is None:
+                warnings.warn(meta_warning(meta, method="map"))
+            return new_collection(
+                expr.MapAlign(self, arg, na_action=na_action, meta=meta)
+            )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta, method="map"))
@@ -4323,6 +4345,15 @@ class Series(FrameBase):
         Returns
         -------
         uniques : Series
+
+        Notes
+        -----
+        Unlike :meth:`pandas.Series.unique`, the order of the returned
+        values is not guaranteed to match the order of first appearance
+        in the data, because ``unique`` shuffles the data under the hood
+        to avoid overloading a single worker. To preserve the original
+        order, pass ``split_out=1`` to use a tree reduction instead
+        (only suitable for low-cardinality data).
         """
         shuffle_method = _get_shuffle_preferring_order(shuffle_method)
         return new_collection(Unique(self, split_every, split_out, shuffle_method))
@@ -4684,7 +4715,7 @@ class Index(Series):
     _accessors: ClassVar[set[str]] = set()
     _partition_type = pd.Index
 
-    _dt_attributes = {
+    _dt_attributes: ClassVar[set[str]] = {
         "nanosecond",
         "microsecond",
         "millisecond",
@@ -4704,7 +4735,7 @@ class Index(Series):
         "year",
     }
 
-    _cat_attributes = {
+    _cat_attributes: ClassVar[set[str]] = {
         "known",
         "as_known",
         "as_unknown",
@@ -4773,13 +4804,12 @@ class Index(Series):
         divisions to the output.
 
         """
-        if isinstance(arg, Series):
-            if not expr.are_co_aligned(self.expr, arg.expr):
-                if meta is None:
-                    warnings.warn(meta_warning(meta, method="map"))
-                return new_collection(
-                    expr.MapIndexAlign(self, arg, na_action, meta, is_monotonic)
-                )
+        if isinstance(arg, Series) and not expr.are_co_aligned(self.expr, arg.expr):
+            if meta is None:
+                warnings.warn(meta_warning(meta, method="map"))
+            return new_collection(
+                expr.MapIndexAlign(self, arg, na_action, meta, is_monotonic)
+            )
         if meta is None:
             meta = expr.emulate(M.map, self, arg, na_action=na_action, udf=True)
             warnings.warn(meta_warning(meta, method="map"))
@@ -5364,7 +5394,7 @@ def read_parquet(
 
     if filters is not None:
         for filter in flatten(filters, container=list):
-            col, op, val = filter
+            _col, op, val = filter
             if op == "in" and not isinstance(val, (set, list, tuple)):
                 raise TypeError("Value of 'in' filter must be a list, set or tuple.")
 
@@ -5918,7 +5948,7 @@ def from_map(
     iterables = list(iterables)
     for i, iterable in enumerate(iterables):
         if not isinstance(iterable, Iterable):
-            raise ValueError(
+            raise TypeError(
                 f"All elements of `iterables` must be Iterable, got {type(iterable)}"
             )
         try:
@@ -6451,12 +6481,11 @@ def handle_out(out, result):
             f"out={type(out)}, result={type(result)}"
         )
 
-    if isinstance(out, DataFrame):
-        if len(out.columns) != len(result.columns):
-            raise ValueError(
-                "Mismatched columns count between result and out parameter. "
-                f"out={len(out.columns)}, result={len(result.columns)}"
-            )
+    if isinstance(out, DataFrame) and len(out.columns) != len(result.columns):
+        raise ValueError(
+            "Mismatched columns count between result and out parameter. "
+            f"out={len(out.columns)}, result={len(result.columns)}"
+        )
 
     if isinstance(out, (Series, DataFrame, Scalar)):
         out._expr = result._expr

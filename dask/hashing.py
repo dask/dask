@@ -83,9 +83,9 @@ def hash_buffer(buf, hasher=None):
             # Some hash libraries may have overly-strict type checking,
             # not accepting all buffers
             pass
-    for hasher in hashers:
+    for hasher_i in hashers:
         try:
-            return hasher(buf)
+            return hasher_i(buf)
         except (TypeError, OverflowError):
             pass
     raise TypeError(f"unsupported type for hashing: {type(buf)}")

@@ -166,7 +166,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None, keys=None):
     if cache is None:
         cache = config.get("cache", None)
     if cache is None:
-        cache = dict()
+        cache = {}
     if keys is None:
         keys = list(set(dsk) - set(cache))
     dsk = convert_legacy_graph(dsk, all_keys=set(dsk) | set(cache))
@@ -257,7 +257,9 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
         id = get_id()
         result = dumps((result, id))
         failed = False
-    except BaseException as e:
+    # Scheduler boundary: tasks may raise any BaseException, including
+    # KeyboardInterrupt; pack it so callbacks and the caller see the failure.
+    except BaseException as e:  # noqa: BLE001
         result = pack_exception(e, dumps)
         failed = True
     return key, result, failed
@@ -338,7 +340,7 @@ def nested_get(ind, coll):
 
 def default_get_id():
     """Default get_id"""
-    return None
+    return
 
 
 def default_pack_exception(e, dumps):
@@ -456,15 +458,15 @@ def get_async(
     if not isinstance(dsk, Mapping):
         dsk = dsk.__dask_graph__()
     dsk = convert_legacy_graph(dsk)
-    with local_callbacks(callbacks) as callbacks:
-        _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
+    with local_callbacks(callbacks) as local_cbs:
+        _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(local_cbs)
         started_cbs = []
         succeeded = False
         # if start_state_from_dask fails, we will have something
         # to pass to the final block.
         state = {}
         try:
-            for cb in callbacks:
+            for cb in local_cbs:
                 if cb[0]:
                     cb[0](dsk)
                 started_cbs.append(cb)
@@ -475,7 +477,7 @@ def get_async(
                 dsk, keys=results, cache=cache, sortkey=keyorder.get
             )
 
-            for _, start_state, _, _, _ in callbacks:
+            for _, start_state, _, _, _ in local_cbs:
                 if start_state:
                     start_state(dsk, state)
 
@@ -576,7 +578,9 @@ class SynchronousExecutor(Executor):
         fut = Future()
         try:
             fut.set_result(fn(*args, **kwargs))
-        except BaseException as e:
+        # Mirror concurrent.futures: deliver user-code failures through the Future,
+        # including BaseException subclasses that are not Exception.
+        except BaseException as e:  # noqa: BLE001
             fut.set_exception(e)
         return fut
 

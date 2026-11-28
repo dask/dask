@@ -91,7 +91,7 @@ def to_json(
     ]
     if compute:
         if compute_kwargs is None:
-            compute_kwargs = dict()
+            compute_kwargs = {}
         return list(dask_compute(*parts, **compute_kwargs))
     else:
         return parts

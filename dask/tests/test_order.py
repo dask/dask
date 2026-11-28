@@ -268,7 +268,7 @@ def test_visualize_int_overflow(tmp_path):
 
 
 def test_ordering_keeps_groups_together(abcde):
-    a, b, c, d, e = abcde
+    a, b, _c, d, _e = abcde
     d = {(a, i): (f,) for i in range(4)}
     d.update({(b, 0): (f, (a, 0), (a, 1)), (b, 1): (f, (a, 2), (a, 3))})
     o = order(d)
@@ -297,7 +297,7 @@ def test_avoid_broker_nodes(abcde):
     we choose to run first, we should finish the computation branch before
     moving to the other one
     """
-    a, b, c, d, e = abcde
+    a, b, _c, _d, _e = abcde
     dsk = {
         (a, 0): (f,),
         (a, 1): (f,),
@@ -327,7 +327,7 @@ def test_base_of_reduce_preferred(abcde, data_root):
 
     We really want to run b0 quickly
     """
-    a, b, c, d, e = abcde
+    a, b, c, _d, _e = abcde
     dsk = {(a, i): (f, (a, i - 1), (b, i)) for i in [1, 2, 3]}
     dsk[(a, 0)] = (f, (b, 0))
     dsk.update({(b, i): (f, c, 1) for i in [0, 1, 2, 3]})
@@ -357,7 +357,7 @@ def test_avoid_upwards_branching(abcde):
           |
           c3
     """
-    a, b, c, d, e = abcde
+    a, b, c, d, _e = abcde
     dsk = {
         (a, 1): (f, (a, 2)),
         (a, 2): (f, (a, 3)),
@@ -472,7 +472,7 @@ def test_stacklimit(abcde):
 
 
 def test_break_ties_by_str(abcde):
-    a, b, c, d, e = abcde
+    _a, _b, _c, _d, _e = abcde
     dsk = {("x", i): (inc, i) for i in range(10)}
     x_keys = sorted(dsk)
     dsk["y"] = (f, list(x_keys))
@@ -513,7 +513,7 @@ def test_gh_3055():
 
 
 def test_type_comparisons_ok(abcde):
-    a, b, c, d, e = abcde
+    a, b, _c, _d, _e = abcde
     dsk = {a: 1, (a, 1): 2, (a, b, 1): 3}
     order(dsk)  # this doesn't err
 
@@ -583,7 +583,7 @@ def test_local_parents_of_reduction(abcde):
 
     Prefer to finish a1 stack before proceeding to b2
     """
-    a, b, c, d, e = abcde
+    a, b, c, _d, _e = abcde
     a1, a2, a3 = (a + i for i in "123")
     b1, b2, b3 = (b + i for i in "123")
     c1, c2, c3 = (c + i for i in "123")
@@ -627,7 +627,7 @@ def test_nearest_neighbor(abcde):
     Want to finish off a local group before moving on.
     This is difficult because all groups are connected.
     """
-    a, b, c, _, _ = abcde
+    a, b, _c, _d, _e = abcde
     a1, a2, a3, a4, a5, a6, a7, a8, a9 = (a + i for i in "123456789")
     b1, b2, b3, b4 = (b + i for i in "1234")
 
@@ -777,7 +777,7 @@ def test_map_overlap(abcde):
 
     Want to finish b1 before we start on e5
     """
-    a, b, c, d, e = abcde
+    _a, b, c, d, e = abcde
     dsk = {
         (e, 1): (f,),
         (d, 1): (f, (e, 1)),
@@ -848,7 +848,7 @@ def test_use_structure_not_keys(abcde):
 
 def test_dont_run_all_dependents_too_early(abcde):
     """From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372"""
-    a, b, c, d, e = abcde
+    a, b, c, d, _e = abcde
     depth = 10
     dsk = {
         (a, 0): (f, 0),
@@ -939,7 +939,7 @@ def test_order_with_equal_dependents(abcde):
     # that no variation below should be worse since all variations below should
     # reduce to the same graph when optimized/fused.
     max_pressure = 10
-    a, b, c, d, e = abcde
+    a, b, c, d, _e = abcde
     dsk = {}
     abc = [a, b, c, d]
     for x in abc:
@@ -1359,7 +1359,7 @@ def test_diagnostics(abcde):
 
 
 def test_xarray_like_reduction():
-    a, b, c, d, e = list("abcde")
+    a, b, c, d, _e = list("abcde")
 
     dsk = {}
     for ix in range(3):
@@ -1402,16 +1402,16 @@ def test_array_vs_dataframe(optimize):
 
     size = 5000
     ds = xr.Dataset(
-        dict(
-            anom_u=(
+        {
+            "anom_u": (
                 ["time", "face", "j", "i"],
                 da.random.random((size, 1, 987, 1920), chunks=(10, 1, -1, -1)),
             ),
-            anom_v=(
+            "anom_v": (
                 ["time", "face", "j", "i"],
                 da.random.random((size, 1, 987, 1920), chunks=(10, 1, -1, -1)),
             ),
-        )
+        }
     )
 
     quad = ds**2
@@ -1463,7 +1463,7 @@ def test_anom_mean():
     from collections import defaultdict
 
     count_dependents = defaultdict(set)
-    for k in dict(graph).keys():
+    for k in dict(graph):
         count_dependents[len(dependents[k])].add(k)
 
     # array-taker has the most dependents, but it's not what we want to look at
@@ -1994,8 +1994,8 @@ def test_flox_reduction(abcde):
     }
     o = order(dsk)
     assert_topological_sort(dsk, o)
-    of1 = list(o[(g, 1, ix)] for ix in range(3))
-    of2 = list(o[(g, 2, ix)] for ix in range(3))
+    of1 = [o[(g, 1, ix)] for ix in range(3)]
+    of2 = [o[(g, 2, ix)] for ix in range(3)]
     assert max(of1) < min(of2) or max(of2) < min(of1)
 
 
@@ -2038,7 +2038,7 @@ def test_reduce_with_many_common_dependents(optimize, keep_self, ndeps, n_reduce
             .optimize()
             .__dask_graph__()
         )
-    dependencies, dependents = get_deps(dsk)
+    dependencies, _dependents = get_deps(dsk)
     # Verify assumptions
     before = len(dsk)
     before_dsk = dsk.copy()
@@ -2199,7 +2199,7 @@ def test_gh_3055_explicit(abcde):
 
 def test_order_flox_reduction_2(abcde):
     # https://github.com/dask/dask/issues/10618
-    a, b, c, d, e = abcde
+    a, b, c, d, _e = abcde
     dsk = {
         (a, 0): 0,
         (a, 1): 0,
@@ -2347,10 +2347,10 @@ def test_xarray_8414():
     xr = pytest.importorskip("xarray")
 
     ds = xr.Dataset(
-        data_vars=dict(
-            a=(("x", "y"), np.arange(80).reshape(8, 10)),
-            b=(("y"), np.arange(10)),
-        )
+        data_vars={
+            "a": (("x", "y"), np.arange(80).reshape(8, 10)),
+            "b": (("y"), np.arange(10)),
+        }
     ).chunk(x=1)
 
     def f(ds):
@@ -2505,7 +2505,7 @@ def test_connected_roots_deduplication_mem_usage():
             alpha = gamma / n_samples
 
             transformed = X.conj().T @ (basis3 - (alpha * basis @ W))
-            U, svals, VT = da.linalg.svd_compressed(
+            U, _svals, VT = da.linalg.svd_compressed(
                 transformed, k=n_modes, compute=False
             )
             R = U @ VT
@@ -2516,12 +2516,12 @@ def test_connected_roots_deduplication_mem_usage():
     n_modes = 100
 
     x = da.random.random((10_000, 100), chunks=(5_000, -1))
-    u, s, v = da.linalg.svd_compressed(x, k=n_modes, compute=False)
+    u, _s, v = da.linalg.svd_compressed(x, k=n_modes, compute=False)
 
     u_rot = rotate(u)
     dsk = dict(u_rot.dask)
     dependencies, dependents = get_deps(dsk)
-    connected_roots, max_dependents = _connecting_to_roots(dependencies, dependents)
+    connected_roots, _max_dependents = _connecting_to_roots(dependencies, dependents)
 
     hashes = defaultdict(set)
 
@@ -2585,7 +2585,7 @@ def test_do_not_mutate_input():
         "d": ["a", "b", "c"],
         "e": (f, "d"),
     }
-    dependencies, __build_class__ = get_deps(dsk)
+    dependencies, _ = get_deps(dsk)
     dependencies_copy = dependencies.copy()
     dsk_copy = dsk.copy()
     o = order(dsk, dependencies=dependencies)

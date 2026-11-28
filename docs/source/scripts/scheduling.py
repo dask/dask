@@ -56,9 +56,9 @@ def dense(width, height):
 import numpy as np
 
 x = np.logspace(0, 4, 10)
-trivial_results = dict()
+trivial_results = {}
 for get in (dask.get, threaded.get, local.get_sync, multiprocessing.get):
-    y = list()
+    y = []
     for n in x:
         dsk, keys = trivial(int(n), 5)
         start = time()
@@ -95,9 +95,9 @@ plt.savefig("images/scaling-nodes.png")
 #####################
 
 x = np.linspace(1, 100, 10)
-crosstalk_results = dict()
-for get in [threaded.get, local.get_sync]:  # type: ignore[assignment]
-    y = list()
+crosstalk_results = {}
+for get in [threaded.get, local.get_sync]:
+    y = []
     for n in x:
         dsk, keys = crosstalk(1000, 5, int(n))
         start = time()

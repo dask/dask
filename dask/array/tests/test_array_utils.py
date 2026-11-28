@@ -4,9 +4,11 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array._array_expr._utils import compute_meta as expr_compute_meta
 from dask.array.core import Array
-from dask.array.utils import assert_eq, meta_from_array
+from dask.array.utils import assert_eq, compute_meta, meta_from_array
 from dask.local import get_sync
+from dask.utils_test import assert_scipy_sparse_matrix_deprecated
 
 asarrays = [np.asarray]
 
@@ -54,7 +56,18 @@ def test_meta_from_array(asarray):
     assert meta_from_array(np.dtype("float32")) == np.dtype("float32")
 
 
-@pytest.mark.parametrize("meta", ["", "str", "", "str", b"", b"str"])
+def test_compute_meta_swallows_user_exception():
+    class CustomMetaError(Exception):
+        pass
+
+    def raises_custom_error(x):
+        raise CustomMetaError("meta inference failed")
+
+    for meta_func in (compute_meta, expr_compute_meta):
+        assert meta_func(raises_custom_error, None, np.empty((0,))) is None
+
+
+@pytest.mark.parametrize("meta", ["", "str", b"", b"str"])
 @pytest.mark.parametrize("dtype", [None, "bool", "int", "float"])
 def test_meta_from_array_literal(meta, dtype):
     if dtype is None:
@@ -88,18 +101,19 @@ def test_meta_from_array_scipy_sparse():
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
-    # Note: csr_matrix can exclusively have ndim=2
-    x = scipy.sparse.csr_matrix([[2, 3]])
-    meta = meta_from_array(x)
-    assert isinstance(meta, type(x))
+    # Note: csr_matrix can exclusively have ndim=2.
+    with assert_scipy_sparse_matrix_deprecated():
+        x = scipy.sparse.csr_matrix([[2, 3]])
+        meta = meta_from_array(x)
+        assert isinstance(meta, type(x))
 
-    meta = meta_from_array(x, ndim=2)
-    assert isinstance(meta, type(x))
-    assert meta.shape == (0, 0)
+        meta = meta_from_array(x, ndim=2)
+        assert isinstance(meta, type(x))
+        assert meta.shape == (0, 0)
 
-    meta = meta_from_array(x, dtype=np.float32)
-    assert isinstance(meta, type(x))
-    assert meta.dtype == np.float32
+        meta = meta_from_array(x, dtype=np.float32)
+        assert isinstance(meta, type(x))
+        assert meta.dtype == np.float32
 
 
 @pytest.mark.parametrize(

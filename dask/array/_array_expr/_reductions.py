@@ -5,6 +5,7 @@ import math
 from functools import partial
 from itertools import product
 from numbers import Integral
+from typing import Any, ClassVar
 
 from tlz import compose, get, partition_all
 
@@ -223,7 +224,7 @@ def _tree_reduce(
         n = builtins.max(int(split_every ** (1 / (len(axis) or 1))), 2)
         split_every = dict.fromkeys(axis, n)
     else:
-        raise ValueError("split_every must be a int or a dict")
+        raise TypeError("split_every must be a int or a dict")
 
     # Reduce across intermediates
     depth = 1
@@ -260,7 +261,7 @@ def _tree_reduce(
 
 
 class PartialReduce(ArrayExpr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "array",
         "func",
         "split_every",
@@ -269,7 +270,7 @@ class PartialReduce(ArrayExpr):
         "name",
         "reduced_meta",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "keepdims": False,
         "dtype": None,
         "name": None,

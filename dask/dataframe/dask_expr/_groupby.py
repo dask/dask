@@ -4,6 +4,7 @@ import functools
 import math
 import warnings
 from collections.abc import Callable
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -267,7 +268,7 @@ class SingleAggregation(GroupByApplyConcatApply, GroupByBase):
         Key-word arguments to pass to `aggregate_chunk`.
     """
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "observed",
         "dropna",
@@ -279,7 +280,7 @@ class SingleAggregation(GroupByApplyConcatApply, GroupByBase):
         "sort",
         "shuffle_method",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "observed": None,
         "dropna": None,
         "chunk_kwargs": None,
@@ -353,7 +354,7 @@ class GroupbyAggregationBase(GroupByApplyConcatApply, GroupByBase):
         Whether rows with NA values should be dropped.
     """
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "arg",
         "observed",
@@ -364,7 +365,7 @@ class GroupbyAggregationBase(GroupByApplyConcatApply, GroupByBase):
         "shuffle_method",
         "_slice",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "observed": None,
         "dropna": None,
         "split_every": 8,
@@ -647,7 +648,7 @@ class Unique(SingleAggregation):
 
 class Cov(SingleAggregation):
     chunk = staticmethod(_cov_chunk)
-    std = False
+    std = False  # type: ignore[assignment]
 
     @classmethod
     def combine(cls, g, levels):
@@ -740,7 +741,7 @@ def _var_combine(g, levels, sort=False, observed=False, dropna=True):
 
 
 class Var(GroupByReduction):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "ddof",
         "numeric_only",
@@ -751,7 +752,7 @@ class Var(GroupByReduction):
         "observed",
         "shuffle_method",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "split_out": 1,
         "sort": None,
         "observed": None,
@@ -761,7 +762,7 @@ class Var(GroupByReduction):
     }
     reduction_aggregate = staticmethod(_var_agg)
     reduction_combine = staticmethod(_var_combine)
-    chunk = staticmethod(_var_chunk)
+    chunk = staticmethod(_var_chunk)  # type: ignore[assignment]
 
     @functools.cached_property
     def aggregate_kwargs(self):
@@ -816,7 +817,7 @@ class Mean(GroupByReduction):
     _defaults = SingleAggregation._defaults
     reduction_aggregate = staticmethod(_mean_agg)
     reduction_combine = staticmethod(_mean_combine)
-    chunk = staticmethod(_mean_chunk)
+    chunk = staticmethod(_mean_chunk)  # type: ignore[assignment]
 
 
 def nunique_df_combine(dfs, *args, **kwargs):
@@ -833,14 +834,14 @@ def nunique_df_aggregate(dfs, levels, name, sort=False):
 
 
 class NUnique(SingleAggregation):
-    aggregate = staticmethod(nunique_df_aggregate)
+    aggregate = staticmethod(nunique_df_aggregate)  # type: ignore[assignment]
     combine = staticmethod(nunique_df_combine)
 
     @staticmethod
     def chunk(df, *by, **kwargs):
         if df.ndim == 1:
             df = df.to_frame()
-            kwargs = dict(name=df.columns[0], levels=_determine_levels(by))
+            kwargs = {"name": df.columns[0], "levels": _determine_levels(by)}
         return _nunique_df_chunk(df, *by, **kwargs)
 
     @functools.cached_property
@@ -873,7 +874,7 @@ class Tail(Head):
 
 
 class GroupByApply(Expr, GroupByBase):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "observed",
         "dropna",
@@ -885,7 +886,7 @@ class GroupByApply(Expr, GroupByBase):
         "kwargs",
         "shuffle_method",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "observed": None,
         "dropna": None,
         "_slice": None,
@@ -922,12 +923,11 @@ class GroupByApply(Expr, GroupByBase):
 
     @functools.cached_property
     def need_to_shuffle(self):
-        if not any(isinstance(b, Expr) for b in self.by):
-            if any(
-                set(self._by_columns) >= set(cols)
-                for cols in self.frame.unique_partition_mapping_columns_from_shuffle
-            ):
-                return False
+        if not any(isinstance(b, Expr) for b in self.by) and any(
+            set(self._by_columns) >= set(cols)
+            for cols in self.frame.unique_partition_mapping_columns_from_shuffle
+        ):
+            return False
 
         return any(div is None for div in self.frame.divisions) or not any(
             _contains_index_name(self.frame._meta.index.name, b) for b in self.by
@@ -1053,7 +1053,7 @@ class GroupByFFill(GroupByBFill):
 
 
 class GroupByShift(GroupByApply):
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "observed": None,
         "dropna": None,
         "_slice": None,
@@ -1071,7 +1071,7 @@ class GroupByShift(GroupByApply):
 
 class Median(GroupByShift):
     _parameters = GroupByApply._parameters + ["split_every"]
-    default = {**GroupByShift._defaults, "split_every": None}
+    default: ClassVar[dict[str, Any]] = {**GroupByShift._defaults, "split_every": None}
 
     @functools.cached_property
     def grp_func(self):
@@ -1100,8 +1100,8 @@ def groupby_get_group(df, *by_key, get_key=None, columns=None):
 
 class GetGroup(Blockwise, GroupByBase):
     operation = staticmethod(groupby_get_group)
-    _parameters = ["frame", "get_key", "columns"]
-    _keyword_only = ["get_key", "columns"]
+    _parameters: ClassVar[list[str]] = ["frame", "get_key", "columns"]
+    _keyword_only: ClassVar[list[str]] = ["get_key", "columns"]
 
     @property
     def _args(self) -> list:
@@ -1137,7 +1137,7 @@ def _median_groupby_aggregate(
 
 
 class GroupByUDFBlockwise(Blockwise, GroupByBase):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "_slice",
         "group_keys",
@@ -1148,8 +1148,8 @@ class GroupByUDFBlockwise(Blockwise, GroupByBase):
         "dask_func",
         "meta",
     ]
-    _defaults = {"observed": None, "dropna": None}
-    _keyword_only = [
+    _defaults: ClassVar[dict[str, Any]] = {"observed": None, "dropna": None}
+    _keyword_only: ClassVar[list[str]] = [
         "_slice",
         "group_keys",
         "observed",
@@ -1350,8 +1350,12 @@ def _clean_by_expr(obj, by):
 
 
 class GroupByCumulative(Expr, GroupByBase):
-    _parameters = ["frame", "dropna", "_slice", "numeric_only"]
-    _defaults = {"numeric_only": None, "dropna": None, "_slice": None}
+    _parameters: ClassVar[list[str]] = ["frame", "dropna", "_slice", "numeric_only"]
+    _defaults: ClassVar[dict[str, Any]] = {
+        "numeric_only": None,
+        "dropna": None,
+        "_slice": None,
+    }
     chunk = None
     aggregate: Callable | None = None
     initial = 0
@@ -1439,7 +1443,7 @@ class GroupByCumulative(Expr, GroupByBase):
 
 
 class GroupByCumulativeFinalizer(Expr, GroupByBase):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "cum_raw",
         "cum_last",
@@ -1565,8 +1569,6 @@ class GroupBy:
             **_as_dict("dropna", dropna),
         )
         if slice is not None:
-            if isinstance(slice, tuple):
-                slice = list(slice)
             self._meta = self._meta[slice]
 
     def _numeric_only_kwargs(self, numeric_only):
@@ -2255,7 +2257,7 @@ class SeriesGroupBy(GroupBy):
             IdxMin,
             split_every=None,
             split_out=split_out,
-            chunk_kwargs=dict(skipna=skipna),
+            chunk_kwargs={"skipna": skipna},
         )
 
     def idxmax(
@@ -2271,7 +2273,7 @@ class SeriesGroupBy(GroupBy):
             IdxMax,
             split_every=split_every,
             split_out=split_out,
-            chunk_kwargs=dict(skipna=skipna),
+            chunk_kwargs={"skipna": skipna},
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)

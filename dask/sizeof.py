@@ -94,7 +94,7 @@ def sizeof_python_dict(d):
         sys.getsizeof(d)
         + sizeof(list(d.keys()))
         + sizeof(list(d.values()))
-        - 2 * sizeof(list())
+        - 2 * sizeof([])
     )
 
 
@@ -230,6 +230,13 @@ def register_spmatrix():
     @sizeof.register(sparse.spmatrix)
     def sizeof_spmatrix(s):
         return sum(sizeof(v) for v in s.__dict__.values())
+
+    if hasattr(sparse, "sparray"):  # scipy >=1.11
+        # scipy.sparse.sparray is not a subclass of scipy.sparse.spmatrix,
+        # so it needs its own registration.
+        @sizeof.register(sparse.sparray)
+        def sizeof_sparray(s):
+            return sum(sizeof(v) for v in s.__dict__.values())
 
 
 @sizeof.register_lazy("pyarrow")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import itertools
 import warnings
 from collections.abc import Iterable
 
@@ -328,12 +330,9 @@ def make_meta_object(x, index=None):
         # could be a string, a dtype object, or a python type. Skip `None`,
         # because it is implicitly converted to `dtype('f8')`, which we don't
         # want here.
-        try:
+        with contextlib.suppress(Exception):
             dtype = np.dtype(x)
             return _scalar_from_dtype(dtype)
-        except Exception:
-            # Continue on to next check
-            pass
 
     if is_scalar(x):
         return _nonempty_scalar(x)
@@ -360,8 +359,8 @@ def meta_nonempty_object(x):
 @meta_nonempty.register(pd.DataFrame)
 def meta_nonempty_dataframe(x):
     idx = meta_nonempty(x.index)
-    dt_s_dict = dict()
-    data = dict()
+    dt_s_dict = {}
+    data = {}
     for i in range(len(x.columns)):
         series = x.iloc[:, i]
         dt = series.dtype
@@ -475,10 +474,7 @@ def _nonempty_series(s, idx=None):
         # pandas 0.24.0+ should infer this to be Series[Period[freq]]
         freq = dtype.freq
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
-    elif isinstance(dtype, pd.SparseDtype):
-        entry = _scalar_from_dtype(dtype.subtype)
-        data = pd.array([entry, entry], dtype=dtype)
-    elif isinstance(dtype, pd.IntervalDtype):
+    elif isinstance(dtype, (pd.SparseDtype, pd.IntervalDtype)):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
     elif type(dtype) in make_array_nonempty._lookup:
@@ -578,7 +574,7 @@ def group_split_pandas(df, c, k, ignore_index=False):
     locations = locations.cumsum()
     parts = [
         df2.iloc[a:b].reset_index(drop=True) if ignore_index else df2.iloc[a:b]
-        for a, b in zip(locations[:-1], locations[1:])
+        for a, b in itertools.pairwise(locations)
     ]
     return ShuffleGroupResult(zip(range(k), parts))
 
@@ -656,7 +652,7 @@ def concat_pandas(
             new_tuples = np.concatenate(to_concat)
             try:
                 return pd.MultiIndex.from_tuples(new_tuples, names=first.names)
-            except Exception:
+            except (IndexError, TypeError, ValueError):
                 return pd.Index(new_tuples)
         return dfs[0].append(dfs[1:])
 

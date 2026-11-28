@@ -9,7 +9,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, tm
+from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_310, tm
 from dask.dataframe.methods import concat
 from dask.dataframe.utils import (
     assert_divisions,
@@ -17,6 +17,14 @@ from dask.dataframe.utils import (
     check_meta,
     has_known_categories,
 )
+
+
+def _pandas_join(left, right, suffixes, **kwargs):
+    """Mirror ``pandas.DataFrame.join`` across the lsuffix/rsuffix deprecation."""
+    if PANDAS_GE_310:
+        return left.join(right, suffixes=suffixes, **kwargs)
+    # pandas < 3.1 has no `suffixes` keyword for DataFrame.join
+    return left.join(right, lsuffix=suffixes[0], rsuffix=suffixes[1], **kwargs)
 
 
 def test_merge_indexed_dataframe_to_indexed_dataframe():
@@ -76,8 +84,8 @@ def test_sequential_joins():
     df2 = pd.DataFrame({"key": list(range(4)), "B": ["B0", "B1", "B2", "B3"]})
     df3 = pd.DataFrame({"key": list(range(1, 5)), "C": ["C0", "C1", "C2", "C3"]})
 
-    join_pd = df1.join(df2, how="inner", lsuffix="_l", rsuffix="_r")
-    multi_join_pd = join_pd.join(df3, how="inner", lsuffix="_l", rsuffix="_r")
+    join_pd = _pandas_join(df1, df2, ("_l", "_r"), how="inner")
+    multi_join_pd = _pandas_join(join_pd, df3, ("_l", "_r"), how="inner")
 
     # Dask version of multiple inner joins
     ddf1 = dd.from_pandas(df1, npartitions=3)
@@ -524,7 +532,7 @@ def test_merge_asof_on_left_right(left_col, right_col):
 
 def test_merge_asof_with_various_npartitions():
     # https://github.com/dask/dask/issues/8999
-    df = pd.DataFrame(dict(ts=[pd.to_datetime("1-1-2020")] * 3, foo=[1, 2, 3]))
+    df = pd.DataFrame({"ts": [pd.to_datetime("1-1-2020")] * 3, "foo": [1, 2, 3]})
     expected = pd.merge_asof(left=df, right=df, on="ts")
 
     for npartitions in range(1, 5):
@@ -1261,9 +1269,7 @@ def test_join_by_index_patterns(how, shuffle_method):
                     rsuffix="r",
                     shuffle_method=shuffle_method,
                 ),
-                fix_index(
-                    pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
-                ),
+                fix_index(_pandas_join(pdl, pdr, ("l", "r"), how=how), pdl.index.dtype),
             )
             assert_eq(
                 ddr.join(
@@ -1273,9 +1279,7 @@ def test_join_by_index_patterns(how, shuffle_method):
                     rsuffix="r",
                     shuffle_method=shuffle_method,
                 ),
-                fix_index(
-                    pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"), pdl.index.dtype
-                ),
+                fix_index(_pandas_join(pdr, pdl, ("l", "r"), how=how), pdl.index.dtype),
             )
 
             # temporary disabled because pandas may incorrectly raise
@@ -1284,12 +1288,12 @@ def test_join_by_index_patterns(how, shuffle_method):
 
             list_eq(
                 ddl.join(ddr, how=how, on="a", lsuffix="l", rsuffix="r"),
-                pdl.join(pdr, how=how, on="a", lsuffix="l", rsuffix="r"),
+                _pandas_join(pdl, pdr, ("l", "r"), how=how, on="a"),
             )
 
             list_eq(
                 ddr.join(ddl, how=how, on="c", lsuffix="l", rsuffix="r"),
-                pdr.join(pdl, how=how, on="c", lsuffix="l", rsuffix="r"),
+                _pandas_join(pdr, pdl, ("l", "r"), how=how, on="c"),
             )
 
             # merge with index and columns
@@ -1493,12 +1497,12 @@ def test_merge_by_multiple_columns(how, shuffle_method):
     "kwargs",
     [
         {},
-        dict(id_vars="int"),
-        dict(value_vars="int"),
-        dict(value_vars=["obj", "int"], var_name="myvar"),
-        dict(id_vars="s1", value_vars=["obj", "int"], value_name="myval"),
-        dict(value_vars=["obj", "s1"]),
-        dict(value_vars=["s1", "s2"]),
+        {"id_vars": "int"},
+        {"value_vars": "int"},
+        {"value_vars": ["obj", "int"], "var_name": "myvar"},
+        {"id_vars": "s1", "value_vars": ["obj", "int"], "value_name": "myval"},
+        {"value_vars": ["obj", "s1"]},
+        {"value_vars": ["s1", "s2"]},
     ],
 )
 def test_melt(kwargs):
@@ -1714,9 +1718,11 @@ def test_concat_unknown_divisions_errors():
     aa = dd.from_pandas(a, npartitions=2, sort=False).clear_divisions()
     bb = dd.from_pandas(b, npartitions=2, sort=False).clear_divisions()
 
-    with pytest.raises(ValueError):
-        with pytest.warns(UserWarning):  # Concat with unknown divisions
-            dd.concat([aa, bb], axis=1).compute()
+    with (
+        pytest.raises(ValueError),
+        pytest.warns(UserWarning),  # Concat with unknown divisions
+    ):
+        dd.concat([aa, bb], axis=1).compute()
 
 
 def test_concat3():
@@ -2021,6 +2027,21 @@ def test_concat_categorical_mixed_simple():
     assert_eq(result, expected)
 
 
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.Index([2]),
+        pd.Index(["b"]),
+        pd.Index([None]),
+        pd.Index([(2,)], tupleize_cols=False),
+    ],
+)
+def test_concat_multiindex_with_plain_index(index: pd.Index) -> None:
+    first = pd.MultiIndex.from_tuples([(1, "a")], names=["x", "y"])
+    expected = pd.Index([*first, *index], tupleize_cols=False)
+    assert_eq(concat([first, index]), expected)
+
+
 def test_concat_datetimeindex():
     # https://github.com/dask/dask/issues/2932
     b2 = pd.DataFrame(
@@ -2049,8 +2070,9 @@ def test_concat_datetimeindex():
 def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
     with pytest.warns(FutureWarning, match="append method is deprecated"):
         expected = pandas_obj.append(pandas_append)
+    with pytest.warns(FutureWarning, match="append method is deprecated"):
         result = dask_obj.append(dask_append)
-        assert_eq(result, expected)
+    assert_eq(result, expected)
 
     return result
 
@@ -2100,7 +2122,7 @@ def test_merge_outer_empty():
     df = dd.from_pandas(df, npartitions=10)
     empty_df = dd.from_pandas(pd.DataFrame(), npartitions=10)
 
-    for x in range(0, k_clusters + 1):
+    for x in range(k_clusters + 1):
         assert_eq(
             dd.merge(empty_df, df[df.cluster == x], how="outer"),
             df[df.cluster == x],

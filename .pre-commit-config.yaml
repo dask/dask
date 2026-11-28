@@ -4,17 +4,17 @@ repos:
     hooks:
       - id: end-of-file-fixer
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.10
+    rev: v0.17.6
     hooks:
       - id: ruff-check
-        # args: [--fix]
+        # args: [--fix, --unsafe-fixes]
   - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 26.3.1
+    rev: 26.10.1
     hooks:
       - id: black
         args: [--target-version=py310]
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.3
     hooks:
       -   id: codespell
           types_or: [rst, markdown]
@@ -22,10 +22,7 @@ repos:
           additional_dependencies:
             - tomli
   - repo: https://github.com/pre-commit/mirrors-mypy
-    # pinned due to
-    # https://github.com/python/typeshed/pull/9771 and
-    # https://github.com/python/mypy/issues/15257 for DaskCollection.__dask_scheduler__
-    rev: v1.15.0
+    rev: v2.4.1
     hooks:
       - id: mypy
         # Override default --ignore-missing-imports

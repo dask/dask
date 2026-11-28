@@ -6,6 +6,7 @@ import numbers
 from itertools import product
 from numbers import Integral
 from threading import Lock
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -134,7 +135,7 @@ class Generator:
             axis,
             chunks,
             meta,
-            dependencies,
+            _dependencies,
         ) = _choice_validate_params(self, a, size, replace, p, axis, chunks)
 
         return new_collection(
@@ -540,10 +541,10 @@ class RandomState:
                 size,
                 replace,
                 p,
-                axis,  # np.random.RandomState.choice does not use axis
+                _axis,  # np.random.RandomState.choice does not use axis
                 chunks,
                 meta,
-                dependencies,
+                _dependencies,
             ) = _choice_validate_params(self, a, size, replace, p, 0, chunks)
 
             return new_collection(
@@ -818,7 +819,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
             dummy_p = state._backend.array([1]) if p is not None else p
             meta = state._backend.random.RandomState().choice(1, size=(), p=dummy_p)
         else:
-            raise ValueError("Unknown generator class")
+            raise TypeError("Unknown generator class")
         len_a = a
         if a < 0:
             raise ValueError("a must be greater than 0")
@@ -881,7 +882,7 @@ def _wrap_func(
 
 
 class Random(IO):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "rng",
         "distribution",
         "size",
@@ -890,7 +891,7 @@ class Random(IO):
         "args",
         "kwargs",
     ]
-    _defaults = {"extra_chunks": ()}
+    _defaults: ClassVar[dict[str, Any]] = {"extra_chunks": ()}
 
     @cached_property
     def kwargs(self):
@@ -977,7 +978,7 @@ class Random(IO):
 
     @cached_property
     def _meta(self):
-        bitgens, name, sizes, gen, func_applier = self._info
+        bitgens, _name, _sizes, gen, func_applier = self._info
         return func_applier(
             gen,
             self.distribution,
@@ -991,7 +992,7 @@ class Random(IO):
 
 
 class RandomChoice(IO):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "array",
         "chunks",
         "_meta",
@@ -1001,7 +1002,7 @@ class RandomChoice(IO):
         "axis",
         "shuffle",
     ]
-    _defaults = {"axis": None, "shuffle": None}
+    _defaults: ClassVar[dict[str, Any]] = {"axis": None, "shuffle": None}
     _funcname = "da.random.choice-"
 
     @cached_property
@@ -1028,7 +1029,7 @@ class RandomChoice(IO):
 
 
 class RandomChoiceGenerator(RandomChoice):
-    _defaults = {}
+    _defaults: ClassVar[dict[str, Any]] = {}
 
     @cached_property
     def state_data(self):

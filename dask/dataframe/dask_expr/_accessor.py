@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import ClassVar
 
 from dask.dataframe.accessor import _bind_method, _bind_property, maybe_wrap_pandas
 from dask.dataframe.dask_expr._expr import Elemwise, Expr
@@ -21,7 +22,7 @@ class Accessor:
         from dask.dataframe.dask_expr import Series
 
         if not isinstance(series, Series):
-            raise ValueError("Accessor cannot be initialized")
+            raise TypeError("Accessor cannot be initialized")
 
         series_meta = series._meta
         if hasattr(series_meta, "to_series"):  # is index-like
@@ -80,7 +81,7 @@ class Accessor:
 
 
 class PropertyMap(Elemwise):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "accessor",
         "attr",
@@ -99,7 +100,7 @@ class PropertyMapIndex(PropertyMap):
 
 
 class FunctionMap(Elemwise):
-    _parameters = ["frame", "accessor", "attr", "args", "kwargs"]
+    _parameters: ClassVar[list[str]] = ["frame", "accessor", "attr", "args", "kwargs"]
 
     @functools.cached_property
     def _meta(self):

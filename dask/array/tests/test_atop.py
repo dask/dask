@@ -519,7 +519,7 @@ def test_blockwise_non_blockwise_output():
     z = ((y * 2) * 3) * 4
 
     z_top_before = tuple(z.dask.layers[z.name].indices)
-    (zz,) = dask.optimize(z)
+    (_zz,) = dask.optimize(z)
     z_top_after = tuple(z.dask.layers[z.name].indices)
     assert z_top_before == z_top_after, "z_top mutated"
 
@@ -806,7 +806,7 @@ def test_bag_array_conversion():
 def test_svd():
     x = da.ones((1, 1), chunks=(1, 1))
     y = x * 2
-    u, s, v = da.linalg.svd(y)
+    u, _s, _v = da.linalg.svd(y)
     z = y + u
     assert_eq(z, z)
 

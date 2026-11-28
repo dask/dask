@@ -11,6 +11,7 @@ import weakref
 from abc import abstractmethod
 from collections import defaultdict
 from functools import cached_property, partial
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -113,7 +114,7 @@ _cached_plan = {}  # type: ignore[var-annotated]
 
 
 class FragmentWrapper:
-    _filesystems = weakref.WeakValueDictionary()  # type: ignore[var-annotated]
+    _filesystems: ClassVar[weakref.WeakValueDictionary] = weakref.WeakValueDictionary()
     _filesystem_pickle_cache = (-1, None)
 
     def __init__(
@@ -203,7 +204,7 @@ class FragmentWrapper:
 
 def _control_cached_plan(key):
     if len(_cached_plan) > _CACHED_PLAN_SIZE and key not in _cached_plan:
-        key_to_pop = list(_cached_plan.keys())[0]
+        key_to_pop = next(iter(_cached_plan.keys()))
         _cached_plan.pop(key_to_pop)
 
 
@@ -250,7 +251,7 @@ def normalize_pq_filemetadata(meta):
 
 
 class ToParquet(Expr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "path",
         "fs",
@@ -581,7 +582,7 @@ def to_parquet(
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
 
-    if custom_metadata and b"pandas" in custom_metadata.keys():
+    if custom_metadata and b"pandas" in custom_metadata:
         raise ValueError(
             "User-defined key/value metadata (custom_metadata) can not "
             "contain a b'pandas' key.  This key is reserved by Pandas, "
@@ -825,7 +826,7 @@ class ReadParquet(PartitionsFiltered, BlockwiseIO):
 
 
 class ReadParquetPyarrowFS(ReadParquet):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "path",
         "columns",
         "filters",
@@ -842,7 +843,7 @@ class ReadParquetPyarrowFS(ReadParquet):
         "_series",
         "_dataset_info_cache",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "columns": None,
         "filters": None,
         "categories": None,
@@ -1255,7 +1256,7 @@ class ReadParquetPyarrowFS(ReadParquet):
 class ReadParquetFSSpec(ReadParquet):
     """Read a parquet dataset"""
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "path",
         "columns",
         "filters",
@@ -1277,7 +1278,7 @@ class ReadParquetFSSpec(ReadParquet):
         "_dataset_info_cache",
         "_pq_length_stats",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "columns": None,
         "filters": None,
         "categories": None,
@@ -1548,11 +1549,10 @@ def _aggregate_row_groups(parts, statistics, dataset_info):
     fs = dataset_info["fs"]
     aggregation_depth = dataset_info["aggregation_depth"]
 
-    if statistics:
-        if blocksize or (split_row_groups and int(split_row_groups) > 1):
-            parts, statistics = aggregate_row_groups(
-                parts, statistics, blocksize, split_row_groups, fs, aggregation_depth
-            )
+    if statistics and (blocksize or (split_row_groups and int(split_row_groups) > 1)):
+        parts, statistics = aggregate_row_groups(
+            parts, statistics, blocksize, split_row_groups, fs, aggregation_depth
+        )
     return parts, statistics
 
 
@@ -1726,7 +1726,7 @@ def _collect_pq_statistics(
     ]
 
     # Execute with delayed for large and remote datasets
-    parallel = int(False if _is_local_fs(fs) else 16)
+    parallel = 0 if _is_local_fs(fs) else 16
     if parallel:
         # Group parts corresponding to the same file.
         # A single task should always parse statistics
@@ -1788,20 +1788,23 @@ def _read_partition_stats_group(parts, fs, columns=None):
                 for i in range(row_group.num_columns):
                     col = row_group.column(i)
                     name = col.path_in_schema
-                    if name in columns:
-                        if col.statistics and col.statistics.has_min_max:
-                            if name in column_stats:
-                                column_stats[name]["min"] = min(
-                                    column_stats[name]["min"], col.statistics.min
-                                )
-                                column_stats[name]["max"] = max(
-                                    column_stats[name]["max"], col.statistics.max
-                                )
-                            else:
-                                column_stats[name] = {
-                                    "min": col.statistics.min,
-                                    "max": col.statistics.max,
-                                }
+                    if (
+                        name in columns
+                        and col.statistics
+                        and col.statistics.has_min_max
+                    ):
+                        if name in column_stats:
+                            column_stats[name]["min"] = min(
+                                column_stats[name]["min"], col.statistics.min
+                            )
+                            column_stats[name]["max"] = max(
+                                column_stats[name]["max"], col.statistics.max
+                            )
+                        else:
+                            column_stats[name] = {
+                                "min": col.statistics.min,
+                                "max": col.statistics.max,
+                            }
 
         # Convert dict-of-dict to list-of-dict to be consistent
         # with current `dd.read_parquet` convention (for now)
@@ -1811,7 +1814,7 @@ def _read_partition_stats_group(parts, fs, columns=None):
                 "min": column_stats[name]["min"],
                 "max": column_stats[name]["max"],
             }
-            for name in column_stats.keys()
+            for name in column_stats
         ]
         return {"num-rows": num_rows, "columns": column_stats_list}
 
@@ -1987,7 +1990,7 @@ def _gather_statistics(frags):
         return token_fragment[0], _extract_stats(token_fragment[1].metadata.to_dict())
 
     return dask.compute(
-        list(_collect_statistics(frag) for frag in frags), scheduler="threading"
+        [_collect_statistics(frag) for frag in frags], scheduler="threading"
     )[0]
 
 

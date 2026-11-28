@@ -87,7 +87,7 @@ def test_oob_indexer(darr):
 def test_shuffle_no_op_with_correct_indexer():
     arr = da.ones((250, 100), chunks=((50, 100, 33, 67), 100))
     indexer = [
-        list(range(0, 50)),
+        list(range(50)),
         list(range(50, 150)),
         list(range(150, 183)),
         list(range(183, 250)),

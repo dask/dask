@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import functools
+import itertools
 from collections.abc import Callable
 from operator import getitem
 from pprint import pformat
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -29,14 +30,14 @@ from dask.utils import iter_chunks, parse_bytes
 class Repartition(Expr):
     """Abstract repartitioning expression"""
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "new_partitions",
         "new_divisions",
         "force",
         "partition_size",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "new_partitions": None,
         "new_divisions": None,
         "force": False,
@@ -169,7 +170,7 @@ class Repartition(Expr):
 class RepartitionToFewer(Repartition):
     """Reduce the partition count"""
 
-    _parameters = ["frame", "new_partitions"]
+    _parameters: ClassVar[list[str]] = ["frame", "new_partitions"]
 
     def _divisions(self):
         return tuple(self.frame.divisions[i] for i in self._partitions_boundaries)
@@ -200,7 +201,7 @@ class RepartitionToFewer(Repartition):
                 [(self.frame._name, j) for j in range(start, end)],
             )
             for i, (start, end) in enumerate(
-                zip(new_partitions_boundaries, new_partitions_boundaries[1:])
+                itertools.pairwise(new_partitions_boundaries)
             )
         }
 
@@ -208,7 +209,7 @@ class RepartitionToFewer(Repartition):
 class RepartitionToMore(Repartition):
     """Increase the partition count"""
 
-    _parameters = ["frame", "new_partitions"]
+    _parameters: ClassVar[list[str]] = ["frame", "new_partitions"]
 
     def _divisions(self):
         return (None,) * (1 + sum(self._nsplits))
@@ -245,8 +246,8 @@ class RepartitionToMore(Repartition):
 class RepartitionDivisions(Repartition):
     """Repartition to specific divisions"""
 
-    _parameters = ["frame", "new_divisions", "force"]
-    _defaults = {"force": False}
+    _parameters: ClassVar[list[str]] = ["frame", "new_divisions", "force"]
+    _defaults: ClassVar[dict[str, Any]] = {"force": False}
 
     def _divisions(self):
         return self.new_divisions
@@ -291,7 +292,7 @@ class RepartitionDivisions(Repartition):
             return len(x) >= 2 and x[-1] == x[-2]
 
         c = [a[0]]
-        d = dict()
+        d = {}
         low = a[0]
 
         i, j = 1, 1  # indices for old/new divisions
@@ -390,7 +391,7 @@ class RepartitionDivisions(Repartition):
 
 
 class RepartitionFreq(Repartition):
-    _parameters = ["frame", "freq"]
+    _parameters: ClassVar[list[str]] = ["frame", "freq"]
 
     def _divisions(self):
         freq = _map_freq_to_period_start(self.freq)

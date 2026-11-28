@@ -734,15 +734,15 @@ def test_futures_in_subgraphs(loop_in_thread):
     """Copied from distributed (tests/test_client.py)"""
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    with cluster() as (s, [a, b]), Client(s["address"], loop=loop_in_thread):
+    with cluster() as (s, [_a, _b]), Client(s["address"], loop=loop_in_thread):
         ddf = dd.from_pandas(
             pd.DataFrame(
-                dict(
-                    uid=range(50),
-                    enter_time=pd.date_range(
+                {
+                    "uid": range(50),
+                    "enter_time": pd.date_range(
                         start="2020-01-01", end="2020-09-01", periods=50, tz="UTC"
                     ),
-                )
+                }
             ),
             npartitions=5,
         )
@@ -799,21 +799,23 @@ def test_map_partitions_df_input():
             f, ddf, meta=merged_df, enforce_metadata=False
         ).compute()
 
-    with distributed.LocalCluster(
-        scheduler_port=0,
-        # Explicitly disabling dashboard to prevent related warnings being
-        # elevated to errors until `bokeh=3` is fully supported.
-        # See https://github.com/dask/dask/issues/9686 and
-        # https://github.com/dask/distributed/issues/7173 for details.
-        dashboard_address=":0",
-        scheduler_kwargs={"dashboard": False},
-        asynchronous=False,
-        n_workers=1,
-        nthreads=1,
-        processes=False,
-    ) as cluster:
-        with distributed.Client(cluster, asynchronous=False):
-            main()
+    with (
+        distributed.LocalCluster(
+            scheduler_port=0,
+            # Explicitly disabling dashboard to prevent related warnings being
+            # elevated to errors until `bokeh=3` is fully supported.
+            # See https://github.com/dask/dask/issues/9686 and
+            # https://github.com/dask/distributed/issues/7173 for details.
+            dashboard_address=":0",
+            scheduler_kwargs={"dashboard": False},
+            asynchronous=False,
+            n_workers=1,
+            nthreads=1,
+            processes=False,
+        ) as cluster,
+        distributed.Client(cluster, asynchronous=False),
+    ):
+        main()
 
 
 @pytest.mark.filterwarnings(

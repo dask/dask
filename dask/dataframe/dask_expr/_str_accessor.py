@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import ClassVar
 
 from dask.dataframe.dask_expr._accessor import Accessor, FunctionMap
 from dask.dataframe.dask_expr._expr import Blockwise
@@ -101,9 +102,11 @@ class StringAccessor(Accessor):
         return self._split("split", pat=pat, n=n, expand=expand)
 
     def rsplit(self, pat=None, n=-1, expand=False):
+        """Split strings around the given separator, starting from the end."""
         return self._split("rsplit", pat=pat, n=n, expand=expand)
 
     def cat(self, others=None, sep=None, na_rep=None):
+        """Concatenate strings in the Series/Index with the given separator."""
         import pandas as pd
 
         from dask.dataframe.dask_expr._collection import Index, Series, new_collection
@@ -124,8 +127,8 @@ class StringAccessor(Accessor):
 
 
 class CatBlockwise(Blockwise):
-    _parameters = ["frame", "sep", "na_rep"]
-    _keyword_only = ["sep", "na_rep"]
+    _parameters: ClassVar[list[str]] = ["frame", "sep", "na_rep"]
+    _keyword_only: ClassVar[list[str]] = ["sep", "na_rep"]
 
     @property
     def _args(self) -> list:
@@ -137,7 +140,7 @@ class CatBlockwise(Blockwise):
 
 
 class Cat(Reduction):
-    _parameters = ["frame", "sep", "na_rep"]
+    _parameters: ClassVar[list[str]] = ["frame", "sep", "na_rep"]
 
     @property
     def chunk_kwargs(self):
@@ -165,7 +168,7 @@ class Cat(Reduction):
 
 
 class SplitMap(FunctionMap):
-    _parameters = ["frame", "accessor", "attr", "args", "kwargs"]
+    _parameters: ClassVar[list[str]] = ["frame", "accessor", "attr", "args", "kwargs"]
 
     @property
     def n(self):

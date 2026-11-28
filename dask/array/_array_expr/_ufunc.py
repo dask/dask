@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 from functools import partial
 from operator import getitem
+from typing import ClassVar
 
 import numpy as np
 
@@ -73,7 +74,7 @@ def frompyfunc(func, nin, nout):
 
 
 class ufunc:
-    _forward_attrs = {
+    _forward_attrs: ClassVar[set[str]] = {
         "nin",
         "nargs",
         "nout",
@@ -296,7 +297,7 @@ def angle(x, deg=0):
 
 
 class DoubleOutputs(ArrayExpr):
-    _parameters = ["array", "index", "meta", "name", "func"]
+    _parameters: ClassVar[list[str]] = ["array", "index", "meta", "name", "func"]
 
     @functools.cached_property
     def _meta(self):

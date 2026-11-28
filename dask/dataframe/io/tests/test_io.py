@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -117,7 +118,7 @@ def test_from_array_with_record_dtype():
 def test_from_pandas_dataframe():
     a = list("aaaaaaabbbbbbbbccccccc")
     df = pd.DataFrame(
-        dict(a=a, b=np.random.randn(len(a))),
+        {"a": a, "b": np.random.randn(len(a))},
         index=pd.date_range(start="20120101", periods=len(a)),
     )
     ddf = dd.from_pandas(df, 3)
@@ -920,7 +921,7 @@ def test_from_map_other_iterables(iterable):
 
 
 class MyFunc:
-    projected: list[str] = []
+    projected: ClassVar[list[str]] = []
 
     def __init__(self, columns=None):
         self.columns = columns

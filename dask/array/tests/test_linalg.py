@@ -455,10 +455,10 @@ def test_dask_svd_self_consistent(m, n):
 @pytest.mark.parametrize("iterator", ["power", "QR"])
 def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(
+    _u, _s, v = da.linalg.svd_compressed(
         x, k=2, iterator=iterator, n_power_iter=1, compute=True, seed=123
     )
-    uu, ss, vv = da.linalg.svd_compressed(
+    _uu, _ss, vv = da.linalg.svd_compressed(
         x, k=2, iterator=iterator, n_power_iter=1, seed=123
     )
 
@@ -805,13 +805,13 @@ def test_solve_assume_a(shape, chunk):
 
     with pytest.warns(FutureWarning, match="sym_pos keyword is deprecated"):
         res = da.linalg.solve(dA, db, sym_pos=True)
-        assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
-        assert_eq(dA.dot(res), b.astype(float), check_graph=False)
+    assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     with pytest.warns(FutureWarning, match="sym_pos keyword is deprecated"):
         res = da.linalg.solve(dA, db, sym_pos=False)
-        assert_eq(res, _scipy_linalg_solve(A, b, assume_a="gen"), check_graph=False)
-        assert_eq(dA.dot(res), b.astype(float), check_graph=False)
+    assert_eq(res, _scipy_linalg_solve(A, b, assume_a="gen"), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (12, 3), (30, 3), (30, 6)])

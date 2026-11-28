@@ -44,10 +44,12 @@ def test_broken_callback():
 
     dsk = {"x": 1}
 
-    with Callback(start=_f_broken, finish=_f_ok):
-        with Callback(start=_f_ok, finish=_f_ok):
-            with pytest.raises(ValueError, match="my_exception"):
-                get(dsk, "x")
+    with (
+        Callback(start=_f_broken, finish=_f_ok),
+        Callback(start=_f_ok, finish=_f_ok),
+        pytest.raises(ValueError, match="my_exception"),
+    ):
+        get(dsk, "x")
 
 
 def bad(x):
@@ -61,10 +63,9 @@ def test_exceptions_rise_to_top():
 
 @pytest.mark.parametrize("pool_typ", [ThreadPool, ThreadPoolExecutor])
 def test_reuse_pool(pool_typ):
-    with pool_typ(CPU_COUNT) as pool:
-        with dask.config.set(pool=pool):
-            assert get({"x": (inc, 1)}, "x") == 2
-            assert get({"x": (inc, 1)}, "x") == 2
+    with pool_typ(CPU_COUNT) as pool, dask.config.set(pool=pool):
+        assert get({"x": (inc, 1)}, "x") == 2
+        assert get({"x": (inc, 1)}, "x") == 2
 
 
 @pytest.mark.parametrize("pool_typ", [ThreadPool, ThreadPoolExecutor])
@@ -153,19 +154,11 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-@pytest.mark.parametrize(
-    "use_barrier",
-    [
-        True,
-        pytest.param(
-            False,
-            marks=pytest.mark.skipif(
-                sys.version_info >= (3, 13) and not sys._is_gil_enabled(),
-                reason="hangs on free-threading python/cpython#150873",
-            ),
-        ),
-    ],
+@pytest.mark.skipif(
+    sys.version_info >= (3, 13) and not sys._is_gil_enabled(),
+    reason="hangs on python/cpython#150873 and python/cpython#148874",
 )
+@pytest.mark.parametrize("use_barrier", [True, False])
 def test_interrupt(use_barrier):
     # Windows implements `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.

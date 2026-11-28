@@ -194,9 +194,9 @@ def unpack_collections(expr, _return_collections=True):
             (name,) = expr.__dask_keys__()
             return TaskRef(name), (expr,)
 
-    if type(expr) is type(iter(list())):
+    if type(expr) is type(iter([])):
         expr = list(expr)
-    elif type(expr) is type(iter(tuple())):
+    elif type(expr) is type(iter(())):
         expr = tuple(expr)
     elif type(expr) is type(iter(set())):
         expr = set(expr)
@@ -222,7 +222,7 @@ def unpack_collections(expr, _return_collections=True):
 
     if typ is dict:
         keyargs, kcollections = unpack_collections(
-            [k for k in expr.keys()], _return_collections=False
+            [k for k in expr], _return_collections=False
         )
         valargs, valcollections = unpack_collections(
             [v for v in expr.values()], _return_collections=False
@@ -348,9 +348,9 @@ def to_task_dask(expr):
         (name,) = expr.__dask_keys__()
         return name, expr.__dask_graph__()
 
-    if type(expr) is type(iter(list())):
+    if type(expr) is type(iter([])):
         expr = list(expr)
-    elif type(expr) is type(iter(tuple())):
+    elif type(expr) is type(iter(())):
         expr = tuple(expr)
     elif type(expr) is type(iter(set())):
         expr = set(expr)
@@ -676,7 +676,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "_dask", "_length", "_layer")
+    __slots__ = ("_dask", "_key", "_layer", "_length")
 
     def __init__(self, key, dsk, length=None, layer=None):
         self._key = key
@@ -827,7 +827,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
 
 
 class DelayedLeaf(Delayed):
-    __slots__ = ("_obj", "_pure", "_nout")
+    __slots__ = ("_nout", "_obj", "_pure")
 
     def __init__(self, obj, key, pure=None, nout=None):
         super().__init__(key, None, length=nout)
@@ -862,7 +862,7 @@ class DelayedLeaf(Delayed):
 
 
 class DelayedAttr(Delayed):
-    __slots__ = ("_obj", "_attr")
+    __slots__ = ("_attr", "_obj")
 
     def __init__(self, obj, attr):
         key = f"getattr-{tokenize(obj, attr, pure=True)}"

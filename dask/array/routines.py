@@ -259,7 +259,7 @@ def rot90(m, k=1, axes=(0, 1)):
     if k == 2:
         return flip(flip(m, axes[0]), axes[1])
 
-    axes_list = list(range(0, m.ndim))
+    axes_list = list(range(m.ndim))
     axes_list[axes[0]], axes_list[axes[1]] = (axes_list[axes[1]], axes_list[axes[0]])
 
     if k == 1:
@@ -277,8 +277,8 @@ def _tensordot(a, b, axes, is_sparse):
         return x
     else:
         ind = [slice(None, None)] * x.ndim
-        for a in sorted(axes[0]):
-            ind.insert(a, None)
+        for axis in sorted(axes[0]):
+            ind.insert(axis, None)
         x = x[tuple(ind)]
         return x
 
@@ -302,7 +302,7 @@ def tensordot(lhs, rhs, axes=2):
         left_axes, right_axes = axes
     else:
         left_axes = tuple(range(lhs.ndim - axes, lhs.ndim))
-        right_axes = tuple(range(0, axes))
+        right_axes = tuple(range(axes))
     if isinstance(left_axes, Integral):
         left_axes = (left_axes,)
     if isinstance(right_axes, Integral):
@@ -688,9 +688,11 @@ def gradient(f, *varargs, axis=None, **kwargs):
             "Spacing must either be a single scalar, or a scalar / 1d-array per axis"
         )
 
-    if issubclass(f.dtype.type, (np.bool_, Integral)):
-        f = f.astype(float)
-    elif issubclass(f.dtype.type, Real) and f.dtype.itemsize < 4:
+    if (
+        issubclass(f.dtype.type, (np.bool_, Integral))
+        or issubclass(f.dtype.type, Real)
+        and f.dtype.itemsize < 4
+    ):
         f = f.astype(float)
 
     results = []
@@ -750,9 +752,8 @@ def _bincount_agg(bincounts, dtype, **kwargs):
 def bincount(x, weights=None, minlength=0, split_every=None):
     if x.ndim != 1:
         raise ValueError("Input array must be one dimensional. Try using x.ravel()")
-    if weights is not None:
-        if weights.chunks != x.chunks:
-            raise ValueError("Chunks of input array x and weights must match.")
+    if weights is not None and weights.chunks != x.chunks:
+        raise ValueError("Chunks of input array x and weights must match.")
 
     token = tokenize(x, weights, minlength)
     args = [x, "i"]
@@ -1418,11 +1419,10 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
 
     # if bins is a list, tuple, then make sure the length is the same
     # as the number dimensions.
-    if isinstance(bins, (list, tuple)):
-        if len(bins) != D:
-            raise ValueError(
-                "The dimension of bins must be equal to the dimension of the sample."
-            )
+    if isinstance(bins, (list, tuple)) and len(bins) != D:
+        raise ValueError(
+            "The dimension of bins must be equal to the dimension of the sample."
+        )
 
     # if range is defined, check that it's the right length and also a
     # sequence of pairs.

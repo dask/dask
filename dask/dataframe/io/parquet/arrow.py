@@ -85,7 +85,7 @@ def _append_row_groups(metadata, md):
                 '`to_parquet(..., schema={"column1": pa.string()})`'
             ) from err
         else:
-            raise err
+            raise
 
 
 def _write_partitioned(
@@ -112,13 +112,13 @@ def _write_partitioned(
     fs.mkdirs(root_path, exist_ok=True)
 
     if preserve_index:
-        df.reset_index(inplace=True)
+        df = df.reset_index()
     df = df[table.schema.names]
 
     index_cols = list(index_cols) if index_cols else []
     preserve_index = False
     if index_cols:
-        df.set_index(index_cols, inplace=True)
+        df = df.set_index(index_cols)
         preserve_index = True
 
     partition_keys = [df[col] for col in partition_cols]
@@ -164,13 +164,12 @@ def _index_in_schema(index, schema):
     """Simple utility to check if all `index` columns are included
     in the known `schema`.
     """
-    if index and schema is not None:
-        # Make sure all index columns are in user-defined schema
-        return len(set(index).intersection(schema.names)) == len(index)
-    elif index:
-        return True  # Schema is not user-specified, all good
-    else:
+    if not index:
         return False  # No index to check
+    if schema is None:
+        return True  # Schema is not user-specified, all good
+    # Make sure all index columns are in user-defined schema
+    return len(set(index).intersection(schema.names)) == len(index)
 
 
 class PartitionObj:
@@ -383,7 +382,7 @@ def _filters_to_expression(filters, propagate_null=False, nan_is_null=True):
         field = pa_ds.field(col)
 
         # Handle null-value comparison
-        if val is None or (nan_is_null and val is np.nan):
+        if val is None or (nan_is_null and val is np.nan):  # noqa: PLW0177
             if op == "is":
                 return field.is_null(nan_is_null=nan_is_null)
             elif op == "is not":
@@ -536,14 +535,17 @@ class ArrowDatasetEngine(Engine):
 
         # Ensure `columns` and `partitions` do not overlap
         columns_and_parts = columns.copy()
-        if not isinstance(partitions, (list, tuple)):
-            if columns_and_parts and partitions:
-                for part_name in partitions.partition_names:
-                    if part_name in columns:
-                        columns.remove(part_name)
-                    else:
-                        columns_and_parts.append(part_name)
-                columns = columns or None
+        if (
+            not isinstance(partitions, (list, tuple))
+            and columns_and_parts
+            and partitions
+        ):
+            for part_name in partitions.partition_names:
+                if part_name in columns:
+                    columns.remove(part_name)
+                else:
+                    columns_and_parts.append(part_name)
+            columns = columns or None
 
         # Always convert pieces to list
         if not isinstance(pieces, list):
@@ -616,15 +618,15 @@ class ArrowDatasetEngine(Engine):
             if index_in_columns_and_parts:
                 # User does not want to set index and a desired
                 # column/partition has been set to the index
-                df.reset_index(drop=False, inplace=True)
+                df = df.reset_index(drop=False)
             else:
                 # User does not want to set index and an
                 # "unwanted" column has been set to the index
-                df.reset_index(drop=True, inplace=True)
+                df = df.reset_index(drop=True)
         elif set(df.index.names) != set(index) and index_in_columns_and_parts:
             # The wrong index has been set and it contains
             # one or more desired columns/partitions
-            df.reset_index(drop=False, inplace=True)
+            df = df.reset_index(drop=False)
         elif index_in_columns_and_parts:
             # The correct index has already been set
             index = False
@@ -688,7 +690,7 @@ class ArrowDatasetEngine(Engine):
                 except OSError:
                     try:
                         with fs.open(
-                            sorted(ds.files, key=natural_sort_key)[-1], mode="rb"
+                            max(ds.files, key=natural_sort_key), mode="rb"
                         ) as fil:
                             tail_metadata = pq.read_metadata(fil)
                     except OSError:
@@ -741,9 +743,7 @@ class ArrowDatasetEngine(Engine):
                 for row_group in row_groups:
                     column = row_group.column(index_col_i)
                     if column.statistics:
-                        if old_end is None:
-                            old_end = column.statistics.max
-                        elif column.statistics.max > old_end:
+                        if old_end is None or column.statistics.max > old_end:
                             old_end = column.statistics.max
                         else:
                             # Existing column on disk isn't sorted, set
@@ -757,8 +757,8 @@ class ArrowDatasetEngine(Engine):
                         "The divisions of the appended dataframe overlap with "
                         "previously written divisions. If this is desired, set "
                         "``ignore_divisions=True`` to append anyway.\n"
-                        "- End of last written partition: {old_end}\n"
-                        "- Start of first new partition: {divisions[0]}"
+                        f"- End of last written partition: {old_end}\n"
+                        f"- Start of first new partition: {divisions[0]}"
                     )
 
         extra_write_kwargs = {"schema": schema, "index_cols": index_cols}
@@ -816,7 +816,7 @@ class ArrowDatasetEngine(Engine):
         _meta = None
         preserve_index = False
         if _index_in_schema(index_cols, schema):
-            df.set_index(index_cols, inplace=True)
+            df = df.set_index(index_cols)
             preserve_index = True
         else:
             index_cols = []
@@ -1129,14 +1129,13 @@ class ArrowDatasetEngine(Engine):
 
         # Use pandas metadata to update categories
         pandas_metadata = _get_pandas_metadata(schema) or {}
-        if pandas_metadata:
-            if categories is None:
-                categories = []
-                for col in pandas_metadata["columns"]:
-                    if (col["pandas_type"] == "categorical") and (
-                        col["name"] not in categories
-                    ):
-                        categories.append(col["name"])
+        if pandas_metadata and categories is None:
+            categories = []
+            for col in pandas_metadata["columns"]:
+                if (col["pandas_type"] == "categorical") and (
+                    col["name"] not in categories
+                ):
+                    categories.append(col["name"])
 
         # Use _arrow_table_to_pandas to generate meta
         arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
@@ -1153,7 +1152,7 @@ class ArrowDatasetEngine(Engine):
         column_names = list(meta.columns)
         if index_names and index_names != [None]:
             # Reset the index if non-null index name
-            meta.reset_index(inplace=True)
+            meta = meta.reset_index()
 
         # Use index specified in the pandas metadata if
         # the index column was not specified by the user
@@ -1171,7 +1170,7 @@ class ArrowDatasetEngine(Engine):
         # Set proper index for meta
         index_cols = index or ()
         if index_cols and index_cols != [None]:
-            meta.set_index(index_cols, inplace=True)
+            meta = meta.set_index(index_cols)
 
         # Ensure that there is no overlap between partition columns
         # and explicit column storage
@@ -1524,7 +1523,7 @@ class ArrowDatasetEngine(Engine):
                                 "total_byte_size": row_group.total_byte_size,
                             }
                         cstats = []
-                        for name in stat_col_indices.keys():
+                        for name in stat_col_indices:
                             if name in statistics:
                                 cmin = statistics[name]["min"]
                                 cmax = statistics[name]["max"]
@@ -1544,20 +1543,19 @@ class ArrowDatasetEngine(Engine):
                                     filters
                                     or (blocksize and split_row_groups is True)
                                     or aggregation_depth
-                                ):
+                                ) and (cmin is None or (last and cmin < last)):
                                     # Only think about bailing if we don't need
                                     # stats for filtering
-                                    if cmin is None or (last and cmin < last):
-                                        # We are collecting statistics for divisions
-                                        # only (no filters) - Column isn't sorted, or
-                                        # we have an all-null partition, so lets bail.
-                                        #
-                                        # Note: This assumes ascending order.
-                                        #
-                                        gather_statistics = False
-                                        file_row_group_stats = {}
-                                        file_row_group_column_stats = {}
-                                        break
+                                    # We are collecting statistics for divisions
+                                    # only (no filters) - Column isn't sorted, or
+                                    # we have an all-null partition, so lets bail.
+                                    #
+                                    # Note: This assumes ascending order.
+                                    #
+                                    gather_statistics = False
+                                    file_row_group_stats = {}
+                                    file_row_group_column_stats = {}
+                                    break
 
                                 if single_rg_parts:
                                     s["columns"].append(

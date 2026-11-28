@@ -553,7 +553,7 @@ class RandomState:
                 size,
                 replace,
                 p,
-                axis,  # np.random.RandomState.choice does not use axis
+                _axis,  # np.random.RandomState.choice does not use axis
                 chunks,
                 meta,
                 dependencies,
@@ -841,7 +841,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
             dummy_p = state._backend.array([1]) if p is not None else p
             meta = state._backend.random.RandomState().choice(1, size=(), p=dummy_p)
         else:
-            raise ValueError("Unknown generator class")
+            raise TypeError("Unknown generator class")
         len_a = a
         if a < 0:
             raise ValueError("a must be greater than 0")

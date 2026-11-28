@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -86,9 +87,10 @@ class LocIndexer(Indexer):
         return self._loc(iindexer, cindexer)
 
     def _loc(self, iindexer, cindexer):
-        if iindexer is None or isinstance(iindexer, slice) and iindexer == slice(None):
-            if not isinstance(cindexer, Callable):
-                return new_collection(Projection(self.obj, cindexer))
+        if (
+            iindexer is None or isinstance(iindexer, slice) and iindexer == slice(None)
+        ) and not isinstance(cindexer, Callable):
+            return new_collection(Projection(self.obj, cindexer))
         if isinstance(iindexer, Series):
             return self._loc_series(iindexer, cindexer)
         elif isinstance(iindexer, Array):
@@ -175,7 +177,7 @@ def _reverse_partition(df):
 
 
 class ReverseDataFrame(Expr):
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
 
     @functools.cached_property
     def _meta(self):
@@ -205,7 +207,7 @@ class ReverseDataFrame(Expr):
 
 
 class LocBase(Blockwise):
-    _parameters = ["frame", "iindexer", "cindexer"]
+    _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
     operation = staticmethod(methods.loc)
 
     @functools.cached_property
@@ -229,7 +231,7 @@ class LocBase(Blockwise):
 
 
 class LocUnknown(Blockwise):
-    _parameters = ["frame", "iindexer", "cindexer"]
+    _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
     operation = staticmethod(methods.try_loc)
 
 
@@ -282,8 +284,8 @@ class LocList(LocBase):
                     indexer,
                     self.cindexer,
                 )
-                divisions.append(sorted(indexer)[0])
-            divisions.append(sorted(items[-1][1])[-1])
+                divisions.append(min(indexer))
+            divisions.append(max(items[-1][1]))
             return dsk, divisions
         else:
             divisions = [None, None]
@@ -298,7 +300,7 @@ class LocList(LocBase):
 
 
 class LocEmpty(LocList):
-    _parameters = ["meta", "cindexer"]
+    _parameters: ClassVar[list[str]] = ["meta", "cindexer"]
 
     def _lower(self):
         return None
@@ -430,14 +432,14 @@ class LocSlice(LocBase):
 
 
 class Loc(Blockwise):
-    _parameters = ["frame", "iindexer", "cindexer"]
-    _defaults = {"cindexer": None}
+    _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
+    _defaults: ClassVar[dict[str, Any]] = {"cindexer": None}
     operation = staticmethod(methods.loc)
 
 
 class LocAlign(MaybeAlignPartitions):
-    _parameters = ["frame", "iindexer", "cindexer"]
-    _defaults = {"cindexer": None}
+    _parameters: ClassVar[list[str]] = ["frame", "iindexer", "cindexer"]
+    _defaults: ClassVar[dict[str, Any]] = {"cindexer": None}
     _expr_cls = Loc
 
 

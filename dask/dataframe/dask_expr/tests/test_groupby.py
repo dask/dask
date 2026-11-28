@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import dask
-from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300
+from dask.dataframe._compat import PANDAS_GE_220, PANDAS_GE_300, PANDAS_GE_310
 from dask.dataframe.dask_expr import from_pandas
 from dask.dataframe.dask_expr._groupby import Aggregation, GroupByUDFBlockwise
 from dask.dataframe.dask_expr._reductions import TreeReduce
@@ -548,16 +548,18 @@ def test_apply_or_transform_shuffle_multilevel(pdf, df, func, cow):
     with ctx:
         grouper = lambda df: [df["x"] + 1, df["y"] + 1]
 
+        # DataFrameGroupBy
         with pytest.warns(UserWarning, match="`meta` is not specified"):
-            # DataFrameGroupBy
             assert_eq(func(df.groupby(grouper(df))), func(pdf.groupby(grouper(pdf))))
 
-            # SeriesGroupBy
+        # SeriesGroupBy
+        with pytest.warns(UserWarning, match="`meta` is not specified"):
             assert_eq(
                 func(df.groupby(grouper(df))["z"]), func(pdf.groupby(grouper(pdf))["z"])
             )
 
-            # DataFrameGroupBy with column slice
+        # DataFrameGroupBy with column slice
+        with pytest.warns(UserWarning, match="`meta` is not specified"):
             assert_eq(
                 func(df.groupby(grouper(df))[["z"]]),
                 func(pdf.groupby(grouper(pdf))[["z"]]),
@@ -919,7 +921,13 @@ def test_cumulative(func, key, sel):
         3,
         "value",
         ["value"],
-        ("value",),
+        pytest.param(
+            ("value",),
+            marks=pytest.mark.skipif(
+                PANDAS_GE_310,
+                reason="pandas>=3.1 deprecates tuple keys in GroupBy.__getitem__",
+            ),
+        ),
         pd.Index(["value"]),
         pd.Series(["value"]),
     ],

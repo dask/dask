@@ -87,9 +87,9 @@ def test_arr_like(
             assert da_r.name == name
 
         if "order" == "F":  # FIXME: this is clearly a bug!  # noqa: PLR0133
-            assert np.isfortran(da_r.compute())
+            assert da_r.compute().flags.fnc
         else:
-            assert not np.isfortran(da_r.compute())
+            assert not da_r.compute().flags.fnc
 
 
 @pytest.mark.parametrize(
@@ -339,7 +339,7 @@ def test_arange_float_step():
 
 def test_indices_wrong_chunks():
     with pytest.raises(ValueError):
-        da.indices((1,), chunks=tuple())
+        da.indices((1,), chunks=())
 
 
 def test_indices_dimensions_chunks():
@@ -357,14 +357,14 @@ def test_indices_dimensions_chunks():
 
 
 def test_empty_indices():
-    darr = da.indices(tuple(), chunks=tuple())
-    nparr = np.indices(tuple())
+    darr = da.indices((), chunks=())
+    nparr = np.indices(())
     assert darr.shape == nparr.shape
     assert darr.dtype == nparr.dtype
     assert_eq(darr, nparr)
 
-    darr = da.indices(tuple(), float, chunks=tuple())
-    nparr = np.indices(tuple(), float)
+    darr = da.indices((), float, chunks=())
+    nparr = np.indices((), float)
     assert darr.shape == nparr.shape
     assert darr.dtype == nparr.dtype
     assert_eq(darr, nparr)
@@ -1059,12 +1059,12 @@ def test_from_array_getitem_fused():
     result = darr[slice(1, 5), :][slice(1, 3), :]
     dsk = collections_to_expr([result]).__dask_graph__()
     # Ensure that slices are merged properly
-    key = [k for k in dsk if "array-getitem" in k[0]][0]
-    key_2 = [
+    key = next(k for k in dsk if "array-getitem" in k[0])
+    key_2 = next(
         k
         for k, v in dsk[key].args[0].items()
         if "getitem" in k[0] and not isinstance(v, Alias)
-    ][0]
+    )
     assert dsk[key].args[0][key_2].args[1] == ((slice(2, 4), slice(0, None)))
     assert_eq(result, arr[slice(1, 5), :][slice(1, 3), :])
 

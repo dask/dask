@@ -199,24 +199,40 @@ def test_collect_yaml_permission_errors(tmp_path, kind):
         assert config == expected
 
 
-def test_collect_yaml_malformed_file(tmp_path):
-    (tmp_path / "a.yaml").write_bytes(b"{")
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"{",
+        b"a: 2026-13-01",
+        b"a: !!int invalid",
+        b"a: !!bool maybe",
+        b"a: !!timestamp invalid",
+    ],
+)
+def test_collect_yaml_malformed_file(tmp_path: pathlib.Path, content: bytes) -> None:
+    (tmp_path / "a.yaml").write_bytes(content)
 
-    with pytest.raises(ValueError) as rec:
+    with pytest.raises(
+        ValueError, match=r"a\.yaml' is malformed, original error message"
+    ):
+        list(collect_yaml(paths=[str(tmp_path)]))
+
+
+def test_collect_yaml_invalid_encoding(tmp_path):
+    # 0x81 is invalid in both UTF-8 and Windows' default cp1252 codec.
+    (tmp_path / "a.yaml").write_bytes(b"\x81: 1\n")
+
+    with pytest.raises(ValueError, match=r"a\.yaml' is malformed"):
         list(collect_yaml(paths=[tmp_path]))
-    assert "a.yaml" in str(rec.value)
-    assert "is malformed" in str(rec.value)
-    assert "original error message" in str(rec.value)
 
 
 def test_collect_yaml_no_top_level_dict(tmp_path):
     (tmp_path / "a.yaml").write_bytes(b"[1234]")
 
-    with pytest.raises(ValueError) as rec:
+    with pytest.raises(
+        ValueError, match=r"a\.yaml' is malformed - config files must have a dict"
+    ):
         list(collect_yaml(paths=[tmp_path]))
-    assert "a.yaml" in str(rec.value)
-    assert "is malformed" in str(rec.value)
-    assert "must have a dict" in str(rec.value)
 
 
 def test_env():
@@ -373,12 +389,14 @@ def test_set_nested():
     assert "abc" not in config
 
 
-def test_set_hard_to_copyables():
-    import threading
+def test_set_does_not_copy():
+    """Test that dask.config.set stores objects by reference.
+    This is important for shared stateful objects, e.g. locks.
+    """
+    x = object()
 
-    with dask.config.set(x=threading.Lock()):
-        with dask.config.set(y=1):
-            pass
+    with dask.config.set(x=x):
+        assert config["x"] is x
 
 
 @pytest.mark.parametrize("mkdir", [True, False])
@@ -536,7 +554,7 @@ def test_schema_is_complete():
                     )
                 )
             if isinstance(v, dict):
-                test_matches(c[k], s["properties"][k])
+                test_matches(v, s["properties"][k])
 
     test_matches(config, schema)
 
@@ -576,9 +594,11 @@ def test_rename():
     ],
 )
 def test_deprecations_on_set(args, kwargs):
-    with pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width"):
-        with dask.config.set(*args, **kwargs):
-            assert dask.config.get("optimization.fuse.ave-width") == 123
+    with (
+        pytest.warns(FutureWarning, match=r"optimization\.fuse\.ave-width"),
+        dask.config.set(*args, **kwargs),
+    ):
+        assert dask.config.get("optimization.fuse.ave-width") == 123
 
 
 def test_deprecations_on_env_variables(monkeypatch):

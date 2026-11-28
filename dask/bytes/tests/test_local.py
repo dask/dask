@@ -65,7 +65,7 @@ def test_read_bytes():
     with filetexts(files, mode="b"):
         sample, values = read_bytes(".test.accounts.*")
         assert isinstance(sample, bytes)
-        assert sample[:5] == files[sorted(files)[0]][:5]
+        assert sample[:5] == files[min(files)][:5]
         assert sample.endswith(b"\n")
 
         assert isinstance(values, (list, tuple))
@@ -79,17 +79,17 @@ def test_read_bytes():
 
 def test_read_bytes_sample_delimiter():
     with filetexts(files, mode="b"):
-        sample, values = read_bytes(".test.accounts.*", sample=80, delimiter=b"\n")
+        sample, _ = read_bytes(".test.accounts.*", sample=80, delimiter=b"\n")
         assert sample.endswith(b"\n")
-        sample, values = read_bytes(".test.accounts.1.json", sample=80, delimiter=b"\n")
+        sample, _ = read_bytes(".test.accounts.1.json", sample=80, delimiter=b"\n")
         assert sample.endswith(b"\n")
-        sample, values = read_bytes(".test.accounts.1.json", sample=2, delimiter=b"\n")
+        sample, _ = read_bytes(".test.accounts.1.json", sample=2, delimiter=b"\n")
         assert sample.endswith(b"\n")
 
 
 def test_parse_sample_bytes():
     with filetexts(files, mode="b"):
-        sample, values = read_bytes(".test.accounts.*", sample="40 B")
+        sample, _ = read_bytes(".test.accounts.*", sample="40 B")
         assert len(sample) == 40
 
 
@@ -101,14 +101,14 @@ def test_read_bytes_no_sample():
 
 def test_read_bytes_blocksize_none():
     with filetexts(files, mode="b"):
-        sample, values = read_bytes(".test.accounts.*", blocksize=None)
+        _, values = read_bytes(".test.accounts.*", blocksize=None)
         assert sum(map(len, values)) == len(files)
 
 
 @pytest.mark.parametrize("blocksize", [5.0, "5 B"])
 def test_read_bytes_blocksize_types(blocksize):
     with filetexts(files, mode="b"):
-        sample, vals = read_bytes(".test.account*", blocksize=blocksize)
+        _, vals = read_bytes(".test.account*", blocksize=blocksize)
         results = compute(*concat(vals))
         ourlines = b"".join(results).split(b"\n")
         testlines = b"".join(files.values()).split(b"\n")
@@ -116,9 +116,8 @@ def test_read_bytes_blocksize_types(blocksize):
 
 
 def test_read_bytes_blocksize_float_errs():
-    with filetexts(files, mode="b"):
-        with pytest.raises(TypeError):
-            read_bytes(".test.account*", blocksize=5.5)
+    with filetexts(files, mode="b"), pytest.raises(TypeError):
+        read_bytes(".test.account*", blocksize=5.5)
 
 
 def test_read_bytes_include_path():
@@ -131,7 +130,7 @@ def test_with_urls():
     with filetexts(files, mode="b"):
         # OS-independent file:// URI with glob *
         url = to_uri(".test.accounts.") + "*"
-        sample, values = read_bytes(url, blocksize=None)
+        _, values = read_bytes(url, blocksize=None)
         assert sum(map(len, values)) == len(files)
 
 
@@ -139,7 +138,7 @@ def test_with_urls():
 def test_with_paths():
     with filetexts(files, mode="b"):
         url = pathlib.Path("./.test.accounts.*")
-        sample, values = read_bytes(url, blocksize=None)
+        _, values = read_bytes(url, blocksize=None)
         assert sum(map(len, values)) == len(files)
     with pytest.raises(OSError):
         # relative path doesn't work
@@ -150,7 +149,7 @@ def test_with_paths():
 def test_read_bytes_block():
     with filetexts(files, mode="b"):
         for bs in [5, 15, 45, 1500]:
-            sample, vals = read_bytes(".test.account*", blocksize=bs)
+            _, vals = read_bytes(".test.account*", blocksize=bs)
             assert list(map(len, vals)) == [
                 max((len(v) // bs), 1) for v in files.values()
             ]
@@ -189,10 +188,8 @@ def test_read_bytes_delimited():
             assert ours == test
 
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
-
-
-@pytest.mark.parametrize("fmt,blocksize", fmt_bs)
+@pytest.mark.parametrize("blocksize", [None, 10])
+@pytest.mark.parametrize("fmt", compr)
 def test_compression(fmt, blocksize):
     if fmt not in compress:
         pytest.skip("compression function not provided")
@@ -213,7 +210,7 @@ def test_compression(fmt, blocksize):
             delimiter=b"\n",
             compression=fmt,
         )
-        assert sample[:5] == files[sorted(files)[0]][:5]
+        assert sample[:5] == files[min(files)][:5]
         assert sample.endswith(b"\n")
 
         results = compute(*concat(values))
@@ -264,7 +261,7 @@ def test_bad_compression():
     with filetexts(files, mode="b"):
         for func in [read_bytes, open_files]:
             with pytest.raises(ValueError):
-                sample, values = func(".test.accounts.*", compression="not-found")
+                _, _ = func(".test.accounts.*", compression="not-found")
 
 
 def test_not_found():

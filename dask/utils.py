@@ -5,6 +5,7 @@ import contextlib
 import functools
 import gc
 import inspect
+import itertools
 import os
 import re
 import shutil
@@ -39,7 +40,7 @@ T = TypeVar("T")
 FuncType = Callable[..., Any]
 F = TypeVar("F", bound=FuncType)
 
-system_encoding = sys.getdefaultencoding()
+system_encoding: str = sys.getdefaultencoding()
 if system_encoding == "ascii":
     system_encoding = "utf-8"
 
@@ -220,7 +221,7 @@ def _deprecated_kwarg(
             "mapping from old to new argument values must be dict or callable!"
         )
 
-    comment_ = f"\n{comment}" or ""
+    comment_ = f"\n{comment}"
 
     def _deprecated_kwarg(func: F) -> F:
         @wraps(func)
@@ -436,9 +437,8 @@ def changed_cwd(new_cwd):
 
 @contextmanager
 def tmp_cwd(dir=None):
-    with tmpdir(dir) as dirname:
-        with changed_cwd(dirname):
-            yield dirname
+    with tmpdir(dir) as dirname, changed_cwd(dirname):
+        yield dirname
 
 
 class IndexCallable:
@@ -534,7 +534,7 @@ def pseudorandom(n: int, p, random_state=None):
     x = random_state.random_sample(n)
     out = np.empty(n, dtype="i1")
 
-    for i, (low, high) in enumerate(zip(cp[:-1], cp[1:])):
+    for i, (low, high) in enumerate(itertools.pairwise(cp)):
         out[(x >= low) & (x < high)] = i
     return out
 
@@ -682,12 +682,12 @@ def takes_multiple_arguments(func, varargs=True):
 
     try:
         spec = getargspec(func)
-    except Exception:
+    except TypeError:
         return False
 
     try:
         is_constructor = spec.args[0] == "self" and isinstance(func, type)
-    except Exception:
+    except IndexError:
         is_constructor = False
 
     if varargs and spec.varargs:
@@ -749,9 +749,10 @@ class Dispatch:
         for cls2 in cls.__mro__:
             # Is a lazy registration function present?
             try:
-                toplevel, _, _ = cls2.__module__.partition(".")
-            except Exception:
+                mod = cls2.__module__
+            except AttributeError:
                 continue
+            toplevel, _, _ = mod.partition(".")
             try:
                 register = self._lazy[toplevel]
             except KeyError:
@@ -1191,7 +1192,7 @@ def asciitable(columns, rows):
     header = row_template % tuple(columns)
     bar = "+{}+".format("+".join("-" * (w + 2) for w in widths))
     data = "\n".join(row_template % r for r in rows)
-    return "\n".join([bar, header, bar, data, bar])
+    return f"{bar}\n{header}\n{bar}\n{data}\n{bar}"
 
 
 def put_lines(buf, lines):
@@ -1228,7 +1229,7 @@ class methodcaller:
             _method_cache[method] = self
             return self
 
-    def __call__(self, __obj, *args, **kwargs):
+    def __call__(self, __obj, /, *args, **kwargs):
         return getattr(__obj, self.method)(*args, **kwargs)
 
     def __reduce__(self):
@@ -1894,10 +1895,22 @@ def parse_timedelta(s, default="seconds"):
     return result
 
 
-def has_keyword(func, keyword):
+if sys.version_info >= (3, 14):
+    from annotationlib import Format
+
+    # Keyword detection must also work for types imported under TYPE_CHECKING.
+    _keyword_signature = functools.partial(
+        inspect.signature, annotation_format=Format.FORWARDREF
+    )
+else:
+    _keyword_signature = inspect.signature
+
+
+def has_keyword(func: Callable[..., Any], keyword: str) -> bool:
     try:
-        return keyword in inspect.signature(func).parameters
-    except Exception:
+        return keyword in _keyword_signature(func).parameters
+    # Objects with a broken __signature__ metehod can raise any exception
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -1995,7 +2008,7 @@ def key_split(s):
             if result[0] == "<":
                 result = result.strip("<>").split()[0].split(".")[-1]
             return sys.intern(result)
-    except Exception:
+    except (AttributeError, IndexError, TypeError, ValueError):
         return "Other"
 
 

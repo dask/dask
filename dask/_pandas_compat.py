@@ -26,6 +26,7 @@ PANDAS_GE_220 = PANDAS_VERSION.release >= (2, 2, 0)
 PANDAS_GE_230 = PANDAS_VERSION.release >= (2, 3, 0)
 PANDAS_GE_300 = PANDAS_VERSION.release >= (3, 0, 0)
 PANDAS_GE_310 = PANDAS_VERSION.release >= (3, 1, 0)
+PANDAS_GE_320 = PANDAS_VERSION.release >= (3, 2, 0)
 
 
 def assert_categorical_equal(left, right, *args, **kwargs):

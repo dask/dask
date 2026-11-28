@@ -20,6 +20,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_220,
     PANDAS_GE_230,
     PANDAS_GE_300,
+    PANDAS_GE_310,
     check_observed_deprecation,
     tm,
 )
@@ -220,28 +221,27 @@ def test_groupby_on_index(scheduler):
     def func3(df):
         return df.mean()
 
-    with dask.config.set(scheduler=scheduler):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            assert_eq(
-                ddf.groupby("a").apply(func, **INCLUDE_GROUPS),
-                pdf.groupby("a").apply(func, **INCLUDE_GROUPS),
-            )
+    with dask.config.set(scheduler=scheduler), warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        assert_eq(
+            ddf.groupby("a").apply(func, **INCLUDE_GROUPS),
+            pdf.groupby("a").apply(func, **INCLUDE_GROUPS),
+        )
 
-            assert_eq(
-                pdf2.groupby(pdf2.index).apply(func2, **INCLUDE_GROUPS),
-                ddf2.groupby(ddf2.index).apply(func2, **INCLUDE_GROUPS),
-            )
+        assert_eq(
+            pdf2.groupby(pdf2.index).apply(func2, **INCLUDE_GROUPS),
+            ddf2.groupby(ddf2.index).apply(func2, **INCLUDE_GROUPS),
+        )
 
-            assert_eq(
-                ddf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
-                pdf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
-            )
+        assert_eq(
+            ddf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
+            pdf2.b.groupby("a").apply(func3, **INCLUDE_GROUPS),
+        )
 
-            assert_eq(
-                ddf2.b.groupby(ddf2.index).apply(func3, **INCLUDE_GROUPS),
-                pdf2.b.groupby(pdf2.index).apply(func3, **INCLUDE_GROUPS),
-            )
+        assert_eq(
+            ddf2.b.groupby(ddf2.index).apply(func3, **INCLUDE_GROUPS),
+            pdf2.b.groupby(pdf2.index).apply(func3, **INCLUDE_GROUPS),
+        )
 
 
 @pytest.mark.filterwarnings("ignore:invalid value encountered:RuntimeWarning")
@@ -365,7 +365,7 @@ def test_groupby_get_group(categoricals, by):
 def test_dataframe_groupby_nunique():
     strings = list("aaabbccccdddeee")
     data = np.random.randn(len(strings))
-    ps = pd.DataFrame(dict(strings=strings, data=data))
+    ps = pd.DataFrame({"strings": strings, "data": data})
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
     result = s.groupby("strings")["data"].nunique()
@@ -375,7 +375,7 @@ def test_dataframe_groupby_nunique():
 def test_dataframe_groupby_nunique_across_group_same_value():
     strings = list("aaabbccccdddeee")
     data = list(map(int, "123111223323412"))
-    ps = pd.DataFrame(dict(strings=strings, data=data))
+    ps = pd.DataFrame({"strings": strings, "data": data})
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
     result = s.groupby("strings")["data"].nunique()
@@ -659,7 +659,8 @@ def test_split_apply_combine_on_series(empty):
     pytest.raises(KeyError, lambda: ddf.groupby("x"))
     pytest.raises(KeyError, lambda: ddf.groupby(["a", "x"]))
     pytest.raises(KeyError, lambda: ddf.groupby("a")["x"])
-    pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
+    # pandas rejects tuples with more than one element (pandas GH 23566)
+    pytest.raises(ValueError, lambda: ddf.groupby("a")["b", "x"])
     pytest.raises(KeyError, lambda: ddf.groupby("a")[["b", "x"]])
 
 
@@ -733,7 +734,6 @@ def test_groupby_reduction_split(xfail, keyword, agg_func, shuffle_method):
         lambda df: df.groupby("A"),
         lambda df: df.groupby(df["A"]),
         lambda df: df.groupby(df["A"] + 1),
-        lambda df: df.groupby("A")["B"],
         # SeriesGroupBy:
         lambda df: df.groupby("A")["B"],
         lambda df: df.groupby(df["A"])["B"],
@@ -799,16 +799,18 @@ def test_apply_or_transform_shuffle_multilevel(grouper, func):
     )
     ddf = dd.from_pandas(pdf, 3)
 
+    # DataFrameGroupBy
     with pytest.warns(UserWarning):
-        # DataFrameGroupBy
         assert_eq(func(ddf.groupby(grouper(ddf))), func(pdf.groupby(grouper(pdf))))
 
-        # SeriesGroupBy
+    # SeriesGroupBy
+    with pytest.warns(UserWarning):
         assert_eq(
             func(ddf.groupby(grouper(ddf))["B"]), func(pdf.groupby(grouper(pdf))["B"])
         )
 
-        # DataFrameGroupBy with column slice
+    # DataFrameGroupBy with column slice
+    with pytest.warns(UserWarning):
         assert_eq(
             func(ddf.groupby(grouper(ddf))[["B", "C"]]),
             func(pdf.groupby(grouper(pdf))[["B", "C"]]),
@@ -1442,7 +1444,7 @@ def test_groupby_dataframe_cum_caching(op):
     Relates to #3756.
     """
     df = pd.DataFrame(
-        dict(a=list("aabbcc")), index=pd.date_range(start="20100101", periods=6)
+        {"a": list("aabbcc")}, index=pd.date_range(start="20100101", periods=6)
     )
     df["ones"] = 1
     df["twos"] = 2
@@ -2217,7 +2219,7 @@ def test_groupby_shift_within_partition_sorting():
 
 def test_groupby_shift_with_freq(shuffle_method):
     pdf = pd.DataFrame(
-        dict(a=[1, 2, 3, 4, 5, 6], b=[0, 0, 0, 1, 1, 1]),
+        {"a": [1, 2, 3, 4, 5, 6], "b": [0, 0, 0, 1, 1, 1]},
         index=pd.date_range(start="20100101", periods=6),
     )
     ddf = dd.from_pandas(pdf, npartitions=3)
@@ -2283,14 +2285,15 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
 
     ddf = dd.from_pandas(pdf, npartitions)
 
+    # DataFrame
     with pytest.warns(UserWarning):
-        # DataFrame
         assert_eq(
             pdf.groupby("group").transform(lambda series: series - series.mean()),
             ddf.groupby("group").transform(lambda series: series - series.mean()),
         )
 
-        # Series
+    # Series
+    with pytest.warns(UserWarning):
         assert_eq(
             pdf.groupby("group")["value"].transform(
                 lambda series: series - series.mean()
@@ -3029,7 +3032,13 @@ def test_groupby_iter_fails():
         3,
         "value",
         ["value"],
-        ("value",),
+        pytest.param(
+            ("value",),
+            marks=pytest.mark.skipif(
+                PANDAS_GE_310,
+                reason="pandas>=3.1 deprecates tuple keys in GroupBy.__getitem__",
+            ),
+        ),
         pd.Index(["value"]),
         pd.Series(["value"]),
     ],
@@ -3047,6 +3056,26 @@ def test_groupby_slice_getitem(by, slice_key):
     ddf = dd.from_pandas(pdf, npartitions=3)
     expect = pdf.groupby(by)[slice_key].count()
     got = ddf.groupby(by)[slice_key].count()
+    assert_eq(expect, got)
+
+
+def test_groupby_slice_getitem_tuple_key():
+    # Dask must not pre-empt pandas' handling of tuple keys. pandas>=3.1
+    # deprecates them, so the warning must surface instead of being swallowed
+    # by silently converting the tuple to a list.
+    pdf = pd.DataFrame({"key1": ["a", "b", "a"], "value": [1, 2, 3]})
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    if PANDAS_GE_310:
+        from pandas.errors import Pandas4Warning
+
+        ctx = pytest.warns(Pandas4Warning, match="Passing a tuple to __getitem__")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        expect = pdf.groupby("key1")[["value"]].count()
+        got = ddf.groupby("key1")[("value",)].count().compute()
     assert_eq(expect, got)
 
 

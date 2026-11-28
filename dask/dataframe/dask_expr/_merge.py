@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import math
 import operator
+from typing import Any, ClassVar
 
 import numpy as np
 from toolz import merge_sorted, unique
@@ -64,7 +65,7 @@ class Merge(Expr):
     Shuffle
     """
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "how",
@@ -78,7 +79,7 @@ class Merge(Expr):
         "_npartitions",
         "broadcast",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "how": "inner",
         "left_on": None,
         "right_on": None,
@@ -209,16 +210,14 @@ class Merge(Expr):
 
     @property
     def _bcast_left(self):
-        if self.operand("_npartitions") is not None:
-            if self.broadcast_side == "right":
-                return Repartition(self.left, new_partitions=self._npartitions)
+        if self.operand("_npartitions") is not None and self.broadcast_side == "right":
+            return Repartition(self.left, new_partitions=self._npartitions)
         return self.left
 
     @property
     def _bcast_right(self):
-        if self.operand("_npartitions") is not None:
-            if self.broadcast_side == "left":
-                return Repartition(self.right, new_partitions=self._npartitions)
+        if self.operand("_npartitions") is not None and self.broadcast_side == "left":
+            return Repartition(self.right, new_partitions=self._npartitions)
         return self.right
 
     def _divisions(self):
@@ -519,7 +518,7 @@ class Merge(Expr):
 
 
 class HashJoinP2P(Merge, PartitionsFiltered):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "how",
@@ -534,7 +533,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
         "shuffle_right_on",
         "_npartitions",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "how": "inner",
         "left_on": None,
         "right_on": None,
@@ -586,8 +585,8 @@ class HashJoinP2P(Merge, PartitionsFiltered):
 
         transfer_name_left = f"hash-join-transfer-{token_left}"
         transfer_name_right = f"hash-join-transfer-{token_right}"
-        transfer_keys_left = list()
-        transfer_keys_right = list()
+        transfer_keys_left = []
+        transfer_keys_right = []
         func = create_assign_index_merge_transfer()
         for i in range(self.left.npartitions):
             t = Task(
@@ -684,7 +683,7 @@ class HashJoinP2P(Merge, PartitionsFiltered):
 
 
 class BroadcastJoin(Merge, PartitionsFiltered):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "left",
         "right",
         "how",
@@ -696,7 +695,7 @@ class BroadcastJoin(Merge, PartitionsFiltered):
         "indicator",
         "_partitions",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "how": "inner",
         "left_on": None,
         "right_on": None,
@@ -905,8 +904,8 @@ class BlockwiseMerge(Merge, Blockwise):
 
 
 class JoinRecursive(Expr):
-    _parameters = ["frames", "how"]
-    _defaults = {"right_index": True, "how": "outer"}
+    _parameters: ClassVar[list[str]] = ["frames", "how"]
+    _defaults: ClassVar[dict[str, Any]] = {"right_index": True, "how": "outer"}
 
     @functools.cached_property
     def _meta(self):

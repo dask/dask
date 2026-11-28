@@ -41,10 +41,10 @@ class Cache(Callback):
         else:
             assert not args and not kwargs
         self.cache = cache
-        self.starttimes = dict()
+        self.starttimes = {}
 
     def _start(self, dsk):
-        self.durations = dict()
+        self.durations = {}
         overlap = set(dsk) & set(self.cache.data)
         for key in overlap:
             dsk[key] = self.cache.data[key]

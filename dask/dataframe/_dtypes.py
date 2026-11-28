@@ -46,7 +46,7 @@ def _make_array_nonempty_pyarrow_dtype(dtype):
     ):
         data = [b"a", b"b"]
     elif pa.types.is_decimal(dtype.pyarrow_dtype):
-        data = [Decimal("1"), Decimal("0.0")]
+        data = [Decimal(1), Decimal("0.0")]
     elif pa.types.is_duration(dtype.pyarrow_dtype):
         data = [pd.Timedelta("1 day"), pd.Timedelta("2 days")]
     elif pa.types.is_time(dtype.pyarrow_dtype):

@@ -434,14 +434,13 @@ class TestCategoricalAccessor:
     @pytest.mark.parametrize(
         "method, kwargs",
         [
-            ("add_categories", dict(new_categories=["d", "e"])),
+            ("add_categories", {"new_categories": ["d", "e"]}),
             ("as_ordered", {}),
             ("as_unordered", {}),
-            ("as_ordered", {}),
-            ("remove_categories", dict(removals=["a"])),
-            ("rename_categories", dict(new_categories=["d", "e", "f"])),
-            ("reorder_categories", dict(new_categories=["a", "b", "c"])),
-            ("set_categories", dict(new_categories=["a", "e", "b"])),
+            ("remove_categories", {"removals": ["a"]}),
+            ("rename_categories", {"new_categories": ["d", "e", "f"]}),
+            ("reorder_categories", {"new_categories": ["a", "b", "c"]}),
+            ("set_categories", {"new_categories": ["a", "e", "b"]}),
             ("remove_unused_categories", {}),
         ],
     )

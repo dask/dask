@@ -4,6 +4,8 @@ import functools
 import math
 import operator
 import uuid
+from typing import Any as AnyType
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -71,7 +73,7 @@ from dask.utils import (
 
 
 class ShuffleBase(Expr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "partitioning_index",
         "npartitions_out",
@@ -81,7 +83,7 @@ class ShuffleBase(Expr):
         "index_shuffle",
         "original_partitioning_index",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "ignore_index": False,
         "method": None,
         "options": None,
@@ -294,7 +296,7 @@ class RearrangeByColumn(ShuffleBase):
 
 
 class SimpleShuffle(PartitionsFiltered, Shuffle):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "partitioning_index",
         "npartitions_out",
@@ -304,7 +306,7 @@ class SimpleShuffle(PartitionsFiltered, Shuffle):
         "_partitions",
     ]
 
-    _defaults = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "_partitions": None,
         "original_partitioning_index": None,
         "partitioning_index": "_partitions",
@@ -388,9 +390,9 @@ class TaskShuffle(SimpleShuffle):
 
         # Calculate number of stages and splits per stage
         npartitions = self.npartitions_out
-        stages = int(math.ceil(math.log(npartitions_input) / math.log(max_branch)))
+        stages = math.ceil(math.log(npartitions_input) / math.log(max_branch))
         if stages > 1:
-            nsplits = int(math.ceil(npartitions_input ** (1 / stages)))
+            nsplits = math.ceil(npartitions_input ** (1 / stages))
         else:
             nsplits = npartitions_input
 
@@ -582,7 +584,7 @@ class P2PShuffle(SimpleShuffle):
             tuple(self._partitions) if self._filtered else self.npartitions_out
         )
 
-        transfer_keys = list()
+        transfer_keys = []
         for i in range(self.frame.npartitions):
             t = Task(
                 (name, i),
@@ -717,7 +719,7 @@ class AssignPartitioningIndex(Blockwise):
         Whether we are using solely the index for the shuffle
     """
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "partitioning_index",
         "index_name",
@@ -726,7 +728,7 @@ class AssignPartitioningIndex(Blockwise):
         "index_shuffle",
     ]
 
-    _defaults = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "cast_dtype": None,
         "index_shuffle": False,
         "partitioning_index": "_partitions",
@@ -825,7 +827,7 @@ class SetIndex(BaseSetIndexSortValues):
         Used to increase the number of samples for quantiles.
     """
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "_other",
         "drop",
@@ -838,7 +840,7 @@ class SetIndex(BaseSetIndexSortValues):
         "append",
         "options",  # Options for the chosen shuffle method
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "drop": True,
         "user_divisions": None,
         "partition_size": 128e6,
@@ -973,7 +975,7 @@ class SetIndex(BaseSetIndexSortValues):
 
 
 class SortValues(BaseSetIndexSortValues):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "by",
         "ascending",
@@ -987,7 +989,7 @@ class SortValues(BaseSetIndexSortValues):
         "shuffle_method",
         "options",  # Options for the chosen shuffle method
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, AnyType]] = {
         "partition_size": 128e6,
         "ascending": True,
         "npartitions": None,
@@ -1005,7 +1007,7 @@ class SortValues(BaseSetIndexSortValues):
             # Protect against triggering calculations when we only have one division
             return (None, None)
 
-        divisions, mins, maxes, presorted = _get_divisions(
+        divisions, _mins, _maxes, presorted = _get_divisions(
             self.frame,
             self.frame[self.by[0]],
             self._npartitions_input,
@@ -1147,7 +1149,7 @@ class SetPartition(SetIndex):
         Divisions of the resulting expression.
     """
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "_other",
         "drop",
@@ -1202,8 +1204,13 @@ class SetPartition(SetIndex):
 
 
 class _SetPartitionsPreSetIndex(Blockwise):
-    _parameters = ["frame", "new_divisions", "ascending", "na_position"]
-    _defaults = {"ascending": True, "na_position": "last"}
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "new_divisions",
+        "ascending",
+        "na_position",
+    ]
+    _defaults: ClassVar[dict[str, AnyType]] = {"ascending": True, "na_position": "last"}
     operation = staticmethod(set_partitions_pre)
     _is_length_preserving = True
 
@@ -1213,7 +1220,7 @@ class _SetPartitionsPreSetIndex(Blockwise):
 
 
 class _SetIndexPost(Blockwise):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "index_name",
         "drop",
@@ -1261,15 +1268,15 @@ class _SetIndexPost(Blockwise):
 
 class SortIndexBlockwise(Blockwise):
     _projection_passthrough = True
-    _parameters = ["frame"]
+    _parameters: ClassVar[list[str]] = ["frame"]
     operation = M.sort_index
     _is_length_preserving = True
 
 
 class SortValuesBlockwise(Blockwise):
     _projection_passthrough = False
-    _parameters = ["frame", "sort_function", "sort_kwargs"]
-    _keyword_only = ["sort_function", "sort_kwargs"]
+    _parameters: ClassVar[list[str]] = ["frame", "sort_function", "sort_kwargs"]
+    _keyword_only: ClassVar[list[str]] = ["sort_function", "sort_kwargs"]
     _is_length_preserving = True
 
     @staticmethod
@@ -1284,9 +1291,19 @@ class SortValuesBlockwise(Blockwise):
 
 
 class SetIndexBlockwise(Blockwise):
-    _parameters = ["frame", "other", "drop", "new_divisions", "append"]
-    _defaults = {"append": False, "new_divisions": None, "drop": True}
-    _keyword_only = ["drop", "new_divisions", "append"]
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "other",
+        "drop",
+        "new_divisions",
+        "append",
+    ]
+    _defaults: ClassVar[dict[str, AnyType]] = {
+        "append": False,
+        "new_divisions": None,
+        "drop": True,
+    }
+    _keyword_only: ClassVar[list[str]] = ["drop", "new_divisions", "append"]
     _is_length_preserving = True
     _preserves_partitioning_information = True
 
@@ -1377,7 +1394,7 @@ def _calculate_divisions(
             ) from e
         # For numeric types there shouldn't be problems with nulls, so we raise as-it-is this particular TypeError
         else:
-            raise e
+            raise
 
     sizes = []  # type: ignore[var-annotated]
 

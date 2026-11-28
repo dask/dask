@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import contextlib
 import itertools as it
 import operator
 import warnings
@@ -344,7 +345,7 @@ def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
     if is_series_like(df) or columns is None:
         return func(g, **kwargs)
     else:
-        if isinstance(columns, (tuple, list, set, pd.Index)):
+        if isinstance(columns, (list, set, pd.Index)):
             columns = list(columns)
         return func(g[columns], **kwargs)
 
@@ -520,7 +521,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
     inv_col_mapping = {v: k for k, v in col_mapping.items()}
     idx_vals = result.index.names
-    idx_mapping = list()
+    idx_mapping = []
 
     # when index is None we probably have selected a particular column
     # df.groupby('a')[['b']].cov()
@@ -564,12 +565,10 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
 def _nunique_df_chunk(df, *by, **kwargs):
     name = kwargs.pop("name")
-    try:
+    with contextlib.suppress(Exception):
         # This is a lot faster but kind of a pain to implement when by
         # has a boolean series in it.
         return df.drop_duplicates(subset=list(by) + [name]).set_index(list(by))
-    except Exception:
-        pass
 
     g = _groupby_raise_unaligned(df, by=by, group_keys=True)
     if len(df) > 0:
@@ -683,7 +682,7 @@ def _normalize_spec(spec, non_group_columns):
                 )
 
     else:
-        raise ValueError(f"unsupported agg spec of type {type(spec)}")
+        raise TypeError(f"unsupported agg spec of type {type(spec)}")
 
     compounds = (list, tuple, dict)
     use_flat_columns = not any(
@@ -757,10 +756,10 @@ def _build_agg_args(spec):
         )
 
         # overwrite existing result-columns, generate intermediates only once
-        for spec in impls["chunk_funcs"]:
-            chunks[spec[0]] = spec
-        for spec in impls["aggregate_funcs"]:
-            aggs[spec[0]] = spec
+        for spec_i in impls["chunk_funcs"]:
+            chunks[spec_i[0]] = spec_i
+        for spec_i in impls["aggregate_funcs"]:
+            aggs[spec_i[0]] = spec_i
 
         finalizers.append(impls["finalizer"])
 
@@ -786,7 +785,7 @@ def _build_agg_args_single(result_column, func, func_args, func_kwargs, input_co
         ),  # No chunk func for median, we can only take it when aggregating
     }
 
-    if func in simple_impl.keys():
+    if func in simple_impl:
         return _build_agg_args_simple(
             result_column, func, input_column, simple_impl[func]
         )
@@ -818,23 +817,23 @@ def _build_agg_args_simple(result_column, func, input_column, impl_pair):
     intermediate = _make_agg_id(func, input_column)
     chunk_impl, agg_impl = impl_pair
 
-    return dict(
-        chunk_funcs=[
+    return {
+        "chunk_funcs": [
             (
                 intermediate,
                 _apply_func_to_column,
-                dict(column=input_column, func=chunk_impl),
+                {"column": input_column, "func": chunk_impl},
             )
         ],
-        aggregate_funcs=[
+        "aggregate_funcs": [
             (
                 intermediate,
                 _apply_func_to_column,
-                dict(column=intermediate, func=agg_impl),
+                {"column": intermediate, "func": agg_impl},
             )
         ],
-        finalizer=(result_column, itemgetter(intermediate), dict()),
-    )
+        "finalizer": (result_column, itemgetter(intermediate), {}),
+    }
 
 
 def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_column):
@@ -856,17 +855,21 @@ def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_colum
             f"aggregate function '{func}' supports {expected_kwargs} keyword arguments, but got {unexpected_kwargs}"
         )
 
-    return dict(
-        chunk_funcs=[
-            (int_sum, _apply_func_to_column, dict(column=input_column, func=M.sum)),
-            (int_count, _apply_func_to_column, dict(column=input_column, func=M.count)),
-            (int_sum2, _compute_sum_of_squares, dict(column=input_column)),
+    return {
+        "chunk_funcs": [
+            (int_sum, _apply_func_to_column, {"column": input_column, "func": M.sum}),
+            (
+                int_count,
+                _apply_func_to_column,
+                {"column": input_column, "func": M.count},
+            ),
+            (int_sum2, _compute_sum_of_squares, {"column": input_column}),
         ],
-        aggregate_funcs=[
-            (col, _apply_func_to_column, dict(column=col, func=M.sum))
+        "aggregate_funcs": [
+            (col, _apply_func_to_column, {"column": col, "func": M.sum})
             for col in (int_sum, int_count, int_sum2)
         ],
-        finalizer=(
+        "finalizer": (
             result_column,
             _finalize_var,
             dict(
@@ -876,7 +879,7 @@ def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_colum
                 **func_kwargs,
             ),
         ),
-    )
+    }
 
 
 def _build_agg_args_std(result_column, func, func_args, func_kwargs, input_column):
@@ -894,72 +897,76 @@ def _build_agg_args_mean(result_column, func, input_column):
     int_sum = _make_agg_id("sum", input_column)
     int_count = _make_agg_id("count", input_column)
 
-    return dict(
-        chunk_funcs=[
-            (int_sum, _apply_func_to_column, dict(column=input_column, func=M.sum)),
-            (int_count, _apply_func_to_column, dict(column=input_column, func=M.count)),
+    return {
+        "chunk_funcs": [
+            (int_sum, _apply_func_to_column, {"column": input_column, "func": M.sum}),
+            (
+                int_count,
+                _apply_func_to_column,
+                {"column": input_column, "func": M.count},
+            ),
         ],
-        aggregate_funcs=[
-            (col, _apply_func_to_column, dict(column=col, func=M.sum))
+        "aggregate_funcs": [
+            (col, _apply_func_to_column, {"column": col, "func": M.sum})
             for col in (int_sum, int_count)
         ],
-        finalizer=(
+        "finalizer": (
             result_column,
             _finalize_mean,
-            dict(sum_column=int_sum, count_column=int_count),
+            {"sum_column": int_sum, "count_column": int_count},
         ),
-    )
+    }
 
 
 def _build_agg_args_list(result_column, func, input_column):
     intermediate = _make_agg_id("list", input_column)
 
-    return dict(
-        chunk_funcs=[
+    return {
+        "chunk_funcs": [
             (
                 intermediate,
                 _apply_func_to_column,
-                dict(column=input_column, func=lambda s: s.apply(list)),
+                {"column": input_column, "func": lambda s: s.apply(list)},
             )
         ],
-        aggregate_funcs=[
+        "aggregate_funcs": [
             (
                 intermediate,
                 _apply_func_to_column,
-                dict(
-                    column=intermediate,
-                    func=lambda s0: s0.apply(
+                {
+                    "column": intermediate,
+                    "func": lambda s0: s0.apply(
                         lambda chunks: list(it.chain.from_iterable(chunks))
                     ),
-                ),
+                },
             )
         ],
-        finalizer=(result_column, itemgetter(intermediate), dict()),
-    )
+        "finalizer": (result_column, itemgetter(intermediate), {}),
+    }
 
 
 def _build_agg_args_custom(result_column, func, input_column):
     col = _make_agg_id(funcname(func), input_column)
 
     if func.finalize is None:
-        finalizer = (result_column, operator.itemgetter(col), dict())
+        finalizer = (result_column, operator.itemgetter(col), {})
 
     else:
         finalizer = (
             result_column,
             _apply_func_to_columns,
-            dict(func=func.finalize, prefix=col),
+            {"func": func.finalize, "prefix": col},
         )
 
-    return dict(
-        chunk_funcs=[
-            (col, _apply_func_to_column, dict(func=func.chunk, column=input_column))
+    return {
+        "chunk_funcs": [
+            (col, _apply_func_to_column, {"func": func.chunk, "column": input_column})
         ],
-        aggregate_funcs=[
-            (col, _apply_func_to_columns, dict(func=func.agg, prefix=col))
+        "aggregate_funcs": [
+            (col, _apply_func_to_columns, {"func": func.agg, "prefix": col})
         ],
-        finalizer=finalizer,
-    )
+        "finalizer": finalizer,
+    }
 
 
 def _groupby_apply_funcs(df, *by, **kwargs):

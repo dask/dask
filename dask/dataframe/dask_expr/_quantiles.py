@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from typing import Any, ClassVar
 
 import numpy as np
 import toolz
@@ -18,8 +19,13 @@ from dask.utils import random_state_data
 
 
 class RepartitionQuantiles(Expr):
-    _parameters = ["frame", "input_npartitions", "upsample", "random_state"]
-    _defaults = {"upsample": 1.0, "random_state": None}
+    _parameters: ClassVar[list[str]] = [
+        "frame",
+        "input_npartitions",
+        "upsample",
+        "random_state",
+    ]
+    _defaults: ClassVar[dict[str, Any]] = {"upsample": 1.0, "random_state": None}
 
     @functools.cached_property
     def _meta(self):
@@ -68,7 +74,7 @@ class RepartitionQuantiles(Expr):
             merge_dsk = {
                 (self._name, 2, 0): (
                     merge_and_compress_summaries,
-                    [list(percentiles_dsk)[0]],
+                    [next(iter(percentiles_dsk))],
                 )
             }
 

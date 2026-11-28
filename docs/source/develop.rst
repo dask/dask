@@ -159,6 +159,8 @@ experimental configurations::
    pixi run -e py313 test-ci
    pixi run -e py314 test-ci
    pixi run -e py314t test-ci
+   pixi run -e py315 test-ci
+   pixi run -e py315t test-ci
    pixi run -e nightly test-ci
 
 Note that, besides Python versions, these variant environments also test a
@@ -182,7 +184,7 @@ standards include language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.10 to 3.14.
+Dask supports Python versions 3.10 to 3.15.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 .. _develop-test:
@@ -288,7 +290,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are tested under Python 3.14 on GitHub Actions. You can test
+Docstrings are tested under Python 3.15 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
@@ -344,7 +346,7 @@ Install the packages in ``requirements-docs.txt``.
 
 Optionally create and activate a ``conda`` environment first::
 
-  conda create -n daskdocs -c conda-forge python=3.14
+  conda create -n daskdocs -c conda-forge python=3.15
   conda activate daskdocs
 
 Install the dependencies with ``pip``::

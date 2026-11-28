@@ -66,21 +66,21 @@ def test_polyfit_reshaping():
 def test_positional_indexer_multiple_variables():
     n = 200
     ds = xr.Dataset(
-        data_vars=dict(
-            a=(
+        data_vars={
+            "a": (
                 ["x", "y", "time"],
                 da.random.randint(1, 100, (10, 10, n), chunks=(-1, -1, n // 2)),
             ),
-            b=(
+            "b": (
                 ["x", "y", "time"],
                 da.random.randint(1, 100, (10, 10, n), chunks=(-1, -1, n // 2)),
             ),
-        ),
-        coords=dict(
-            x=list(range(10)),
-            y=list(range(10)),
-            time=np.arange(n),
-        ),
+        },
+        coords={
+            "x": list(range(10)),
+            "y": list(range(10)),
+            "time": np.arange(n),
+        },
     )
     indexer = np.arange(n)
     np.random.shuffle(indexer)
@@ -199,5 +199,5 @@ def test_tokenize_without_pyarrow() -> None:
         y['foo'] = y.foo.dims, y.foo.data + 1
         dask.optimize(y)
         """)
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True)
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, check=False)
     assert out.stderr == b""

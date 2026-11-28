@@ -807,7 +807,7 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
         )
     except TypeError:
         # Array type doesn't support structured arrays (e.g., CuPy)
-        result = dict()
+        result = {}
 
     result["vals"] = vals
     result["arg"] = arg
@@ -823,7 +823,7 @@ def arg_combine(argfunc, data, axis=None, **kwargs):
         )
     except TypeError:
         # Array type doesn't support structured arrays (e.g., CuPy).
-        result = dict()
+        result = {}
 
     result["vals"] = vals
     result["arg"] = arg
@@ -1076,7 +1076,7 @@ def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
     # Right now, the metadata for batches is incorrect, but this should be okay
     batches = x.map_blocks(preop, axis=axis, keepdims=True, dtype=dtype)
     # We don't need the last index until the end
-    *indices, last_index = full_indices = [
+    *indices, _last_index = full_indices = [
         list(
             product(
                 *[range(nb) if j != axis else [i] for j, nb in enumerate(x.numblocks)]
@@ -1246,7 +1246,7 @@ def cumreduction(
     indices = list(
         product(*[range(nb) if i != axis else [0] for i, nb in enumerate(x.numblocks)])
     )
-    dsk = dict()
+    dsk = {}
     for ind in indices:
         shape = tuple(x.chunks[i][ii] if i != axis else 1 for i, ii in enumerate(ind))
         dsk[(name, "extra") + ind] = (

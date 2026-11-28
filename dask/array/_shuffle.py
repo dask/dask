@@ -216,8 +216,8 @@ def _shuffle(chunks, indexer, axis, in_name, out_name, token):
         product(*(range(len(c)) for i, c in enumerate(chunks) if i != axis))
     )
 
-    intermediates = dict()
-    merges = dict()
+    intermediates = {}
+    merges = {}
     # The taker indices and argsort positions can range over the whole axis
     # length, not just a single chunk, so the dtype must cover the total size.
     dtype = np.min_scalar_type(sum(chunks[axis]))

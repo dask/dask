@@ -90,7 +90,7 @@ def test_config_set_value(
         config_file.parent.mkdir(parents=True, exist_ok=True)
         config_file.write_text(yaml.dump(expected_conf))
     else:
-        expected_conf = dict()
+        expected_conf = {}
         assert not config_file.exists()
 
     cmd = ["fizz.buzz", str(value)]
@@ -231,11 +231,22 @@ def test_register_command_ep():
         def load(self):
             raise ImportError("Entrypoint could not be imported")
 
+    class BrokenEP:
+        @property
+        def name(self):
+            return "bar"
+
+        def load(self):
+            raise RuntimeError("Entrypoint failed during import")
+
     with pytest.warns(UserWarning, match="must be instances of"):
         _register_command_ep(dummy_cli, bad_ep)
 
     with pytest.warns(UserWarning, match="exception occurred"):
         _register_command_ep(dummy_cli, ErrorEP())
+
+    with pytest.warns(UserWarning, match="exception occurred"):
+        _register_command_ep(dummy_cli, BrokenEP())
 
     _register_command_ep(dummy_cli, good_ep)
     assert "good" in dummy_cli.commands

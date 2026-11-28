@@ -346,7 +346,7 @@ def test_set_index_with_explicit_divisions():
     ddf = dd.from_pandas(df, npartitions=2)
 
     def throw(*args, **kwargs):
-        raise Exception()
+        raise RuntimeError()
 
     with dask.config.set(scheduler=throw):
         ddf2 = ddf.set_index("x", divisions=[1, 3, 5])
@@ -855,8 +855,9 @@ def test_disk_shuffle_with_compression_option(compression):
 
 def test_disk_shuffle_with_unknown_compression():
     # test if dask raises an error in case of fault config string
-    with dask.config.set({"dataframe.shuffle.compression": "UNKNOWN_COMPRESSION_ALGO"}):
-        with pytest.raises(
+    with (
+        dask.config.set({"dataframe.shuffle.compression": "UNKNOWN_COMPRESSION_ALGO"}),
+        pytest.raises(
             ImportError,
             match=(
                 "Not able to import and load {} as compression algorithm."
@@ -864,8 +865,9 @@ def test_disk_shuffle_with_unknown_compression():
                     "UNKNOWN_COMPRESSION_ALGO"
                 )
             ),
-        ):
-            shuffle_func(d, d.b, shuffle_method="disk").compute()
+        ),
+    ):
+        shuffle_func(d, d.b, shuffle_method="disk").compute()
 
 
 def test_disk_shuffle_check_actual_compression():
@@ -985,9 +987,9 @@ def test_compute_current_divisions_overlap():
     a = dd.from_pandas(A, npartitions=2)
     with pytest.warns(UserWarning, match="Partitions have overlapping values"):
         divisions = a.compute_current_divisions("key")
-        b = a.set_index("key", divisions=divisions)
-        assert b.divisions == (1, 4, 7)
-        assert [len(p) for p in b.partitions] == [3, 5]
+    b = a.set_index("key", divisions=divisions)
+    assert b.divisions == (1, 4, 7)
+    assert [len(p) for p in b.partitions] == [3, 5]
 
 
 def test_compute_current_divisions_overlap_2():
@@ -1250,7 +1252,7 @@ def test_sort_values_timestamp(npartitions):
             [pd.Timestamp("2022-01-01"), pd.Timestamp("2023-01-02")],
             "timestamp[ns][pyarrow]",
         ),
-        ([Decimal("5"), Decimal("6.24")], "decimal128"),
+        ([Decimal(5), Decimal("6.24")], "decimal128"),
         ([pd.Timedelta("1 day"), pd.Timedelta("20 days")], "duration[ns][pyarrow]"),
         ([time(12, 0), time(0, 12)], "time64[ns][pyarrow]"),
     ],

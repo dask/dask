@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import operator
+from typing import Any, ClassVar
 
 import numpy as np
 import toolz
@@ -22,7 +23,7 @@ from dask.utils import cached_property
 
 
 class Rechunk(ArrayExpr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "array",
         "_chunks",
         "threshold",
@@ -31,7 +32,7 @@ class Rechunk(ArrayExpr):
         "method",
     ]
 
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "_chunks": "auto",
         "threshold": None,
         "block_size_limit": None,
@@ -59,9 +60,7 @@ class Rechunk(ArrayExpr):
         if isinstance(chunks, dict):
             chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
             for i in range(x.ndim):
-                if i not in chunks:
-                    chunks[i] = x.chunks[i]
-                elif chunks[i] is None:
+                if i not in chunks or chunks[i] is None:
                     chunks[i] = x.chunks[i]
         if isinstance(chunks, (tuple, list)):
             chunks = tuple(
@@ -102,7 +101,12 @@ class Rechunk(ArrayExpr):
 
 
 class TasksRechunk(Rechunk):
-    _parameters = ["array", "_chunks", "threshold", "block_size_limit"]
+    _parameters: ClassVar[list[str]] = [
+        "array",
+        "_chunks",
+        "threshold",
+        "block_size_limit",
+    ]
 
     @cached_property
     def chunks(self):
@@ -141,8 +145,8 @@ def _compute_rechunk(old_name, old_chunks, chunks, level, name):
 
     ndim = len(old_chunks)
     crossed = intersect_chunks(old_chunks, chunks)
-    x2 = dict()
-    intermediates = dict()
+    x2 = {}
+    intermediates = {}
     # token = tokenize(old_name, chunks)
     if level != 0:
         merge_name = name.replace("rechunk-merge-", f"rechunk-merge-{level}-")

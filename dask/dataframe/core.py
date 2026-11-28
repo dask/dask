@@ -41,7 +41,7 @@ def _concat(args, ignore_index=False):
     if not has_parallel_type(args[0]):
         try:
             return pd.Series(args)
-        except Exception:
+        except (OverflowError, TypeError, ValueError):
             return args
     # We filter out empty partitions here because pandas frequently has
     # inconsistent dtypes in results between empty and non-empty frames.
@@ -82,11 +82,12 @@ def _get_divisions_map_partitions(
             )
             if isinstance(divisions, pd.Index):
                 divisions = methods.tolist(divisions)
-        except Exception:
-            pass
-        else:
-            if not valid_divisions(divisions):
-                divisions = [None] * (dfs[0].npartitions + 1)
+        # Transforming divisions calls user functions; keep the input divisions
+        # on any failure rather than breaking graph construction.
+        except Exception:  # noqa: BLE001
+            return divisions
+        if not valid_divisions(divisions):
+            divisions = [None] * (dfs[0].npartitions + 1)
     return divisions
 
 
@@ -205,9 +206,10 @@ def _cov_corr_combine(data_in, corr=False):
     if corr:
         data["m"] = None
 
-    for k in data.keys():
-        data[k] = [d[k] for d in data_in]
-        data[k] = np.concatenate(data[k]).reshape((len(data[k]),) + data[k][0].shape)
+    data = {k: [d[k] for d in data_in] for k in data}
+    data = {
+        k: np.concatenate(v).reshape((len(v),) + v[0].shape) for k, v in data.items()
+    }
 
     sums = np.nan_to_num(data["sum"])
     counts = data["count"]
@@ -257,7 +259,7 @@ def _cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=N
 
 def check_divisions(divisions):
     if not isinstance(divisions, (list, tuple)):
-        raise ValueError("New division must be list or tuple")
+        raise TypeError("New division must be list or tuple")
     divisions = list(divisions)
     if len(divisions) == 0:
         raise ValueError("New division must not be empty")

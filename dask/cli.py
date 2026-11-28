@@ -23,7 +23,6 @@ CONTEXT_SETTINGS = {
 @click.version_option(__version__)
 def cli():
     """Dask command line interface."""
-    pass
 
 
 @cli.command()
@@ -37,7 +36,6 @@ def docs():
 @cli.group()
 def info():
     """Information about your dask installation."""
-    pass
 
 
 @info.command()
@@ -51,7 +49,6 @@ def versions():
 @cli.group()
 def config():
     """Dask config settings"""
-    pass
 
 
 @config.command(name="get")
@@ -175,7 +172,9 @@ def _register_command_ep(interface, entry_point):
     """
     try:
         command = entry_point.load()
-    except Exception as e:
+    # Entry points execute third-party import code that can raise anything.
+    # Keep the CLI usable by warning and skipping instead of aborting startup.
+    except Exception as e:  # noqa: BLE001
         warnings.warn(
             f"While registering the command with name '{entry_point.name}', an "
             f"exception occurred; {e}."

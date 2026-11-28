@@ -37,15 +37,14 @@ def _calc_maybe_new_divisions(df, periods, freq):
     if isinstance(freq, str):
         freq = pd.tseries.frequencies.to_offset(freq)
 
-    is_offset = isinstance(freq, pd.DateOffset)
-    if is_offset:
-        if not isinstance(freq, (pd.offsets.Tick, pd.offsets.Day)):
-            # Can't infer divisions on relative or anchored offsets, as
-            # divisions may now split identical index value.
-            # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
-            # As of https://github.com/pandas-dev/pandas/pull/61985
-            # Day doesn't subclass Tick.
-            return None  # Would need to clear divisions
+    is_offset = isinstance(freq, pd.offsets.BaseOffset)
+    if is_offset and not isinstance(freq, (pd.offsets.Tick, pd.offsets.Day)):
+        # Can't infer divisions on relative or anchored offsets, as
+        # divisions may now split identical index value.
+        # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
+        # As of https://github.com/pandas-dev/pandas/pull/61985
+        # Day doesn't subclass Tick.
+        return None  # Would need to clear divisions
     if df.known_divisions:
         divs = pd.Series(range(len(df.divisions)), index=df.divisions)
         divisions = divs.shift(periods, freq=freq).index

@@ -566,7 +566,7 @@ def test_reductions_with_empty_array():
 
 
 def assert_max_deps(x, n, eq=True):
-    dependencies, dependents = get_deps(x.dask)
+    dependencies, _dependents = get_deps(x.dask)
     if eq:
         assert max(map(len, dependencies.values())) == n
     else:
@@ -662,7 +662,7 @@ def test_array_cumreduction_axis(func, use_nan, axis, method):
     if func in ["cumprod", "nancumprod"] and method == "blelloch" and axis is None:
         with pytest.warns(RuntimeWarning):
             da_func(d, axis=axis, method=method).compute()
-            return
+        return
 
     a_r = np_func(a, axis=axis)
     d_r = da_func(d, axis=axis, method=method)

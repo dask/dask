@@ -23,7 +23,7 @@ from dask._compatibility import PY_VERSION
 from dask.core import flatten, literal
 from dask.tokenize import TokenizationError, normalize_token, tokenize
 from dask.utils import tmpfile
-from dask.utils_test import import_or_none
+from dask.utils_test import assert_scipy_sparse_matrix_deprecated, import_or_none
 
 da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")
@@ -287,11 +287,13 @@ def test_normalize_numpy_ufunc_unserializable():
         # You can call normalize_token directly
         assert normalize_token(inc) != normalize_token(inc)
 
-    with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(
+    with (
+        dask.config.set({"tokenize.ensure-deterministic": True}),
+        pytest.raises(
             TokenizationError, match=r"Cannot tokenize.*dask\.array\.ufunc.*instead"
-        ):
-            tokenize(inc)
+        ),
+    ):
+        tokenize(inc)
 
     # Test env override
     assert tokenize(inc, ensure_deterministic=False) != tokenize(
@@ -314,11 +316,11 @@ def test_normalize_object_unserializable():
         # You can call normalize_token directly
         assert normalize_token(c) != normalize_token(c)
 
-    with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(
-            TokenizationError, match="cannot be deterministically hashed"
-        ):
-            tokenize(c)
+    with (
+        dask.config.set({"tokenize.ensure-deterministic": True}),
+        pytest.raises(TokenizationError, match="cannot be deterministically hashed"),
+    ):
+        tokenize(c)
 
     # Test env override
     assert tokenize(c, ensure_deterministic=False) != tokenize(
@@ -1032,9 +1034,7 @@ def test_tokenize_object_array_with_nans():
     check_tokenize(a)
 
 
-@pytest.mark.parametrize(
-    "x", [1, True, "a", b"a", 1.0, 1j, 1.0j, [], (), {}, None, str, int]
-)
+@pytest.mark.parametrize("x", [1, True, "a", b"a", 1.0, 1j, [], (), {}, None, str, int])
 def test_tokenize_base_types(x):
     check_tokenize(x)
 
@@ -1060,26 +1060,27 @@ def test_tokenize_numpy_matrix():
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
-    a = sp.rand(10, 100, random_state=rng).asformat(cls_name)
-    b = a.copy()
+    with assert_scipy_sparse_matrix_deprecated():
+        a = sp.rand(10, 100, random_state=rng).asformat(cls_name)
+        b = a.copy()
 
-    assert check_tokenize(a) == check_tokenize(b)
+        assert check_tokenize(a) == check_tokenize(b)
 
-    # modifying the data values
-    if hasattr(b, "data"):
-        b.data[:10] = 1
-    elif cls_name == "dok":
-        b[3, 3] = 1
-    else:
-        raise ValueError
-    check_tokenize(b)
-    assert check_tokenize(a) != check_tokenize(b)
+        # modifying the data values
+        if hasattr(b, "data"):
+            b.data[:10] = 1
+        elif cls_name == "dok":
+            b[3, 3] = 1
+        else:
+            raise ValueError
+        check_tokenize(b)
+        assert check_tokenize(a) != check_tokenize(b)
 
-    # modifying the data indices
-    b = a.copy().asformat("coo")
-    b.row[:10] = np.arange(10)
-    b = b.asformat(cls_name)
-    assert check_tokenize(a) != check_tokenize(b)
+        # modifying the data indices
+        b = a.copy().asformat("coo")
+        b.row[:10] = np.arange(10)
+        b = b.asformat(cls_name)
+        assert check_tokenize(a) != check_tokenize(b)
 
 
 def test_tokenize_circular_recursion():
@@ -1234,8 +1235,7 @@ def test_tokenize_functions_main():
     result2 = tokenize(func)
     assert result != result2
     """
-    proc = subprocess.run([sys.executable, "-c", textwrap.dedent(script)])
-    proc.check_returncode()
+    subprocess.check_call([sys.executable, "-c", textwrap.dedent(script)])
 
 
 def test_tokenize_dataclass_field_no_repr():
@@ -1406,12 +1406,11 @@ all_numba_funcs = [
 def test_tokenize_numba(func):
     assert func(1, 2) == 3
     check_tokenize(func)
-    for func in all_numba_funcs:
-        tokens = normalize_token(func)
 
-        # Ensure that we attempt to tokenize it instead of dumping it into pickle
-        assert isinstance(tokens, tuple)
-        assert isinstance(tokens[1], tuple)
+    tokens = normalize_token(func)
+    # Ensure that we attempt to tokenize it instead of dumping it into pickle
+    assert isinstance(tokens, tuple)
+    assert isinstance(tokens[1], tuple)
 
 
 @pytest.mark.skipif("not numba")

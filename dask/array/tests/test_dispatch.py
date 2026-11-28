@@ -32,7 +32,7 @@ def dispatch_property(prop_name):
     """
 
     @property
-    def wrapped(self, *a, **kw):
+    def wrapped(self):
         return getattr(self.arr, prop_name)
 
     return wrapped

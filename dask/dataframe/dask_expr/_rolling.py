@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 from collections import namedtuple
 from numbers import Integral
+from typing import Any, ClassVar
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
@@ -43,7 +44,7 @@ def _rolling_agg(
 
 
 class RollingReduction(Expr):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "window",
         "kwargs",
@@ -52,7 +53,7 @@ class RollingReduction(Expr):
         "groupby_kwargs",
         "groupby_slice",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "kwargs": None,
         "how_args": (),
         "how_kwargs": None,
@@ -141,20 +142,20 @@ class RollingReduction(Expr):
             after=after,
             meta=self._meta,
             enforce_metadata=True,
-            kwargs=dict(
-                window=self.window,
-                kwargs=self.kwargs,
-                how=self.how,
-                how_args=self.how_args,
-                how_kwargs=self.how_kwargs,
-                groupby_kwargs=self.groupby_kwargs,
-                groupby_slice=self.groupby_slice,
-            ),
+            kwargs={
+                "window": self.window,
+                "kwargs": self.kwargs,
+                "how": self.how,
+                "how_args": self.how_args,
+                "how_kwargs": self.how_kwargs,
+                "groupby_kwargs": self.groupby_kwargs,
+                "groupby_slice": self.groupby_slice,
+            },
         )
 
 
 class RollingAggregation(Blockwise):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "window",
         "kwargs",
@@ -269,9 +270,11 @@ class Rolling:
 
     @functools.cached_property
     def kwargs(self):
-        return dict(
-            min_periods=self.min_periods, center=self.center, win_type=self.win_type
-        )
+        return {
+            "min_periods": self.min_periods,
+            "center": self.center,
+            "win_type": self.win_type,
+        }
 
     def _single_agg(self, expr_cls, how_args=(), how_kwargs=None):
         return new_collection(

@@ -104,7 +104,7 @@ def _optimize_slices(dsk):
     """
     fancy_ind_types = (list, np.ndarray)
     dsk = dsk.copy()
-    for _, v in dsk.items():
+    for v in dsk.values():
         if not (isinstance(v, Task) and v.func is _execute_subgraph):
             continue
 
@@ -300,7 +300,7 @@ def fuse_slice(a, b):
             check_for_nonfusible_fancy_indexing(b, a)
 
         j = 0
-        result = list()
+        result = []
         for i in range(len(a)):
             #  axis ceased to exist  or we're out of b
             if isinstance(a[i], Integral) or j == len(b):

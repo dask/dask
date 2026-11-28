@@ -116,7 +116,7 @@ def coerce_dtypes(df, dtypes):
             else:
                 try:
                     df[c] = df[c].astype(dtypes[c])
-                except Exception as e:
+                except (OverflowError, TypeError, ValueError) as e:
                     bad_dtypes.append((c, actual, desired))
                     errors.append((c, e))
 
@@ -450,7 +450,7 @@ def read_pandas(
     ):
         raise ValueError(
             "Keywords 'index' and 'index_col' not supported, except for "
-            "'index_col=False'. Use dd.{reader_name}(...).set_index('my-index') instead"
+            f"'index_col=False'. Use dd.{reader_name}(...).set_index('my-index') instead"
         )
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
@@ -934,7 +934,7 @@ def to_csv(
         )
     if compute:
         if compute_kwargs is None:
-            compute_kwargs = dict()
+            compute_kwargs = {}
 
         if scheduler is not None:
             warn(

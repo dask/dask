@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import functools
+import itertools
 import math
 import operator
+from typing import Any, ClassVar
 
 import numpy as np
 import pyarrow as pa
@@ -43,7 +45,13 @@ class FromGraph(IO):
     conversion from legacy dataframes.
     """
 
-    _parameters = ["layer", "_meta", "divisions", "keys", "name_prefix"]
+    _parameters: ClassVar[list[str]] = [
+        "layer",
+        "_meta",
+        "divisions",
+        "keys",
+        "name_prefix",
+    ]
 
     @property
     def _meta(self):
@@ -112,7 +120,7 @@ class BlockwiseIO(Blockwise, IO):
 
 
 class FusedIO(BlockwiseIO):
-    _parameters = ["_expr"]
+    _parameters: ClassVar[list[str]] = ["_expr"]
 
     @functools.cached_property
     def _name(self):
@@ -167,7 +175,7 @@ class FusedIO(BlockwiseIO):
 
         buckets = [
             partitions[start:end]
-            for (start, end) in zip(partition_boundaries, partition_boundaries[1:])
+            for (start, end) in itertools.pairwise(partition_boundaries)
         ]
         return buckets
 
@@ -176,7 +184,7 @@ class FusedIO(BlockwiseIO):
 
 
 class FusedParquetIO(FusedIO):
-    _parameters = ["_expr"]
+    _parameters: ClassVar[list[str]] = ["_expr"]
 
     @functools.cached_property
     def _name(self):
@@ -235,7 +243,7 @@ class FusedParquetIO(FusedIO):
 
 
 class FromMap(PartitionsFiltered, BlockwiseIO):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "func",
         "iterables",
         "args",
@@ -246,7 +254,7 @@ class FromMap(PartitionsFiltered, BlockwiseIO):
         "label",
         "_partitions",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "user_meta": no_default,
         "enforce_metadata": False,
         "user_divisions": None,
@@ -316,7 +324,7 @@ class FromMap(PartitionsFiltered, BlockwiseIO):
 
 
 class FromMapProjectable(FromMap):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "func",
         "iterables",
         "columns",
@@ -330,7 +338,7 @@ class FromMapProjectable(FromMap):
         "_partitions",
         "_series",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "user_meta": no_default,
         "enforce_metadata": False,
         "user_divisions": None,
@@ -407,7 +415,7 @@ class FromMapProjectable(FromMap):
 class FromPandas(PartitionsFiltered, BlockwiseIO):
     """The only way today to get a real dataframe"""
 
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "npartitions",
         "sort",
@@ -418,7 +426,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
         "_series",
         "_pd_length_stats",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "npartitions": None,
         "sort": True,
         "columns": None,
@@ -487,7 +495,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
                 if npartitions is None:
                     chunksize = self.operand("chunksize")
                 else:
-                    chunksize = int(math.ceil(nrows / npartitions))
+                    chunksize = math.ceil(nrows / npartitions)
                 locations = list(range(0, nrows, chunksize)) + [len(data)]
                 divisions = (None,) * len(locations)
             _division_info_cache[key] = divisions, locations
@@ -551,7 +559,7 @@ class FromPandas(PartitionsFiltered, BlockwiseIO):
 
 
 class FromPandasDivisions(FromPandas):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "divisions",
         "columns",
@@ -560,7 +568,7 @@ class FromPandasDivisions(FromPandas):
         "_series",
         "_pd_length_stats",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "columns": None,
         "_partitions": None,
         "_series": False,
@@ -590,7 +598,7 @@ class FromPandasDivisions(FromPandas):
 
 
 class FromScalars(IO):
-    _parameters = ["meta", "names"]
+    _parameters: ClassVar[list[str]] = ["meta", "names"]
 
     @property
     def _scalars(self):
@@ -631,7 +639,7 @@ class FromScalars(IO):
 
 
 class FromArray(PartitionsFiltered, BlockwiseIO):
-    _parameters = [
+    _parameters: ClassVar[list[str]] = [
         "frame",
         "chunksize",
         "original_columns",
@@ -639,7 +647,7 @@ class FromArray(PartitionsFiltered, BlockwiseIO):
         "columns",
         "_partitions",
     ]
-    _defaults = {
+    _defaults: ClassVar[dict[str, Any]] = {
         "chunksize": 50_000,
         "original_columns": None,
         "meta": None,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import fnmatch
 import io
 import operator
@@ -20,6 +21,7 @@ from dask.dataframe._compat import (
     PANDAS_GE_220,
     PANDAS_GE_300,
     PANDAS_GE_310,
+    PANDAS_GE_320,
 )
 from dask.dataframe.dask_expr import (
     DataFrame,
@@ -1012,7 +1014,7 @@ def test_clip_traverse_filters(df):
     assert result._name == expected._name
 
 
-@pytest.mark.parametrize("projection", ["zz", ["zz"], ["zz", "x"], "zz"])
+@pytest.mark.parametrize("projection", ["zz", ["zz"], ["zz", "x"]])
 @pytest.mark.parametrize("subset", ["x", ["x"]])
 def test_drop_duplicates_subset_simplify(pdf, subset, projection):
     pdf["zz"] = 1
@@ -1371,8 +1373,18 @@ def test_series_iter(df, pdf):
 
 
 def test_dataframe_iterrows(df, pdf):
-    for a, b in zip(df.iterrows(), pdf.iterrows()):
-        pd.testing.assert_series_equal(a[1], b[1])
+    if PANDAS_GE_320:
+        # pandas 3.2 deprecated DataFrame.iterrows. Dask yields from the pandas
+        # implementation, so the warning must surface rather than be suppressed.
+        from pandas.errors import Pandas4Warning
+
+        ctx = pytest.warns(Pandas4Warning, match="iterrows is deprecated")
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        for a, b in zip(df.iterrows(), pdf.iterrows()):
+            pd.testing.assert_series_equal(a[1], b[1])
 
 
 def test_dataframe_itertuples(df, pdf):
@@ -1584,12 +1596,12 @@ def test_values():
 
     if pyarrow_strings_enabled() or PANDAS_GE_300:
         with pytest.warns(UserWarning, match="extension dtypes"):
-            assert_eq(df.values, pdf.values)
-            values = df.x.values
-            if not PANDAS_GE_300:
-                # https://github.com/dask/dask/issues/2713
-                # dask lacks an extension array type.
-                assert_eq(values, pdf.x.values)
+            values = df.values, df.x.values
+        assert_eq(values[0], pdf.values)
+        if not PANDAS_GE_300:
+            # https://github.com/dask/dask/issues/2713
+            # dask lacks an extension array type.
+            assert_eq(values[1], pdf.x.values)
     else:
         assert_eq(df.values, pdf.values)
         assert_eq(df.x.values, pdf.x.values)
@@ -2282,7 +2294,7 @@ def test_combine():
     first = lambda a, b: a
 
     # You can add series with strings and nans but you can't add scalars 'a' + np.nan
-    str_add = lambda a, b: a + b if a is not np.nan else a
+    str_add = lambda a, b: a + b if a is not np.nan else a  # noqa: PLW0177
 
     # DataFrame
     for dda, ddb, a, b, runs in [
@@ -2579,9 +2591,11 @@ def test_warn_annotations():
 
     dask.dataframe.dask_expr._collection._WARN_ANNOTATIONS = True
 
-    with pytest.warns(UserWarning, match="annotations.*retries.*ignore"):
-        with dask.annotate(retries=3):
-            from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
+    with (
+        pytest.warns(UserWarning, match="annotations.*retries.*ignore"),
+        dask.annotate(retries=3),
+    ):
+        from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
     # Don't warn a second time
     with dask.annotate(retries=3):
         from_pandas(pd.DataFrame({"a": [1, 2, 3]}), npartitions=2)
@@ -2630,12 +2644,12 @@ def test_shape_integer(df):
     "kwargs",
     [
         {},
-        dict(id_vars="int"),
-        dict(value_vars="int"),
-        dict(value_vars=["obj", "int"], var_name="myvar"),
-        dict(id_vars="s1", value_vars=["obj", "int"], value_name="myval"),
-        dict(value_vars=["obj", "s1"]),
-        dict(value_vars=["s1", "s2"]),
+        {"id_vars": "int"},
+        {"value_vars": "int"},
+        {"value_vars": ["obj", "int"], "var_name": "myvar"},
+        {"id_vars": "s1", "value_vars": ["obj", "int"], "value_name": "myval"},
+        {"value_vars": ["obj", "s1"]},
+        {"value_vars": ["s1", "s2"]},
     ],
 )
 def test_melt(kwargs):

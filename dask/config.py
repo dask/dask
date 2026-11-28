@@ -181,7 +181,9 @@ def _load_config_file(path: str) -> dict | None:
     except OSError:
         # Ignore permission errors
         return None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        # PyYAML scalar constructors do not share an exception type. Include the
+        # config path even for errors such as KeyError from an invalid !!bool.
         raise ValueError(
             f"A dask config file at {path!r} is malformed, original error "
             f"message:\n\n{exc}"
@@ -437,12 +439,12 @@ class set:
         return self.config
 
     def __exit__(self, type, value, traceback):
-        for op, path, value in reversed(self._record):
+        for op, path, rec_value in reversed(self._record):
             d = self.config
             if op == "replace":
                 for key in path[:-1]:
                     d = d.setdefault(key, {})
-                d[path[-1]] = value
+                d[path[-1]] = rec_value
             else:  # insert
                 for key in path[:-1]:
                     try:
