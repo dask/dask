@@ -1030,6 +1030,75 @@ def test_aggregate_median(spec, keys, shuffle_method):
     assert_eq(actual, expected)
 
 
+@pytest.mark.parametrize("split_out", [1, 2])
+@pytest.mark.parametrize("groupby_kind", ["dataframe", "selected_series", "series"])
+def test_aggregate_median_and_custom(
+    split_out: int, groupby_kind: str, shuffle_method: str
+) -> None:
+    pdf = pd.DataFrame(
+        {
+            "g": [1.0, 2.0, np.nan, 1.0, np.nan, 2.0],
+            "a": [1, 4, 3, 8, 5, 7],
+            "b": [2, 3, 4, 5, 6, 7],
+        }
+    )
+    custom_mean = dd.Aggregation(
+        "mean",
+        lambda grouped: (grouped.sum(), grouped.count()),
+        lambda total, count: (total.sum(), count.sum()),
+        lambda total, count: total / count,
+    )
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    grouped = ddf.groupby("g", dropna=False)
+    expected_grouped = pdf.groupby("g", dropna=False)
+    if groupby_kind != "dataframe":
+        series_grouped = (
+            ddf["a"].groupby(ddf["g"], dropna=False)
+            if groupby_kind == "series"
+            else grouped["a"]
+        )
+        result = series_grouped.agg(
+            [custom_mean, "median"], split_out=split_out, shuffle_method=shuffle_method
+        )
+        expected = expected_grouped["a"].agg(["mean", "median"])
+    else:
+        result = grouped.agg(
+            {"a": [custom_mean, "median"], "b": "max"},
+            split_out=split_out,
+            shuffle_method=shuffle_method,
+        )
+        expected = expected_grouped.agg({"a": ["mean", "median"], "b": "max"})
+
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("split_out", [1, 2])
+@pytest.mark.parametrize("groupby_kind", ["dataframe", "multiple_keys", "series"])
+def test_aggregate_median_and_custom_unobserved(
+    split_out: int, groupby_kind: str, shuffle_method: str
+) -> None:
+    pdf = pd.DataFrame(
+        {
+            "g": pd.Categorical(["a", "a", "b", "b"], categories=["a", "b", "c"]),
+            "k": [1, 2, 2, 3],
+            "v": [3.0, np.nan, 7.0, 4.0],
+        }
+    )
+    custom_size = dd.Aggregation("size", lambda grouped: grouped.size(), M.sum)
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    keys = ["g", "k"] if groupby_kind == "multiple_keys" else "g"
+    if groupby_kind == "series":
+        grouped = ddf["v"].groupby(ddf["g"], observed=False)
+    else:
+        grouped = ddf.groupby(keys, observed=False)["v"]
+    result = grouped.agg(
+        [custom_size, "median"], split_out=split_out, shuffle_method=shuffle_method
+    )
+    expected = pdf.groupby(keys, observed=False)["v"].agg(["size", "median"])
+
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("group_keys", [True, False, None])
 @pytest.mark.parametrize("limit", [None, 1, 4])
 def test_ffill(group_keys, limit):

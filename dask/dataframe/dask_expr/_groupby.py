@@ -79,6 +79,7 @@ from dask.dataframe.groupby import (
     _var_agg,
     _var_chunk,
 )
+from dask.dataframe.groupby import Aggregation as CustomAggregation
 from dask.dataframe.utils import insert_meta_param_description, is_scalar
 from dask.typing import Key
 from dask.utils import M, derived_from, is_index_like
@@ -493,23 +494,49 @@ class HolisticGroupbyAggregation(GroupbyAggregationBase):
     def aggregate(cls, inputs, **kwargs):
         return _groupby_aggregate_spec(_concat(inputs), **kwargs)
 
+    @functools.cached_property
+    def _has_custom_aggregation(self):
+        return any(isinstance(func, CustomAggregation) for _, func, _ in self.spec)
+
+    @functools.cached_property
+    def _padding_column(self):
+        if self.observed is False and self._has_custom_aggregation:
+            columns = set(self.frame.columns) | set(self._by_columns)
+            column = "__dask_groupby_padding__"
+            while column in columns:
+                column += "_"
+            return column
+        return None
+
     @property
     def chunk_kwargs(self) -> dict:  # type: ignore[override]
         return {
             "by": self._by_columns,
             "key": [col for col in self.frame.columns if col not in self._by_columns],
+            **_as_dict("padding_column", self._padding_column),
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
         }
 
     @property
     def aggregate_kwargs(self) -> dict:  # type: ignore[override]
-        return {
+        kwargs = {
             "spec": self.arg,
             "levels": _determine_levels(self.by),
             **_as_dict("observed", self.observed),
             **_as_dict("dropna", self.dropna),
         }
+        if self._has_custom_aggregation:
+            kwargs["normalized_spec"] = self.spec
+            kwargs["series_input"] = is_series_like(self.frame._meta)
+            kwargs.update(_as_dict("padding_column", self._padding_column))
+            if (
+                self._slice is not None
+                and is_scalar(self._slice)
+                and is_dataframe_like(self.frame._meta)
+            ):
+                kwargs["series_column"] = self._slice
+        return kwargs
 
 
 class DecomposableGroupbyAggregation(GroupbyAggregationBase):
