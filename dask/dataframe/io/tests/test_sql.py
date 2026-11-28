@@ -368,6 +368,56 @@ def test_datetimes():
         )
 
 
+@pytest.mark.parametrize("step_us", [1_000_000, 100, 0])
+@pytest.mark.parametrize("index_col_as_string", [True, False])
+def test_read_sql_query_datetime_index(tmp_path, step_us, index_col_as_string):
+    import sqlalchemy as sa
+
+    uri = f"sqlite:///{tmp_path / 'dates.db'}"
+    df = pd.DataFrame(
+        {
+            "date": pd.Timestamp("2024-01-01")
+            + pd.to_timedelta(np.arange(4) * step_us, unit="us"),
+            "value": [1, 2, 3, 4],
+        }
+    )
+    engine = sa.create_engine(uri)
+    df.to_sql("test", engine, index=False)
+    table = sa.Table("test", sa.MetaData(), autoload_with=engine)
+    query = sa.select(table.c.date, table.c.value)
+    expected = pd.read_sql(query, engine, index_col="date")
+    engine.dispose()
+
+    index_col = "date" if index_col_as_string else table.c.date
+    result = read_sql_query(query, uri, index_col=index_col, npartitions=3)
+    assert result.npartitions == (3 if step_us else 1)
+    assert_eq(result, expected)
+
+
+@pytest.mark.skipif(
+    not PANDAS_GE_300, reason="Year 1 requires microsecond dtype inference"
+)
+def test_read_sql_query_datetime_divisions_keep_exact_bounds(tmp_path):
+    from datetime import datetime
+
+    import sqlalchemy as sa
+
+    uri = f"sqlite:///{tmp_path / 'dates.db'}"
+    dates = [datetime.min, datetime(2024, 1, 1, microsecond=1)]
+    df = pd.DataFrame({"date": dates, "value": [1, 2]})
+    engine = sa.create_engine(uri)
+    df.to_sql("test", engine, index=False)
+    table = sa.Table("test", sa.MetaData(), autoload_with=engine)
+    query = sa.select(table.c.date, table.c.value)
+    expected = pd.read_sql(query, engine, index_col="date")
+    engine.dispose()
+
+    result = read_sql_query(query, uri, index_col="date", npartitions=2)
+    assert_eq(result, expected)
+    assert result.npartitions == 2
+    assert (result.divisions[0], result.divisions[-1]) == tuple(expected.index)
+
+
 def test_extra_connection_engine_keywords(caplog, db):
     data = read_sql_table(
         "test", db, npartitions=2, index_col="number", engine_kwargs={"echo": False}
