@@ -430,6 +430,17 @@ def matmul(a, b):
         b_is_1d = True
         b = b[:, np.newaxis]
 
+    left_size = a.shape[-1]
+    right_size = b.shape[-2]
+    if (
+        left_size != right_size
+        and isinstance(left_size, Integral)
+        and isinstance(right_size, Integral)
+    ):
+        raise ValueError(
+            f"matmul: core dimension mismatch ({left_size} != {right_size})"
+        )
+
     if a.ndim < b.ndim:
         a = a[(b.ndim - a.ndim) * (np.newaxis,)]
     elif a.ndim > b.ndim:
