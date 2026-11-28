@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -405,6 +406,70 @@ def test_calculate_divisions_no_index(tmpdir, write_engine, read_engine):
     df = dd.read_parquet(fn, engine=read_engine, index=False)
     assert df.index.name is None
     assert not df.known_divisions
+
+
+@PYARROW_MARK
+def test_infer_schema_for_high_cardinality_categories(tmp_path: Path) -> None:
+    left = pd.DataFrame({"name": [f"left-{i}" for i in range(150)]})
+    right = pd.DataFrame({"name": [f"right-{i}" for i in range(150)]})
+    ddf = dd.concat(
+        [dd.from_pandas(left, npartitions=1), dd.from_pandas(right, npartitions=1)]
+    ).astype("category")
+    assert not ddf["name"].cat.known
+    path = tmp_path / "categories"
+
+    ddf.to_parquet(path, write_index=False)
+    ddf.to_parquet(path, append=True, write_index=False, ignore_divisions=True)
+    result = dd.read_parquet(path).compute()
+
+    assert isinstance(result["name"].dtype, pd.CategoricalDtype)
+    expected = left["name"].tolist() + right["name"].tolist()
+    assert result["name"].astype(str).tolist() == expected * 2
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("wide_second_partition", [False, True])
+def test_append_inferred_categories_preserves_existing_schema(
+    tmp_path: Path, wide_second_partition: bool
+) -> None:
+    path = tmp_path / "categories"
+    original = pd.DataFrame({"name": pd.Categorical(["red", "green"])})
+    dd.from_pandas(original, npartitions=1).to_parquet(path, write_index=False)
+
+    addition = dd.from_pandas(
+        pd.DataFrame({"name": ["yellow", "blue"]}), npartitions=1
+    ).astype("category")
+    first_type = pq.read_schema(path / "part.0.parquet").field("name").type
+    second_type = (
+        pa.dictionary(pa.int32(), first_type.value_type)
+        if wide_second_partition
+        else first_type
+    )
+    addition.to_parquet(
+        path,
+        append=True,
+        write_index=False,
+        ignore_divisions=True,
+        schema={"name": second_type} if wide_second_partition else "infer",
+    )
+    original_files = set(path.glob("*.parquet"))
+    assert pq.read_schema(path / "part.1.parquet").field("name").type == second_type
+
+    too_many_categories = dd.from_pandas(
+        pd.DataFrame({"name": [f"name-{i}" for i in range(150)]}), npartitions=1
+    ).astype("category")
+    with pytest.raises(ValueError, match="Failed to convert partition"):
+        too_many_categories.to_parquet(
+            path, append=True, write_index=False, ignore_divisions=True
+        )
+
+    assert set(path.glob("*.parquet")) == original_files
+    assert pq.read_table(path).column("name").to_pylist() == [
+        "red",
+        "green",
+        "yellow",
+        "blue",
+    ]
 
 
 def test_columns_index_with_multi_index(tmpdir, engine):
