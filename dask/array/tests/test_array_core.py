@@ -4294,6 +4294,17 @@ def test_setitem_slice_twice():
     assert_eq(x, dx)
 
 
+def test_setitem_slice_increment_graph() -> None:
+    expected = np.zeros((5, 6))
+    result = da.zeros((5, 6), chunks=2)
+
+    expected[:2, :2] += 1
+    result[:2, :2] += 1
+
+    result.dask.validate()
+    assert_eq(result, expected)
+
+
 def test_setitem_2d():
     x = np.arange(24).reshape((4, 6))
     dx = da.from_array(x.copy(), chunks=(2, 2))
